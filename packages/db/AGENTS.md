@@ -1,0 +1,7 @@
+# @ren/db
+
+- Tables live in `src/<domain>.sql.ts`. Use snake_case object keys and never pass column names as strings (`org_id: text()`, not `orgID: text("org_id")`). ast-grep enforces this.
+- Generate migrations with drizzle-kit (`bun run db generate`). Never edit generated migrations.
+- Access Postgres through `Database.Service` (Drizzle) or `SqlClient.SqlClient`. Do not create ad hoc connections.
+- Tests use `Testing.layer`, which creates a fresh database and drops it when the layer's scope closes. Never point tests at a shared database.
+- Drizzle's `execute` is typed as an array but returns `{ rows }` at runtime in the current RC. Prefer query builders or `SqlClient` for raw SQL.
