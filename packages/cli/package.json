@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@renai-labs/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "license": "UNLICENSED",
+  "bin": {
+    "ren": "./src/index.ts"
+  },
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "test": "bun ../../script/test.ts",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@renai-labs/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}
