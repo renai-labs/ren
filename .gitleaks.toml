@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Vendored reference source under repos/ (test fixtures and docs examples)"
+paths = ['''^repos/''']
+commits = [
+  "fe1da8a1de47a41767930cd6edf1538fc3cd019d",
+]
