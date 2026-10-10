@@ -1,0 +1,5 @@
+repos/
+packages/client/src/generated/
+packages/client/src/effect/generated/
+packages/db/migration/
+packages/site/.astro/

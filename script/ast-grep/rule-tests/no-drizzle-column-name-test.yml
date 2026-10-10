@@ -1,0 +1,14 @@
+id: no-drizzle-column-name
+valid:
+  - |
+    const table = pgTable("pod", {
+      org_id: text().notNull(),
+      time_created: timestamp({ withTimezone: true }).notNull(),
+      payload: jsonb(),
+    })
+invalid:
+  - |
+    const table = pgTable("pod", {
+      orgID: text("org_id").notNull(),
+      createdAt: timestamp("time_created", { withTimezone: true }).notNull(),
+    })

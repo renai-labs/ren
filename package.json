@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "ren",
+  "description": "Agent infrastructure platform for AI-native teams",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "scripts": {
+    "dev": "bun run --cwd packages/server dev",
+    "dev:app": "bun run --cwd packages/app dev",
+    "dev:site": "bun run --cwd packages/site dev",
+    "lint": "oxlint --disable-nested-config && ast-grep scan -c script/ast-grep/sgconfig.yml packages",
+    "test:lint-rules": "ast-grep test -c script/ast-grep/sgconfig.yml",
+    "typecheck": "bun turbo typecheck --concurrency=3 && tsgo --noEmit",
+    "check": "bun run lint && bun run typecheck",
+    "generate": "bun run script/generate.ts",
+    "format": "bun run script/format.ts",
+    "prepare": "husky",
+    "test": "echo 'do not run tests from root' && exit 1"
+  },
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ],
+    "catalog": {
+      "@astrojs/check": "0.9.10",
+      "@astrojs/starlight": "0.42.5",
+      "@effect/platform-bun": "4.0.1",
+      "@effect/sql-pg": "4.0.1",
+      "@playwright/test": "1.63.0",
+      "@tsconfig/bun": "1.0.11",
+      "@types/bun": "1.4.2",
+      "@types/react": "19.3.0",
+      "@types/react-dom": "19.3.0",
+      "@typescript/native-preview": "7.0.0-dev.20260707.2",
+      "@vitejs/plugin-react": "6.1.2",
+      "astro": "7.3.6",
+      "drizzle-kit": "1.0.0-rc.5-5935859",
+      "drizzle-orm": "1.0.0-rc.5-5935859",
+      "effect": "4.0.1",
+      "prettier": "3.9.9",
+      "react": "19.3.0",
+      "react-dom": "19.3.0",
+      "typescript": "5.9.3",
+      "vite": "8.3.3"
+    }
+  },
+  "devDependencies": {
+    "@ast-grep/cli": "0.45.3",
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "husky": "9.1.7",
+    "oxlint": "1.87.0",
+    "prettier": "catalog:",
+    "turbo": "2.11.7"
+  },
+  "trustedDependencies": [
+    "@ast-grep/cli",
+    "esbuild"
+  ],
+  "overrides": {
+    "effect": "catalog:",
+    "@types/bun": "catalog:"
+  },
+  "prettier": {
+    "semi": false,
+    "printWidth": 120
+  }
+}

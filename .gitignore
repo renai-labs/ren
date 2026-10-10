@@ -1,0 +1,30 @@
+.DS_Store
+node_modules
+dist
+ts-dist
+.turbo
+.typecheck-profiles
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+.cache
+tmp
+logs/
+.worktrees
+.idea
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Personal agent config
+/opencode.json
+
+# Test output
+/artifacts/
+playwright-report/
+test-results/
+
+# Astro
+.astro/

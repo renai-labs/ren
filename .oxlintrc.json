@@ -1,0 +1,64 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicolo-ribaudo/oxc-project.github.io/refs/heads/json-schema/src/public/.oxlintrc.schema.json",
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "rules": {
+    "no-restricted-globals": [
+      "error",
+      {
+        "name": "Reflect",
+        "message": "Use typed property access or direct invocation. Suppress this rule only for genuine reflection."
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "regex": "(^|/)repos/",
+            "message": "repos/ holds vendored reference source. Import from the package dependency instead."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["packages/client/**", "packages/sdk/**", "packages/cli/**", "packages/app/**", "packages/ui/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "^@ren/(core|db|server)(/|$)",
+                "message": "Client-side packages never import core, db or server. Go through @ren/client."
+              },
+              {
+                "regex": "(^|/)repos/",
+                "message": "repos/ holds vendored reference source. Import from the package dependency instead."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "repos/**",
+    "**/node_modules",
+    "**/dist",
+    "**/.astro",
+    "**/*.d.ts",
+    "packages/client/src/generated/**",
+    "packages/client/src/effect/generated/**",
+    ".opencode/**"
+  ]
+}

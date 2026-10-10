@@ -1,0 +1,21 @@
+name: ren
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ren
+      POSTGRES_PASSWORD: ren
+      POSTGRES_DB: ren
+    ports:
+      - "54320:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ren"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres:
