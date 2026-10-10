@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ren/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts",
+    "./effect": "./src/effect/index.ts"
+  },
+  "scripts": {
+    "generate": "bun run script/generate.ts",
+    "check:generated": "bun run generate && git diff --exit-code -- src/generated src/effect/generated",
+    "test": "bun test --timeout 30000 --only-failures",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@ren/protocol": "workspace:*",
+    "@ren/schema": "workspace:*"
+  },
+  "peerDependencies": {
+    "effect": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "effect": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "@effect/platform-bun": "catalog:",
+    "@ren/httpapi-codegen": "workspace:*",
+    "effect": "catalog:"
+  }
+}

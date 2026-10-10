@@ -1,0 +1,64 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ren API",
+    "version": "0.0.0",
+    "description": "Ren HTTP API."
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": ["health"],
+        "operationId": "health.get",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Health.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health.Info"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the server status and version.",
+        "summary": "Get server health"
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Health.Info": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/Health.Status"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": ["status", "version"],
+        "additionalProperties": false
+      },
+      "Health.Status": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["ok"]
+          }
+        ]
+      }
+    },
+    "securitySchemes": {}
+  },
+  "security": [],
+  "tags": [
+    {
+      "name": "health"
+    }
+  ]
+}
