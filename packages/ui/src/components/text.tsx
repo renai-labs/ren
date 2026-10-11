@@ -23,7 +23,7 @@ const textVariants = cva("", {
     weight: { regular: "font-regular", medium: "font-medium", unset: "" },
     truncation: {
       none: "",
-      "single-line": "block truncate",
+      "single-line": "block truncate text-nowrap",
       "two-lines": "line-clamp-2",
       "three-lines": "line-clamp-3",
     },

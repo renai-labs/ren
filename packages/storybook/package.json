@@ -13,6 +13,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
+    "@base-ui/react": "catalog:",
     "@playwright/test": "catalog:",
     "@ren/app": "workspace:*",
     "@ren/ui": "workspace:*",

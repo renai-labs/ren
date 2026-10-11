@@ -15,6 +15,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
   - A multi-part component uses Ren's module pattern. The file starts with `export * as Dialog from "./dialog.js"` and exports parts named `Root`, `Trigger`, `Popup`, `Title` and so on. Consumers write `<Dialog.Root>`.
   - A single-part component exports the component itself (`export function Button`), so consumers write `<Button>`, not `<Button.Root>`.
 - Wrap Base UI parts. Don't re-implement behaviour Base UI already provides, such as focus management, dismissal, positioning or ARIA.
+- When a single-part component shares its name with the Base UI namespace it wraps (`Checkbox`, `Switch`), name the function `<Name>Control` and end the file with `export { <Name>Control as <Name> }`. Imports stay unaliased.
 - Keep ren-v1's `data-slot` names. Theme decorations such as girliepop target them.
 - Public props are semantic (`appearance`, `tone`, `size`, `purpose`). Omit `className` and `style` from public props so app code cannot restyle components. Layout belongs to the parent.
 - Define variants with cva, and merge classes with `composeClasses`. Never concatenate class strings by hand.
@@ -31,6 +32,8 @@ The design system. It owns every visual decision in Ren: tokens, components and 
   - `Text` balances headings (`text-balance`) and avoids orphans in body copy (`text-pretty`).
   - `Text purpose="display"` renders at `text-display`. ren-v1's `composeClasses` did not know the size, so its tone class stripped it.
   - Classes that borrow another role's colour move to role tokens with identical values: `bg-text-primary` to `bg-fill-inverse`, `bg-text-secondary` to `bg-fill-inverse-secondary`, and `border-`, `ring-` and `outline-text-primary` to `border-strong`. Lines drawn with `bg-border-primary` become borders.
+  - `Checkbox` has an indeterminate state; ren-v1 had none.
+  - Controls inside `Field` take their label, description and invalid state from Base UI, so a `Select` inside an invalid field turns red. ren-v1 dropped the invalid state there.
 
 ## Stories
 

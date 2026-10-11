@@ -1,0 +1,52 @@
+import { expect, story } from "../story.js"
+
+story("opens with a click and selects the clicked option", async ({ visit, page }) => {
+  const trigger = (await visit("ui-select--placeholder")).getByRole("combobox", { name: "Model" })
+  await trigger.click()
+  const listbox = page.getByRole("listbox")
+  await expect(listbox).toBeVisible()
+  await expect(trigger).toHaveAttribute("aria-expanded", "true")
+  await page.getByRole("option", { name: "Claude Haiku" }).click()
+  await expect(listbox).toBeHidden()
+  await expect(trigger).toHaveText("Claude Haiku")
+  await expect(trigger).toBeFocused()
+})
+
+story("opens from the keyboard and moves through options with the arrow keys", async ({ visit, page }) => {
+  const trigger = (await visit("ui-select--placeholder")).getByRole("combobox", { name: "Model" })
+  await page.keyboard.press("Tab")
+  await expect(trigger).toBeFocused()
+  await page.keyboard.press("ArrowDown")
+  await expect(page.getByRole("listbox")).toBeVisible()
+  const sonnet = page.getByRole("option", { name: "Claude Sonnet" })
+  await expect(sonnet).toBeFocused()
+  await page.keyboard.press("ArrowDown")
+  const opus = page.getByRole("option", { name: "Claude Opus" })
+  await expect(opus).toBeFocused()
+  await expect(opus).toHaveAttribute("data-highlighted")
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("listbox")).toBeHidden()
+  await expect(trigger).toHaveText("Claude Opus")
+  await expect(trigger).toBeFocused()
+})
+
+story("closes on Escape and returns focus to the trigger", async ({ visit, page }) => {
+  const trigger = (await visit("ui-select--placeholder")).getByRole("combobox", { name: "Model" })
+  await trigger.focus()
+  await page.keyboard.press("Enter")
+  const listbox = page.getByRole("listbox")
+  await expect(listbox).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(listbox).toBeHidden()
+  await expect(trigger).toHaveText("Choose a model")
+  await expect(trigger).toBeFocused()
+})
+
+story("opens below the trigger without covering it", async ({ visit, page }) => {
+  const trigger = (await visit("ui-select--selected")).getByRole("combobox", { name: "Model" })
+  await trigger.click()
+  const popup = await page.getByRole("listbox").boundingBox()
+  const anchor = await trigger.boundingBox()
+  expect(popup?.y ?? 0).toBeGreaterThanOrEqual((anchor?.y ?? 0) + (anchor?.height ?? 0))
+  expect(popup?.width ?? 0).toBeGreaterThanOrEqual(anchor?.width ?? 0)
+})
