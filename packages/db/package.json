@@ -9,7 +9,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "db": "bun drizzle-kit",
+    "db": "bun --bun drizzle-kit",
     "test": "bun ../../script/test.ts",
     "typecheck": "tsgo --noEmit"
   },
