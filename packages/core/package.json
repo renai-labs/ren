@@ -13,14 +13,19 @@
     "typecheck": "tsgo -b tsconfig.json tsconfig.tests.json"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "catalog:",
     "@ren/db": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/util": "workspace:*",
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
     "effect": "catalog:"
   },
   "devDependencies": {
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:"
+    "@typescript/native-preview": "catalog:",
+    "auth": "catalog:",
+    "prettier": "catalog:"
   }
 }
