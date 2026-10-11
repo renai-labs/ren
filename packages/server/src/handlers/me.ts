@@ -5,7 +5,7 @@ import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../api.js"
 import { Auth } from "../auth.js"
 
-export const MeHandler = HttpApiBuilder.group(Api, "server.me", (handlers) =>
+export const MeHandler = HttpApiBuilder.group(Api, "me", (handlers) =>
   Effect.gen(function* () {
     const auth = yield* Auth.Service
     return handlers.handle("me.get", () =>

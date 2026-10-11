@@ -9,8 +9,8 @@ import { Exposure } from "./exposure.js"
 import { ActiveOrganization } from "./middleware/active-organization.js"
 import { Authentication } from "./middleware/authentication.js"
 
-export class Definition extends Context.Service<Definition, Primitive.Definition>()(
-  "@ren/protocol/Primitive/Definition",
+export class Annotation extends Context.Service<Annotation, Primitive.Definition>()(
+  "@ren/protocol/Primitive/Annotation",
 ) {}
 
 interface Named<Name extends string, Plural extends string> {
@@ -164,10 +164,10 @@ export const group = <
   exposure: Exposure["Service"],
   endpoints: Endpoints,
 ) =>
-  HttpApiGroup.make(`server.${definition.name}` as const)
+  HttpApiGroup.make(definition.name)
     .add(...endpoints)
     .middleware(ActiveOrganization)
     .middleware(Authentication)
-    .annotate(Definition, definition)
+    .annotate(Annotation, definition)
     .annotate(Exposure, exposure)
     .annotateMerge(OpenApi.annotations({ title: definition.name }))
