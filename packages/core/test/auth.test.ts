@@ -33,24 +33,28 @@ const signUp = (auth: Auth.Interface, email: string) =>
   )
 
 describe("Auth", () => {
-  it.live("signs up and reads the session back from its cookie", () =>
+  it.live("signs up and reads the user back from the session cookie", () =>
     Effect.gen(function* () {
       const auth = yield* Auth.Service
       const response = yield* signUp(auth, "ada@example.com")
       expect(response.status).toBe(200)
 
       const headers = new Headers({ cookie: response.headers.getSetCookie().join("; ") })
-      const session = Option.getOrThrow(yield* auth.getSession(headers))
-      expect(session.user.email).toBe("ada@example.com")
-      expect(session.user.id).toMatch(/^usr_[0-9A-HJKMNP-TV-Z]{26}$/)
-      expect(session.session.id).toMatch(/^aus_[0-9A-HJKMNP-TV-Z]{26}$/)
+      const user = Option.getOrThrow(yield* auth.getUser(headers))
+      expect(user).toEqual({
+        id: expect.stringMatching(/^usr_[0-9A-HJKMNP-TV-Z]{26}$/),
+        name: "Ada",
+        email: "ada@example.com",
+        emailVerified: false,
+        image: null,
+      })
     }),
   )
 
-  it.live("has no session without credentials", () =>
+  it.live("has no user without credentials", () =>
     Effect.gen(function* () {
       const auth = yield* Auth.Service
-      expect(Option.isNone(yield* auth.getSession(new Headers()))).toBe(true)
+      expect(Option.isNone(yield* auth.getUser(new Headers()))).toBe(true)
     }),
   )
 

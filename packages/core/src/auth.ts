@@ -40,14 +40,10 @@ export const make = (input: Input) =>
     },
   })
 
-type Instance = ReturnType<typeof make>
-
-export type Session = Instance["$Infer"]["Session"]
-
 export interface Interface {
   readonly handler: (request: Request) => Promise<Response>
   readonly trustedOrigins: ReadonlyArray<string>
-  readonly getSession: (headers: Headers) => Effect.Effect<Option.Option<Session>>
+  readonly getUser: (headers: Headers) => Effect.Effect<Option.Option<Auth.User>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Auth") {}
@@ -70,9 +66,11 @@ export const layer = Layer.effect(
     return Service.of({
       handler: auth.handler,
       trustedOrigins: config.trustedOrigins,
-      getSession: Effect.fn("Auth.getSession")(function* (headers: Headers) {
+      getUser: Effect.fn("Auth.getUser")(function* (headers: Headers) {
         const session = yield* Effect.promise(() => auth.api.getSession({ headers }))
-        return Option.fromNullishOr(session)
+        if (!session) return Option.none()
+        const user: typeof Auth.User.Encoded = session.user
+        return Option.some(yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie))
       }),
     })
   }),
