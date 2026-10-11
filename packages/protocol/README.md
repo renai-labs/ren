@@ -8,6 +8,9 @@ The public HTTP contract: `HttpApi` endpoint groups, middleware tags and API err
 - `src/api.ts`: the assembled `HttpApi`.
 - `src/client.ts`: the API shape handed to the client generator, plus consumer-facing group names.
 - `src/errors.ts`: tagged API errors with HTTP statuses.
+- `src/primitive.ts`: endpoint and group constructors for primitives.
+- `src/exposure.ts`: the `Exposure` annotation every group carries.
+- `script/contract.ts`: the API contract check, run by `bun run generate`.
 - `src/middleware/*.ts`: middleware tags and the services they provide, such as `Authentication` and `CurrentUser`. The server implements them.
 - `openapi.json`: generated. Do not edit.
 
