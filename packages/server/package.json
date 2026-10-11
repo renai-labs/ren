@@ -9,7 +9,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "dev": "bun run --watch src/main.ts",
+    "dev": "bun --env-file=../../.env run --watch src/main.ts",
     "start": "bun run src/main.ts",
     "test": "bun ../../script/test.ts",
     "typecheck": "tsgo -b"

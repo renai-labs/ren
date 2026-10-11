@@ -1,12 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test"
-import { BunHttpServer } from "@effect/platform-bun"
-import { Layer } from "effect"
-import { HttpRouter } from "effect/http"
-import { Routes } from "../src/routes.js"
+import { makeApp } from "./lib/app.js"
 
-const app = HttpRouter.toWebHandler(Routes.layer.pipe(Layer.provide(BunHttpServer.layerHttpServices)), {
-  disableLogger: true,
-})
+const app = makeApp()
 
 afterAll(() => app.dispose())
 
