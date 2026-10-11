@@ -22,7 +22,7 @@ Work deferred during scaffolding. Pick items up when they become relevant, and m
 
 ## App and site
 
-- [ ] `app`: add TanStack Router and Query, Tailwind 4 and Base UI (the ren-v1 stack).
+- [ ] `app` / `ui`: migrate the ren-v1 UI components, then its product areas.
 - [ ] `site`: render the API reference from `packages/protocol/openapi.json`.
 - [ ] CI: install and cache Playwright Chromium in the `e2e` job once browser tests exist. Today's e2e tests are API and CLI only.
 
@@ -32,8 +32,7 @@ Work deferred during scaffolding. Pick items up when they become relevant, and m
 
 ## Tooling
 
-- [ ] Custom oxlint plugins (anti-slop + Effect rules).
-- [ ] `lint:changed`: apply strict lint warnings only to changed files in the UI packages.
+- [ ] Custom Oxlint rules for Effect code. The React and UI rules live in `script/oxlint/ren/`.
 - [ ] Typecheck profiling scripts (`typecheck:profile`) once typecheck gets slow.
 - [ ] Add `patches/` + `patchedDependencies` the first time a dependency needs a patch (ren-v1 already patches `@standard-community/standard-openapi`).
 - [ ] Flesh out the `ren-dev` skill once the server, logs and DB workflow exist.

@@ -9,7 +9,7 @@
 ## Layering
 
 - Runtime dependencies point from `schema` to `protocol`, `db` and `core`, and from those to `server`.
-- `client` may depend only on `schema` and `protocol`. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client` and `ui`.
+- `client` may depend only on `schema` and `protocol`. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client` and `ui`, and uses `better-auth/client` for auth flows.
 - `client`, `sdk`, `cli`, `app` and `ui` never import `core`, `db` or `server`. oxlint and `packages/client/test/import-boundaries.test.ts` enforce this.
 - `httpapi-codegen` stays independent of every Ren package.
 
@@ -76,6 +76,7 @@
 
 - Run `bun run check` from the repo root before pushing. The pre-push hook runs it too.
 - Run `bun typecheck` from a package directory to typecheck one package. Never run `tsc` directly.
+- Lint rules live in `oxlint.config.ts`, the Ren Oxlint plugin (`script/oxlint/ren/`) and `script/ast-grep/`. Oxlint loads its config and plugin through Node (see `.node-version`). Add a test for every new rule, then run `bun run test:lint-rules`.
 
 ## Vendored Repositories
 

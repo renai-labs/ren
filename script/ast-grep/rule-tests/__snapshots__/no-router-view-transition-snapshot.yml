@@ -1,0 +1,22 @@
+id: no-router-view-transition
+snapshots:
+  "createRouter({ routeTree, defaultViewTransition: true })":
+    labels:
+      - source: "defaultViewTransition: true"
+        style: primary
+        start: 26
+        end: 53
+      - source: defaultViewTransition
+        style: secondary
+        start: 26
+        end: 47
+  "navigate({ to: '/', viewTransition: true })":
+    labels:
+      - source: "viewTransition: true"
+        style: primary
+        start: 20
+        end: 40
+      - source: viewTransition
+        style: secondary
+        start: 20
+        end: 34
