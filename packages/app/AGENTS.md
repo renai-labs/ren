@@ -31,4 +31,6 @@ The product SPA and its web host. Desktop and mobile hosts will import it throug
 ## Testing
 
 - Test components with `bun test` against real providers.
-- Cover user flows with Playwright in `packages/e2e`.
+- Write a story for a feature component only when a browser spec needs it, as `src/features/<domain>/<name>.stories.tsx` with `title: "App/<Domain>/<Name>"`. The story supplies a fake `Platform` and a `QueryClient` seeded with `setQueryData`, so it never touches the network. Routes and `src/components/` never get stories.
+- Put that spec in `packages/storybook/tests/app/<domain>/<name>.spec.ts`.
+- Cover user flows with Playwright in `packages/e2e`. A contract a story spec proves does not get an e2e copy.
