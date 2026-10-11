@@ -14,7 +14,8 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "ulid": "catalog:"
   },
   "devDependencies": {
     "@tsconfig/bun": "catalog:",

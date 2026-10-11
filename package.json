@@ -26,6 +26,7 @@
     "catalog": {
       "@astrojs/check": "0.9.10",
       "@astrojs/starlight": "0.42.5",
+      "@better-auth/drizzle-adapter": "1.7.7",
       "@effect/platform-bun": "4.0.1",
       "@effect/sql-pg": "4.0.1",
       "@playwright/test": "1.63.0",
@@ -36,6 +37,8 @@
       "@typescript/native-preview": "7.0.0-dev.20260707.2",
       "@vitejs/plugin-react": "6.1.2",
       "astro": "7.3.6",
+      "auth": "1.7.7",
+      "better-auth": "1.7.7",
       "drizzle-kit": "1.0.0-rc.5-5935859",
       "drizzle-orm": "1.0.0-rc.5-5935859",
       "effect": "4.0.1",
@@ -43,6 +46,7 @@
       "react": "19.3.0",
       "react-dom": "19.3.0",
       "typescript": "5.9.3",
+      "ulid": "3.0.2",
       "vite": "8.3.3"
     }
   },
