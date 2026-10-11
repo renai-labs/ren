@@ -14,9 +14,11 @@ Domain services and layers. Everything Ren does, without HTTP.
 
 ## Dependencies
 
-`@ren/schema`, `@ren/db`, `@ren/util`, `effect`.
+`@ren/schema`, `@ren/db`, `@ren/util`, `effect`, `better-auth` and its Drizzle adapter.
 
 ## Notes
+
+`src/auth.ts` owns the Better Auth config. `Auth.make` is shared by `Auth.layer` and `script/auth-config.ts`, which the Better Auth CLI reads to generate `packages/db/src/auth.sql.ts`.
 
 Tests use `testEffect(layer)` from `test/lib/effect.ts`. It provides `TestClock` and `TestConsole` and fails any test that makes a non-loopback network request.
 
@@ -25,4 +27,5 @@ Tests use `testEffect(layer)` from `test/lib/effect.ts`. It provides `TestClock`
 ```sh
 bun run test
 bun typecheck
+bun run generate   # regenerate packages/db/src/auth.sql.ts
 ```
