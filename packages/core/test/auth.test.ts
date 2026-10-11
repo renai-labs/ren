@@ -51,6 +51,26 @@ describe("Auth", () => {
     }),
   )
 
+  it.live("reads the user from a bearer token", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const response = yield* signUp(auth, "grace@example.com")
+      const token = response.headers.get("set-auth-token")
+      expect(token).not.toBeNull()
+
+      const user = Option.getOrThrow(yield* auth.getUser(new Headers({ authorization: `Bearer ${token}` })))
+      expect(user.email).toBe("grace@example.com")
+    }),
+  )
+
+  it.live("rejects an unknown bearer token", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const user = yield* auth.getUser(new Headers({ authorization: "Bearer not-a-session" }))
+      expect(Option.isNone(user)).toBe(true)
+    }),
+  )
+
   it.live("has no user without credentials", () =>
     Effect.gen(function* () {
       const auth = yield* Auth.Service
