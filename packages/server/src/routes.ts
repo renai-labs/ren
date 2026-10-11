@@ -2,11 +2,13 @@ export * as Routes from "./routes.js"
 
 import { Auth } from "@ren/core/auth"
 import { Health } from "@ren/core/health"
+import { Invitation } from "@ren/core/invitation"
 import { Effect, Layer } from "effect"
 import { HttpEffect, HttpMiddleware, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "./api.js"
 import { HealthHandler } from "./handlers/health.js"
+import { InvitationHandler } from "./handlers/invitation.js"
 import { MeHandler } from "./handlers/me.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 
@@ -31,9 +33,9 @@ const Cors = HttpRouter.middleware(
 
 export const layer = Layer.mergeAll(
   HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
-    Layer.provide([HealthHandler, MeHandler]),
+    Layer.provide([HealthHandler, MeHandler, InvitationHandler]),
     Layer.provide(AuthenticationLayer),
-    Layer.provide(Health.layer),
+    Layer.provide([Health.layer, Invitation.layer]),
   ),
   AuthRoute,
   Cors,
