@@ -6,7 +6,7 @@ The API process: HTTP handlers, middleware implementations and runtime compositi
 
 - `src/api.ts`: the concrete `HttpApi` (protocol plus server-supplied middleware).
 - `src/handlers/*.ts`: one `HttpApiBuilder.group` per protocol group. Keep them thin.
-- `src/routes.ts`: the composed router layer.
+- `src/routes.ts`: the composed router layer, including Better Auth at `/api/auth/*` and CORS for `TRUSTED_ORIGINS`.
 - `src/main.ts`: process entry point.
 
 ## What does not
@@ -21,7 +21,7 @@ The API process: HTTP handlers, middleware implementations and runtime compositi
 ## Commands
 
 ```sh
-bun run dev   # port 4000, or PORT
+bun run dev   # port 4000, or PORT; reads the repo root .env
 bun run test
 bun typecheck
 ```
