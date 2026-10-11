@@ -39,7 +39,18 @@ export const make = (input: Input) =>
     account: {
       accountLinking: { enabled: true, trustedProviders: ["google"] },
     },
-    plugins: [bearer()],
+    plugins: [
+      bearer(),
+      {
+        id: "ren-indexes",
+        schema: {
+          account: {
+            fields: {},
+            indexes: [{ fields: ["providerId", "accountId"], unique: true }],
+          },
+        },
+      },
+    ],
     advanced: {
       // Better Auth skips the origin check when NODE_ENV is "test"; keep it on so tests match production.
       disableOriginCheck: false,
