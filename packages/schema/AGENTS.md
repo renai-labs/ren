@@ -6,5 +6,5 @@
 - Exported schemas use PascalCase (`Info`, `ID`, `Status`). Do not add aliases such as `PodSchema`.
 - Pair each struct with a same-name interface: `export interface Info extends Schema.Schema.Type<typeof Info> {}`.
 - Give every exported schema a stable, domain-qualified identifier: `.annotate({ identifier: "Pod.Info" })`.
-- Brand IDs: `Schema.String.pipe(Schema.brand("Pod.ID"))`.
+- Prefixed IDs use `Identifier.make("pod", "Pod.ID")`: a branded `<prefix>_<ULID>` schema with a `create()` static. Prefixes are unique across Ren.
 - Contracts are readonly. Do not use `Schema.Any` or `Schema.Unknown` in contracts unless the payload is genuinely opaque.
