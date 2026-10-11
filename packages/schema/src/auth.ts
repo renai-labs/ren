@@ -4,6 +4,7 @@ import { Schema } from "effect"
 import { Identifier } from "./identifier.js"
 
 export const UserID = Identifier.make("usr", "Auth.UserID")
+export type UserID = typeof UserID.Type
 
 export const SessionID = Identifier.make("aus", "Auth.SessionID")
 
