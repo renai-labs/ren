@@ -5,6 +5,7 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Auth } from "@ren/schema/auth"
 import { Identifier } from "@ren/schema/identifier"
 import { betterAuth } from "better-auth"
+import { bearer } from "better-auth/plugins"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 
 export interface Input {
@@ -31,6 +32,7 @@ export const make = (input: Input) =>
     database: drizzleAdapter(input.database, { provider: "pg", schema: AuthDatabase.Schema }),
     emailAndPassword: { enabled: true },
     session: { expiresIn: 60 * 60 * 24 * 90 },
+    plugins: [bearer()],
     advanced: {
       // Better Auth skips the origin check when NODE_ENV is "test"; keep it on so tests match production.
       disableOriginCheck: false,
