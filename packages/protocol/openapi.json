@@ -27,10 +27,146 @@
         "description": "Return the server status and version.",
         "summary": "Get server health"
       }
+    },
+    "/api/me": {
+      "get": {
+        "tags": ["me"],
+        "operationId": "me.get",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Auth.Me",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Auth.Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the signed-in user and their active organization, or `null` if they have none yet (for example, while an invitation is pending).",
+        "summary": "Get the signed-in user"
+      }
     }
   },
   "components": {
     "schemas": {
+      "Auth.Me": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/Auth.User"
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.Organization"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["user", "organization"],
+        "additionalProperties": false
+      },
+      "Auth.Organization": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "logo": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "name", "slug"],
+        "additionalProperties": false
+      },
+      "Auth.OrganizationID": {
+        "type": "string",
+        "pattern": "^org_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "Auth.User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Auth.UserID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "name", "email", "emailVerified"],
+        "additionalProperties": false
+      },
+      "Auth.UserID": {
+        "type": "string",
+        "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
       "Health.Info": {
         "type": "object",
         "properties": {
@@ -51,14 +187,43 @@
             "enum": ["ok"]
           }
         ]
+      },
+      "UnauthorizedErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["UnauthorizedError"]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "message"],
+        "additionalProperties": false
       }
     },
-    "securitySchemes": {}
+    "securitySchemes": {
+      "bearer": {
+        "description": "A Better Auth session token, for the CLI and SDK.",
+        "type": "http",
+        "scheme": "Bearer"
+      },
+      "cookie": {
+        "description": "The Better Auth session cookie, for browsers. Named `__Secure-better-auth.session_token` over HTTPS.",
+        "type": "apiKey",
+        "name": "better-auth.session_token",
+        "in": "cookie"
+      }
+    }
   },
   "security": [],
   "tags": [
     {
       "name": "health"
+    },
+    {
+      "name": "me"
     }
   ]
 }

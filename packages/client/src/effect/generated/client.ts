@@ -18,7 +18,14 @@ const EndpointHealthGet = (raw: RawClient["server.health"]) => () =>
 
 const adaptGroupHealth = (raw: RawClient["server.health"]) => ({ get: EndpointHealthGet(raw) })
 
-const adaptClient = (raw: RawClient) => ({ health: adaptGroupHealth(raw["server.health"]) })
+const EndpointMeGet = (raw: RawClient["server.me"]) => () => raw["me.get"]({}).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupMe = (raw: RawClient["server.me"]) => ({ get: EndpointMeGet(raw) })
+
+const adaptClient = (raw: RawClient) => ({
+  health: adaptGroupHealth(raw["server.health"]),
+  me: adaptGroupMe(raw["server.me"]),
+})
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>
   HttpApiClient.make(ClientApi, options).pipe(Effect.map(adaptClient))

@@ -40,3 +40,9 @@ export const Organization = Schema.Struct({
   slug: Schema.String,
   logo: Schema.optional(Schema.NullOr(Schema.String)),
 }).annotate({ identifier: "Auth.Organization" })
+
+export interface Me extends Schema.Schema.Type<typeof Me> {}
+export const Me = Schema.Struct({
+  user: User,
+  organization: Schema.NullOr(Organization),
+}).annotate({ identifier: "Auth.Me" })
