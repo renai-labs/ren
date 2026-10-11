@@ -1,0 +1,6 @@
+id: no-import-alias-tsx
+valid:
+  - import { Button } from "@ren/ui/button"
+  - import type { Info as PodInfo } from "@ren/schema/pod"
+invalid:
+  - import { Button as UiButton } from "@ren/ui/button"

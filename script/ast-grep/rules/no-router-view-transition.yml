@@ -1,0 +1,11 @@
+id: no-router-view-transition
+language: TypeScript
+message: Use React's <ViewTransition>. The router's document-level view transition interrupts React's.
+severity: error
+files:
+  - packages/app/**
+rule:
+  kind: pair
+  has:
+    field: key
+    regex: ^(defaultViewTransition|viewTransition)$

@@ -1,0 +1,16 @@
+id: no-import-alias-tsx
+language: Tsx
+message: Do not alias value imports. For type name collisions, alias inside a dedicated `import type` statement.
+severity: error
+ignores:
+  - "**/*.gen.ts"
+rule:
+  all:
+    - kind: import_specifier
+    - has:
+        field: alias
+        kind: identifier
+    - not:
+        inside:
+          pattern: import type { $$$SPECS } from "$MOD"
+          stopBy: end

@@ -1,7 +1,3 @@
 export function App() {
-  return (
-    <main>
-      <h1>Ren</h1>
-    </main>
-  )
+  return <main>Ren</main>
 }

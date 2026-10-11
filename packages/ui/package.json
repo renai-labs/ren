@@ -6,8 +6,7 @@
   "type": "module",
   "license": "UNLICENSED",
   "exports": {
-    ".": "./src/index.ts",
-    "./*": "./src/*.tsx"
+    "./*": "./src/components/*.tsx"
   },
   "scripts": {
     "test": "bun test --only-failures",

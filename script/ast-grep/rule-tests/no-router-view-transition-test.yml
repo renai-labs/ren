@@ -1,0 +1,6 @@
+id: no-router-view-transition
+valid:
+  - "createRouter({ routeTree, defaultPreload: 'intent' })"
+invalid:
+  - "createRouter({ routeTree, defaultViewTransition: true })"
+  - "navigate({ to: '/', viewTransition: true })"
