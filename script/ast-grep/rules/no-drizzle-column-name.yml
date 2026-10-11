@@ -4,6 +4,8 @@ message: Use snake_case object keys instead of explicit drizzle column names.
 severity: error
 files:
   - packages/db/src/**/*.sql.ts
+ignores:
+  - packages/db/src/auth.sql.ts
 rule:
   any:
     - pattern: $COLUMN($NAME)

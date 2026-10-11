@@ -66,6 +66,10 @@ jobs:
           fi
           bun turbo test --affected --concurrency=3 --filter='!@ren/e2e'
 
+      - name: Check generated auth schema
+        working-directory: packages/core
+        run: bun run check:generated
+
       - name: Check generated OpenAPI
         working-directory: packages/protocol
         run: bun run check:generated
