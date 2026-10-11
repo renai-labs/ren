@@ -1,3 +1,6 @@
+import { getDefaultSelectors } from "eslint-plugin-better-tailwindcss/api/defaults"
+import { MatcherType, SelectorKind } from "eslint-plugin-better-tailwindcss/api/types"
+import type { Settings } from "eslint-plugin-better-tailwindcss/api/types"
 import { defineConfig } from "oxlint"
 
 const vendored = {
@@ -155,8 +158,70 @@ const forbiddenElements = [
   ["p", "Text"],
 ].map((entry) => ({ element: entry[0], message: `Use ${entry[1]} from @ren/ui.` }))
 
+const tailwind = {
+  cwd: "packages/ui",
+  entryPoint: "src/styles/index.css",
+  selectors: [
+    ...getDefaultSelectors(),
+    { kind: SelectorKind.Callee, name: "^composeClasses$", match: [{ type: MatcherType.String }] },
+    { kind: SelectorKind.Callee, name: "^composeClasses$", match: [{ type: MatcherType.ObjectKey }] },
+  ],
+} satisfies Settings
+
+const tailwindRules = {
+  "better-tailwindcss/no-unknown-classes": "error",
+  "better-tailwindcss/no-conflicting-classes": "error",
+  "better-tailwindcss/no-duplicate-classes": "error",
+  "better-tailwindcss/no-deprecated-classes": "error",
+  "better-tailwindcss/no-unnecessary-whitespace": "error",
+  "better-tailwindcss/no-concatenated-classes": "error",
+  "better-tailwindcss/enforce-canonical-classes": "error",
+  "better-tailwindcss/enforce-shorthand-classes": "error",
+  "better-tailwindcss/enforce-consistent-class-order": "error",
+  "better-tailwindcss/enforce-consistent-variable-syntax": "error",
+  "better-tailwindcss/enforce-consistent-important-position": "error",
+} as const
+
+const spacingStep = "(?:0|1|2|3|4|6|8|12)"
+const layoutUtilities = [
+  "flex|inline-flex|grid|inline-grid|block|inline-block|inline|hidden|contents|invisible|visible",
+  "flex-(?:row|col)(?:-reverse)?|flex-(?:wrap|nowrap|1|none|auto)|grow(?:-0)?|shrink(?:-0)?",
+  "items-(?:start|end|center|baseline|stretch)",
+  "justify-(?:start|end|center|between|around|evenly|stretch|normal)",
+  "self-(?:auto|start|end|center|stretch|baseline)",
+  "content-(?:start|end|center|between|around|evenly|stretch|normal|baseline)",
+  "place-(?:content|items|self)-(?:start|end|center|between|around|evenly|stretch|baseline|auto)",
+  "justify-items-(?:start|end|center|stretch|normal)",
+  "justify-self-(?:auto|start|end|center|stretch)",
+  "order-(?:\\d+|first|last|none)",
+  "grid-(?:cols|rows)-\\d+|(?:col|row)-span-(?:\\d+|full)|col-(?:start|end)-\\d+",
+  "text-(?:left|right|center|start|end)",
+  `(?:gap(?:-[xy])?|[pm][xytrblse]?)-${spacingStep}|m[xytrblse]?-auto`,
+  "(?:w|h|size|max-w|max-h|min-h)-full|min-[wh]-0|(?:max-)?w-(?:sidebar|dialog|content)",
+  "overflow(?:-[xy])?-(?:auto|hidden|visible|scroll|clip)|overscroll(?:-[xy])?-(?:contain|auto|none)",
+  "relative|sticky|top-0",
+].join("|")
+
+const importantClass = {
+  pattern: "^.*!$|^!.*$",
+  message: "`!important` fights the cascade. Fix the specificity in the component instead.",
+}
+const rawArbitraryValue = {
+  pattern: "\\[[^\\]]*(#|\\d+(px|rem|em|ms|s)\\b|rgb|hsl|oklch)[^\\]]*\\]",
+  message: "Raw values bypass the design tokens. Use a token class, or `var(--ren-*)` inside the arbitrary value.",
+}
+const appClasses = {
+  pattern: `^(?!(?:(?:sm|md|lg):)*(?:${layoutUtilities})$).+$`,
+  message:
+    "App code only lays components out with flex, grid, gap, padding, margin, sizing and overflow on the token scale. Visual styling belongs in @ren/ui.",
+}
+
 export default defineConfig({
-  jsPlugins: [{ name: "ren", specifier: "./script/oxlint/ren/index.ts" }],
+  jsPlugins: [
+    { name: "ren", specifier: "./script/oxlint/ren/index.ts" },
+    { name: "better-tailwindcss", specifier: "eslint-plugin-better-tailwindcss" },
+  ],
+  settings: { "better-tailwindcss": tailwind },
   categories: {
     correctness: "off",
     suspicious: "off",
@@ -305,6 +370,9 @@ export default defineConfig({
         "import/no-self-import": "error",
 
         "import/no-namespace": "error",
+
+        ...tailwindRules,
+        "better-tailwindcss/no-restricted-classes": ["error", { restrict: [importantClass, rawArbitraryValue] }],
 
         "ren/jsx-no-leaked-render": "error",
         "ren/no-boolean-mode-props": "error",

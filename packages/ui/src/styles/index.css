@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@source "../**/*.{ts,tsx}";
+@import "./fonts.css";
+@import "./theme.css";
+@import "./motion.css";
+@import "./utilities.css";
+@import "./girliepop-decoration.css";
