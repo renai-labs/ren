@@ -19,7 +19,7 @@ docker compose up -d
 | `bun run dev:site` | Start the docs site                               |
 | `bun run generate` | Regenerate `openapi.json` and the clients         |
 | `bun run format`   | Format the repo with Prettier                     |
-| `bun run check`    | Lint (oxlint + ast-grep) and typecheck everything |
+| `bun run check`    | Lint (oxlint, ast-grep and knip) and typecheck everything |
 
 ## Verification
 
