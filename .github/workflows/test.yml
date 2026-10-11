@@ -78,6 +78,10 @@ jobs:
         working-directory: packages/client
         run: bun run check:generated
 
+      - name: Check generated routes
+        working-directory: packages/app
+        run: bun run check:generated
+
   e2e:
     name: e2e
     runs-on: ubuntu-latest

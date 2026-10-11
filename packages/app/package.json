@@ -10,19 +10,35 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "bun test --only-failures",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "generate": "tsr generate",
+    "check:generated": "bun run generate && git diff --exit-code -- src/route-tree.gen.ts"
   },
   "dependencies": {
+    "@ren/client": "workspace:*",
+    "@ren/ui": "workspace:*",
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-router": "catalog:",
+    "better-auth": "catalog:",
+    "effect": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@babel/core": "catalog:",
+    "@rolldown/plugin-babel": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@tanstack/router-cli": "catalog:",
+    "@tanstack/router-plugin": "catalog:",
     "@tsconfig/bun": "catalog:",
+    "@types/babel__core": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@typescript/native-preview": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "babel-plugin-react-compiler": "catalog:",
+    "tailwindcss": "catalog:",
     "vite": "catalog:"
   }
 }
