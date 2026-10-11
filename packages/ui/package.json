@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "exports": {
     "./styles": "./src/styles/index.css",
+    "./*.stories": null,
     "./*": "./src/components/*.tsx"
   },
   "scripts": {
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "catalog:",
+    "@storybook/react-vite": "catalog:",
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
@@ -29,7 +31,12 @@
     "react-dom": "catalog:"
   },
   "dependencies": {
+    "@base-ui/react": "catalog:",
     "@fontsource/ibm-plex-mono": "catalog:",
+    "@tabler/icons-react": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:"
   },
   "sideEffects": [

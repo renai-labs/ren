@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@tsconfig/bun/tsconfig.json",
+  "compilerOptions": {
+    "noUnusedLocals": true,
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "noUncheckedIndexedAccess": true,
+    "types": ["bun", "vite/client"]
+  },
+  "include": [".storybook/**/*", "tests/**/*", "script/**/*", "playwright.config.ts"]
+}

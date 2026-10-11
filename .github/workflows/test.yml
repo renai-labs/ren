@@ -61,10 +61,10 @@ jobs:
         timeout-minutes: 20
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            bun turbo test --concurrency=3 --filter='!@ren/e2e'
+            bun turbo test --concurrency=3 --filter='!@ren/e2e' --filter='!@ren/storybook'
             exit 0
           fi
-          bun turbo test --affected --concurrency=3 --filter='!@ren/e2e'
+          bun turbo test --affected --concurrency=3 --filter='!@ren/e2e' --filter='!@ren/storybook'
 
       - name: Check generated auth schema
         working-directory: packages/server
@@ -119,4 +119,43 @@ jobs:
           path: |
             packages/e2e/playwright-report
             packages/e2e/test-results
+          retention-days: 7
+
+  storybook:
+    name: storybook
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright Chromium
+        working-directory: packages/storybook
+        run: bunx playwright install --with-deps chromium
+
+      - name: Build Storybook
+        working-directory: packages/storybook
+        run: bun run build
+
+      - name: Run story specs
+        timeout-minutes: 10
+        working-directory: packages/storybook
+        run: bun run test
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: storybook-playwright-${{ github.run_attempt }}
+          path: |
+            packages/storybook/playwright-report
+            packages/storybook/test-results
           retention-days: 7

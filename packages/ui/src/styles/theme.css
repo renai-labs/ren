@@ -8,11 +8,14 @@
   --color-background-tertiary: var(--ren-color-bg-tertiary);
   --color-fill-primary: var(--ren-color-fill-primary);
   --color-fill-secondary: var(--ren-color-fill-secondary);
+  --color-fill-inverse: var(--ren-color-fill-inverse);
+  --color-fill-inverse-secondary: var(--ren-color-fill-inverse-secondary);
   --color-text-primary: var(--ren-color-text-primary);
   --color-text-secondary: var(--ren-color-text-secondary);
   --color-text-inverse: var(--ren-color-text-inverse);
   --color-border-primary: var(--ren-color-border-primary);
   --color-border-secondary: var(--ren-color-border-secondary);
+  --color-border-strong: var(--ren-color-border-strong);
   --color-accent-primary: var(--ren-color-accent-primary);
   --color-status-success: var(--ren-color-status-success);
   --color-status-warning: var(--ren-color-status-warning);
