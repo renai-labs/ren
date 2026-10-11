@@ -14,6 +14,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
   - A multi-part component uses Ren's module pattern. The file starts with `export * as Dialog from "./dialog.js"` and exports parts named `Root`, `Trigger`, `Popup`, `Title` and so on. Consumers write `<Dialog.Root>`.
   - A single-part component exports the component itself (`export function Button`), so consumers write `<Button>`, not `<Button.Root>`.
 - Wrap Base UI parts. Don't re-implement behaviour Base UI already provides, such as focus management, dismissal, positioning or ARIA.
+- Keep ren-v1's `data-slot` names. Theme decorations such as girliepop target them.
 - Public props are semantic (`appearance`, `tone`, `size`, `purpose`). Omit `className` and `style` from public props so app code cannot restyle components. Layout belongs to the parent.
 - Define variants with cva, and merge classes with `composeClasses`. Never concatenate class strings by hand.
 - Style Base UI states with data-attribute variants (`data-checked:`, `data-highlighted:`, `data-disabled:`) and Base UI's CSS variables (`--anchor-width`, `--available-height`, `--transform-origin`).
@@ -22,7 +23,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 
 ## Design fidelity
 
-- Tokens are generated from the Paper file "Ren UI". Never edit `tokens.generated.css` by hand, never rename a token, and never use a colour, size, radius or duration that is not a token.
+- Tokens come from the Paper file "Ren UI" through `DESIGN.md` (use the `sync-with-paper` skill) and `bun run generate`. Never edit `DESIGN.md` or `tokens.generated.css` by hand, never rename a token, and never use a colour, size, radius or duration that is not a token.
 - When porting from `ren-v1/packages/ui`, keep class strings, variants, sizes and states identical. A visual change is a separate, explicit decision. Compare against ren-v1 screenshots in dark and light before merging.
 
 ## Testing
