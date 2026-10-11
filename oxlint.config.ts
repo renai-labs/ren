@@ -55,7 +55,7 @@ const browserPatterns = [
       "^(lodash|lodash-es|underscore|ramda|usehooks-ts|react-use|ahooks|@uidotdev/usehooks|fast-deep-equal|classnames|uuid|nanoid)(/|$)",
     message: "Use the platform (crypto.randomUUID, structuredClone, Intl) or a few lines of local code.",
   },
-  { regex: "^(moment|dayjs|date-fns|luxon)(/|$)", message: "Use Intl and the formatters in @ren/ui." },
+  { regex: "^(moment|dayjs|date-fns|luxon)(/|$)", message: "Use the formatters in @ren/ui." },
   {
     regex: "^(@radix-ui|@headlessui|@mui|@chakra-ui|@mantine|@ark-ui|react-aria|react-aria-components|@shadcn)(/|$)",
     message: "Base UI is the only primitive library.",
@@ -90,6 +90,17 @@ const appPatterns = [
 
 const restrictedImports = (apis: string[], message: string, patterns: typeof browserPatterns) =>
   ["error", { paths: [{ name: "react", importNames: apis, message }, ...authPaths], patterns }] as const
+
+const formatMessage = "Format dates and numbers with the shared formatters in @ren/ui."
+const formatGlobals = [{ name: "Intl", message: formatMessage }]
+const formatProperties = ["toLocaleString", "toLocaleDateString", "toLocaleTimeString"].map((property) => ({
+  property,
+  message: `${formatMessage} \`${property}\` builds a new formatter on every call.`,
+}))
+const dateProperties = ["getFullYear", "getMonth", "getDate", "getDay"].map((property) => ({
+  property,
+  message: formatMessage,
+}))
 
 const platformGlobals = [
   { name: "localStorage", message: "Go through platform storage." },
@@ -131,7 +142,7 @@ const domProperties = [
   { object: "document", property: "querySelectorAll", message: "Use refs." },
   { object: "document", property: "getElementById", message: "Use a ref." },
   { object: "document", property: "getElementsByClassName", message: "Use refs." },
-  { object: "document", property: "startViewTransition", message: "Use the router's viewTransition option." },
+  { object: "document", property: "startViewTransition", message: "Use React's <ViewTransition>." },
   { object: "window", property: "alert", message: "Use a Dialog or Toast from @ren/ui." },
   { object: "window", property: "confirm", message: "Use an AlertDialog from @ren/ui." },
   { object: "window", property: "prompt", message: "Use a Dialog from @ren/ui." },
@@ -185,7 +196,7 @@ const tailwindRules = {
 const spacingStep = "(?:0|1|2|3|4|6|8|12)"
 const layoutUtilities = [
   "flex|inline-flex|grid|inline-grid|block|inline-block|inline|hidden|contents|invisible|visible",
-  "flex-(?:row|col)(?:-reverse)?|flex-(?:wrap|nowrap|1|none|auto)|grow(?:-0)?|shrink(?:-0)?",
+  "flex-(?:row|col)|flex-(?:wrap|nowrap|1|none|auto)|grow(?:-0)?|shrink(?:-0)?",
   "items-(?:start|end|center|baseline|stretch)",
   "justify-(?:start|end|center|between|around|evenly|stretch|normal)",
   "self-(?:auto|start|end|center|stretch|baseline)",
@@ -193,11 +204,10 @@ const layoutUtilities = [
   "place-(?:content|items|self)-(?:start|end|center|between|around|evenly|stretch|baseline|auto)",
   "justify-items-(?:start|end|center|stretch|normal)",
   "justify-self-(?:auto|start|end|center|stretch)",
-  "order-(?:\\d+|first|last|none)",
   "grid-(?:cols|rows)-\\d+|(?:col|row)-span-(?:\\d+|full)|col-(?:start|end)-\\d+",
   "text-(?:left|right|center|start|end)",
   `(?:gap(?:-[xy])?|[pm][xytrblse]?)-${spacingStep}|m[xytrblse]?-auto`,
-  "(?:w|h|size|max-w|max-h|min-h)-full|min-[wh]-0|(?:max-)?w-(?:sidebar|dialog|content)",
+  "(?:w|h|size|max-w|max-h|min-h)-full|(?:min-)?h-dvh|min-[wh]-0|(?:max-)?w-(?:sidebar|dialog|content)",
   "overflow(?:-[xy])?-(?:auto|hidden|visible|scroll|clip)|overscroll(?:-[xy])?-(?:contain|auto|none)",
   "relative|sticky|top-0",
 ].join("|")
@@ -210,6 +220,31 @@ const rawArbitraryValue = {
   pattern: "\\[[^\\]]*(#|\\d+(px|rem|em|ms|s)\\b|rgb|hsl|oklch)[^\\]]*\\]",
   message: "Raw values bypass the design tokens. Use a token class, or `var(--ren-*)` inside the arbitrary value.",
 }
+const anyVariant = "^(?:[^:]*:)*"
+const motionClass = {
+  pattern: `${anyVariant}(?:transition(?!-(?:standard|extended|none)$)(?:-.+)?|duration-.+|ease-.+|delay-.+)$`,
+  message:
+    "Motion goes through the tokens in motion.css: `transition-standard`, `transition-extended` or `transition-none`.",
+}
+const viewportUnitClass = {
+  pattern: `${anyVariant}(?:min-|max-)?[hw]-screen$`,
+  message: "`100vw` includes the scrollbar and `100vh` sits behind mobile browser toolbars. Use `w-full` or `h-dvh`.",
+}
+const readingOrderClass = {
+  pattern: `${anyVariant}(?:order-.+|flex-(?:row|col)-reverse|text-justify)$`,
+  message:
+    "Visual order must match DOM order for keyboard and screen-reader users, and interface text aligns to start.",
+}
+const fontSmoothingClass = {
+  pattern: `${anyVariant}(?:subpixel-)?antialiased$`,
+  message: "Font smoothing is set once on the root in theme.css.",
+}
+const colorRoleClass = {
+  pattern: `${anyVariant}(?:(?:bg|from|via|to)-(?:text|border)-|(?:text|placeholder|caret|decoration)-(?:background|fill|border|overlay)-|(?:border(?:-[xytrblse])?|ring|outline|divide|inset-ring)-(?:text|background|fill|overlay)-).+$`,
+  message:
+    "Use colour tokens only in their role: backgrounds take background, fill and overlay; text takes text; borders and rings take border. Accent and status work anywhere. Add a role token in Paper instead of borrowing one.",
+}
+
 const appClasses = {
   pattern: `^(?!(?:(?:sm|md|lg):)*(?:${layoutUtilities})$).+$`,
   message:
@@ -372,8 +407,22 @@ export default defineConfig({
         "import/no-namespace": "error",
 
         ...tailwindRules,
-        "better-tailwindcss/no-restricted-classes": ["error", { restrict: [importantClass, rawArbitraryValue] }],
+        "better-tailwindcss/no-restricted-classes": [
+          "error",
+          {
+            restrict: [
+              importantClass,
+              rawArbitraryValue,
+              motionClass,
+              viewportUnitClass,
+              readingOrderClass,
+              fontSmoothingClass,
+              colorRoleClass,
+            ],
+          },
+        ],
 
+        "ren/interface-copy": "error",
         "ren/jsx-no-leaked-render": "error",
         "ren/no-boolean-mode-props": "error",
         "ren/no-comments": "error",
@@ -382,11 +431,12 @@ export default defineConfig({
         "ren/no-render-props": "error",
         "ren/no-sort-for-extremum": "error",
         "ren/prefer-lazy-state-init": "error",
+        "ren/require-companion-class": "error",
         "ren/require-passive-listener": "error",
         "ren/require-suppression-reason": "error",
 
         "no-restricted-globals": ["error", reflect, ...serverGlobals, ...platformGlobals, ...dialogGlobals],
-        "no-restricted-properties": ["error", jsonParse, ...platformProperties, ...domProperties],
+        "no-restricted-properties": ["error", jsonParse, ...platformProperties, ...domProperties, ...formatProperties],
         "no-restricted-imports": restrictedImports(reactApis, reactMessage, browserPatterns),
       },
     },
@@ -412,6 +462,22 @@ export default defineConfig({
         ],
         "react/forbid-dom-props": ["error", { forbid: ["style"] }],
         "react/forbid-elements": ["error", { forbid: forbiddenElements }],
+        "no-restricted-globals": [
+          "error",
+          reflect,
+          ...serverGlobals,
+          ...platformGlobals,
+          ...dialogGlobals,
+          ...formatGlobals,
+        ],
+        "no-restricted-properties": [
+          "error",
+          jsonParse,
+          ...platformProperties,
+          ...domProperties,
+          ...formatProperties,
+          ...dateProperties,
+        ],
         "no-restricted-imports": restrictedImports(reactApis, reactMessage, appPatterns),
       },
     },
@@ -428,8 +494,8 @@ export default defineConfig({
     {
       files: ["packages/app/src/platform/**"],
       rules: {
-        "no-restricted-globals": ["error", reflect, ...serverGlobals, ...dialogGlobals],
-        "no-restricted-properties": ["error", jsonParse, ...domProperties],
+        "no-restricted-globals": ["error", reflect, ...serverGlobals, ...dialogGlobals, ...formatGlobals],
+        "no-restricted-properties": ["error", jsonParse, ...domProperties, ...formatProperties, ...dateProperties],
       },
     },
     {
@@ -455,7 +521,7 @@ export default defineConfig({
     {
       files: ["packages/app/src/main.tsx"],
       rules: {
-        "no-restricted-properties": ["error", jsonParse, ...platformProperties],
+        "no-restricted-properties": ["error", jsonParse, ...platformProperties, ...formatProperties, ...dateProperties],
       },
     },
     {

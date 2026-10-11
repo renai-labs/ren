@@ -21,6 +21,30 @@ tester.run("feature-boundaries", rules["feature-boundaries"], {
   ],
 })
 
+tester.run("interface-copy", rules["interface-copy"], {
+  valid: [
+    `const a = <Text>Loading…</Text>`,
+    `const a = <Text>You’re all set</Text>`,
+    `const a = <Button aria-label="Close dialog" />`,
+    `const a = <Field placeholder="name@example.com" />`,
+    `const a = <div className="origin-(--transform-origin) before:content-['']" />`,
+    `const a = { queryKey: ["it's"] }`,
+    `const a = <Text>{error ? "Unable to save. Try again." : "Saved"}</Text>`,
+  ],
+  invalid: [
+    { code: `const a = <Text>Loading...</Text>`, errors: 1 },
+    { code: `const a = <Text>Don't go</Text>`, errors: 1 },
+    { code: `const a = <Text>{failed ? "Oops, something went wrong" : null}</Text>`, errors: 2 },
+    { code: `const a = <Button>OK</Button>`, errors: 1 },
+    { code: `const a = <Button aria-label="Close icon" />`, errors: 1 },
+    { code: `const a = <Button aria-label="X" />`, errors: 1 },
+    { code: `toast.add({ title: "Saved successfully" })`, errors: 1 },
+    { code: `const a = <Text>Please enter your email</Text>`, errors: 1 },
+    { code: `const a = <Dialog.Title>Are you sure?</Dialog.Title>`, errors: 1 },
+    { code: "const a = <Text title={`Step 1 -- ${name}`} />", errors: 1 },
+  ],
+})
+
 tester.run("jsx-no-leaked-render", rules["jsx-no-leaked-render"], {
   valid: [`const a = <div>{count > 0 ? <span /> : null}</div>`, `const ready = loaded && visible`],
   invalid: [
@@ -103,6 +127,23 @@ tester.run("prefer-lazy-state-init", rules["prefer-lazy-state-init"], {
     { code: `useState(parse(value))`, errors: 1 },
     { code: `useState(new Set())`, errors: 1 },
     { code: `useReducer(reducer, build(props))`, errors: 1 },
+  ],
+})
+
+tester.run("require-companion-class", rules["require-companion-class"], {
+  valid: [
+    `const a = <div className="outline-none focus-visible:ring-2" />`,
+    `const a = cva("outline-none", { variants: { tone: { primary: "focus-visible:inset-ring-accent-primary" } } })`,
+    `const a = <div className="overflow-y-auto overscroll-contain" />`,
+    `const a = <div className={composeClasses("overflow-auto", open && "overscroll-y-contain")} />`,
+    `const a = <div className="overflow-hidden" />`,
+    `const a = <div title="outline-none" />`,
+  ],
+  invalid: [
+    { code: `const a = <div className="outline-none" />`, errors: 1 },
+    { code: `const a = cva("rounded-control outline-none", { variants: { size: { sm: "h-8" } } })`, errors: 1 },
+    { code: `const a = <div className="max-h-64 overflow-y-auto" />`, errors: 1 },
+    { code: `const a = <div className={composeClasses("data-open:overflow-scroll", "outline-none")} />`, errors: 2 },
   ],
 })
 

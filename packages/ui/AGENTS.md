@@ -1,6 +1,6 @@
 # @ren/ui
 
-The design system. It owns every visual decision in Ren: tokens, components and motion. Load the `react` skill before writing components.
+The design system. It owns every visual decision in Ren: tokens, components and motion. Load the `react` and `interface` skills before writing components.
 
 ## Structure
 
@@ -25,6 +25,10 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 
 - Tokens come from the Paper file "Ren UI" through `DESIGN.md` (use the `sync-with-paper` skill) and `bun run generate`. Never edit `DESIGN.md` or `tokens.generated.css` by hand, never rename a token, and never use a colour, size, radius or duration that is not a token.
 - When porting from `ren-v1/packages/ui`, keep class strings, variants, sizes and states identical. A visual change is a separate, explicit decision. Compare against ren-v1 screenshots in dark and light before merging.
+- Approved deviations from ren-v1:
+  - Text inputs use `text-base sm:text-sm`, so iOS doesn't zoom the page on focus.
+  - `Text` balances headings (`text-balance`) and avoids orphans in body copy (`text-pretty`).
+  - Classes that borrow another role's colour (`bg-text-primary`, `border-text-primary`, `bg-border-primary`) move to the role tokens added in Paper, with identical values.
 
 ## Testing
 
