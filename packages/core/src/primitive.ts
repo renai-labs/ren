@@ -10,37 +10,30 @@ export class Forbidden extends Schema.TaggedError<Forbidden>()("Primitive.Forbid
 
 export class Conflict extends Schema.TaggedError<Conflict>()("Primitive.Conflict", { message: Schema.String }) {}
 
-type Write<D extends Primitive.Definition, W extends Primitive.Write> = (
-  actor: Actor.Info,
-  id: D["id"]["Type"],
-  input: W["input"]["Type"],
-) => Effect.Effect<W["result"]["Type"], NotFound | Forbidden | Conflict>
+type Input<Operation> = Operation extends { readonly input: Schema.Top } ? Operation["input"]["Type"] : never
 
-export type Interface<D extends Primitive.Definition> = (D extends { readonly list: Primitive.List }
-  ? {
-      readonly list: (actor: Actor.Info, input: D["list"]["input"]["Type"]) => Effect.Effect<D["list"]["page"]["Type"]>
-    }
-  : unknown) &
-  (D extends { readonly get: true }
-    ? { readonly get: (actor: Actor.Info, idOrSlug: string) => Effect.Effect<D["info"]["Type"], NotFound> }
-    : unknown) &
-  (D extends { readonly create: Primitive.Write }
-    ? {
-        readonly create: (
-          actor: Actor.Info,
-          input: D["create"]["input"]["Type"],
-        ) => Effect.Effect<D["create"]["result"]["Type"], Conflict>
-      }
-    : unknown) &
-  (D extends { readonly update: Primitive.Write } ? { readonly update: Write<D, D["update"]> } : unknown) &
-  (D extends { readonly archive: true }
-    ? {
-        readonly archive: (
-          actor: Actor.Info,
-          id: D["id"]["Type"],
-        ) => Effect.Effect<D["info"]["Type"], NotFound | Forbidden>
-      }
-    : unknown) &
-  (D extends { readonly actions: Readonly<Record<string, Primitive.Write>> }
-    ? { readonly [Name in keyof D["actions"]]: Write<D, D["actions"][Name]> }
-    : unknown)
+type Result<Operation> = Operation extends { readonly result: Schema.Top } ? Operation["result"]["Type"] : never
+
+type Page<Operation> = Operation extends { readonly page: Schema.Top } ? Operation["page"]["Type"] : never
+
+interface Methods<D extends Primitive.Definition> {
+  readonly list: (actor: Actor.Info, input: Input<D["list"]>) => Effect.Effect<Page<D["list"]>>
+  readonly get: (actor: Actor.Info, idOrSlug: string) => Effect.Effect<D["info"]["Type"], NotFound>
+  readonly create: (actor: Actor.Info, input: Input<D["create"]>) => Effect.Effect<Result<D["create"]>, Conflict>
+  readonly update: (
+    actor: Actor.Info,
+    id: D["id"]["Type"],
+    input: Input<D["update"]>,
+  ) => Effect.Effect<Result<D["update"]>, NotFound | Forbidden | Conflict>
+  readonly archive: (actor: Actor.Info, id: D["id"]["Type"]) => Effect.Effect<D["info"]["Type"], NotFound | Forbidden>
+}
+
+type Actions<D extends Primitive.Definition> = {
+  readonly [Name in keyof D["actions"]]: (
+    actor: Actor.Info,
+    id: D["id"]["Type"],
+    input: Input<D["actions"][Name]>,
+  ) => Effect.Effect<Result<D["actions"][Name]>, NotFound | Forbidden | Conflict>
+}
+
+export type Interface<D extends Primitive.Definition> = Pick<Methods<D>, keyof D & keyof Methods<D>> & Actions<D>
