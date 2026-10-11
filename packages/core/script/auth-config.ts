@@ -1,5 +1,6 @@
 import { AuthDatabase } from "@ren/db/auth-database"
 import { drizzle } from "drizzle-orm/bun-sql/postgres"
+import { Option } from "effect"
 import { Auth } from "../src/auth.js"
 
 export const auth = Auth.make({
@@ -11,4 +12,8 @@ export const auth = Auth.make({
   appURL: "http://localhost",
   requireEmailVerification: true,
   sendEmail: () => {},
+  signupGuard: {
+    checkEmailSignUp: () => Promise.resolve(Option.none()),
+    checkAccountCreation: () => Promise.resolve(Option.none()),
+  },
 })

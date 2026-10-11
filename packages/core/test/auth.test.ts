@@ -1,16 +1,19 @@
 import { describe, expect } from "bun:test"
+import { AuthDatabase } from "@ren/db/auth-database"
 import { Testing } from "@ren/db/testing"
 import { getAuthTables } from "better-auth/db"
 import { drizzle } from "drizzle-orm/bun-sql/postgres"
 import { ConfigProvider, Effect, Exit, Layer, Option } from "effect"
 import { Auth } from "../src/auth.js"
 import { Mailer } from "../src/mailer.js"
+import { SignupGuard } from "../src/signup-guard.js"
 import { testEffect } from "./lib/effect.js"
 import { Postmark } from "./lib/postmark.js"
 
 const layer = (config: Record<string, string>) =>
   Auth.layer.pipe(
-    Layer.provide(Testing.layer),
+    Layer.provideMerge(Layer.effect(SignupGuard.Service, SignupGuard.make(dns))),
+    Layer.provideMerge(Testing.layer),
     Layer.provideMerge(Mailer.layer),
     Layer.provideMerge(Postmark.layer()),
     Layer.provide(
@@ -29,6 +32,15 @@ const layer = (config: Record<string, string>) =>
       ),
     ),
   )
+
+const dns: SignupGuard.Resolver = {
+  resolveMx: (domain) =>
+    domain.includes("nowhere")
+      ? Promise.reject(Object.assign(new Error("ENOTFOUND"), { code: "ENOTFOUND" }))
+      : Promise.resolve([{ exchange: `mx.${domain}` }]),
+  resolve4: () => Promise.resolve([]),
+  resolve6: () => Promise.resolve([]),
+}
 
 const it = testEffect(layer({ SKIP_EMAIL_VERIFICATION: "true" }))
 const verifying = testEffect(layer({}))
@@ -293,6 +305,10 @@ describe("Auth", () => {
         appURL: "http://localhost:5173",
         requireEmailVerification: true,
         sendEmail: () => {},
+        signupGuard: {
+          checkEmailSignUp: () => Promise.resolve(Option.none()),
+          checkAccountCreation: () => Promise.resolve(Option.none()),
+        },
       })
       const models = Object.keys(getAuthTables(auth.options))
       const ids = models.map((model) => auth.options.advanced.database.generateId({ model }))
@@ -423,6 +439,61 @@ describe("Auth", () => {
         })
         yield* post(auth, "/request-password-reset", { email: "annie@example.org" })
         expect((yield* outbox.next).message.Subject).toBe("Reset your Ren password")
+      }),
+    )
+  })
+
+  describe("signup guard", () => {
+    const rejection = Effect.fnUntraced(function* (response: Response) {
+      expect(response.status).toBe(400)
+      return (yield* Effect.promise(() => response.json())).code
+    })
+
+    it.live("rejects email sign-ups the guard refuses, before creating the user", () =>
+      Effect.gen(function* () {
+        const auth = yield* Auth.Service
+        const database = yield* AuthDatabase.Service
+        expect(yield* rejection(yield* signUp(auth, "spam@mailinator.com"))).toBe("DISPOSABLE_EMAIL")
+        expect(yield* rejection(yield* signUp(auth, "lost@nowhere.dev"))).toBe("UNDELIVERABLE_EMAIL_DOMAIN")
+        expect((yield* signUp(auth, "jdoe@gmail.com")).status).toBe(200)
+        expect(yield* rejection(yield* signUp(auth, "j.doe+1@gmail.com"))).toBe("ALIAS_EMAIL")
+
+        const users = yield* Effect.promise(() => database.db.query.user.findMany({ columns: { email: true } }))
+        expect(users.map((user) => user.email)).not.toContain("spam@mailinator.com")
+      }),
+    )
+
+    it.live("rejects disposable domains for accounts created outside email sign-up", () =>
+      Effect.gen(function* () {
+        const database = yield* AuthDatabase.Service
+        const guard = yield* SignupGuard.Service
+        const instance = Auth.make({
+          database: database.db,
+          secret: "test-secret-at-least-32-characters-long",
+          baseURL: "http://localhost:4000",
+          trustedOrigins: [],
+          google: { clientId: "unused", clientSecret: "unused" },
+          appURL: "http://localhost:5173",
+          requireEmailVerification: true,
+          sendEmail: () => {},
+          signupGuard: {
+            checkEmailSignUp: (email) => Effect.runPromise(guard.checkEmailSignUp(email)),
+            checkAccountCreation: (email) => Effect.runPromise(guard.checkAccountCreation(email)),
+          },
+        })
+        const context = yield* Effect.promise(() => instance.$context)
+        const created = yield* Effect.promise(() =>
+          context.internalAdapter
+            .createUser(
+              { email: "oauth@mailinator.com", name: "OAuth", emailVerified: true },
+              { method: "oauth", oauth: { providerId: "google" } },
+            )
+            .then(
+              () => "created",
+              (error: unknown) => String(error),
+            ),
+        )
+        expect(created).toContain("permanent email")
       }),
     )
   })

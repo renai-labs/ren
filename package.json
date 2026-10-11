@@ -40,6 +40,7 @@
       "auth": "1.7.7",
       "better-auth": "1.7.7",
       "drizzle-kit": "1.0.0-rc.5-5935859",
+      "disposable-email-domains-js": "1.26.0",
       "drizzle-orm": "1.0.0-rc.5-5935859",
       "effect": "4.0.1",
       "free-email-domains": "1.12.21",
