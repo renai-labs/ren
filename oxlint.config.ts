@@ -11,6 +11,29 @@ const serverOnly = {
   regex: "^@ren/(core|db|server)(/|$)",
   message: "Client-side packages never import core, db or server. Go through @ren/client.",
 }
+const packageBoundaries = [
+  { files: ["packages/schema/**"], regex: "^@ren/", message: "Schema imports nothing from Ren." },
+  {
+    files: ["packages/protocol/**"],
+    regex: "^@ren/(core|db|server)(/|$)",
+    message: "Protocol depends only on schema.",
+  },
+  {
+    files: ["packages/db/**"],
+    regex: "^@ren/(core|protocol|server)(/|$)",
+    message: "Db never imports core, protocol or server.",
+  },
+  {
+    files: ["packages/core/**"],
+    regex: "^@ren/(protocol|server)(/|$)",
+    message: "Core never knows about HTTP. Take an Actor instead of protocol services.",
+  },
+  {
+    files: ["packages/server/src/handlers/**"],
+    regex: "^@ren/db(/|$)",
+    message: "Handlers decode, call a core service and map errors. Queries belong in core.",
+  },
+]
 
 const reactApis = [
   "useMemo",
@@ -272,6 +295,15 @@ export default defineConfig({
     "typescript/no-deprecated": "error",
   },
   overrides: [
+    ...packageBoundaries.map((boundary) => ({
+      files: boundary.files,
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          { patterns: [{ regex: boundary.regex, message: boundary.message }, vendored] },
+        ],
+      },
+    })),
     {
       files: ["packages/client/**", "packages/sdk/**", "packages/cli/**"],
       rules: {
