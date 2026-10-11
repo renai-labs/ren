@@ -23,7 +23,8 @@
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
     "free-email-domains": "catalog:",
-    "tldts": "catalog:"
+    "tldts": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@tsconfig/bun": "catalog:",

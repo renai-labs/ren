@@ -5,7 +5,8 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Auth } from "@ren/schema/auth"
 import { Identifier } from "@ren/schema/identifier"
 import { betterAuth } from "better-auth"
-import { bearer, organization } from "better-auth/plugins"
+import { APIError, createAuthMiddleware } from "better-auth/api"
+import { bearer, emailOTP, organization } from "better-auth/plugins"
 import { eq, like, or } from "drizzle-orm"
 import freeEmailDomains from "free-email-domains"
 import { Config, Context, Effect, FiberSet, Layer, Option, Redacted, Schema } from "effect"
@@ -19,6 +20,7 @@ export interface Input {
   readonly trustedOrigins: ReadonlyArray<string>
   readonly google: { readonly clientId: string; readonly clientSecret: string }
   readonly appURL: string
+  readonly requireEmailVerification: boolean
   readonly sendEmail: (email: Mailer.Email) => void
 }
 
@@ -31,6 +33,8 @@ const ids: Record<string, () => string> = {
   member: Auth.MemberID.create,
   invitation: Auth.InvitationID.create,
 }
+
+const SendableOTP = Schema.Struct({ type: Schema.Literals(["sign-in", "email-verification"]) })
 
 const freemail = new Set([...freeEmailDomains, "duckduckgo.com", "tutanota.com", "tutamail.com", "tuta.io", "hey.com"])
 
@@ -57,11 +61,20 @@ export const make = (input: Input) => {
     secret: input.secret,
     baseURL: input.baseURL,
     basePath: "/api/auth",
-    disabledPaths: ["/organization/leave"],
+    disabledPaths: [
+      "/organization/leave",
+      "/email-otp/check-verification-otp",
+      "/email-otp/request-password-reset",
+      "/email-otp/reset-password",
+      "/forget-password/email-otp",
+      "/email-otp/request-email-change",
+      "/email-otp/change-email",
+    ],
     trustedOrigins: [...input.trustedOrigins],
     database: drizzleAdapter(input.database, { provider: "pg", schema: AuthDatabase.Schema }),
     emailAndPassword: {
       enabled: true,
+      requireEmailVerification: input.requireEmailVerification,
       sendResetPassword: async (data) => {
         const url = new URL("reset-password", `${input.appURL.replace(/\/$/, "")}/`)
         url.searchParams.set("token", data.token)
@@ -73,6 +86,13 @@ export const make = (input: Input) => {
       },
     },
     session: { expiresIn: 60 * 60 * 24 * 90 },
+    emailVerification: { sendOnSignIn: true, autoSignInAfterVerification: true },
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== "/email-otp/send-verification-otp") return
+        if (!Schema.is(SendableOTP)(ctx.body)) throw new APIError("BAD_REQUEST", { message: "Invalid OTP type" })
+      }),
+    },
     socialProviders: {
       google: { clientId: input.google.clientId, clientSecret: input.google.clientSecret },
     },
@@ -117,6 +137,30 @@ export const make = (input: Input) => {
     },
     plugins: [
       bearer(),
+      emailOTP({
+        overrideDefaultEmailVerification: true,
+        disableSignUp: true,
+        otpLength: 6,
+        expiresIn: 60 * 10,
+        allowedAttempts: 5,
+        storeOTP: "hashed",
+        sendVerificationOTP: async (data) => {
+          if (!Schema.is(SendableOTP)(data)) return
+          if (data.type === "email-verification") {
+            const user = await input.database.query.user.findFirst({
+              columns: { emailVerified: true },
+              where: { email: data.email.toLowerCase() },
+            })
+            if (user?.emailVerified) return
+          }
+          const purpose = data.type === "sign-in" ? "sign-in" : "verification"
+          input.sendEmail({
+            to: data.email,
+            subject: `${data.otp} is your Ren ${purpose} code`,
+            text: `Use ${data.otp} to ${data.type === "sign-in" ? "sign in" : "verify your email"} on Ren. The code expires in 10 minutes. If you didn't request it, you can ignore this email.`,
+          })
+        },
+      }),
       organization({
         invitationExpiresIn: 60 * 60 * 24 * 7,
         requireEmailVerificationOnInvitation: false,
@@ -169,7 +213,12 @@ export const layer = Layer.effect(
       googleClientId: Config.String("GOOGLE_CLIENT_ID"),
       googleClientSecret: Config.Redacted("GOOGLE_CLIENT_SECRET"),
       appURL: Config.String("APP_URL"),
+      skipEmailVerification: Config.Boolean("SKIP_EMAIL_VERIFICATION").pipe(Config.withDefault(false)),
+      nodeEnv: Config.String("NODE_ENV").pipe(Config.withDefault("development")),
     })
+    if (config.skipEmailVerification && config.nodeEnv === "production") {
+      return yield* Effect.die(new Error("SKIP_EMAIL_VERIFICATION cannot be enabled in production"))
+    }
     const auth = make({
       database: database.db,
       secret: Redacted.value(config.secret),
@@ -177,6 +226,7 @@ export const layer = Layer.effect(
       trustedOrigins: config.trustedOrigins,
       google: { clientId: config.googleClientId, clientSecret: Redacted.value(config.googleClientSecret) },
       appURL: config.appURL,
+      requireEmailVerification: !config.skipEmailVerification,
       sendEmail: (email) => {
         run(mailer.send(email).pipe(Effect.ignoreCause({ log: "Error", message: "Failed to send email" })))
       },
