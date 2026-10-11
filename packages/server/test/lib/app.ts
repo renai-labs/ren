@@ -1,5 +1,6 @@
 import { BunHttpServer } from "@effect/platform-bun"
 import { Mailer } from "@ren/core/mailer"
+import { SignupGuard } from "@ren/core/signup-guard"
 import { Testing } from "@ren/db/testing"
 import { ConfigProvider, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
@@ -10,7 +11,8 @@ export const origin = "http://localhost:5173"
 export const makeApp = (routes: typeof Routes.layer = Routes.layer) =>
   HttpRouter.toWebHandler(
     routes.pipe(
-      Layer.provide([Testing.layer, Mailer.layer]),
+      Layer.provide([Mailer.layer, SignupGuard.layer]),
+      Layer.provide(Testing.layer),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(BunHttpServer.layerHttpServices),
       Layer.provide(
@@ -23,6 +25,7 @@ export const makeApp = (routes: typeof Routes.layer = Routes.layer) =>
             GOOGLE_CLIENT_SECRET: "google-client-secret",
             APP_URL: origin,
             SKIP_EMAIL_VERIFICATION: "true",
+            SIGNUP_MX_CHECK: "false",
           }),
           { asPrimary: true },
         ),

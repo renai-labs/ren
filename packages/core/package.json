@@ -20,6 +20,7 @@
     "@ren/schema": "workspace:*",
     "@ren/util": "workspace:*",
     "better-auth": "catalog:",
+    "disposable-email-domains-js": "catalog:",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
     "free-email-domains": "catalog:",

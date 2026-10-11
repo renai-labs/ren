@@ -80,6 +80,7 @@
         "@ren/schema": "workspace:*",
         "@ren/util": "workspace:*",
         "better-auth": "catalog:",
+        "disposable-email-domains-js": "catalog:",
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
         "free-email-domains": "catalog:",
@@ -263,6 +264,7 @@
     "astro": "7.3.6",
     "auth": "1.7.7",
     "better-auth": "1.7.7",
+    "disposable-email-domains-js": "1.26.0",
     "drizzle-kit": "1.0.0-rc.5-5935859",
     "drizzle-orm": "1.0.0-rc.5-5935859",
     "effect": "4.0.1",
@@ -972,6 +974,8 @@
     "diff": ["diff@9.0.0", "", {}, "sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw=="],
 
     "direction": ["direction@2.0.1", "", { "bin": { "direction": "cli.js" } }, "sha512-9S6m9Sukh1cZNknO1CWAr2QAWsbKLafQiyM5gZ7VgXHeuaoUwffKN4q6NC4A/Mf9iiPlOXQEKW/Mv/mh9/3YFA=="],
+
+    "disposable-email-domains-js": ["disposable-email-domains-js@1.26.0", "", {}, "sha512-pSqALZAiuw6HDC1HqhhtvShRnniUNObQ6kzwa5N280XbyxxCPBZnQQ7fO6Uk/CNTi4cAaKE1UZl3Mc30Zfj4UA=="],
 
     "dom-serializer": ["dom-serializer@2.0.0", "", { "dependencies": { "domelementtype": "^2.3.0", "domhandler": "^5.0.2", "entities": "^4.2.0" } }, "sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg=="],
 

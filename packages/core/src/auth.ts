@@ -12,6 +12,7 @@ import freeEmailDomains from "free-email-domains"
 import { Config, Context, Effect, FiberSet, Layer, Option, Redacted, Schema } from "effect"
 import { getDomainWithoutSuffix } from "tldts"
 import { Mailer } from "./mailer.js"
+import { SignupGuard } from "./signup-guard.js"
 
 export interface Input {
   readonly database: AuthDatabase.Interface["db"]
@@ -22,6 +23,10 @@ export interface Input {
   readonly appURL: string
   readonly requireEmailVerification: boolean
   readonly sendEmail: (email: Mailer.Email) => void
+  readonly signupGuard: {
+    readonly checkEmailSignUp: (email: string) => Promise<Option.Option<SignupGuard.Rejection>>
+    readonly checkAccountCreation: (email: string) => Promise<Option.Option<SignupGuard.Rejection>>
+  }
 }
 
 const ids: Record<string, () => string> = {
@@ -35,6 +40,8 @@ const ids: Record<string, () => string> = {
 }
 
 const SendableOTP = Schema.Struct({ type: Schema.Literals(["sign-in", "email-verification"]) })
+
+const SignUp = Schema.Struct({ email: Schema.String })
 
 const freemail = new Set([...freeEmailDomains, "duckduckgo.com", "tutanota.com", "tutamail.com", "tuta.io", "hey.com"])
 
@@ -89,8 +96,12 @@ export const make = (input: Input) => {
     emailVerification: { sendOnSignIn: true, autoSignInAfterVerification: true },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
-        if (ctx.path !== "/email-otp/send-verification-otp") return
-        if (!Schema.is(SendableOTP)(ctx.body)) throw new APIError("BAD_REQUEST", { message: "Invalid OTP type" })
+        if (ctx.path === "/email-otp/send-verification-otp" && !Schema.is(SendableOTP)(ctx.body)) {
+          throw new APIError("BAD_REQUEST", { message: "Invalid OTP type" })
+        }
+        if (ctx.path !== "/sign-up/email" || !Schema.is(SignUp)(ctx.body)) return
+        const rejection = await input.signupGuard.checkEmailSignUp(ctx.body.email)
+        if (Option.isSome(rejection)) throw new APIError("BAD_REQUEST", rejection.value)
       }),
     },
     socialProviders: {
@@ -100,6 +111,17 @@ export const make = (input: Input) => {
       accountLinking: { enabled: true, trustedProviders: ["google"] },
     },
     databaseHooks: {
+      user: {
+        create: {
+          before: async (user, ctx) => {
+            if (ctx?.path !== "/sign-up/email") {
+              const rejection = await input.signupGuard.checkAccountCreation(user.email)
+              if (Option.isSome(rejection)) throw new APIError("BAD_REQUEST", rejection.value)
+            }
+            return { data: user }
+          },
+        },
+      },
       session: {
         create: {
           before: async (session): Promise<{ data: typeof session }> => {
@@ -205,6 +227,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* AuthDatabase.Service
     const mailer = yield* Mailer.Service
+    const signupGuard = yield* SignupGuard.Service
     const run = yield* FiberSet.makeRuntime()
     const config = yield* Config.all({
       secret: Config.Redacted("BETTER_AUTH_SECRET"),
@@ -229,6 +252,10 @@ export const layer = Layer.effect(
       requireEmailVerification: !config.skipEmailVerification,
       sendEmail: (email) => {
         run(mailer.send(email).pipe(Effect.ignoreCause({ log: "Error", message: "Failed to send email" })))
+      },
+      signupGuard: {
+        checkEmailSignUp: (email) => Effect.runPromise(signupGuard.checkEmailSignUp(email)),
+        checkAccountCreation: (email) => Effect.runPromise(signupGuard.checkAccountCreation(email)),
       },
     })
     return Service.of({
