@@ -6,9 +6,9 @@ import { Routes } from "../../src/routes.js"
 
 export const origin = "http://localhost:5173"
 
-export const makeApp = () =>
+export const makeApp = (routes: typeof Routes.layer = Routes.layer) =>
   HttpRouter.toWebHandler(
-    Routes.layer.pipe(
+    routes.pipe(
       Layer.provide(Testing.layer),
       Layer.provide(BunHttpServer.layerHttpServices),
       Layer.provide(
