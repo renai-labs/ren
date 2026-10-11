@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { AuthDatabase } from "@ren/db/auth-database"
+import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { ConfigProvider, Effect, Fiber, Layer, Option } from "effect"
@@ -34,18 +34,16 @@ const code = Effect.fnUntraced(function* (email: string, overrides: Partial<Sign
   return Option.getOrUndefined(yield* guard.checkEmailSignUp(email))?.code
 })
 
-const insertUser = Effect.fnUntraced(function* (email: string) {
-  const database = yield* AuthDatabase.Service
-  yield* Effect.promise(() =>
-    database.db.insert(AuthDatabase.Schema.user).values({
-      id: Auth.UserID.create(),
-      name: "Owner",
-      email,
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }),
-  )
+const insertUser = Effect.fnUntraced(function* (email: string, emailVerified = true) {
+  const database = yield* Database.Service
+  yield* database.db.insert(Database.Schema.user).values({
+    id: Auth.UserID.create(),
+    name: "Owner",
+    email,
+    emailVerified,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
 })
 
 describe("SignupGuard", () => {
@@ -54,14 +52,6 @@ describe("SignupGuard", () => {
       Effect.gen(function* () {
         expect(yield* code("spam@guerrillamail.com")).toBe("DISPOSABLE_EMAIL")
         expect(yield* code("spam@inbox.guerrillamail.com")).toBe("DISPOSABLE_EMAIL")
-      }),
-    )
-
-    it.live("lets privacy relays and regular providers through", () =>
-      Effect.gen(function* () {
-        for (const domain of ["duck.com", "relay.firefox.com", "simplelogin.com", "proton.me", "gmail.com"]) {
-          expect(yield* code(`someone@${domain}`)).toBeUndefined()
-        }
       }),
     )
 
@@ -84,12 +74,6 @@ describe("SignupGuard", () => {
   })
 
   describe("mail server lookup", () => {
-    it.live("accepts a domain with MX records", () =>
-      Effect.gen(function* () {
-        expect(yield* code("ada@acme.dev")).toBeUndefined()
-      }),
-    )
-
     it.live("rejects a null MX and a domain that does not exist", () =>
       Effect.gen(function* () {
         expect(yield* code("ada@acme.dev", { resolveMx: () => Promise.resolve([{ exchange: "" }]) })).toBe(
@@ -139,27 +123,35 @@ describe("SignupGuard", () => {
   })
 
   describe("email aliases", () => {
-    it.live("rejects plus tags everywhere and Gmail dots of an existing inbox", () =>
+    const alias = Effect.fnUntraced(function* (email: string) {
+      const guard = yield* SignupGuard.make(resolver({}))
+      return yield* guard.hasVerifiedAlias(email)
+    })
+
+    it.live("finds plus tags everywhere and Gmail dots of a verified inbox", () =>
       Effect.gen(function* () {
         yield* insertUser("jdoe@gmail.com")
         yield* insertUser("owner@acme-tools.dev")
-        for (const alias of [
-          "jdoe+1@gmail.com",
-          "j.doe@googlemail.com",
-          "J.Doe+farm@GoogleMail.com",
-          "owner+x@acme-tools.dev",
-        ]) {
-          expect(yield* code(alias)).toBe("ALIAS_EMAIL")
-        }
+        const aliases = yield* Effect.forEach(
+          ["jdoe+1@gmail.com", "j.doe@googlemail.com", "J.Doe+farm@GoogleMail.com", "owner+x@acme-tools.dev"],
+          alias,
+        )
+        expect(aliases).toEqual([true, true, true, true])
       }),
     )
 
-    it.live("keeps exact duplicates and distinct inboxes out of it", () =>
+    it.live("ignores aliases of unverified accounts", () =>
+      Effect.gen(function* () {
+        yield* insertUser("victim+squat@gmail.com", false)
+        expect(yield* alias("victim@gmail.com")).toBe(false)
+      }),
+    )
+
+    it.live("keeps distinct inboxes out of it", () =>
       Effect.gen(function* () {
         yield* insertUser("grace@gmail.com")
-        expect(yield* code("grace@gmail.com")).toBeUndefined()
-        expect(yield* code("gracex@gmail.com")).toBeUndefined()
-        expect(yield* code("g.race@acme-tools.dev")).toBeUndefined()
+        expect(yield* alias("gracex@gmail.com")).toBe(false)
+        expect(yield* alias("g.race@acme-tools.dev")).toBe(false)
       }),
     )
   })

@@ -8,6 +8,6 @@
     "incremental": true,
     "tsBuildInfoFile": "node_modules/.ts-dist/tests.tsbuildinfo"
   },
-  "include": ["test", "script"],
+  "include": ["test"],
   "references": [{ "path": "./tsconfig.json" }]
 }

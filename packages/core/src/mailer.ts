@@ -1,5 +1,6 @@
 export * as Mailer from "./mailer.js"
 
+import { Environment } from "@ren/util/environment"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 
@@ -23,8 +24,14 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Ma
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const token = yield* Config.option(Config.Redacted("POSTMARK_SERVER_TOKEN"))
+    const token = Option.filter(
+      yield* Config.option(Config.Redacted("POSTMARK_SERVER_TOKEN")),
+      (value) => Redacted.value(value) !== "",
+    )
     if (Option.isNone(token)) {
+      if (!(yield* Environment.local)) {
+        return yield* Effect.die(new Error("POSTMARK_SERVER_TOKEN is required outside development/test"))
+      }
       return Service.of({
         send: Effect.fn("Mailer.send")(function* (email: Email) {
           yield* Effect.logInfo(`Email to ${email.to}: ${email.subject}\n${email.text}`)
@@ -47,6 +54,7 @@ export const layer = Layer.effect(
             MessageStream: "outbound",
           }),
           client.execute,
+          Effect.timeout("10 seconds"),
           Effect.mapError((cause) => new MailerError({ cause })),
         )
       }),

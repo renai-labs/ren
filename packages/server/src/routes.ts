@@ -1,12 +1,12 @@
 export * as Routes from "./routes.js"
 
-import { Auth } from "@ren/core/auth"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Effect, Layer } from "effect"
 import { HttpEffect, HttpMiddleware, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "./api.js"
+import { Auth } from "./auth.js"
 import { HealthHandler } from "./handlers/health.js"
 import { InvitationHandler } from "./handlers/invitation.js"
 import { MeHandler } from "./handlers/me.js"

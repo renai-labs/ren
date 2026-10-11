@@ -1,5 +1,4 @@
 export * as AuthDatabase from "./auth-database.js"
-export * as Schema from "./auth.sql.js"
 
 import { SQL } from "bun"
 import { type BunSQLDatabase, drizzle } from "drizzle-orm/bun-sql/postgres"

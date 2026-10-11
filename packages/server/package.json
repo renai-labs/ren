@@ -9,23 +9,32 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
+    "generate": "bun run script/generate-auth-schema.ts",
+    "check:generated": "bun run generate && git diff --exit-code -- ../db/src/auth.sql.ts",
     "dev": "bun --env-file=../../.env run --watch src/main.ts",
     "start": "bun run src/main.ts",
     "test": "bun ../../script/test.ts",
     "typecheck": "tsgo -b"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "catalog:",
     "@effect/platform-bun": "catalog:",
     "@ren/core": "workspace:*",
     "@ren/db": "workspace:*",
     "@ren/protocol": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/util": "workspace:*",
-    "effect": "catalog:"
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
+    "effect": "catalog:",
+    "free-email-domains": "catalog:",
+    "tldts": "catalog:"
   },
   "devDependencies": {
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:"
+    "@typescript/native-preview": "catalog:",
+    "auth": "catalog:",
+    "prettier": "catalog:"
   }
 }

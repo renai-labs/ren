@@ -1,10 +1,10 @@
-import { AuthDatabase } from "@ren/db/auth-database"
+import { Database } from "@ren/db/database"
 import { drizzle } from "drizzle-orm/bun-sql/postgres"
 import { Option } from "effect"
 import { Auth } from "../src/auth.js"
 
 export const auth = Auth.make({
-  database: drizzle.mock({ relations: AuthDatabase.Schema.authRelations }),
+  database: drizzle.mock({ relations: Database.Schema.authRelations }),
   secret: "generate-auth-schema",
   baseURL: "http://localhost",
   trustedOrigins: [],
@@ -15,5 +15,6 @@ export const auth = Auth.make({
   signupGuard: {
     checkEmailSignUp: () => Promise.resolve(Option.none()),
     checkAccountCreation: () => Promise.resolve(Option.none()),
+    hasVerifiedAlias: () => Promise.resolve(false),
   },
 })

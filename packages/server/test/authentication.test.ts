@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test"
-import { Auth } from "@ren/core/auth"
 import { UnauthorizedError } from "@ren/protocol/errors"
 import { Authentication, CurrentUser } from "@ren/protocol/middleware/authentication"
 import { Effect, Layer, Schema } from "effect"
 import { HttpApi, HttpApiBuilder, HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
+import { Auth } from "../src/auth.js"
 import { AuthenticationLayer } from "../src/middleware/authentication.js"
 import { Routes } from "../src/routes.js"
 import { makeApp } from "./lib/app.js"
@@ -33,13 +33,19 @@ const ProtectedRoutes = HttpApiBuilder.layer(ProtectedApi).pipe(
   Layer.provide(Auth.layer),
 )
 
-const app = makeApp(Layer.mergeAll(Routes.layer, ProtectedRoutes))
+const routes = Layer.mergeAll(Routes.layer, ProtectedRoutes)
 
-afterAll(() => app.dispose())
+const app = makeApp(routes)
+const secureApp = makeApp(routes, { baseURL: "https://localhost:4000" })
 
-const signUp = async (email: string) => {
-  const response = await app.handler(
-    new Request("http://localhost:4000/api/auth/sign-up/email", {
+afterAll(async () => {
+  await app.dispose()
+  await secureApp.dispose()
+})
+
+const signUp = async (email: string, handler = app.handler, baseURL = "http://localhost:4000") => {
+  const response = await handler(
+    new Request(`${baseURL}/api/auth/sign-up/email`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, password: "correct horse battery staple", name: "Ada" }),
@@ -48,6 +54,12 @@ const signUp = async (email: string) => {
   expect(response.status).toBe(200)
   return response
 }
+
+const sessionCookie = (response: Response) =>
+  response.headers
+    .getSetCookie()
+    .map((cookie) => cookie.split(";")[0])
+    .join("; ")
 
 const me = (headers?: HeadersInit) => app.handler(new Request("http://localhost:4000/api/test/me", { headers }))
 
@@ -60,7 +72,7 @@ describe("Authentication", () => {
 
   test("provides the user from the session cookie", async () => {
     const response = await signUp("ada@example.com")
-    const user = await me({ cookie: response.headers.getSetCookie().join("; ") })
+    const user = await me({ cookie: sessionCookie(response) })
     expect(user.status).toBe(200)
     expect(await user.json()).toMatchObject({ email: "ada@example.com", id: expect.stringMatching(/^usr_/) })
   })
@@ -76,7 +88,12 @@ describe("Authentication", () => {
     expect((await me({ authorization: "Bearer not-a-session" })).status).toBe(401)
   })
 
-  test("returns 401 for an unknown session cookie", async () => {
-    expect((await me({ cookie: "better-auth.session_token=not-a-session" })).status).toBe(401)
+  test("authenticates the secure-prefixed session cookie over HTTPS", async () => {
+    const response = await signUp("ivy@example.com", secureApp.handler, "https://localhost:4000")
+    const cookie = sessionCookie(response)
+    expect(cookie.startsWith("__Secure-")).toBe(true)
+    const user = await secureApp.handler(new Request("https://localhost:4000/api/test/me", { headers: { cookie } }))
+    expect(user.status).toBe(200)
+    expect(await user.json()).toMatchObject({ email: "ivy@example.com" })
   })
 })
