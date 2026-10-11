@@ -171,6 +171,35 @@ describe("Auth", () => {
     }),
   )
 
+  it.live("resolves the session's active organization, falling back to the oldest membership", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const cookie = (yield* signUp(auth, "margaret@example.net")).headers.getSetCookie().join("; ")
+      const headers = new Headers({ cookie })
+      const personal = Option.getOrThrow(yield* auth.getActiveOrganization(headers))
+      expect(personal).toMatch(/^org_/)
+
+      const response = yield* post(auth, "/organization/create", { name: "Apollo", slug: "apollo" }, { cookie })
+      const apollo = (yield* Effect.promise(() => response.json())).id
+      expect(Option.getOrThrow(yield* auth.getActiveOrganization(headers))).toBe(apollo)
+
+      const deleted = yield* post(auth, "/organization/delete", { organizationId: apollo }, { cookie })
+      expect(deleted.status).toBe(200)
+      expect(Option.getOrThrow(yield* auth.getActiveOrganization(headers))).toBe(personal)
+    }),
+  )
+
+  it.live("has no active organization without a membership", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const cookie = (yield* signUp(auth, "owner@pending.dev")).headers.getSetCookie().join("; ")
+      yield* post(auth, "/organization/invite-member", { email: "pending@gmail.com", role: "member" }, { cookie })
+      const invited = (yield* signUp(auth, "pending@gmail.com")).headers.getSetCookie().join("; ")
+      expect(Option.isNone(yield* auth.getActiveOrganization(new Headers({ cookie: invited })))).toBe(true)
+      expect(Option.isNone(yield* auth.getActiveOrganization(new Headers()))).toBe(true)
+    }),
+  )
+
   it.live("does not let members leave an organization", () =>
     Effect.gen(function* () {
       const auth = yield* Auth.Service

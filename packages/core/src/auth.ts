@@ -136,6 +136,7 @@ export interface Interface {
   readonly handler: (request: Request) => Promise<Response>
   readonly trustedOrigins: ReadonlyArray<string>
   readonly getUser: (headers: Headers) => Effect.Effect<Option.Option<Auth.User>>
+  readonly getActiveOrganization: (headers: Headers) => Effect.Effect<Option.Option<Auth.OrganizationID>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Auth") {}
@@ -166,6 +167,23 @@ export const layer = Layer.effect(
         if (!session) return Option.none()
         const user: typeof Auth.User.Encoded = session.user
         return Option.some(yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie))
+      }),
+      getActiveOrganization: Effect.fn("Auth.getActiveOrganization")(function* (headers: Headers) {
+        const session = yield* Effect.promise(() => auth.api.getSession({ headers }))
+        if (!session) return Option.none()
+        const memberships = yield* Effect.promise(() =>
+          database.db.query.member.findMany({
+            columns: { organizationId: true },
+            where: { userId: session.user.id },
+            orderBy: { createdAt: "asc", id: "asc" },
+          }),
+        )
+        const membership =
+          memberships.find((row) => row.organizationId === session.session.activeOrganizationId) ?? memberships[0]
+        if (!membership) return Option.none()
+        return Option.some(
+          yield* Schema.decodeEffect(Auth.OrganizationID)(membership.organizationId).pipe(Effect.orDie),
+        )
       }),
     })
   }),
