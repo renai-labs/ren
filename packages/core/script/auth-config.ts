@@ -6,4 +6,5 @@ export const auth = Auth.make({
   secret: "generate-auth-schema",
   baseURL: "http://localhost",
   trustedOrigins: [],
+  google: { clientId: "generate-auth-schema", clientSecret: "generate-auth-schema" },
 })

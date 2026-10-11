@@ -17,6 +17,8 @@ export const makeApp = (routes: typeof Routes.layer = Routes.layer) =>
             BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
             BETTER_AUTH_URL: "http://localhost:4000",
             TRUSTED_ORIGINS: origin,
+            GOOGLE_CLIENT_ID: "google-client-id",
+            GOOGLE_CLIENT_SECRET: "google-client-secret",
           }),
           { asPrimary: true },
         ),

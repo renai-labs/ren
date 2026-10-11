@@ -13,6 +13,7 @@ export interface Input {
   readonly secret: string
   readonly baseURL: string
   readonly trustedOrigins: ReadonlyArray<string>
+  readonly google: { readonly clientId: string; readonly clientSecret: string }
 }
 
 const ids: Record<string, () => string> = {
@@ -32,6 +33,12 @@ export const make = (input: Input) =>
     database: drizzleAdapter(input.database, { provider: "pg", schema: AuthDatabase.Schema }),
     emailAndPassword: { enabled: true },
     session: { expiresIn: 60 * 60 * 24 * 90 },
+    socialProviders: {
+      google: { clientId: input.google.clientId, clientSecret: input.google.clientSecret },
+    },
+    account: {
+      accountLinking: { enabled: true, trustedProviders: ["google"] },
+    },
     plugins: [bearer()],
     advanced: {
       // Better Auth skips the origin check when NODE_ENV is "test"; keep it on so tests match production.
@@ -58,12 +65,15 @@ export const layer = Layer.effect(
       secret: Config.Redacted("BETTER_AUTH_SECRET"),
       baseURL: Config.String("BETTER_AUTH_URL"),
       trustedOrigins: Config.Array(Schema.String, "TRUSTED_ORIGINS").pipe(Config.withDefault([])),
+      googleClientId: Config.String("GOOGLE_CLIENT_ID"),
+      googleClientSecret: Config.Redacted("GOOGLE_CLIENT_SECRET"),
     })
     const auth = make({
       database: database.db,
       secret: Redacted.value(config.secret),
       baseURL: config.baseURL,
       trustedOrigins: config.trustedOrigins,
+      google: { clientId: config.googleClientId, clientSecret: Redacted.value(config.googleClientSecret) },
     })
     return Service.of({
       handler: auth.handler,
