@@ -136,7 +136,7 @@ export interface Interface {
   readonly handler: (request: Request) => Promise<Response>
   readonly trustedOrigins: ReadonlyArray<string>
   readonly getUser: (headers: Headers) => Effect.Effect<Option.Option<Auth.User>>
-  readonly getActiveOrganization: (headers: Headers) => Effect.Effect<Option.Option<Auth.OrganizationID>>
+  readonly getActiveOrganization: (headers: Headers) => Effect.Effect<Option.Option<Auth.Organization>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Auth") {}
@@ -171,19 +171,18 @@ export const layer = Layer.effect(
       getActiveOrganization: Effect.fn("Auth.getActiveOrganization")(function* (headers: Headers) {
         const session = yield* Effect.promise(() => auth.api.getSession({ headers }))
         if (!session) return Option.none()
-        const memberships = yield* Effect.promise(() =>
+        const organizations = (yield* Effect.promise(() =>
           database.db.query.member.findMany({
-            columns: { organizationId: true },
+            columns: {},
+            with: { organization: { columns: { id: true, name: true, slug: true, logo: true } } },
             where: { userId: session.user.id },
             orderBy: { createdAt: "asc", id: "asc" },
           }),
-        )
-        const membership =
-          memberships.find((row) => row.organizationId === session.session.activeOrganizationId) ?? memberships[0]
-        if (!membership) return Option.none()
-        return Option.some(
-          yield* Schema.decodeEffect(Auth.OrganizationID)(membership.organizationId).pipe(Effect.orDie),
-        )
+        )).flatMap((row) => (row.organization ? [row.organization] : []))
+        const active = organizations.find((row) => row.id === session.session.activeOrganizationId) ?? organizations[0]
+        if (!active) return Option.none()
+        const organization: typeof Auth.Organization.Encoded = active
+        return Option.some(yield* Schema.decodeEffect(Auth.Organization)(organization).pipe(Effect.orDie))
       }),
     })
   }),

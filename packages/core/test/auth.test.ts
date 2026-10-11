@@ -174,18 +174,23 @@ describe("Auth", () => {
   it.live("resolves the session's active organization, falling back to the oldest membership", () =>
     Effect.gen(function* () {
       const auth = yield* Auth.Service
-      const cookie = (yield* signUp(auth, "margaret@example.net")).headers.getSetCookie().join("; ")
+      const cookie = (yield* signUp(auth, "margaret@hamilton-labs.dev")).headers.getSetCookie().join("; ")
       const headers = new Headers({ cookie })
       const personal = Option.getOrThrow(yield* auth.getActiveOrganization(headers))
-      expect(personal).toMatch(/^org_/)
+      expect(personal).toEqual({
+        id: expect.stringMatching(/^org_/),
+        name: "Hamilton Labs",
+        slug: "hamilton-labs",
+        logo: null,
+      })
 
       const response = yield* post(auth, "/organization/create", { name: "Apollo", slug: "apollo" }, { cookie })
       const apollo = (yield* Effect.promise(() => response.json())).id
-      expect(Option.getOrThrow(yield* auth.getActiveOrganization(headers))).toBe(apollo)
+      expect(Option.getOrThrow(yield* auth.getActiveOrganization(headers)).id).toBe(apollo)
 
       const deleted = yield* post(auth, "/organization/delete", { organizationId: apollo }, { cookie })
       expect(deleted.status).toBe(200)
-      expect(Option.getOrThrow(yield* auth.getActiveOrganization(headers))).toBe(personal)
+      expect(Option.getOrThrow(yield* auth.getActiveOrganization(headers))).toEqual(personal)
     }),
   )
 

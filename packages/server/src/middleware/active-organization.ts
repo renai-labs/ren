@@ -15,7 +15,7 @@ export const ActiveOrganizationLayer = Layer.effect(
         if (Option.isNone(organization)) {
           return yield* new ForbiddenError({ message: "Join or create an organization to continue." })
         }
-        return yield* Effect.provideService(httpEffect, CurrentOrganization, { id: organization.value })
+        return yield* Effect.provideService(httpEffect, CurrentOrganization, { id: organization.value.id })
       }),
     )
   }),
