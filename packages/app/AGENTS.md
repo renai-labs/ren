@@ -1,6 +1,6 @@
 # @ren/app
 
-The product SPA and its web host. Desktop and mobile hosts will import it through a dedicated entry point and supply their own `Platform`. Load the `react` skill before writing components.
+The product SPA and its web host. Desktop and mobile hosts will import it through a dedicated entry point and supply their own `Platform`. Load the `react` and `interface` skills before writing components.
 
 ## Structure
 

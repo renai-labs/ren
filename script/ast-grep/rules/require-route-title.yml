@@ -1,0 +1,27 @@
+id: require-route-title
+language: Tsx
+message: 'Give every page a title with `head: () => ({ meta: [{ title: "… · Ren" }] })`. Screen readers announce it after navigation.'
+severity: error
+files:
+  - packages/app/src/routes/**
+rule:
+  pattern: createFileRoute($PATH)($OPTIONS)
+constraints:
+  OPTIONS:
+    kind: object
+    not:
+      any:
+        - has:
+            kind: pair
+            has:
+              field: key
+              regex: ^head$
+        - has:
+            kind: pair
+            all:
+              - has:
+                  field: key
+                  regex: ^component$
+              - has:
+                  field: value
+                  regex: ^Outlet$

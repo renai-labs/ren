@@ -1,0 +1,16 @@
+id: no-disabled-submit
+language: Tsx
+message: Keep submit enabled and show errors after submit. Disabling it until the form is valid hides why it can't be sent.
+severity: error
+files:
+  - packages/ui/**
+  - packages/app/**
+rule:
+  kind: jsx_attribute
+  all:
+    - has:
+        kind: property_identifier
+        regex: ^disabled$
+    - has:
+        kind: jsx_expression
+        regex: \b(canSubmit|isValid)\b
