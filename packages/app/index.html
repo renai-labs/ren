@@ -1,9 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ren</title>
+    <script>
+      try {
+        const stored = JSON.parse(localStorage.getItem("ren.theme.v1") ?? '"dark"')
+        const preference =
+          stored === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : stored
+        const classes = { light: ["light"], girliepop: ["light", "girliepop"] }[preference] ?? ["dark"]
+        document.documentElement.classList.remove("dark")
+        document.documentElement.classList.add(...classes)
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

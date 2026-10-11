@@ -4,3 +4,4 @@ packages/client/src/effect/generated/
 packages/db/migration/
 packages/site/.astro/
 packages/client/src/react/generated/
+packages/app/src/route-tree.gen.ts

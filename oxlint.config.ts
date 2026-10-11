@@ -394,6 +394,7 @@ export default defineConfig({
       files: ["packages/app/**"],
       plugins: ["react"],
       rules: {
+        "better-tailwindcss/no-restricted-classes": ["error", { restrict: [importantClass, appClasses] }],
         "ren/feature-boundaries": "error",
         "ren/no-query-key-literal": "error",
         "react/forbid-component-props": [
@@ -445,7 +446,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["packages/ui/src/components/**"],
+      files: ["packages/ui/src/components/**", "packages/app/src/platform/**"],
       plugins: ["react"],
       rules: {
         "react/only-export-components": "off",
