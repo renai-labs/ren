@@ -33,6 +33,11 @@ The design system. It owns every visual decision in Ren: tokens, components and 
   - `Text purpose="display"` renders at `text-display`. ren-v1's `composeClasses` did not know the size, so its tone class stripped it.
   - Classes that borrow another role's colour move to role tokens with identical values: `bg-text-primary` to `bg-fill-inverse`, `bg-text-secondary` to `bg-fill-inverse-secondary`, and `border-`, `ring-` and `outline-text-primary` to `border-strong`. Lines drawn with `bg-border-primary` become borders.
   - `Checkbox` has an indeterminate state; ren-v1 had none.
+  - Tabs and breadcrumb links show a focus-visible ring; ren-v1's `outline-none` hid keyboard focus.
+  - `Toast` uses `text-text-secondary` descriptions and `shadow-overlay`, which sonner's stylesheet overrode in ren-v1. Toast has no parity file.
+  - `Dialog.Footer` stacks in DOM order on small screens, so Cancel sits above the primary action.
+  - `ConfirmationDialog` ignores outside clicks; Escape and Cancel still close it.
+  - `Menu.Search` keeps its glyph at 16px; ren-v1's input squeezed it.
   - Controls inside `Field` take their label, description and invalid state from Base UI, so a `Select` inside an invalid field turns red. ren-v1 dropped the invalid state there.
 
 ## Stories
