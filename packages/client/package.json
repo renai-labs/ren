@@ -7,11 +7,12 @@
   "license": "UNLICENSED",
   "exports": {
     ".": "./src/index.ts",
-    "./effect": "./src/effect/index.ts"
+    "./effect": "./src/effect/index.ts",
+    "./react": "./src/react/index.ts"
   },
   "scripts": {
     "generate": "bun run script/generate.ts",
-    "check:generated": "bun run generate && git diff --exit-code -- src/generated src/effect/generated",
+    "check:generated": "bun run generate && git diff --exit-code -- src/generated src/effect/generated src/react/generated",
     "test": "bun test --timeout 30000 --only-failures",
     "typecheck": "tsgo --noEmit"
   },
@@ -20,19 +21,24 @@
     "@ren/schema": "workspace:*"
   },
   "peerDependencies": {
+    "@tanstack/react-query": "catalog:",
     "effect": "catalog:"
   },
   "peerDependenciesMeta": {
     "effect": {
       "optional": true
+    },
+    "@tanstack/react-query": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@ren/httpapi-codegen": "workspace:*",
+    "@tanstack/react-query": "catalog:",
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "@effect/platform-bun": "catalog:",
-    "@ren/httpapi-codegen": "workspace:*",
     "effect": "catalog:"
   }
 }

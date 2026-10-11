@@ -482,6 +482,7 @@ export default defineConfig({
     "**/*.gen.ts",
     "packages/client/src/generated/**",
     "packages/client/src/effect/generated/**",
+    "packages/client/src/react/generated/**",
     ".opencode/**",
   ],
 })

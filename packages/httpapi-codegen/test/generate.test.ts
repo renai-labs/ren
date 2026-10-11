@@ -12,6 +12,7 @@ import {
   emitEffectImported,
   emitEffectShape,
   emitPromise,
+  emitReactQuery,
   generate,
   GenerationError,
   type Output,
@@ -1755,5 +1756,24 @@ describe("HttpApiCodegen.generate", () => {
     expect(output.files.find((file) => file.path === "session.ts")?.content).toContain(
       "new ClientError({ cause: error })",
     )
+  })
+  test("emits TanStack Query factories over the Promise client", () => {
+    const output = emitReactQuery(compile(Api), { client: "../client/index.js" })
+    const query = output.files.find((file) => file.path === "query.ts")?.content
+
+    expect(output.files.map((file) => file.path)).toEqual(["query.ts", "index.ts"])
+    expect(query).toContain('import { queryOptions, mutationOptions } from "@tanstack/react-query"')
+    expect(query).toContain('from "../client/index.js"')
+    expect(query).toContain(
+      'queryOptions: () => queryOptions({ queryKey: ["session", "health"] as const, queryFn: (context) => client["session"]["health"]({ signal: context.signal }) })',
+    )
+    expect(query).toContain(
+      'queryKey: (input?: SessionGetInput) => input === undefined ? ["session", "get"] as const : ["session", "get", input] as const',
+    )
+    expect(query).toContain("queryOptions: (input?: SessionListInput) => queryOptions(")
+    expect(query).toContain(
+      'mutationOptions: () => mutationOptions({ mutationKey: ["session", "interrupt"] as const, mutationFn: (input: SessionInterruptInput) => client["session"]["interrupt"](input) })',
+    )
+    expect(query).not.toContain("subscribe")
   })
 })
