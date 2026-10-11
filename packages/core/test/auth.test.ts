@@ -213,6 +213,32 @@ describe("Auth", () => {
     }),
   )
 
+  it.live("lets the invited user accept an invitation", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const owner = (yield* signUp(auth, "radia@example.org")).headers.getSetCookie().join("; ")
+      const invited = yield* post(
+        auth,
+        "/organization/invite-member",
+        { email: "sophie@gmail.com", role: "member" },
+        { cookie: owner },
+      )
+      const invitation = (yield* Effect.promise(() => invited.json())).id
+
+      const invitee = (yield* signUp(auth, "sophie@gmail.com")).headers.getSetCookie().join("; ")
+      const accepted = yield* post(
+        auth,
+        "/organization/accept-invitation",
+        { invitationId: invitation },
+        { cookie: invitee },
+      )
+      expect(accepted.status).toBe(200)
+      expect(Option.getOrThrow(yield* auth.getActiveOrganization(new Headers({ cookie: invitee }))).name).toBe(
+        "Example",
+      )
+    }),
+  )
+
   it.live("has no user without credentials", () =>
     Effect.gen(function* () {
       const auth = yield* Auth.Service

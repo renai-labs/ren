@@ -105,6 +105,7 @@ export const make = (input: Input) => {
       bearer(),
       organization({
         invitationExpiresIn: 60 * 60 * 24 * 7,
+        requireEmailVerificationOnInvitation: false,
         organizationHooks: {
           beforeCreateOrganization: async (data) => ({
             data: { slug: await uniqueSlug(data.organization.slug || data.organization.name || "") },
