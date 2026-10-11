@@ -1,6 +1,7 @@
 import { Invitation } from "@ren/schema/invitation"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { Exposure } from "../exposure.js"
 
 export const InvitationGroup = HttpApiGroup.make("server.invitation")
   .add(
@@ -16,4 +17,5 @@ export const InvitationGroup = HttpApiGroup.make("server.invitation")
       }),
     ),
   )
+  .annotate(Exposure, "sdk")
   .annotateMerge(OpenApi.annotations({ title: "invitation" }))

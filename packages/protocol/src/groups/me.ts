@@ -1,6 +1,7 @@
 import { Auth } from "@ren/schema/auth"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { UnauthorizedError } from "../errors.js"
+import { Exposure } from "../exposure.js"
 import { Authentication } from "../middleware/authentication.js"
 
 export const MeGroup = HttpApiGroup.make("server.me")
@@ -18,4 +19,5 @@ export const MeGroup = HttpApiGroup.make("server.me")
     ),
   )
   .middleware(Authentication)
+  .annotate(Exposure, "sdk")
   .annotateMerge(OpenApi.annotations({ title: "me" }))
