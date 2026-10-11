@@ -1,6 +1,6 @@
 # @ren/protocol
 
-- One `HttpApiGroup` per domain in `src/groups/<domain>.ts`, named `server.<domain>`, then added to `src/api.ts` and to `groupNames` in `src/client.ts`.
+- One `HttpApiGroup` per domain in `src/groups/<domain>.ts`, named `server.<domain>`, then added to `src/api.ts`. `groupNames` in `src/client.ts` derives each client group name by dropping the `server.` prefix.
 - Endpoint names are `<domain>.<action>` (`pod.list`, `pod.get`), and match the OpenAPI `identifier` annotation.
 - Paths start with `/api/`.
 - Reuse schemas from `@ren/schema` for request and response bodies. Define request-only shapes here.

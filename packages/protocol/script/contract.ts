@@ -49,11 +49,11 @@ const checkPrimitive = (group: HttpApiGroup.Top, domain: string) => {
   ]
 }
 
-const checkGroup = (group: HttpApiGroup.Top, groupNames: Readonly<Record<string, string>>) => {
+const checkGroup = (group: HttpApiGroup.Top) => {
   const domain = group.identifier.replace(/^server\./, "")
   const endpoints = Object.values(group.endpoints)
   const shared = failures([
-    [!(group.identifier in groupNames), `${group.identifier} is missing from groupNames`],
+    [!group.identifier.startsWith("server."), `${group.identifier} is not named server.<domain>`],
     [Option.isNone(Context.getOption(group.annotations, Exposure)), `${group.identifier} has no Exposure annotation`],
     ...endpoints.flatMap((endpoint) => [
       [
@@ -81,7 +81,6 @@ const checkGroup = (group: HttpApiGroup.Top, groupNames: Readonly<Record<string,
 
 export function checkContract<Id extends string, Groups extends HttpApiGroup.Constraint>(
   api: HttpApi.HttpApi<Id, Groups>,
-  groupNames: Readonly<Record<string, string>>,
 ) {
   const groups: Array<HttpApiGroup.Top> = []
   HttpApi.reflect(api, {
@@ -92,12 +91,9 @@ export function checkContract<Id extends string, Groups extends HttpApiGroup.Con
   })
   const identifiers = groups.flatMap((group) => Object.values(group.endpoints).map((endpoint) => endpoint.identifier))
   return [
-    ...Object.keys(groupNames)
-      .filter((name) => !groups.some((group) => group.identifier === name))
-      .map((name) => `groupNames lists ${name}, which the API does not contain`),
     ...identifiers
       .filter((identifier, index) => identifiers.indexOf(identifier) !== index)
       .map((identifier) => `${identifier} is declared more than once`),
-    ...groups.flatMap((group) => checkGroup(group, groupNames)),
+    ...groups.flatMap(checkGroup),
   ]
 }
