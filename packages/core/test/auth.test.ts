@@ -14,6 +14,8 @@ const it = testEffect(
         ConfigProvider.fromUnknown({
           BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
           BETTER_AUTH_URL: "http://localhost:4000",
+          GOOGLE_CLIENT_ID: "google-client-id",
+          GOOGLE_CLIENT_SECRET: "google-client-secret",
         }),
         { asPrimary: true },
       ),
@@ -71,6 +73,26 @@ describe("Auth", () => {
     }),
   )
 
+  it.live("starts google sign-in with the configured client and callback", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const response = yield* Effect.promise(() =>
+        auth.handler(
+          new Request("http://localhost:4000/api/auth/sign-in/social", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ provider: "google", callbackURL: "/" }),
+          }),
+        ),
+      )
+      expect(response.status).toBe(200)
+      const url = new URL((yield* Effect.promise(() => response.json())).url)
+      expect(url.origin).toBe("https://accounts.google.com")
+      expect(url.searchParams.get("client_id")).toBe("google-client-id")
+      expect(url.searchParams.get("redirect_uri")).toBe("http://localhost:4000/api/auth/callback/google")
+    }),
+  )
+
   it.live("has no user without credentials", () =>
     Effect.gen(function* () {
       const auth = yield* Auth.Service
@@ -85,6 +107,7 @@ describe("Auth", () => {
         secret: "unused",
         baseURL: "http://localhost:4000",
         trustedOrigins: [],
+        google: { clientId: "unused", clientSecret: "unused" },
       })
       const models = Object.keys(getAuthTables(auth.options))
       const ids = models.map((model) => auth.options.advanced.database.generateId({ model }))
