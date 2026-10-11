@@ -26,6 +26,7 @@ const layer = (config: Record<string, string>) =>
           APP_URL: "http://localhost:5173",
           POSTMARK_SERVER_TOKEN: "postmark-token",
           EMAIL_FROM: "Ren <hello@ren.ai>",
+          EMAIL_INVITE_FROM: "Ren <invites@ren.ai>",
           ...config,
         }),
         { asPrimary: true },
@@ -258,6 +259,29 @@ describe("Auth", () => {
       expect(Option.getOrThrow(yield* auth.getActiveOrganization(new Headers({ cookie: invitee }))).name).toBe(
         "Example",
       )
+    }),
+  )
+
+  it.live("emails the invitation from the invite address with a sign-up link", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const outbox = yield* Postmark.Outbox
+      const owner = (yield* signUp(auth, "radia@example.org")).headers.getSetCookie().join("; ")
+      const invited = yield* post(
+        auth,
+        "/organization/invite-member",
+        { email: "sophie@gmail.com", role: "member" },
+        { cookie: owner },
+      )
+      expect(invited.status).toBe(200)
+      const invitation = (yield* Effect.promise(() => invited.json())).id
+      expect((yield* outbox.next).message).toEqual({
+        From: "Ren <invites@ren.ai>",
+        To: "sophie@gmail.com",
+        Subject: "You have been invited to join a Ren organization",
+        TextBody: `You have been invited to join a Ren organization. Please click on the link below to accept the invitation. http://localhost:5173/signup?invitationId=${invitation}`,
+        MessageStream: "outbound",
+      })
     }),
   )
 

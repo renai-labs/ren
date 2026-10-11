@@ -186,6 +186,16 @@ export const make = (input: Input) => {
       organization({
         invitationExpiresIn: 60 * 60 * 24 * 7,
         requireEmailVerificationOnInvitation: false,
+        sendInvitationEmail: async (data) => {
+          const url = new URL("signup", `${input.appURL.replace(/\/$/, "")}/`)
+          url.searchParams.set("invitationId", data.invitation.id)
+          input.sendEmail({
+            to: data.email,
+            sender: "invitations",
+            subject: "You have been invited to join a Ren organization",
+            text: `You have been invited to join a Ren organization. Please click on the link below to accept the invitation. ${url}`,
+          })
+        },
         organizationHooks: {
           beforeCreateOrganization: async (data) => ({
             data: { slug: await uniqueSlug(data.organization.slug || data.organization.name || "") },
