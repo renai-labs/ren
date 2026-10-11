@@ -29,6 +29,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 - Approved deviations from ren-v1:
   - Text inputs use `text-base sm:text-sm`, so iOS doesn't zoom the page on focus.
   - `Text` balances headings (`text-balance`) and avoids orphans in body copy (`text-pretty`).
+  - `Text purpose="display"` renders at `text-display`. ren-v1's `composeClasses` did not know the size, so its tone class stripped it.
   - Classes that borrow another role's colour move to role tokens with identical values: `bg-text-primary` to `bg-fill-inverse`, `bg-text-secondary` to `bg-fill-inverse-secondary`, and `border-`, `ring-` and `outline-text-primary` to `border-strong`. Lines drawn with `bg-border-primary` become borders.
 
 ## Stories

@@ -22,7 +22,7 @@ REN_V1_PATH=../../../ren-v1 bun run test:parity
 
 - `parity/<name>.stories.tsx` re-exports the Ren story file's meta and stories with `title: "Parity/<Name>"` and the ren-v1 component imported from `ren-v1/<path>` (aliased to `$REN_V1_PATH/packages/ui/src/<path>`). When a prop differs between the two, define that story in the parity file with the ren-v1 props.
 - Storybook loads parity stories, and Tailwind scans the ren-v1 sources, only when `REN_V1_PATH` is set.
-- `test:parity` screenshots every parity story and its Ren story in dark and light and fails on any pixel difference. Diffs land in `test-results/`. Fix the difference, or record it as an approved deviation in `packages/ui/AGENTS.md`.
+- `test:parity` screenshots every parity story and its Ren story in dark and light and fails on any pixel difference. Diffs land in `test-results/`. Fix the difference, or record it as an approved deviation in `packages/ui/AGENTS.md` and leave that story out of the parity file.
 - Parity is local only: font rendering differs between macOS and Linux.
 
 ## Not adopted
