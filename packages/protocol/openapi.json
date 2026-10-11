@@ -158,7 +158,7 @@
       },
       "Auth.OrganizationID": {
         "type": "string",
-        "pattern": "^org_[0-9A-HJKMNP-TV-Z]{26}$"
+        "pattern": "^org_"
       },
       "Auth.User": {
         "type": "object",
@@ -198,7 +198,7 @@
       },
       "Auth.UserID": {
         "type": "string",
-        "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$"
+        "pattern": "^usr_"
       },
       "Health.Info": {
         "type": "object",

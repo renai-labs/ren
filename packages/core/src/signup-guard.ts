@@ -1,7 +1,7 @@
 export * as SignupGuard from "./signup-guard.js"
 
 import { promises } from "node:dns"
-import { AuthDatabase } from "@ren/db/auth-database"
+import { Database } from "@ren/db/database"
 import { disposableEmailBlocklistSet } from "disposable-email-domains-js"
 import { sql } from "drizzle-orm"
 import { Config, Context, Effect, Layer, Option, Schema } from "effect"
@@ -19,6 +19,7 @@ export interface Resolver {
 
 export interface Interface {
   readonly checkEmailSignUp: (email: string) => Effect.Effect<Option.Option<Rejection>>
+  readonly hasVerifiedAlias: (email: string) => Effect.Effect<boolean>
   readonly checkAccountCreation: (email: string) => Effect.Effect<Option.Option<Rejection>>
 }
 
@@ -30,7 +31,6 @@ const rejections = {
     code: "UNDELIVERABLE_EMAIL_DOMAIN",
     message: "This email domain can't receive email. Check the address and try again.",
   },
-  alias: { code: "ALIAS_EMAIL", message: "An account already exists for this inbox. Sign in instead." },
 } satisfies Record<string, Rejection>
 
 const missing = new Set(["ENOTFOUND", "ENODATA", "NXDOMAIN"])
@@ -53,7 +53,7 @@ const parentDomains = (domain: string) => {
 }
 
 export const make = Effect.fnUntraced(function* (resolver: Resolver) {
-  const database = yield* AuthDatabase.Service
+  const database = yield* Database.Service
   const config = yield* Config.all({
     checkMailServer: Config.Boolean("SIGNUP_MX_CHECK").pipe(Config.withDefault(true)),
     blocked: Config.Array(Schema.String, "SIGNUP_BLOCKED_DOMAINS").pipe(Config.withDefault([])),
@@ -101,26 +101,30 @@ export const make = Effect.fnUntraced(function* (resolver: Resolver) {
       if (!isAllowed(domain) && config.checkMailServer && !(yield* canReceiveMail(domain))) {
         return Option.some(rejections.undeliverable)
       }
+      return Option.none()
+    }),
+    hasVerifiedAlias: Effect.fn("SignupGuard.hasVerifiedAlias")(function* (email: string) {
+      const normalized = email.trim().toLowerCase()
+      const domain = domainOf(normalized)
       const local = normalized.slice(0, normalized.lastIndexOf("@")).split("+")[0]
       const canonical =
         domain === "gmail.com" || domain === "googlemail.com"
           ? `${local.replaceAll(".", "")}@gmail.com`
           : `${local}@${domain}`
-      const userLocal = sql`split_part(split_part(lower(${AuthDatabase.Schema.user.email}), '@', 1), '+', 1)`
-      const userDomain = sql`split_part(lower(${AuthDatabase.Schema.user.email}), '@', 2)`
-      const rows = yield* Effect.promise(() =>
-        database.db
-          .select({ email: AuthDatabase.Schema.user.email })
-          .from(AuthDatabase.Schema.user)
-          .where(
-            sql`case when ${userDomain} in ('gmail.com', 'googlemail.com')
+      const userLocal = sql`split_part(split_part(lower(${Database.Schema.user.email}), '@', 1), '+', 1)`
+      const userDomain = sql`split_part(lower(${Database.Schema.user.email}), '@', 2)`
+      const rows = yield* database.db
+        .select({ id: Database.Schema.user.id })
+        .from(Database.Schema.user)
+        .where(
+          sql`${Database.Schema.user.emailVerified} = true and
+            case when ${userDomain} in ('gmail.com', 'googlemail.com')
               then replace(${userLocal}, '.', '') || '@gmail.com'
               else ${userLocal} || '@' || ${userDomain} end = ${canonical}`,
-          ),
-      )
-      const alias = rows.length > 0 && rows.every((row) => row.email.toLowerCase() !== normalized)
-      return alias ? Option.some(rejections.alias) : Option.none()
-    }),
+        )
+        .limit(1)
+      return rows.length > 0
+    }, Effect.orDie),
     checkAccountCreation: Effect.fn("SignupGuard.checkAccountCreation")(function* (email: string) {
       return isDisposable(domainOf(email)) ? Option.some(rejections.disposable) : Option.none()
     }),

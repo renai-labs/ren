@@ -1,0 +1,7 @@
+id: no-nested-ternary
+valid:
+  - 'const label = ready ? "ready" : "waiting"'
+  - 'const name = company || (first ? `${first} Org` : "Personal Org")'
+invalid:
+  - 'const state = accepted ? "accepted" : pending ? "pending" : "unavailable"'
+  - 'const state = pending ? (expired ? "expired" : "pending") : "unavailable"'

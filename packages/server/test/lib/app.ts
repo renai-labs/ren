@@ -8,7 +8,7 @@ import { Routes } from "../../src/routes.js"
 
 export const origin = "http://localhost:5173"
 
-export const makeApp = (routes: typeof Routes.layer = Routes.layer) =>
+export const makeApp = (routes: typeof Routes.layer = Routes.layer, options?: { readonly baseURL?: string }) =>
   HttpRouter.toWebHandler(
     routes.pipe(
       Layer.provide([Mailer.layer, SignupGuard.layer]),
@@ -19,7 +19,7 @@ export const makeApp = (routes: typeof Routes.layer = Routes.layer) =>
         ConfigProvider.layerAdd(
           ConfigProvider.fromUnknown({
             BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
-            BETTER_AUTH_URL: "http://localhost:4000",
+            BETTER_AUTH_URL: options?.baseURL ?? "http://localhost:4000",
             TRUSTED_ORIGINS: origin,
             GOOGLE_CLIENT_ID: "google-client-id",
             GOOGLE_CLIENT_SECRET: "google-client-secret",
@@ -33,3 +33,19 @@ export const makeApp = (routes: typeof Routes.layer = Routes.layer) =>
     ),
     { disableLogger: true },
   )
+
+export const authRequest = (path: string, body: unknown, cookie = "") =>
+  new Request(`http://localhost:4000/api/auth${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://localhost:4000", cookie },
+    body: JSON.stringify(body),
+  })
+
+export const signUp = (app: ReturnType<typeof makeApp>, email: string, name = "Ada") =>
+  app.handler(authRequest("/sign-up/email", { email, password: "correct horse battery staple", name }))
+
+export const sessionCookie = (response: Response) =>
+  response.headers
+    .getSetCookie()
+    .map((cookie) => cookie.split(";")[0])
+    .join("; ")
