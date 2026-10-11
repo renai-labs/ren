@@ -15,7 +15,7 @@ export const story = test.extend<{
       if (args.length > 0) query.set("args", args.join(";"))
       await page.goto(`/iframe.html?${query}`)
       const root = page.locator("#storybook-root")
-      await expect(root).not.toBeEmpty()
+      await root.locator(":scope > *").first().waitFor({ state: "attached" })
       await page.evaluate(() => document.fonts.ready)
       return root
     })

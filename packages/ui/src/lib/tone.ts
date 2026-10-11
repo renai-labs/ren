@@ -7,3 +7,19 @@ export const toneText = {
   warning: "text-status-warning",
   danger: "text-status-danger",
 } as const
+
+export const toneFill = {
+  primary: "bg-fill-inverse",
+  secondary: "bg-fill-inverse-secondary",
+  accent: "bg-accent-primary",
+  success: "bg-status-success",
+  warning: "bg-status-warning",
+  danger: "bg-status-danger",
+} as const
+
+export const toneTint = {
+  accent: "bg-accent-primary/tint text-accent-primary",
+  success: "bg-status-success/tint text-status-success",
+  warning: "bg-status-warning/tint text-status-warning",
+  danger: "bg-status-danger/tint text-status-danger",
+} as const
