@@ -1,5 +1,6 @@
 import { Health } from "@ren/schema/health"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { Exposure } from "../exposure.js"
 
 export const HealthGroup = HttpApiGroup.make("server.health")
   .add(
@@ -13,4 +14,5 @@ export const HealthGroup = HttpApiGroup.make("server.health")
       }),
     ),
   )
+  .annotate(Exposure, "sdk")
   .annotateMerge(OpenApi.annotations({ title: "health" }))
