@@ -1,4 +1,4 @@
-import type { HealthGetOutput } from "./types.js"
+import type { HealthGetOutput, MeGetOutput } from "./types.js"
 import { ClientError } from "./client-error.js"
 
 export interface ClientOptions {
@@ -86,6 +86,13 @@ export function make(options: ClientOptions) {
       get: (requestOptions?: RequestOptions) =>
         request<HealthGetOutput>(
           { method: "GET", path: `/api/health`, successStatus: 200, declaredStatuses: [], empty: false },
+          requestOptions,
+        ),
+    },
+    me: {
+      get: (requestOptions?: RequestOptions) =>
+        request<MeGetOutput>(
+          { method: "GET", path: `/api/me`, successStatus: 200, declaredStatuses: [401], empty: false },
           requestOptions,
         ),
     },

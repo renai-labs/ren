@@ -7,6 +7,8 @@ import { HttpEffect, HttpMiddleware, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "./api.js"
 import { HealthHandler } from "./handlers/health.js"
+import { MeHandler } from "./handlers/me.js"
+import { AuthenticationLayer } from "./middleware/authentication.js"
 
 const AuthRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
@@ -29,7 +31,8 @@ const Cors = HttpRouter.middleware(
 
 export const layer = Layer.mergeAll(
   HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
-    Layer.provide(HealthHandler),
+    Layer.provide([HealthHandler, MeHandler]),
+    Layer.provide(AuthenticationLayer),
     Layer.provide(Health.layer),
   ),
   AuthRoute,
