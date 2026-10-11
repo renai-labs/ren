@@ -7,7 +7,7 @@ export interface Email {
   readonly to: string
   readonly subject: string
   readonly text: string
-  readonly from?: string
+  readonly sender?: "default" | "invitations"
 }
 
 export class MailerError extends Schema.TaggedError<MailerError>()("MailerError", {
@@ -32,6 +32,7 @@ export const layer = Layer.effect(
       })
     }
     const from = yield* Config.String("EMAIL_FROM")
+    const inviteFrom = yield* Config.String("EMAIL_INVITE_FROM").pipe(Config.withDefault(from))
     const client = HttpClient.filterStatusOk(yield* HttpClient.HttpClient)
     return Service.of({
       send: Effect.fn("Mailer.send")(function* (email: Email) {
@@ -39,7 +40,7 @@ export const layer = Layer.effect(
           HttpClientRequest.setHeader("X-Postmark-Server-Token", Redacted.value(token.value)),
           HttpClientRequest.acceptJson,
           HttpClientRequest.bodyJsonUnsafe({
-            From: email.from ?? from,
+            From: email.sender === "invitations" ? inviteFrom : from,
             To: email.to,
             Subject: email.subject,
             TextBody: email.text,
