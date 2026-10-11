@@ -23,16 +23,19 @@ const it = testEffect(
   ),
 )
 
-const signUp = (auth: Auth.Interface, email: string) =>
+const post = (auth: Auth.Interface, path: string, body: unknown, headers?: Record<string, string>) =>
   Effect.promise(() =>
     auth.handler(
-      new Request("http://localhost:4000/api/auth/sign-up/email", {
+      new Request(`http://localhost:4000/api/auth${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password: "correct horse battery staple", name: "Ada" }),
+        headers: { "content-type": "application/json", origin: "http://localhost:4000", ...headers },
+        body: JSON.stringify(body),
       }),
     ),
   )
+
+const signUp = (auth: Auth.Interface, email: string) =>
+  post(auth, "/sign-up/email", { email, password: "correct horse battery staple", name: "Ada" })
 
 describe("Auth", () => {
   it.live("signs up and reads the user back from the session cookie", () =>
@@ -76,20 +79,37 @@ describe("Auth", () => {
   it.live("starts google sign-in with the configured client and callback", () =>
     Effect.gen(function* () {
       const auth = yield* Auth.Service
-      const response = yield* Effect.promise(() =>
-        auth.handler(
-          new Request("http://localhost:4000/api/auth/sign-in/social", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ provider: "google", callbackURL: "/" }),
-          }),
-        ),
-      )
+      const response = yield* post(auth, "/sign-in/social", { provider: "google", callbackURL: "/" })
       expect(response.status).toBe(200)
       const url = new URL((yield* Effect.promise(() => response.json())).url)
       expect(url.origin).toBe("https://accounts.google.com")
       expect(url.searchParams.get("client_id")).toBe("google-client-id")
       expect(url.searchParams.get("redirect_uri")).toBe("http://localhost:4000/api/auth/callback/google")
+    }),
+  )
+
+  it.live("creates organizations with normalized, unique slugs", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const cookie = (yield* signUp(auth, "linus@example.com")).headers.getSetCookie().join("; ")
+      const create = Effect.fnUntraced(function* () {
+        const response = yield* post(auth, "/organization/create", { name: "Acme Inc", slug: "Acme Inc!" }, { cookie })
+        expect(response.status).toBe(200)
+        return yield* Effect.promise(() => response.json())
+      })
+
+      const first = yield* create()
+      const second = yield* create()
+      expect(first.id).toMatch(/^org_[0-9A-HJKMNP-TV-Z]{26}$/)
+      expect([first.slug, second.slug]).toEqual(["acme-inc", "acme-inc-2"])
+    }),
+  )
+
+  it.live("does not let members leave an organization", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const response = yield* post(auth, "/organization/leave", { organizationId: "org_unknown" })
+      expect(response.status).toBe(404)
     }),
   )
 

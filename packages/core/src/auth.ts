@@ -5,11 +5,12 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Auth } from "@ren/schema/auth"
 import { Identifier } from "@ren/schema/identifier"
 import { betterAuth } from "better-auth"
-import { bearer } from "better-auth/plugins"
+import { bearer, organization } from "better-auth/plugins"
+import { eq, like, or } from "drizzle-orm"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 
 export interface Input {
-  readonly database: Parameters<typeof drizzleAdapter>[0]
+  readonly database: AuthDatabase.Interface["db"]
   readonly secret: string
   readonly baseURL: string
   readonly trustedOrigins: ReadonlyArray<string>
@@ -21,6 +22,9 @@ const ids: Record<string, () => string> = {
   session: Auth.SessionID.create,
   account: Auth.AccountID.create,
   verification: Auth.VerificationID.create,
+  organization: Auth.OrganizationID.create,
+  member: Auth.MemberID.create,
+  invitation: Auth.InvitationID.create,
 }
 
 export const make = (input: Input) =>
@@ -29,6 +33,7 @@ export const make = (input: Input) =>
     secret: input.secret,
     baseURL: input.baseURL,
     basePath: "/api/auth",
+    disabledPaths: ["/organization/leave"],
     trustedOrigins: [...input.trustedOrigins],
     database: drizzleAdapter(input.database, { provider: "pg", schema: AuthDatabase.Schema }),
     emailAndPassword: { enabled: true },
@@ -41,6 +46,30 @@ export const make = (input: Input) =>
     },
     plugins: [
       bearer(),
+      organization({
+        invitationExpiresIn: 60 * 60 * 24 * 7,
+        organizationHooks: {
+          beforeCreateOrganization: async (data) => {
+            const root =
+              (data.organization.slug || data.organization.name || "")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "") || "organization"
+            const rows = await input.database
+              .select({ slug: AuthDatabase.Schema.organization.slug })
+              .from(AuthDatabase.Schema.organization)
+              .where(
+                or(
+                  eq(AuthDatabase.Schema.organization.slug, root),
+                  like(AuthDatabase.Schema.organization.slug, `${root}-%`),
+                ),
+              )
+            const taken = new Set(rows.map((row) => row.slug))
+            const candidates = [root, ...Array.from({ length: taken.size }, (_, index) => `${root}-${index + 2}`)]
+            return { data: { slug: candidates.find((candidate) => !taken.has(candidate)) ?? root } }
+          },
+        },
+      }),
       {
         id: "ren-indexes",
         schema: {
