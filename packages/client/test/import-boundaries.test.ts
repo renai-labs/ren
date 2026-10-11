@@ -5,6 +5,7 @@ import { join, resolve, sep } from "node:path"
 
 const directory = resolve(import.meta.dir, "..")
 const effect = realpathSync(resolve(import.meta.dir, "../node_modules/effect"))
+const query = realpathSync(resolve(import.meta.dir, "../node_modules/@tanstack/react-query"))
 const schema = resolve(import.meta.dir, "../../schema")
 const protocol = resolve(import.meta.dir, "../../protocol")
 const core = resolve(import.meta.dir, "../../core")
@@ -21,6 +22,18 @@ describe("public import boundaries", () => {
     expect(within(root.all, core)).toEqual([])
     expect(within(root.all, db)).toEqual([])
     expect(within(root.all, server)).toEqual([])
+  })
+
+  test("react entrypoint adds TanStack Query but no Effect, schema, protocol or server code", async () => {
+    const react = await bundleInputs("@ren/client/react")
+
+    expect(within(react.all, query).length).toBeGreaterThan(0)
+    expect(within(react.all, effect)).toEqual([])
+    expect(within(react.all, schema)).toEqual([])
+    expect(within(react.all, protocol)).toEqual([])
+    expect(within(react.all, core)).toEqual([])
+    expect(within(react.all, db)).toEqual([])
+    expect(within(react.all, server)).toEqual([])
   })
 
   test("effect entrypoint uses schema and protocol but never core, db or server", async () => {

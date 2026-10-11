@@ -61,15 +61,18 @@
       "devDependencies": {
         "@effect/platform-bun": "catalog:",
         "@ren/httpapi-codegen": "workspace:*",
+        "@tanstack/react-query": "catalog:",
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "effect": "catalog:",
       },
       "peerDependencies": {
+        "@tanstack/react-query": "catalog:",
         "effect": "catalog:",
       },
       "optionalPeers": [
+        "@tanstack/react-query",
         "effect",
       ],
     },
@@ -262,6 +265,7 @@
     "@effect/sql-pg": "4.0.1",
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@playwright/test": "1.63.0",
+    "@tanstack/react-query": "5.104.1",
     "@tsconfig/bun": "1.0.11",
     "@types/bun": "1.4.2",
     "@types/react": "19.3.0",
@@ -865,6 +869,10 @@
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
+
+    "@tanstack/query-core": ["@tanstack/query-core@5.104.1", "", {}, "sha512-TiRghcrGkUTE+M4JBxvpPSpBhxvIzQairw+cksrHYGr+2uwC77yW1SY9nYxnYRYOppvucf8rEg6b5byoz4rTpw=="],
+
+    "@tanstack/react-query": ["@tanstack/react-query@5.104.1", "", { "dependencies": { "@tanstack/query-core": "5.104.1" }, "peerDependencies": { "react": "^18 || ^19" } }, "sha512-Zz70EgjahNI7aCz8BZxM3vUGU44ycxEAzMuCUjLeA7SVhhOkg3ZgPjPJPvHjs6Rmky/dtmnu1WzjGHNHmhCoZQ=="],
 
     "@tsconfig/bun": ["@tsconfig/bun@1.0.11", "", {}, "sha512-DQA3HOKFQ+/yPTUa73k5QGcuEM1ExtL6uWQMR0QrfOTitm0oLHqHd1tI74WtEtMqlIu+tvSMELJ6p5uNxVE7lw=="],
 

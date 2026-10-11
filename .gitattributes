@@ -4,3 +4,4 @@ packages/protocol/openapi.json linguist-generated
 packages/client/src/generated/** linguist-generated
 packages/client/src/effect/generated/** linguist-generated
 packages/db/migration/** linguist-generated
+packages/client/src/react/generated/** linguist-generated
