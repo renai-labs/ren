@@ -15,7 +15,7 @@ Effect Schema contracts shared by every layer. Browser-safe.
 
 ## Dependencies
 
-`effect` only.
+`effect` and `ulid`.
 
 ## Commands
 
