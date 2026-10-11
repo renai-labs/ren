@@ -4,7 +4,7 @@
 - Commits and PR titles use `type(scope): summary` with one of `feat`, `fix`, `docs`, `chore`, `refactor`, `test`. The scope is optional.
 - Branch names are at most three hyphenated words, with no prefix such as `feat/`.
 - Follow the nearest nested `AGENTS.md` for package-specific rules.
-- After changing `@ren/protocol` or the server's `HttpApi`, run `bun run generate` from the repo root. Never edit generated files (`packages/protocol/openapi.json`, `packages/client/src/**/generated/`).
+- After changing `@ren/protocol` or the server's `HttpApi`, run `bun run generate` from the repo root. Never edit generated files (`packages/protocol/openapi.json`, `packages/client/src/**/generated/`, `packages/db/src/auth.sql.ts`). After changing Better Auth options or plugins in `@ren/core/auth`, run `bun run generate`, then `bun run db generate` in `packages/db` for the migration.
 
 ## Layering
 

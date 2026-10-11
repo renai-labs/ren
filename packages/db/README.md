@@ -7,6 +7,7 @@ Postgres access: Drizzle tables, migrations, connection layers and isolated test
 - `src/**/*.sql.ts`: Drizzle tables.
 - `src/postgres.ts`: `PgClient` layer configured from `DATABASE_URL`.
 - `src/database.ts`: `Database.Service`, the Effect-native Drizzle instance.
+- `src/auth.sql.ts`: Better Auth tables, generated from `@ren/core`'s auth config (`bun run generate` in `packages/core`).
 - `src/testing.ts`: `Testing.layer`, which creates and drops an isolated database for tests.
 - `migration/`: generated SQL migrations.
 
