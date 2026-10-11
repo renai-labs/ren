@@ -32,3 +32,11 @@ export const User = Schema.Struct({
   emailVerified: Schema.Boolean,
   image: Schema.optional(Schema.NullOr(Schema.String)),
 }).annotate({ identifier: "Auth.User" })
+
+export interface Organization extends Schema.Schema.Type<typeof Organization> {}
+export const Organization = Schema.Struct({
+  id: OrganizationID,
+  name: Schema.String,
+  slug: Schema.String,
+  logo: Schema.optional(Schema.NullOr(Schema.String)),
+}).annotate({ identifier: "Auth.Organization" })
