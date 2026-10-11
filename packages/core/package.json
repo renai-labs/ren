@@ -21,7 +21,9 @@
     "@ren/util": "workspace:*",
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "free-email-domains": "catalog:",
+    "tldts": "catalog:"
   },
   "devDependencies": {
     "@tsconfig/bun": "catalog:",
