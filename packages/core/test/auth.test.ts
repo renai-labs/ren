@@ -4,11 +4,15 @@ import { getAuthTables } from "better-auth/db"
 import { drizzle } from "drizzle-orm/bun-sql/postgres"
 import { ConfigProvider, Effect, Layer, Option } from "effect"
 import { Auth } from "../src/auth.js"
+import { Mailer } from "../src/mailer.js"
 import { testEffect } from "./lib/effect.js"
+import { Postmark } from "./lib/postmark.js"
 
 const it = testEffect(
   Auth.layer.pipe(
     Layer.provide(Testing.layer),
+    Layer.provideMerge(Mailer.layer),
+    Layer.provideMerge(Postmark.layer()),
     Layer.provide(
       ConfigProvider.layerAdd(
         ConfigProvider.fromUnknown({
@@ -16,6 +20,9 @@ const it = testEffect(
           BETTER_AUTH_URL: "http://localhost:4000",
           GOOGLE_CLIENT_ID: "google-client-id",
           GOOGLE_CLIENT_SECRET: "google-client-secret",
+          APP_URL: "http://localhost:5173",
+          POSTMARK_SERVER_TOKEN: "postmark-token",
+          EMAIL_FROM: "Ren <hello@ren.ai>",
         }),
         { asPrimary: true },
       ),
@@ -239,6 +246,32 @@ describe("Auth", () => {
     }),
   )
 
+  it.live("emails a password reset link to the app and resets the password", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const outbox = yield* Postmark.Outbox
+      yield* signUp(auth, "katherine@example.org")
+
+      const requested = yield* post(auth, "/request-password-reset", { email: "katherine@example.org" })
+      expect(requested.status).toBe(200)
+      const email = (yield* outbox.next).message
+      expect(email).toMatchObject({ To: "katherine@example.org", Subject: "Reset your Ren password" })
+      const link = new URL(email.TextBody.slice(email.TextBody.indexOf("http")))
+      expect(link.origin + link.pathname).toBe("http://localhost:5173/reset-password")
+
+      const reset = yield* post(auth, "/reset-password", {
+        token: link.searchParams.get("token"),
+        newPassword: "a brand new password",
+      })
+      expect(reset.status).toBe(200)
+      const signIn = yield* post(auth, "/sign-in/email", {
+        email: "katherine@example.org",
+        password: "a brand new password",
+      })
+      expect(signIn.status).toBe(200)
+    }),
+  )
+
   it.live("has no user without credentials", () =>
     Effect.gen(function* () {
       const auth = yield* Auth.Service
@@ -254,6 +287,8 @@ describe("Auth", () => {
         baseURL: "http://localhost:4000",
         trustedOrigins: [],
         google: { clientId: "unused", clientSecret: "unused" },
+        appURL: "http://localhost:5173",
+        sendEmail: () => {},
       })
       const models = Object.keys(getAuthTables(auth.options))
       const ids = models.map((model) => auth.options.advanced.database.generateId({ model }))
