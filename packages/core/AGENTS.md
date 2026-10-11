@@ -6,3 +6,5 @@
 - Core never imports `@ren/protocol` or `@ren/server`, and never knows about HTTP.
 - Tests use `testEffect(layer)` from `test/lib/effect.ts`. Use `it.live` for real time, the filesystem, child processes or the database.
 - Tests run through `script/test.ts` at the repo root, with a temporary HOME and without credential env vars.
+- A primitive service's `Interface` extends `Primitive.Interface<typeof <Name>.definition>`. Methods take the caller's `Actor.Info` first.
+- Primitive methods fail only with `Primitive.NotFound`, `Primitive.Forbidden` or `Primitive.Conflict`. A record the actor cannot see is `NotFound`.
