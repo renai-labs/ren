@@ -8,3 +8,4 @@
 - Give every exported schema a stable, domain-qualified identifier: `.annotate({ identifier: "Pod.Info" })`.
 - Prefixed IDs use `Identifier.make("pod", "Pod.ID")`: a branded `<prefix>_<ULID>` schema with a `create()` static. Prefixes are unique across Ren.
 - Contracts are readonly. Do not use `Schema.Any` or `Schema.Unknown` in contracts unless the payload is genuinely opaque.
+- A primitive declares itself with `Primitive.define`: singular kebab-case `name`, `plural`, `id`, `info`, and only the operations it supports. List input spreads `Pagination.fields(defaultPageSize)`, and its page is `Pagination.Page(Info)` annotated `<Name>.Page`. Writes return `Info` or a `WriteResult`; annotate `WriteResult.Secret(Info)` as `<Name>.<Result>`.
