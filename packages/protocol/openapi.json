@@ -66,6 +66,39 @@
         "description": "Return the signed-in user and their active organization, or `null` if they have none yet (for example, while an invitation is pending).",
         "summary": "Get the signed-in user"
       }
+    },
+    "/api/invitations/{id}/preview": {
+      "get": {
+        "tags": ["invitation"],
+        "operationId": "invitation.preview",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Invitation.Preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invitation.Preview"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the state of an invitation link with its organization and inviter, without signing in. Unknown invitations return the `invalid` state.",
+        "summary": "Preview an organization invitation"
+      }
     }
   },
   "components": {
@@ -188,6 +221,77 @@
           }
         ]
       },
+      "Invitation.Preview": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/Invitation.State"
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Auth.OrganizationID"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "logo": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": ["id", "name", "logo"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inviter": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "email": {
+                    "type": "string"
+                  }
+                },
+                "required": ["name", "email"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["state", "organization", "inviter"],
+        "additionalProperties": false
+      },
+      "Invitation.State": {
+        "type": "string",
+        "enum": ["pending", "expired", "accepted", "unavailable", "invalid"]
+      },
       "UnauthorizedErrorEncoded": {
         "type": "object",
         "properties": {
@@ -224,6 +328,9 @@
     },
     {
       "name": "me"
+    },
+    {
+      "name": "invitation"
     }
   ]
 }

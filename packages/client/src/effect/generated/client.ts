@@ -22,9 +22,17 @@ const EndpointMeGet = (raw: RawClient["server.me"]) => () => raw["me.get"]({}).p
 
 const adaptGroupMe = (raw: RawClient["server.me"]) => ({ get: EndpointMeGet(raw) })
 
+type InvitationPreviewRequest = Parameters<RawClient["server.invitation"]["invitation.preview"]>[0]
+type InvitationPreviewInput = { readonly id: InvitationPreviewRequest["params"]["id"] }
+const EndpointInvitationPreview = (raw: RawClient["server.invitation"]) => (input: InvitationPreviewInput) =>
+  raw["invitation.preview"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupInvitation = (raw: RawClient["server.invitation"]) => ({ preview: EndpointInvitationPreview(raw) })
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["server.health"]),
   me: adaptGroupMe(raw["server.me"]),
+  invitation: adaptGroupInvitation(raw["server.invitation"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>
