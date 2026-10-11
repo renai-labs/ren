@@ -9,6 +9,8 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
+    "generate": "bun run script/generate-auth-schema.ts",
+    "check:generated": "bun run generate && git diff --exit-code -- ../db/src/auth.sql.ts",
     "test": "bun ../../script/test.ts",
     "typecheck": "tsgo -b tsconfig.json tsconfig.tests.json"
   },
