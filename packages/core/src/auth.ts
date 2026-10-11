@@ -8,8 +8,9 @@ import { betterAuth } from "better-auth"
 import { bearer, organization } from "better-auth/plugins"
 import { eq, like, or } from "drizzle-orm"
 import freeEmailDomains from "free-email-domains"
-import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Config, Context, Effect, FiberSet, Layer, Option, Redacted, Schema } from "effect"
 import { getDomainWithoutSuffix } from "tldts"
+import { Mailer } from "./mailer.js"
 
 export interface Input {
   readonly database: AuthDatabase.Interface["db"]
@@ -17,6 +18,8 @@ export interface Input {
   readonly baseURL: string
   readonly trustedOrigins: ReadonlyArray<string>
   readonly google: { readonly clientId: string; readonly clientSecret: string }
+  readonly appURL: string
+  readonly sendEmail: (email: Mailer.Email) => void
 }
 
 const ids: Record<string, () => string> = {
@@ -57,7 +60,18 @@ export const make = (input: Input) => {
     disabledPaths: ["/organization/leave"],
     trustedOrigins: [...input.trustedOrigins],
     database: drizzleAdapter(input.database, { provider: "pg", schema: AuthDatabase.Schema }),
-    emailAndPassword: { enabled: true },
+    emailAndPassword: {
+      enabled: true,
+      sendResetPassword: async (data) => {
+        const url = new URL("reset-password", `${input.appURL.replace(/\/$/, "")}/`)
+        url.searchParams.set("token", data.token)
+        input.sendEmail({
+          to: data.user.email,
+          subject: "Reset your Ren password",
+          text: `Please click on the link below to reset your Ren password. ${url}`,
+        })
+      },
+    },
     session: { expiresIn: 60 * 60 * 24 * 90 },
     socialProviders: {
       google: { clientId: input.google.clientId, clientSecret: input.google.clientSecret },
@@ -146,12 +160,15 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* AuthDatabase.Service
+    const mailer = yield* Mailer.Service
+    const run = yield* FiberSet.makeRuntime()
     const config = yield* Config.all({
       secret: Config.Redacted("BETTER_AUTH_SECRET"),
       baseURL: Config.String("BETTER_AUTH_URL"),
       trustedOrigins: Config.Array(Schema.String, "TRUSTED_ORIGINS").pipe(Config.withDefault([])),
       googleClientId: Config.String("GOOGLE_CLIENT_ID"),
       googleClientSecret: Config.Redacted("GOOGLE_CLIENT_SECRET"),
+      appURL: Config.String("APP_URL"),
     })
     const auth = make({
       database: database.db,
@@ -159,6 +176,10 @@ export const layer = Layer.effect(
       baseURL: config.baseURL,
       trustedOrigins: config.trustedOrigins,
       google: { clientId: config.googleClientId, clientSecret: Redacted.value(config.googleClientSecret) },
+      appURL: config.appURL,
+      sendEmail: (email) => {
+        run(mailer.send(email).pipe(Effect.ignoreCause({ log: "Error", message: "Failed to send email" })))
+      },
     })
     return Service.of({
       handler: auth.handler,
