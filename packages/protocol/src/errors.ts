@@ -15,6 +15,12 @@ export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
   { httpApiStatus: 401 },
 ) {}
 
+export class ForbiddenError extends Schema.TaggedError<ForbiddenError>()(
+  "ForbiddenError",
+  { message: Schema.String },
+  { httpApiStatus: 403 },
+) {}
+
 export class NotFoundError extends Schema.TaggedError<NotFoundError>()(
   "NotFoundError",
   {
