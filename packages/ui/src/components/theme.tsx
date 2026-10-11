@@ -42,8 +42,15 @@ export function Provider(props: {
   const appearance = props.preference === "system" ? system : props.preference
   useEffect(() => {
     const root = document.documentElement
+    root.toggleAttribute("data-theme-switching", true)
     root.classList.remove("light", "dark", "girliepop")
     root.classList.add(...appearanceClasses[appearance])
+    window.getComputedStyle(root).getPropertyValue("color")
+    const frame = requestAnimationFrame(() => root.removeAttribute("data-theme-switching"))
+    return () => {
+      cancelAnimationFrame(frame)
+      root.removeAttribute("data-theme-switching")
+    }
   }, [appearance])
   return (
     <Context value={{ preference: props.preference, appearance, setPreference: props.onPreferenceChange }}>
