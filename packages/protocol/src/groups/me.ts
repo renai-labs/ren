@@ -4,7 +4,7 @@ import { UnauthorizedError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { Authentication } from "../middleware/authentication.js"
 
-export const MeGroup = HttpApiGroup.make("server.me")
+export const MeGroup = HttpApiGroup.make("me")
   .add(
     HttpApiEndpoint.get("me.get", "/api/me", {
       success: Auth.Me,

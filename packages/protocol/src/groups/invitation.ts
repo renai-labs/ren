@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { Exposure } from "../exposure.js"
 
-export const InvitationGroup = HttpApiGroup.make("server.invitation")
+export const InvitationGroup = HttpApiGroup.make("invitation")
   .add(
     HttpApiEndpoint.get("invitation.preview", "/api/invitations/:id/preview", {
       params: { id: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(128)) },

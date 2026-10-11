@@ -1,10 +1,10 @@
 import { BunFileSystem } from "@effect/platform-bun"
 import { compile, emitEffectImported, emitPromise, emitReactQuery, write } from "@ren/httpapi-codegen"
-import { ClientApi, groupNames } from "@ren/protocol/client"
+import { ClientApi } from "@ren/protocol/client"
 import { Effect } from "effect"
 import { fileURLToPath } from "url"
 
-const contract = compile(ClientApi, { groupNames })
+const contract = compile(ClientApi)
 
 await Effect.runPromise(
   Effect.all(

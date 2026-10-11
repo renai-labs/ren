@@ -6,7 +6,7 @@ The public HTTP contract: `HttpApi` endpoint groups, middleware tags and API err
 
 - `src/groups/*.ts`: one `HttpApiGroup` per domain.
 - `src/api.ts`: the assembled `HttpApi`.
-- `src/client.ts`: the API shape handed to the client generator, plus consumer-facing group names.
+- `src/client.ts`: the API shape handed to the client generator.
 - `src/errors.ts`: tagged API errors with HTTP statuses.
 - `src/primitive.ts`: endpoint and group constructors for primitives.
 - `src/exposure.ts`: the `Exposure` annotation every group carries.
