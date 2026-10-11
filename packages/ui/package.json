@@ -10,7 +10,7 @@
     "./*": "./src/components/*.tsx"
   },
   "scripts": {
-    "test": "bun test --only-failures",
+    "test": "bun test --only-failures --preload ./test/lib/dom.ts",
     "typecheck": "tsgo --noEmit",
     "generate": "bun run script/design-tokens.ts"
   },
@@ -19,6 +19,7 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "catalog:",
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",
