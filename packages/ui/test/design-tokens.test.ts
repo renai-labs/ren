@@ -37,9 +37,14 @@ describe("design tokens", () => {
     const grounds = ["bg-primary", "bg-secondary", "bg-tertiary"]
     const pairs = [
       ...inks.flatMap((ink) => grounds.map((ground) => [ink, ground] as const)),
-      ...["text-primary", "accent-primary", "status-success", "status-warning", "status-danger"].map(
-        (fill) => ["text-inverse", fill] as const,
-      ),
+      ...[
+        "fill-inverse",
+        "fill-inverse-secondary",
+        "accent-primary",
+        "status-success",
+        "status-warning",
+        "status-danger",
+      ].map((fill) => ["text-inverse", fill] as const),
     ]
     const failing = pairs
       .map((pair) => ({ pair: pair.join(" on "), ratio: contrast(color(pair[0], mode), color(pair[1], mode)) }))
@@ -48,7 +53,7 @@ describe("design tokens", () => {
   })
 
   test("scales keep their fixed size", () => {
-    expect(tokens.colors.size).toBe(15)
+    expect(tokens.colors.size).toBe(18)
     expect(
       Object.fromEntries(
         ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "radius", "opacity", "container"].map(

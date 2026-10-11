@@ -165,3 +165,18 @@ tester.run("require-suppression-reason", rules["require-suppression-reason"], {
     { code: `/* eslint-disable */\nconsole.log(1)`, errors: 1 },
   ],
 })
+
+tester.run("story-location", rules["story-location"], {
+  valid: [
+    { code: `export const A = {}`, filename: "/repo/packages/ui/src/components/button.stories.tsx" },
+    { code: `export const A = {}`, filename: "/repo/packages/app/src/features/chat/composer.stories.tsx" },
+    { code: `export const A = {}`, filename: "/repo/packages/storybook/parity/button.stories.tsx" },
+    { code: `export const A = {}`, filename: "/repo/packages/ui/src/components/button.tsx" },
+  ],
+  invalid: [
+    { code: `export const A = {}`, filename: "/repo/packages/ui/src/lib/glyphs.stories.tsx", errors: 1 },
+    { code: `export const A = {}`, filename: "/repo/packages/app/src/routes/index.stories.tsx", errors: 1 },
+    { code: `export const A = {}`, filename: "/repo/packages/storybook/stories/button.stories.tsx", errors: 1 },
+    { code: `export const A = {}`, filename: "/repo/packages/app/src/components/frame.stories.ts", errors: 1 },
+  ],
+})

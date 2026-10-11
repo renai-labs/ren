@@ -13,6 +13,7 @@ import { preferLazyStateInit } from "./rules/prefer-lazy-state-init.ts"
 import { requireCompanionClass } from "./rules/require-companion-class.ts"
 import { requirePassiveListener } from "./rules/require-passive-listener.ts"
 import { requireSuppressionReason } from "./rules/require-suppression-reason.ts"
+import { storyLocation } from "./rules/story-location.ts"
 
 export const rules = {
   "feature-boundaries": featureBoundaries,
@@ -29,6 +30,7 @@ export const rules = {
   "require-companion-class": requireCompanionClass,
   "require-passive-listener": requirePassiveListener,
   "require-suppression-reason": requireSuppressionReason,
+  "story-location": storyLocation,
 }
 
 export default definePlugin({ meta: { name: "ren" }, rules })

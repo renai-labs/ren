@@ -290,6 +290,7 @@ export default defineConfig({
     nursery: "off",
   },
   rules: {
+    "ren/story-location": "error",
     "no-restricted-globals": ["error", reflect],
     "no-restricted-imports": ["error", { patterns: [vendored] }],
     "typescript/no-deprecated": "error",
@@ -557,7 +558,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["**/vite.config.ts"],
+      files: ["**/vite.config.ts", "**/*.stories.tsx", "packages/storybook/.storybook/**", "packages/storybook/playwright.config.ts"],
       plugins: ["import"],
       rules: {
         "import/no-default-export": "off",

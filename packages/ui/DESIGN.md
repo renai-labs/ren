@@ -6,23 +6,26 @@ Generated from the Paper file "Ren UI" — Paper is the source of truth. Edit to
 
 Code: `--ren-color-{role}`; the active theme supplies the value. Paper: `--color-{theme}-{role}` for light, dark and girliepop.
 
-| Color            | Light                 | Dark                      | Girliepop               |
-| ---------------- | --------------------- | ------------------------- | ----------------------- |
-| bg-primary       | #f9f9f9               | #151515                   | #ffd9f0                 |
-| bg-secondary     | #ffffff               | #1f1f1f                   | #fff2ff                 |
-| bg-tertiary      | #f2f2f2               | #101010                   | #ffebff                 |
-| fill-primary     | rgba(0, 0, 0, 0.04)   | rgba(255, 255, 255, 0.04) | rgba(105, 74, 83, 0.04) |
-| fill-secondary   | rgba(0, 0, 0, 0.08)   | rgba(255, 255, 255, 0.08) | rgba(105, 74, 83, 0.08) |
-| text-primary     | #1b1b1b               | #f1f1f1                   | #291d25                 |
-| text-secondary   | #5d5d5d               | #a3a3a3                   | #694a53                 |
-| text-inverse     | #ffffff               | #101010                   | #ffffff                 |
-| border-primary   | rgba(0, 0, 0, 0.08)   | rgba(255, 255, 255, 0.08) | rgba(105, 74, 83, 0.16) |
-| border-secondary | #858585               | #777777                   | #956777                 |
-| accent-primary   | #0067d0               | #268bff                   | #a92357                 |
-| status-success   | #197735               | #53c878                   | #17632d                 |
-| status-warning   | #8a5700               | #e0a33a                   | #794b00                 |
-| status-danger    | #bd2634               | #f47780                   | #ac2033                 |
-| overlay-primary  | rgba(20, 20, 20, 0.5) | rgba(20, 20, 20, 0.5)     | rgba(63, 26, 47, 0.5)   |
+| Color                  | Light                 | Dark                      | Girliepop               |
+| ---------------------- | --------------------- | ------------------------- | ----------------------- |
+| bg-primary             | #f9f9f9               | #151515                   | #ffd9f0                 |
+| bg-secondary           | #ffffff               | #1f1f1f                   | #fff2ff                 |
+| bg-tertiary            | #f2f2f2               | #101010                   | #ffebff                 |
+| fill-primary           | rgba(0, 0, 0, 0.04)   | rgba(255, 255, 255, 0.04) | rgba(105, 74, 83, 0.04) |
+| fill-secondary         | rgba(0, 0, 0, 0.08)   | rgba(255, 255, 255, 0.08) | rgba(105, 74, 83, 0.08) |
+| fill-inverse           | #1b1b1b               | #f1f1f1                   | #291d25                 |
+| fill-inverse-secondary | #5d5d5d               | #a3a3a3                   | #694a53                 |
+| text-primary           | #1b1b1b               | #f1f1f1                   | #291d25                 |
+| text-secondary         | #5d5d5d               | #a3a3a3                   | #694a53                 |
+| text-inverse           | #ffffff               | #101010                   | #ffffff                 |
+| border-primary         | rgba(0, 0, 0, 0.08)   | rgba(255, 255, 255, 0.08) | rgba(105, 74, 83, 0.16) |
+| border-secondary       | #858585               | #777777                   | #956777                 |
+| border-strong          | #1b1b1b               | #f1f1f1                   | #291d25                 |
+| accent-primary         | #0067d0               | #268bff                   | #a92357                 |
+| status-success         | #197735               | #53c878                   | #17632d                 |
+| status-warning         | #8a5700               | #e0a33a                   | #794b00                 |
+| status-danger          | #bd2634               | #f47780                   | #ac2033                 |
+| overlay-primary        | rgba(20, 20, 20, 0.5) | rgba(20, 20, 20, 0.5)     | rgba(63, 26, 47, 0.5)   |
 
 ## Type and geometry
 
