@@ -22,6 +22,7 @@ export const makeApp = (routes: typeof Routes.layer = Routes.layer) =>
             GOOGLE_CLIENT_ID: "google-client-id",
             GOOGLE_CLIENT_SECRET: "google-client-secret",
             APP_URL: origin,
+            SKIP_EMAIL_VERIFICATION: "true",
           }),
           { asPrimary: true },
         ),

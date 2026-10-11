@@ -9,5 +9,6 @@ export const auth = Auth.make({
   trustedOrigins: [],
   google: { clientId: "generate-auth-schema", clientSecret: "generate-auth-schema" },
   appURL: "http://localhost",
+  requireEmailVerification: true,
   sendEmail: () => {},
 })

@@ -2,13 +2,13 @@ import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { getAuthTables } from "better-auth/db"
 import { drizzle } from "drizzle-orm/bun-sql/postgres"
-import { ConfigProvider, Effect, Layer, Option } from "effect"
+import { ConfigProvider, Effect, Exit, Layer, Option } from "effect"
 import { Auth } from "../src/auth.js"
 import { Mailer } from "../src/mailer.js"
 import { testEffect } from "./lib/effect.js"
 import { Postmark } from "./lib/postmark.js"
 
-const it = testEffect(
+const layer = (config: Record<string, string>) =>
   Auth.layer.pipe(
     Layer.provide(Testing.layer),
     Layer.provideMerge(Mailer.layer),
@@ -23,12 +23,15 @@ const it = testEffect(
           APP_URL: "http://localhost:5173",
           POSTMARK_SERVER_TOKEN: "postmark-token",
           EMAIL_FROM: "Ren <hello@ren.ai>",
+          ...config,
         }),
         { asPrimary: true },
       ),
     ),
-  ),
-)
+  )
+
+const it = testEffect(layer({ SKIP_EMAIL_VERIFICATION: "true" }))
+const verifying = testEffect(layer({}))
 
 const post = (auth: Auth.Interface, path: string, body: unknown, headers?: Record<string, string>) =>
   Effect.promise(() =>
@@ -288,6 +291,7 @@ describe("Auth", () => {
         trustedOrigins: [],
         google: { clientId: "unused", clientSecret: "unused" },
         appURL: "http://localhost:5173",
+        requireEmailVerification: true,
         sendEmail: () => {},
       })
       const models = Object.keys(getAuthTables(auth.options))
@@ -296,4 +300,130 @@ describe("Auth", () => {
       expect(new Set(ids.map((id) => id.split("_")[0])).size).toBe(models.length)
     }),
   )
+
+  describe("email verification", () => {
+    const cookie = (response: Response) => response.headers.getSetCookie().join("; ")
+
+    verifying.live("sends a code on sign-up and signs in once it is verified", () =>
+      Effect.gen(function* () {
+        const auth = yield* Auth.Service
+        const outbox = yield* Postmark.Outbox
+        const response = yield* signUp(auth, "mary@example.org")
+        expect(response.status).toBe(200)
+        expect(cookie(response)).toBe("")
+
+        const email = (yield* outbox.next).message
+        const otp = email.Subject.split(" ")[0]
+        expect(email).toEqual({
+          From: "Ren <hello@ren.ai>",
+          To: "mary@example.org",
+          Subject: `${otp} is your Ren verification code`,
+          TextBody: `Use ${otp} to verify your email on Ren. The code expires in 10 minutes. If you didn't request it, you can ignore this email.`,
+          MessageStream: "outbound",
+        })
+        expect(otp).toMatch(/^\d{6}$/)
+
+        const verified = yield* post(auth, "/email-otp/verify-email", { email: "mary@example.org", otp })
+        expect(verified.status).toBe(200)
+        const user = Option.getOrThrow(yield* auth.getUser(new Headers({ cookie: cookie(verified) })))
+        expect(user).toMatchObject({ email: "mary@example.org", emailVerified: true })
+      }),
+    )
+
+    verifying.live("blocks password sign-in until verified and sends a fresh code", () =>
+      Effect.gen(function* () {
+        const auth = yield* Auth.Service
+        const outbox = yield* Postmark.Outbox
+        yield* signUp(auth, "dorothy@example.org")
+        yield* outbox.next
+
+        const signIn = yield* post(auth, "/sign-in/email", {
+          email: "dorothy@example.org",
+          password: "correct horse battery staple",
+        })
+        expect(signIn.status).toBe(403)
+        expect((yield* outbox.next).message.Subject).toMatch(/^\d{6} is your Ren verification code$/)
+      }),
+    )
+
+    verifying.live("signs in an existing user with a one-time code", () =>
+      Effect.gen(function* () {
+        const auth = yield* Auth.Service
+        const outbox = yield* Postmark.Outbox
+        yield* signUp(auth, "hedy@example.org")
+        yield* outbox.next
+
+        const sent = yield* post(auth, "/email-otp/send-verification-otp", {
+          email: "hedy@example.org",
+          type: "sign-in",
+        })
+        expect(sent.status).toBe(200)
+        const email = (yield* outbox.next).message
+        const otp = email.Subject.split(" ")[0]
+        expect(email.Subject).toBe(`${otp} is your Ren sign-in code`)
+        expect(email.TextBody).toStartWith(`Use ${otp} to sign in on Ren.`)
+
+        const signIn = yield* post(auth, "/sign-in/email-otp", { email: "hedy@example.org", otp })
+        expect(signIn.status).toBe(200)
+        expect(Option.isSome(yield* auth.getUser(new Headers({ cookie: cookie(signIn) })))).toBe(true)
+      }),
+    )
+
+    verifying.live("does not send codes to or create unknown users", () =>
+      Effect.gen(function* () {
+        const auth = yield* Auth.Service
+        const outbox = yield* Postmark.Outbox
+        const sent = yield* post(auth, "/email-otp/send-verification-otp", {
+          email: "nobody@example.org",
+          type: "sign-in",
+        })
+        expect(sent.status).toBe(200)
+        const signIn = yield* post(auth, "/sign-in/email-otp", { email: "nobody@example.org", otp: "123456" })
+        expect(signIn.status).toBe(400)
+
+        yield* signUp(auth, "known@example.org")
+        expect((yield* outbox.next).message.To).toBe("known@example.org")
+      }),
+    )
+
+    verifying.live("rejects other code types and the unused code endpoints", () =>
+      Effect.gen(function* () {
+        const auth = yield* Auth.Service
+        const forget = yield* post(auth, "/email-otp/send-verification-otp", {
+          email: "ada@example.org",
+          type: "forget-password",
+        })
+        expect(forget.status).toBe(400)
+        expect((yield* post(auth, "/email-otp/reset-password", {})).status).toBe(404)
+        expect((yield* post(auth, "/forget-password/email-otp", {})).status).toBe(404)
+      }),
+    )
+
+    it.live("refuses to skip verification in production", () =>
+      Effect.gen(function* () {
+        const production = layer({ SKIP_EMAIL_VERIFICATION: "true", NODE_ENV: "production" })
+        const exit = yield* Effect.gen(function* () {
+          return yield* Layer.buildWithMemoMap(production, yield* Layer.makeMemoMap, yield* Effect.scope)
+        }).pipe(Effect.scoped, Effect.exit)
+        expect(Exit.isFailure(exit)).toBe(true)
+      }),
+    )
+
+    verifying.live("does not email a verification code to a verified address", () =>
+      Effect.gen(function* () {
+        const auth = yield* Auth.Service
+        const outbox = yield* Postmark.Outbox
+        yield* signUp(auth, "annie@example.org")
+        const otp = (yield* outbox.next).message.Subject.split(" ")[0]
+        expect((yield* post(auth, "/email-otp/verify-email", { email: "annie@example.org", otp })).status).toBe(200)
+
+        yield* post(auth, "/email-otp/send-verification-otp", {
+          email: "annie@example.org",
+          type: "email-verification",
+        })
+        yield* post(auth, "/request-password-reset", { email: "annie@example.org" })
+        expect((yield* outbox.next).message.Subject).toBe("Reset your Ren password")
+      }),
+    )
+  })
 })
