@@ -757,6 +757,24 @@ describe("HttpApiCodegen.generate", () => {
     expect(types).not.toContain("Brand")
   })
 
+  test("emits the JSON wire form of transformed schemas in Promise types", () => {
+    const output = emitPromise(
+      compile(
+        api(
+          HttpApiEndpoint.post("create", "/session", {
+            payload: Schema.Struct({ startsAt: Schema.DateTimeUtc }),
+            success: Schema.Struct({ expiresAt: Schema.DateTimeUtc }),
+          }),
+        ),
+      ),
+    )
+    const types = output.files.find((file) => file.path === "types.ts")?.content
+
+    expect(types).toContain('readonly "startsAt": string')
+    expect(types).toContain('"expiresAt": string')
+    expect(types).not.toContain("DateTime")
+  })
+
   test("preserves suggestions for open string unions in Promise wire types", () => {
     const Field = Schema.Union([Schema.Literals(["reasoning", "reasoning_content"]), Schema.String]).annotate({
       identifier: "Field",

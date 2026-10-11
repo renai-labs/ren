@@ -1196,11 +1196,19 @@ function structuralType(schema: Schema.Top) {
 }
 
 function promiseTypeAst(schema: Schema.Top) {
-  return codegenAst(schema.ast)
+  return codegenAst(jsonWireAst(schema.ast))
 }
 
 function promiseTypeAsts(schemas: ReadonlyArray<Schema.Top>) {
-  return codegenAsts(schemas.map((schema) => schema.ast))
+  return codegenAsts(schemas.map((schema) => jsonWireAst(schema.ast)))
+}
+
+function jsonWireAst(ast: SchemaAST.AST): SchemaAST.AST {
+  if (SchemaAST.isDeclaration(ast) && ast.annotations?.toCodecJson !== undefined) {
+    return Schema.toEncoded(Schema.toCodecJson(Schema.make<Schema.Top>(ast))).ast
+  }
+  if (!("recur" in ast) || typeof ast.recur !== "function") return ast
+  return ast.recur(jsonWireAst)
 }
 
 function codegenAst(root: SchemaAST.AST) {
