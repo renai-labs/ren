@@ -42,9 +42,11 @@
       "drizzle-kit": "1.0.0-rc.5-5935859",
       "drizzle-orm": "1.0.0-rc.5-5935859",
       "effect": "4.0.1",
+      "free-email-domains": "1.12.21",
       "prettier": "3.9.9",
       "react": "19.3.0",
       "react-dom": "19.3.0",
+      "tldts": "7.4.18",
       "typescript": "5.9.3",
       "ulid": "3.0.2",
       "vite": "8.3.3"

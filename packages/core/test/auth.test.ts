@@ -34,8 +34,20 @@ const post = (auth: Auth.Interface, path: string, body: unknown, headers?: Recor
     ),
   )
 
-const signUp = (auth: Auth.Interface, email: string) =>
-  post(auth, "/sign-up/email", { email, password: "correct horse battery staple", name: "Ada" })
+const signUp = (auth: Auth.Interface, email: string, name = "Ada") =>
+  post(auth, "/sign-up/email", { email, password: "correct horse battery staple", name })
+
+const get = (auth: Auth.Interface, path: string, cookie: string) =>
+  Effect.promise(() =>
+    auth
+      .handler(new Request(`http://localhost:4000/api/auth${path}`, { headers: { cookie } }))
+      .then((response) => response.json()),
+  )
+
+const activeOrganization = Effect.fnUntraced(function* (auth: Auth.Interface, email: string, name?: string) {
+  const cookie = (yield* signUp(auth, email, name)).headers.getSetCookie().join("; ")
+  return yield* get(auth, "/organization/get-full-organization", cookie)
+})
 
 describe("Auth", () => {
   it.live("signs up and reads the user back from the session cookie", () =>
@@ -102,6 +114,60 @@ describe("Auth", () => {
       const second = yield* create()
       expect(first.id).toMatch(/^org_[0-9A-HJKMNP-TV-Z]{26}$/)
       expect([first.slug, second.slug]).toEqual(["acme-inc", "acme-inc-2"])
+    }),
+  )
+
+  it.live("creates a personal organization on first sign-in", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const organization = yield* activeOrganization(auth, "barbara@gmail.com", "Barbara Liskov")
+      expect(organization.id).toMatch(/^org_[0-9A-HJKMNP-TV-Z]{26}$/)
+      expect(organization.name).toBe("Barbara's Org")
+      expect(organization.slug).toBe("barbara-s-org")
+      expect(organization.members.map((member: { role: string }) => member.role)).toEqual(["owner"])
+      expect((yield* activeOrganization(auth, "nameless@hey.com", " ")).name).toBe("Personal Org")
+    }),
+  )
+
+  it.live("names the organization after a company email domain", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      expect((yield* activeOrganization(auth, "ken@bell-labs.co.uk")).name).toBe("Bell Labs")
+      const second = yield* activeOrganization(auth, "dennis@mail.bell-labs.co.uk")
+      expect([second.name, second.slug]).toEqual(["Bell Labs", "bell-labs-2"])
+    }),
+  )
+
+  it.live("signs back in to the oldest organization", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const cookie = (yield* signUp(auth, "frances@example.org")).headers.getSetCookie().join("; ")
+      const first = (yield* get(auth, "/get-session", cookie)).session.activeOrganizationId
+      const created = yield* post(auth, "/organization/create", { name: "Side Project", slug: "side" }, { cookie })
+      expect(created.status).toBe(200)
+
+      const response = yield* post(auth, "/sign-in/email", {
+        email: "frances@example.org",
+        password: "correct horse battery staple",
+      })
+      const session = yield* get(auth, "/get-session", response.headers.getSetCookie().join("; "))
+      expect(session.session.activeOrganizationId).toBe(first)
+    }),
+  )
+
+  it.live("waits for a pending invitation instead of creating an organization", () =>
+    Effect.gen(function* () {
+      const auth = yield* Auth.Service
+      const cookie = (yield* signUp(auth, "admin@inviting.dev")).headers.getSetCookie().join("; ")
+      const invite = yield* post(
+        auth,
+        "/organization/invite-member",
+        { email: "Invitee@Gmail.com", role: "member" },
+        { cookie },
+      )
+      expect(invite.status).toBe(200)
+      const organization = yield* activeOrganization(auth, "invitee@gmail.com")
+      expect(organization).toBeNull()
     }),
   )
 
