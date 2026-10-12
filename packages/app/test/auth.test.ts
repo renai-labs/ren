@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { Schema } from "effect"
 import { AuthError } from "../src/features/auth/auth-error.js"
+import { CompleteAuth } from "../src/features/auth/complete-auth.js"
 import { AuthSchemas } from "../src/features/auth/schemas.js"
 
 const failure = (error: { code?: string; message?: string; status?: number; statusText?: string }) =>
@@ -50,4 +51,13 @@ test("reset password requires matching passwords of at least 8 characters", asyn
   expect(mismatch.issues?.map((issue) => [issue.path, issue.message])).toEqual([
     [["passwordConfirm"], "Passwords do not match"],
   ])
+})
+
+test("finishing auth goes to the invitation, then the redirect, then home", () => {
+  expect(CompleteAuth.href({})).toBe("/")
+  expect(CompleteAuth.href({ redirect: "/settings" })).toBe("/settings")
+  expect(CompleteAuth.href({ invitationId: "inv_1", redirect: "/settings", join: true })).toBe(
+    "/invites/accept?id=inv_1&join=true&redirect=%2Fsettings",
+  )
+  expect(CompleteAuth.href({ invitationId: "inv_1" })).toBe("/invites/accept?id=inv_1")
 })
