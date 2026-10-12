@@ -1,4 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
+import { useState } from "react"
+import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { Text } from "@ren/ui/text"
 
@@ -34,4 +36,20 @@ export const WithDetails: Story = {
 export const Pending: Story = { args: { onConfirm: () => new Promise<void>(() => undefined) } }
 export const Failing: Story = {
   args: { onConfirm: () => Promise.reject(new Error("Unable to delete the report. Try again.")) },
+}
+export const FailingWithoutReason: Story = {
+  args: { onConfirm: () => Promise.reject(new Response(null, { status: 503 })) },
+}
+export const FromTrigger: Story = {
+  render: function Render(args) {
+    const [open, setOpen] = useState(false)
+    return (
+      <div className="p-4">
+        <Button appearance="danger" onClick={() => setOpen(true)}>
+          Delete report
+        </Button>
+        <ConfirmationDialog {...args} open={open} onOpenChange={setOpen} />
+      </div>
+    )
+  },
 }

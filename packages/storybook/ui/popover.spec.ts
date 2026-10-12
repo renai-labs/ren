@@ -47,3 +47,15 @@ story("opens below the trigger without covering it", async ({ visit, page }) => 
   expect(popup?.y ?? 0).toBeGreaterThanOrEqual((anchor?.y ?? 0) + (anchor?.height ?? 0))
   expect(popup?.x ?? 0).toBeCloseTo(anchor?.x ?? 0, 0)
 })
+
+story("opens on the requested side and alignment", async ({ visit, page }) => {
+  const top = (await visit("ui-popover--top")).getByRole("button", { name: "Display" })
+  const above = await page.getByRole("dialog", { name: "Task display" }).boundingBox()
+  const topAnchor = await top.boundingBox()
+  expect((above?.y ?? 0) + (above?.height ?? 0)).toBeLessThanOrEqual(topAnchor?.y ?? 0)
+
+  const end = (await visit("ui-popover--aligned-end")).getByRole("button", { name: "Display" })
+  const below = await page.getByRole("dialog", { name: "Task display" }).boundingBox()
+  const endAnchor = await end.boundingBox()
+  expect((below?.x ?? 0) + (below?.width ?? 0)).toBeCloseTo((endAnchor?.x ?? 0) + (endAnchor?.width ?? 0), 0)
+})

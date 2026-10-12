@@ -61,3 +61,21 @@ story("toggles the drawer with the keyboard shortcut on mobile", async ({ visit,
   await page.keyboard.press("ControlOrMeta+b")
   await expect(drawer).toBeHidden()
 })
+
+story("ignores b without a modifier", async ({ visit, page }) => {
+  await visit("ui-application-shell--expanded")
+  await page.keyboard.press("b")
+  await expect(page.getByRole("complementary", { name: "Navigation" })).toHaveAttribute("data-state", "expanded")
+})
+
+story("marks the current page and advertises keyboard shortcuts", async ({ visit, page }) => {
+  await visit("ui-application-shell--expanded")
+  const sidebar = page.getByRole("complementary", { name: "Navigation" })
+  await expect(sidebar.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page")
+  await expect(sidebar.getByRole("link", { name: "Tasks" })).not.toHaveAttribute("aria-current")
+  await expect(sidebar.getByRole("button", { name: "Search" })).toHaveAttribute("aria-keyshortcuts", "Meta+K Control+K")
+  await expect(page.getByRole("button", { name: "Collapse sidebar" })).toHaveAttribute(
+    "aria-keyshortcuts",
+    "Meta+B Control+B",
+  )
+})

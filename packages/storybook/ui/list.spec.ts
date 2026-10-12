@@ -88,3 +88,39 @@ story("keeps Tab moving through a virtual list past the first rendered rows", as
   await expect(list.getByRole("button", { name: /^Session 40\b/ })).toBeInViewport()
   expect(await list.getByRole("button").count()).toBeLessThan(40)
 })
+
+story("replaces the rows with a loading, empty or failed message", async ({ visit }) => {
+  const loading = await visit("ui-list--loading")
+  await expect(loading.getByRole("list")).toHaveCount(0)
+  await expect(loading.getByRole("status", { name: "Loading" })).toBeVisible()
+  await expect((await visit("ui-list--empty")).getByText("No files yet.")).toBeVisible()
+  const alert = (await visit("ui-list--failed")).getByRole("alert")
+  await expect(alert).toContainText("Couldn't load files.")
+  await expect(alert.getByRole("button", { name: "Try again" })).toBeVisible()
+})
+
+story("marks the selected link row as the current page", async ({ visit }) => {
+  const list = (await visit("ui-list--links")).getByRole("list", { name: "Files" })
+  await expect(list.getByRole("link", { name: "README.md" })).toHaveAttribute("aria-current", "page")
+  await expect(list.getByRole("link", { name: "assets" })).not.toHaveAttribute("aria-current")
+})
+
+story("disables a row and marks the selected one as pressed", async ({ visit }) => {
+  const list = (await visit("ui-list--buttons")).getByRole("list", { name: "Files" })
+  await expect(list.getByRole("button", { name: /^assets/ })).toBeDisabled()
+  await expect(list.getByRole("button", { name: /^release-notes\.md/ })).toHaveAttribute("aria-pressed", "true")
+})
+
+story("keeps a transcript row's actions between its trigger and the next row", async ({ visit, page }) => {
+  const root = await visit("ui-list--transcript-actions")
+  const trigger = root.getByRole("button", { name: /^Edited list\.tsx/ })
+  await page.keyboard.press("Tab")
+  await expect(trigger).toBeFocused()
+  await page.keyboard.press("Tab")
+  await expect(root.getByRole("button", { name: "Copy diff" })).toBeFocused()
+  await page.keyboard.press("Tab")
+  await expect(root.getByRole("button", { name: "Waiting for review" })).toBeFocused()
+  await root.getByText("0.8s").click()
+  await expect(trigger).toHaveAttribute("aria-expanded", "true")
+  await expect(root.getByText("export function Root(props: RootProps)")).toBeVisible()
+})

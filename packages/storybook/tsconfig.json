@@ -12,6 +12,7 @@
     "ui/**/*",
     "app/**/*",
     "support/**/*",
+    "sweep/**/*",
     "parity/*.spec.ts",
     "script/**/*",
     "playwright.config.ts"

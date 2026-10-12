@@ -40,3 +40,10 @@ export const Shell: Story = {
 export const Ellipsis: Story = { args: { continuation: "ellipsis" } }
 export const ShowMore: Story = { args: { content: log, truncated: true, onShowMore: () => undefined } }
 export const Copy: Story = { args: { onCopy: () => undefined } }
+export const CopyText: Story = {
+  args: {
+    content: "ren_live_••••••",
+    copyText: "ren_live_4f9a2c",
+    onCopy: (text) => navigator.clipboard.writeText(text),
+  },
+}

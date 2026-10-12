@@ -15,3 +15,11 @@ story("skips a disabled checkbox when tabbing", async ({ visit, page }) => {
   await page.keyboard.press("Tab")
   await expect(checkbox).not.toBeFocused()
 })
+
+story("names the box by its visible label, describes it, and toggles from the label", async ({ visit }) => {
+  const root = await visit("ui-checkbox--description")
+  const checkbox = root.getByRole("checkbox", { name: "Use PKCE", exact: true })
+  await expect(checkbox).toHaveAccessibleDescription("Require a code challenge on every authorization request.")
+  await root.getByText("Use PKCE").click()
+  await expect(checkbox).toBeChecked()
+})

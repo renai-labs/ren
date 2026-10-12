@@ -97,3 +97,13 @@ export const Blocked: Story = {
     </Dialog.Root>
   ),
 }
+export const Alert: Story = {
+  render: (args) => (
+    <Dialog.AlertRoot defaultOpen>
+      <Dialog.Trigger>
+        <Button>Archive project</Button>
+      </Dialog.Trigger>
+      <Dialog.Content {...args} />
+    </Dialog.AlertRoot>
+  ),
+}

@@ -13,14 +13,17 @@ const preview: Preview = {
   initialGlobals: { theme: "dark" },
   parameters: { layout: "padded" },
   decorators: [
-    (Story, context) => (
-      <Theme.Provider
-        preference={Theme.preferences.find((preference) => preference === context.globals["theme"]) ?? "dark"}
-        onPreferenceChange={() => undefined}
-      >
+    (Story, context) =>
+      context.parameters["theme"] === "story" ? (
         <Story />
-      </Theme.Provider>
-    ),
+      ) : (
+        <Theme.Provider
+          preference={Theme.preferences.find((preference) => preference === context.globals["theme"]) ?? "dark"}
+          onPreferenceChange={() => undefined}
+        >
+          <Story />
+        </Theme.Provider>
+      ),
   ],
 }
 

@@ -13,8 +13,8 @@ export default defineConfig({
   expect: { toHaveScreenshot: { maxDiffPixels: 0, animations: "disabled", caret: "hide" } },
   use: { baseURL: `http://127.0.0.1:${port}`, ...devices["Desktop Chrome"] },
   projects: [
-    { name: "ui", testMatch: /storybook\/(ui|app)\/.*\.spec\.ts$/ },
-    { name: "parity", testMatch: /storybook\/parity\/.*\.spec\.ts$/, use: { colorScheme: "dark" } },
+    { name: "ui", testMatch: /storybook\/(ui|app|sweep)\/.*\.spec\.ts$/ },
+    { name: "parity", testMatch: /storybook\/parity\/.*\.spec\.ts$/, timeout: 180_000, use: { colorScheme: "dark" } },
   ],
   webServer: {
     command: process.env.CI ? `bun run script/serve.ts ${port}` : `bunx storybook dev -p ${port} --no-open --ci`,

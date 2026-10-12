@@ -23,3 +23,11 @@ story("rings the focused item only for keyboard focus", async ({ visit, page }) 
   await page.keyboard.press("ArrowDown")
   await expect(root.locator("label").nth(1)).toHaveCSS("outline-style", "solid")
 })
+
+story("names and describes each radio by its own label and selects it from its card", async ({ visit }) => {
+  const group = (await visit("ui-radio-group--unselected")).getByRole("radiogroup", { name: "Network access" })
+  const limited = group.getByRole("radio", { name: "Limited", exact: true })
+  await expect(limited).toHaveAccessibleDescription("Only approved destinations.")
+  await group.getByText("Only approved destinations.").click()
+  await expect(limited).toBeChecked()
+})

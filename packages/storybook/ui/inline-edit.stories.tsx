@@ -32,3 +32,6 @@ export const LongValue: Story = {
 export const Validated: Story = {
   args: { validate: (value) => (value.length < 3 ? "Use at least 3 characters." : null) },
 }
+export const Failing: Story = {
+  render: (args) => <InlineEdit {...args} onCommit={() => Promise.reject(new Error("That name is taken."))} />,
+}

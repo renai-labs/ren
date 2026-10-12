@@ -1,11 +1,12 @@
 import { expect, story } from "../support/story.js"
 
-story("commits an edit with Enter", async ({ visit, page }) => {
+story("commits the trimmed edit with Enter", async ({ visit, page }) => {
   const root = await visit("ui-inline-edit--default")
   await root.getByRole("button", { name: "Edit Name" }).click()
   const field = root.getByRole("textbox", { name: "Name" })
   await expect(field).toBeFocused()
-  await field.fill("Grace Hopper")
+  await expect(field).toHaveValue("Ada Lovelace")
+  await field.fill("  Grace Hopper ")
   await page.keyboard.press("Enter")
   await expect(field).toBeHidden()
   await expect(root.getByRole("button", { name: "Edit Name" })).toHaveText("Grace Hopper")
@@ -80,4 +81,25 @@ story("shows a validation error while editing until the user types", async ({ vi
   await page.keyboard.press("Enter")
   await expect(root.getByRole("button", { name: "Edit Name" })).toHaveText("Alan")
   await expect(root.getByRole("button", { name: "Edit Name" })).toBeFocused()
+})
+
+story("shows the placeholder when the value is empty", async ({ visit }) => {
+  await expect((await visit("ui-inline-edit--empty")).getByRole("button", { name: "Edit Name" })).toHaveText(
+    "Add your name",
+  )
+})
+
+story("keeps editing with the save error until Escape restores the value", async ({ visit, page }) => {
+  const root = await visit("ui-inline-edit--failing")
+  await root.getByRole("button", { name: "Edit Name" }).click()
+  const field = root.getByRole("textbox", { name: "Name" })
+  await field.fill("Grace Hopper")
+  await page.keyboard.press("Enter")
+  await expect(field).toHaveAccessibleDescription("That name is taken.")
+  await expect(field).toHaveAttribute("aria-invalid", "true")
+  await expect(field).toBeEnabled()
+  await expect(field).toHaveValue("Grace Hopper")
+  await page.keyboard.press("Escape")
+  await expect(root.getByRole("button", { name: "Edit Name" })).toHaveText("Ada Lovelace")
+  await expect(root.getByText("That name is taken.")).toHaveCount(0)
 })

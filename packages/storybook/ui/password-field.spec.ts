@@ -23,3 +23,9 @@ story("toggles from the keyboard and keeps focus on the toggle", async ({ visit,
   await expect(root.getByRole("button", { name: "Hide password" })).toBeFocused()
   await expect(root.getByLabel("Password", { exact: true })).toHaveAttribute("type", "text")
 })
+
+story("disables the reveal toggle with the field", async ({ visit }) => {
+  const root = await visit("ui-password-field--disabled")
+  await expect(root.getByLabel("Password", { exact: true })).toBeDisabled()
+  await expect(root.getByRole("button", { name: "Show password" })).toBeDisabled()
+})

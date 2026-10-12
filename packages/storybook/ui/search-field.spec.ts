@@ -37,3 +37,14 @@ story("clears the value and keeps focus in the field", async ({ visit }) => {
   await expect(input).toBeFocused()
   await expect(root.getByRole("button", { name: "Clear search" })).toBeHidden()
 })
+
+story("prefers its label over the placeholder for its name", async ({ visit }) => {
+  const input = (await visit("ui-search-field--labelled")).getByRole("searchbox", { name: "Search projects" })
+  await expect(input).toHaveAttribute("placeholder", "Find")
+})
+
+story("clears the value on Escape", async ({ visit }) => {
+  const input = (await visit("ui-search-field--with-value")).getByRole("searchbox", { name: "Search" })
+  await input.press("Escape")
+  await expect(input).toHaveValue("")
+})
