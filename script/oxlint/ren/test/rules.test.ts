@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
 import { describe, it } from "node:test"
 import { RuleTester } from "oxlint/plugins-dev"
 import { rules } from "../index.ts"
@@ -179,5 +182,64 @@ tester.run("story-location", rules["story-location"], {
     { code: `export const A = {}`, filename: "/repo/packages/storybook/stories/button.stories.tsx", errors: 1 },
     { code: `export const A = {}`, filename: "/repo/packages/ui/src/components/button.stories.tsx", errors: 1 },
     { code: `export const A = {}`, filename: "/repo/packages/app/src/components/frame.stories.ts", errors: 1 },
+  ],
+})
+
+const fixture = mkdtempSync(path.join(tmpdir(), "ren-story-coverage-"))
+mkdirSync(path.join(fixture, "packages/ui/src/components"), { recursive: true })
+mkdirSync(path.join(fixture, "packages/storybook/ui"), { recursive: true })
+writeFileSync(path.join(fixture, "packages/ui/src/components/badge.tsx"), "export function Badge() {}\n")
+writeFileSync(path.join(fixture, "packages/ui/src/components/orphaned.tsx"), "export function Orphaned() {}\n")
+writeFileSync(
+  path.join(fixture, "packages/ui/src/components/menu.tsx"),
+  'export * as Menu from "./menu.js"\n\nexport function Root() {}\nexport const Item = () => null\nexport type Props = {}\nexport { Search } from "../lib/menu-search.js"\n',
+)
+writeFileSync(path.join(fixture, "packages/storybook/ui/badge.stories.tsx"), "")
+writeFileSync(path.join(fixture, "packages/storybook/ui/menu.stories.tsx"), "")
+const ui = `${fixture}/packages/ui/src/components`
+const stories = `${fixture}/packages/storybook/ui`
+
+tester.run("story-coverage", rules["story-coverage"], {
+  valid: [
+    { code: `export function Badge() {}`, filename: `${ui}/badge.tsx` },
+    {
+      code: `import { Badge } from "@ren/ui/badge"\nconst meta = { component: Badge }\nexport default meta`,
+      filename: `${stories}/badge.stories.tsx`,
+    },
+    {
+      code: `import { Menu } from "@ren/ui/menu"\nexport const A = { render: () => <Menu.Root><Menu.Item /><Menu.Search /></Menu.Root> }`,
+      filename: `${stories}/menu.stories.tsx`,
+    },
+    {
+      code: `import { Badge } from "@ren/ui/badge"\nexport const A = { args: { title: "Kept" } }`,
+      filename: `${stories}/badge.stories.tsx`,
+    },
+    { code: `test("a", () => {})`, filename: `${stories}/badge.spec.ts` },
+    { code: `export const A = {}`, filename: `${fixture}/packages/storybook/parity/gone.stories.tsx` },
+  ],
+  invalid: [
+    { code: `export function Orphaned() {}`, filename: `${ui}/orphaned.tsx`, errors: 1 },
+    { code: `test("a", () => {})`, filename: `${stories}/gone.spec.ts`, errors: 1 },
+    { code: `export const A = {}`, filename: `${stories}/gone.stories.tsx`, errors: 1 },
+    {
+      code: `import { Menu } from "@ren/ui/menu"\nexport const A = { render: () => <Menu.Root /> }`,
+      filename: `${stories}/menu.stories.tsx`,
+      errors: 2,
+    },
+    {
+      code: `import { Text } from "@ren/ui/text"\nexport default {}`,
+      filename: `${stories}/badge.stories.tsx`,
+      errors: 1,
+    },
+    {
+      code: `import { Badge } from "@ren/ui/badge"\nconst meta = { title: "UI/Badge" } satisfies Meta\nexport default meta`,
+      filename: `${stories}/badge.stories.tsx`,
+      errors: 1,
+    },
+    {
+      code: `import { Badge } from "@ren/ui/badge"\nexport default { title: "UI/Badge" }`,
+      filename: `${stories}/badge.stories.tsx`,
+      errors: 1,
+    },
   ],
 })
