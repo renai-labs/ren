@@ -20,6 +20,8 @@ import { Route as InvitesAcceptRouteImport } from "./routes/invites/accept"
 import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/index"
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
 import { Route as AuthedShellSessionsIndexRouteImport } from "./routes/_authed/_shell/sessions/index"
+import { Route as AuthedShellSessionsSettingsIndexRouteImport } from "./routes/_authed/_shell/sessions/settings/index"
+import { Route as AuthedShellSessionsSettingsPreferencesRouteImport } from "./routes/_authed/_shell/sessions/settings/preferences"
 
 const AuthedRoute = AuthedRouteImport.update({
   id: "/_authed",
@@ -75,6 +77,18 @@ const AuthedShellSessionsIndexRoute =
     path: "/sessions/",
     getParentRoute: () => AuthedShellRoute,
   } as any)
+const AuthedShellSessionsSettingsIndexRoute =
+  AuthedShellSessionsSettingsIndexRouteImport.update({
+    id: "/sessions/settings/",
+    path: "/sessions/settings/",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellSessionsSettingsPreferencesRoute =
+  AuthedShellSessionsSettingsPreferencesRouteImport.update({
+    id: "/sessions/settings/preferences",
+    path: "/sessions/settings/preferences",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof AuthedShellIndexRoute
@@ -86,6 +100,8 @@ export interface FileRoutesByFullPath {
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
   "/sessions/": typeof AuthedShellSessionsIndexRoute
+  "/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
+  "/sessions/settings/": typeof AuthedShellSessionsSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   "/": typeof AuthedShellIndexRoute
@@ -97,6 +113,8 @@ export interface FileRoutesByTo {
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
   "/sessions": typeof AuthedShellSessionsIndexRoute
+  "/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
+  "/sessions/settings": typeof AuthedShellSessionsSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -111,6 +129,8 @@ export interface FileRoutesById {
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
   "/_authed/_shell/": typeof AuthedShellIndexRoute
   "/_authed/_shell/sessions/": typeof AuthedShellSessionsIndexRoute
+  "/_authed/_shell/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
+  "/_authed/_shell/sessions/settings/": typeof AuthedShellSessionsSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -124,6 +144,8 @@ export interface FileRouteTypes {
     | "/invites/accept"
     | "/$"
     | "/sessions/"
+    | "/sessions/settings/preferences"
+    | "/sessions/settings/"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
@@ -135,6 +157,8 @@ export interface FileRouteTypes {
     | "/invites/accept"
     | "/$"
     | "/sessions"
+    | "/sessions/settings/preferences"
+    | "/sessions/settings"
   id:
     | "__root__"
     | "/_authed"
@@ -148,6 +172,8 @@ export interface FileRouteTypes {
     | "/_authed/_shell/$"
     | "/_authed/_shell/"
     | "/_authed/_shell/sessions/"
+    | "/_authed/_shell/sessions/settings/preferences"
+    | "/_authed/_shell/sessions/settings/"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -239,6 +265,20 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSessionsIndexRouteImport
       parentRoute: typeof AuthedShellRoute
     }
+    "/_authed/_shell/sessions/settings/": {
+      id: "/_authed/_shell/sessions/settings/"
+      path: "/sessions/settings"
+      fullPath: "/sessions/settings/"
+      preLoaderRoute: typeof AuthedShellSessionsSettingsIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/sessions/settings/preferences": {
+      id: "/_authed/_shell/sessions/settings/preferences"
+      path: "/sessions/settings/preferences"
+      fullPath: "/sessions/settings/preferences"
+      preLoaderRoute: typeof AuthedShellSessionsSettingsPreferencesRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
   }
 }
 
@@ -246,12 +286,17 @@ interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
   AuthedShellIndexRoute: typeof AuthedShellIndexRoute
   AuthedShellSessionsIndexRoute: typeof AuthedShellSessionsIndexRoute
+  AuthedShellSessionsSettingsPreferencesRoute: typeof AuthedShellSessionsSettingsPreferencesRoute
+  AuthedShellSessionsSettingsIndexRoute: typeof AuthedShellSessionsSettingsIndexRoute
 }
 
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
   AuthedShellSessionsIndexRoute: AuthedShellSessionsIndexRoute,
+  AuthedShellSessionsSettingsPreferencesRoute:
+    AuthedShellSessionsSettingsPreferencesRoute,
+  AuthedShellSessionsSettingsIndexRoute: AuthedShellSessionsSettingsIndexRoute,
 }
 
 const AuthedShellRouteWithChildren = AuthedShellRoute._addFileChildren(

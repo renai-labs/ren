@@ -1,9 +1,13 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router"
+import { useQuery } from "@tanstack/react-query"
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import { AppBoot } from "../../components/app-boot.js"
 import { ApplicationSidebar, ApplicationSidebarBrand } from "../../components/application-sidebar.js"
 import { RouteError } from "../../components/error-page.js"
+import { SettingsSidebar } from "../../components/settings-sidebar.js"
 import { WorkspaceLayout } from "../../components/workspace-layout.js"
 import { ProfileCard } from "../../features/organization/profile-card.js"
+
+const settingsPath = /^\/sessions\/settings(?:\/|$)/
 
 export const Route = createFileRoute("/_authed/_shell")({
   head: () => ({ meta: [{ title: "Ren" }] }),
@@ -14,12 +18,14 @@ export const Route = createFileRoute("/_authed/_shell")({
 
 function Shell() {
   const context = Route.useRouteContext()
-  const organization = context.me.organization
+  const me = useQuery(context.api.me.get.queryOptions()).data ?? context.me
+  const inSettings = useRouterState({ select: (state) => settingsPath.test(state.location.pathname) })
+  const organization = me.organization
   return (
     <WorkspaceLayout
-      header={<ApplicationSidebarBrand />}
-      navigation={<ApplicationSidebar onSearch={() => undefined} />}
-      footer={organization === null ? null : <ProfileCard user={context.me.user} organization={organization} />}
+      header={inSettings ? null : <ApplicationSidebarBrand />}
+      navigation={inSettings ? <SettingsSidebar /> : <ApplicationSidebar onSearch={() => undefined} />}
+      footer={inSettings || organization === null ? null : <ProfileCard user={me.user} organization={organization} />}
     >
       <Outlet />
     </WorkspaceLayout>

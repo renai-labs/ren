@@ -6,6 +6,7 @@ import { IconButton } from "@ren/ui/icon-button"
 import { Menu } from "@ren/ui/menu"
 import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
+import { Tooltip } from "@ren/ui/tooltip"
 import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
@@ -22,7 +23,6 @@ export function ProfileCard(props: {
   organization: { id: string; name: string }
 }) {
   const auth = Auth.useClient()
-  const platform = Platform.usePlatform()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const navigation = ApplicationShell.useNavigation()
@@ -57,27 +57,7 @@ export function ProfileCard(props: {
           </Select.Button>
         }
       />
-      {navigation.collapsed ? null : (
-        <div className="flex shrink-0 items-center">
-          <Menu.Root>
-            <Menu.Trigger
-              render={
-                <IconButton label="Help">
-                  <Icon glyph="CircleHelp" />
-                </IconButton>
-              }
-            />
-            <Menu.Popup placement="top" alignment="end" width="small">
-              <Menu.Item icon={<Icon glyph="Calendar" />} onSelect={() => platform.openExternal(founderCallURL)}>
-                Talk to founder
-              </Menu.Item>
-              <Menu.Item icon={<Icon glyph="BookOpen" />} onSelect={() => platform.openExternal(docsURL)}>
-                Documentation
-              </Menu.Item>
-            </Menu.Popup>
-          </Menu.Root>
-        </div>
-      )}
+      {navigation.collapsed ? null : <ProfileActions />}
       {creating ? <CreateOrganizationDialog onOpenChange={setCreating} /> : null}
       <ConfirmationDialog
         open={loggingOut}
@@ -91,6 +71,44 @@ export function ProfileCard(props: {
           await navigate({ to: "/login" })
         }}
       />
+    </div>
+  )
+}
+
+function ProfileActions() {
+  const platform = Platform.usePlatform()
+  const navigate = useNavigate()
+  const navigation = ApplicationShell.useNavigation()
+  return (
+    <div className="flex shrink-0 items-center">
+      <Menu.Root>
+        <Menu.Trigger
+          render={
+            <IconButton label="Help">
+              <Icon glyph="CircleHelp" />
+            </IconButton>
+          }
+        />
+        <Menu.Popup placement="top" alignment="end" width="small">
+          <Menu.Item icon={<Icon glyph="Calendar" />} onSelect={() => platform.openExternal(founderCallURL)}>
+            Talk to founder
+          </Menu.Item>
+          <Menu.Item icon={<Icon glyph="BookOpen" />} onSelect={() => platform.openExternal(docsURL)}>
+            Documentation
+          </Menu.Item>
+        </Menu.Popup>
+      </Menu.Root>
+      <Tooltip.Root content="Settings">
+        <IconButton
+          label="Settings"
+          onClick={() => {
+            navigation.dismiss()
+            void navigate({ to: "/sessions/settings" })
+          }}
+        >
+          <Icon glyph="Settings" />
+        </IconButton>
+      </Tooltip.Root>
     </div>
   )
 }
