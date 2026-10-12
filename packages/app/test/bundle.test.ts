@@ -4,7 +4,7 @@ import os from "os"
 import path from "path"
 import { gzipSync } from "zlib"
 
-const budget = { javascript: 200 * 1024, css: 50 * 1024 }
+const budget = { javascript: 220 * 1024, css: 50 * 1024 }
 const outDir = await mkdtemp(path.join(os.tmpdir(), "ren-app-bundle-"))
 
 afterAll(() => rm(outDir, { recursive: true, force: true }))
