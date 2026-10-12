@@ -29,9 +29,9 @@ test("an invited person signs up and joins the organization", async ({ page, req
   await expect(page.getByText("Create your Ren account")).toBeVisible()
   await page.getByLabel("Name").fill("Ada Lovelace")
   await page.getByLabel("Email").fill(email)
-  await page.getByRole("button", { name: "Continue" }).click()
+  await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
-  await page.getByRole("button", { name: "Continue" }).click()
+  await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByRole("textbox").first().click()
   await page.keyboard.type(await emailedCode(request, email))
 
