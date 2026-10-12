@@ -34,7 +34,7 @@ export function usePendingInvitation(props: PendingInvitationProps) {
     failure,
     join,
     continueToJoin: async () => {
-      if (props.userEmail === undefined) {
+      if (!props.userEmail) {
         await navigate({ to: "/signup", search: { invitationId: props.id, redirect: props.redirect } })
         return
       }
@@ -50,7 +50,7 @@ export function usePendingInvitation(props: PendingInvitationProps) {
     },
     signInWithAnotherAccount: async () => {
       const result = await context.auth.signOut()
-      if (result.error !== null) {
+      if (result.error) {
         setFailure({ kind: "mismatch", id: props.id, message: result.error.message ?? "Could not sign out." })
         return
       }
@@ -60,7 +60,7 @@ export function usePendingInvitation(props: PendingInvitationProps) {
     decline: async () => {
       setAction("declining")
       const result = await context.auth.organization.rejectInvitation({ invitationId: props.id })
-      if (result.error !== null) {
+      if (result.error) {
         setAction("idle")
         Toast.manager.add({
           type: "error",

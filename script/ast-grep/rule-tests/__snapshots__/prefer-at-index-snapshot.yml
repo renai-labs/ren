@@ -1,0 +1,22 @@
+id: prefer-at-index
+snapshots:
+  const first = rows[0]:
+    labels:
+      - source: rows[0]
+        style: primary
+        start: 14
+        end: 21
+      - source: "0"
+        style: secondary
+        start: 19
+        end: 20
+  const total = totals[0].total:
+    labels:
+      - source: totals[0]
+        style: primary
+        start: 14
+        end: 23
+      - source: "0"
+        style: secondary
+        start: 21
+        end: 22

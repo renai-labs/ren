@@ -9,10 +9,10 @@ export interface Destination {
 }
 
 export function href(destination: Destination & { readonly join?: boolean }) {
-  if (destination.invitationId === undefined) return destination.redirect ?? "/"
+  if (!destination.invitationId) return destination.redirect ?? "/"
   const search = new URLSearchParams({ id: destination.invitationId })
   if (destination.join === true) search.set("join", "true")
-  if (destination.redirect !== undefined) search.set("redirect", destination.redirect)
+  if (destination.redirect) search.set("redirect", destination.redirect)
   return `/invites/accept?${search.toString()}`
 }
 

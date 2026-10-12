@@ -35,10 +35,12 @@ const rejections = {
 
 const missing = new Set(["ENOTFOUND", "ENODATA", "NXDOMAIN"])
 
+const ErrorCode = Schema.Struct({ code: Schema.Unknown })
+
 const lookup = <A>(resolve: () => Promise<A>) =>
   Effect.tryPromise({
     try: resolve,
-    catch: (error) => (typeof error === "object" && error !== null && "code" in error ? String(error.code) : ""),
+    catch: (error) => (Schema.is(ErrorCode)(error) ? String(error.code) : ""),
   })
 
 const domainOf = (email: string) =>

@@ -1,8 +1,8 @@
 import type { BaseUIEvent } from "@base-ui/react/types"
 import { useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
-import { parentOf, sections, settle } from "./combobox-tree.js"
-import type { CreateStep, Creation, Group, Row, Tree } from "./combobox-tree.js"
+import { difference, parentOf, sections, settle } from "./combobox-tree.js"
+import type { CreateStep, Creation, Draft, Group, Row, Tree } from "./combobox-tree.js"
 
 export type Selection =
   | {
@@ -30,7 +30,7 @@ export function useTree(input: {
   select: (value: string) => void
 }) {
   const [path, setPath] = useState<readonly string[]>([])
-  const [draft, setDraft] = useState<string | null>(null)
+  const [draft, setDraft] = useState<Draft>()
   const [ownQuery, setOwnQuery] = useState("")
   const highlighted = useRef<string | undefined>(undefined)
   const typed = input.query ?? ownQuery
@@ -41,32 +41,32 @@ export function useTree(input: {
   }
   const createLabel = input.onCreate ? (input.createLabel ?? ((name: string) => `Create “${name}”`)) : undefined
   const view = sections({ ...input, query, path, draft, createLabel })
-  const nested = typed === "" && (path.length > 0 || draft !== null)
+  const nested = typed === "" && (path.length > 0 || Boolean(draft))
   const creation = useCreation(input.onCreate, (created) => {
     setPath([])
-    setDraft(null)
+    setDraft(undefined)
     changeQuery("")
     if (typeof created === "string") input.select(created)
   })
   const reset = () => {
     setPath([])
-    setDraft(null)
+    setDraft(undefined)
     creation.clear()
   }
   const commit = creation.commit
   const tree: Tree = {
-    creation: creation.state && (draft !== null || creation.state.name === query) ? creation.state : null,
+    creation: creation.state && (Boolean(draft) || creation.state.name === query) ? creation.state : null,
     drill: (value) => setPath((current) => [...current, value]),
     back: () => {
-      if (draft === null) return setPath((current) => current.slice(0, -1))
-      changeQuery(draft)
-      setDraft(null)
+      if (!draft) return setPath((current) => current.slice(0, -1))
+      changeQuery(draft.name)
+      setDraft(undefined)
       creation.clear()
     },
     create: (row) => {
-      if (row.kind === "step" && draft !== null) return commit(draft, row.value, row.option.value)
+      if (row.kind === "step" && draft) return commit(draft.name, row.value, row.option.value)
       if (!input.createStep) return commit(query, row.value)
-      setDraft(query)
+      setDraft({ name: query })
       changeQuery("")
     },
   }
@@ -80,8 +80,8 @@ export function useTree(input: {
       highlighted.current = value
     },
     picked: (previous: readonly string[], next: readonly string[]) => {
-      const added = next.find((value) => !previous.includes(value))
-      const parent = added === undefined ? undefined : parentOf(input.groups, added)
+      const added = difference(next, previous)
+      const parent = added && parentOf(input.groups, added.value)
       if (parent?.selection === "single" && path.at(-1) === parent.value) setPath(path.slice(0, -1))
     },
     reset,
@@ -153,7 +153,7 @@ export function useSelection(props: Selection, groups: readonly Group[]) {
   }
   return {
     values,
-    value: props.selection !== "multiple" && props.value !== undefined ? props.value : ownValue,
+    value: props.selection !== "multiple" && "value" in props ? (props.value ?? null) : ownValue,
     changeValues,
     changeValue,
     add: (created: string) =>

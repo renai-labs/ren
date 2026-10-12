@@ -13,7 +13,7 @@ function tick() {
 
 export function subscribeClock(listener: () => void) {
   listeners.add(listener)
-  if (state.timer === undefined) {
+  if (!state.timer) {
     state.now = Date.now()
     state.timer = setInterval(tick, TICK)
   }

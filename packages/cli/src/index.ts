@@ -5,8 +5,8 @@ import { Ren } from "@renai-labs/sdk"
 const usage = "Usage: ren health"
 
 async function main(args: ReadonlyArray<string>) {
-  const command = args[0]
-  if (command === undefined) {
+  const command = args.at(0)
+  if (!command) {
     console.log(usage)
     return 0
   }

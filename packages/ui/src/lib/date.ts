@@ -67,7 +67,7 @@ export function formatTimeOfDay(value: DateInput, options: ZoneOptions = {}) {
 
 export function formatDateTimeInZone(value: DateInput, timeZone: string) {
   return formatWith(value, {
-    timeZone: timeZone === "" ? undefined : timeZone,
+    ...(timeZone && { timeZone }),
     year: "numeric",
     month: "short",
     day: "numeric",

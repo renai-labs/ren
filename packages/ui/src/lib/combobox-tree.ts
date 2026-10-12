@@ -37,6 +37,8 @@ export type Section = {
 
 export type Creation = ({ state: "pending" } | { state: "failed"; message: string }) & { row: string }
 
+export type Draft = { readonly name: string } | undefined
+
 export type Tree = {
   creation: Creation | null
   drill: (value: string) => void
@@ -74,6 +76,13 @@ function branchAt(groups: readonly Group[], path: readonly string[]) {
   )
 }
 
+export function difference(values: readonly string[], from: readonly string[]) {
+  return values
+    .filter((value) => !from.includes(value))
+    .map((value) => ({ value }))
+    .at(0)
+}
+
 export function parentOf(groups: readonly Group[], value: string) {
   return groups
     .flatMap((group) => leaves(group.items))
@@ -85,14 +94,14 @@ export function sections(input: {
   groups: readonly Group[]
   path: readonly string[]
   query: string
-  draft: string | null
+  draft: Draft
   createStep?: CreateStep
   createLabel?: ((query: string) => string) | undefined
 }): Section[] {
   const query = input.query.trim()
-  if (input.draft !== null && input.createStep && input.createLabel)
+  if (input.draft && input.createStep && input.createLabel)
     return [
-      { value: back, items: [{ kind: "back", value: back, label: input.createLabel(input.draft) }] },
+      { value: back, items: [{ kind: "back", value: back, label: input.createLabel(input.draft.name) }] },
       {
         value: step,
         label: input.createStep.label,
@@ -135,15 +144,15 @@ export function sections(input: {
 }
 
 export function settle(groups: readonly Group[], previous: readonly string[], next: readonly string[]) {
-  const added = next.find((value) => !previous.includes(value))
-  const removed = previous.find((value) => !next.includes(value))
-  if (added !== undefined) {
-    const parent = parentOf(groups, added)
+  const added = difference(next, previous)
+  const removed = difference(previous, next)
+  if (added) {
+    const parent = parentOf(groups, added.value)
     if (parent?.selection !== "single") return [...next]
     const siblings = new Set(leaves(parent.options ?? []).map((leaf) => leaf.option.value))
-    return next.filter((value) => value === added || !siblings.has(value))
+    return next.filter((value) => value === added.value || !siblings.has(value))
   }
-  if (removed !== undefined && parentOf(groups, removed)?.selection === "single") return [...previous]
+  if (removed && parentOf(groups, removed.value)?.selection === "single") return [...previous]
   return [...next]
 }
 

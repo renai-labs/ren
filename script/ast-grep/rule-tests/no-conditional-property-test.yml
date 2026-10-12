@@ -1,0 +1,7 @@
+id: no-conditional-property
+valid:
+  - "const input = { ...(joined && { joined }) }"
+  - 'const input = { label: ready ? "ready" : "waiting" }'
+invalid:
+  - "const input = { joined: joined ? true : undefined }"
+  - "const input = { joined: missing ? undefined : value }"

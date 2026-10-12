@@ -26,7 +26,7 @@ export async function openWorkspace(
   input: { organizationId: string; redirect: string | undefined },
 ): Promise<Outcome> {
   const switched = await context.auth.organization.setActive({ organizationId: input.organizationId })
-  if (switched.error !== null) {
+  if (switched.error) {
     const message = switched.error.message ?? "Your invitation was accepted, but the workspace could not open."
     Toast.manager.add({ type: "error", title: "Couldn’t open workspace", description: message })
     return failure("workspace-error", message)
@@ -40,7 +40,7 @@ export async function join(
   input: { invitationId: string; organizationId: string; redirect: string | undefined },
 ): Promise<Outcome> {
   const accepted = await context.auth.organization.acceptInvitation({ invitationId: input.invitationId })
-  if (accepted.error === null) {
+  if (!accepted.error) {
     Toast.manager.add({ type: "success", title: "Joined organization" })
     return openWorkspace(context, input)
   }

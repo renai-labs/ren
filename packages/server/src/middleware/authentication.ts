@@ -27,7 +27,7 @@ export const AuthenticationLayer = Layer.effect(
       }),
       cookie: Effect.fn("Authentication.cookie")(function* (httpEffect) {
         const request = yield* HttpServerRequest.HttpServerRequest
-        if (request.headers.cookie === undefined) return yield* unauthorized
+        if (!request.headers.cookie) return yield* unauthorized
         const session = yield* authenticate
         return yield* httpEffect.pipe(
           Effect.provideService(CurrentUser, session.user),
