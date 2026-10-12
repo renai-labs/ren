@@ -2,8 +2,8 @@ export * as Combobox from "./combobox.js"
 
 import { Combobox } from "@base-ui/react/combobox"
 import { cva } from "class-variance-authority"
-import { useRef, useState } from "react"
-import type { KeyboardEvent, KeyboardEventHandler, ReactElement, ReactNode } from "react"
+import { useState } from "react"
+import type { KeyboardEventHandler, ReactElement, ReactNode } from "react"
 import { Body } from "../lib/combobox-list.js"
 import type { Group, ListChrome, Option } from "../lib/combobox-list.js"
 import { composeClasses } from "../lib/compose-classes.js"
@@ -63,80 +63,49 @@ export function Popover(props: PopoverProps) {
 }
 
 export function Inline(props: ListProps) {
-  return <Options {...props} presentation="inline" />
+  return <Options {...props} presentation="inline" open />
 }
 
 export function Panel(props: ListProps) {
-  return <Options {...props} presentation="panel" />
-}
-
-function allGroups(props: ListProps): readonly Group[] {
-  return props.groups ?? [{ value: "all", items: props.items ?? [] }]
-}
-
-function filterGroups(groups: readonly Group[], query: string, external: boolean) {
-  const needle = query.trim().toLowerCase()
-  if (external || !needle) return groups.filter((group) => group.items.length > 0)
-  return groups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) =>
-        [item.label, ...(item.keywords ?? [])].some((text) => text.toLowerCase().includes(needle)),
-      ),
-    }))
-    .filter((group) => group.items.length > 0)
+  return <Options {...props} presentation="panel" open />
 }
 
 function Options(props: PopoverProps & { presentation: Presentation }) {
   const closeOnSelect = props.closeOnSelect ?? props.selection !== "multiple"
   const popover = props.presentation === "popover"
-  const [localQuery, setLocalQuery] = useState("")
-  const [localOpen, setLocalOpen] = useState(props.defaultOpen === true)
-  const [single, setSingle] = useState(props.selection === "multiple" ? null : props.defaultValue)
-  const [many, setMany] = useState(props.selection === "multiple" ? props.defaultValue : undefined)
-  const highlighted = useRef<string | undefined>(undefined)
-  const query = props.query ?? localQuery
-  const groups = allGroups(props)
-  const labels = new Map(groups.flatMap((group) => group.items.map((item) => [item.value, item.label] as const)))
-  const filtered = filterGroups(groups, query, props.filtering === "external")
+  const closesAfterMultiplePick = popover && closeOnSelect && props.selection === "multiple"
+  const [pickedOpen, setPickedOpen] = useState(props.defaultOpen === true)
+  const collator = Combobox.useFilter()
+  const items = Combobox.createItems(props.groups ?? [{ value: "all", items: props.items ?? [] }], {
+    getValue: (item) => item.value,
+    getLabel: (item) => item.label,
+  })
   const changeOpen = (next: boolean) => {
-    if (!next) setLocalQuery("")
-    setLocalOpen(next)
+    setPickedOpen(next)
     props.onOpenChange?.(next)
   }
-  const selectSingle = (next: string | null) => {
-    setSingle(next)
-    if (props.selection !== "multiple") props.onValueChange?.(next)
-  }
-  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    props.onSearchKeyDown?.(event)
-    if (event.defaultPrevented || event.key !== "Enter" || highlighted.current !== undefined) return
-    const first = filtered[0]?.items.find((item) => !item.disabled)
-    if (props.selection === "multiple" || !first) return
-    event.preventDefault()
-    selectSingle(first.value)
-    if (closeOnSelect && popover) changeOpen(false)
-  }
   const root = {
-    items: groups,
-    filteredItems: filtered,
+    items,
+    filter:
+      props.filtering === "external"
+        ? null
+        : (item: Option, query: string) =>
+            [item.label, ...(item.keywords ?? [])].some((text) => collator.contains(text, query)),
     inline: !popover,
     autoHighlight: true,
-    open: popover ? (props.open ?? localOpen) : true,
+    defaultInputValue: "",
+    inputValue: props.query,
+    onInputValueChange: props.onQueryChange,
+    defaultOpen: props.defaultOpen,
+    open: props.open ?? (closesAfterMultiplePick ? pickedOpen : undefined),
     onOpenChange: (next: boolean, details: Combobox.Root.ChangeEventDetails) => {
-      if (!next && !closeOnSelect && details.reason === "item-press") return
+      if (!next && !closeOnSelect && details.reason === "item-press") return details.cancel()
       changeOpen(next)
-    },
-    inputValue: query,
-    onInputValueChange: (next: string) => (props.onQueryChange ? props.onQueryChange(next) : setLocalQuery(next)),
-    itemToStringLabel: (value: string) => labels.get(value) ?? value,
-    onItemHighlighted: (value: string | undefined) => {
-      highlighted.current = value
     },
   }
   const content = (
     <Container {...props}>
-      <Body {...props} focusOnMount={!popover} onKeyDown={handleSearchKeyDown} />
+      <Body {...props} focusOnMount={!popover} pickFirstOnEnter={props.selection !== "multiple"} />
     </Container>
   )
   if (props.selection === "multiple")
@@ -144,22 +113,18 @@ function Options(props: PopoverProps & { presentation: Presentation }) {
       <Combobox.Root
         {...root}
         multiple
-        value={[...(props.value ?? many ?? [])]}
+        value={props.value && [...props.value]}
+        defaultValue={props.defaultValue && [...props.defaultValue]}
         onValueChange={(next) => {
-          setMany(next)
           props.onValueChange?.(next)
-          if (closeOnSelect && popover) changeOpen(false)
+          if (closesAfterMultiplePick) changeOpen(false)
         }}
       >
         {content}
       </Combobox.Root>
     )
   return (
-    <Combobox.Root
-      {...root}
-      value={props.value === undefined ? (single ?? null) : props.value}
-      onValueChange={selectSingle}
-    >
+    <Combobox.Root {...root} value={props.value} defaultValue={props.defaultValue} onValueChange={props.onValueChange}>
       {content}
     </Combobox.Root>
   )

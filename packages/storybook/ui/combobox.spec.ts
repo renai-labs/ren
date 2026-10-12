@@ -83,3 +83,45 @@ story("stays open while picking several options", async ({ visit, page }) => {
   await expect(ada).toHaveAttribute("aria-selected", "false")
   await expect(alan).toHaveAttribute("aria-selected", "true")
 })
+
+story("marks the default selection", async ({ visit, page }) => {
+  await visit("ui-combobox--selected")
+  await expect(page.getByRole("option", { name: /Alan Turing/ })).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByRole("option", { name: /Ada Lovelace/ })).toHaveAttribute("aria-selected", "false")
+})
+
+story("filters within groups and hides groups without matches", async ({ visit, page }) => {
+  const input = (await visit("ui-combobox--groups")).getByRole("combobox", { name: "Search" })
+  await expect(page.getByRole("group")).toHaveText([/^Teams/, /^Projects/])
+  await input.fill("launch")
+  await expect(page.getByRole("group", { name: "Projects" })).toBeVisible()
+  await expect(page.getByRole("group", { name: "Teams" })).toBeHidden()
+  await expect(page.getByRole("option")).toHaveText(["Launch plan"])
+})
+
+story("shows loading and failure in place of options", async ({ visit, page }) => {
+  await visit("ui-combobox--loading")
+  await expect(page.getByRole("status", { name: "Loading" })).toBeVisible()
+  await expect(page.getByRole("option")).toHaveCount(0)
+  await visit("ui-combobox--failed")
+  await expect(page.getByRole("alert")).toHaveText("Couldn’t load teams.")
+  await expect(page.getByRole("option")).toHaveCount(0)
+})
+
+story("keeps a single selection open when closeOnSelect is off", async ({ visit, page }) => {
+  await visit("ui-combobox--popover-keep-open")
+  await page.getByRole("option", { name: /Alan Turing/ }).click()
+  const grace = page.getByRole("option", { name: /Grace Hopper/ })
+  await grace.click()
+  await expect(grace).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByRole("option", { name: /Alan Turing/ })).toHaveAttribute("aria-selected", "false")
+})
+
+story("closes a multiple selection after a pick when closeOnSelect is on", async ({ visit, page }) => {
+  await visit("ui-combobox--popover-multiple-close-on-select")
+  await page.getByRole("option", { name: /Alan Turing/ }).click()
+  await expect(page.getByRole("listbox")).toBeHidden()
+  await page.getByRole("combobox", { name: "Members to add" }).click()
+  await expect(page.getByRole("option", { name: /Alan Turing/ })).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByRole("option", { name: /Ada Lovelace/ })).toHaveAttribute("aria-selected", "true")
+})
