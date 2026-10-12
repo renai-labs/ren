@@ -290,6 +290,7 @@ export default defineConfig({
     nursery: "off",
   },
   rules: {
+    "ren/story-coverage": "error",
     "ren/story-location": "error",
     "no-restricted-globals": ["error", reflect],
     "no-restricted-imports": ["error", { patterns: [vendored] }],
