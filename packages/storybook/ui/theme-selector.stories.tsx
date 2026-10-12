@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
+import { Field } from "@ren/ui/field"
 import { ThemeSelector } from "@ren/ui/theme-selector"
 import type { Theme } from "@ren/ui/theme"
 import { useState } from "react"
@@ -27,5 +28,16 @@ export const Interactive: Story = {
   render: function Render() {
     const [value, setValue] = useState<Theme.Preference>("light")
     return <ThemeSelector value={value} onValueChange={setValue} />
+  },
+}
+
+export const InField: Story = {
+  render: function Render() {
+    const [value, setValue] = useState<Theme.Preference>("dark")
+    return (
+      <Field.Root label="Theme">
+        <ThemeSelector value={value} onValueChange={setValue} />
+      </Field.Root>
+    )
   },
 }

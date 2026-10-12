@@ -17,3 +17,10 @@ story("reveals more themes and keeps them open while one is chosen", async ({ vi
   await expect(root.getByRole("radio", { name: "Girliepop" })).toBeChecked()
   await expect(root.getByRole("button", { name: "Show less" })).toBeHidden()
 })
+
+story("names each theme after its own label inside a field", async ({ visit }) => {
+  const root = await visit("ui-theme-selector--in-field")
+  await expect(root.getByRole("radio", { name: "Dark" })).toBeChecked()
+  await root.getByRole("radio", { name: "Light" }).click()
+  await expect(root.getByRole("radio", { name: "Light" })).toBeChecked()
+})
