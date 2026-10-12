@@ -16,10 +16,10 @@ test("a forgotten password is reset through the emailed link", async ({ page, re
   await page.goto(link ?? "")
   await page.getByLabel("New password", { exact: true }).fill("second password")
   await page.getByLabel("Confirm new password").fill("other password")
-  await page.getByRole("button", { name: "Continue" }).click()
+  await page.getByRole("button", { name: "Continue", exact: true }).click()
   await expect(page.getByText("Passwords do not match")).toBeVisible()
   await page.getByLabel("Confirm new password").fill("second password")
-  await page.getByRole("button", { name: "Continue" }).click()
+  await page.getByRole("button", { name: "Continue", exact: true }).click()
   await expect(page).toHaveURL(/\/login$/)
 
   expect((await signIn(request, { email, password: "second password" })).ok()).toBe(true)
@@ -29,7 +29,7 @@ test("a used or missing reset link offers a new one", async ({ page }) => {
   await page.goto("/reset-password?token=not-a-token")
   await page.getByLabel("New password", { exact: true }).fill("second password")
   await page.getByLabel("Confirm new password").fill("second password")
-  await page.getByRole("button", { name: "Continue" }).click()
+  await page.getByRole("button", { name: "Continue", exact: true }).click()
   await expect(
     page.getByText("This reset link has expired or was already used. Request a new one to continue."),
   ).toBeVisible()
