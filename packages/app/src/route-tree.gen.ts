@@ -24,6 +24,7 @@ import { Route as AuthedShellSessionsSettingsIndexRouteImport } from "./routes/_
 import { Route as AuthedShellSessionsSettingsAdminRouteImport } from "./routes/_authed/_shell/sessions/settings/_admin"
 import { Route as AuthedShellSessionsSettingsPreferencesRouteImport } from "./routes/_authed/_shell/sessions/settings/preferences"
 import { Route as AuthedShellSessionsSettingsAdminGeneralRouteImport } from "./routes/_authed/_shell/sessions/settings/_admin/general"
+import { Route as AuthedShellSessionsSettingsAdminMembersIndexRouteImport } from "./routes/_authed/_shell/sessions/settings/_admin/members/index"
 
 const AuthedRoute = AuthedRouteImport.update({
   id: "/_authed",
@@ -103,6 +104,12 @@ const AuthedShellSessionsSettingsAdminGeneralRoute =
     path: "/general",
     getParentRoute: () => AuthedShellSessionsSettingsAdminRoute,
   } as any)
+const AuthedShellSessionsSettingsAdminMembersIndexRoute =
+  AuthedShellSessionsSettingsAdminMembersIndexRouteImport.update({
+    id: "/members/",
+    path: "/members/",
+    getParentRoute: () => AuthedShellSessionsSettingsAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof AuthedShellIndexRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByFullPath {
   "/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
   "/sessions/settings/": typeof AuthedShellSessionsSettingsIndexRoute
   "/sessions/settings/general": typeof AuthedShellSessionsSettingsAdminGeneralRoute
+  "/sessions/settings/members/": typeof AuthedShellSessionsSettingsAdminMembersIndexRoute
 }
 export interface FileRoutesByTo {
   "/": typeof AuthedShellIndexRoute
@@ -132,6 +140,7 @@ export interface FileRoutesByTo {
   "/sessions/settings": typeof AuthedShellSessionsSettingsIndexRoute
   "/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
   "/sessions/settings/general": typeof AuthedShellSessionsSettingsAdminGeneralRoute
+  "/sessions/settings/members": typeof AuthedShellSessionsSettingsAdminMembersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -150,6 +159,7 @@ export interface FileRoutesById {
   "/_authed/_shell/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
   "/_authed/_shell/sessions/settings/": typeof AuthedShellSessionsSettingsIndexRoute
   "/_authed/_shell/sessions/settings/_admin/general": typeof AuthedShellSessionsSettingsAdminGeneralRoute
+  "/_authed/_shell/sessions/settings/_admin/members/": typeof AuthedShellSessionsSettingsAdminMembersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -167,6 +177,7 @@ export interface FileRouteTypes {
     | "/sessions/settings/preferences"
     | "/sessions/settings/"
     | "/sessions/settings/general"
+    | "/sessions/settings/members/"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | "/sessions/settings"
     | "/sessions/settings/preferences"
     | "/sessions/settings/general"
+    | "/sessions/settings/members"
   id:
     | "__root__"
     | "/_authed"
@@ -198,6 +210,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/sessions/settings/preferences"
     | "/_authed/_shell/sessions/settings/"
     | "/_authed/_shell/sessions/settings/_admin/general"
+    | "/_authed/_shell/sessions/settings/_admin/members/"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -317,17 +330,27 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSessionsSettingsAdminGeneralRouteImport
       parentRoute: typeof AuthedShellSessionsSettingsAdminRoute
     }
+    "/_authed/_shell/sessions/settings/_admin/members/": {
+      id: "/_authed/_shell/sessions/settings/_admin/members/"
+      path: "/members"
+      fullPath: "/sessions/settings/members/"
+      preLoaderRoute: typeof AuthedShellSessionsSettingsAdminMembersIndexRouteImport
+      parentRoute: typeof AuthedShellSessionsSettingsAdminRoute
+    }
   }
 }
 
 interface AuthedShellSessionsSettingsAdminRouteChildren {
   AuthedShellSessionsSettingsAdminGeneralRoute: typeof AuthedShellSessionsSettingsAdminGeneralRoute
+  AuthedShellSessionsSettingsAdminMembersIndexRoute: typeof AuthedShellSessionsSettingsAdminMembersIndexRoute
 }
 
 const AuthedShellSessionsSettingsAdminRouteChildren: AuthedShellSessionsSettingsAdminRouteChildren =
   {
     AuthedShellSessionsSettingsAdminGeneralRoute:
       AuthedShellSessionsSettingsAdminGeneralRoute,
+    AuthedShellSessionsSettingsAdminMembersIndexRoute:
+      AuthedShellSessionsSettingsAdminMembersIndexRoute,
   }
 
 const AuthedShellSessionsSettingsAdminRouteWithChildren =

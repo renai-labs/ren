@@ -1,10 +1,11 @@
 export * as AuthSchemas from "./schemas.js"
 
 import { Option, Schema, SchemaTransformation } from "effect"
+import { Email } from "../../lib/email.js"
 
-const emailPattern = /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/
+const emailPattern = Email.pattern
 
-const Email = Schema.Trim.check(Schema.isPattern(emailPattern, { message: "Enter a valid email" }))
+const EmailAddress = Schema.Trim.check(Schema.isPattern(emailPattern, { message: "Enter a valid email" }))
 
 const NewPassword = Schema.String.check(Schema.isMinLength(8, { message: "Password must be at least 8 characters" }))
 
@@ -32,7 +33,7 @@ export const OptionalEmail = Schema.optionalKey(Schema.String).pipe(
 
 export const InvitationId = Schema.optionalKey(Schema.NonEmptyString)
 
-export const EmailStep = Schema.toStandardSchemaV1(Schema.Struct({ email: Email }))
+export const EmailStep = Schema.toStandardSchemaV1(Schema.Struct({ email: EmailAddress }))
 
 export const SignupDetails = Schema.toStandardSchemaV1(
   Schema.Struct({
@@ -40,7 +41,7 @@ export const SignupDetails = Schema.toStandardSchemaV1(
       Schema.isNonEmpty({ message: "Enter your name" }),
       Schema.isMaxLength(100, { message: "Name is too long" }),
     ),
-    email: Email,
+    email: EmailAddress,
   }),
 )
 
