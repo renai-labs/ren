@@ -1,27 +1,13 @@
 import { Combobox } from "@base-ui/react/combobox"
+import type { BaseUIEvent } from "@base-ui/react/types"
 import { cva } from "class-variance-authority"
-import type { KeyboardEventHandler, ReactNode } from "react"
+import type { KeyboardEvent, KeyboardEventHandler, ReactNode } from "react"
 import { Icon } from "../components/icon.js"
 import { LoadingMessage } from "../components/loading-message.js"
 import { StateMessage } from "../components/state-message.js"
+import { RowView } from "./combobox-row.js"
+import type { Row, Section, Tree } from "./combobox-tree.js"
 import { composeClasses } from "./compose-classes.js"
-import { optionRow } from "./control-chrome.js"
-
-export type Option = {
-  value: string
-  label: string
-  description?: ReactNode
-  detail?: ReactNode
-  icon?: ReactNode
-  disabled?: boolean
-  keywords?: readonly string[]
-}
-
-export type Group = {
-  value: string
-  label?: ReactNode
-  items: readonly Option[]
-}
 
 export type ListChrome = {
   label: string
@@ -53,7 +39,9 @@ function scale(props: ListChrome) {
 type BodyProps = ListChrome & {
   focusOnMount: boolean
   pickFirstOnEnter: boolean
+  tree: Tree
   onSearchKeyDown?: KeyboardEventHandler<HTMLInputElement>
+  onTreeKeyDown: (event: BaseUIEvent<KeyboardEvent<HTMLInputElement>>) => void
 }
 
 export function Body(props: BodyProps) {
@@ -94,11 +82,12 @@ function Search(props: BodyProps) {
         aria-label={props.label}
         onKeyDown={(event) => {
           props.onSearchKeyDown?.(event)
+          if (!event.defaultPrevented) props.onTreeKeyDown(event)
           if (event.defaultPrevented || event.key !== "Enter" || !props.pickFirstOnEnter) return
           if (event.currentTarget.hasAttribute("aria-activedescendant")) return
           const first = event.currentTarget
             .closest('[data-slot="option-list"]')
-            ?.querySelector<HTMLElement>('[role="option"]:not([data-disabled])')
+            ?.querySelector<HTMLElement>('[role="option"]:not([data-disabled], [data-back])')
           if (!first) return
           event.preventDefault()
           event.preventBaseUIHandler()
@@ -114,7 +103,7 @@ function Search(props: BodyProps) {
   )
 }
 
-function Results(props: ListChrome) {
+function Results(props: BodyProps) {
   const spacious = props.density === "spacious"
   return (
     <div className={composeClasses(resultsVariants({ scale: scale(props) }))}>
@@ -136,7 +125,7 @@ function Results(props: ListChrome) {
       <Combobox.List aria-busy={props.state === "loading" || undefined} className="flex flex-col outline-none">
         {props.state === "loading" || props.state === "failed"
           ? null
-          : (group: Group) => (
+          : (group: Section) => (
               <Combobox.Group
                 key={group.value}
                 items={[...group.items]}
@@ -154,43 +143,13 @@ function Results(props: ListChrome) {
                   </Combobox.GroupLabel>
                 ) : null}
                 <Combobox.Collection>
-                  {(item: Option) => <Row key={item.value} item={item} purpose={props.purpose} spacious={spacious} />}
+                  {(row: Row) => (
+                    <RowView key={row.value} row={row} tree={props.tree} purpose={props.purpose} spacious={spacious} />
+                  )}
                 </Combobox.Collection>
               </Combobox.Group>
             )}
       </Combobox.List>
     </div>
-  )
-}
-
-function Row(props: { item: Option; purpose: ListChrome["purpose"]; spacious: boolean }) {
-  const selection = props.purpose !== "command"
-  return (
-    <Combobox.Item
-      value={props.item.value}
-      disabled={props.item.disabled}
-      className={
-        props.spacious
-          ? // oxlint-disable-next-line ren/require-companion-class -- focus stays in the input; data-highlighted marks the active option
-            "relative flex h-11 cursor-default items-center gap-3 rounded-control px-3 text-sm text-text-primary outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-disabled data-highlighted:bg-fill-secondary [&_svg]:shrink-0"
-          : composeClasses(optionRow, selection && "pr-8")
-      }
-    >
-      {props.item.icon}
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate">{props.item.label}</span>
-        {props.item.description ? (
-          <span className="truncate text-xs text-text-secondary">{props.item.description}</span>
-        ) : null}
-      </span>
-      {props.item.detail ? <span className="shrink-0 text-xs text-text-secondary">{props.item.detail}</span> : null}
-      {selection ? (
-        <Combobox.ItemIndicator
-          className={props.spacious ? "flex items-center [&_svg]:size-3.5" : "absolute right-2 flex items-center"}
-        >
-          <Icon glyph="Check" />
-        </Combobox.ItemIndicator>
-      ) : null}
-    </Combobox.Item>
   )
 }
