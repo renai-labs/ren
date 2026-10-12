@@ -3,6 +3,7 @@ import { Schema } from "effect"
 import { AuthError } from "../src/features/auth/auth-error.js"
 import { CompleteAuth } from "../src/features/auth/complete-auth.js"
 import { AuthSchemas } from "../src/features/auth/schemas.js"
+import { InvitationSchemas } from "../src/features/invitation/schemas.js"
 
 const failure = (error: { code?: string; message?: string; status?: number; statusText?: string }) =>
   AuthError.describe({ status: 400, statusText: "", ...error })
@@ -60,4 +61,13 @@ test("finishing auth goes to the invitation, then the redirect, then home", () =
     "/invites/accept?id=inv_1&join=true&redirect=%2Fsettings",
   )
   expect(CompleteAuth.href({ invitationId: "inv_1" })).toBe("/invites/accept?id=inv_1")
+})
+
+test("invitation links fall back to an invalid id and join only when asked", () => {
+  const decode = Schema.decodeUnknownSync(Schema.Struct({ id: InvitationSchemas.Id, join: InvitationSchemas.Join }))
+  expect(decode({ id: "inv_1", join: true })).toEqual({ id: "inv_1", join: true })
+  expect(decode({ id: "inv_1", join: "true" })).toEqual({ id: "inv_1", join: true })
+  expect(decode({ id: "inv_1", join: false })).toEqual({ id: "inv_1" })
+  expect(decode({ id: 42 })).toEqual({ id: "invalid" })
+  expect(decode({})).toEqual({ id: "invalid" })
 })

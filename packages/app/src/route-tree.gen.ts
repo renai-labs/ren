@@ -16,6 +16,7 @@ import { Route as ResetPasswordRouteImport } from "./routes/reset-password"
 import { Route as SignupRouteImport } from "./routes/signup"
 import { Route as VerifyEmailRouteImport } from "./routes/verify-email"
 import { Route as AuthedIndexRouteImport } from "./routes/_authed/index"
+import { Route as InvitesAcceptRouteImport } from "./routes/invites/accept"
 
 const AuthedRoute = AuthedRouteImport.update({
   id: "/_authed",
@@ -51,6 +52,11 @@ const AuthedIndexRoute = AuthedIndexRouteImport.update({
   path: "/",
   getParentRoute: () => AuthedRoute,
 } as any)
+const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
+  id: "/invites/accept",
+  path: "/invites/accept",
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof AuthedIndexRoute
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   "/reset-password": typeof ResetPasswordRoute
   "/signup": typeof SignupRoute
   "/verify-email": typeof VerifyEmailRoute
+  "/invites/accept": typeof InvitesAcceptRoute
 }
 export interface FileRoutesByTo {
   "/forgot-password": typeof ForgotPasswordRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   "/reset-password": typeof ResetPasswordRoute
   "/signup": typeof SignupRoute
   "/verify-email": typeof VerifyEmailRoute
+  "/invites/accept": typeof InvitesAcceptRoute
   "/": typeof AuthedIndexRoute
 }
 export interface FileRoutesById {
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   "/reset-password": typeof ResetPasswordRoute
   "/signup": typeof SignupRoute
   "/verify-email": typeof VerifyEmailRoute
+  "/invites/accept": typeof InvitesAcceptRoute
   "/_authed/": typeof AuthedIndexRoute
 }
 export interface FileRouteTypes {
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | "/reset-password"
     | "/signup"
     | "/verify-email"
+    | "/invites/accept"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/forgot-password"
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
     | "/reset-password"
     | "/signup"
     | "/verify-email"
+    | "/invites/accept"
     | "/"
   id:
     | "__root__"
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
     | "/reset-password"
     | "/signup"
     | "/verify-email"
+    | "/invites/accept"
     | "/_authed/"
   fileRoutesById: FileRoutesById
 }
@@ -113,6 +125,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  InvitesAcceptRoute: typeof InvitesAcceptRoute
 }
 
 declare module "@tanstack/react-router" {
@@ -166,6 +179,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
+    "/invites/accept": {
+      id: "/invites/accept"
+      path: "/invites/accept"
+      fullPath: "/invites/accept"
+      preLoaderRoute: typeof InvitesAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -187,6 +207,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  InvitesAcceptRoute: InvitesAcceptRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
