@@ -1,2 +1,4 @@
 @import "@ren/ui/styles";
+@source "../ui";
+@source "../app";
 @source "../../app/src/features";

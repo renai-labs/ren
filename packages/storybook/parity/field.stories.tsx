@@ -1,7 +1,7 @@
 import { Field } from "ren-v1/composites/field"
-import meta from "../../ui/src/components/field.stories.js"
+import meta from "../ui/field.stories.js"
 
-export default { ...meta, title: "Parity/Field", component: Field }
+export default { ...meta, component: Field }
 
 export {
   Default,
@@ -14,4 +14,4 @@ export {
   Horizontal,
   Row,
   RowInvalid,
-} from "../../ui/src/components/field.stories.js"
+} from "../ui/field.stories.js"

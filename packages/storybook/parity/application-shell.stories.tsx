@@ -1,10 +1,10 @@
 import type { ComponentProps } from "react"
 import { useState } from "react"
 import { ApplicationShell } from "ren-v1/shells/application-shell"
-import { IconButton } from "../../ui/src/components/icon-button.js"
-import { Icon } from "../../ui/src/components/icon.js"
-import { KeyboardKey } from "../../ui/src/components/keyboard-key.js"
-import meta from "../../ui/src/components/application-shell.stories.js"
+import { IconButton } from "@ren/ui/icon-button"
+import { Icon } from "@ren/ui/icon"
+import { KeyboardKey } from "@ren/ui/keyboard-key"
+import meta from "../ui/application-shell.stories.js"
 
 const chats = ["Quarterly report", "Onboarding emails", "Pricing page copy", "Support triage", "Release notes"]
 
@@ -60,10 +60,9 @@ function Interactive(props: ComponentProps<typeof ApplicationShell>) {
 
 export default {
   ...meta,
-  title: "Parity/Application Shell",
   component: ApplicationShell,
   args: { ...meta.args, navigation, subscribeKeyDown },
   render: (args: ComponentProps<typeof ApplicationShell>) => <Interactive {...args} />,
 }
 
-export { Expanded, Collapsed, Mobile } from "../../ui/src/components/application-shell.stories.js"
+export { Expanded, Collapsed, Mobile } from "../ui/application-shell.stories.js"

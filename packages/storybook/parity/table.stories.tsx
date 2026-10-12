@@ -4,7 +4,7 @@ import type { ComponentProps } from "react"
 import { MenuItem } from "ren-v1/composites/menu"
 import { Table } from "ren-v1/composites/table"
 import type { TableColumn, TableSortDirection } from "ren-v1/composites/table"
-import { Icon } from "../../ui/src/components/icon.js"
+import { Icon } from "@ren/ui/icon"
 
 type Member = { id: string; name: string; email: string; role: string; seats: string }
 
@@ -42,7 +42,6 @@ function Members(props: { root: Props; sortable?: boolean }) {
 }
 
 export default {
-  title: "Parity/Table",
   component: Table,
   args: { caption: "Organization members" },
   render: (args: Props) => <Members root={args} />,

@@ -1,10 +1,10 @@
 import type { ComponentProps } from "react"
-import { Button } from "../../ui/src/components/button.js"
-import { Text } from "../../ui/src/components/text.js"
+import { Button } from "@ren/ui/button"
+import { Text } from "@ren/ui/text"
 import { Popover } from "ren-v1/composites/popover"
-import meta from "../../ui/src/components/preview-card.stories.js"
+import meta from "../ui/preview-card.stories.js"
 
-export default { ...meta, title: "Parity/Preview Card", component: Popover }
+export default { ...meta, component: Popover }
 
 const opened = (args: Partial<ComponentProps<typeof Popover>>) => ({
   render: () => (

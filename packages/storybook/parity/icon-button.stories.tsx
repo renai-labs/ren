@@ -1,7 +1,7 @@
 import { IconButton } from "ren-v1/primitives/icon-button"
-import meta from "../../ui/src/components/icon-button.stories.js"
+import meta from "../ui/icon-button.stories.js"
 
-export default { ...meta, title: "Parity/Icon Button", component: IconButton }
+export default { ...meta, component: IconButton }
 
 export {
   Plain,
@@ -19,4 +19,4 @@ export {
   AttentionSecondary,
   Pending,
   Disabled,
-} from "../../ui/src/components/icon-button.stories.js"
+} from "../ui/icon-button.stories.js"

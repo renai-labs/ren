@@ -1,7 +1,7 @@
 import { Notice } from "ren-v1/composites/notice"
-import meta from "../../ui/src/components/notice.stories.js"
+import meta from "../ui/notice.stories.js"
 
-export default { ...meta, title: "Parity/Notice", component: Notice }
+export default { ...meta, component: Notice }
 
 export {
   Information,
@@ -15,4 +15,4 @@ export {
   InlineDanger,
   InlineLayout,
   InlineLayoutAction,
-} from "../../ui/src/components/notice.stories.js"
+} from "../ui/notice.stories.js"

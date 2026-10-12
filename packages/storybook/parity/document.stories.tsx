@@ -1,9 +1,9 @@
 import { Document } from "ren-v1/composites/document"
-import meta from "../../ui/src/components/document.stories.js"
+import meta from "../ui/document.stories.js"
 
-export default { ...meta, title: "Parity/Document", component: Document }
+export default { ...meta, component: Document }
 
-export { Compact, Standard, Secondary, Streaming, Table } from "../../ui/src/components/document.stories.js"
+export { Compact, Standard, Secondary, Streaming, Table } from "../ui/document.stories.js"
 
 export const Code = {
   render: () => (

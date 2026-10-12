@@ -11,7 +11,7 @@ import {
 } from "ren-v1/composites/dialog"
 import { Button } from "ren-v1/primitives/button"
 import { Text } from "ren-v1/primitives/text"
-import meta from "../../ui/src/components/dialog.stories.js"
+import meta from "../ui/dialog.stories.js"
 
 const sections = (
   <>
@@ -31,7 +31,6 @@ const sections = (
 
 export default {
   ...meta,
-  title: "Parity/Dialog",
   component: DialogContent,
   args: { children: sections },
   render: (args: ComponentProps<typeof DialogContent>) => (
@@ -89,4 +88,4 @@ export {
   SideLarge,
   SideExtraLarge,
   HiddenCloseButton,
-} from "../../ui/src/components/dialog.stories.js"
+} from "../ui/dialog.stories.js"

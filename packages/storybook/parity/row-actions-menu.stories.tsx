@@ -1,10 +1,9 @@
 import { MenuItem, RowActionsMenu } from "ren-v1/composites/menu"
-import { Icon } from "../../ui/src/components/icon.js"
-import meta from "../../ui/src/components/row-actions-menu.stories.js"
+import { Icon } from "@ren/ui/icon"
+import meta from "../ui/row-actions-menu.stories.js"
 
 export default {
   ...meta,
-  title: "Parity/Row Actions Menu",
   component: RowActionsMenu,
   args: {
     ...meta.args,
@@ -19,4 +18,4 @@ export default {
   },
 }
 
-export { Default } from "../../ui/src/components/row-actions-menu.stories.js"
+export { Default } from "../ui/row-actions-menu.stories.js"

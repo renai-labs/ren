@@ -3,17 +3,18 @@ import { defineConfig, devices } from "@playwright/test"
 const port = Number(process.env.STORYBOOK_PORT ?? 6116)
 
 export default defineConfig({
-  testDir: "./tests",
+  testDir: ".",
+  testIgnore: /node_modules/,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   fullyParallel: true,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
-  snapshotPathTemplate: "{testDir}/../test-results/parity/{arg}{ext}",
+  snapshotPathTemplate: "{testDir}/test-results/parity/{arg}{ext}",
   expect: { toHaveScreenshot: { maxDiffPixels: 0, animations: "disabled", caret: "hide" } },
   use: { baseURL: `http://127.0.0.1:${port}`, ...devices["Desktop Chrome"] },
   projects: [
-    { name: "ui", testMatch: /tests\/(ui|app)\/.*\.spec\.ts$/ },
-    { name: "parity", testMatch: /tests\/parity\/.*\.spec\.ts$/, use: { colorScheme: "dark" } },
+    { name: "ui", testMatch: /storybook\/(ui|app)\/.*\.spec\.ts$/ },
+    { name: "parity", testMatch: /storybook\/parity\/.*\.spec\.ts$/, use: { colorScheme: "dark" } },
   ],
   webServer: {
     command: process.env.CI ? `bun run script/serve.ts ${port}` : `bunx storybook dev -p ${port} --no-open --ci`,

@@ -4,7 +4,6 @@ import type { ComponentProps } from "react"
 import { Pagination } from "ren-v1/composites/navigation"
 
 export default {
-  title: "Parity/Pagination",
   component: Pagination,
   args: { page: 3, pageCount: 10, onPageChange: () => undefined },
   render: function Render(args: ComponentProps<typeof Pagination>) {

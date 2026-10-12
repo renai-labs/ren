@@ -4,7 +4,6 @@ import type { ComponentProps } from "react"
 import { SearchField } from "ren-v1/composites/controls"
 
 export default {
-  title: "Parity/Search Field",
   component: SearchField,
   args: { value: "", onValueChange: () => undefined },
   render: function Render(args: ComponentProps<typeof SearchField>) {

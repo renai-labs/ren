@@ -1,8 +1,8 @@
 import { Folder } from "ren-v1/icons"
 import { Avatar } from "ren-v1/primitives/avatar"
-import meta, { Image } from "../../ui/src/components/avatar.stories.js"
+import meta, { Image } from "../ui/avatar.stories.js"
 
-export default { ...meta, title: "Parity/Avatar", component: Avatar }
+export default { ...meta, component: Avatar }
 
 export {
   Initials,
@@ -21,7 +21,7 @@ export {
   Decorative,
   Image,
   ImageContain,
-} from "../../ui/src/components/avatar.stories.js"
+} from "../ui/avatar.stories.js"
 
 const picture = Image.args?.image
 const tinted = (color: string) => ({ args: { icon: `tabler:IconCube:${color}`, shape: "square", size: "large" } })

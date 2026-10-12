@@ -1,10 +1,10 @@
 import type { Decorator } from "@storybook/react-vite"
 import { useEffect, useRef } from "react"
-import { Icon } from "../../ui/src/components/icon.js"
+import { Icon } from "@ren/ui/icon"
 import { Select } from "ren-v1/primitives/select"
-import meta from "../../ui/src/components/select.stories.js"
+import meta from "../ui/select.stories.js"
 
-export default { ...meta, title: "Parity/Select", component: Select }
+export default { ...meta, component: Select }
 
 const opened: Decorator = (Story) => {
   const ref = useRef<HTMLDivElement>(null)
@@ -93,4 +93,4 @@ export {
   Full,
   Leading,
   Disabled,
-} from "../../ui/src/components/select.stories.js"
+} from "../ui/select.stories.js"

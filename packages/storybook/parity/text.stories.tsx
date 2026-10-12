@@ -1,7 +1,7 @@
 import { Text } from "ren-v1/primitives/text"
-import meta from "../../ui/src/components/text.stories.js"
+import meta from "../ui/text.stories.js"
 
-export default { ...meta, title: "Parity/Text", component: Text }
+export default { ...meta, component: Text }
 
 export {
   Body,
@@ -31,4 +31,4 @@ export {
   Uppercase,
   Capitalized,
   LeadingIcon,
-} from "../../ui/src/components/text.stories.js"
+} from "../ui/text.stories.js"

@@ -25,9 +25,9 @@ const parity = (root: string): Plugin => ({
 const config: StorybookConfig = {
   framework: { name: "@storybook/react-vite", options: {} },
   stories: [
-    "../../ui/src/components/*.stories.tsx",
-    "../../app/src/features/**/*.stories.tsx",
-    ...(renV1 === undefined ? [] : ["../parity/*.stories.tsx"]),
+    { directory: "../ui", files: "*.stories.tsx", titlePrefix: "UI" },
+    { directory: "../app", files: "**/*.stories.tsx", titlePrefix: "App" },
+    ...(renV1 === undefined ? [] : [{ directory: "../parity", files: "*.stories.tsx", titlePrefix: "Parity" }]),
   ],
   core: { disableTelemetry: true, disableWhatsNewNotifications: true },
   typescript: { reactDocgen: false },

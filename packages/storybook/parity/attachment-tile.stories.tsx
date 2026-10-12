@@ -3,7 +3,7 @@ import type { ComponentProps } from "react"
 import { AttachmentTile } from "ren-v1/composites/attachment-tile"
 import { Button } from "ren-v1/primitives/button"
 import { Text } from "ren-v1/primitives/text"
-import { Icon } from "../../ui/src/components/icon.js"
+import { Icon } from "@ren/ui/icon"
 
 const image =
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><rect width='96' height='96' fill='%234f7cff'/><circle cx='48' cy='48' r='24' fill='%23ffd166'/></svg>"
@@ -12,7 +12,6 @@ const excerpt =
   "Ship the onboarding checklist before Friday. Keep the copy short, link the billing page, and make sure every step can be skipped."
 
 export default {
-  title: "Parity/Attachment Tile",
   component: AttachmentTile,
   args: { name: "design-brief.pdf", glyph: <Icon glyph="File" /> },
 }

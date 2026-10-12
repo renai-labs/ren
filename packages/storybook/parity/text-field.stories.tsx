@@ -1,7 +1,7 @@
 import { TextField } from "ren-v1/primitives/text-field"
-import meta from "../../ui/src/components/text-field.stories.js"
+import meta from "../ui/text-field.stories.js"
 
-export default { ...meta, title: "Parity/Text Field", component: TextField }
+export default { ...meta, component: TextField }
 
 export {
   Outline,
@@ -18,4 +18,4 @@ export {
   Invalid,
   Disabled,
   Suggestions,
-} from "../../ui/src/components/text-field.stories.js"
+} from "../ui/text-field.stories.js"

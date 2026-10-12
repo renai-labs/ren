@@ -1,7 +1,7 @@
 import { TextArea } from "ren-v1/primitives/text-area"
-import meta from "../../ui/src/components/text-area.stories.js"
+import meta from "../ui/text-area.stories.js"
 
-export default { ...meta, title: "Parity/Text Area", component: TextArea }
+export default { ...meta, component: TextArea }
 
 export {
   Outline,
@@ -18,4 +18,4 @@ export {
   Concealed,
   Invalid,
   Disabled,
-} from "../../ui/src/components/text-area.stories.js"
+} from "../ui/text-area.stories.js"

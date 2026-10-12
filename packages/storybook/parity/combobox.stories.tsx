@@ -1,11 +1,11 @@
 import type { ComponentProps } from "react"
-import { Icon } from "../../ui/src/components/icon.js"
-import { Select } from "../../ui/src/components/select.js"
-import { Text } from "../../ui/src/components/text.js"
+import { Icon } from "@ren/ui/icon"
+import { Select } from "@ren/ui/select"
+import { Text } from "@ren/ui/text"
 import { OptionList } from "ren-v1/composites/option-list"
-import meta from "../../ui/src/components/combobox.stories.js"
+import meta from "../ui/combobox.stories.js"
 
-export default { ...meta, title: "Parity/Combobox", component: OptionList }
+export default { ...meta, component: OptionList }
 
 const people = [
   {

@@ -244,6 +244,7 @@
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "@typescript/native-preview": "catalog:",
+        "effect": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
         "storybook": "catalog:",
@@ -272,7 +273,6 @@
       },
       "devDependencies": {
         "@happy-dom/global-registrator": "catalog:",
-        "@storybook/react-vite": "catalog:",
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",

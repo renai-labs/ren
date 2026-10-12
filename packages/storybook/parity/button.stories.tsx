@@ -1,7 +1,7 @@
 import { Button } from "ren-v1/primitives/button"
-import meta from "../../ui/src/components/button.stories.js"
+import meta from "../ui/button.stories.js"
 
-export default { ...meta, title: "Parity/Button", component: Button }
+export default { ...meta, component: Button }
 
 export {
   Secondary,
@@ -22,4 +22,4 @@ export {
   Pending,
   PendingLabel,
   Disabled,
-} from "../../ui/src/components/button.stories.js"
+} from "../ui/button.stories.js"
