@@ -140,18 +140,18 @@ function MemberRow(props: {
 
 function MemberName(props: { row: Members.MemberRow }) {
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <span className="flex min-w-0 items-center gap-3">
       <Avatar.Root name={props.row.name} image={props.row.image} size="small" decorative />
-      <span className="flex min-w-0 flex-col">
-        <Text truncation="single-line" element="span" title={props.row.name}>
-          {props.row.name}
-        </Text>
-        {props.row.isSelf ? (
+      <Text truncation="single-line" element="span" title={props.row.name}>
+        {props.row.name}
+      </Text>
+      {props.row.isSelf ? (
+        <span className="shrink-0">
           <Text purpose="caption" element="span">
             You
           </Text>
-        ) : null}
-      </span>
+        </span>
+      ) : null}
     </span>
   )
 }
