@@ -5,7 +5,6 @@ The design system. It owns every visual decision in Ren: tokens, components and 
 ## Structure
 
 - `src/components/<name>.tsx` holds one component namespace per file and is exported as `@ren/ui/<name>`. There is no root barrel and there are no tiers.
-- `src/components/<name>.stories.tsx` holds that component's stories. Nothing imports it.
 - `src/lib/` holds internal helpers such as `composeClasses` and formatters. It is never exported.
 - `src/styles/` holds `index.css`, `tokens.generated.css`, `theme.css`, `fonts.css` and `motion.css`.
 
@@ -42,18 +41,14 @@ The design system. It owns every visual decision in Ren: tokens, components and 
   - `ApplicationShell` gives collapsed navigation items an accessible name, and its mobile drawer's panel button reads "Close navigation".
   - Image avatars that are not decorative get `role="img"`.
   - `Document` streams in with Ren's motion easing instead of `ease-out`.
+  - Drawn placeholders (`Select.Button` with no value, empty `InlineEdit`) use `text-secondary` at full opacity; ren-v1's 50% opacity failed contrast.
+  - `Avatar tone="accent"` uses `text-text-inverse`; ren-v1's `text-text-primary` failed contrast on `bg-accent-primary`.
+  - `Text activity="active"` pulses between `text-secondary` and `text-primary` instead of fading to 50% opacity, which failed contrast.
+  - Light `accent-primary` is `#0065cc` (ren-v1 `#0067d0`) so accent text passes AA on its tint. Mirror it in Paper.
+  - Searchable pickers use `Combobox.Popover`. `Menu` has no search field: a text field inside `role="menu"` is invalid ARIA.
   - Controls inside `Field` take their label, description and invalid state from Base UI, so a `Select` inside an invalid field turns red. ren-v1 dropped the invalid state there.
-
-## Stories
-
-- Every component has stories in CSF 3: `title: "UI/<Name>"`, `component` set, and the meta checked with `satisfies Meta<typeof Component>`.
-- Write one story per variant, size and prop-driven state (`Default`, `Secondary`, `Small`, `Disabled`, `Invalid`). Each story shows one thing through `args`. Use `render` only to compose the parts of a compound component.
-- Don't fake interactive states such as hover, focus or open with attributes. Browser specs reach them through Playwright.
-- Stories carry no descriptions or docs prose. Prop types are the API documentation.
-- Check a visual change by opening its stories in dark and light (`bun run dev:storybook` from the repo root).
 
 ## Testing
 
-- Every component gets a `bun test` file under `test/` for roles, labels, attributes and prop-driven states.
-- Behaviour that needs a real browser (focus movement, keyboard navigation, pointer, popups, positioning, scrolling, layout) gets a Playwright spec in `packages/storybook/tests/ui/<name>.spec.ts` that mounts the component's stories. Don't repeat a contract that `bun test` already proves.
-- Don't test class strings.
+- Every component has stories and, where it has behaviour, a spec in `packages/storybook/ui/` (see `packages/storybook/AGENTS.md`). There are no `bun test` component tests.
+- `bun test` in this package covers only what no story can: design tokens (`test/design-tokens.test.ts`) and stylesheet rules (`test/styles.test.ts`).
