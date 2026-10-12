@@ -48,6 +48,14 @@ export async function createOrganization(request: APIRequestContext, owner: { na
   return { organization: company, email }
 }
 
+export async function inviteMember(request: APIRequestContext, email: string) {
+  const invited = await request.post(`${appURL}/api/auth/organization/invite-member`, {
+    headers: { origin: appURL },
+    data: { email, role: "member" },
+  })
+  expect(invited.ok()).toBe(true)
+}
+
 export async function addMember(
   owner: APIRequestContext,
   member: APIRequestContext,
