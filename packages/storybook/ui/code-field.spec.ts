@@ -54,3 +54,9 @@ story("completes once every slot is filled", async ({ visit, page }) => {
   await page.keyboard.type("4")
   await expect(field).toHaveAttribute("data-complete", "")
 })
+
+story("describes every slot with the error message", async ({ visit }) => {
+  const slots = (await visit("ui-code-field--invalid-with-message")).getByRole("textbox")
+  await expect(slots.first()).toHaveAccessibleDescription("That code didn’t work. Check it and try again.")
+  await expect(slots.last()).toHaveAccessibleDescription("That code didn’t work. Check it and try again.")
+})
