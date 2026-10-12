@@ -113,15 +113,25 @@ describe("Auth", () => {
     }),
   )
 
+  it.live("gives colleagues from the same domain their own default organizations", () =>
+    Effect.gen(function* () {
+      const slugs = yield* Effect.forEach(["ada", "grace", "joan"], (name) =>
+        defaultOrganization(`${name}@northwind.io`).pipe(Effect.map((organization) => organization.slug)),
+      )
+      expect(slugs).toEqual(["northwind", "northwind-2", "northwind-3"])
+    }),
+  )
+
   it.live("keeps sign-up working and logs the failure when the default organization cannot be provisioned", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
-      yield* defaultOrganization("ken@bell-labs.co.uk")
+      yield* sql`alter table organization add constraint reject_bell_labs check (slug not like 'bell-labs%')`
 
       const log = spyOn(console, "log")
       const response = yield* signUp("dennis@mail.bell-labs.co.uk")
       const logged = log.mock.calls.flat().join(" ")
       log.mockRestore()
+      yield* sql`alter table organization drop constraint reject_bell_labs`
       expect(response.status).toBe(200)
       const session = yield* get("/get-session", cookie(response))
       expect(session.user.email).toBe("dennis@mail.bell-labs.co.uk")
