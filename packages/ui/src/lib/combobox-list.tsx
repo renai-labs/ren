@@ -1,6 +1,6 @@
 import { Combobox } from "@base-ui/react/combobox"
 import { cva } from "class-variance-authority"
-import type { KeyboardEvent, ReactNode } from "react"
+import type { KeyboardEventHandler, ReactNode } from "react"
 import { Icon } from "../components/icon.js"
 import { LoadingMessage } from "../components/loading-message.js"
 import { StateMessage } from "../components/state-message.js"
@@ -50,7 +50,11 @@ function scale(props: ListChrome) {
   return props.searchSize ?? "medium"
 }
 
-type BodyProps = ListChrome & { focusOnMount: boolean; onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void }
+type BodyProps = ListChrome & {
+  focusOnMount: boolean
+  pickFirstOnEnter: boolean
+  onSearchKeyDown?: KeyboardEventHandler<HTMLInputElement>
+}
 
 export function Body(props: BodyProps) {
   return (
@@ -88,7 +92,18 @@ function Search(props: BodyProps) {
         autoFocus={props.focusOnMount}
         placeholder={props.searchPlaceholder ?? "Search…"}
         aria-label={props.label}
-        onKeyDown={props.onKeyDown}
+        onKeyDown={(event) => {
+          props.onSearchKeyDown?.(event)
+          if (event.defaultPrevented || event.key !== "Enter" || !props.pickFirstOnEnter) return
+          if (event.currentTarget.hasAttribute("aria-activedescendant")) return
+          const first = event.currentTarget
+            .closest('[data-slot="option-list"]')
+            ?.querySelector<HTMLElement>('[role="option"]:not([data-disabled])')
+          if (!first) return
+          event.preventDefault()
+          event.preventBaseUIHandler()
+          first.click()
+        }}
         className={composeClasses(
           // oxlint-disable-next-line ren/require-companion-class -- the caret and the highlighted option show focus inside the list
           "size-full bg-transparent placeholder-muted text-text-primary outline-none",
@@ -108,18 +123,20 @@ function Results(props: ListChrome) {
         <StateMessage state="failed" placement="inline" title={props.failureMessage ?? "Couldn’t load options."} />
       ) : null}
       {props.state === "loading" || props.state === "failed" ? null : (
-        <>
-          <Combobox.Empty
-            className={composeClasses(
-              "px-3 text-center text-sm text-text-secondary empty:hidden",
-              spacious ? "py-8" : "py-6",
-            )}
-          >
-            {props.emptyMessage ?? "No results"}
-          </Combobox.Empty>
-          {/* oxlint-disable-next-line ren/require-companion-class -- focus stays in the input; data-highlighted marks the active option */}
-          <Combobox.List className="flex flex-col outline-none">
-            {(group: Group) => (
+        <Combobox.Empty
+          className={composeClasses(
+            "px-3 text-center text-sm text-text-secondary empty:hidden",
+            spacious ? "py-8" : "py-6",
+          )}
+        >
+          {props.emptyMessage ?? "No results"}
+        </Combobox.Empty>
+      )}
+      {/* oxlint-disable-next-line ren/require-companion-class -- focus stays in the input; data-highlighted marks the active option */}
+      <Combobox.List aria-busy={props.state === "loading" || undefined} className="flex flex-col outline-none">
+        {props.state === "loading" || props.state === "failed"
+          ? null
+          : (group: Group) => (
               <Combobox.Group
                 key={group.value}
                 items={[...group.items]}
@@ -141,9 +158,7 @@ function Results(props: ListChrome) {
                 </Combobox.Collection>
               </Combobox.Group>
             )}
-          </Combobox.List>
-        </>
-      )}
+      </Combobox.List>
     </div>
   )
 }

@@ -107,6 +107,13 @@ export const PopoverMultiple: Story = {
   args: { selection: "multiple", defaultValue: ["ada"] },
   render: (args) => <Combobox.Popover {...args} trigger={trigger} width="large" defaultOpen />,
 }
+export const PopoverKeepOpen: Story = {
+  render: (args) => <Combobox.Popover {...args} trigger={trigger} defaultOpen closeOnSelect={false} />,
+}
+export const PopoverMultipleCloseOnSelect: Story = {
+  args: { selection: "multiple", defaultValue: ["ada"] },
+  render: (args) => <Combobox.Popover {...args} trigger={trigger} width="large" defaultOpen closeOnSelect />,
+}
 export const PopoverTriggerWidth: Story = {
   render: (args) => <Combobox.Popover {...args} trigger={trigger} width="trigger" defaultOpen />,
 }
