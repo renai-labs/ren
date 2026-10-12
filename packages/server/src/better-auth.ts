@@ -28,6 +28,17 @@ export interface Input {
     readonly checkAccountCreation: (email: string) => Promise<Option.Option<SignupGuard.Rejection>>
     readonly hasVerifiedAlias: (email: string) => Promise<boolean>
   }
+  readonly lifecycle: {
+    readonly join: (organizationId: string, user: LifecycleUser) => Promise<void>
+    readonly activate: (organizationId: string, user: LifecycleUser) => Promise<void>
+    readonly leave: (organizationId: string, userId: string) => Promise<void>
+  }
+}
+
+export interface LifecycleUser {
+  readonly id: string
+  readonly name: string
+  readonly email: string
 }
 
 const ids = new Map<string, () => string>([
@@ -89,13 +100,18 @@ const provisionOrganization =
   (input: Input) =>
   async <Session extends { userId: string; activeOrganizationId?: string | null | undefined }>(session: Session) => {
     if (session.activeOrganizationId) return { data: session }
-    const created = await DefaultOrganization.provision(input.database, session.userId).catch(async (error) => {
-      await Effect.runPromise(
-        Effect.logError("Default organization provisioning failed", error).pipe(
-          Effect.annotateLogs({ userId: session.userId }),
-        ),
-      )
-    })
+    const created = await DefaultOrganization.provision(input.database, session.userId)
+      .then(async (result) => {
+        if (result?.user) await input.lifecycle.join(result.id, result.user)
+        return result
+      })
+      .catch(async (error) => {
+        await Effect.runPromise(
+          Effect.logError("Default organization provisioning failed", error).pipe(
+            Effect.annotateLogs({ userId: session.userId }),
+          ),
+        )
+      })
     return created ? { data: { ...session, activeOrganizationId: created.id } } : { data: session }
   }
 
@@ -142,6 +158,14 @@ export const make = (input: Input) => {
   const organizationPlugin = organization({
     invitationExpiresIn: 60 * 60 * 24 * 7,
     requireEmailVerificationOnInvitation: false,
+    organizationHooks: {
+      afterAddMember: (data) => input.lifecycle.join(data.organization.id, data.user),
+      afterAcceptInvitation: async (data) => {
+        await input.lifecycle.join(data.organization.id, data.user)
+        if (data.user.emailVerified) await input.lifecycle.activate(data.organization.id, data.user)
+      },
+      afterRemoveMember: (data) => input.lifecycle.leave(data.organization.id, data.user.id),
+    },
     sendInvitationEmail: async (data) => {
       const url = new URL("signup", appURL)
       url.searchParams.set("invitationId", data.invitation.id)
@@ -206,3 +230,5 @@ export const make = (input: Input) => {
     },
   })
 }
+
+export type Instance = ReturnType<typeof make>

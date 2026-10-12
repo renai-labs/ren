@@ -19,7 +19,10 @@ type Page<Operation> = Operation extends { readonly page: Schema.Top } ? Operati
 interface Methods<D extends Primitive.Definition> {
   readonly list: (actor: Actor.Info, input: Input<D["list"]>) => Effect.Effect<Page<D["list"]>>
   readonly get: (actor: Actor.Info, idOrSlug: string) => Effect.Effect<D["info"]["Type"], NotFound>
-  readonly create: (actor: Actor.Info, input: Input<D["create"]>) => Effect.Effect<Result<D["create"]>, Conflict>
+  readonly create: (
+    actor: Actor.Info,
+    input: Input<D["create"]>,
+  ) => Effect.Effect<Result<D["create"]>, NotFound | Forbidden | Conflict>
   readonly update: (
     actor: Actor.Info,
     id: D["id"]["Type"],

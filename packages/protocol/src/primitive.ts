@@ -72,7 +72,7 @@ export const create = <
   return HttpApiEndpoint.post(identifier, `/api/${definition.plural}`, {
     payload: definition.create.input,
     success: definition.create.result,
-    error: ConflictError,
+    error: [NotFoundError, ForbiddenError, ConflictError],
   }).annotateMerge(
     OpenApi.annotations({
       identifier,
