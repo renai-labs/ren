@@ -13,6 +13,7 @@ import { Auth } from "../../lib/auth.js"
 export function OrganizationSwitcher(props: {
   trigger: ReactElement
   active: { id: string; name: string }
+  onCreate: () => void
   onLogOut: () => void
 }) {
   const auth = Auth.useClient()
@@ -64,20 +65,44 @@ export function OrganizationSwitcher(props: {
         if (value !== null) void switchTo(value)
       }}
       footer={
-        <Button
-          appearance="ghost"
-          size="small"
-          width="full"
-          alignment="start"
-          leadingIcon={<Icon glyph="LogOut" />}
-          onClick={() => {
+        <SwitcherActions
+          onCreate={() => {
+            setOpen(false)
+            props.onCreate()
+          }}
+          onLogOut={() => {
             setOpen(false)
             props.onLogOut()
           }}
-        >
-          Log out
-        </Button>
+        />
       }
     />
+  )
+}
+
+function SwitcherActions(props: { onCreate: () => void; onLogOut: () => void }) {
+  return (
+    <>
+      <Button
+        appearance="ghost"
+        size="small"
+        width="full"
+        alignment="start"
+        leadingIcon={<Icon glyph="Plus" />}
+        onClick={props.onCreate}
+      >
+        Create organization
+      </Button>
+      <Button
+        appearance="ghost"
+        size="small"
+        width="full"
+        alignment="start"
+        leadingIcon={<Icon glyph="LogOut" />}
+        onClick={props.onLogOut}
+      >
+        Log out
+      </Button>
+    </>
   )
 }

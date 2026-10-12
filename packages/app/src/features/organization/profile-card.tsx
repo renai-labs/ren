@@ -11,6 +11,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 import { Auth } from "../../lib/auth.js"
 import { Platform } from "../../platform/platform.js"
+import { CreateOrganizationDialog } from "./create-organization-dialog.js"
 import { OrganizationSwitcher } from "./organization-switcher.js"
 
 const founderCallURL = "https://calendly.com/shrey-renai/30min"
@@ -26,11 +27,13 @@ export function ProfileCard(props: {
   const navigate = useNavigate()
   const navigation = ApplicationShell.useNavigation()
   const [loggingOut, setLoggingOut] = useState(false)
+  const [creating, setCreating] = useState(false)
   const displayName = props.user.name || props.user.email || "User"
   return (
     <div className="flex items-center gap-1">
       <OrganizationSwitcher
         active={props.organization}
+        onCreate={() => setCreating(true)}
         onLogOut={() => setLoggingOut(true)}
         trigger={
           <Select.Button
@@ -75,6 +78,7 @@ export function ProfileCard(props: {
           </Menu.Root>
         </div>
       )}
+      {creating ? <CreateOrganizationDialog onOpenChange={setCreating} /> : null}
       <ConfirmationDialog
         open={loggingOut}
         onOpenChange={setLoggingOut}

@@ -48,3 +48,26 @@ export function organizationsOptions(client: Client) {
     },
   })
 }
+
+const slugTakenCodes = new Set(["ORGANIZATION_ALREADY_EXISTS", "ORGANIZATION_SLUG_ALREADY_TAKEN"])
+
+export function isSlugTaken(error: { code?: string; message?: string }) {
+  return (
+    slugTakenCodes.has(error.code ?? "") ||
+    /organization (slug already taken|already exists)/i.test(error.message ?? "")
+  )
+}
+
+const slugKey = (slug: string) => ["auth", "organization-slug", slug] as const
+
+export function slugAvailabilityOptions(client: Client, slug: string) {
+  return queryOptions({
+    queryKey: slugKey(slug),
+    queryFn: async (context) => {
+      const result = await client.organization.checkSlug({ slug, fetchOptions: { signal: context.signal } })
+      if (result.error === null) return "available" as const
+      return isSlugTaken(result.error) ? ("taken" as const) : ("unverified" as const)
+    },
+    retry: false,
+  })
+}
