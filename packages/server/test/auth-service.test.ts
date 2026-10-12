@@ -397,6 +397,11 @@ describe("Auth", () => {
             checkAccountCreation: (email) => Effect.runPromise(guard.checkAccountCreation(email)),
             hasVerifiedAlias: (email) => Effect.runPromise(guard.hasVerifiedAlias(email)),
           },
+          lifecycle: {
+            join: () => Promise.resolve(),
+            activate: () => Promise.resolve(),
+            leave: () => Promise.resolve(),
+          },
         })
         const context = yield* Effect.promise(() => instance.$context)
         const created = yield* Effect.promise(() =>

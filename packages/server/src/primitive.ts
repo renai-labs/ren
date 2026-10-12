@@ -30,10 +30,19 @@ export const get =
     )
 
 export const create =
-  <Input, Result>(method: (actor: Actor.Info, input: Input) => Effect.Effect<Result, Primitive.Conflict>) =>
+  <Input, Result>(
+    method: (
+      actor: Actor.Info,
+      input: Input,
+    ) => Effect.Effect<Result, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict>,
+  ) =>
   (request: { readonly payload: Input }) =>
     Effect.flatMap(currentActor, (actor) => method(actor, request.payload)).pipe(
-      Effect.catchTag("Primitive.Conflict", conflict),
+      Effect.catchTags({
+        "Primitive.NotFound": notFound,
+        "Primitive.Forbidden": forbidden,
+        "Primitive.Conflict": conflict,
+      }),
     )
 
 export const update =

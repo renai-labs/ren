@@ -2,6 +2,7 @@ export * as Auth from "./auth.js"
 
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
+import { SpaceLifecycle } from "@ren/core/space-lifecycle"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { type AuthenticatedSession } from "@ren/protocol/middleware/authentication"
 import { Auth } from "@ren/schema/auth"
@@ -21,12 +22,37 @@ interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/server/Auth") {}
 
+const getActiveOrganization = (database: AuthDatabase.Interface["db"], auth: BetterAuth.Instance) =>
+  Effect.fn("Auth.getActiveOrganization")(function* (session: AuthenticatedSession, headers: Headers) {
+    const membership = yield* Effect.promise(() =>
+      database.query.member.findFirst({
+        columns: {},
+        with: { organization: { columns: { id: true, name: true, slug: true, logo: true } } },
+        where: { userId: session.user.id },
+        orderBy: (member, { asc, desc, sql }) => [
+          desc(sql`${member.organizationId} is not distinct from ${session.session.activeOrganizationId}`),
+          asc(member.createdAt),
+          asc(member.id),
+        ],
+      }),
+    )
+    const active = membership?.organization
+    if (!active) return Option.none()
+    if (active.id !== session.session.activeOrganizationId) {
+      yield* Effect.promise(() => auth.api.setActiveOrganization({ headers, body: { organizationId: active.id } }))
+    }
+    const organization: typeof Auth.Organization.Encoded = active
+    return Option.some(yield* Schema.decodeEffect(Auth.Organization)(organization).pipe(Effect.orDie))
+  })
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* AuthDatabase.Service
     const mailer = yield* Mailer.Service
     const signupGuard = yield* SignupGuard.Service
+    const lifecycle = yield* SpaceLifecycle.Service
+    const lifecycleUser = (user: BetterAuth.LifecycleUser) => ({ ...user, id: Auth.UserID.make(user.id) })
     const run = yield* FiberSet.makeRuntime()
     const runPromise = yield* FiberSet.makeRuntimePromise()
     const config = yield* Config.all({
@@ -58,6 +84,14 @@ export const layer = Layer.effect(
         checkAccountCreation: (email) => runPromise(signupGuard.checkAccountCreation(email)),
         hasVerifiedAlias: (email) => runPromise(signupGuard.hasVerifiedAlias(email)),
       },
+      lifecycle: {
+        join: (organizationId, user) =>
+          runPromise(lifecycle.join(Auth.OrganizationID.make(organizationId), lifecycleUser(user))),
+        activate: (organizationId, user) =>
+          runPromise(lifecycle.activate(Auth.OrganizationID.make(organizationId), lifecycleUser(user))),
+        leave: (organizationId, userId) =>
+          runPromise(lifecycle.leave(Auth.OrganizationID.make(organizationId), Auth.UserID.make(userId))),
+      },
     })
     return Service.of({
       handler: auth.handler,
@@ -71,30 +105,7 @@ export const layer = Layer.effect(
           session: { activeOrganizationId: session.session.activeOrganizationId ?? null },
         })
       }),
-      getActiveOrganization: Effect.fn("Auth.getActiveOrganization")(function* (
-        session: AuthenticatedSession,
-        headers: Headers,
-      ) {
-        const membership = yield* Effect.promise(() =>
-          database.db.query.member.findFirst({
-            columns: {},
-            with: { organization: { columns: { id: true, name: true, slug: true, logo: true } } },
-            where: { userId: session.user.id },
-            orderBy: (member, { asc, desc, sql }) => [
-              desc(sql`${member.organizationId} is not distinct from ${session.session.activeOrganizationId}`),
-              asc(member.createdAt),
-              asc(member.id),
-            ],
-          }),
-        )
-        const active = membership?.organization
-        if (!active) return Option.none()
-        if (active.id !== session.session.activeOrganizationId) {
-          yield* Effect.promise(() => auth.api.setActiveOrganization({ headers, body: { organizationId: active.id } }))
-        }
-        const organization: typeof Auth.Organization.Encoded = active
-        return Option.some(yield* Schema.decodeEffect(Auth.Organization)(organization).pipe(Effect.orDie))
-      }),
+      getActiveOrganization: getActiveOrganization(database.db, auth),
     })
   }),
-)
+).pipe(Layer.provide(SpaceLifecycle.layer))

@@ -1,4 +1,25 @@
-import type { HealthGetOutput, MeGetOutput, InvitationPreviewInput, InvitationPreviewOutput } from "./types.js"
+import type {
+  HealthGetOutput,
+  MeGetOutput,
+  InvitationPreviewInput,
+  InvitationPreviewOutput,
+  SpaceListInput,
+  SpaceListOutput,
+  SpaceGetInput,
+  SpaceGetOutput,
+  SpaceCreateInput,
+  SpaceCreateOutput,
+  SpaceUpdateInput,
+  SpaceUpdateOutput,
+  SpaceArchiveInput,
+  SpaceArchiveOutput,
+  SpaceMemberListInput,
+  SpaceMemberListOutput,
+  SpaceMemberCreateInput,
+  SpaceMemberCreateOutput,
+  SpaceMemberArchiveInput,
+  SpaceMemberArchiveOutput,
+} from "./types.js"
 import { ClientError } from "./client-error.js"
 
 export interface ClientOptions {
@@ -104,6 +125,108 @@ export function make(options: ClientOptions) {
             path: `/api/invitations/${encodeURIComponent(input.id)}/preview`,
             successStatus: 200,
             declaredStatuses: [],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    space: {
+      list: (input: SpaceListInput, requestOptions?: RequestOptions) =>
+        request<SpaceListOutput>(
+          {
+            method: "GET",
+            path: `/api/spaces`,
+            query: { joined: input["joined"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: SpaceGetInput, requestOptions?: RequestOptions) =>
+        request<SpaceGetOutput>(
+          {
+            method: "GET",
+            path: `/api/spaces/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: SpaceCreateInput, requestOptions?: RequestOptions) =>
+        request<SpaceCreateOutput>(
+          {
+            method: "POST",
+            path: `/api/spaces`,
+            body: { name: input["name"], description: input["description"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: SpaceUpdateInput, requestOptions?: RequestOptions) =>
+        request<SpaceUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/api/spaces/${encodeURIComponent(input.id)}`,
+            body: { name: input["name"], description: input["description"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: SpaceArchiveInput, requestOptions?: RequestOptions) =>
+        request<SpaceArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/api/spaces/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "space-member": {
+      list: (input: SpaceMemberListInput, requestOptions?: RequestOptions) =>
+        request<SpaceMemberListOutput>(
+          {
+            method: "GET",
+            path: `/api/space-members`,
+            query: {
+              spaceId: input["spaceId"],
+              status: input["status"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: SpaceMemberCreateInput, requestOptions?: RequestOptions) =>
+        request<SpaceMemberCreateOutput>(
+          {
+            method: "POST",
+            path: `/api/space-members`,
+            body: input["payload"],
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: SpaceMemberArchiveInput, requestOptions?: RequestOptions) =>
+        request<SpaceMemberArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/api/space-members/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,

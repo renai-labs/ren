@@ -29,10 +29,93 @@ const EndpointInvitationPreview = (raw: RawClient["invitation"]) => (input: Invi
 
 const adaptGroupInvitation = (raw: RawClient["invitation"]) => ({ preview: EndpointInvitationPreview(raw) })
 
+type SpaceListRequest = Parameters<RawClient["space"]["space.list"]>[0]
+type SpaceListInput = {
+  readonly joined?: SpaceListRequest["query"]["joined"]
+  readonly page: SpaceListRequest["query"]["page"]
+  readonly pageSize: SpaceListRequest["query"]["pageSize"]
+}
+const EndpointSpaceList = (raw: RawClient["space"]) => (input: SpaceListInput) =>
+  raw["space.list"]({ query: { joined: input["joined"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SpaceGetRequest = Parameters<RawClient["space"]["space.get"]>[0]
+type SpaceGetInput = { readonly idOrSlug: SpaceGetRequest["params"]["idOrSlug"] }
+const EndpointSpaceGet = (raw: RawClient["space"]) => (input: SpaceGetInput) =>
+  raw["space.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type SpaceCreateRequest = Parameters<RawClient["space"]["space.create"]>[0]
+type SpaceCreateInput = {
+  readonly name: SpaceCreateRequest["payload"]["name"]
+  readonly description?: SpaceCreateRequest["payload"]["description"]
+}
+const EndpointSpaceCreate = (raw: RawClient["space"]) => (input: SpaceCreateInput) =>
+  raw["space.create"]({ payload: { name: input["name"], description: input["description"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SpaceUpdateRequest = Parameters<RawClient["space"]["space.update"]>[0]
+type SpaceUpdateInput = {
+  readonly id: SpaceUpdateRequest["params"]["id"]
+  readonly name?: SpaceUpdateRequest["payload"]["name"]
+  readonly description?: SpaceUpdateRequest["payload"]["description"]
+}
+const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInput) =>
+  raw["space.update"]({
+    params: { id: input["id"] },
+    payload: { name: input["name"], description: input["description"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SpaceArchiveRequest = Parameters<RawClient["space"]["space.archive"]>[0]
+type SpaceArchiveInput = { readonly id: SpaceArchiveRequest["params"]["id"] }
+const EndpointSpaceArchive = (raw: RawClient["space"]) => (input: SpaceArchiveInput) =>
+  raw["space.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSpace = (raw: RawClient["space"]) => ({
+  list: EndpointSpaceList(raw),
+  get: EndpointSpaceGet(raw),
+  create: EndpointSpaceCreate(raw),
+  update: EndpointSpaceUpdate(raw),
+  archive: EndpointSpaceArchive(raw),
+})
+
+type SpaceMemberListRequest = Parameters<RawClient["space-member"]["space-member.list"]>[0]
+type SpaceMemberListInput = {
+  readonly spaceId: SpaceMemberListRequest["query"]["spaceId"]
+  readonly status?: SpaceMemberListRequest["query"]["status"]
+  readonly page: SpaceMemberListRequest["query"]["page"]
+  readonly pageSize: SpaceMemberListRequest["query"]["pageSize"]
+}
+const EndpointSpaceMemberList = (raw: RawClient["space-member"]) => (input: SpaceMemberListInput) =>
+  raw["space-member.list"]({
+    query: { spaceId: input["spaceId"], status: input["status"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SpaceMemberCreateRequest = Parameters<RawClient["space-member"]["space-member.create"]>[0]
+type SpaceMemberCreateInput = { readonly payload: SpaceMemberCreateRequest["payload"] }
+const EndpointSpaceMemberCreate = (raw: RawClient["space-member"]) => (input: SpaceMemberCreateInput) =>
+  raw["space-member.create"]({ payload: input["payload"] } as SpaceMemberCreateRequest).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SpaceMemberArchiveRequest = Parameters<RawClient["space-member"]["space-member.archive"]>[0]
+type SpaceMemberArchiveInput = { readonly id: SpaceMemberArchiveRequest["params"]["id"] }
+const EndpointSpaceMemberArchive = (raw: RawClient["space-member"]) => (input: SpaceMemberArchiveInput) =>
+  raw["space-member.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSpaceMember = (raw: RawClient["space-member"]) => ({
+  list: EndpointSpaceMemberList(raw),
+  create: EndpointSpaceMemberCreate(raw),
+  archive: EndpointSpaceMemberArchive(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
   invitation: adaptGroupInvitation(raw["invitation"]),
+  space: adaptGroupSpace(raw["space"]),
+  "space-member": adaptGroupSpaceMember(raw["space-member"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>
