@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test"
 
-const port = Number(process.env.E2E_PORT ?? 4010)
+const app = Number(process.env.E2E_APP_PORT ?? 4011)
 
 export default defineConfig({
   testDir: "./tests",
@@ -8,12 +8,13 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: `http://127.0.0.1:${port}`,
+    baseURL: `http://127.0.0.1:${app}`,
   },
   webServer: {
-    command: "bun run --cwd ../server start",
-    url: `http://127.0.0.1:${port}/api/health`,
-    env: { PORT: String(port) },
+    command: "bun script/serve.ts",
+    url: `http://127.0.0.1:${app}/api/health`,
+    timeout: 120_000,
+    gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
     reuseExistingServer: !process.env.CI,
   },
 })

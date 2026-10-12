@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [tanstackRouter(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss()],
   server: {
     proxy: {
-      "/api": "http://localhost:4000",
+      "/api": process.env.REN_API_URL ?? "http://localhost:4000",
     },
   },
 })
