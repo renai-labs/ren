@@ -44,6 +44,10 @@ export const SignupDetails = Schema.toStandardSchemaV1(
   }),
 )
 
+export const PasswordStep = Schema.toStandardSchemaV1(
+  Schema.Struct({ password: Schema.String.check(Schema.isNonEmpty({ message: "Password is required" })) }),
+)
+
 export const NewPasswordStep = Schema.toStandardSchemaV1(Schema.Struct({ password: NewPassword }))
 
 export const ResetPassword = Schema.toStandardSchemaV1(
