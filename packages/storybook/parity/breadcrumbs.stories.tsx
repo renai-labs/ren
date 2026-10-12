@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite"
 import { Breadcrumbs } from "ren-v1/composites/navigation"
 
 export default {
-  title: "Parity/Breadcrumbs",
   component: Breadcrumbs,
   args: {
     items: [

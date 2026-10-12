@@ -1,13 +1,13 @@
-import { Button } from "../../ui/src/components/button.js"
-import { IconButton } from "../../ui/src/components/icon-button.js"
-import { Icon } from "../../ui/src/components/icon.js"
-import { Logotype } from "../../ui/src/components/logotype.js"
-import { Surface } from "../../ui/src/components/surface.js"
-import { Text } from "../../ui/src/components/text.js"
+import { Button } from "@ren/ui/button"
+import { IconButton } from "@ren/ui/icon-button"
+import { Icon } from "@ren/ui/icon"
+import { Logotype } from "@ren/ui/logotype"
+import { Surface } from "@ren/ui/surface"
+import { Text } from "@ren/ui/text"
 import { PublicShell } from "ren-v1/shells/public-shell"
-import meta from "../../ui/src/components/public-shell.stories.js"
+import meta from "../ui/public-shell.stories.js"
 
-export default { ...meta, title: "Parity/Public Shell", component: PublicShell }
+export default { ...meta, component: PublicShell }
 
 export const Centered = {
   render: () => (

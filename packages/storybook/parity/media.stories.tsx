@@ -1,7 +1,7 @@
 import { Media } from "ren-v1/primitives/media"
-import meta from "../../ui/src/components/media.stories.js"
+import meta from "../ui/media.stories.js"
 
-export default { ...meta, title: "Parity/Media", component: Media }
+export default { ...meta, component: Media }
 
 export {
   Image,
@@ -14,4 +14,4 @@ export {
   Video,
   Embed,
   Sandboxed,
-} from "../../ui/src/components/media.stories.js"
+} from "../ui/media.stories.js"

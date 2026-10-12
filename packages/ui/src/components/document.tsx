@@ -8,9 +8,11 @@ import type { CodeOutputProps } from "./code-output.js"
 
 export { Media } from "./media.js"
 
-const MarkdownRenderer = lazy(() =>
-  import("../lib/markdown-renderer.js").then((module) => ({ default: module.MarkdownRenderer })),
-)
+export function preload() {
+  return import("../lib/markdown-renderer.js")
+}
+
+const MarkdownRenderer = lazy(() => preload().then((module) => ({ default: module.MarkdownRenderer })))
 
 const documentVariants = cva("min-w-0", {
   variants: {

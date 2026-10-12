@@ -1,7 +1,7 @@
 import { Badge } from "ren-v1/primitives/badge"
-import meta from "../../ui/src/components/badge.stories.js"
+import meta from "../ui/badge.stories.js"
 
-export default { ...meta, title: "Parity/Badge", component: Badge }
+export default { ...meta, component: Badge }
 
 export {
   Neutral,
@@ -27,4 +27,4 @@ export {
   MarkerTone,
   LeadingIcon,
   Removable,
-} from "../../ui/src/components/badge.stories.js"
+} from "../ui/badge.stories.js"

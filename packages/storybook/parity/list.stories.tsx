@@ -1,13 +1,13 @@
 import type { ComponentProps } from "react"
 import { useState } from "react"
 import { List, ListItem, ListSection } from "ren-v1/composites/list"
-import { Badge } from "../../ui/src/components/badge.js"
-import { Button } from "../../ui/src/components/button.js"
-import { IconButton } from "../../ui/src/components/icon-button.js"
-import { Icon } from "../../ui/src/components/icon.js"
-import type { Glyph } from "../../ui/src/components/icon.js"
-import { Text } from "../../ui/src/components/text.js"
-import meta from "../../ui/src/components/list.stories.js"
+import { Badge } from "@ren/ui/badge"
+import { Button } from "@ren/ui/button"
+import { IconButton } from "@ren/ui/icon-button"
+import { Icon } from "@ren/ui/icon"
+import type { Glyph } from "@ren/ui/icon"
+import { Text } from "@ren/ui/text"
+import meta from "../ui/list.stories.js"
 
 type Args = ComponentProps<typeof List>
 
@@ -19,9 +19,9 @@ const files: ReadonlyArray<{ title: string; description: string; glyph: Glyph }>
 
 const rows = files.map((file) => <ListItem key={file.title} title={file.title} description={file.description} />)
 
-export default { ...meta, title: "Parity/List", component: List, args: { label: "Files", children: rows } }
+export default { ...meta, component: List, args: { label: "Files", children: rows } }
 
-export { Plain, CardFrame, Divided, Ruled, Loading, Failed } from "../../ui/src/components/list.stories.js"
+export { Plain, CardFrame, Divided, Ruled, Loading, Failed } from "../ui/list.stories.js"
 
 export const Compact = {
   args: { children: files.map((file) => <ListItem key={file.title} density="compact" title={file.title} />) },

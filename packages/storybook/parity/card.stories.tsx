@@ -1,9 +1,9 @@
 import { Card } from "ren-v1/composites/card"
-import { IconButton } from "../../ui/src/components/icon-button.js"
-import { Icon } from "../../ui/src/components/icon.js"
-import meta from "../../ui/src/components/card.stories.js"
+import { IconButton } from "@ren/ui/icon-button"
+import { Icon } from "@ren/ui/icon"
+import meta from "../ui/card.stories.js"
 
-export default { ...meta, title: "Parity/Card", component: Card }
+export default { ...meta, component: Card }
 
 const media = <Icon glyph="Folder" size="large" tone="secondary" />
 
@@ -25,7 +25,7 @@ export {
   FooterActions,
   Footer,
   Content,
-} from "../../ui/src/components/card.stories.js"
+} from "../ui/card.stories.js"
 
 export const Button = { args: { interaction: "button", accessibleLabel: "Open release notes" } }
 export const Link = {

@@ -1,8 +1,8 @@
 import type { StoryObj } from "@storybook/react-vite"
 import { StateMessage } from "ren-v1/composites/state-message"
-import meta from "../../ui/src/components/loading-message.stories.js"
+import meta from "../ui/loading-message.stories.js"
 
-export default { ...meta, title: "Parity/Loading Message", component: StateMessage, args: { state: "loading" } }
+export default { ...meta, component: StateMessage, args: { state: "loading" } }
 
 type Story = StoryObj<typeof StateMessage>
 

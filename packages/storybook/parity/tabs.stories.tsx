@@ -2,12 +2,11 @@ import type { StoryObj } from "@storybook/react-vite"
 import { useState } from "react"
 import type { ComponentProps } from "react"
 import { Tabs } from "ren-v1/composites/navigation"
-import { Icon } from "../../ui/src/components/icon.js"
+import { Icon } from "@ren/ui/icon"
 
 type PanelProps = Extract<ComponentProps<typeof Tabs<string>>, { purpose?: "panel" }>
 
 export default {
-  title: "Parity/Tabs",
   component: Tabs,
   args: {
     label: "Usage views",

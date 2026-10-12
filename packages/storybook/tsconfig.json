@@ -7,5 +7,13 @@
     "noUncheckedIndexedAccess": true,
     "types": ["bun", "vite/client"]
   },
-  "include": [".storybook/**/*", "tests/**/*", "script/**/*", "playwright.config.ts"]
+  "include": [
+    ".storybook/**/*",
+    "ui/**/*",
+    "app/**/*",
+    "support/**/*",
+    "parity/*.spec.ts",
+    "script/**/*",
+    "playwright.config.ts"
+  ]
 }

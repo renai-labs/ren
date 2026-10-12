@@ -1,9 +1,9 @@
 import { PageShell } from "ren-v1/shells/page-shell"
-import { Surface } from "../../ui/src/components/surface.js"
-import { Text } from "../../ui/src/components/text.js"
-import meta from "../../ui/src/components/page-shell.stories.js"
+import { Surface } from "@ren/ui/surface"
+import { Text } from "@ren/ui/text"
+import meta from "../ui/page-shell.stories.js"
 
-export default { ...meta, title: "Parity/Page Shell", component: PageShell }
+export default { ...meta, component: PageShell }
 
 export const Settings = {
   args: {
@@ -55,12 +55,4 @@ export const SectionDivided = {
   ),
 }
 
-export {
-  Collection,
-  Detail,
-  Workspace,
-  Board,
-  Untitled,
-  WithScope,
-  WithNavigation,
-} from "../../ui/src/components/page-shell.stories.js"
+export { Collection, Detail, Workspace, Board, Untitled, WithScope, WithNavigation } from "../ui/page-shell.stories.js"

@@ -1,7 +1,7 @@
 import { Checkbox } from "ren-v1/primitives/selection-controls"
-import meta from "../../ui/src/components/checkbox.stories.js"
+import meta from "../ui/checkbox.stories.js"
 
-export default { ...meta, title: "Parity/Checkbox", component: Checkbox }
+export default { ...meta, component: Checkbox }
 
 export {
   Unchecked,
@@ -12,4 +12,4 @@ export {
   VisibleLabel,
   Description,
   DisabledDescription,
-} from "../../ui/src/components/checkbox.stories.js"
+} from "../ui/checkbox.stories.js"

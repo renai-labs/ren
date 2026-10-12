@@ -1,7 +1,7 @@
 import { StateMessage } from "ren-v1/composites/state-message"
-import meta from "../../ui/src/components/state-message.stories.js"
+import meta from "../ui/state-message.stories.js"
 
-export default { ...meta, title: "Parity/State Message", component: StateMessage }
+export default { ...meta, component: StateMessage }
 
 export {
   Empty,
@@ -16,4 +16,4 @@ export {
   Inline,
   InlineFailed,
   Page,
-} from "../../ui/src/components/state-message.stories.js"
+} from "../ui/state-message.stories.js"

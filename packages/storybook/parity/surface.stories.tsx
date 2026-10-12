@@ -1,9 +1,9 @@
 import type { StoryObj } from "@storybook/react-vite"
 import { Surface } from "ren-v1/primitives/surface"
-import meta from "../../ui/src/components/surface.stories.js"
-import { Text } from "../../ui/src/components/text.js"
+import meta from "../ui/surface.stories.js"
+import { Text } from "@ren/ui/text"
 
-export default { ...meta, title: "Parity/Surface", component: Surface }
+export default { ...meta, component: Surface }
 
 type Story = StoryObj<typeof Surface>
 

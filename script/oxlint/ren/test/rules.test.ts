@@ -168,8 +168,8 @@ tester.run("require-suppression-reason", rules["require-suppression-reason"], {
 
 tester.run("story-location", rules["story-location"], {
   valid: [
-    { code: `export const A = {}`, filename: "/repo/packages/ui/src/components/button.stories.tsx" },
-    { code: `export const A = {}`, filename: "/repo/packages/app/src/features/chat/composer.stories.tsx" },
+    { code: `export const A = {}`, filename: "/repo/packages/storybook/ui/button.stories.tsx" },
+    { code: `export const A = {}`, filename: "/repo/packages/storybook/app/chat/composer.stories.tsx" },
     { code: `export const A = {}`, filename: "/repo/packages/storybook/parity/button.stories.tsx" },
     { code: `export const A = {}`, filename: "/repo/packages/ui/src/components/button.tsx" },
   ],
@@ -177,6 +177,7 @@ tester.run("story-location", rules["story-location"], {
     { code: `export const A = {}`, filename: "/repo/packages/ui/src/lib/glyphs.stories.tsx", errors: 1 },
     { code: `export const A = {}`, filename: "/repo/packages/app/src/routes/index.stories.tsx", errors: 1 },
     { code: `export const A = {}`, filename: "/repo/packages/storybook/stories/button.stories.tsx", errors: 1 },
+    { code: `export const A = {}`, filename: "/repo/packages/ui/src/components/button.stories.tsx", errors: 1 },
     { code: `export const A = {}`, filename: "/repo/packages/app/src/components/frame.stories.ts", errors: 1 },
   ],
 })

@@ -1,12 +1,12 @@
 import type { StoryObj } from "@storybook/react-vite"
 import { FormActions } from "ren-v1/composites/field"
-import meta from "../../ui/src/components/form-actions.stories.js"
+import meta from "../ui/form-actions.stories.js"
 
-export default { ...meta, title: "Parity/Form Actions", component: FormActions }
+export default { ...meta, component: FormActions }
 
 type Story = StoryObj<typeof FormActions>
 
-export { End, Split } from "../../ui/src/components/form-actions.stories.js"
+export { End, Split } from "../ui/form-actions.stories.js"
 
 export const Submit: Story = {
   render: () => (

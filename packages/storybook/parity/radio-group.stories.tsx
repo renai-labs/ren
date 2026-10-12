@@ -1,7 +1,7 @@
 import type { StoryObj } from "@storybook/react-vite"
 import { RadioGroup } from "ren-v1/primitives/selection-controls"
 
-export default { title: "Parity/Radio Group", component: RadioGroup }
+export default { component: RadioGroup }
 
 type Story = StoryObj<typeof RadioGroup>
 

@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { Tabs } from "ren-v1/composites/navigation"
 import { Toolbar } from "ren-v1/composites/controls"
-import { Button } from "../../ui/src/components/button.js"
-import { IconButton } from "../../ui/src/components/icon-button.js"
-import { Icon } from "../../ui/src/components/icon.js"
-import { Link } from "../../ui/src/components/link.js"
+import { Button } from "@ren/ui/button"
+import { IconButton } from "@ren/ui/icon-button"
+import { Icon } from "@ren/ui/icon"
+import { Link } from "@ren/ui/link"
 
 const actions = (
   <>
@@ -34,7 +34,6 @@ const tabs = (size: "small" | "medium") => (
 )
 
 export default {
-  title: "Parity/Toolbar",
   component: Toolbar,
   args: { label: "Projects", children: actions },
   decorators: [

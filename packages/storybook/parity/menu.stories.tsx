@@ -12,9 +12,9 @@ import {
   MenuSeparator,
   MenuSubmenu,
 } from "ren-v1/composites/menu"
-import { Button } from "../../ui/src/components/button.js"
-import { Icon } from "../../ui/src/components/icon.js"
-import meta from "../../ui/src/components/menu.stories.js"
+import { Button } from "@ren/ui/button"
+import { Icon } from "@ren/ui/icon"
+import meta from "../ui/menu.stories.js"
 
 type Args = Omit<ComponentProps<typeof Menu>, "trigger">
 
@@ -28,7 +28,6 @@ const items = (
 
 export default {
   ...meta,
-  title: "Parity/Menu",
   component: Menu,
   args: { children: items },
   render: (args: Args) => <Menu trigger={<Button appearance="outline">Options</Button>} open {...args} />,
@@ -151,15 +150,7 @@ export const Spacious = {
     ),
   },
 }
-export {
-  Small,
-  Medium,
-  Large,
-  TriggerWidth,
-  AlignedEnd,
-  AlignedCenter,
-  Top,
-} from "../../ui/src/components/menu.stories.js"
+export { Small, Medium, Large, TriggerWidth, AlignedEnd, AlignedCenter, Top } from "../ui/menu.stories.js"
 
 function CheckboxItems() {
   const [days, setDays] = useState(["Mon", "Wed"])
