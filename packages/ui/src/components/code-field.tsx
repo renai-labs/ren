@@ -22,6 +22,7 @@ export type CodeFieldProps = {
   name?: string
   slotLabel?: string
   "aria-labelledby"?: string
+  "aria-describedby"?: string
 }
 
 export function CodeField(props: CodeFieldProps) {
@@ -46,6 +47,7 @@ export function CodeField(props: CodeFieldProps) {
           autoFocus={props.autoFocus === true && index === 0}
           aria-label={index === 0 ? undefined : `${props.slotLabel ?? "Digit"} ${index + 1} of ${length}`}
           aria-labelledby={index === 0 ? props["aria-labelledby"] : undefined}
+          aria-describedby={props["aria-describedby"]}
           {...(props.invalid === true ? { "aria-invalid": true } : {})}
           className={slotClasses}
         />

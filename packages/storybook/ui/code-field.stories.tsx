@@ -25,6 +25,17 @@ export const Default: Story = {}
 export const Partial: Story = { args: { defaultValue: "12" } }
 export const Complete: Story = { args: { defaultValue: "123456" } }
 export const Invalid: Story = { args: { defaultValue: "123456", invalid: true } }
+export const InvalidWithMessage: Story = {
+  args: { defaultValue: "123456", invalid: true, "aria-describedby": "code-field-error" },
+  render: (args) => (
+    <>
+      <CodeField {...args} />
+      <Text tone="danger" id="code-field-error">
+        That code didn’t work. Check it and try again.
+      </Text>
+    </>
+  ),
+}
 export const Disabled: Story = { args: { defaultValue: "12", disabled: true } }
 export const ReadOnly: Story = { args: { defaultValue: "123456", readOnly: true } }
 export const FourDigits: Story = { args: { length: 4 } }
