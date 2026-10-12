@@ -39,3 +39,30 @@ export async function createUser(request: APIRequestContext, input: { name: stri
 export async function signIn(request: APIRequestContext, input: { email: string; password: string }) {
   return request.post(`${appURL}/api/auth/sign-in/email`, { headers: { origin: appURL }, data: input })
 }
+
+export async function createOrganization(request: APIRequestContext, owner: { name: string }) {
+  const company = `Acme${crypto.randomUUID().slice(0, 8)}`
+  const email = `${owner.name.split(" ")[0]?.toLowerCase() ?? "owner"}@${company.toLowerCase()}.com`
+  await createUser(request, { name: owner.name, email, password: "correct horse battery" })
+  return { organization: company, email }
+}
+
+export async function addMember(
+  owner: APIRequestContext,
+  member: APIRequestContext,
+  input: { name: string; email: string; role?: "member" | "admin" },
+) {
+  const headers = { origin: appURL }
+  const invited = await owner.post(`${appURL}/api/auth/organization/invite-member`, {
+    headers,
+    data: { email: input.email, role: input.role ?? "member" },
+  })
+  expect(invited.ok()).toBe(true)
+  const invitation = await invited.json()
+  await createUser(member, { name: input.name, email: input.email, password: "correct horse battery" })
+  const accepted = await member.post(`${appURL}/api/auth/organization/accept-invitation`, {
+    headers,
+    data: { invitationId: invitation.id },
+  })
+  expect(accepted.ok()).toBe(true)
+}

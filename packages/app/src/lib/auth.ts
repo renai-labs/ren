@@ -71,3 +71,36 @@ export function slugAvailabilityOptions(client: Client, slug: string) {
     retry: false,
   })
 }
+
+const activeRoleKey = ["auth", "active-member-role"] as const
+
+export function activeRoleOptions(client: Client) {
+  return queryOptions({
+    queryKey: activeRoleKey,
+    queryFn: async (context) => {
+      const result = await client.organization.getActiveMemberRole({ fetchOptions: { signal: context.signal } })
+      if (result.error !== null)
+        throw new Error(result.error.message ?? "Failed to load your role", { cause: result.error })
+      return result.data.role
+    },
+  })
+}
+
+export const isAdminRole = (role: string) => role === "owner" || role === "admin"
+
+const organizationKey = (organizationId: string) => ["auth", "organization", organizationId] as const
+
+export function organizationOptions(client: Client, organizationId: string) {
+  return queryOptions({
+    queryKey: organizationKey(organizationId),
+    queryFn: async (context) => {
+      const result = await client.organization.getFullOrganization({
+        query: { organizationId },
+        fetchOptions: { signal: context.signal },
+      })
+      if (result.error !== null)
+        throw new Error(result.error.message ?? "Couldn’t load the organization.", { cause: result.error })
+      return result.data
+    },
+  })
+}
