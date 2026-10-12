@@ -125,3 +125,127 @@ story("closes a multiple selection after a pick when closeOnSelect is on", async
   await expect(page.getByRole("option", { name: /Alan Turing/ })).toHaveAttribute("aria-selected", "true")
   await expect(page.getByRole("option", { name: /Ada Lovelace/ })).toHaveAttribute("aria-selected", "true")
 })
+
+story("drills into a branch and back out with the mouse", async ({ visit, page }) => {
+  await (await visit("ui-combobox--project-picker")).getByRole("combobox", { name: "Project", exact: true }).click()
+  await page.getByRole("option", { name: "Platform", exact: true }).click()
+  await expect(page.getByRole("option")).toHaveText([
+    "Platform, back",
+    "All of Platform",
+    "Billing",
+    "Search",
+    "Storage",
+  ])
+  await expect(page.getByRole("combobox", { name: "Find a space or project" })).toBeFocused()
+  await page.getByRole("option", { name: "Platform, back" }).click()
+  await expect(page.getByRole("option", { name: "Platform", exact: true })).toBeVisible()
+  await expect(page.getByRole("option", { name: "Platform, back" })).toBeHidden()
+})
+
+story("drills with ArrowRight and pops with ArrowLeft, Backspace and Escape", async ({ visit, page }) => {
+  const trigger = (await visit("ui-combobox--project-picker")).getByRole("combobox", { name: "Project", exact: true })
+  await trigger.click()
+  const back = page.getByRole("option", { name: "Platform, back" })
+  const platform = page.getByRole("option", { name: "Platform", exact: true })
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("ArrowDown")
+  await expect(platform).toHaveAttribute("data-highlighted")
+  await page.keyboard.press("ArrowRight")
+  await expect(back).toBeVisible()
+  await page.keyboard.press("ArrowLeft")
+  await expect(platform).toHaveAttribute("data-highlighted")
+  await page.keyboard.press("ArrowRight")
+  await expect(back).toBeVisible()
+  await page.keyboard.press("Backspace")
+  await expect(platform).toHaveAttribute("data-highlighted")
+  await page.keyboard.press("ArrowRight")
+  await expect(back).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(back).toBeHidden()
+  await expect(page.getByRole("listbox")).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("listbox")).toBeHidden()
+  await expect(trigger).toBeFocused()
+})
+
+story("searches every level, shows each result’s path and selects a deep result", async ({ visit, page }) => {
+  const trigger = (await visit("ui-combobox--project-picker")).getByRole("combobox", { name: "Project", exact: true })
+  await trigger.click()
+  const input = page.getByRole("combobox", { name: "Find a space or project" })
+  await input.fill("platform")
+  await expect(page.getByRole("option")).toHaveText([
+    "Platform › All of Platform",
+    "Platform › Billing",
+    "Platform › Search",
+    "Platform › Storage",
+  ])
+  await input.fill("brand")
+  await expect(page.getByRole("option")).toHaveText(["Design › Brand refresh"])
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("listbox")).toBeHidden()
+  await expect(trigger).toBeFocused()
+  await expect(trigger).toHaveText("Brand refresh")
+})
+
+story("offers to create a label only without an exact match, then picks its colour", async ({ visit, page }) => {
+  const trigger = (await visit("ui-combobox--label-picker")).getByRole("combobox", { name: "Task labels" })
+  await trigger.click()
+  const input = page.getByRole("combobox", { name: "Labels", exact: true })
+  await input.fill("bug")
+  await expect(page.getByRole("option")).toHaveText(["Bug"])
+  await input.fill("Regression")
+  await page.getByRole("option", { name: "Create label “Regression”" }).click()
+  await expect(page.getByRole("option")).toHaveText([
+    "Create label “Regression”, back",
+    "Gray",
+    "Blue",
+    "Green",
+    "Yellow",
+    "Red",
+  ])
+  await page.getByRole("option", { name: "Green" }).click()
+  await expect(page.getByRole("option", { name: "Regression" })).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByRole("option", { name: "Bug" })).toHaveAttribute("aria-selected", "true")
+  await expect(input).toHaveValue("")
+  await expect(trigger).toHaveText("Bug, Regression")
+})
+
+story("shows a failed creation on its row", async ({ visit, page }) => {
+  await (await visit("ui-combobox--label-picker")).getByRole("combobox", { name: "Task labels" }).click()
+  await page.getByRole("combobox", { name: "Labels", exact: true }).fill("Customer escalation tier")
+  await page.getByRole("option", { name: /Create label/ }).click()
+  await page.getByRole("option", { name: "Red" }).click()
+  await expect(page.getByRole("option", { name: /Red/ })).toContainText("Label names can be up to 20 characters.")
+  await page.getByRole("option", { name: /back$/ }).click()
+  await expect(page.getByRole("combobox", { name: "Labels", exact: true })).toHaveValue("Customer escalation tier")
+})
+
+story("keeps the popup open while picking several values inside a level", async ({ visit, page }) => {
+  const trigger = (await visit("ui-combobox--filters")).getByRole("combobox", { name: "Filter tasks" })
+  await trigger.click()
+  await page.getByRole("option", { name: /^Labels/ }).click()
+  await page.getByRole("option", { name: "Bug" }).click()
+  await page.getByRole("option", { name: "Feature" }).click()
+  await expect(page.getByRole("option", { name: "Bug" })).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByRole("option", { name: "Feature" })).toHaveAttribute("aria-selected", "true")
+  await expect(page.getByRole("option", { name: "Labels, back" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("option", { name: "Labels, back" })).toBeHidden()
+  await expect(page.getByRole("option", { name: /^Labels/ })).toContainText("2 selected")
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("listbox")).toBeHidden()
+  await expect(page.getByRole("combobox", { name: "Filter tasks, filters on" })).toBeFocused()
+})
+
+story("returns to the properties after a single choice and resets from the footer", async ({ visit, page }) => {
+  await (await visit("ui-combobox--filters")).getByRole("combobox", { name: "Filter tasks" }).click()
+  await page.getByRole("option", { name: /^Status/ }).click()
+  await page.getByRole("option", { name: "Open" }).click()
+  await expect(page.getByRole("option", { name: "Status, back" })).toBeHidden()
+  await expect(page.getByRole("option", { name: /^Status/ })).toContainText("Open")
+  await expect(page.getByRole("combobox", { name: "Filter tasks, filters on" })).toBeVisible()
+  await page.getByRole("button", { name: "Reset to default" }).click()
+  await expect(page.getByRole("option", { name: /^Status/ })).toContainText("Any status")
+  await expect(page.getByRole("combobox", { name: "Filter tasks", exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Reset to default" })).toBeDisabled()
+})

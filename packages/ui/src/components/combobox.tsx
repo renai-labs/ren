@@ -5,11 +5,15 @@ import { cva } from "class-variance-authority"
 import { useState } from "react"
 import type { KeyboardEventHandler, ReactElement, ReactNode } from "react"
 import { Body } from "../lib/combobox-list.js"
-import type { Group, ListChrome, Option } from "../lib/combobox-list.js"
+import type { ListChrome } from "../lib/combobox-list.js"
+import { useSelection, useTree } from "../lib/combobox-state.js"
+import type { Create, Selection } from "../lib/combobox-state.js"
+import { matches } from "../lib/combobox-tree.js"
+import type { CreateStep, Group, Option, Row } from "../lib/combobox-tree.js"
 import { composeClasses } from "../lib/compose-classes.js"
 import { popupSurface } from "../lib/control-chrome.js"
 
-export type { Group, Option }
+export type { Create, CreateStep, Group, Option }
 
 const popupVariants = cva(
   composeClasses(
@@ -22,20 +26,6 @@ const popupVariants = cva(
   },
 )
 
-type Selection =
-  | {
-      selection?: "single"
-      value?: string | null
-      defaultValue?: string | null
-      onValueChange?: (value: string | null) => void
-    }
-  | {
-      selection: "multiple"
-      value?: readonly string[]
-      defaultValue?: readonly string[]
-      onValueChange?: (value: string[]) => void
-    }
-
 export type ListProps = Selection &
   ListChrome & {
     items?: readonly Option[]
@@ -44,6 +34,9 @@ export type ListProps = Selection &
     onQueryChange?: (query: string) => void
     filtering?: "internal" | "external"
     onSearchKeyDown?: KeyboardEventHandler<HTMLInputElement>
+    onCreate?: Create
+    createLabel?: (query: string) => string
+    createStep?: CreateStep
   }
 
 export type PopoverProps = ListProps & {
@@ -73,39 +66,53 @@ export function Panel(props: ListProps) {
 function Options(props: PopoverProps & { presentation: Presentation }) {
   const closeOnSelect = props.closeOnSelect ?? props.selection !== "multiple"
   const popover = props.presentation === "popover"
-  const closesAfterMultiplePick = popover && closeOnSelect && props.selection === "multiple"
-  const [pickedOpen, setPickedOpen] = useState(props.defaultOpen === true)
+  const [ownOpen, setOwnOpen] = useState(props.defaultOpen === true)
   const collator = Combobox.useFilter()
-  const items = Combobox.createItems(props.groups ?? [{ value: "all", items: props.items ?? [] }], {
-    getValue: (item) => item.value,
-    getLabel: (item) => item.label,
-  })
+  const groups = props.groups ?? [{ value: "all", items: props.items ?? [] }]
+  const selected = useSelection(props, groups)
   const changeOpen = (next: boolean) => {
-    setPickedOpen(next)
+    setOwnOpen(next)
     props.onOpenChange?.(next)
   }
+  const tree = useTree({
+    ...props,
+    groups,
+    select: (created) => {
+      selected.add(created)
+      if (popover && closeOnSelect) changeOpen(false)
+    },
+  })
   const root = {
-    items,
+    items: Combobox.createItems(tree.sections, { getValue: (row) => row.value, getLabel: (row) => row.label }),
     filter:
       props.filtering === "external"
         ? null
-        : (item: Option, query: string) =>
-            [item.label, ...(item.keywords ?? [])].some((text) => collator.contains(text, query)),
+        : (row: Row, search: string) => matches(row, (text) => collator.contains(text, search)),
     inline: !popover,
     autoHighlight: true,
-    defaultInputValue: "",
-    inputValue: props.query,
-    onInputValueChange: props.onQueryChange,
-    defaultOpen: props.defaultOpen,
-    open: props.open ?? (closesAfterMultiplePick ? pickedOpen : undefined),
+    inputValue: tree.query,
+    onInputValueChange: tree.changeQuery,
+    onItemHighlighted: tree.highlight,
+    open: props.open ?? ownOpen,
     onOpenChange: (next: boolean, details: Combobox.Root.ChangeEventDetails) => {
+      if (!next && details.reason === "escape-key" && tree.nested) {
+        details.cancel()
+        return tree.tree.back()
+      }
       if (!next && !closeOnSelect && details.reason === "item-press") return details.cancel()
+      if (!next) tree.reset()
       changeOpen(next)
     },
   }
   const content = (
     <Container {...props}>
-      <Body {...props} focusOnMount={!popover} pickFirstOnEnter={props.selection !== "multiple"} />
+      <Body
+        {...props}
+        tree={tree.tree}
+        onTreeKeyDown={(event) => tree.keyDown(event, !popover)}
+        focusOnMount={!popover}
+        pickFirstOnEnter={props.selection !== "multiple"}
+      />
     </Container>
   )
   if (props.selection === "multiple")
@@ -113,18 +120,18 @@ function Options(props: PopoverProps & { presentation: Presentation }) {
       <Combobox.Root
         {...root}
         multiple
-        value={props.value && [...props.value]}
-        defaultValue={props.defaultValue && [...props.defaultValue]}
+        value={[...selected.values]}
         onValueChange={(next) => {
-          props.onValueChange?.(next)
-          if (closesAfterMultiplePick) changeOpen(false)
+          selected.changeValues(next)
+          tree.picked(selected.values, next)
+          if (popover && closeOnSelect) changeOpen(false)
         }}
       >
         {content}
       </Combobox.Root>
     )
   return (
-    <Combobox.Root {...root} value={props.value} defaultValue={props.defaultValue} onValueChange={props.onValueChange}>
+    <Combobox.Root {...root} value={selected.value} onValueChange={selected.changeValue}>
       {content}
     </Combobox.Root>
   )
