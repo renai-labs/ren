@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { Form } from "@ren/ui/form"
+import { Notice } from "@ren/ui/notice"
 import { RadioGroup } from "@ren/ui/radio-group"
 import { Schema } from "effect"
+import { useState } from "react"
 
 const codeSchema = Schema.toStandardSchemaV1(
   Schema.Struct({
@@ -25,7 +27,7 @@ function VerifyForm() {
 
 const environmentSchema = Schema.toStandardSchemaV1(
   Schema.Struct({
-    name: Schema.String.check(Schema.isNonEmpty({ message: "Name the environment." })),
+    name: Schema.Trim.check(Schema.isNonEmpty({ message: "Name the environment." })),
     description: Schema.String,
     region: Schema.String.check(Schema.isNonEmpty({ message: "Choose a region." })),
     access: Schema.String.check(Schema.isNonEmpty({ message: "Choose how agents reach the network." })),
@@ -36,6 +38,7 @@ const environmentSchema = Schema.toStandardSchemaV1(
 )
 
 function EnvironmentForm() {
+  const [created, setCreated] = useState<(typeof environmentSchema)["Type"]>()
   const form = Form.useForm({
     defaultValues: {
       name: "",
@@ -47,10 +50,14 @@ function EnvironmentForm() {
       notify: false,
     },
     schema: environmentSchema,
-    onSubmit: () => new Promise((resolve) => setTimeout(resolve, 1500)),
+    onSubmit: async (value) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      setCreated(value)
+    },
   })
   return (
     <Form.Root form={form} label="Create environment" arrangement="loose-stack">
+      {created === undefined ? null : <Notice title="Environment created">{JSON.stringify(created)}</Notice>}
       <form.AppField name="name">{(field) => <field.TextField label="Name" placeholder="Staging" />}</form.AppField>
       <form.AppField name="description">
         {(field) => <field.TextArea label="Description" necessity="optional" height="automatic" />}

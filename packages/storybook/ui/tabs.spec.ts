@@ -41,3 +41,9 @@ story("moves between navigation links with Tab", async ({ visit, page }) => {
   await page.keyboard.press("Tab")
   await expect(nav.getByRole("link", { name: "Tasks" })).toBeFocused()
 })
+
+story("selects no tab when the value is empty", async ({ visit }) => {
+  const list = (await visit("ui-tabs--unselected")).getByRole("tablist", { name: "Usage views" })
+  await expect(list.getByRole("tab")).toHaveCount(3)
+  await expect(list.getByRole("tab", { selected: true })).toHaveCount(0)
+})

@@ -78,17 +78,7 @@ export const Shortcuts: Story = {
     ),
   },
 }
-export const Selected: Story = {
-  args: {
-    children: (
-      <>
-        <Menu.Item selected={false}>Light</Menu.Item>
-        <Menu.Item selected>Dark</Menu.Item>
-        <Menu.Item selected={false}>System</Menu.Item>
-      </>
-    ),
-  },
-}
+export const Selected: Story = { args: { children: <ThemeItems /> } }
 export const Detail: Story = {
   args: {
     width: "medium",
@@ -148,7 +138,6 @@ export const Submenu: Story = {
   },
 }
 export const Message: Story = { args: { children: <Menu.Message>No models found</Menu.Message> } }
-export const Search: Story = { render: () => <SearchMenu /> }
 export const Spacious: Story = {
   args: {
     width: "medium",
@@ -216,34 +205,13 @@ function RadioItems() {
   )
 }
 
-function SearchMenu() {
-  const [open, setOpen] = useState(true)
-  const [query, setQuery] = useState("")
-  const [model, setModel] = useState("Model")
-  const matches = ["Claude Sonnet", "Claude Opus", "Claude Haiku", "GPT-5", "Gemini Pro"].filter((entry) =>
-    entry.toLowerCase().includes(query.toLowerCase()),
-  )
-  const choose = (next: string) => {
-    setModel(next)
-    setOpen(false)
-  }
+function ThemeItems() {
+  const [theme, setTheme] = useState("dark")
   return (
-    <Menu.Root open={open} onOpenChange={setOpen}>
-      <Menu.Trigger render={<Button appearance="outline">{model}</Button>} />
-      <Menu.Popup width="medium">
-        <Menu.Search
-          value={query}
-          onValueChange={setQuery}
-          placeholder="Search models"
-          onSubmit={() => matches.slice(0, 1).forEach(choose)}
-        />
-        {matches.length === 0 ? <Menu.Message>No models found</Menu.Message> : null}
-        {matches.map((entry) => (
-          <Menu.Item key={entry} onSelect={() => choose(entry)}>
-            {entry}
-          </Menu.Item>
-        ))}
-      </Menu.Popup>
-    </Menu.Root>
+    <Menu.RadioGroup value={theme} onValueChange={setTheme}>
+      <Menu.RadioItem value="light">Light</Menu.RadioItem>
+      <Menu.RadioItem value="dark">Dark</Menu.RadioItem>
+      <Menu.RadioItem value="system">System</Menu.RadioItem>
+    </Menu.RadioGroup>
   )
 }

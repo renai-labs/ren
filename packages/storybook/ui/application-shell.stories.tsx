@@ -62,6 +62,28 @@ const page = (
   </PageShell.Root>
 )
 
+function Profile() {
+  const navigation = ApplicationShell.useNavigation()
+  if (navigation.collapsed) {
+    return (
+      <IconButton label="Ada Lovelace" onClick={navigation.dismiss}>
+        <Icon glyph="User" />
+      </IconButton>
+    )
+  }
+  return (
+    <Button
+      appearance="ghost"
+      width="full"
+      alignment="start"
+      leadingIcon={<Icon glyph="User" />}
+      onClick={navigation.dismiss}
+    >
+      Ada Lovelace
+    </Button>
+  )
+}
+
 function Interactive(props: ApplicationShell.RootProps) {
   const [state, setState] = useState(props.state)
   return <ApplicationShell.Root {...props} state={state} onStateChange={setState} />
@@ -115,3 +137,4 @@ export const Mobile: Story = {
   ],
 }
 export const MobileOpen: Story = { ...Mobile, args: { mobile: true, defaultNavigationOpen: true } }
+export const NavigationAware: Story = { args: { state: "collapsed", navigationFooter: <Profile /> } }

@@ -26,3 +26,10 @@ story("opens while the trigger has keyboard focus", async ({ visit, page }) => {
   await page.keyboard.press("Tab")
   await expect(card).toBeHidden()
 })
+
+story("opens on the requested side", async ({ visit, page }) => {
+  const trigger = (await visit("ui-preview-card--right")).getByRole("button", { name: "Design review" })
+  const card = await page.getByText(content).boundingBox()
+  const anchor = await trigger.boundingBox()
+  expect(card?.x ?? 0).toBeGreaterThanOrEqual((anchor?.x ?? 0) + (anchor?.width ?? 0))
+})

@@ -26,3 +26,17 @@ story("closes the toast from its close button", async ({ visit, page }) => {
   await toast.getByRole("button", { name: "Close notification" }).click()
   await expect(toast).toBeHidden()
 })
+
+story("describes the toast with its description", async ({ visit, page }) => {
+  await visit("ui-toast--success")
+  await expect(page.getByRole("dialog", { name: "Changes saved" })).toHaveAccessibleDescription(
+    "Your profile is up to date.",
+  )
+})
+
+story("leaves out the close button on request", async ({ visit, page }) => {
+  await visit("ui-toast--hidden-close-button")
+  const toast = page.getByRole("dialog", { name: "Changes saved" })
+  await expect(toast).toBeVisible()
+  await expect(toast.getByRole("button", { name: "Close notification" })).toHaveCount(0)
+})

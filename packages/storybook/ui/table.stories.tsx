@@ -4,6 +4,7 @@ import type { ComponentProps } from "react"
 import { Icon } from "@ren/ui/icon"
 import { Menu } from "@ren/ui/menu"
 import { Table } from "@ren/ui/table"
+import { Text } from "@ren/ui/text"
 import type { TableSortDirection } from "@ren/ui/table"
 
 const members = [
@@ -16,7 +17,7 @@ function Members(props: {
   root: ComponentProps<typeof Table.Root>
   sortable?: boolean
   actions?: boolean
-  activatable?: boolean
+  onActivate?: (name: string) => void
 }) {
   const [direction, setDirection] = useState<TableSortDirection>("ascending")
   const rows = props.sortable
@@ -45,7 +46,7 @@ function Members(props: {
       </Table.Header>
       <Table.Body>
         {rows.map((row) => (
-          <Table.Row key={row.id} onActivate={props.activatable ? () => undefined : undefined}>
+          <Table.Row key={row.id} onActivate={props.onActivate && (() => props.onActivate?.(row.name))}>
             <Table.Cell>{row.name}</Table.Cell>
             <Table.Cell visibility="wide-screens">{row.email}</Table.Cell>
             <Table.Cell>{row.role}</Table.Cell>
@@ -81,7 +82,18 @@ export const Compact: Story = { args: { density: "compact" } }
 export const Plain: Story = { args: { frame: "plain" } }
 export const Sortable: Story = { render: (args) => <Members root={args} sortable /> }
 export const RowActions: Story = { render: (args) => <Members root={args} actions /> }
-export const Activatable: Story = { render: (args) => <Members root={args} activatable /> }
+export const Activatable: Story = { render: (args) => <Members root={args} onActivate={() => undefined} /> }
+export const RowActivation: Story = {
+  render: function Render(args) {
+    const [opened, setOpened] = useState<string | null>(null)
+    return (
+      <div className="flex flex-col gap-3">
+        <Members root={args} actions onActivate={setOpened} />
+        <Text tone="secondary">{opened === null ? "No member open" : `Opened ${opened}`}</Text>
+      </div>
+    )
+  },
+}
 export const ReservedRows: Story = { args: { reservedRows: 6 } }
 export const Loading: Story = { args: { state: "loading" } }
 export const Failed: Story = {

@@ -28,3 +28,26 @@ story("shows why the confirmation failed", async ({ visit, page }) => {
   await expect(dialog.getByText("Unable to delete the report. Try again.")).toBeVisible()
   await expect(dialog.getByRole("button", { name: "Delete" })).toBeEnabled()
 })
+
+story("describes the alert dialog with its description", async ({ visit, page }) => {
+  await visit("ui-confirmation-dialog--default")
+  await expect(page.getByRole("alertdialog", { name: "Delete ‘Q3 report’?" })).toHaveAccessibleDescription(
+    "The report and its comments are removed for everyone.",
+  )
+})
+
+story("closes once the confirmation succeeds", async ({ visit, page }) => {
+  const trigger = (await visit("ui-confirmation-dialog--from-trigger")).getByRole("button", { name: "Delete report" })
+  await trigger.click()
+  const dialog = page.getByRole("alertdialog", { name: "Delete ‘Q3 report’?" })
+  await dialog.getByRole("button", { name: "Delete" }).click()
+  await expect(dialog).toBeHidden()
+  await expect(trigger).toBeFocused()
+})
+
+story("falls back to a generic message when the failure has none", async ({ visit, page }) => {
+  await visit("ui-confirmation-dialog--failing-without-reason")
+  const dialog = page.getByRole("alertdialog", { name: "Delete ‘Q3 report’?" })
+  await dialog.getByRole("button", { name: "Delete" }).click()
+  await expect(dialog.getByText("The action didn’t finish. Try again.")).toBeVisible()
+})

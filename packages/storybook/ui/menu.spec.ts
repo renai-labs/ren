@@ -49,29 +49,6 @@ story("opens a submenu with ArrowRight and closes it with ArrowLeft", async ({ v
   await expect(moveTo).toBeFocused()
 })
 
-story("filters while typing in the search field and selects the first match with Enter", async ({ visit, page }) => {
-  const root = await visit("ui-menu--search")
-  const search = page.getByRole("textbox", { name: "Search models" })
-  await expect(search).toBeFocused()
-  await search.pressSequentially("opus")
-  await expect(page.getByRole("menuitem")).toHaveText(["Claude Opus"])
-  await page.keyboard.press("Enter")
-  await expect(page.getByRole("menu")).toBeHidden()
-  await expect(root.getByRole("button")).toHaveText("Claude Opus")
-})
-
-story("moves from the search field into the items with ArrowDown", async ({ visit, page }) => {
-  await visit("ui-menu--search")
-  const search = page.getByRole("textbox", { name: "Search models" })
-  await search.pressSequentially("claude")
-  await page.keyboard.press("ArrowDown")
-  await expect(page.getByRole("menuitem", { name: "Claude Sonnet" })).toBeFocused()
-  await page.keyboard.press("ArrowDown")
-  await expect(page.getByRole("menuitem", { name: "Claude Opus" })).toBeFocused()
-  await search.fill("nothing")
-  await expect(page.getByText("No models found")).toBeVisible()
-})
-
 story("toggles a checkbox item without closing the menu", async ({ visit, page }) => {
   await visit("ui-menu--checkboxes")
   const tuesday = page.getByRole("menuitemcheckbox", { name: "Tue" })
@@ -79,4 +56,34 @@ story("toggles a checkbox item without closing the menu", async ({ visit, page }
   await tuesday.click()
   await expect(tuesday).toHaveAttribute("aria-checked", "true")
   await expect(page.getByRole("menu")).toBeVisible()
+})
+
+story("announces the selected item", async ({ visit, page }) => {
+  await visit("ui-menu--selected")
+  await expect(page.getByRole("menuitemradio", { name: "Dark" })).toBeChecked()
+  await expect(page.getByRole("menuitemradio", { name: "Light" })).not.toBeChecked()
+})
+
+story("keeps the menu open when a disabled item is clicked", async ({ visit, page }) => {
+  await visit("ui-menu--disabled")
+  const archive = page.getByRole("menuitem", { name: "Archive" })
+  await expect(archive).toBeDisabled()
+  await archive.click({ force: true })
+  await expect(page.getByRole("menu")).toBeVisible()
+})
+
+story("checks one radio item at a time", async ({ visit, page }) => {
+  await visit("ui-menu--radios")
+  const updated = page.getByRole("menuitemradio", { name: "Last updated" })
+  const created = page.getByRole("menuitemradio", { name: "Created" })
+  await expect(updated).toBeChecked()
+  await created.click()
+  await expect(created).toBeChecked()
+  await expect(updated).not.toBeChecked()
+})
+
+story("names each section by its label", async ({ visit, page }) => {
+  await visit("ui-menu--sections")
+  await expect(page.getByRole("group", { name: "Session" }).getByRole("menuitem")).toHaveText(["Rename", "Copy link"])
+  await expect(page.getByRole("group", { name: "Danger zone" }).getByRole("menuitem")).toHaveText(["Delete"])
 })

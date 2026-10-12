@@ -146,6 +146,28 @@ export const Transcript: Story = {
     ),
   },
 }
+export const TranscriptActions: Story = {
+  args: {
+    children: (
+      <>
+        <List.TranscriptDisclosure
+          leading={<Icon glyph="Pencil" />}
+          title="Edited list.tsx"
+          description="+12 −4"
+          trailing="0.8s"
+          actions={
+            <IconButton label="Copy diff" size="compact">
+              <Icon glyph="Copy" />
+            </IconButton>
+          }
+        >
+          <Text purpose="code">export function Root(props: RootProps)</Text>
+        </List.TranscriptDisclosure>
+        <List.TranscriptItem leading={<Icon glyph="Clock" />} title="Waiting for review" onActivate={() => undefined} />
+      </>
+    ),
+  },
+}
 export const Summary: Story = {
   args: {
     children: (
@@ -179,6 +201,7 @@ export const Sections: Story = {
   },
 }
 export const Group: Story = {
+  render: (args) => <>{args.children}</>,
   args: {
     children: (
       <List.Group
@@ -198,6 +221,7 @@ export const Group: Story = {
   },
 }
 export const GroupCollapsed: Story = {
+  render: (args) => <>{args.children}</>,
   args: {
     children: (
       <List.Group label="Done" title="Done" defaultOpen={false}>

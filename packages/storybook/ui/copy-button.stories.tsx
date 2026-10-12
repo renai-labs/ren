@@ -3,7 +3,7 @@ import { CopyButton } from "@ren/ui/copy-button"
 
 const meta = {
   component: CopyButton,
-  args: { value: "ren_live_4f9a2c", onCopy: () => Promise.resolve() },
+  args: { value: "ren_live_4f9a2c", onCopy: (value) => navigator.clipboard.writeText(value) },
 } satisfies Meta<typeof CopyButton>
 
 export default meta

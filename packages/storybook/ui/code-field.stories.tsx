@@ -1,12 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { CodeField } from "@ren/ui/code-field"
+import { Text } from "@ren/ui/text"
 
 const meta = {
   component: CodeField,
-  args: { slotLabel: "Code digit" },
+  args: { slotLabel: "Code digit", "aria-labelledby": "code-field-label" },
   decorators: [
     (Story) => (
-      <div className="w-80">
+      <div className="flex w-80 flex-col gap-2">
+        <Text purpose="label" id="code-field-label">
+          Verification code
+        </Text>
         <Story />
       </div>
     ),
