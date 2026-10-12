@@ -8,10 +8,10 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router"
 import { useRef, useState } from "react"
 import { Keyboard } from "../platform/keyboard.js"
 
-type Item = { label: string; to: "/sessions/settings/preferences"; glyph: Glyph }
+type Item = { label: string; to: "/sessions/settings/preferences" | "/sessions/settings/general"; glyph: Glyph }
 
 const personal: ReadonlyArray<Item> = [{ label: "Preferences", to: "/sessions/settings/preferences", glyph: "Sliders" }]
-const organization: ReadonlyArray<Item> = []
+const organization: ReadonlyArray<Item> = [{ label: "General", to: "/sessions/settings/general", glyph: "Building" }]
 
 export function SettingsSidebar() {
   const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/+$/, "") })

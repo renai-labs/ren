@@ -21,7 +21,9 @@ import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/in
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
 import { Route as AuthedShellSessionsIndexRouteImport } from "./routes/_authed/_shell/sessions/index"
 import { Route as AuthedShellSessionsSettingsIndexRouteImport } from "./routes/_authed/_shell/sessions/settings/index"
+import { Route as AuthedShellSessionsSettingsAdminRouteImport } from "./routes/_authed/_shell/sessions/settings/_admin"
 import { Route as AuthedShellSessionsSettingsPreferencesRouteImport } from "./routes/_authed/_shell/sessions/settings/preferences"
+import { Route as AuthedShellSessionsSettingsAdminGeneralRouteImport } from "./routes/_authed/_shell/sessions/settings/_admin/general"
 
 const AuthedRoute = AuthedRouteImport.update({
   id: "/_authed",
@@ -83,11 +85,23 @@ const AuthedShellSessionsSettingsIndexRoute =
     path: "/sessions/settings/",
     getParentRoute: () => AuthedShellRoute,
   } as any)
+const AuthedShellSessionsSettingsAdminRoute =
+  AuthedShellSessionsSettingsAdminRouteImport.update({
+    id: "/sessions/settings/_admin",
+    path: "/sessions/settings",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSessionsSettingsPreferencesRoute =
   AuthedShellSessionsSettingsPreferencesRouteImport.update({
     id: "/sessions/settings/preferences",
     path: "/sessions/settings/preferences",
     getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellSessionsSettingsAdminGeneralRoute =
+  AuthedShellSessionsSettingsAdminGeneralRouteImport.update({
+    id: "/general",
+    path: "/general",
+    getParentRoute: () => AuthedShellSessionsSettingsAdminRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -100,8 +114,10 @@ export interface FileRoutesByFullPath {
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
   "/sessions/": typeof AuthedShellSessionsIndexRoute
+  "/sessions/settings": typeof AuthedShellSessionsSettingsAdminRouteWithChildren
   "/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
   "/sessions/settings/": typeof AuthedShellSessionsSettingsIndexRoute
+  "/sessions/settings/general": typeof AuthedShellSessionsSettingsAdminGeneralRoute
 }
 export interface FileRoutesByTo {
   "/": typeof AuthedShellIndexRoute
@@ -113,8 +129,9 @@ export interface FileRoutesByTo {
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
   "/sessions": typeof AuthedShellSessionsIndexRoute
-  "/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
   "/sessions/settings": typeof AuthedShellSessionsSettingsIndexRoute
+  "/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
+  "/sessions/settings/general": typeof AuthedShellSessionsSettingsAdminGeneralRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -129,8 +146,10 @@ export interface FileRoutesById {
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
   "/_authed/_shell/": typeof AuthedShellIndexRoute
   "/_authed/_shell/sessions/": typeof AuthedShellSessionsIndexRoute
+  "/_authed/_shell/sessions/settings/_admin": typeof AuthedShellSessionsSettingsAdminRouteWithChildren
   "/_authed/_shell/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
   "/_authed/_shell/sessions/settings/": typeof AuthedShellSessionsSettingsIndexRoute
+  "/_authed/_shell/sessions/settings/_admin/general": typeof AuthedShellSessionsSettingsAdminGeneralRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -144,8 +163,10 @@ export interface FileRouteTypes {
     | "/invites/accept"
     | "/$"
     | "/sessions/"
+    | "/sessions/settings"
     | "/sessions/settings/preferences"
     | "/sessions/settings/"
+    | "/sessions/settings/general"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
@@ -157,8 +178,9 @@ export interface FileRouteTypes {
     | "/invites/accept"
     | "/$"
     | "/sessions"
-    | "/sessions/settings/preferences"
     | "/sessions/settings"
+    | "/sessions/settings/preferences"
+    | "/sessions/settings/general"
   id:
     | "__root__"
     | "/_authed"
@@ -172,8 +194,10 @@ export interface FileRouteTypes {
     | "/_authed/_shell/$"
     | "/_authed/_shell/"
     | "/_authed/_shell/sessions/"
+    | "/_authed/_shell/sessions/settings/_admin"
     | "/_authed/_shell/sessions/settings/preferences"
     | "/_authed/_shell/sessions/settings/"
+    | "/_authed/_shell/sessions/settings/_admin/general"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -272,6 +296,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSessionsSettingsIndexRouteImport
       parentRoute: typeof AuthedShellRoute
     }
+    "/_authed/_shell/sessions/settings/_admin": {
+      id: "/_authed/_shell/sessions/settings/_admin"
+      path: "/sessions/settings"
+      fullPath: "/sessions/settings"
+      preLoaderRoute: typeof AuthedShellSessionsSettingsAdminRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
     "/_authed/_shell/sessions/settings/preferences": {
       id: "/_authed/_shell/sessions/settings/preferences"
       path: "/sessions/settings/preferences"
@@ -279,13 +310,36 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSessionsSettingsPreferencesRouteImport
       parentRoute: typeof AuthedShellRoute
     }
+    "/_authed/_shell/sessions/settings/_admin/general": {
+      id: "/_authed/_shell/sessions/settings/_admin/general"
+      path: "/general"
+      fullPath: "/sessions/settings/general"
+      preLoaderRoute: typeof AuthedShellSessionsSettingsAdminGeneralRouteImport
+      parentRoute: typeof AuthedShellSessionsSettingsAdminRoute
+    }
   }
 }
+
+interface AuthedShellSessionsSettingsAdminRouteChildren {
+  AuthedShellSessionsSettingsAdminGeneralRoute: typeof AuthedShellSessionsSettingsAdminGeneralRoute
+}
+
+const AuthedShellSessionsSettingsAdminRouteChildren: AuthedShellSessionsSettingsAdminRouteChildren =
+  {
+    AuthedShellSessionsSettingsAdminGeneralRoute:
+      AuthedShellSessionsSettingsAdminGeneralRoute,
+  }
+
+const AuthedShellSessionsSettingsAdminRouteWithChildren =
+  AuthedShellSessionsSettingsAdminRoute._addFileChildren(
+    AuthedShellSessionsSettingsAdminRouteChildren,
+  )
 
 interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
   AuthedShellIndexRoute: typeof AuthedShellIndexRoute
   AuthedShellSessionsIndexRoute: typeof AuthedShellSessionsIndexRoute
+  AuthedShellSessionsSettingsAdminRoute: typeof AuthedShellSessionsSettingsAdminRouteWithChildren
   AuthedShellSessionsSettingsPreferencesRoute: typeof AuthedShellSessionsSettingsPreferencesRoute
   AuthedShellSessionsSettingsIndexRoute: typeof AuthedShellSessionsSettingsIndexRoute
 }
@@ -294,6 +348,8 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
   AuthedShellSessionsIndexRoute: AuthedShellSessionsIndexRoute,
+  AuthedShellSessionsSettingsAdminRoute:
+    AuthedShellSessionsSettingsAdminRouteWithChildren,
   AuthedShellSessionsSettingsPreferencesRoute:
     AuthedShellSessionsSettingsPreferencesRoute,
   AuthedShellSessionsSettingsIndexRoute: AuthedShellSessionsSettingsIndexRoute,
