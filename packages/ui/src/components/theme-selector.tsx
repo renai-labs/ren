@@ -1,6 +1,6 @@
 import { Radio } from "@base-ui/react/radio"
 import { RadioGroup } from "@base-ui/react/radio-group"
-import { useState } from "react"
+import { useId, useState } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
 import { Button } from "./button.js"
 import { Text } from "./text.js"
@@ -43,6 +43,7 @@ export function ThemeSelector(props: { value: Preference; onValueChange: (value:
   const additionalSelected = additional.some((option) => option.value === props.value)
   const [expanded, setExpanded] = useState(additionalSelected)
   const options = expanded || additionalSelected ? [...primary, ...additional] : primary
+  const id = useId()
   return (
     <div data-slot="theme-selector" className="flex flex-col gap-3">
       <RadioGroup
@@ -58,6 +59,7 @@ export function ThemeSelector(props: { value: Preference; onValueChange: (value:
           <label key={option.value} className="group/theme flex cursor-pointer flex-col items-center gap-2">
             <Radio.Root
               value={option.value}
+              aria-labelledby={`${id}-${option.value}`}
               className="relative block aspect-16/9 w-full overflow-hidden rounded-container border border-border-primary transition-standard outline-none group-hover/theme:border-border-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary data-checked:border-border-strong data-checked:ring-1 data-checked:ring-border-strong"
             >
               {option.value === "system" ? (
@@ -74,6 +76,7 @@ export function ThemeSelector(props: { value: Preference; onValueChange: (value:
               )}
             </Radio.Root>
             <Text
+              id={`${id}-${option.value}`}
               element="span"
               tone={option.value === props.value ? "primary" : "secondary"}
               weight={option.value === props.value ? "medium" : "regular"}
