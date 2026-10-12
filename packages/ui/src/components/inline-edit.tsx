@@ -144,9 +144,7 @@ function Display(props: {
           props.value ? "text-text-primary" : "text-text-secondary",
         )}
       >
-        <span data-placeholder={props.value ? undefined : ""} className="min-w-0 truncate placeholder-muted">
-          {props.value || props.placeholder}
-        </span>
+        <span className="min-w-0 truncate">{props.value || props.placeholder}</span>
         <span className="flex shrink-0 text-text-secondary transition-standard [button:hover>&]:text-text-primary">
           <Icon glyph="Pencil" size="extra-small" />
         </span>

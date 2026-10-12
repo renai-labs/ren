@@ -1,4 +1,5 @@
 import { Checkbox } from "@base-ui/react/checkbox"
+import { useId } from "react"
 import type { ReactNode } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
 import { revealOnContainerHover } from "../lib/control-chrome.js"
@@ -18,6 +19,7 @@ export type CheckboxProps = {
 }
 
 function CheckboxControl(props: CheckboxProps) {
+  const id = useId()
   const visible = props.labelVisibility === "visible"
   const size = props.size ?? "medium"
   const box = (
@@ -28,6 +30,8 @@ function CheckboxControl(props: CheckboxProps) {
       onCheckedChange={(next) => props.onCheckedChange?.(next)}
       disabled={props.disabled}
       aria-label={visible ? undefined : props.label}
+      aria-labelledby={visible ? `${id}-label` : undefined}
+      aria-describedby={visible && props.description ? `${id}-description` : undefined}
       data-slot="checkbox"
       className={composeClasses(
         "inline-grid shrink-0 rounded-small bg-background-secondary transition-standard data-disabled:opacity-disabled",
@@ -46,8 +50,14 @@ function CheckboxControl(props: CheckboxProps) {
     <label className="flex cursor-default items-start gap-2 text-sm">
       <span className="flex h-lh shrink-0 items-center">{box}</span>
       <span className={composeClasses("flex min-w-0 flex-col gap-1", props.disabled === true && "opacity-disabled")}>
-        <span className="text-text-primary">{props.label}</span>
-        {props.description ? <span className="text-xs text-text-secondary">{props.description}</span> : null}
+        <span id={`${id}-label`} className="text-text-primary">
+          {props.label}
+        </span>
+        {props.description ? (
+          <span id={`${id}-description`} className="text-xs text-text-secondary">
+            {props.description}
+          </span>
+        ) : null}
       </span>
     </label>
   )

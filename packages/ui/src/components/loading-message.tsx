@@ -22,7 +22,7 @@ export function LoadingMessage(props: LoadingMessageProps) {
       aria-label={typeof props.title === "string" ? props.title : "Loading"}
       className={composeClasses(stateMessageVariants({ placement }))}
     >
-      <ProgressIndicator size={placement === "page" ? "large" : "medium"} />
+      <ProgressIndicator size={placement === "page" ? "large" : "medium"} announcement="none" />
       {visible(props.title) ? (
         <Text purpose="caption" element="span">
           {props.title}

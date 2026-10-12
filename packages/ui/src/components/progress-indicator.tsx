@@ -13,13 +13,16 @@ export function ProgressIndicator(props: {
   size?: "extra-small" | "small" | "medium" | "large"
   tone?: "secondary" | "inherit"
   label?: string
+  announcement?: "status" | "none"
 }) {
+  const announced = props.announcement !== "none"
   return (
     <IconLoader2
       data-slot="progress-indicator"
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the spinner is the glyph itself, and an <output> cannot be an svg
-      role="status"
-      aria-label={props.label ?? "Loading"}
+      role={announced ? "status" : undefined}
+      aria-label={announced ? (props.label ?? "Loading") : undefined}
+      aria-hidden={announced ? undefined : true}
       className={composeClasses(spinnerVariants({ size: props.size ?? "small", tone: props.tone ?? "secondary" }))}
     />
   )

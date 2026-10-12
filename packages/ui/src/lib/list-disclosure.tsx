@@ -27,6 +27,8 @@ export type DisclosureItemProps = DisclosureState & {
 export function DisclosureRoot(props: DisclosureState & { children: ReactNode }) {
   return (
     <Collapsible.Root
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- List.Root and the rows are divs, so a disclosure row cannot be an <li>
+      role="listitem"
       open={props.open}
       defaultOpen={props.defaultOpen}
       onOpenChange={(next) => {
@@ -69,7 +71,11 @@ export function DisclosureItem(props: DisclosureItemProps) {
           </span>
         )}
       </Collapsible.Trigger>
-      <Collapsible.Panel className="ml-3 flex min-w-0 flex-col gap-1 border-l border-border-primary py-1 pl-3">
+      <Collapsible.Panel
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the nested rows are divs with role="listitem", which a <ul> cannot hold
+        role="list"
+        className="ml-3 flex min-w-0 flex-col gap-1 border-l border-border-primary py-1 pl-3"
+      >
         {props.children}
       </Collapsible.Panel>
     </DisclosureRoot>

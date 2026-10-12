@@ -7,7 +7,6 @@ import {
   MenuMessage,
   MenuRadioGroup,
   MenuRadioItem,
-  MenuSearch,
   MenuSection,
   MenuSeparator,
   MenuSubmenu,

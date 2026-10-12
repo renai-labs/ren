@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import { Icon } from "../components/icon.js"
 import { Text } from "../components/text.js"
 import { composeClasses } from "./compose-classes.js"
+import { InteractiveFrame } from "./interactive-frame.js"
 import { DisclosureRoot } from "./list-disclosure.js"
 import type { DisclosureState } from "./list-disclosure.js"
 
@@ -86,17 +87,25 @@ export function TranscriptItem(props: TranscriptItemProps) {
       )}
     </>
   )
-  if (props.onActivate === undefined) return <div className={classes}>{body}</div>
   return (
-    <button
-      type="button"
-      aria-label={props.label}
-      disabled={props.disabled}
-      onClick={props.onActivate}
-      className={classes}
+    <InteractiveFrame
+      frame={{ role: "listitem" }}
+      target={
+        props.onActivate === undefined
+          ? { kind: "static", props: { role: "listitem", className: classes } }
+          : {
+              kind: "button",
+              props: {
+                "aria-label": props.label,
+                disabled: props.disabled,
+                onClick: props.onActivate,
+                className: classes,
+              },
+            }
+      }
     >
       {body}
-    </button>
+    </InteractiveFrame>
   )
 }
 
@@ -178,7 +187,12 @@ export function TranscriptDisclosure(props: TranscriptDisclosureProps) {
           </Collapsible.Trigger>
         </div>
       )}
-      <Collapsible.Panel className={composeClasses(panelVariants({ appearance }))}>{props.children}</Collapsible.Panel>
+      <Collapsible.Panel
+        role={appearance === "summary" ? "list" : undefined}
+        className={composeClasses(panelVariants({ appearance }))}
+      >
+        {props.children}
+      </Collapsible.Panel>
     </DisclosureRoot>
   )
 }

@@ -16,7 +16,6 @@ export {
   Square,
   SquareFeature,
   Inverse,
-  Accent,
   Unnamed,
   Decorative,
   Image,

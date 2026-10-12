@@ -21,7 +21,7 @@ Code: `--ren-color-{role}`; the active theme supplies the value. Paper: `--color
 | border-primary         | rgba(0, 0, 0, 0.08)   | rgba(255, 255, 255, 0.08) | rgba(105, 74, 83, 0.16) |
 | border-secondary       | #858585               | #777777                   | #956777                 |
 | border-strong          | #1b1b1b               | #f1f1f1                   | #291d25                 |
-| accent-primary         | #0067d0               | #268bff                   | #a92357                 |
+| accent-primary         | #0065cc               | #268bff                   | #a92357                 |
 | status-success         | #197735               | #53c878                   | #17632d                 |
 | status-warning         | #8a5700               | #e0a33a                   | #794b00                 |
 | status-danger          | #bd2634               | #f47780                   | #ac2033                 |

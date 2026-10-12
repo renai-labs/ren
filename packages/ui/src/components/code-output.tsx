@@ -51,6 +51,7 @@ function shellTokens(source: string) {
 
 export type CodeOutputProps = {
   content: string
+  label?: string
   wrapping?: "wrapped" | "preformatted"
   tone?: "primary" | "secondary"
   height?: "bounded" | "content"
@@ -70,8 +71,14 @@ export function CodeOutput(props: CodeOutputProps) {
           <CopyButton value={props.copyText ?? props.content} onCopy={props.onCopy} size="extra-small" />
         </span>
       )}
-      <div
-        className={composeClasses("overflow-auto overscroll-contain", props.height !== "content" && "max-h-64")}
+      <section
+        aria-label={props.label ?? "Output"}
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the output can overflow, so keyboard users need to reach it to scroll
+        tabIndex={0}
+        className={composeClasses(
+          "overflow-auto overscroll-contain outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-primary",
+          props.height !== "content" && "max-h-64",
+        )}
         data-scrollable
       >
         <pre className={composeClasses(outputVariants({ wrapping: props.wrapping, tone: props.tone }))}>
@@ -84,7 +91,7 @@ export function CodeOutput(props: CodeOutputProps) {
             : props.content}
           {props.continuation === "ellipsis" ? <span className="text-text-secondary">{"\n"}…</span> : null}
         </pre>
-      </div>
+      </section>
       {props.truncated === true && props.onShowMore !== undefined ? (
         <button
           type="button"

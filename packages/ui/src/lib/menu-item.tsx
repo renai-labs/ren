@@ -10,7 +10,6 @@ const markIndicator = { regular: "absolute right-2 flex items-center", spacious:
 
 export type ItemProps = {
   tone?: "neutral" | "danger"
-  selected?: boolean
   icon?: ReactNode
   detail?: ReactNode
   shortcut?: ReactNode
@@ -25,7 +24,6 @@ export function Item(props: ItemProps) {
   return (
     <Menu.Item
       data-slot="menu-item"
-      aria-checked={props.selected}
       disabled={props.disabled}
       closeOnClick={props.closeOnSelect ?? true}
       onClick={props.onSelect}
@@ -39,11 +37,6 @@ export function Item(props: ItemProps) {
         <span className="max-w-1/2 shrink-0 truncate text-xs text-text-secondary">{props.detail}</span>
       ) : null}
       {props.shortcut ? <span className="ml-auto pl-4 text-xs text-text-secondary">{props.shortcut}</span> : null}
-      {props.selected === undefined ? null : (
-        <span className={composeClasses("ml-auto flex shrink-0", props.selected ? "opacity-100" : "opacity-0")}>
-          <Icon glyph="Check" />
-        </span>
-      )}
     </Menu.Item>
   )
 }

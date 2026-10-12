@@ -35,7 +35,7 @@ const textVariants = cva("", {
     },
     alignment: { start: "text-start", center: "text-center", end: "text-end" },
     numerals: { proportional: "", tabular: "tabular-nums" },
-    activity: { none: "", active: "animate-pulsation motion-reduce:animate-none", shimmer: "animate-shimmer" },
+    activity: { none: "", active: "animate-ink-pulsation motion-reduce:animate-none", shimmer: "animate-shimmer" },
     visibility: { visible: "", assistive: "sr-only" },
     letterCase: { unchanged: "", uppercase: "tracking-normal uppercase", capitalized: "capitalize" },
   },
