@@ -13,7 +13,7 @@ export function ApplicationSidebarBrand() {
   if (navigation.collapsed) return null
   return (
     <div className="flex min-w-0 flex-1 px-2">
-      <Link to="/sessions" aria-label="Ren home" onClick={navigation.dismiss}>
+      <Link to="/sessions" activeOptions={{ exact: true }} aria-label="Ren home" onClick={navigation.dismiss}>
         <span className="flex items-center gap-2">
           <Logotype label="" />
           <Text purpose="heading" element="span">
@@ -34,7 +34,7 @@ export function ApplicationSidebar(props: { onSearch: () => void }) {
           current={pathname === "/sessions"}
           icon={<Icon glyph="Compose" />}
           label="New chat"
-          render={<Link to="/sessions" />}
+          render={<Link to="/sessions" activeOptions={{ exact: true }} />}
         />
         <ApplicationShell.NavigationItem
           icon={<Icon glyph="Search" />}
@@ -55,7 +55,7 @@ export function ApplicationSidebar(props: { onSearch: () => void }) {
         scrolling="contained"
         collapsedVisibility="hidden"
         actions={
-          <IconButton label="New chat" render={<Link to="/sessions" />}>
+          <IconButton label="New chat" render={<Link to="/sessions" activeOptions={{ exact: true }} />}>
             <Icon glyph="Plus" />
           </IconButton>
         }
