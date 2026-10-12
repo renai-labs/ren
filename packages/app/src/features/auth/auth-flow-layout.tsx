@@ -20,7 +20,7 @@ export function AuthFlowLayout(props: {
   )
 }
 
-function LegalFooter(props: { purpose?: "browse" | "signup" }) {
+export function LegalFooter(props: { purpose?: "browse" | "signup" }) {
   return (
     <Text purpose="caption" tone="secondary" alignment="center">
       {props.purpose === "signup" ? "By creating an account, you agree to the " : null}

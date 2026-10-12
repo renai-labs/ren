@@ -30,7 +30,21 @@ export const OptionalEmail = Schema.optionalKey(Schema.String).pipe(
   ),
 )
 
+export const InvitationId = Schema.optionalKey(Schema.NonEmptyString)
+
 export const EmailStep = Schema.toStandardSchemaV1(Schema.Struct({ email: Email }))
+
+export const SignupDetails = Schema.toStandardSchemaV1(
+  Schema.Struct({
+    name: Schema.Trim.check(
+      Schema.isNonEmpty({ message: "Enter your name" }),
+      Schema.isMaxLength(100, { message: "Name is too long" }),
+    ),
+    email: Email,
+  }),
+)
+
+export const NewPasswordStep = Schema.toStandardSchemaV1(Schema.Struct({ password: NewPassword }))
 
 export const ResetPassword = Schema.toStandardSchemaV1(
   Schema.Struct({
