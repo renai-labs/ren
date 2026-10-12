@@ -106,6 +106,29 @@ function EnvironmentForm() {
   )
 }
 
+const inviteSchema = Schema.toStandardSchemaV1(
+  Schema.Struct({ email: Schema.Trim.check(Schema.isNonEmpty({ message: "Enter an email." })) }),
+)
+
+function InviteForm() {
+  const [rejection, setRejection] = useState("")
+  const form = Form.useForm({
+    defaultValues: { email: "" },
+    schema: inviteSchema,
+    onSubmit: (value) => {
+      setRejection(value.email.endsWith("@mailinator.com") ? "Use a permanent email address." : "")
+    },
+  })
+  return (
+    <Form.Root form={form} label="Invite a teammate">
+      <form.AppField name="email">
+        {(field) => <field.TextField label="Email" type="email" error={rejection || undefined} />}
+      </form.AppField>
+      <form.SubmitButton pendingLabel="Inviting…">Send invite</form.SubmitButton>
+    </Form.Root>
+  )
+}
+
 const meta = {
   component: Form.Root,
   decorators: [
@@ -124,3 +147,5 @@ type Story = StoryObj<typeof Form.Root>
 export const Default: Story = { render: () => <VerifyForm /> }
 
 export const CreateEnvironment: Story = { render: () => <EnvironmentForm /> }
+
+export const ServerError: Story = { render: () => <InviteForm /> }

@@ -28,7 +28,7 @@ const messages = (errors: ReadonlyArray<unknown>): string[] =>
     return []
   })
 
-type FrameProps = Omit<Field.RootProps, "error" | "dirty" | "touched" | "children">
+type FrameProps = Omit<Field.RootProps, "dirty" | "touched" | "children">
 
 function Frame(props: FrameProps & { children: ReactNode }) {
   const field = contexts.useFieldContext<unknown>()
@@ -41,7 +41,7 @@ function Frame(props: FrameProps & { children: ReactNode }) {
       necessity={props.necessity}
       orientation={props.orientation}
       disabled={props.disabled}
-      error={messages(field.state.meta.errors).at(0)}
+      error={messages(field.state.meta.errors).at(0) ?? props.error}
       dirty={field.state.meta.isDirty}
       touched={field.state.meta.isTouched}
     >
@@ -53,7 +53,7 @@ function Frame(props: FrameProps & { children: ReactNode }) {
 type InputBinding = "value" | "defaultValue" | "onChange" | "onBlur" | "invalid" | "aria-invalid" | "name"
 
 export function BoundTextField(props: FrameProps & Omit<TextFieldProps, InputBinding | "onSuggestionSelect">) {
-  const { label, labelAction, description, hint, necessity, orientation, ...control } = props
+  const { label, labelAction, description, hint, necessity, orientation, error, ...control } = props
   const field = contexts.useFieldContext<string>()
   return (
     <Frame {...props}>
@@ -70,7 +70,7 @@ export function BoundTextField(props: FrameProps & Omit<TextFieldProps, InputBin
 }
 
 export function BoundPasswordField(props: FrameProps & Omit<PasswordFieldProps, InputBinding>) {
-  const { label, labelAction, description, hint, necessity, orientation, ...control } = props
+  const { label, labelAction, description, hint, necessity, orientation, error, ...control } = props
   const field = contexts.useFieldContext<string>()
   return (
     <Frame {...props}>
@@ -86,7 +86,7 @@ export function BoundPasswordField(props: FrameProps & Omit<PasswordFieldProps, 
 }
 
 export function BoundTextArea(props: FrameProps & Omit<TextAreaProps, InputBinding>) {
-  const { label, labelAction, description, hint, necessity, orientation, ...control } = props
+  const { label, labelAction, description, hint, necessity, orientation, error, ...control } = props
   const field = contexts.useFieldContext<string>()
   return (
     <Frame {...props}>
@@ -102,7 +102,7 @@ export function BoundTextArea(props: FrameProps & Omit<TextAreaProps, InputBindi
 }
 
 export function BoundSearchField(props: FrameProps & Omit<SearchField.RootProps, "value" | "onValueChange" | "label">) {
-  const { labelAction, description, hint, necessity, orientation, disabled, ...control } = props
+  const { labelAction, description, hint, necessity, orientation, disabled, error, ...control } = props
   const field = contexts.useFieldContext<string>()
   return (
     <Frame {...props}>
@@ -114,7 +114,7 @@ export function BoundSearchField(props: FrameProps & Omit<SearchField.RootProps,
 export function BoundSelect(
   props: FrameProps & Omit<Select.RootProps<string>, "value" | "defaultValue" | "onValueChange" | "name" | "label">,
 ) {
-  const { label, labelAction, description, hint, necessity, orientation, ...control } = props
+  const { label, labelAction, description, hint, necessity, orientation, error, ...control } = props
   const field = contexts.useFieldContext<string>()
   return (
     <Frame {...props}>
@@ -183,7 +183,7 @@ export function BoundRadioGroup(props: FrameProps & { children: ReactNode }) {
 export function BoundCodeField(
   props: FrameProps & Omit<CodeFieldProps, "value" | "defaultValue" | "onValueChange" | "invalid" | "name">,
 ) {
-  const { label, labelAction, description, hint, necessity, orientation, ...control } = props
+  const { label, labelAction, description, hint, necessity, orientation, error, ...control } = props
   const field = contexts.useFieldContext<string>()
   return (
     <Frame {...props}>

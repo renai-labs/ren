@@ -62,3 +62,14 @@ story("shows the pending state and submits the decoded values", async ({ visit, 
   )
   await expect(root.getByRole("button", { name: "Create environment" })).toBeEnabled()
 })
+
+story("shows an error the server returned until validation finds its own", async ({ visit }) => {
+  const root = await visit("ui-form--server-error")
+  const email = root.getByRole("textbox", { name: "Email" })
+  await email.fill("ada@mailinator.com")
+  await root.getByRole("button", { name: "Send invite" }).click()
+  await expect(email).toHaveAccessibleDescription("Use a permanent email address.")
+  await expect(email).toHaveAttribute("aria-invalid", "true")
+  await email.fill("")
+  await expect(email).toHaveAccessibleDescription("Enter an email.")
+})
