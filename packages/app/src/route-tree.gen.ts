@@ -15,8 +15,11 @@ import { Route as LoginRouteImport } from "./routes/login"
 import { Route as ResetPasswordRouteImport } from "./routes/reset-password"
 import { Route as SignupRouteImport } from "./routes/signup"
 import { Route as VerifyEmailRouteImport } from "./routes/verify-email"
-import { Route as AuthedIndexRouteImport } from "./routes/_authed/index"
+import { Route as AuthedShellRouteImport } from "./routes/_authed/_shell"
 import { Route as InvitesAcceptRouteImport } from "./routes/invites/accept"
+import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/index"
+import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
+import { Route as AuthedShellSessionsIndexRouteImport } from "./routes/_authed/_shell/sessions/index"
 
 const AuthedRoute = AuthedRouteImport.update({
   id: "/_authed",
@@ -47,9 +50,8 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
   path: "/verify-email",
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthedIndexRoute = AuthedIndexRouteImport.update({
-  id: "/",
-  path: "/",
+const AuthedShellRoute = AuthedShellRouteImport.update({
+  id: "/_shell",
   getParentRoute: () => AuthedRoute,
 } as any)
 const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
@@ -57,24 +59,44 @@ const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
   path: "/invites/accept",
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedShellIndexRoute = AuthedShellIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => AuthedShellRoute,
+} as any)
+const AuthedShellSplatRoute = AuthedShellSplatRouteImport.update({
+  id: "/$",
+  path: "/$",
+  getParentRoute: () => AuthedShellRoute,
+} as any)
+const AuthedShellSessionsIndexRoute =
+  AuthedShellSessionsIndexRouteImport.update({
+    id: "/sessions/",
+    path: "/sessions/",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof AuthedIndexRoute
+  "/": typeof AuthedShellIndexRoute
   "/forgot-password": typeof ForgotPasswordRoute
   "/login": typeof LoginRoute
   "/reset-password": typeof ResetPasswordRoute
   "/signup": typeof SignupRoute
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
+  "/$": typeof AuthedShellSplatRoute
+  "/sessions/": typeof AuthedShellSessionsIndexRoute
 }
 export interface FileRoutesByTo {
+  "/": typeof AuthedShellIndexRoute
   "/forgot-password": typeof ForgotPasswordRoute
   "/login": typeof LoginRoute
   "/reset-password": typeof ResetPasswordRoute
   "/signup": typeof SignupRoute
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
-  "/": typeof AuthedIndexRoute
+  "/$": typeof AuthedShellSplatRoute
+  "/sessions": typeof AuthedShellSessionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -84,8 +106,11 @@ export interface FileRoutesById {
   "/reset-password": typeof ResetPasswordRoute
   "/signup": typeof SignupRoute
   "/verify-email": typeof VerifyEmailRoute
+  "/_authed/_shell": typeof AuthedShellRouteWithChildren
   "/invites/accept": typeof InvitesAcceptRoute
-  "/_authed/": typeof AuthedIndexRoute
+  "/_authed/_shell/$": typeof AuthedShellSplatRoute
+  "/_authed/_shell/": typeof AuthedShellIndexRoute
+  "/_authed/_shell/sessions/": typeof AuthedShellSessionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,15 +122,19 @@ export interface FileRouteTypes {
     | "/signup"
     | "/verify-email"
     | "/invites/accept"
+    | "/$"
+    | "/sessions/"
   fileRoutesByTo: FileRoutesByTo
   to:
+    | "/"
     | "/forgot-password"
     | "/login"
     | "/reset-password"
     | "/signup"
     | "/verify-email"
     | "/invites/accept"
-    | "/"
+    | "/$"
+    | "/sessions"
   id:
     | "__root__"
     | "/_authed"
@@ -114,8 +143,11 @@ export interface FileRouteTypes {
     | "/reset-password"
     | "/signup"
     | "/verify-email"
+    | "/_authed/_shell"
     | "/invites/accept"
-    | "/_authed/"
+    | "/_authed/_shell/$"
+    | "/_authed/_shell/"
+    | "/_authed/_shell/sessions/"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -172,11 +204,11 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
-    "/_authed/": {
-      id: "/_authed/"
-      path: "/"
+    "/_authed/_shell": {
+      id: "/_authed/_shell"
+      path: ""
       fullPath: "/"
-      preLoaderRoute: typeof AuthedIndexRouteImport
+      preLoaderRoute: typeof AuthedShellRouteImport
       parentRoute: typeof AuthedRoute
     }
     "/invites/accept": {
@@ -186,15 +218,52 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof InvitesAcceptRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/_authed/_shell/": {
+      id: "/_authed/_shell/"
+      path: "/"
+      fullPath: "/"
+      preLoaderRoute: typeof AuthedShellIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/$": {
+      id: "/_authed/_shell/$"
+      path: "/$"
+      fullPath: "/$"
+      preLoaderRoute: typeof AuthedShellSplatRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
+    "/_authed/_shell/sessions/": {
+      id: "/_authed/_shell/sessions/"
+      path: "/sessions"
+      fullPath: "/sessions/"
+      preLoaderRoute: typeof AuthedShellSessionsIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
   }
 }
 
+interface AuthedShellRouteChildren {
+  AuthedShellSplatRoute: typeof AuthedShellSplatRoute
+  AuthedShellIndexRoute: typeof AuthedShellIndexRoute
+  AuthedShellSessionsIndexRoute: typeof AuthedShellSessionsIndexRoute
+}
+
+const AuthedShellRouteChildren: AuthedShellRouteChildren = {
+  AuthedShellSplatRoute: AuthedShellSplatRoute,
+  AuthedShellIndexRoute: AuthedShellIndexRoute,
+  AuthedShellSessionsIndexRoute: AuthedShellSessionsIndexRoute,
+}
+
+const AuthedShellRouteWithChildren = AuthedShellRoute._addFileChildren(
+  AuthedShellRouteChildren,
+)
+
 interface AuthedRouteChildren {
-  AuthedIndexRoute: typeof AuthedIndexRoute
+  AuthedShellRoute: typeof AuthedShellRouteWithChildren
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
-  AuthedIndexRoute: AuthedIndexRoute,
+  AuthedShellRoute: AuthedShellRouteWithChildren,
 }
 
 const AuthedRouteWithChildren =

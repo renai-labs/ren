@@ -15,11 +15,11 @@ test("signs in with a password and returns to the requested page", async ({ page
   await expect(page.getByRole("alert")).toHaveText("Invalid email or password.")
   await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
   await page.getByRole("button", { name: "Sign in" }).click()
-  await expect(page).toHaveURL(`${appURL}/`)
-  await expect(page.getByText("Ada Lovelace")).toBeVisible()
+  await expect(page).toHaveURL(`${appURL}/sessions`)
+  await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
 
   await page.goto("/login")
-  await expect(page).toHaveURL(`${appURL}/`)
+  await expect(page).toHaveURL(`${appURL}/sessions`)
 })
 
 test("signs in with an emailed code", async ({ page, request }) => {
@@ -31,10 +31,11 @@ test("signs in with an emailed code", async ({ page, request }) => {
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByRole("button", { name: "Email sign-in code" }).click()
   await expect(page.getByText("Enter the code sent to")).toBeVisible()
+  const code = await emailedCode(request, email)
   await page.getByRole("textbox").first().click()
-  await page.keyboard.type(await emailedCode(request, email))
-  await expect(page).toHaveURL(`${appURL}/`)
-  await expect(page.getByText("Grace Hopper")).toBeVisible()
+  await page.keyboard.type(code)
+  await expect(page).toHaveURL(`${appURL}/sessions`)
+  await expect(page.getByRole("heading", { name: "Welcome, Grace Hopper" })).toBeVisible()
 })
 
 test("an unverified account is sent to verify its email", async ({ page, request }) => {

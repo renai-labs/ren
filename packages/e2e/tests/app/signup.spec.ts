@@ -33,11 +33,11 @@ test("a new account is created and verified with the emailed code", async ({ pag
   await page.keyboard.press("ControlOrMeta+a")
   await page.keyboard.press("Backspace")
   await page.keyboard.type(await emailedCode(request, email))
-  await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByText("Ada Lovelace")).toBeVisible()
+  await expect(page).toHaveURL(/\/sessions$/)
+  await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
 
   await page.goto("/signup")
-  await expect(page).toHaveURL(/\/$/)
+  await expect(page).toHaveURL(/\/sessions$/)
 })
 
 test("a rejected address returns to the details step with the server’s reason", async ({ page }) => {

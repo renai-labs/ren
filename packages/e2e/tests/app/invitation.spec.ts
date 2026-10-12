@@ -32,12 +32,13 @@ test("an invited person signs up and joins the organization", async ({ page, req
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
   await page.getByRole("button", { name: "Continue", exact: true }).click()
+  const code = await emailedCode(request, email)
   await page.getByRole("textbox").first().click()
-  await page.keyboard.type(await emailedCode(request, email))
+  await page.keyboard.type(code)
 
   await expect(page.getByText("Joined organization")).toBeVisible()
-  await expect(page).toHaveURL(`${appURL}/`)
-  await expect(page.getByText("Ada Lovelace")).toBeVisible()
+  await expect(page).toHaveURL(`${appURL}/sessions`)
+  await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
   const me = await page.request.get(`${appURL}/api/me`)
   expect((await me.json()).organization.name).toBe(invitation.organization)
 
@@ -57,8 +58,8 @@ test("a signed-in person declines an invitation", async ({ page, request }) => {
   ).toBeVisible()
   await expect(page.getByText("Invited by Grace Hopper")).toBeVisible()
   await page.getByRole("button", { name: "No thanks, continue to Ren" }).click()
-  await expect(page).toHaveURL(`${appURL}/`)
-  await expect(page.getByText("Alan Turing")).toBeVisible()
+  await expect(page).toHaveURL(`${appURL}/sessions`)
+  await expect(page.getByRole("heading", { name: "Welcome, Alan Turing" })).toBeVisible()
 })
 
 test("an invitation for another address offers to switch accounts", async ({ page, request }) => {
@@ -92,7 +93,7 @@ test("an account with only a pending invitation is sent to it", async ({ page, r
   await expect(page).toHaveURL(/\/invites\/accept\?id=.+&redirect=%2F$/)
   await page.getByRole("button", { name: "Continue to join" }).click()
   await expect(page.getByText("Joined organization")).toBeVisible()
-  await expect(page).toHaveURL(`${appURL}/`)
+  await expect(page).toHaveURL(`${appURL}/sessions`)
   const me = await page.request.get(`${appURL}/api/me`)
   expect((await me.json()).organization.name).toBe(invitation.organization)
 })
