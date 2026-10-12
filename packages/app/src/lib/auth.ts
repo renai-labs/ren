@@ -1,6 +1,7 @@
 export * as Auth from "./auth.js"
 
 import { queryOptions } from "@tanstack/react-query"
+import { useRouteContext } from "@tanstack/react-router"
 import { createAuthClient } from "better-auth/client"
 import { emailOTPClient, organizationClient } from "better-auth/client/plugins"
 import type { Platform } from "../platform/platform.js"
@@ -14,6 +15,10 @@ export function createClient(platform: Platform.Info) {
 }
 
 export type Client = ReturnType<typeof createClient>
+
+export function useClient() {
+  return useRouteContext({ from: "__root__", select: (context) => context.auth })
+}
 
 const sessionKey = ["auth", "session"] as const
 
