@@ -116,7 +116,7 @@ function InvitationRow(props: {
         </Text>
       </Table.Cell>
       <Table.Cell>
-        <Text element="span" tone={row.isExpired ? "danger" : "primary"}>
+        <Text element="span" tone={row.isExpired ? "danger" : "primary"} truncation="single-line">
           {row.isExpired ? "Expired " : "Expires "}
           <Time value={row.expiresAt} format="relative" relativeStyle="narrow" />
         </Text>
