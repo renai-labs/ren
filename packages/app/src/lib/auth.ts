@@ -34,3 +34,17 @@ export function sessionOptions(client: Client) {
     staleTime: Infinity,
   })
 }
+
+const organizationsKey = ["auth", "organizations"] as const
+
+export function organizationsOptions(client: Client) {
+  return queryOptions({
+    queryKey: organizationsKey,
+    queryFn: async (context) => {
+      const result = await client.organization.list({ fetchOptions: { signal: context.signal } })
+      if (result.error !== null)
+        throw new Error(result.error.message ?? "Failed to load organizations", { cause: result.error })
+      return result.data
+    },
+  })
+}

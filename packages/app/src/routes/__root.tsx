@@ -1,15 +1,12 @@
 import { createRootRouteWithContext, HeadContent, Outlet } from "@tanstack/react-router"
+import { RouteError, RouteNotFound } from "../components/error-page.js"
 import type { Runtime } from "../lib/runtime.js"
 
 export const Route = createRootRouteWithContext<Runtime.Context>()({
   head: () => ({ meta: [{ title: "Ren" }] }),
   component: Root,
-  errorComponent: (props) => (
-    <main role="alert">
-      {props.error instanceof Error ? props.error.message : "Unable to load this page. Reload to try again."}
-    </main>
-  ),
-  notFoundComponent: () => <main>Not found</main>,
+  errorComponent: (props) => <RouteError error={props.error} />,
+  notFoundComponent: RouteNotFound,
 })
 
 function Root() {
