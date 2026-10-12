@@ -107,6 +107,14 @@ export function Auth(props: AuthProps) {
   )
 }
 
+export function Step(props: { children?: ReactNode }) {
+  return (
+    <div data-slot="public-shell-step" className="flex animate-entrance flex-col gap-8">
+      {props.children}
+    </div>
+  )
+}
+
 export function Document(props: { header?: ReactNode; footer?: ReactNode; children?: ReactNode }) {
   return (
     <main data-slot="public-shell" data-layout="document" className="flex min-h-svh flex-col bg-background-primary">
