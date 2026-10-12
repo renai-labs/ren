@@ -90,6 +90,19 @@ export const Auth: Story = {
   ),
 }
 
+export const AuthStep: Story = {
+  render: () => (
+    <PublicShell.Auth title="Welcome to Ren" description="Self-improving software">
+      <PublicShell.Step>
+        <Text tone="secondary">Enter the code sent to ada@northwind.com</Text>
+        <Button appearance="primary" size="large" width="full">
+          Continue
+        </Button>
+      </PublicShell.Step>
+    </PublicShell.Auth>
+  ),
+}
+
 export const Document: Story = {
   render: () => (
     <PublicShell.Document
