@@ -1,0 +1,114 @@
+import { Avatar } from "@ren/ui/avatar"
+import { Combobox } from "@ren/ui/combobox"
+import { Dialog } from "@ren/ui/dialog"
+import { Field } from "@ren/ui/field"
+import { FormActions } from "@ren/ui/form-actions"
+import { Icon } from "@ren/ui/icon"
+import { Notice } from "@ren/ui/notice"
+import { Toast } from "@ren/ui/toast"
+import { useMutation } from "@tanstack/react-query"
+import { useState } from "react"
+import { RouterContext } from "../../lib/router-context.js"
+import type { Spaces } from "./spaces.js"
+
+export function AddSpaceMemberDialog(props: {
+  spaceId: string
+  candidates: ReadonlyArray<Spaces.Candidate>
+  state: "loading" | "failed" | "ready"
+  onClose: () => void
+  onChanged: () => Promise<unknown>
+}) {
+  const context = RouterContext.useRouterContext()
+  const create = useMutation(context.api["space-member"].create.mutationOptions())
+  const [selected, setSelected] = useState<string | null>(null)
+  const candidate = props.candidates.find((each) => each.value === selected)
+  const submit = () => {
+    if (!candidate) return
+    create.mutate(
+      { payload: { spaceId: props.spaceId, ...candidate.target } },
+      {
+        onSuccess: () => {
+          Toast.manager.add({ type: "success", title: candidate.added })
+          props.onClose()
+          void props.onChanged()
+        },
+      },
+    )
+  }
+  return (
+    <Dialog.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) props.onClose()
+      }}
+      dismissal={create.isPending ? "blocked" : "allowed"}
+    >
+      <Dialog.Content>
+        <Dialog.Header>
+          <Dialog.Title>Add member</Dialog.Title>
+          <Dialog.Description>
+            Pick someone from the organization, or someone invited to it. Invited people join once they accept.
+          </Dialog.Description>
+        </Dialog.Header>
+        <Dialog.Body>
+          <Field.Root label="Person">
+            <PersonPicker
+              candidates={props.candidates}
+              state={props.state}
+              value={selected}
+              onValueChange={setSelected}
+            />
+          </Field.Root>
+          <Notice tone="danger" placement="inline">
+            {create.error?.message}
+          </Notice>
+        </Dialog.Body>
+        <Dialog.Footer>
+          <FormActions.Root>
+            <FormActions.Cancel onClick={props.onClose} disabled={create.isPending} />
+            <FormActions.Submit
+              pending={create.isPending}
+              pendingLabel="Adding…"
+              disabled={!candidate}
+              onClick={submit}
+            >
+              Add member
+            </FormActions.Submit>
+          </FormActions.Root>
+        </Dialog.Footer>
+      </Dialog.Content>
+    </Dialog.Root>
+  )
+}
+
+function PersonPicker(props: {
+  candidates: ReadonlyArray<Spaces.Candidate>
+  state: "loading" | "failed" | "ready"
+  value: string | null
+  onValueChange: (value: string | null) => void
+}) {
+  return (
+    <Combobox.Inline
+      label="Person"
+      state={props.state}
+      searchPlaceholder="Search by name or email…"
+      emptyMessage={
+        props.candidates.length === 0 ? "Everyone in the organization is already in this space." : "No matches."
+      }
+      value={props.value}
+      onValueChange={props.onValueChange}
+      items={props.candidates.map((each) => ({
+        value: each.value,
+        label: each.label,
+        description: each.description,
+        keywords: [each.description],
+        icon:
+          "userId" in each.target ? (
+            <Avatar.Root name={each.label} image={each.image} size="small" decorative />
+          ) : (
+            <Icon glyph="Mail" />
+          ),
+      }))}
+    />
+  )
+}

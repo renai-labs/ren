@@ -43,6 +43,12 @@ export function ApplicationSidebar(props: { onSearch: () => void }) {
           trailing={<KeyboardKey>{Viewport.shortcut("K")}</KeyboardKey>}
           onActivate={props.onSearch}
         />
+        <ApplicationShell.NavigationItem
+          current={pathname.startsWith("/sessions/spaces")}
+          icon={<Icon glyph="Cube" />}
+          label="Spaces"
+          render={<Link to="/sessions/spaces" />}
+        />
       </ApplicationShell.NavigationSection>
       <ApplicationShell.NavigationSection
         title="Chats"
