@@ -1,0 +1,22 @@
+id: no-conditional-property
+language: TypeScript
+message: "Spread the property conditionally with `...(condition && { key: value })` instead of assigning undefined."
+severity: error
+files:
+  - packages/*/src/**/*.ts
+  - packages/*/src/**/*.tsx
+ignores:
+  - packages/httpapi-codegen/**
+  - packages/client/src/**/generated/**
+rule:
+  kind: pair
+  has:
+    field: value
+    kind: ternary_expression
+    any:
+      - has:
+          field: consequence
+          kind: undefined
+      - has:
+          field: alternative
+          kind: undefined

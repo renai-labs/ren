@@ -1,0 +1,6 @@
+id: no-return-undefined
+valid:
+  - "function f() { if (!row) return; return row }"
+  - "function f() { return value }"
+invalid:
+  - "function f() { if (!row) return undefined; return row }"

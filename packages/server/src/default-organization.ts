@@ -41,7 +41,7 @@ export const provision = (database: AuthDatabase.Interface["db"], userId: string
           .filter(Boolean)
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
           .join(" ")
-    const firstName = user.name.trim().split(/\s+/)[0]
+    const firstName = user.name.trim().split(/\s+/).at(0)
     const name = company || (firstName ? `${firstName}'s Org` : "Personal Org")
     const base = slugify(name) || "organization"
     const taken = new Set(

@@ -1,0 +1,8 @@
+id: prefer-at-index
+valid:
+  - "const first = rows.at(0)"
+  - "const [first] = rows"
+  - "const value = record[key]"
+invalid:
+  - "const first = rows[0]"
+  - "const total = totals[0].total"

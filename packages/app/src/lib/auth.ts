@@ -9,7 +9,7 @@ import type { Platform } from "../platform/platform.js"
 export function createClient(platform: Platform.Info) {
   return createAuthClient({
     baseURL: `${platform.serverUrl}/api/auth`,
-    fetchOptions: platform.fetch === undefined ? undefined : { customFetchImpl: platform.fetch },
+    ...(platform.fetch && { fetchOptions: { customFetchImpl: platform.fetch } }),
     plugins: [organizationClient(), emailOTPClient()],
   })
 }
@@ -27,8 +27,7 @@ export function sessionOptions(client: Client) {
     queryKey: sessionKey,
     queryFn: async (context) => {
       const result = await client.getSession({ fetchOptions: { signal: context.signal } })
-      if (result.error !== null)
-        throw new Error(result.error.message ?? "Failed to load the session", { cause: result.error })
+      if (result.error) throw new Error(result.error.message ?? "Failed to load the session", { cause: result.error })
       return result.data
     },
     staleTime: Infinity,
@@ -42,8 +41,7 @@ export function organizationsOptions(client: Client) {
     queryKey: organizationsKey,
     queryFn: async (context) => {
       const result = await client.organization.list({ fetchOptions: { signal: context.signal } })
-      if (result.error !== null)
-        throw new Error(result.error.message ?? "Failed to load organizations", { cause: result.error })
+      if (result.error) throw new Error(result.error.message ?? "Failed to load organizations", { cause: result.error })
       return result.data
     },
   })
@@ -65,7 +63,7 @@ export function slugAvailabilityOptions(client: Client, slug: string) {
     queryKey: slugKey(slug),
     queryFn: async (context) => {
       const result = await client.organization.checkSlug({ slug, fetchOptions: { signal: context.signal } })
-      if (result.error === null) return "available" as const
+      if (!result.error) return "available" as const
       return isSlugTaken(result.error) ? ("taken" as const) : ("unverified" as const)
     },
     retry: false,
@@ -79,8 +77,7 @@ export function activeRoleOptions(client: Client) {
     queryKey: activeRoleKey,
     queryFn: async (context) => {
       const result = await client.organization.getActiveMemberRole({ fetchOptions: { signal: context.signal } })
-      if (result.error !== null)
-        throw new Error(result.error.message ?? "Failed to load your role", { cause: result.error })
+      if (result.error) throw new Error(result.error.message ?? "Failed to load your role", { cause: result.error })
       return result.data.role
     },
   })
@@ -98,7 +95,7 @@ export function organizationOptions(client: Client, organizationId: string) {
         query: { organizationId },
         fetchOptions: { signal: context.signal },
       })
-      if (result.error !== null)
+      if (result.error)
         throw new Error(result.error.message ?? "Couldn’t load the organization.", { cause: result.error })
       return result.data
     },

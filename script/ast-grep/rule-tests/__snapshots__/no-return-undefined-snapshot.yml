@@ -1,0 +1,8 @@
+id: no-return-undefined
+snapshots:
+  function f() { if (!row) return undefined; return row }:
+    labels:
+      - source: return undefined;
+        style: primary
+        start: 25
+        end: 42

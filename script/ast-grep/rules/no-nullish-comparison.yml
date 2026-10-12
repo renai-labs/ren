@@ -1,0 +1,19 @@
+id: no-nullish-comparison
+language: TypeScript
+message: "Test presence with `!value` or `Boolean(value)` instead of comparing to null or undefined."
+severity: error
+files:
+  - packages/*/src/**/*.ts
+  - packages/*/src/**/*.tsx
+ignores:
+  - packages/httpapi-codegen/**
+rule:
+  kind: binary_expression
+  all:
+    - has:
+        field: operator
+        regex: ^[!=]==?$
+    - has:
+        any:
+          - kind: "null"
+          - kind: undefined
