@@ -81,7 +81,7 @@ export function IconButton(props: IconButtonProps) {
         className: composeClasses(iconButtonVariants({ appearance, size, shape, glyphMotion })),
         children: (
           <>
-            {pending === true ? <ProgressIndicator size="small" tone="inherit" /> : children}
+            {pending === true ? <ProgressIndicator size="small" tone="inherit" announcement="none" /> : children}
             {indicator === "attention" ? (
               <span aria-hidden className="absolute top-0.5 right-0.5 rounded-full bg-background-primary p-0.5">
                 <span className="block size-2 rounded-full bg-accent-primary" />

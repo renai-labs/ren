@@ -13,8 +13,6 @@ import { Icon } from "./icon.js"
 export { Item, CheckboxItem, RadioItem } from "../lib/menu-item.js"
 export type { ItemProps, CheckboxItemProps, RadioItemProps } from "../lib/menu-item.js"
 export type { Density } from "../lib/menu-chrome.js"
-export { Search } from "../lib/menu-search.js"
-export type { SearchProps } from "../lib/menu-search.js"
 
 export type Width = "content" | "trigger" | "small" | "medium" | "large"
 
@@ -223,5 +221,13 @@ export function SubmenuPopup(props: { width?: Width; children: ReactNode }) {
 }
 
 export function Message(props: { children: ReactNode }) {
-  return <div className="p-2 text-sm text-text-secondary">{props.children}</div>
+  return (
+    <Menu.Item
+      disabled
+      closeOnClick={false}
+      className="rounded-small p-2 text-sm text-text-secondary outline-none focus-visible:bg-fill-secondary"
+    >
+      {props.children}
+    </Menu.Item>
+  )
 }

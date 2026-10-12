@@ -36,11 +36,6 @@ export const Button = {
     </Select>
   ),
 }
-export const ButtonPlaceholder = {
-  render: () => (
-    <Select presentation="button" label="Due date" placeholder="Pick a date" leading={<Icon glyph="Calendar" />} />
-  ),
-}
 export const ButtonChip = {
   render: () => (
     <Select presentation="button" label="Labels" appearance="chip" shape="pill" size="small" indicator="none">
@@ -61,9 +56,6 @@ export const ButtonCircle = {
       <Icon glyph="Plus" />
     </Select>
   ),
-}
-export const ButtonInvalid = {
-  render: () => <Select presentation="button" label="Due date" placeholder="Pick a date" invalid />,
 }
 export const ButtonDisabled = {
   render: () => (

@@ -31,7 +31,7 @@ const triggerVariants = cva(
           "rounded-control bg-transparent text-text-secondary hover:bg-fill-primary hover:text-text-primary data-popup-open:bg-fill-primary",
         inline:
           "rounded-control bg-transparent px-1 text-text-secondary hover:text-text-primary active:scale-98 data-popup-open:text-text-primary [&>svg:last-child]:opacity-disabled",
-        chip: "rounded-control bg-fill-primary font-medium inset-ring-1 inset-ring-border-primary hover:bg-fill-secondary **:data-placeholder:opacity-100 data-popup-open:bg-fill-secondary [&_svg]:size-3.5",
+        chip: "rounded-control bg-fill-primary font-medium inset-ring-1 inset-ring-border-primary hover:bg-fill-secondary data-popup-open:bg-fill-secondary [&_svg]:size-3.5",
         property:
           "max-w-full rounded-control bg-transparent font-medium text-text-primary hover:bg-fill-secondary disabled:opacity-100 data-invalid:text-status-danger data-popup-open:bg-fill-secondary",
       },
@@ -222,7 +222,7 @@ export function Button(props: ButtonProps) {
         {leading ? <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">{leading}</span> : null}
         <span
           data-placeholder={empty ? "" : undefined}
-          className="flex min-w-0 items-center gap-2 truncate placeholder-muted"
+          className="flex min-w-0 items-center gap-2 truncate data-placeholder:text-text-secondary"
         >
           <TextLabel>{children ?? placeholder}</TextLabel>
         </span>

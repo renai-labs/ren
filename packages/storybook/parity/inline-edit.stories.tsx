@@ -12,4 +12,4 @@ export default {
   },
 }
 
-export { Default, Empty, EndAligned, Required, LongValue, Validated } from "../ui/inline-edit.stories.js"
+export { Default, EndAligned, Required, LongValue, Validated } from "../ui/inline-edit.stories.js"

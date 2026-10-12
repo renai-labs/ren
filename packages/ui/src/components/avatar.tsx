@@ -33,7 +33,7 @@ const avatarVariants = cva("relative inline-grid shrink-0 place-items-center ove
 const toneClass: Record<AvatarTone, string> = {
   neutral: "bg-fill-secondary text-text-primary",
   inverse: "bg-fill-inverse text-text-inverse",
-  accent: "bg-accent-primary text-text-primary",
+  accent: "bg-accent-primary text-text-inverse",
   subtle: "bg-fill-primary text-text-primary",
 }
 
@@ -100,7 +100,7 @@ function surfaceClass(props: RootProps) {
 }
 
 export function Root(props: RootProps) {
-  const label = props.decorative === true ? undefined : props.name
+  const label = props.decorative === true || props.name === "" ? undefined : props.name
   const frame = avatarVariants({ size: props.size, shape: props.shape })
   if (props.emoji !== undefined) {
     return (

@@ -1,6 +1,5 @@
 @utility placeholder-muted {
-  &::placeholder,
-  &[data-placeholder] {
+  &::placeholder {
     color: var(--ren-color-text-secondary);
     opacity: var(--ren-opacity-disabled);
   }

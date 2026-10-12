@@ -105,7 +105,13 @@ export function Group(props: GroupProps) {
           <span className="ml-auto flex shrink-0 items-center gap-1">{props.actions}</span>
         )}
       </header>
-      <Collapsible.Panel className="flex min-w-0 flex-col">{props.children}</Collapsible.Panel>
+      <Collapsible.Panel
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the rows are divs with role="listitem", which a <ul> cannot hold
+        role="list"
+        className="flex min-w-0 flex-col"
+      >
+        {props.children}
+      </Collapsible.Panel>
     </Collapsible.Root>
   )
 }

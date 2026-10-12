@@ -113,7 +113,7 @@ export function Button(props: ButtonProps) {
         ),
         children: (
           <>
-            {pending === true ? <ProgressIndicator size="small" tone="inherit" /> : leadingIcon}
+            {pending === true ? <ProgressIndicator size="small" tone="inherit" announcement="none" /> : leadingIcon}
             <Label visibility={labelVisibility ?? "always"}>
               {pending === true && pendingLabel !== undefined ? (
                 pendingLabel
