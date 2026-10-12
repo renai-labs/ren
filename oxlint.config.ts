@@ -566,7 +566,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["packages/ui/test/**", "packages/app/test/**", "packages/*/script/**"],
+      files: ["packages/ui/test/**", "packages/app/test/**", "packages/*/script/**", "packages/*/vite.config.ts"],
       rules: {
         "no-restricted-globals": ["error", reflect],
         "eslint/max-lines-per-function": "off",
