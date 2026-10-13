@@ -86,3 +86,10 @@ export const Started = Schema.Struct({ sessionId: ID, harness: Harness }).annota
 
 export interface Accepted extends Schema.Schema.Type<typeof Accepted> {}
 export const Accepted = Schema.Struct({ messageId: MessageID }).annotate({ identifier: "Session.Accepted" })
+
+export interface ClientAccess extends Schema.Schema.Type<typeof ClientAccess> {}
+export const ClientAccess = Schema.Struct({
+  url: Schema.String,
+  token: Schema.String,
+  expiresAt: Schema.DateTimeUtc,
+}).annotate({ identifier: "Session.ClientAccess" })

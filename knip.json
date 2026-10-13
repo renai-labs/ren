@@ -17,6 +17,9 @@
       "ignoreBinaries": ["celld"],
       "ignoreDependencies": ["cloudflare"]
     },
+    "packages/core": {
+      "entry": ["test/**/*.test.ts", "test/lib/preload.ts", "script/**/*.ts"]
+    },
     "packages/db": {
       "entry": ["test/**/*.test.ts", "script/**/*.ts"],
       "ignoreDependencies": ["@ren/schema"]

@@ -13,6 +13,7 @@
     "typecheck": "tsgo -b tsconfig.json tsconfig.tests.json"
   },
   "dependencies": {
+    "@ren/brain-api": "workspace:*",
     "@ren/db": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/util": "workspace:*",
@@ -21,6 +22,7 @@
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@ren/cell": "workspace:*",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:"
   }
