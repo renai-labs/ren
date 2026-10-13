@@ -1,4 +1,6 @@
-const root = new URL("..", import.meta.url).pathname
+import { fileURLToPath } from "node:url"
+
+const root = fileURLToPath(new URL("..", import.meta.url))
 
 await Bun.$`bun run generate`.cwd(`${root}/packages/server`)
 await Bun.$`bun run generate`.cwd(`${root}/packages/protocol`)

@@ -1,9 +1,12 @@
 import path from "path"
+import { Schema } from "effect"
+import { Port } from "@ren/util/port"
+import { testPort } from "../support/stories.js"
 
 const root = path.resolve(import.meta.dir, "../storybook-static")
 
 Bun.serve({
-  port: Number(process.argv[2] ?? 6006),
+  port: Schema.decodeUnknownSync(Port.FromString)(process.argv[2] ?? String(testPort)),
   hostname: "127.0.0.1",
   async fetch(request) {
     const pathname = new URL(request.url).pathname

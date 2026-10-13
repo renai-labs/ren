@@ -33,6 +33,12 @@ const packageBoundaries = [
     regex: "^@ren/db(/|$)",
     message: "Handlers decode, call a core service and map errors. Queries belong in core.",
   },
+  {
+    files: ["packages/util/src/**"],
+    regex:
+      "^(@ren/|node:|bun(:|$)|(fs|path|os|child_process|crypto|url|buffer|stream|events|http|https|net|zlib|worker_threads)(/|$))",
+    message: "Util is browser-safe and knows nothing about Ren. It depends on effect only.",
+  },
 ]
 
 const reactApis = [
@@ -611,6 +617,10 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": ["error", { patterns: [serverOnly, vendored] }],
       },
+    },
+    {
+      files: ["packages/util/src/**"],
+      rules: { "no-restricted-globals": ["error", reflect, ...serverGlobals] },
     },
     {
       files: ["packages/ui/src/**", "packages/app/src/**"],

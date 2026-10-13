@@ -4,6 +4,10 @@ import { defineRelationsPart, isNull, sql } from "drizzle-orm"
 import { check, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { organization, user } from "./auth.sql.js"
 
+export const spaceMemberUserConstraint = "space_member_space_id_user_id_uidx"
+
+export const spacePendingMemberEmailConstraint = "space_pending_member_space_id_email_uidx"
+
 export const space = pgTable(
   "space",
   {
@@ -43,9 +47,7 @@ export const space_member = pgTable(
     archived_at: timestamp(),
   },
   (table) => [
-    uniqueIndex("space_member_space_id_user_id_uidx")
-      .on(table.space_id, table.user_id)
-      .where(isNull(table.archived_at)),
+    uniqueIndex(spaceMemberUserConstraint).on(table.space_id, table.user_id).where(isNull(table.archived_at)),
     index("space_member_user_id_idx").on(table.user_id),
   ],
 )
@@ -63,9 +65,7 @@ export const space_pending_member = pgTable(
     archived_at: timestamp(),
   },
   (table) => [
-    uniqueIndex("space_pending_member_space_id_email_uidx")
-      .on(table.space_id, table.email)
-      .where(isNull(table.archived_at)),
+    uniqueIndex(spacePendingMemberEmailConstraint).on(table.space_id, table.email).where(isNull(table.archived_at)),
     index("space_pending_member_email_idx").on(table.email),
   ],
 )

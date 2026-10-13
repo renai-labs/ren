@@ -6,6 +6,7 @@ import { Logotype } from "@ren/ui/logotype"
 import { StateMessage } from "@ren/ui/state-message"
 import { Text } from "@ren/ui/text"
 import { Link, useRouterState } from "@tanstack/react-router"
+import { Pathname } from "@ren/util/pathname"
 import { Viewport } from "../platform/viewport.js"
 
 export function ApplicationSidebarBrand() {
@@ -26,7 +27,7 @@ export function ApplicationSidebarBrand() {
 }
 
 export function ApplicationSidebar(props: { onSearch: () => void }) {
-  const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/+$/, "") })
+  const pathname = useRouterState({ select: (state) => Pathname.trimTrailingSlashes(state.location.pathname) })
   return (
     <>
       <ApplicationShell.NavigationSection>

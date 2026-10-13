@@ -5,11 +5,13 @@ import { StateMessage } from "@ren/ui/state-message"
 import { TextField } from "@ren/ui/text-field"
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router"
 import { useRef, useState } from "react"
+import { Search } from "@ren/util/search"
+import { Pathname } from "@ren/util/pathname"
 import { Keyboard } from "../platform/keyboard.js"
 import { SettingsPages } from "./settings-pages.js"
 
 export function SettingsSidebar() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/+$/, "") })
+  const pathname = useRouterState({ select: (state) => Pathname.trimTrailingSlashes(state.location.pathname) })
   const navigate = useNavigate()
   const navigation = ApplicationShell.useNavigation()
   const search = useRef<HTMLInputElement>(null)
@@ -21,7 +23,7 @@ export function SettingsSidebar() {
   })
   const needle = query.trim().toLowerCase()
   const matching = (items: ReadonlyArray<SettingsPages.Page>) =>
-    items.filter((item) => item.label.toLowerCase().includes(needle))
+    items.filter((item) => Search.matches([item.label], needle))
   const visiblePersonal = matching(SettingsPages.personal)
   const visibleOrganization = matching(SettingsPages.organization)
   const item = (entry: SettingsPages.Page) => (

@@ -15,6 +15,7 @@
     "@playwright/test": "catalog:",
     "@ren/client": "workspace:*",
     "@ren/server": "workspace:*",
+    "@ren/util": "workspace:*",
     "effect": "catalog:"
   }
 }

@@ -1,4 +1,4 @@
-import { SpaceMember } from "@ren/core/space-member"
+import { SpaceMember } from "@ren/core/space/member"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../api.js"

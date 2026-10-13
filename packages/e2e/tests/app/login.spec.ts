@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test"
-import { appOrigin, appURL, createUser, emailedCode, serverURL, uniqueEmail } from "../lib/servers.js"
+import { appOrigin, appURL, createUser, emailedCode, password, serverURL, uniqueEmail } from "../lib/servers.js"
 
 test("signs in with a password and returns to the requested page", async ({ page, request }) => {
   const email = uniqueEmail("login")
-  await createUser(request, { name: "Ada Lovelace", email, password: "correct horse battery" })
+  await createUser(request, { name: "Ada Lovelace", email, password })
 
   await page.goto("/app/")
   await expect(page).toHaveURL(/\/login\?redirect=%2F$/)
@@ -13,7 +13,7 @@ test("signs in with a password and returns to the requested page", async ({ page
   await page.getByLabel("Password", { exact: true }).fill("wrong password")
   await page.getByRole("button", { name: "Sign in" }).click()
   await expect(page.getByRole("alert")).toHaveText("Invalid email or password.")
-  await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
+  await page.getByLabel("Password", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Sign in" }).click()
   await expect(page).toHaveURL(`${appURL}/`)
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
@@ -24,7 +24,7 @@ test("signs in with a password and returns to the requested page", async ({ page
 
 test("signs in with an emailed code", async ({ page, request }) => {
   const email = uniqueEmail("code")
-  await createUser(request, { name: "Grace Hopper", email, password: "correct horse battery" })
+  await createUser(request, { name: "Grace Hopper", email, password })
 
   await page.goto("/app/login")
   await page.getByLabel("Email").fill(email)
@@ -42,14 +42,14 @@ test("an unverified account is sent to verify its email", async ({ page, request
   const email = uniqueEmail("unverified")
   const signUp = await request.post(`${serverURL}/auth/sign-up/email`, {
     headers: { origin: appOrigin },
-    data: { name: "Alan Turing", email, password: "correct horse battery" },
+    data: { name: "Alan Turing", email, password },
   })
   expect(signUp.ok()).toBe(true)
 
   await page.goto("/app/login")
   await page.getByLabel("Email").fill(email)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
-  await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
+  await page.getByLabel("Password", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Sign in" }).click()
   await expect(page).toHaveURL(/\/verify-email\?email=/)
   await expect(page.getByText(email)).toBeVisible()

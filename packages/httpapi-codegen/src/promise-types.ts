@@ -86,7 +86,7 @@ function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, r
   }
   const equivalent = new Map<string, string>()
   for (const reference of references) {
-    const base = reference.$ref.replace(/_\d+$/, "")
+    const base = Names.withoutNumericSuffix(reference.$ref)
     const identifier = referenceNames.has(base) ? base : reference.$ref
     const key = `${identifier}\0${render(inlineReferences(anonymousTypes, reference.code.Type))}`
     const existing = equivalent.get(key)

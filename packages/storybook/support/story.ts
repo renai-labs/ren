@@ -1,12 +1,14 @@
 import { expect, test } from "@playwright/test"
 import type { Locator } from "@playwright/test"
+import type { Theme } from "@ren/ui/theme"
 
 export { expect }
 
-export type Appearance = "dark" | "light" | "girliepop"
-
 export const story = test.extend<{
-  visit: (id: string, options?: { theme?: Appearance; args?: Record<string, string | boolean> }) => Promise<Locator>
+  visit: (
+    id: string,
+    options?: { theme?: Theme.Appearance; args?: Record<string, string | boolean> },
+  ) => Promise<Locator>
 }>({
   visit: async ({ page }, use) => {
     // oxlint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture callback, not a React hook

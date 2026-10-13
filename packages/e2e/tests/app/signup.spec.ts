@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { emailedCode, uniqueEmail } from "../lib/servers.js"
+import { emailedCode, password, uniqueEmail } from "../lib/servers.js"
 
 test("a new account is created and verified with the emailed code", async ({ page, request }) => {
   const email = uniqueEmail("signup")
@@ -17,7 +17,7 @@ test("a new account is created and verified with the emailed code", async ({ pag
   await page.getByLabel("Password", { exact: true }).fill("short")
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await expect(page.getByText("Password must be at least 8 characters")).toBeVisible()
-  await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
+  await page.getByLabel("Password", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
 
   await expect(page).toHaveURL(/\/verify-email\?email=/)
@@ -45,7 +45,7 @@ test("a rejected address returns to the details step with the server’s reason"
   await page.getByLabel("Name").fill("Ada Lovelace")
   await page.getByLabel("Email").fill(`ada-${crypto.randomUUID()}@mailinator.com`)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
-  await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
+  await page.getByLabel("Password", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await expect(page.getByLabel("Email")).toHaveAccessibleDescription("Use a permanent email address.")
   await expect(page.getByLabel("Email")).toBeFocused()

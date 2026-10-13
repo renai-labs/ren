@@ -14,10 +14,10 @@ import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useDeferredValue, useState } from "react"
+import { Search } from "@ren/util/search"
 import { RouterContext } from "../../lib/router-context.js"
 import { CreateSpaceDialog } from "./create-space-dialog.js"
 import { JoinSpaceDialog } from "./join-space-dialog.js"
-import { Spaces } from "./spaces.js"
 
 export function SpacesPage(props: { userId: string }) {
   const context = RouterContext.useRouterContext()
@@ -25,7 +25,7 @@ export function SpacesPage(props: { userId: string }) {
   const [query, setQuery] = useState("")
   const needle = useDeferredValue(query).trim()
   const visible = (spaces.data?.items ?? []).filter((space) =>
-    Spaces.matches([space.name, space.description ?? ""], needle),
+    Search.matches([space.name, space.description ?? ""], needle),
   )
   return (
     <PageShell.Root

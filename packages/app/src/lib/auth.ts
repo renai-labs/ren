@@ -21,6 +21,13 @@ export function useClient() {
   return useRouteContext({ from: "__root__", select: (context) => context.auth })
 }
 
+function assertSuccess<Result extends { error: { message?: string | undefined } | null }>(
+  result: Result,
+  fallback: string,
+): asserts result is Extract<Result, { error: null }> {
+  if (result.error !== null) throw new Error(result.error.message ?? fallback, { cause: result.error })
+}
+
 const sessionKey = ["auth", "session"] as const
 
 export function sessionOptions(client: Client) {
@@ -28,7 +35,7 @@ export function sessionOptions(client: Client) {
     queryKey: sessionKey,
     queryFn: async (context) => {
       const result = await client.getSession({ fetchOptions: { signal: context.signal } })
-      if (result.error) throw new Error(result.error.message ?? "Failed to load the session", { cause: result.error })
+      assertSuccess(result, "Failed to load the session")
       return result.data
     },
     staleTime: Infinity,
@@ -42,7 +49,7 @@ export function organizationsOptions(client: Client) {
     queryKey: organizationsKey,
     queryFn: async (context) => {
       const result = await client.organization.list({ fetchOptions: { signal: context.signal } })
-      if (result.error) throw new Error(result.error.message ?? "Failed to load organizations", { cause: result.error })
+      assertSuccess(result, "Failed to load organizations")
       return result.data
     },
   })
@@ -50,11 +57,8 @@ export function organizationsOptions(client: Client) {
 
 const slugTakenCodes = new Set(["ORGANIZATION_ALREADY_EXISTS", "ORGANIZATION_SLUG_ALREADY_TAKEN"])
 
-export function isSlugTaken(error: { code?: string | undefined; message?: string | undefined }) {
-  return (
-    slugTakenCodes.has(error.code ?? "") ||
-    /organization (slug already taken|already exists)/i.test(error.message ?? "")
-  )
+export function isSlugTaken(error: { code?: string | undefined }) {
+  return slugTakenCodes.has(error.code ?? "")
 }
 
 const slugKey = (slug: string) => ["auth", "organization-slug", slug] as const
@@ -78,7 +82,7 @@ export function activeRoleOptions(client: Client) {
     queryKey: activeRoleKey,
     queryFn: async (context) => {
       const result = await client.organization.getActiveMemberRole({ fetchOptions: { signal: context.signal } })
-      if (result.error) throw new Error(result.error.message ?? "Failed to load your role", { cause: result.error })
+      assertSuccess(result, "Failed to load your role")
       return result.data.role
     },
   })
@@ -98,8 +102,7 @@ export function organizationOptions(client: Client, organizationId: string) {
         query: { organizationId },
         fetchOptions: { signal: context.signal },
       })
-      if (result.error)
-        throw new Error(result.error.message ?? "Couldn’t load the organization.", { cause: result.error })
+      assertSuccess(result, "Couldn’t load the organization.")
       return result.data
     },
   })

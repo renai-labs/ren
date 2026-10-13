@@ -11,12 +11,10 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
 import { Auth } from "../../lib/auth.js"
+import { Links } from "../../lib/links.js"
 import { Platform } from "../../platform/platform.js"
 import { CreateOrganizationDialog } from "./create-organization-dialog.js"
 import { OrganizationSwitcher } from "./organization-switcher.js"
-
-const founderCallURL = "https://calendly.com/shrey-renai/30min"
-const docsURL = "https://useren.ai/docs"
 
 export function ProfileCard(props: {
   user: { name: string; email: string; image?: string | null | undefined }
@@ -90,10 +88,10 @@ function ProfileActions() {
           }
         />
         <Menu.Popup placement="top" alignment="end" width="small">
-          <Menu.Item icon={<Icon glyph="Calendar" />} onSelect={() => platform.openExternal(founderCallURL)}>
+          <Menu.Item icon={<Icon glyph="Calendar" />} onSelect={() => platform.openExternal(Links.founderCall)}>
             Talk to founder
           </Menu.Item>
-          <Menu.Item icon={<Icon glyph="BookOpen" />} onSelect={() => platform.openExternal(docsURL)}>
+          <Menu.Item icon={<Icon glyph="BookOpen" />} onSelect={() => platform.openExternal(Links.docs)}>
             Documentation
           </Menu.Item>
         </Menu.Popup>

@@ -47,7 +47,10 @@ const Page = Pagination.Page(Info).annotate({ identifier: "SpaceMember.Page" })
 
 export const CreateInput = Schema.Union([
   Schema.Struct({ spaceId: Space.ID, userId: Auth.UserID }),
-  Schema.Struct({ spaceId: Space.ID, email: Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(320)) }),
+  Schema.Struct({
+    spaceId: Space.ID,
+    email: Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(320)).pipe(Schema.decodeTo(Auth.Email)),
+  }),
 ]).annotate({ identifier: "SpaceMember.CreateInput" })
 export type CreateInput = typeof CreateInput.Type
 

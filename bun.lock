@@ -26,6 +26,7 @@
         "@ren/client": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/ui": "workspace:*",
+        "@ren/util": "workspace:*",
         "@tanstack/react-query": "catalog:",
         "@tanstack/react-router": "catalog:",
         "better-auth": "catalog:",
@@ -58,6 +59,7 @@
       },
       "dependencies": {
         "@renai-labs/sdk": "workspace:*",
+        "effect": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -126,6 +128,7 @@
         "@playwright/test": "catalog:",
         "@ren/client": "workspace:*",
         "@ren/server": "workspace:*",
+        "@ren/util": "workspace:*",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "effect": "catalog:",
@@ -226,6 +229,7 @@
         "@playwright/test": "catalog:",
         "@ren/app": "workspace:*",
         "@ren/ui": "workspace:*",
+        "@ren/util": "workspace:*",
         "@storybook/react-vite": "catalog:",
         "@tailwindcss/vite": "catalog:",
         "@types/bun": "catalog:",

@@ -14,7 +14,7 @@ export const clientErrorFile = {
 
 export const indexFile = {
   path: "index.ts",
-  content: 'export { ClientError } from "./client-error.js"\nexport * as Ren from "./client.js"\n',
+  content: `export { ClientError } from "./client-error.js"\n${Names.clientNamespaceExport}`,
 }
 
 function renderClient(groups: ReadonlyArray<Types.Group>) {

@@ -54,6 +54,13 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export const isEmail = (value: string) => emailPattern.test(value)
 
+export const normalizeEmail = (email: string) => email.trim().toLowerCase()
+
+export const emailDomain = (email: string) => {
+  const normalized = normalizeEmail(email)
+  return normalized.slice(normalized.lastIndexOf("@") + 1)
+}
+
 export const Email = Schema.Trim.check(Schema.isPattern(emailPattern, { message: "Enter a valid email" }))
 
 const minimumPasswordLength = 8
@@ -68,7 +75,7 @@ export const CurrentPassword = Schema.String.check(Schema.isNonEmpty({ message: 
 
 const PasswordConfirmation = Schema.String.check(Schema.isNonEmpty({ message: "Confirm your password" }))
 
-const maximumUserNameLength = 100
+export const maximumUserNameLength = 100
 
 export const UserName = Schema.Trim.check(
   Schema.isNonEmpty({ message: "Enter your name" }),
@@ -99,7 +106,7 @@ export const PasswordChange = Schema.Struct({
   ),
 )
 
-const maximumSlugLength = 128
+export const maximumSlugLength = 128
 
 export const organizationSlug = (name: string) =>
   name

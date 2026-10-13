@@ -10,8 +10,6 @@ import { AuthFlowLayout } from "./auth-flow-layout.js"
 import { BackLink } from "./back-link.js"
 import { AuthSchemas } from "./schemas.js"
 
-const expiredPattern = /invalid token|expired/i
-
 export function ResetPassword(props: { token?: string | undefined }) {
   const [expired, setExpired] = useState(false)
   const backToSignIn = <BackLink render={<Link to="/login" />}>Back to sign in</BackLink>
@@ -50,12 +48,11 @@ function ResetPasswordForm(props: { token: string; onExpired: () => void }) {
         await navigate({ to: "/login" })
         return
       }
-      const failure = AuthError.describe(result.error)
-      if (expiredPattern.test(failure.message)) {
+      if (result.error.code === "INVALID_TOKEN") {
         props.onExpired()
         return
       }
-      setError(failure.message)
+      setError(AuthError.describe(result.error).message)
     },
   })
   return (

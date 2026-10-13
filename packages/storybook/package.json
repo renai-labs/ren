@@ -18,6 +18,7 @@
     "@playwright/test": "catalog:",
     "@ren/app": "workspace:*",
     "@ren/ui": "workspace:*",
+    "@ren/util": "workspace:*",
     "@storybook/react-vite": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@types/bun": "catalog:",

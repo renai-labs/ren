@@ -2,7 +2,7 @@ export * as Auth from "./auth.js"
 
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
-import { SpaceProvisioning } from "@ren/core/space-provisioning"
+import { SpaceProvisioning } from "@ren/core/space/provisioning"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { type AuthenticatedSession } from "@ren/protocol/middleware/authentication"
 import { Auth } from "@ren/schema/auth"

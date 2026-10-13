@@ -23,8 +23,6 @@ type Options = {
 
 type TypeReferences = ReturnType<typeof effectTypeReferences>
 
-const leadingIdentifier = /^[A-Za-z_$][A-Za-z0-9_$]*/
-
 function effectTypeReferences(input: ReadonlyArray<Types.EffectTypeReference>) {
   const names = new Map<string, ResolvedTypeReference>()
   const asts = new Map<SchemaAST.AST, ResolvedTypeReference>()
@@ -38,7 +36,7 @@ function effectTypeReferences(input: ReadonlyArray<Types.EffectTypeReference>) {
     const value = { name: reference.name, import: reference.import, ast: reference.schema.ast, type }
     asts.set(reference.schema.ast, value)
     asts.set(projected.ast, value)
-    if (name === undefined || type === undefined || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) continue
+    if (name === undefined || type === undefined || !Names.isIdentifier(name)) continue
     const previous = names.get(name)
     if (previous === undefined) {
       names.set(name, value)
@@ -64,7 +62,7 @@ function effectType(schema: Schema.Top, references: TypeReferences, imports: Set
     [...source].reduce((result, [name, value]) => {
       if (!TypeText.mentionsReference(result, name)) return result
       // oxlint-disable-next-line ren/no-comments -- Optional/encoded occurrences can acquire a numeric suffix; reuse the named type only when its definition matches, since a suffix can also denote a different shape.
-      const candidate = references.names.get(name.replace(/_\d+$/, ""))
+      const candidate = references.names.get(Names.withoutNumericSuffix(name))
       const reference = references.names.get(name) ?? (candidate?.type === value ? candidate : undefined)
       if (reference !== undefined) {
         imports.add(reference.import)
@@ -114,8 +112,8 @@ function assertNoNameCollision(groups: ReadonlyArray<Types.Group>, options: Opti
     "AppApi",
     "Effect",
     "Stream",
-    ...(options.typeReferences ?? []).flatMap((reference) => reference.name.match(leadingIdentifier) ?? []),
-    ...Object.values(options.outputTypes ?? {}).flatMap((output) => output.name.match(leadingIdentifier) ?? []),
+    ...(options.typeReferences ?? []).flatMap((reference) => reference.name.match(Names.leadingIdentifier) ?? []),
+    ...Object.values(options.outputTypes ?? {}).flatMap((output) => output.name.match(Names.leadingIdentifier) ?? []),
   ])
   const generatedNames = groups.flatMap((group) => [
     Names.groupShapeName(group),

@@ -8,6 +8,8 @@ import { Text } from "@ren/ui/text"
 import { Theme } from "@ren/ui/theme"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
+import { Links } from "../lib/links.js"
+import { Search } from "@ren/util/search"
 import { Platform } from "../platform/platform.js"
 import { SettingsPages } from "./settings-pages.js"
 
@@ -52,8 +54,8 @@ const settings: ReadonlyArray<Entry> = [
 ]
 
 const externalLinks: Partial<Record<string, string>> = {
-  docs: "https://useren.ai/docs",
-  founder: "https://calendly.com/shrey-renai/30min",
+  docs: Links.docs,
+  founder: Links.founderCall,
 }
 
 export function WorkspaceSearch(props: { onClose: () => void }) {
@@ -65,9 +67,7 @@ export function WorkspaceSearch(props: { onClose: () => void }) {
   const needle = query.trim().toLowerCase()
   const matching = (entries: ReadonlyArray<Entry>) =>
     entries
-      .filter((entry) =>
-        [entry.label, entry.hint ?? "", ...(entry.keywords ?? [])].some((text) => text.toLowerCase().includes(needle)),
-      )
+      .filter((entry) => Search.matches([entry.label, entry.hint ?? "", ...(entry.keywords ?? [])], needle))
       .map((entry) => ({
         value: entry.value,
         label: entry.label,

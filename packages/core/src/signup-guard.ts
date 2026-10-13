@@ -2,6 +2,7 @@ export * as SignupGuard from "./signup-guard.js"
 
 import { promises } from "node:dns"
 import { Database } from "@ren/db/database"
+import { Auth } from "@ren/schema/auth"
 import { disposableEmailBlocklistSet } from "disposable-email-domains-js"
 import { sql } from "drizzle-orm"
 import { Config, Context, Effect, Layer, Option, Schema } from "effect"
@@ -33,6 +34,8 @@ const rejections = {
   },
 } satisfies Record<string, Rejection>
 
+const gmailDomains = ["gmail.com", "googlemail.com"]
+
 const missing = new Set(["ENOTFOUND", "ENODATA", "NXDOMAIN"])
 
 const ErrorCode = Schema.Struct({ code: Schema.Unknown })
@@ -42,12 +45,6 @@ const lookup = <A>(resolve: () => Promise<A>) =>
     try: resolve,
     catch: (error) => (Schema.is(ErrorCode)(error) ? String(error.code) : ""),
   })
-
-const domainOf = (email: string) =>
-  email
-    .slice(email.lastIndexOf("@") + 1)
-    .trim()
-    .toLowerCase()
 
 const parentDomains = (domain: string) => {
   const labels = domain.split(".")
@@ -97,8 +94,7 @@ export const make = Effect.fnUntraced(function* (resolver: Resolver) {
 
   return Service.of({
     checkEmailSignUp: Effect.fn("SignupGuard.checkEmailSignUp")(function* (email: string) {
-      const normalized = email.trim().toLowerCase()
-      const domain = domainOf(normalized)
+      const domain = Auth.emailDomain(email)
       if (isDisposable(domain)) return Option.some(rejections.disposable)
       if (!isAllowed(domain) && config.checkMailServer && !(yield* canReceiveMail(domain))) {
         return Option.some(rejections.undeliverable)
@@ -106,13 +102,14 @@ export const make = Effect.fnUntraced(function* (resolver: Resolver) {
       return Option.none()
     }),
     hasVerifiedAlias: Effect.fn("SignupGuard.hasVerifiedAlias")(function* (email: string) {
-      const normalized = email.trim().toLowerCase()
-      const domain = domainOf(normalized)
+      const normalized = Auth.normalizeEmail(email)
+      const domain = Auth.emailDomain(normalized)
       const local = normalized.slice(0, normalized.lastIndexOf("@")).replace(/\+.*/, "")
-      const canonical =
-        domain === "gmail.com" || domain === "googlemail.com"
-          ? `${local.replaceAll(".", "")}@gmail.com`
-          : `${local}@${domain}`
+      const canonical = gmailDomains.includes(domain) ? `${local.replaceAll(".", "")}@gmail.com` : `${local}@${domain}`
+      const gmailDomainList = sql.join(
+        gmailDomains.map((gmailDomain) => sql`${gmailDomain}`),
+        sql`, `,
+      )
       const userLocal = sql`split_part(split_part(lower(${Database.Schema.user.email}), '@', 1), '+', 1)`
       const userDomain = sql`split_part(lower(${Database.Schema.user.email}), '@', 2)`
       const rows = yield* database.db
@@ -120,7 +117,7 @@ export const make = Effect.fnUntraced(function* (resolver: Resolver) {
         .from(Database.Schema.user)
         .where(
           sql`${Database.Schema.user.emailVerified} = true and
-            case when ${userDomain} in ('gmail.com', 'googlemail.com')
+            case when ${userDomain} in (${gmailDomainList})
               then replace(${userLocal}, '.', '') || '@gmail.com'
               else ${userLocal} || '@' || ${userDomain} end = ${canonical}`,
         )
@@ -128,7 +125,7 @@ export const make = Effect.fnUntraced(function* (resolver: Resolver) {
       return rows.length > 0
     }, Effect.orDie),
     checkAccountCreation: Effect.fn("SignupGuard.checkAccountCreation")(function* (email: string) {
-      return isDisposable(domainOf(email)) ? Option.some(rejections.disposable) : Option.none()
+      return isDisposable(Auth.emailDomain(email)) ? Option.some(rejections.disposable) : Option.none()
     }),
   })
 })

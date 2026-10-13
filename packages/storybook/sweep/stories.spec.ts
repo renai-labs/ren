@@ -1,25 +1,15 @@
 import AxeBuilder from "@axe-core/playwright"
-import { readdir } from "fs/promises"
+import { appearances } from "../support/appearances.js"
 import path from "path"
-import { Schema } from "effect"
 import { expect, story } from "../support/story.js"
-import type { Appearance } from "../support/story.js"
+import { prefixes, storyComponents, storyIds } from "../support/stories.js"
 
-const StorybookIndex = Schema.Struct({
-  entries: Schema.Record(Schema.String, Schema.Struct({ id: Schema.String, type: Schema.String })),
-})
-
-const appearances: ReadonlyArray<Appearance> = ["dark", "light", "girliepop"]
-const files = await readdir(path.resolve(import.meta.dirname, "../ui"))
-const components = files.filter((file) => file.endsWith(".stories.tsx")).map((file) => file.replace(".stories.tsx", ""))
+const components = await storyComponents(path.resolve(import.meta.dirname, "../ui"))
 
 for (const component of components) {
   story(`${component} stories render accessibly`, async ({ visit, page, request }) => {
     story.setTimeout(240_000)
-    const index = Schema.decodeUnknownSync(StorybookIndex)(await (await request.get("/index.json")).json())
-    const ids = Object.values(index.entries)
-      .filter((entry) => entry.type === "story" && entry.id.startsWith(`ui-${component}--`))
-      .map((entry) => entry.id)
+    const ids = await storyIds(request, prefixes.ui, component)
     expect(ids).not.toEqual([])
     const errors: string[] = []
     page.on("pageerror", (error) => errors.push(error.message))
