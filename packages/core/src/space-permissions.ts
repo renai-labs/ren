@@ -1,5 +1,6 @@
 export * as SpacePermissions from "./space-permissions.js"
 
+import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { Context, Layer } from "effect"
 
@@ -23,14 +24,12 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SpacePermissions") {}
 
-const administratorRoles = new Set(["owner", "admin"])
-
 const canAccess = (access: Access) => access.isAdministrator || Boolean(access.membershipId)
 
 export const layer = Layer.succeed(
   Service,
   Service.of({
-    isAdministrator: (role) => role.split(",").some((each) => administratorRoles.has(each.trim())),
+    isAdministrator: Auth.isAdministrator,
     visibility: (isAdministrator) => (isAdministrator ? "organization" : "membership"),
     canRead: canAccess,
     canManage: canAccess,

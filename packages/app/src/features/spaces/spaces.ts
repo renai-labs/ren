@@ -1,7 +1,9 @@
 export * as Spaces from "./spaces.js"
 
 import type { SpaceMemberInfo } from "@ren/client"
+import { Space } from "@ren/schema/space"
 import type { SpaceMember } from "@ren/schema/space-member"
+import { Schema } from "effect"
 
 export interface MemberRow {
   readonly id: string
@@ -86,4 +88,12 @@ export function candidates(
 export function matches(texts: ReadonlyArray<string>, query: string) {
   const needle = query.trim().toLowerCase()
   return texts.some((text) => text.toLowerCase().includes(needle))
+}
+
+const name = Schema.toStandardSchemaV1(Space.Name)
+
+export function nameProblem(value: string) {
+  const result = name["~standard"].validate(value)
+  if (!("issues" in result) || !result.issues) return null
+  return result.issues.at(0)?.message ?? null
 }

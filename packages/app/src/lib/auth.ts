@@ -1,5 +1,6 @@
 export * as Auth from "./auth.js"
 
+import { Auth } from "@ren/schema/auth"
 import { queryOptions } from "@tanstack/react-query"
 import { useRouteContext } from "@tanstack/react-router"
 import { createAuthClient } from "better-auth/client"
@@ -83,7 +84,7 @@ export function activeRoleOptions(client: Client) {
   })
 }
 
-export const isAdminRole = (role: string) => role === "owner" || role === "admin"
+export const isAdminRole = Auth.isAdministrator
 
 const organizationKey = (organizationId: string) => ["auth", "organization", organizationId] as const
 

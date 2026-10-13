@@ -17,7 +17,11 @@ export type AssignmentID = typeof AssignmentID.Type
 
 export const maximumNameLength = 256
 
-const Name = Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(maximumNameLength))
+export const Name = Schema.String.check(
+  Schema.isTrimmed({ message: "Remove spaces at the start and end." }),
+  Schema.isNonEmpty({ message: "Name is required." }),
+  Schema.isMaxLength(maximumNameLength, { message: `Use ${maximumNameLength} characters or fewer.` }),
+)
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
