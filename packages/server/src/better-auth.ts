@@ -28,14 +28,14 @@ export interface Input {
     readonly checkAccountCreation: (email: string) => Promise<Option.Option<SignupGuard.Rejection>>
     readonly hasVerifiedAlias: (email: string) => Promise<boolean>
   }
-  readonly lifecycle: {
-    readonly join: (organizationId: string, user: LifecycleUser) => Promise<void>
-    readonly activate: (organizationId: string, user: LifecycleUser) => Promise<void>
-    readonly leave: (organizationId: string, userId: string) => Promise<void>
+  readonly provisioning: {
+    readonly provisionMember: (organizationId: string, user: ProvisioningUser) => Promise<void>
+    readonly applyAssignments: (organizationId: string, user: ProvisioningUser) => Promise<void>
+    readonly removeMemberships: (organizationId: string, userId: string) => Promise<void>
   }
 }
 
-export interface LifecycleUser {
+export interface ProvisioningUser {
   readonly id: string
   readonly name: string
   readonly email: string
@@ -96,23 +96,23 @@ const emailCodes = (input: Input) =>
     },
   })
 
+const logFailure = (message: string, error: unknown, userId: string) =>
+  Effect.runPromise(Effect.logError(message, error).pipe(Effect.annotateLogs({ userId })))
+
 const provisionOrganization =
   (input: Input) =>
   async <Session extends { userId: string; activeOrganizationId?: string | null | undefined }>(session: Session) => {
     if (session.activeOrganizationId) return { data: session }
-    const created = await DefaultOrganization.provision(input.database, session.userId)
-      .then(async (result) => {
-        if (result?.user) await input.lifecycle.join(result.id, result.user)
-        return result
-      })
-      .catch(async (error) => {
-        await Effect.runPromise(
-          Effect.logError("Default organization provisioning failed", error).pipe(
-            Effect.annotateLogs({ userId: session.userId }),
-          ),
-        )
-      })
-    return created ? { data: { ...session, activeOrganizationId: created.id } } : { data: session }
+    const organization = await DefaultOrganization.provision(input.database, session.userId).catch((error: unknown) =>
+      logFailure("Default organization provisioning failed", error, session.userId),
+    )
+    if (!organization) return { data: session }
+    if (organization.user) {
+      await input.provisioning
+        .provisionMember(organization.id, organization.user)
+        .catch((error: unknown) => logFailure("Space provisioning failed", error, session.userId))
+    }
+    return { data: { ...session, activeOrganizationId: organization.id } }
   }
 
 const guardRequests = (input: Input) =>
@@ -159,12 +159,12 @@ export const make = (input: Input) => {
     invitationExpiresIn: 60 * 60 * 24 * 7,
     requireEmailVerificationOnInvitation: false,
     organizationHooks: {
-      afterAddMember: (data) => input.lifecycle.join(data.organization.id, data.user),
+      afterAddMember: (data) => input.provisioning.provisionMember(data.organization.id, data.user),
       afterAcceptInvitation: async (data) => {
-        await input.lifecycle.join(data.organization.id, data.user)
-        if (data.user.emailVerified) await input.lifecycle.activate(data.organization.id, data.user)
+        await input.provisioning.provisionMember(data.organization.id, data.user)
+        await input.provisioning.applyAssignments(data.organization.id, data.user)
       },
-      afterRemoveMember: (data) => input.lifecycle.leave(data.organization.id, data.user.id),
+      afterRemoveMember: (data) => input.provisioning.removeMemberships(data.organization.id, data.user.id),
     },
     sendInvitationEmail: async (data) => {
       const url = new URL("signup", appURL)

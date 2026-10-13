@@ -1,4 +1,4 @@
-export * as SpaceLifecycle from "./space-lifecycle.js"
+export * as SpaceProvisioning from "./space-provisioning.js"
 
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
@@ -13,12 +13,14 @@ export interface User {
 }
 
 export interface Interface {
-  readonly join: (organizationId: Auth.OrganizationID, user: User) => Effect.Effect<void>
-  readonly activate: (organizationId: Auth.OrganizationID, user: User) => Effect.Effect<void>
-  readonly leave: (organizationId: Auth.OrganizationID, userId: Auth.UserID) => Effect.Effect<void>
+  readonly provisionMember: (organizationId: Auth.OrganizationID, user: User) => Effect.Effect<void>
+  readonly applyAssignments: (organizationId: Auth.OrganizationID, user: User) => Effect.Effect<void>
+  readonly removeMemberships: (organizationId: Auth.OrganizationID, userId: Auth.UserID) => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@ren/core/SpaceLifecycle") {}
+export class Service extends Context.Service<Service, Interface>()("@ren/core/SpaceProvisioning") {}
+
+const maximumOwnerNameLength = 200
 
 const insertSpace = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
@@ -30,8 +32,8 @@ const insertSpace = Effect.fnUntraced(function* (
   return id
 })
 
-const join = (database: Database.Interface) =>
-  Effect.fn("SpaceLifecycle.join")(function* (organizationId: Auth.OrganizationID, user: User) {
+const provisionMember = (database: Database.Interface) =>
+  Effect.fn("SpaceProvisioning.provisionMember")(function* (organizationId: Auth.OrganizationID, user: User) {
     yield* database.transaction((transaction) =>
       Effect.gen(function* () {
         yield* transaction
@@ -45,9 +47,9 @@ const join = (database: Database.Interface) =>
           .where(eq(Database.Schema.space.organization_id, organizationId))
           .orderBy(asc(Database.Schema.space.created_at), asc(Database.Schema.space.id))
           .limit(1)
-        const first = spaces.at(0)?.id ?? (yield* insertSpace(transaction, organizationId, "General Space"))
-        const name = user.name.trim().slice(0, 200)
-        const personal = yield* insertSpace(
+        const firstSpace = spaces.at(0)?.id ?? (yield* insertSpace(transaction, organizationId, "General Space"))
+        const name = user.name.trim().slice(0, maximumOwnerNameLength)
+        const personalSpace = yield* insertSpace(
           transaction,
           organizationId,
           name ? `${name}'s Personal Space` : "Personal Space",
@@ -55,7 +57,7 @@ const join = (database: Database.Interface) =>
         yield* transaction
           .insert(Database.Schema.space_member)
           .values(
-            [first, personal].map((spaceId) => ({
+            [firstSpace, personalSpace].map((spaceId) => ({
               id: Space.MembershipID.create(),
               space_id: spaceId,
               user_id: user.id,
@@ -66,8 +68,8 @@ const join = (database: Database.Interface) =>
     )
   })
 
-const activate = (database: Database.Interface) =>
-  Effect.fn("SpaceLifecycle.activate")(function* (organizationId: Auth.OrganizationID, user: User) {
+const applyAssignments = (database: Database.Interface) =>
+  Effect.fn("SpaceProvisioning.applyAssignments")(function* (organizationId: Auth.OrganizationID, user: User) {
     yield* database.transaction((transaction) =>
       Effect.gen(function* () {
         const organizationMembers = yield* transaction
@@ -118,8 +120,11 @@ const activate = (database: Database.Interface) =>
     )
   })
 
-const leave = (database: Database.Interface) =>
-  Effect.fn("SpaceLifecycle.leave")(function* (organizationId: Auth.OrganizationID, userId: Auth.UserID) {
+const removeMemberships = (database: Database.Interface) =>
+  Effect.fn("SpaceProvisioning.removeMemberships")(function* (
+    organizationId: Auth.OrganizationID,
+    userId: Auth.UserID,
+  ) {
     yield* database.transaction((transaction) =>
       transaction
         .update(Database.Schema.space_member)
@@ -144,6 +149,10 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    return Service.of({ join: join(database), activate: activate(database), leave: leave(database) })
+    return Service.of({
+      provisionMember: provisionMember(database),
+      applyAssignments: applyAssignments(database),
+      removeMemberships: removeMemberships(database),
+    })
   }),
 )

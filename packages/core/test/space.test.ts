@@ -6,13 +6,13 @@ import { and, eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space-member.js"
-import { SpacePolicy } from "../src/space-policy.js"
-import { SpaceLifecycle } from "../src/space-lifecycle.js"
+import { SpacePermissions } from "../src/space-permissions.js"
+import { SpaceProvisioning } from "../src/space-provisioning.js"
 import { testEffect } from "./lib/effect.js"
 
 const it = testEffect(
-  Layer.mergeAll(Space.layer, SpaceMember.layer, SpaceLifecycle.layer).pipe(
-    Layer.provideMerge(SpacePolicy.layer),
+  Layer.mergeAll(Space.layer, SpaceMember.layer, SpaceProvisioning.layer).pipe(
+    Layer.provideMerge(SpacePermissions.layer),
     Layer.provideMerge(Testing.layer),
   ),
 )
@@ -30,7 +30,7 @@ const organization = Effect.fnUntraced(function* () {
 
 const user = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, role = "member") {
   const database = yield* Database.Service
-  const lifecycle = yield* SpaceLifecycle.Service
+  const provisioning = yield* SpaceProvisioning.Service
   const id = Auth.UserID.create()
   const email = `${id.toLowerCase()}@example.com`
   yield* database.db
@@ -39,7 +39,7 @@ const user = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, r
   yield* database.db
     .insert(Database.Schema.member)
     .values({ id: Auth.MemberID.create(), organizationId, userId: id, role, createdAt: new Date() })
-  yield* lifecycle.join(organizationId, { id, name: "Ada", email })
+  yield* provisioning.provisionMember(organizationId, { id, name: "Ada", email })
   return { userId: id, organizationId, email }
 })
 
@@ -129,9 +129,10 @@ describe("SpaceMember", () => {
         "Primitive.Conflict",
       )
       const added = yield* members.create(ada, { spaceId: team.id, userId: grace.userId })
-      expect((yield* Effect.flip(members.create(ada, { spaceId: team.id, userId: grace.userId })))._tag).toBe(
-        "Primitive.Conflict",
-      )
+      expect(yield* Effect.flip(members.create(ada, { spaceId: team.id, userId: grace.userId }))).toMatchObject({
+        _tag: "Primitive.Conflict",
+        message: "The user is already a member of this space.",
+      })
       const creator = (yield* members.list(grace, { ...page, spaceId: team.id })).items.at(0)
       if (!creator) return yield* Effect.die(new Error("Expected the space creator"))
       const removed = yield* members.archive(grace, creator.id)
@@ -147,7 +148,7 @@ describe("SpaceMember", () => {
       Effect.gen(function* () {
         const spaces = yield* Space.Service
         const members = yield* SpaceMember.Service
-        const lifecycle = yield* SpaceLifecycle.Service
+        const provisioning = yield* SpaceProvisioning.Service
         const database = yield* Database.Service
         const organizationId = yield* organization()
         const ada = yield* user(organizationId)
@@ -165,6 +166,11 @@ describe("SpaceMember", () => {
         ).toBe("Primitive.Conflict")
         const assignment = yield* members.create(ada, { spaceId: team.id, email: " Late@Example.com " })
         expect(assignment).toMatchObject({ status: "pending", email: "late@example.com" })
+        const duplicate = yield* Effect.flip(members.create(ada, { spaceId: team.id, email: "late@example.com" }))
+        expect(duplicate).toMatchObject({
+          _tag: "Primitive.Conflict",
+          message: "This email is already pending in this space.",
+        })
         expect((yield* spaces.get(ada, team.id)).memberCount).toBe(1)
         const pendingOnly = yield* members.list(ada, { ...page, spaceId: team.id, status: "pending" })
         expect(pendingOnly.items.map((member) => member.id)).toEqual([assignment.id])
@@ -186,7 +192,7 @@ describe("SpaceMember", () => {
           role: "member",
           createdAt: new Date(),
         })
-        yield* lifecycle.activate(organizationId, { id: late, name: "Late", email: "late@example.com" })
+        yield* provisioning.applyAssignments(organizationId, { id: late, name: "Late", email: "late@example.com" })
         const statuses = (yield* members.list(ada, { ...page, spaceId: team.id })).items.map((member) => member.status)
         expect(statuses).toEqual(["active", "active"])
         expect((yield* spaces.get({ userId: late, organizationId }, team.id)).memberCount).toBe(2)
@@ -196,7 +202,7 @@ describe("SpaceMember", () => {
   it.live("revokes access on organization departure and does not restore it on rejoin", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service
-      const lifecycle = yield* SpaceLifecycle.Service
+      const provisioning = yield* SpaceProvisioning.Service
       const database = yield* Database.Service
       const organizationId = yield* organization()
       const ada = yield* user(organizationId)
@@ -206,7 +212,7 @@ describe("SpaceMember", () => {
         .where(
           and(eq(Database.Schema.member.organizationId, organizationId), eq(Database.Schema.member.userId, ada.userId)),
         )
-      yield* lifecycle.leave(organizationId, ada.userId)
+      yield* provisioning.removeMemberships(organizationId, ada.userId)
       yield* database.db.insert(Database.Schema.member).values({
         id: Auth.MemberID.create(),
         organizationId,
@@ -214,7 +220,7 @@ describe("SpaceMember", () => {
         role: "member",
         createdAt: new Date(),
       })
-      yield* lifecycle.join(organizationId, { id: ada.userId, name: "Ada", email: ada.email })
+      yield* provisioning.provisionMember(organizationId, { id: ada.userId, name: "Ada", email: ada.email })
       const names = (yield* spaces.list(ada, page)).items.map((space) => space.name)
       expect(names).toEqual(["General Space", "Ada's Personal Space"])
       expect((yield* Effect.flip(spaces.get(ada, team.id)))._tag).toBe("Primitive.NotFound")
