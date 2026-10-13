@@ -1,11 +1,12 @@
 import { OpenApi } from "effect/http-api"
 import { format } from "prettier"
 import { fileURLToPath } from "url"
+import { BrainApi } from "../src/brain-api.js"
 import { ClientApi } from "../src/client.js"
 import { checkContract } from "./contract.js"
 import { stabilizeOpenApi } from "./openapi-stabilize.js"
 
-const violations = checkContract(ClientApi)
+const violations = [...checkContract(ClientApi), ...checkContract(BrainApi)]
 if (violations.length > 0) {
   console.error(["API contract violations:", ...violations].join("\n- "))
   process.exit(1)
