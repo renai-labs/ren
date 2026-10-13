@@ -47,3 +47,15 @@ export class UnknownError extends Schema.TaggedError<UnknownError>()(
   },
   { httpApiStatus: 500 },
 ) {}
+
+export class BrainRejectedError extends Schema.TaggedError<BrainRejectedError>()(
+  "BrainRejectedError",
+  { message: Schema.String },
+  { httpApiStatus: 422 },
+) {}
+
+export class SessionNotStartedError extends Schema.TaggedError<SessionNotStartedError>()(
+  "SessionNotStartedError",
+  { message: Schema.String },
+  { httpApiStatus: 409 },
+) {}
