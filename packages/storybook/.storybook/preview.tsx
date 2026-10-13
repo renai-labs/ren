@@ -2,12 +2,13 @@ import "./preview.css"
 
 import type { Preview } from "@storybook/react-vite"
 import { Theme } from "@ren/ui/theme"
+import { appearances } from "../support/appearances.js"
 
 const preview: Preview = {
   globalTypes: {
     theme: {
       description: "Theme",
-      toolbar: { title: "Theme", icon: "paintbrush", items: ["dark", "light", "girliepop"], dynamicTitle: true },
+      toolbar: { title: "Theme", icon: "paintbrush", items: appearances, dynamicTitle: true },
     },
   },
   initialGlobals: { theme: "dark" },

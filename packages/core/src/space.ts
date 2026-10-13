@@ -7,8 +7,8 @@ import { alias } from "drizzle-orm/pg-core"
 import { Context, DateTime, Effect, Layer, Schema } from "effect"
 import { Actor } from "./actor.js"
 import { Primitive } from "./primitive.js"
-import { SpacePermissions } from "./space-permissions.js"
-import { SpaceQueries } from "./space-queries.js"
+import { SpacePermissions } from "./space/permissions.js"
+import { SpaceQueries } from "./space/queries.js"
 
 export type Interface = Primitive.Interface<typeof Space.definition>
 

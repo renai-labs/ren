@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import { fileURLToPath } from "node:url"
 
-const run = async (...args: string[]) => {
-  const child = Bun.spawn([process.execPath, new URL("../src/index.ts", import.meta.url).pathname, ...args], {
+const run = async (args: string[] = [], env: Record<string, string> = {}) => {
+  const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../src/index.ts", import.meta.url)), ...args], {
+    env: { ...process.env, ...env },
     stdout: "pipe",
     stderr: "pipe",
   })
@@ -21,8 +23,14 @@ describe("ren", () => {
   })
 
   test("fails on an unknown command", async () => {
-    const result = await run("nope")
+    const result = await run(["nope"])
     expect(result.code).toBe(1)
     expect(result.stderr).toContain("Unknown command: nope")
+  })
+
+  test("fails on an invalid REN_URL", async () => {
+    const result = await run(["health"], { REN_URL: "not a url" })
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain("Invalid REN_URL")
   })
 })

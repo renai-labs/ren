@@ -1,6 +1,9 @@
 import { defineConfig, devices } from "@playwright/test"
+import { Schema } from "effect"
+import { Port } from "@ren/util/port"
+import { testPort } from "./support/stories.js"
 
-const port = Number(process.env.STORYBOOK_PORT ?? 6116)
+const port = Schema.decodeUnknownSync(Port.FromString)(process.env.STORYBOOK_PORT ?? String(testPort))
 
 export default defineConfig({
   testDir: ".",

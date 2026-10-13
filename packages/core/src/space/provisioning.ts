@@ -1,10 +1,11 @@
-export * as SpaceProvisioning from "./space-provisioning.js"
+export * as SpaceProvisioning from "./provisioning.js"
 
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
+import { SpaceQueries } from "./queries.js"
 
 export interface User {
   readonly id: Auth.UserID
@@ -81,17 +82,8 @@ export const layer = Layer.effect(
       ) {
         yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const organizationMembers = yield* transaction
-              .select({ id: Database.Schema.member.id })
-              .from(Database.Schema.member)
-              .where(
-                and(
-                  eq(Database.Schema.member.organizationId, organizationId),
-                  eq(Database.Schema.member.userId, user.id),
-                ),
-              )
-              .for("share")
-            if (organizationMembers.length === 0) return
+            const organizationMember = yield* SpaceQueries.organizationMember(transaction, organizationId, user.id)
+            if (!organizationMember) return
             const pendingMemberships = yield* transaction
               .select({
                 id: Database.Schema.space_pending_member.id,
@@ -107,7 +99,7 @@ export const layer = Layer.effect(
                   eq(Database.Schema.space.organization_id, organizationId),
                   isNull(Database.Schema.space.archived_at),
                   isNull(Database.Schema.space_pending_member.archived_at),
-                  eq(Database.Schema.space_pending_member.email, user.email.trim().toLowerCase()),
+                  eq(Database.Schema.space_pending_member.email, Auth.normalizeEmail(user.email)),
                 ),
               )
               .for("update", { of: Database.Schema.space_pending_member })

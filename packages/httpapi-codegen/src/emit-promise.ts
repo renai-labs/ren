@@ -4,6 +4,7 @@ import { Schema, SchemaAST } from "effect"
 import { HttpMethod } from "effect/http"
 import { HttpApiSchema } from "effect/http-api"
 import { Errors } from "./errors.js"
+import { Names } from "./names.js"
 import { Operations } from "./operations.js"
 import { PromiseClient } from "./promise-client.js"
 import { PromiseTypes } from "./promise-types.js"
@@ -147,8 +148,7 @@ export function emitPromise(
       { path: "client.ts", content: normalizeClientContent(PromiseClient.renderPromiseClient(groups), groups) },
       {
         path: "index.ts",
-        content:
-          'export { ClientError, type ClientErrorReason } from "./client-error.js"\nexport * as Ren from "./client.js"\nexport * from "./types.js"\n',
+        content: `export { ClientError, type ClientErrorReason } from "./client-error.js"\n${Names.clientNamespaceExport}export * from "./types.js"\n`,
       },
     ],
   }

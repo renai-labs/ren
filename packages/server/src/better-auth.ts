@@ -3,6 +3,7 @@ export * as BetterAuth from "./better-auth.js"
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
+import type { SpaceProvisioning } from "@ren/core/space/provisioning"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
@@ -35,11 +36,7 @@ export interface Input {
   }
 }
 
-export interface ProvisioningUser {
-  readonly id: string
-  readonly name: string
-  readonly email: string
-}
+export type ProvisioningUser = Omit<SpaceProvisioning.User, "id"> & { readonly id: string }
 
 const ids = new Map<string, () => string>([
   ["user", Auth.UserID.create],
@@ -51,7 +48,7 @@ const ids = new Map<string, () => string>([
   ["invitation", Auth.InvitationID.create],
 ])
 
-const SendableOTP = Schema.Struct({ type: Schema.Literals(["sign-in", "email-verification"]) })
+const signUpPath = "/sign-up/email"
 
 const SignUp = Schema.Struct({ email: Schema.String })
 
@@ -80,15 +77,15 @@ const emailCodes = (input: Input) =>
     overrideDefaultEmailVerification: true,
     disableSignUp: true,
     otpLength: 6,
-    expiresIn: 60 * 10,
+    expiresIn: AuthEmail.otpExpirySeconds,
     allowedAttempts: 5,
     storeOTP: "hashed",
     sendVerificationOTP: async (data) => {
-      if (!Schema.is(SendableOTP)(data)) return
+      if (!Schema.is(AuthEmail.OTP)(data)) return
       if (data.type === "email-verification") {
         const user = await input.database.query.user.findFirst({
           columns: { emailVerified: true },
-          where: { email: data.email.toLowerCase() },
+          where: { email: Auth.normalizeEmail(data.email) },
         })
         if (user?.emailVerified) return
       }
@@ -120,9 +117,9 @@ const guardRequests = (input: Input) =>
     const body: unknown = ctx.body
     switch (ctx.path) {
       case "/email-otp/send-verification-otp":
-        if (!Schema.is(SendableOTP)(body)) throw new APIError("BAD_REQUEST", { message: "Invalid OTP type" })
+        if (!Schema.is(AuthEmail.OTP)(body)) throw new APIError("BAD_REQUEST", { message: "Invalid OTP type" })
         return
-      case "/sign-up/email": {
+      case signUpPath: {
         if (!Schema.is(SignUp)(body)) return
         const rejection = await input.signupGuard.checkEmailSignUp(body.email)
         if (Option.isSome(rejection)) throw new APIError("BAD_REQUEST", rejection.value)
@@ -130,7 +127,7 @@ const guardRequests = (input: Input) =>
       }
       case "/organization/create":
         if (!Schema.is(CreateOrganization)(body)) return
-        return { context: { body: { ...body, slug: DefaultOrganization.slugify(body.slug) } } }
+        return { context: { body: { ...body, slug: Auth.organizationSlug(body.slug) } } }
       default:
         return
     }
@@ -139,7 +136,7 @@ const guardRequests = (input: Input) =>
 const guardAccountCreation =
   (input: Input) =>
   async <User extends { email: string }>(user: User, ctx: { path?: string } | null | undefined) => {
-    if (ctx?.path === "/sign-up/email") {
+    if (ctx?.path === signUpPath) {
       if (await input.signupGuard.hasVerifiedAlias(user.email)) {
         throw APIError.from(
           input.requireEmailVerification ? "FORBIDDEN" : "UNPROCESSABLE_ENTITY",

@@ -1,6 +1,9 @@
 export * as Members from "./members.js"
 
 import { Auth } from "@ren/schema/auth"
+import { Search } from "@ren/util/search"
+
+const emailSeparators = /[\s,;]+/
 
 export type Role = Auth.Role
 
@@ -65,7 +68,7 @@ export function invitationRows(
 export function search<A>(rows: ReadonlyArray<A>, query: string, fields: (row: A) => ReadonlyArray<string>) {
   const needle = query.trim().toLowerCase()
   if (needle === "") return [...rows]
-  return rows.filter((row) => fields(row).some((field) => field.toLowerCase().includes(needle)))
+  return rows.filter((row) => Search.matches(fields(row), needle))
 }
 
 export function sortBy<A>(rows: ReadonlyArray<A>, text: (row: A) => string, direction: "ascending" | "descending") {
@@ -75,7 +78,7 @@ export function sortBy<A>(rows: ReadonlyArray<A>, text: (row: A) => string, dire
 
 export function parseEmails(input: string) {
   const entries = input
-    .split(/[\s,;]+/)
+    .split(emailSeparators)
     .map((entry) => entry.trim())
     .filter((entry) => entry !== "")
   return {

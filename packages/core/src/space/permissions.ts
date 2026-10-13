@@ -1,4 +1,4 @@
-export * as SpacePermissions from "./space-permissions.js"
+export * as SpacePermissions from "./permissions.js"
 
 import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"

@@ -18,6 +18,7 @@
     "@ren/client": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/ui": "workspace:*",
+    "@ren/util": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
     "better-auth": "catalog:",

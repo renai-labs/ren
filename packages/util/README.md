@@ -1,14 +1,15 @@
 # @ren/util
 
-Small shared Effect and platform helpers with no domain knowledge.
+Small shared helpers with no domain knowledge. Browser-safe: the app, server and test harnesses all import it.
 
 ## What belongs here
 
-- Version info, logging and telemetry setup, filesystem helpers.
+- Generic helpers with more than one user: text search, pathnames, port parsing, version info.
 
 ## What does not
 
-- Anything that knows about Ren domains.
+- Anything that knows about Ren domains. Those go in `@ren/schema`.
+- Node, Bun or platform APIs. oxlint rejects them.
 
 ## Dependencies
 

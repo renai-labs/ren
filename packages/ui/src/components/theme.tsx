@@ -13,6 +13,8 @@ const appearanceClasses: Record<Appearance, ReadonlyArray<string>> = {
   light: ["light"],
   girliepop: ["light", "girliepop"],
 }
+
+const allClasses = [...new Set(Object.values(appearanceClasses).flat())]
 const darkScheme = "(prefers-color-scheme: dark)"
 
 function subscribe(listener: () => void) {
@@ -43,7 +45,7 @@ export function Provider(props: {
   useEffect(() => {
     const root = document.documentElement
     root.toggleAttribute("data-theme-switching", true)
-    root.classList.remove("light", "dark", "girliepop")
+    root.classList.remove(...allClasses)
     root.classList.add(...appearanceClasses[appearance])
     window.getComputedStyle(root).getPropertyValue("color")
     const frame = requestAnimationFrame(() => root.removeAttribute("data-theme-switching"))

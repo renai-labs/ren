@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test"
-import { appURL, createUser } from "../lib/servers.js"
+import { appURL, createUser, password } from "../lib/servers.js"
 
 test("creates an organization from the profile card and switches to it", async ({ page }) => {
   const company = `Globex${crypto.randomUUID().slice(0, 8)}`
   await createUser(page.request, {
     name: "Ada Lovelace",
     email: `ada@${company.toLowerCase()}.com`,
-    password: "correct horse battery",
+    password,
   })
   await page.goto("/app/")
   await page.getByRole("combobox", { name: `Switch organization (current: ${company})` }).click()

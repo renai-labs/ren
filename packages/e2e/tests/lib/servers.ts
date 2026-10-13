@@ -1,11 +1,14 @@
 import { expect } from "@playwright/test"
 import type { APIRequestContext } from "@playwright/test"
 import { Schema } from "effect"
+import { ports } from "./env.js"
 
-export const serverURL = `http://127.0.0.1:${process.env.E2E_PORT ?? 4010}`
-export const appOrigin = `http://127.0.0.1:${process.env.E2E_APP_PORT ?? 4011}`
+export const password = "correct horse battery"
+
+export const serverURL = `http://127.0.0.1:${ports.server}`
+export const appOrigin = `http://127.0.0.1:${ports.app}`
 export const appURL = `${appOrigin}/app`
-const mailboxURL = `http://127.0.0.1:${process.env.E2E_MAILBOX_PORT ?? 4012}`
+const mailboxURL = `http://127.0.0.1:${ports.mailbox}`
 
 export const uniqueEmail = (label: string) => `${label}-${crypto.randomUUID()}@example.com`
 
@@ -45,7 +48,7 @@ export async function signIn(request: APIRequestContext, input: { email: string;
 export async function createOrganization(request: APIRequestContext, owner: { name: string }) {
   const company = `Acme${crypto.randomUUID().slice(0, 8)}`
   const email = `${owner.name.split(" ")[0]?.toLowerCase() ?? "owner"}@${company.toLowerCase()}.com`
-  await createUser(request, { name: owner.name, email, password: "correct horse battery" })
+  await createUser(request, { name: owner.name, email, password })
   return { organization: company, email }
 }
 
@@ -55,6 +58,11 @@ export async function inviteMember(request: APIRequestContext, email: string) {
     data: { email, role: "member" },
   })
   expect(invited.ok()).toBe(true)
+}
+
+export async function organizationName(request: APIRequestContext) {
+  const me = Schema.Struct({ organization: Schema.Struct({ name: Schema.String }) })
+  return Schema.decodeUnknownSync(me)(await (await request.get(`${serverURL}/me`)).json()).organization.name
 }
 
 export async function addMember(
@@ -69,7 +77,7 @@ export async function addMember(
   })
   expect(invited.ok()).toBe(true)
   const invitation = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await invited.json())
-  await createUser(member, { name: input.name, email: input.email, password: "correct horse battery" })
+  await createUser(member, { name: input.name, email: input.email, password })
   const accepted = await member.post(`${serverURL}/auth/organization/accept-invitation`, {
     headers,
     data: { invitationId: invitation.id },

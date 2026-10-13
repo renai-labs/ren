@@ -3,13 +3,25 @@ export * as Names from "./names.js"
 import { Errors } from "./errors.js"
 import type { Types } from "./types.js"
 
+export const leadingIdentifier = /^[A-Za-z_$][A-Za-z0-9_$]*/
+
+export const clientNamespaceExport = 'export * as Ren from "./client.js"\n'
+
+export function isIdentifier(value: string) {
+  return leadingIdentifier.exec(value)?.[0] === value
+}
+
+export function withoutNumericSuffix(value: string) {
+  return value.replace(/_\d+$/, "")
+}
+
 export function identifierPart(value: string) {
   const identifier = value
     .split(/[^A-Za-z0-9]+/)
     .filter(Boolean)
     .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
     .join("")
-  return /^[A-Za-z_$]/.test(identifier) ? identifier : `_${identifier}`
+  return leadingIdentifier.test(identifier) ? identifier : `_${identifier}`
 }
 
 export function groupShapeName(group: Types.Group) {

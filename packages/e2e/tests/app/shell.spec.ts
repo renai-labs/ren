@@ -1,13 +1,13 @@
 import { expect, test } from "@playwright/test"
 import type { Page } from "@playwright/test"
-import { appOrigin, appURL, createUser, serverURL } from "../lib/servers.js"
+import { appOrigin, appURL, createUser, organizationName, password, serverURL } from "../lib/servers.js"
 
 async function signedIn(page: Page) {
   const company = `Initech${crypto.randomUUID().slice(0, 8)}`
   await createUser(page.request, {
     name: "Ada Lovelace",
     email: `ada@${company.toLowerCase()}.com`,
-    password: "correct horse battery",
+    password,
   })
   return company
 }
@@ -49,7 +49,7 @@ test("switches organization and logs out from the profile card", async ({ page }
   await expect(page.getByRole("option", { name: company })).toBeHidden()
   await page.getByRole("option", { name: "Side Project" }).click()
   await expect(page.getByRole("combobox", { name: "Switch organization (current: Side Project)" })).toBeVisible()
-  expect((await (await page.request.get(`${serverURL}/me`)).json()).organization.name).toBe("Side Project")
+  expect(await organizationName(page.request)).toBe("Side Project")
 
   await page.getByRole("combobox", { name: "Switch organization (current: Side Project)" }).click()
   await page.getByRole("button", { name: "Log out" }).click()

@@ -5,9 +5,9 @@ import { Auth } from "@ren/schema/auth"
 import { and, eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Space } from "../src/space.js"
-import { SpaceMember } from "../src/space-member.js"
-import { SpacePermissions } from "../src/space-permissions.js"
-import { SpaceProvisioning } from "../src/space-provisioning.js"
+import { SpaceMember } from "../src/space/member.js"
+import { SpacePermissions } from "../src/space/permissions.js"
+import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
 
 const it = testEffect(

@@ -22,7 +22,8 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@renai-labs/sdk": "workspace:*"
+    "@renai-labs/sdk": "workspace:*",
+    "effect": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

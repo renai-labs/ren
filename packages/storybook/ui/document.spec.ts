@@ -1,8 +1,8 @@
 import { expect, story } from "../support/story.js"
-import type { Appearance } from "../support/story.js"
+import type { Theme } from "@ren/ui/theme"
 
 story("highlights fenced code with the active theme's syntax colours", async ({ visit }) => {
-  const keywordColors = async (theme: Appearance) => {
+  const keywordColors = async (theme: Theme.Appearance) => {
     const root = await visit("ui-document--code-block", { theme })
     const keyword = root.locator('[data-streamdown="code-block"] code span', { hasText: /^const$/ }).first()
     await expect(keyword).toBeVisible()

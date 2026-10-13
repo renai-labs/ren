@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import { Ren } from "@ren/client"
+import { Schema } from "effect"
 import { serverURL } from "./lib/servers.js"
 
 test("generated client reads server health", async () => {
@@ -10,5 +11,8 @@ test("generated client reads server health", async () => {
 test("server publishes its OpenAPI document", async ({ request }) => {
   const response = await request.get(`${serverURL}/openapi.json`)
   expect(response.ok()).toBe(true)
-  expect(Object.keys((await response.json()).paths)).toContain("/health")
+  const document = Schema.decodeUnknownSync(Schema.Struct({ paths: Schema.Record(Schema.String, Schema.Unknown) }))(
+    await response.json(),
+  )
+  expect(Object.keys(document.paths)).toContain("/health")
 })

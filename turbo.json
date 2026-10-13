@@ -1,12 +1,17 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "globalDependencies": ["patches/**", "bunfig.toml", ".github/actions/setup-bun/**", ".github/workflows/test.yml"],
+  "globalDependencies": [
+    "patches/**",
+    "tsconfig.base.json",
+    "bunfig.toml",
+    ".github/actions/setup-bun/**",
+    ".github/workflows/test.yml"
+  ],
   "globalEnv": ["CI"],
   "globalPassThroughEnv": ["CI", "DATABASE_URL"],
   "tasks": {
-    "typecheck": {},
-    "@ren/server#typecheck": {
-      "dependsOn": ["@ren/core#typecheck"]
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
     },
     "build": {
       "dependsOn": [],

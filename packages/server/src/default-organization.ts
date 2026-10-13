@@ -9,15 +9,6 @@ import { getDomainWithoutSuffix } from "tldts"
 
 const freemail = new Set([...freeEmailDomains, "duckduckgo.com", "tutanota.com", "tutamail.com", "tuta.io", "hey.com"])
 
-export function slugify(input: string) {
-  return input
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, "-")
-    .replace(/^-+/, "")
-    .replace(/-+$/, "")
-}
-
 export const provision = (database: AuthDatabase.Interface["db"], userId: string) =>
   database.transaction(async (tx) => {
     const [user] = await tx.select().from(Database.Schema.user).where(eq(Database.Schema.user.id, userId)).for("update")
@@ -30,10 +21,10 @@ export const provision = (database: AuthDatabase.Interface["db"], userId: string
     if (membership) return { id: membership.organizationId }
     const invitation = await tx.query.invitation.findFirst({
       columns: { id: true },
-      where: { email: user.email.toLowerCase(), status: "pending", expiresAt: { gt: new Date() } },
+      where: { email: Auth.normalizeEmail(user.email), status: "pending", expiresAt: { gt: new Date() } },
     })
     if (invitation) return
-    const domain = user.email.slice(user.email.lastIndexOf("@") + 1).toLowerCase()
+    const domain = Auth.emailDomain(user.email)
     const company = freemail.has(domain)
       ? ""
       : (getDomainWithoutSuffix(domain) ?? "")
@@ -43,7 +34,7 @@ export const provision = (database: AuthDatabase.Interface["db"], userId: string
           .join(" ")
     const firstName = user.name.trim().split(/\s+/).at(0)
     const name = company || (firstName ? `${firstName}'s Org` : "Personal Org")
-    const base = slugify(name) || "organization"
+    const base = Auth.organizationSlug(name) || "organization"
     const taken = new Set(
       (
         await tx

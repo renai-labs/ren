@@ -1,19 +1,24 @@
 import { expect, test } from "@playwright/test"
 import type { APIRequestContext } from "@playwright/test"
-import { appOrigin, appURL, createUser, emailedCode, lastEmail, serverURL, uniqueEmail } from "../lib/servers.js"
+import {
+  appURL,
+  createUser,
+  emailedCode,
+  inviteMember,
+  lastEmail,
+  organizationName,
+  password,
+  uniqueEmail,
+} from "../lib/servers.js"
 
 async function invite(request: APIRequestContext, email: string) {
   const company = `Northwind${crypto.randomUUID().slice(0, 8)}`
   await createUser(request, {
     name: "Grace Hopper",
     email: `grace@${company.toLowerCase()}.com`,
-    password: "correct horse battery",
+    password,
   })
-  const response = await request.post(`${serverURL}/auth/organization/invite-member`, {
-    headers: { origin: appOrigin },
-    data: { email, role: "member" },
-  })
-  expect(response.ok()).toBe(true)
+  await inviteMember(request, email)
   const link = /(http\S+signup\?invitationId=\S+)/.exec(await lastEmail(request, email, "invitationId="))?.[1]
   if (link === undefined) throw new Error(`No invitation emailed to ${email}`)
   return { link: new URL(link), organization: company }
@@ -30,7 +35,7 @@ test("an invited person signs up and joins the organization", async ({ page, req
   await page.getByLabel("Name").fill("Ada Lovelace")
   await page.getByLabel("Email").fill(email)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
-  await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
+  await page.getByLabel("Password", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   const code = await emailedCode(request, email)
   await page.getByRole("textbox").first().click()
@@ -39,8 +44,7 @@ test("an invited person signs up and joins the organization", async ({ page, req
   await expect(page.getByText("Joined organization")).toBeVisible()
   await expect(page).toHaveURL(`${appURL}/`)
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
-  const me = await page.request.get(`${serverURL}/me`)
-  expect((await me.json()).organization.name).toBe(invitation.organization)
+  expect(await organizationName(page.request)).toBe(invitation.organization)
 
   await page.goto(`/app/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
   await expect(page.getByRole("heading", { name: "This invitation has already been accepted" })).toBeVisible()
@@ -49,7 +53,7 @@ test("an invited person signs up and joins the organization", async ({ page, req
 
 test("a signed-in person declines an invitation", async ({ page, request }) => {
   const email = uniqueEmail("decliner")
-  await createUser(page.request, { name: "Alan Turing", email, password: "correct horse battery" })
+  await createUser(page.request, { name: "Alan Turing", email, password })
   const invitation = await invite(request, email)
 
   await page.goto(`/app/invites/accept?id=${invitation.link.searchParams.get("invitationId") ?? ""}`)
@@ -65,7 +69,7 @@ test("a signed-in person declines an invitation", async ({ page, request }) => {
 test("an invitation for another address offers to switch accounts", async ({ page, request }) => {
   const link = (await invite(request, uniqueEmail("someone-else"))).link
   const email = uniqueEmail("wrong-account")
-  await createUser(page.request, { name: "Alan Turing", email, password: "correct horse battery" })
+  await createUser(page.request, { name: "Alan Turing", email, password })
 
   await page.goto(`/app/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
   await page.getByRole("button", { name: "Continue to join" }).click()
@@ -87,13 +91,12 @@ test("an unknown invitation explains itself", async ({ page }) => {
 test("an account with only a pending invitation is sent to it", async ({ page, request }) => {
   const email = uniqueEmail("orgless")
   const invitation = await invite(request, email)
-  await createUser(page.request, { name: "Alan Turing", email, password: "correct horse battery" })
+  await createUser(page.request, { name: "Alan Turing", email, password })
 
   await page.goto("/app/")
   await expect(page).toHaveURL(/\/invites\/accept\?id=.+&redirect=%2F$/)
   await page.getByRole("button", { name: "Continue to join" }).click()
   await expect(page.getByText("Joined organization")).toBeVisible()
   await expect(page).toHaveURL(`${appURL}/`)
-  const me = await page.request.get(`${serverURL}/me`)
-  expect((await me.json()).organization.name).toBe(invitation.organization)
+  expect(await organizationName(page.request)).toBe(invitation.organization)
 })
