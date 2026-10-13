@@ -39,7 +39,7 @@ const user = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, r
   yield* database.db
     .insert(Database.Schema.member)
     .values({ id: Auth.MemberID.create(), organizationId, userId: id, role, createdAt: new Date() })
-  yield* provisioning.provisionMember(organizationId, { id, name: "Ada", email })
+  yield* provisioning.createInitialMemberships(organizationId, { id, name: "Ada", email })
   return { userId: id, organizationId, email }
 })
 
@@ -84,7 +84,7 @@ describe("Space", () => {
       const grace = yield* user(organizationId)
       const admin = yield* user(organizationId, "admin")
       const team = yield* spaces.create(ada, { name: "Team" })
-      expect(team.canManage).toBe(true)
+      expect(team.canUpdate).toBe(true)
       expect((yield* Effect.flip(spaces.get(grace, team.id)))._tag).toBe("Primitive.NotFound")
       expect((yield* spaces.list(grace, page)).items.map((space) => space.id)).not.toContain(team.id)
       const managed = yield* spaces.update(admin, team.id, { description: "Shared" })
@@ -192,7 +192,11 @@ describe("SpaceMember", () => {
           role: "member",
           createdAt: new Date(),
         })
-        yield* provisioning.applyAssignments(organizationId, { id: late, name: "Late", email: "late@example.com" })
+        yield* provisioning.activatePendingMemberships(organizationId, {
+          id: late,
+          name: "Late",
+          email: "late@example.com",
+        })
         const statuses = (yield* members.list(ada, { ...page, spaceId: team.id })).items.map((member) => member.status)
         expect(statuses).toEqual(["active", "active"])
         expect((yield* spaces.get({ userId: late, organizationId }, team.id)).memberCount).toBe(2)
@@ -212,7 +216,7 @@ describe("SpaceMember", () => {
         .where(
           and(eq(Database.Schema.member.organizationId, organizationId), eq(Database.Schema.member.userId, ada.userId)),
         )
-      yield* provisioning.removeMemberships(organizationId, ada.userId)
+      yield* provisioning.archiveMemberships(organizationId, ada.userId)
       yield* database.db.insert(Database.Schema.member).values({
         id: Auth.MemberID.create(),
         organizationId,
@@ -220,7 +224,7 @@ describe("SpaceMember", () => {
         role: "member",
         createdAt: new Date(),
       })
-      yield* provisioning.provisionMember(organizationId, { id: ada.userId, name: "Ada", email: ada.email })
+      yield* provisioning.createInitialMemberships(organizationId, { id: ada.userId, name: "Ada", email: ada.email })
       const names = (yield* spaces.list(ada, page)).items.map((space) => space.name)
       expect(names).toEqual(["General Space", "Ada's Personal Space"])
       expect((yield* Effect.flip(spaces.get(ada, team.id)))._tag).toBe("Primitive.NotFound")

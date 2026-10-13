@@ -37,8 +37,9 @@ export type SpaceInfo = {
   description: string | null
   memberCount: number
   membershipId: SpaceMembershipID | null
-  canManage: boolean
-  canManageMembers: boolean
+  canUpdate: boolean
+  canAddMember: boolean
+  canRemoveMember: boolean
   canArchive: boolean
   createdAt: string
   updatedAt: string

@@ -13,9 +13,9 @@ export interface User {
 }
 
 export interface Interface {
-  readonly provisionMember: (organizationId: Auth.OrganizationID, user: User) => Effect.Effect<void>
-  readonly applyAssignments: (organizationId: Auth.OrganizationID, user: User) => Effect.Effect<void>
-  readonly removeMemberships: (organizationId: Auth.OrganizationID, userId: Auth.UserID) => Effect.Effect<void>
+  readonly createInitialMemberships: (organizationId: Auth.OrganizationID, user: User) => Effect.Effect<void>
+  readonly activatePendingMemberships: (organizationId: Auth.OrganizationID, user: User) => Effect.Effect<void>
+  readonly archiveMemberships: (organizationId: Auth.OrganizationID, userId: Auth.UserID) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SpaceProvisioning") {}
@@ -37,7 +37,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     return Service.of({
-      provisionMember: Effect.fn("SpaceProvisioning.provisionMember")(function* (
+      createInitialMemberships: Effect.fn("SpaceProvisioning.createInitialMemberships")(function* (
         organizationId: Auth.OrganizationID,
         user: User,
       ) {
@@ -48,23 +48,24 @@ export const layer = Layer.effect(
               .from(Database.Schema.organization)
               .where(eq(Database.Schema.organization.id, organizationId))
               .for("no key update")
-            const spaces = yield* transaction
+            const firstSpaceRows = yield* transaction
               .select({ id: Database.Schema.space.id })
               .from(Database.Schema.space)
               .where(eq(Database.Schema.space.organization_id, organizationId))
               .orderBy(asc(Database.Schema.space.created_at), asc(Database.Schema.space.id))
               .limit(1)
-            const firstSpace = spaces.at(0)?.id ?? (yield* insertSpace(transaction, organizationId, "General Space"))
-            const name = user.name.trim().slice(0, maximumOwnerNameLength)
-            const personalSpace = yield* insertSpace(
+            const firstOrganizationSpaceId =
+              firstSpaceRows.at(0)?.id ?? (yield* insertSpace(transaction, organizationId, "General Space"))
+            const ownerName = user.name.trim().slice(0, maximumOwnerNameLength)
+            const personalSpaceId = yield* insertSpace(
               transaction,
               organizationId,
-              name ? `${name}'s Personal Space` : "Personal Space",
+              ownerName ? `${ownerName}'s Personal Space` : "Personal Space",
             )
             yield* transaction
               .insert(Database.Schema.space_member)
               .values(
-                [firstSpace, personalSpace].map((spaceId) => ({
+                [firstOrganizationSpaceId, personalSpaceId].map((spaceId) => ({
                   id: Space.MembershipID.create(),
                   space_id: spaceId,
                   user_id: user.id,
@@ -74,7 +75,7 @@ export const layer = Layer.effect(
           }),
         )
       }),
-      applyAssignments: Effect.fn("SpaceProvisioning.applyAssignments")(function* (
+      activatePendingMemberships: Effect.fn("SpaceProvisioning.activatePendingMemberships")(function* (
         organizationId: Auth.OrganizationID,
         user: User,
       ) {
@@ -91,7 +92,7 @@ export const layer = Layer.effect(
               )
               .for("share")
             if (organizationMembers.length === 0) return
-            const assignments = yield* transaction
+            const pendingMemberships = yield* transaction
               .select({
                 id: Database.Schema.space_pending_member.id,
                 spaceId: Database.Schema.space_pending_member.space_id,
@@ -110,13 +111,13 @@ export const layer = Layer.effect(
                 ),
               )
               .for("update", { of: Database.Schema.space_pending_member })
-            if (assignments.length === 0) return
+            if (pendingMemberships.length === 0) return
             yield* transaction
               .insert(Database.Schema.space_member)
               .values(
-                assignments.map((assignment) => ({
+                pendingMemberships.map((pendingMembership) => ({
                   id: Space.MembershipID.create(),
-                  space_id: assignment.spaceId,
+                  space_id: pendingMembership.spaceId,
                   user_id: user.id,
                 })),
               )
@@ -127,13 +128,13 @@ export const layer = Layer.effect(
               .where(
                 inArray(
                   Database.Schema.space_pending_member.id,
-                  assignments.map((assignment) => assignment.id),
+                  pendingMemberships.map((pendingMembership) => pendingMembership.id),
                 ),
               )
           }),
         )
       }),
-      removeMemberships: Effect.fn("SpaceProvisioning.removeMemberships")(function* (
+      archiveMemberships: Effect.fn("SpaceProvisioning.archiveMemberships")(function* (
         organizationId: Auth.OrganizationID,
         userId: Auth.UserID,
       ) {
