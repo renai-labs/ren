@@ -1,3 +1,4 @@
+import type { StandardSchemaV1 } from "@tanstack/react-form"
 import { useId, useState } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
 import { Icon } from "./icon.js"
@@ -11,7 +12,7 @@ export function InlineEdit(props: {
   placeholder?: string
   alignment?: "start" | "end"
   required?: boolean
-  validate?: (value: string) => string | null
+  schema?: StandardSchemaV1<string>
 }) {
   const [draft, setDraft] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -26,7 +27,8 @@ export function InlineEdit(props: {
     if (draft === null || saving) return
     const next = draft.trim()
     if ((props.required === true && !next) || next === props.value) return finish()
-    const problem = props.validate?.(next) ?? null
+    const result = await props.schema?.["~standard"].validate(next)
+    const problem = result?.issues?.at(0)?.message
     if (problem) return setError(problem)
     setSaving(true)
     setError(null)

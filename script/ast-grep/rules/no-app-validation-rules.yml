@@ -1,0 +1,22 @@
+id: no-app-validation-rules
+language: Tsx
+message: >-
+  Define validation rules in @ren/schema and compose them here. The app only builds structure: Struct, optional, Trim, decodeTo and toStandardSchemaV1.
+severity: error
+files:
+  - packages/app/src/**
+rule:
+  any:
+    - pattern: Schema.makeFilter($$$)
+    - pattern: $SCHEMA.check($$$)
+    - kind: call_expression
+      has:
+        field: function
+        kind: member_expression
+        all:
+          - has:
+              field: object
+              regex: ^Schema$
+          - has:
+              field: property
+              regex: ^is[A-Z]

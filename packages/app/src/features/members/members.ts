@@ -1,7 +1,6 @@
 export * as Members from "./members.js"
 
-import type { Auth } from "@ren/schema/auth"
-import { Email } from "../../lib/email.js"
+import { Auth } from "@ren/schema/auth"
 
 export type Role = Auth.Role
 
@@ -80,8 +79,8 @@ export function parseEmails(input: string) {
     .map((entry) => entry.trim())
     .filter((entry) => entry !== "")
   return {
-    valid: [...new Set(entries.filter((entry) => Email.pattern.test(entry)).map((entry) => entry.toLowerCase()))],
-    invalid: [...new Set(entries.filter((entry) => !Email.pattern.test(entry)))],
+    valid: [...new Set(entries.filter((entry) => Auth.isEmail(entry)).map((entry) => entry.toLowerCase()))],
+    invalid: [...new Set(entries.filter((entry) => !Auth.isEmail(entry)))],
   }
 }
 

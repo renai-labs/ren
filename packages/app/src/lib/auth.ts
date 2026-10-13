@@ -86,6 +86,8 @@ export function activeRoleOptions(client: Client) {
 
 export const isAdminRole = Auth.isAdministrator
 
+export const organizationSlug = Auth.organizationSlug
+
 const organizationKey = (organizationId: string) => ["auth", "organization", organizationId] as const
 
 export function organizationOptions(client: Client, organizationId: string) {

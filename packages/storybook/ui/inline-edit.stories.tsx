@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useState } from "react"
 import { InlineEdit } from "@ren/ui/inline-edit"
+import { Schema } from "effect"
 
 const meta = {
   component: InlineEdit,
@@ -30,7 +31,11 @@ export const LongValue: Story = {
   args: { value: "Ada Lovelace, Countess of Lovelace and author of the first published algorithm" },
 }
 export const Validated: Story = {
-  args: { validate: (value) => (value.length < 3 ? "Use at least 3 characters." : null) },
+  args: {
+    schema: Schema.toStandardSchemaV1(
+      Schema.String.check(Schema.isMinLength(3, { message: "Use at least 3 characters." })),
+    ),
+  },
 }
 export const Failing: Story = {
   render: (args) => <InlineEdit {...args} onCommit={() => Promise.reject(new Error("That name is taken."))} />,

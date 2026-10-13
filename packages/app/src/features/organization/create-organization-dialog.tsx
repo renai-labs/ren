@@ -4,34 +4,12 @@ import { Notice } from "@ren/ui/notice"
 import { Text } from "@ren/ui/text"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { Schema } from "effect"
 import { useState } from "react"
 import { Auth } from "../../lib/auth.js"
+import { Forms } from "../../lib/forms.js"
 import { Debounce } from "../../lib/debounce.js"
 
 const slugTaken = "This slug is already in use."
-
-function organizationSlug(name: string) {
-  return name
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, "-")
-    .replaceAll(/^-+|-+$/g, "")
-    .slice(0, 128)
-    .replaceAll(/-+$/g, "")
-}
-
-const schema = Schema.toStandardSchemaV1(
-  Schema.Struct({
-    name: Schema.String.check(
-      Schema.makeFilter((name) => (name.trim() === "" ? "Name is required." : undefined)),
-      Schema.makeFilter((name) =>
-        name.trim() !== "" && organizationSlug(name) === ""
-          ? "Use at least one letter or number to generate a slug."
-          : undefined,
-      ),
-    ),
-  }),
-)
 
 export function CreateOrganizationDialog(props: { onOpenChange: (open: boolean) => void }) {
   const auth = Auth.useClient()
@@ -42,9 +20,9 @@ export function CreateOrganizationDialog(props: { onOpenChange: (open: boolean) 
   const [pending, setPending] = useState(false)
   const form = Form.useForm({
     defaultValues: { name: "" },
-    schema,
+    schema: Forms.organization,
     onSubmit: async (value) => {
-      const slug = organizationSlug(value.name)
+      const slug = Auth.organizationSlug(value.name)
       if (slug === takenSlug) return
       setError("")
       setPending(true)
@@ -69,7 +47,7 @@ export function CreateOrganizationDialog(props: { onOpenChange: (open: boolean) 
         </Dialog.Header>
         <Form.Root form={form} arrangement="contents">
           <Dialog.Body>
-            <form.Subscribe selector={(state) => organizationSlug(state.values.name)}>
+            <form.Subscribe selector={(state) => Auth.organizationSlug(state.values.name)}>
               {(slug) => <NameField form={form} slug={slug} takenSlug={takenSlug} />}
             </form.Subscribe>
             <Notice tone="danger" placement="inline">

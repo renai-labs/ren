@@ -3,8 +3,8 @@ import { InlineEdit } from "@ren/ui/inline-edit"
 import { PageShell } from "@ren/ui/page-shell"
 import { Text } from "@ren/ui/text"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { Forms } from "../../lib/forms.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { Spaces } from "./spaces.js"
 
 export function SpaceOverview(props: { spaceId: string }) {
   const context = RouterContext.useRouterContext()
@@ -26,7 +26,7 @@ export function SpaceOverview(props: { spaceId: string }) {
             alignment="end"
             placeholder="Enter space name"
             required
-            validate={Spaces.nameProblem}
+            schema={Forms.spaceName}
             value={space.data.name}
             onCommit={(name) => save({ name })}
           />

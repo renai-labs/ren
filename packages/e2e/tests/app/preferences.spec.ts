@@ -49,9 +49,9 @@ test("changes the password", async ({ page, request }) => {
   const dialog = page.getByRole("dialog", { name: "Change password" })
   await expect(dialog).toContainText("Confirm your current password, then pick a new one.")
   await dialog.getByRole("button", { name: "Change password" }).click()
-  await expect(dialog.getByLabel("Current password")).toHaveAccessibleDescription("Required")
+  await expect(dialog.getByLabel("Current password")).toHaveAccessibleDescription("Password is required")
   await expect(dialog.getByLabel("New password", { exact: true })).toHaveAccessibleDescription(
-    "Must be at least 8 characters",
+    "Password must be at least 8 characters",
   )
 
   await dialog.getByLabel("Current password").fill("wrong password")

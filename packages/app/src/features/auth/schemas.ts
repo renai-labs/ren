@@ -1,13 +1,7 @@
 export * as AuthSchemas from "./schemas.js"
 
+import { Auth } from "@ren/schema/auth"
 import { Option, Schema, SchemaTransformation } from "effect"
-import { Email } from "../../lib/email.js"
-
-const emailPattern = Email.pattern
-
-const EmailAddress = Schema.Trim.check(Schema.isPattern(emailPattern, { message: "Enter a valid email" }))
-
-const NewPassword = Schema.String.check(Schema.isMinLength(8, { message: "Password must be at least 8 characters" }))
 
 const isSafeRedirect = (path: string) => path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\")
 
@@ -25,7 +19,7 @@ export const OptionalEmail = Schema.optional(Schema.String).pipe(
   Schema.decodeTo(
     Schema.optional(Schema.String),
     SchemaTransformation.transformOptional({
-      decode: Option.filter((value) => value !== undefined && emailPattern.test(value)),
+      decode: Option.filter((value) => value !== undefined && Auth.isEmail(value)),
       encode: (value) => value,
     }),
   ),
@@ -33,33 +27,17 @@ export const OptionalEmail = Schema.optional(Schema.String).pipe(
 
 export const InvitationId = Schema.optional(Schema.NonEmptyString)
 
-export const EmailStep = Schema.toStandardSchemaV1(Schema.Struct({ email: EmailAddress }))
+export const EmailStep = Schema.toStandardSchemaV1(Schema.Struct({ email: Auth.Email }))
 
 export const SignupDetails = Schema.toStandardSchemaV1(
   Schema.Struct({
-    name: Schema.Trim.check(
-      Schema.isNonEmpty({ message: "Enter your name" }),
-      Schema.isMaxLength(100, { message: "Name is too long" }),
-    ),
-    email: EmailAddress,
+    name: Auth.UserName,
+    email: Auth.Email,
   }),
 )
 
-export const PasswordStep = Schema.toStandardSchemaV1(
-  Schema.Struct({ password: Schema.String.check(Schema.isNonEmpty({ message: "Password is required" })) }),
-)
+export const PasswordStep = Schema.toStandardSchemaV1(Schema.Struct({ password: Auth.CurrentPassword }))
 
-export const NewPasswordStep = Schema.toStandardSchemaV1(Schema.Struct({ password: NewPassword }))
+export const NewPasswordStep = Schema.toStandardSchemaV1(Schema.Struct({ password: Auth.Password }))
 
-export const ResetPassword = Schema.toStandardSchemaV1(
-  Schema.Struct({
-    password: NewPassword,
-    passwordConfirm: Schema.String.check(Schema.isNonEmpty({ message: "Confirm your password" })),
-  }).check(
-    Schema.makeFilter((value) =>
-      value.password === value.passwordConfirm
-        ? undefined
-        : { path: ["passwordConfirm"], issue: "Passwords do not match" },
-    ),
-  ),
-)
+export const ResetPassword = Schema.toStandardSchemaV1(Auth.PasswordReset)

@@ -49,3 +49,71 @@ export const Me = Schema.Struct({
   user: User,
   organization: Schema.NullOr(Organization),
 }).annotate({ identifier: "Auth.Me" })
+
+const emailPattern = /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/
+
+export const isEmail = (value: string) => emailPattern.test(value)
+
+export const Email = Schema.Trim.check(Schema.isPattern(emailPattern, { message: "Enter a valid email" }))
+
+export const minimumPasswordLength = 8
+
+export const Password = Schema.String.check(
+  Schema.isMinLength(minimumPasswordLength, {
+    message: `Password must be at least ${minimumPasswordLength} characters`,
+  }),
+)
+
+export const CurrentPassword = Schema.String.check(Schema.isNonEmpty({ message: "Password is required" }))
+
+const PasswordConfirmation = Schema.String.check(Schema.isNonEmpty({ message: "Confirm your password" }))
+
+export const maximumUserNameLength = 100
+
+export const UserName = Schema.Trim.check(
+  Schema.isNonEmpty({ message: "Enter your name" }),
+  Schema.isMaxLength(maximumUserNameLength, { message: "Name is too long" }),
+)
+
+export const PasswordReset = Schema.Struct({
+  password: Password,
+  passwordConfirm: PasswordConfirmation,
+}).check(
+  Schema.makeFilter((value) =>
+    value.password === value.passwordConfirm
+      ? undefined
+      : { path: ["passwordConfirm"], issue: "Passwords do not match" },
+  ),
+)
+
+export const PasswordChange = Schema.Struct({
+  currentPassword: CurrentPassword,
+  newPassword: Password,
+  newPasswordConfirm: PasswordConfirmation,
+  revokeOtherSessions: Schema.Boolean,
+}).check(
+  Schema.makeFilter((value) =>
+    value.newPassword === value.newPasswordConfirm
+      ? undefined
+      : { path: ["newPasswordConfirm"], issue: "Passwords do not match" },
+  ),
+)
+
+const maximumSlugLength = 128
+
+export const organizationSlug = (name: string) =>
+  name
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "")
+    .slice(0, maximumSlugLength)
+    .replaceAll(/-+$/g, "")
+
+export const OrganizationName = Schema.String.check(
+  Schema.makeFilter((name) => (name.trim() === "" ? "Name is required." : undefined)),
+  Schema.makeFilter((name) =>
+    name.trim() !== "" && organizationSlug(name) === ""
+      ? "Use at least one letter or number to generate a slug."
+      : undefined,
+  ),
+)
