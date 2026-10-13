@@ -15,6 +15,6 @@ describe("GET /health", () => {
   test("serves the OpenAPI document", async () => {
     const response = await app.handler(new Request("http://localhost/openapi.json"))
     expect(response.status).toBe(200)
-    expect(Object.keys((await response.json()).paths)).toContain("/health")
+    expect((await response.json()).paths["/health"].get.operationId).toBe("health.get")
   })
 })

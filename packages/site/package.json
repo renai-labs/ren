@@ -9,7 +9,6 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "test": "bun test --only-failures",
     "typecheck": "astro check"
   },
   "dependencies": {

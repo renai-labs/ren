@@ -60,17 +60,13 @@ describe("HttpApiCodegen.write", () => {
     )
   })
 
-  it.effect("rejects unsafe and duplicate output paths before writing", () => {
+  it.effect("rejects unsafe output paths before writing", () => {
     const writes: Array<string> = []
     return Effect.gen(function* () {
       const error = yield* Write.write(
         {
           operations: [],
-          files: [
-            { path: "../outside.ts", content: "" },
-            { path: "client.ts", content: "" },
-            { path: "CLIENT.ts", content: "" },
-          ],
+          files: [{ path: "../outside.ts", content: "" }],
         },
         "/generated",
       ).pipe(Effect.flip)

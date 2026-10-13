@@ -1,0 +1,6 @@
+id: no-html-comments
+language: html
+severity: error
+message: Remove the comment and make the markup explain itself through names and structure.
+rule:
+  kind: comment

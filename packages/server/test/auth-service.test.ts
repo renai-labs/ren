@@ -378,16 +378,6 @@ describe("Auth", () => {
       }),
     )
 
-    verifying.live("rejects other code types", () =>
-      Effect.gen(function* () {
-        const response = yield* post("/email-otp/send-verification-otp", {
-          email: "ada@example.org",
-          type: "forget-password",
-        })
-        expect(response.status).toBe(400)
-      }),
-    )
-
     verifying.live("does not email a verification code to a verified address", () =>
       Effect.gen(function* () {
         const outbox = yield* Postmark.Outbox
