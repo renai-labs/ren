@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers"
 import { Effect, Exit, Schema, Scope } from "effect"
+import { Brain } from "./brain.js"
 import { Env } from "./env.js"
 import { OpenCodeHarness } from "./harness/opencode/harness.js"
 import { Lease } from "./lease.js"
@@ -17,6 +18,7 @@ export class SessionCell extends DurableObject {
     (harness) => harness.close,
   )
   readonly activity: Activity = { requests: 0, waiting: undefined }
+  readonly brain = Brain.make(this.ctx.id.name, this.harness.acquire)
 
   override async fetch(request: Request) {
     const url = new URL(request.url)
@@ -31,6 +33,7 @@ export class SessionCell extends DurableObject {
     }
     this.activity.requests += 1
     if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + this.vars.ALARM_INTERVAL_MS)
+    if (url.pathname === "/ren" || url.pathname.startsWith("/ren/")) return this.brain(request)
     const scope = Scope.makeUnsafe()
     const release = () => Effect.runPromise(Scope.close(scope, Exit.void))
     const response = await Effect.runPromise(

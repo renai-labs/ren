@@ -22,7 +22,10 @@ export const vars = () => ({
       stub: {
         package: "@ai-sdk/openai-compatible",
         settings: { baseURL: stub().cellUrl, apiKey: "stub-key" },
-        models: { "stub-model": { name: "Stub", limit: { context: 100_000, output: 4000 } } },
+        models: {
+          "stub-model": { name: "Stub", limit: { context: 100_000, output: 4000 }, variants: [{ id: "high" }] },
+          "stub-other": { name: "Stub Other", limit: { context: 100_000, output: 4000 } },
+        },
       },
     },
   }),

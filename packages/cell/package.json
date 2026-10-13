@@ -13,7 +13,9 @@
   "dependencies": {
     "@opencode/client": "catalog:",
     "@opencode/core": "catalog:",
+    "@opencode/plugin": "catalog:",
     "@opencode/server": "catalog:",
+    "@ren/protocol": "workspace:*",
     "@ren/schema": "workspace:*",
     "effect": "catalog:"
   },

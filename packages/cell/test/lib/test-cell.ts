@@ -38,6 +38,12 @@ export const make = async (url: string) => {
   return {
     id,
     client,
+    brain: (path: string, body: unknown, authorization = server) =>
+      fetch(`${url}${path}`, {
+        method: "POST",
+        headers: { authorization, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
     server,
     opencode,
     state,
