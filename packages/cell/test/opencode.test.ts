@@ -355,13 +355,13 @@ describe("OpenCode in a cell", () => {
   })
 
   describe("after a crash", () => {
-    const state = {
-      finished: undefined as Session | undefined,
-      finishedMessages: [] as Awaited<ReturnType<Session["messages"]>>,
-      cut: undefined as Session | undefined,
-      cutMarker: "",
-      queuedMarker: "",
-    }
+    const state: {
+      finished: Session | undefined
+      finishedMessages: Awaited<ReturnType<Session["messages"]>>
+      cut: Session | undefined
+      cutMarker: string
+      queuedMarker: string
+    } = { finished: undefined, finishedMessages: [], cut: undefined, cutMarker: "", queuedMarker: "" }
 
     beforeAll(async () => {
       const finished = await session()

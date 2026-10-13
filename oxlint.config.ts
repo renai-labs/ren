@@ -34,6 +34,18 @@ const packageBoundaries = [
     message: "The cell bundle runs in workerd. It depends only on schema and protocol.",
   },
   {
+    files: ["packages/cell/src/*.ts"],
+    regex: "^(@ren/(core|db|server)(/|$)|@opencode/)",
+    message:
+      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema and protocol.",
+  },
+  {
+    files: ["packages/cell/src/harness/**"],
+    regex: "^(@ren/(core|db|server)(/|$)|cloudflare:)",
+    message:
+      "A harness never uses Durable Object APIs; the host passes it storage and requests. The cell depends only on schema and protocol.",
+  },
+  {
     files: ["packages/server/src/handlers/**"],
     regex: "^@ren/db(/|$)",
     message: "Handlers decode, call a core service and map errors. Queries belong in core.",
