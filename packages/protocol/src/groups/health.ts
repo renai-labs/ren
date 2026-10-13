@@ -4,7 +4,7 @@ import { Exposure } from "../exposure.js"
 
 export const HealthGroup = HttpApiGroup.make("health")
   .add(
-    HttpApiEndpoint.get("health.get", "/api/health", {
+    HttpApiEndpoint.get("health.get", "/health", {
       success: Health.Info,
     }).annotateMerge(
       OpenApi.annotations({

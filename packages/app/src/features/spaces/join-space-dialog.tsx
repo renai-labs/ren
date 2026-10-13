@@ -27,7 +27,7 @@ export function JoinSpaceDialog(props: { spaces: ReadonlyArray<SpaceInfo>; userI
           Toast.manager.add({ type: "success", title: `Joined ${space.name}` })
           props.onClose()
           void queryClient.invalidateQueries({ queryKey: context.api.space.list.queryKey() })
-          void navigate({ to: "/sessions/spaces/$spaceId", params: { spaceId: space.id } })
+          void navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } })
         },
       },
     )

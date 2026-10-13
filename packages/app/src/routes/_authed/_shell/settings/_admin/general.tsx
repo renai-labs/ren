@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { GeneralSettings } from "../../../../../../features/organization/general-settings.js"
+import { GeneralSettings } from "../../../../../features/organization/general-settings.js"
 
-export const Route = createFileRoute("/_authed/_shell/sessions/settings/_admin/general")({
+export const Route = createFileRoute("/_authed/_shell/settings/_admin/general")({
   head: () => ({ meta: [{ title: "General · Ren" }] }),
   component: GeneralPage,
 })

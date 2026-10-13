@@ -13,7 +13,7 @@ import { authRequest, makeApp, sessionCookie, signUp } from "./lib/app.js"
 const ScopedApi = HttpApi.make("scoped").add(
   HttpApiGroup.make("test.scoped")
     .add(
-      HttpApiEndpoint.get("organization", "/api/test/organization", {
+      HttpApiEndpoint.get("organization", "/test/organization", {
         success: Schema.Struct({ id: Schema.String }),
         error: [UnauthorizedError, ForbiddenError],
       }),
@@ -41,7 +41,7 @@ const app = makeApp(Layer.mergeAll(Routes.layer, ScopedRoutes))
 afterAll(() => app.dispose())
 
 const organization = (cookie: string) =>
-  app.handler(new Request("http://localhost:4000/api/test/organization", { headers: { cookie } }))
+  app.handler(new Request("http://localhost:4000/test/organization", { headers: { cookie } }))
 
 describe("ActiveOrganization", () => {
   test("provides the active organization", async () => {

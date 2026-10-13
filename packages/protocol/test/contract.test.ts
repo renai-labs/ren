@@ -16,5 +16,5 @@ test("rejects a primitive group that omits a declared operation", () => {
     archive: true,
   } as const
   const api = HttpApi.make("test").add(Primitive.group(definition, "sdk", [Primitive.get(definition)]))
-  expect(checkContract(api)).toEqual(["thing is missing DELETE /api/things/:id thing.archive"])
+  expect(checkContract(api)).toEqual(["thing is missing DELETE /things/:id thing.archive"])
 })

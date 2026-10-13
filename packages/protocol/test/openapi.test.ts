@@ -5,7 +5,7 @@ import { stabilizeOpenApi } from "../script/openapi-stabilize.js"
 
 describe("OpenAPI", () => {
   test("documents the health endpoint", () => {
-    expect(OpenApi.fromApi(ClientApi).paths["/api/health"]?.get?.operationId).toBe("health.get")
+    expect(OpenApi.fromApi(ClientApi).paths["/health"]?.get?.operationId).toBe("health.get")
   })
 
   test("sorts component schemas", () => {

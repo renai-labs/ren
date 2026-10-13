@@ -9,7 +9,7 @@ import type { Platform } from "../platform/platform.js"
 
 export function createClient(platform: Platform.Info) {
   return createAuthClient({
-    baseURL: `${platform.serverUrl}/api/auth`,
+    baseURL: `${platform.serverUrl}/auth`,
     ...(platform.fetch && { fetchOptions: { customFetchImpl: platform.fetch } }),
     plugins: [organizationClient(), emailOTPClient()],
   })

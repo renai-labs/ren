@@ -83,10 +83,10 @@ export function WorkspaceSearch(props: { onClose: () => void }) {
     const link = externalLinks[value]
     if (link !== undefined) return platform.openExternal(link)
     if (value === "light" || value === "dark" || value === "system") return theme.setPreference(value)
-    if (value === "new-chat") return void navigate({ to: "/sessions" })
-    if (value === "spaces") return void navigate({ to: "/sessions/spaces" })
+    if (value === "new-chat") return void navigate({ to: "/" })
+    if (value === "spaces") return void navigate({ to: "/spaces" })
     const page = [...SettingsPages.personal, ...SettingsPages.organization].find((entry) => entry.to === value)
-    void navigate({ to: page?.to ?? "/sessions/settings" })
+    void navigate({ to: page?.to ?? "/settings" })
   }
   return (
     <Dialog.Root open onOpenChange={(open) => (open ? undefined : props.onClose())}>

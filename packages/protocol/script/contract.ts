@@ -23,7 +23,7 @@ const checkGroup = (group: HttpApiGroup.Top) => {
   const annotation = Context.getOption(group.annotations, Primitive.Annotation)
   if (Option.isNone(annotation)) return [`${group.identifier} is neither a primitive nor a listed exception`]
   const definition = annotation.value
-  const path = `/api/${definition.plural}`
+  const path = `/${definition.plural}`
   const expected = [
     ...operations
       .filter((operation) => operation.name in definition)

@@ -35,7 +35,7 @@ export const makeApp = (routes: typeof Routes.layer = Routes.layer, options?: { 
   )
 
 export const authRequest = (path: string, body: unknown, cookie = "") =>
-  new Request(`http://localhost:4000/api/auth${path}`, {
+  new Request(`http://localhost:4000/auth${path}`, {
     method: "POST",
     headers: { "content-type": "application/json", origin: "http://localhost:4000", cookie },
     body: JSON.stringify(body),

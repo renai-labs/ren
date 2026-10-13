@@ -12,7 +12,7 @@ test("previews a pending invitation without signing in or exposing the invitee",
   )
   const invitation = await invited.json()
 
-  const response = await app.handler(new Request(`http://localhost:4000/api/invitations/${invitation.id}/preview`))
+  const response = await app.handler(new Request(`http://localhost:4000/invitations/${invitation.id}/preview`))
   expect(response.status).toBe(200)
   expect(await response.json()).toEqual({
     state: "pending",

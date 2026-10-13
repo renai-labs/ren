@@ -25,7 +25,7 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
       heading="entity"
       context={
         <Breadcrumbs.Root>
-          <Breadcrumbs.Link render={<Link to="/sessions/spaces" />}>Spaces</Breadcrumbs.Link>
+          <Breadcrumbs.Link render={<Link to="/spaces" />}>Spaces</Breadcrumbs.Link>
           <Breadcrumbs.Page>{space.data.name}</Breadcrumbs.Page>
         </Breadcrumbs.Root>
       }
@@ -35,13 +35,10 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
       actions={<SpaceMenu space={space.data} />}
       navigation={
         <Tabs.Navigation label={space.data.name}>
-          <Tabs.Link render={<Link to="/sessions/spaces/$spaceId" params={params} activeOptions={{ exact: true }} />}>
+          <Tabs.Link render={<Link to="/spaces/$spaceId" params={params} activeOptions={{ exact: true }} />}>
             Overview
           </Tabs.Link>
-          <Tabs.Link
-            render={<Link to="/sessions/spaces/$spaceId/members" params={params} />}
-            count={space.data.memberCount}
-          >
+          <Tabs.Link render={<Link to="/spaces/$spaceId/members" params={params} />} count={space.data.memberCount}>
             Members
           </Tabs.Link>
         </Tabs.Navigation>
@@ -92,7 +89,7 @@ function SpaceMenu(props: { space: SpaceInfo }) {
         }}
         onConfirmed={() => {
           Toast.manager.add({ type: "success", title: `${props.space.name} archived` })
-          void navigate({ to: "/sessions/spaces" })
+          void navigate({ to: "/spaces" })
         }}
       />
     </>

@@ -13,7 +13,7 @@ export function ApplicationSidebarBrand() {
   if (navigation.collapsed) return null
   return (
     <div className="flex min-w-0 flex-1 px-2">
-      <Link to="/sessions" activeOptions={{ exact: true }} aria-label="Ren home" onClick={navigation.dismiss}>
+      <Link to="/" activeOptions={{ exact: true }} aria-label="Ren home" onClick={navigation.dismiss}>
         <span className="flex items-center gap-2">
           <Logotype label="" />
           <Text purpose="heading" element="span">
@@ -31,10 +31,10 @@ export function ApplicationSidebar(props: { onSearch: () => void }) {
     <>
       <ApplicationShell.NavigationSection>
         <ApplicationShell.NavigationItem
-          current={pathname === "/sessions"}
+          current={pathname === "/"}
           icon={<Icon glyph="Compose" />}
           label="New chat"
-          render={<Link to="/sessions" activeOptions={{ exact: true }} />}
+          render={<Link to="/" activeOptions={{ exact: true }} />}
         />
         <ApplicationShell.NavigationItem
           icon={<Icon glyph="Search" />}
@@ -44,10 +44,10 @@ export function ApplicationSidebar(props: { onSearch: () => void }) {
           onActivate={props.onSearch}
         />
         <ApplicationShell.NavigationItem
-          current={pathname.startsWith("/sessions/spaces")}
+          current={pathname.startsWith("/spaces")}
           icon={<Icon glyph="Cube" />}
           label="Spaces"
-          render={<Link to="/sessions/spaces" />}
+          render={<Link to="/spaces" />}
         />
       </ApplicationShell.NavigationSection>
       <ApplicationShell.NavigationSection
@@ -55,7 +55,7 @@ export function ApplicationSidebar(props: { onSearch: () => void }) {
         scrolling="contained"
         collapsedVisibility="hidden"
         actions={
-          <IconButton label="New chat" render={<Link to="/sessions" activeOptions={{ exact: true }} />}>
+          <IconButton label="New chat" render={<Link to="/" activeOptions={{ exact: true }} />}>
             <Icon glyph="Plus" />
           </IconButton>
         }

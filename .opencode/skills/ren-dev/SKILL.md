@@ -9,13 +9,13 @@ description: Use when running, debugging, or verifying Ren itself during develop
 
 - Postgres: `docker compose up -d` from the repo root. Connection: `postgres://ren:ren@localhost:54320/ren` (`DATABASE_URL`).
 - API server: `bun run dev` from the repo root (port 4000, override with `PORT`). Logs go to stdout.
-- Web app: `bun run dev:app`. Vite proxies `/api` to the API server.
+- Web app: `bun run dev:app`. Vite proxies the API routes (`/auth`, `/spaces`, `/me`, …) to the API server; browser page loads (`Accept: text/html`) still get the SPA.
 - Docs site: `bun run dev:site`.
 
 ## Checking the server
 
 ```sh
-curl localhost:4000/api/health
+curl localhost:4000/health
 curl localhost:4000/openapi.json
 REN_URL=http://localhost:4000 bun run --cwd packages/cli dev health
 ```

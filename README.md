@@ -35,7 +35,7 @@ bun run check
 bun run dev
 ```
 
-`bun run dev` starts the API on `http://localhost:4000`. Try `curl localhost:4000/api/health`.
+`bun run dev` starts the API on `http://localhost:4000`. Try `curl localhost:4000/health`.
 
 Run tests from a package directory:
 

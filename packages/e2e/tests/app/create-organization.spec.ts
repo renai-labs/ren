@@ -8,7 +8,7 @@ test("creates an organization from the profile card and switches to it", async (
     email: `ada@${company.toLowerCase()}.com`,
     password: "correct horse battery",
   })
-  await page.goto("/sessions")
+  await page.goto("/")
   await page.getByRole("combobox", { name: `Switch organization (current: ${company})` }).click()
   await page.getByRole("button", { name: "Create organization" }).click()
 
@@ -28,6 +28,6 @@ test("creates an organization from the profile card and switches to it", async (
   await expect(dialog.getByText(name.toLowerCase().replace(" ", "-"), { exact: true })).toBeVisible()
   await dialog.getByRole("button", { name: "Create organization" }).click()
   await expect(dialog).toBeHidden()
-  await expect(page).toHaveURL(`${appURL}/sessions`)
+  await expect(page).toHaveURL(`${appURL}/`)
   await expect(page.getByRole("combobox", { name: `Switch organization (current: ${name})` })).toBeVisible()
 })

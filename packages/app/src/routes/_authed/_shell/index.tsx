@@ -1,8 +1,12 @@
-import { createFileRoute, redirect } from "@tanstack/react-router"
+import { PageShell } from "@ren/ui/page-shell"
+import { createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_authed/_shell/")({
-  head: () => ({ meta: [{ title: "Ren" }] }),
-  beforeLoad: (options) => {
-    throw redirect({ to: "/sessions", search: options.search, replace: true })
-  },
+  head: () => ({ meta: [{ title: "New chat · Ren" }] }),
+  component: NewChat,
 })
+
+function NewChat() {
+  const context = Route.useRouteContext()
+  return <PageShell.Root title={`Welcome, ${context.me.user.name}`}>{null}</PageShell.Root>
+}

@@ -31,7 +31,7 @@ export const list = <
   definition: Named<Name, Plural> & { readonly list: { readonly input: Input; readonly page: Page } },
 ) => {
   const identifier = `${definition.name}.list` as const
-  return HttpApiEndpoint.get(identifier, `/api/${definition.plural}`, {
+  return HttpApiEndpoint.get(identifier, `/${definition.plural}`, {
     query: definition.list.input,
     success: definition.list.page,
   }).annotateMerge(
@@ -47,7 +47,7 @@ export const get = <const Name extends string, const Plural extends string, Info
   definition: Named<Name, Plural> & { readonly info: Info; readonly get: true },
 ) => {
   const identifier = `${definition.name}.get` as const
-  return HttpApiEndpoint.get(identifier, `/api/${definition.plural}/:idOrSlug`, {
+  return HttpApiEndpoint.get(identifier, `/${definition.plural}/:idOrSlug`, {
     params: { idOrSlug: Schema.String },
     success: definition.info,
     error: NotFoundError,
@@ -69,7 +69,7 @@ export const create = <
   definition: Named<Name, Plural> & { readonly create: { readonly input: Input; readonly result: Result } },
 ) => {
   const identifier = `${definition.name}.create` as const
-  return HttpApiEndpoint.post(identifier, `/api/${definition.plural}`, {
+  return HttpApiEndpoint.post(identifier, `/${definition.plural}`, {
     payload: definition.create.input,
     success: definition.create.result,
     error: [NotFoundError, ForbiddenError, ConflictError],
@@ -92,7 +92,7 @@ export const update = <
   definition: Identified<Name, Plural, ID> & { readonly update: { readonly input: Input; readonly result: Result } },
 ) => {
   const identifier = `${definition.name}.update` as const
-  return HttpApiEndpoint.patch(identifier, `/api/${definition.plural}/:id`, {
+  return HttpApiEndpoint.patch(identifier, `/${definition.plural}/:id`, {
     params: { id: definition.id },
     payload: definition.update.input,
     success: definition.update.result,
@@ -115,7 +115,7 @@ export const archive = <
   definition: Identified<Name, Plural, ID> & { readonly info: Info; readonly archive: true },
 ) => {
   const identifier = `${definition.name}.archive` as const
-  return HttpApiEndpoint.delete(identifier, `/api/${definition.plural}/:id`, {
+  return HttpApiEndpoint.delete(identifier, `/${definition.plural}/:id`, {
     params: { id: definition.id },
     success: definition.info,
     error: [NotFoundError, ForbiddenError],
@@ -142,7 +142,7 @@ export const action = <
   action: Action,
 ) => {
   const identifier = `${definition.name}.${action}` as const
-  return HttpApiEndpoint.post(identifier, `/api/${definition.plural}/:id/${action}`, {
+  return HttpApiEndpoint.post(identifier, `/${definition.plural}/:id/${action}`, {
     params: { id: definition.id },
     payload: definition.actions[action].input,
     success: definition.actions[action].result,

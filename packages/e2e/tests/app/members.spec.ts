@@ -3,7 +3,7 @@ import { addMember, appURL, createOrganization, lastEmail, uniqueEmail } from ".
 
 test("an owner invites people, then resends and revokes an invitation", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/sessions/settings/members")
+  await page.goto("/settings/members")
   await expect(page.getByRole("heading", { level: 1, name: "Members" })).toBeVisible()
   await expect(page.getByRole("row", { name: /Grace Hopper/ })).toContainText("You")
   await expect(page.getByRole("combobox", { name: "Role for Grace Hopper" })).toBeDisabled()
@@ -26,7 +26,7 @@ test("an owner invites people, then resends and revokes an invitation", async ({
   const invitations = page.getByRole("tab", { name: /Invitations/ })
   await expect(invitations).toContainText("2")
   await invitations.click()
-  await expect(page).toHaveURL(`${appURL}/sessions/settings/members?tab=invitations`)
+  await expect(page).toHaveURL(`${appURL}/settings/members?tab=invitations`)
   await expect(page.getByRole("row", { name: new RegExp(first) })).toContainText("Expires")
 
   await page
@@ -57,7 +57,7 @@ test("an owner changes a member’s role, then removes them", async ({ page, req
   await createOrganization(page.request, { name: "Grace Hopper" })
   const alan = uniqueEmail("member")
   await addMember(page.request, request, { name: "Alan Turing", email: alan })
-  await page.goto("/sessions/settings/members")
+  await page.goto("/settings/members")
 
   await page.getByRole("button", { name: "Add member" }).click()
   const dialog = page.getByRole("dialog", { name: "Add members" })

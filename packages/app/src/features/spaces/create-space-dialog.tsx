@@ -27,7 +27,7 @@ export function CreateSpaceDialog(props: { onClose: () => void }) {
       if (!space) return
       await queryClient.invalidateQueries({ queryKey: context.api.space.list.queryKey() })
       props.onClose()
-      await navigate({ to: "/sessions/spaces/$spaceId", params: { spaceId: space.id } })
+      await navigate({ to: "/spaces/$spaceId", params: { spaceId: space.id } })
     },
   })
   return (

@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 
-export const Route = createFileRoute("/_authed/_shell/sessions/settings/")({
+export const Route = createFileRoute("/_authed/_shell/settings/")({
   head: () => ({ meta: [{ title: "Settings · Ren" }] }),
   beforeLoad: () => {
-    throw redirect({ to: "/sessions/settings/preferences", replace: true })
+    throw redirect({ to: "/settings/preferences", replace: true })
   },
 })

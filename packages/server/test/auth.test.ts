@@ -7,7 +7,7 @@ afterAll(() => app.dispose())
 
 test("allows credentialed requests from trusted origins", async () => {
   const response = await app.handler(
-    new Request("http://localhost:4000/api/auth/sign-up/email", {
+    new Request("http://localhost:4000/auth/sign-up/email", {
       method: "POST",
       headers: { "content-type": "application/json", origin },
       body: JSON.stringify({ email: "grace@example.com", password: "correct horse battery staple", name: "Grace" }),
