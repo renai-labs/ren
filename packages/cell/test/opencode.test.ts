@@ -3,14 +3,14 @@ import path from "path"
 import { OpenCode } from "@opencode/client"
 import { Celld } from "./lib/celld.js"
 import { Shared } from "./lib/shared.js"
+import { StubModel } from "./lib/stub-model.js"
 import { TestToken } from "./lib/token.js"
 
 const celld = await Celld.make(Shared.vars(), "test/worker/worker.ts")
 afterAll(celld.dispose)
 
 const stub = Shared.stub()
-const restarted =
-  "The server restarted while you were working. Continue from where you left off without repeating completed work."
+const restarted = StubModel.restarted
 const question = {
   questions: [{ question: "Which one?", header: "Pick", options: [{ label: "A", description: "a" }] }],
 }
@@ -305,6 +305,7 @@ describe("OpenCode in a cell", () => {
       const opened = asked.opened
       const script = asked.script
       expect(await opened.client.session.form.list({ sessionID: opened.id })).toHaveLength(1)
+      script.set({ reply: "resumed without an answer" })
       expect((await opened.close()).status).toBe(204)
       expect(await opened.client.session.form.list({ sessionID: opened.id })).toEqual([])
       await stub.waitFor((call) => mentions(script.marker)(call) && call.text === restarted)

@@ -12,7 +12,7 @@ interface Behaviour {
   readonly tool?: { readonly name: string; readonly input: unknown }
 }
 
-interface Call {
+export interface Call {
   readonly kind: "title" | "turn"
   readonly marker: string | undefined
   readonly text: string
@@ -62,6 +62,9 @@ const text = (content: typeof Content.Type | undefined) => {
 
 const markerPattern = /stub_[0-9a-f]{12}/
 
+export const restarted =
+  "The server restarted while you were working. Continue from where you left off without repeating completed work."
+
 const encoder = new TextEncoder()
 
 const frame = (data: unknown) => encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
@@ -89,10 +92,13 @@ const toCall = (body: ChatRequest, authorization: string | null): Call => {
     .filter((message) => message.role === "system")
     .map((message) => text(message.content))
     .join("\n")
-  const prompt = text(body.messages.findLast((message) => message.role === "user")?.content)
+  const prompts = body.messages.filter((message) => message.role === "user").map((message) => text(message.content))
+  const prompt = prompts.at(-1) ?? ""
   return {
     kind: system.includes("title generator") ? "title" : "turn",
-    marker: prompt.match(markerPattern)?.[0],
+    marker: (prompt === restarted ? prompts.findLast((candidate) => markerPattern.test(candidate)) : prompt)?.match(
+      markerPattern,
+    )?.[0],
     text: prompt,
     system,
     tools: body.tools?.map((tool) => tool.function.name) ?? [],
