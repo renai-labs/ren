@@ -213,7 +213,11 @@ export const make = (input: Input) => {
     emailVerification: { sendOnSignIn: true, autoSignInAfterVerification: true },
     hooks: { before: guardRequests(input) },
     socialProviders: {
-      google: { clientId: input.google.clientId, clientSecret: input.google.clientSecret },
+      google: {
+        clientId: input.google.clientId,
+        clientSecret: input.google.clientSecret,
+        requireEmailVerification: true,
+      },
     },
     account: {
       accountLinking: { enabled: true, trustedProviders: ["google"] },
