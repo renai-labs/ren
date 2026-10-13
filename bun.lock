@@ -70,6 +70,7 @@
         "@opencode/client": "catalog:",
         "@opencode/core": "catalog:",
         "@opencode/plugin": "catalog:",
+        "@opencode/schema": "catalog:",
         "@opencode/server": "catalog:",
         "@ren/brain-api": "workspace:*",
         "@ren/schema": "workspace:*",
@@ -196,6 +197,7 @@
       "name": "@ren/schema",
       "version": "0.0.0",
       "dependencies": {
+        "@opencode/schema": "catalog:",
         "effect": "catalog:",
         "ulid": "catalog:",
       },
@@ -343,6 +345,7 @@
     "@opencode/client": "2.0.27",
     "@opencode/core": "2.0.27",
     "@opencode/plugin": "2.0.27",
+    "@opencode/schema": "2.0.27",
     "@opencode/server": "2.0.27",
     "@playwright/test": "1.63.0",
     "@rolldown/plugin-babel": "0.2.4",

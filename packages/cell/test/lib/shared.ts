@@ -28,6 +28,11 @@ export const vars = (baseURL = stub().cellUrl) => ({
           "stub-other": { name: "Stub Other", limit: { context: 100_000, output: 4000 } },
         },
       },
+      anthropic: {
+        package: "@ai-sdk/anthropic",
+        settings: { baseURL },
+        models: { "stub-claude": { name: "Stub Claude", limit: { context: 100_000, output: 4000 } } },
+      },
     },
   }),
 })

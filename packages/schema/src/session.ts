@@ -1,5 +1,7 @@
 export * as Session from "./session.js"
 
+import { Credential } from "@opencode/schema/credential"
+import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Effect, Schema } from "effect"
 import { Identifier } from "./identifier.js"
 
@@ -27,9 +29,7 @@ export const Context = Schema.Record(
   Schema.String,
   Schema.String.check(
     Schema.makeFilter(
-      (value) =>
-        encoder.encode(JSON.stringify(value)).length <= 256 * 1024 ||
-        "a context value is at most 256 KiB",
+      (value) => encoder.encode(JSON.stringify(value)).length <= 256 * 1024 || "a context value is at most 256 KiB",
     ),
   ),
 )
@@ -43,6 +43,17 @@ export const Context = Schema.Record(
   .annotate({ identifier: "Session.Context" })
 export type Context = typeof Context.Type
 
+export const ManagedMethod = IntegrationMethodID.make("ren")
+
+export const Credentials = Schema.Record(Schema.String, Credential.Value)
+  .check(
+    Schema.makeFilter(
+      (credentials) => Object.keys(credentials).every((key) => key.length > 0) || "a provider id is not empty",
+    ),
+  )
+  .annotate({ identifier: "Session.Credentials" })
+export type Credentials = typeof Credentials.Type
+
 export interface StartInput extends Schema.Schema.Type<typeof StartInput> {}
 export const StartInput = Schema.Struct({
   sessionId: ID,
@@ -51,6 +62,7 @@ export const StartInput = Schema.Struct({
   agent: Schema.optionalKey(Schema.NonEmptyString),
   model: Schema.optionalKey(Model),
   context: Context.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
+  credentials: Credentials.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
   interactive: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
 }).annotate({ identifier: "Session.StartInput" })
 
@@ -79,6 +91,7 @@ export const SendInput = Schema.Struct({
   prompt: Prompt,
   delivery: Delivery.pipe(Schema.withDecodingDefaultKey(Effect.succeed("steer" as const))),
   sender: Sender,
+  credentials: Schema.optionalKey(Credentials),
 }).annotate({ identifier: "Session.SendInput" })
 
 export interface Started extends Schema.Schema.Type<typeof Started> {}

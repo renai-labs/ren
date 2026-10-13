@@ -480,4 +480,205 @@ describe("Brain API", () => {
       expect(script.calls[0]?.tools.filter((tool) => removed.has(tool))).toEqual([])
     })
   })
+
+  describe("credentials", () => {
+    const key = (value: string) => ({ type: "key", key: value })
+    const managed = (access: string, expires: number) => ({
+      type: "oauth",
+      methodID: "ren",
+      access,
+      refresh: "",
+      expires,
+    })
+    const hour = 60 * 60 * 1000
+    const turn = async (opened: Awaited<ReturnType<typeof cell>>, input: Record<string, unknown> = {}) => {
+      const script = stub.script()
+      await opened.send(`key ${script.marker}`, input)
+      await opened.wait()
+      return script.calls[0]?.authorization
+    }
+
+    test("the first turn's model call and its title call carry the key from start", async () => {
+      const opened = await cell()
+      await opened.started({ credentials: { stub: key("sk-start") } })
+      const script = stub.script()
+      await opened.send(`hello ${script.marker}`)
+      await opened.wait()
+      const calls = stub.calls.filter((call) => call.marker === script.marker)
+      expect(calls.map((call) => call.kind).toSorted()).toEqual(["title", "turn"])
+      expect(calls.map((call) => call.authorization)).toEqual(["Bearer sk-start", "Bearer sk-start"])
+    })
+
+    test("a subagent's model call carries the key from start", async () => {
+      const opened = await cell()
+      await opened.started({ credentials: { stub: key("sk-start") } })
+      const child = stub.script({ reply: "child done" })
+      const parent = stub.script({
+        tool: {
+          name: "subagent",
+          input: { agent: "general", description: "child task", prompt: `work ${child.marker}` },
+        },
+      })
+      await opened.send(`delegate ${parent.marker}`)
+      await opened.wait()
+      expect(child.calls.map((call) => call.authorization)).toEqual(["Bearer sk-start"])
+    })
+
+    test("a send with a newer Ren-managed key: the next model call carries it, even in the middle of a turn", async () => {
+      const opened = await cell()
+      await opened.started({ credentials: { stub: managed("sk-first", Date.now() + hour) } })
+      const first = stub.script({ hold: true })
+      const second = stub.script()
+      await opened.send(`first ${first.marker}`)
+      await first.called()
+      await opened.send(`second ${second.marker}`, {
+        credentials: { stub: managed("sk-second", Date.now() + 2 * hour) },
+      })
+      first.release()
+      await opened.wait()
+      expect([first.calls[0]?.authorization, second.calls[0]?.authorization]).toEqual([
+        "Bearer sk-first",
+        "Bearer sk-second",
+      ])
+      expect(TestCell.kinds(await opened.messages()).filter((kind) => kind.startsWith("idle"))).toEqual([
+        "idle:succeeded",
+      ])
+    })
+
+    test("a send with an older Ren-managed key, or with no credentials, leaves the stored key", async () => {
+      const opened = await cell()
+      await opened.started({ credentials: { stub: managed("sk-newer", Date.now() + 2 * hour) } })
+      expect([
+        await turn(opened, { credentials: { stub: managed("sk-older", Date.now() + hour) } }),
+        await turn(opened),
+      ]).toEqual(["Bearer sk-newer", "Bearer sk-newer"])
+    })
+
+    test("a send naming one provider leaves the others' credentials", async () => {
+      const opened = await cell()
+      await opened.started({ credentials: { stub: key("sk-stub"), anthropic: key("sk-ant") } })
+      expect(await turn(opened, { credentials: { stub: key("sk-stub-2") } })).toBe("Bearer sk-stub-2")
+      const stored = await fetch(`${celld.url}/api/credential`, { headers: { authorization: opened.server } })
+      expect(await stored.json()).toMatchObject({
+        data: expect.arrayContaining([
+          expect.objectContaining({ integrationID: "anthropic", value: { type: "key", key: "sk-ant" } }),
+        ]),
+      })
+    })
+
+    test("a second start that leaves a provider out removes its credential", async () => {
+      const opened = await cell()
+      await opened.started({ credentials: { stub: key("sk-start") } })
+      await opened.started({ credentials: {} })
+      expect(await turn(opened)).toBe("Bearer stub-key")
+    })
+
+    test("a second start with another key for a provider replaces it", async () => {
+      const opened = await cell()
+      await opened.started({ credentials: { stub: key("sk-first") } })
+      await opened.started({ credentials: { stub: key("sk-second") } })
+      expect(await turn(opened)).toBe("Bearer sk-second")
+    })
+
+    test("a repeated start with Ren's older copy of an oauth credential keeps the cell's newer one", async () => {
+      const opened = await cell()
+      const older = { credentials: { stub: managed("sk-older", Date.now() + hour) } }
+      await opened.started(older)
+      expect(await turn(opened, { credentials: { stub: managed("sk-newer", Date.now() + 2 * hour) } })).toBe(
+        "Bearer sk-newer",
+      )
+      await opened.started(older)
+      expect(await turn(opened)).toBe("Bearer sk-newer")
+    })
+
+    test("an expired Ren-managed key fails the turn without a model call, naming the provider and the expiry, and a send with a fresh key runs the next turn", async () => {
+      const opened = await cell()
+      const expired = Date.now() - 1000
+      await opened.started({ credentials: { stub: managed("sk-expired", expired) } })
+      const script = stub.script()
+      await opened.send(`expired ${script.marker}`)
+      await opened.wait()
+      expect(script.calls).toEqual([])
+      expect((await opened.messages()).at(-1)).toMatchObject({
+        type: "idle",
+        outcome: "failed",
+        error: {
+          message: expect.stringContaining(
+            `The model key for provider stub expired at ${new Date(expired).toISOString()}`,
+          ),
+        },
+      })
+      expect(await turn(opened, { credentials: { stub: managed("sk-fresh", Date.now() + hour) } })).toBe(
+        "Bearer sk-fresh",
+      )
+    })
+
+    test("a Ren-managed key within five minutes of its expiry is still used", async () => {
+      const opened = await cell()
+      await opened.started({ credentials: { stub: managed("sk-soon", Date.now() + 2 * 60 * 1000) } })
+      expect(await turn(opened)).toBe("Bearer sk-soon")
+    })
+
+    test("credentials for a provider OpenCode does not know answer BrainRejectedError and change nothing", async () => {
+      const opened = await cell()
+      const response = await opened.start({ credentials: { stub: key("sk-start"), nobody: key("sk-nobody") } })
+      expect(await answer(response)).toMatchObject({
+        status: 422,
+        body: { _tag: "BrainRejectedError", message: "Unknown provider: nobody" },
+      })
+      const stored = await fetch(`${celld.url}/api/credential`, { headers: { authorization: opened.server } })
+      expect(await stored.json()).toMatchObject({ data: [] })
+      expect((await opened.opencode.session.list()).data).toEqual([])
+    })
+
+    test("a key for the built-in anthropic provider reaches the model as x-api-key", async () => {
+      const opened = await cell()
+      await opened.started({
+        model: { providerId: "anthropic", modelId: "stub-claude" },
+        credentials: { anthropic: key("sk-ant") },
+      })
+      const script = stub.script({ reply: "from claude" })
+      await opened.send(`claude ${script.marker}`)
+      await opened.wait()
+      expect(script.calls[0]).toMatchObject({ apiKey: "sk-ant", authorization: null })
+      expect(await opened.info()).toMatchObject({ outcome: "succeeded" })
+    })
+
+    test("credentials never appear in the Brain API's answers or in /cell/state", async () => {
+      const opened = await cell()
+      const started = await (await opened.start({ credentials: { stub: key("sk-secret") } })).text()
+      const sent = await (
+        await opened.send("hello", { credentials: { stub: managed("sk-secret-2", Date.now() + hour) } })
+      ).text()
+      const state = JSON.stringify(await opened.state())
+      expect([started, sent, state].filter((body) => body.includes("sk-secret"))).toEqual([])
+    })
+
+    test("a client token gets 403 on OpenCode's credential routes and integration connect routes, and a server token reaches them", async () => {
+      const opened = await cell()
+      const client = TestToken.basic(opened.client)
+      const routes = [
+        { method: "GET", path: "/api/credential" },
+        { method: "POST", path: "/api/credential" },
+        { method: "DELETE", path: "/api/credential/cred_ren_stub" },
+        { method: "POST", path: "/api/integration/stub/connect/key" },
+        { method: "POST", path: "/api/integration/stub/connect/oauth" },
+        { method: "POST", path: "/api/experimental/integration/wellknown" },
+      ]
+      const statuses = await Promise.all(
+        routes.map(async (route) => {
+          const response = await fetch(`${celld.url}${route.path}`, {
+            method: route.method,
+            headers: { authorization: client },
+          })
+          return response.status
+        }),
+      )
+      expect(statuses).toEqual(routes.map(() => 403))
+      const listed = await fetch(`${celld.url}/api/credential`, { headers: { authorization: opened.server } })
+      expect(listed.status).toBe(200)
+      const integrations = await fetch(`${celld.url}/api/integration`, { headers: { authorization: client } })
+      expect(integrations.status).toBe(200)
+    })
+  })
 })

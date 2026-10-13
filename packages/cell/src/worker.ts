@@ -5,6 +5,13 @@ import { Token } from "./token.js"
 
 export { SessionCell } from "./session-cell.js"
 
+const serverOnly = [
+  /^\/(cell|ren)(\/|$)/,
+  /^\/api\/credential(\/|$)/,
+  /^\/api\/integration\/[^/]+\/connect(\/|$)/,
+  /^\/api\/experimental\/integration(\/|$)/,
+]
+
 interface Bindings {
   readonly SESSION_CELL: DurableObjectNamespace<SessionCell>
 }
@@ -22,7 +29,7 @@ export default {
         if (Option.isNone(claims))
           return Response.json({ _tag: "UnauthorizedError", message: "Authentication required" }, { status: 401 })
         const path = new URL(request.url).pathname
-        if (/^\/(cell|ren)(\/|$)/.test(path) && claims.value.scope !== "server")
+        if (serverOnly.some((pattern) => pattern.test(path)) && claims.value.scope !== "server")
           return new Response(null, { status: 403 })
         const headers = new Headers(request.headers)
         headers.delete("authorization")
