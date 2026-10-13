@@ -9,14 +9,15 @@ const decodes = (vars: Record<string, string>) =>
   Option.isSome(Schema.decodeUnknownOption(Env.Vars)({ ...TestToken.vars, ...vars }))
 
 describe("worker env", () => {
-  test("defaults the alarm interval to 30 s and the wait budget to 10 min", () => {
-    expect(decode({})).toMatchObject({ ALARM_INTERVAL_MS: 30_000, WAIT_BUDGET_MS: 600_000 })
+  test("defaults the alarm interval to 30 s, the wait budget to 10 min and the park time to 10 min", () => {
+    expect(decode({})).toMatchObject({ ALARM_INTERVAL_MS: 30_000, WAIT_BUDGET_MS: 600_000, PARK_AFTER_MS: 600_000 })
   })
 
-  test("reads both timings from worker variables in milliseconds", () => {
-    expect(decode({ ALARM_INTERVAL_MS: "1000", WAIT_BUDGET_MS: "3000" })).toMatchObject({
+  test("reads the timings from worker variables in milliseconds", () => {
+    expect(decode({ ALARM_INTERVAL_MS: "1000", WAIT_BUDGET_MS: "3000", PARK_AFTER_MS: "2000" })).toMatchObject({
       ALARM_INTERVAL_MS: 1000,
       WAIT_BUDGET_MS: 3000,
+      PARK_AFTER_MS: 2000,
     })
   })
 
@@ -24,6 +25,7 @@ describe("worker env", () => {
     const invalid = ["0", "-1", "1.5", "soon", "", "Infinity"].flatMap((value) => [
       { ALARM_INTERVAL_MS: value },
       { ALARM_INTERVAL_MS: "1", WAIT_BUDGET_MS: value },
+      { PARK_AFTER_MS: value },
     ])
     expect(invalid.filter(decodes)).toEqual([])
   })

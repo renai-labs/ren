@@ -56,9 +56,18 @@ describe("cell contract", () => {
     )
     test.todo("an alarm during an earlier wait starts no second wait", () => {})
     test.todo("a running child session keeps the harness open while the root session is idle", () => {})
+    test.todo(
+      "a question answered within the park time continues the turn with the answer as the tool result",
+      () => {},
+    )
+    test.todo(
+      "a question unanswered for the park time is parked: the turn is interrupted, the harness closes and no alarm is set",
+      () => {},
+    )
+    test.todo("an answer sent as a message after parking reopens the cell and the turn continues", () => {})
     test.todo("a prompt queued behind a running turn runs after it with no client request", () => {})
-    test.todo("a turn that fails on a model error leaves the cell idle and closed, not retrying", () => {})
-    test.todo("a turn cut off mid-stream without a crash leaves the cell idle and closed", () => {})
+    test.todo("a turn that fails on a model error OpenCode does not retry leaves the cell idle and closed", () => {})
+    test.todo("a stream cut mid-way without a crash is continued, and the cell ends idle and closed", () => {})
     test.todo("a turn that receives malformed model data leaves the cell idle and closed", () => {})
   })
 })

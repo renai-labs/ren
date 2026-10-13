@@ -145,6 +145,7 @@ describe("stub model", () => {
     const first = await read(await complete(user(script.marker)))
     expect(first.toolCalls).toEqual([{ name: "question", arguments: '{"text":"which?"}' }])
     expect(first.finish).toEqual(["tool_calls"])
+    expect(first.text).toBe("")
     const answered = await read(
       await complete([
         { role: "user", content: script.marker },
