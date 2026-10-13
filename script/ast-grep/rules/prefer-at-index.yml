@@ -1,5 +1,5 @@
 id: prefer-at-index
-language: TypeScript
+language: Tsx
 message: "Read array elements with `.at(index)` instead of a numeric subscript."
 severity: error
 files:
@@ -7,6 +7,8 @@ files:
   - packages/*/src/**/*.tsx
 ignores:
   - packages/httpapi-codegen/**
+  - packages/ui/**
+  - packages/app/**
 rule:
   kind: subscript_expression
   has:

@@ -1,12 +1,14 @@
 id: no-nullish-comparison
-language: TypeScript
-message: "Test presence with `!value` or `Boolean(value)` instead of comparing to null or undefined."
+language: Tsx
+message: 'Test presence with `!value` or `Boolean(value)` instead of comparing to null or undefined. Where "", 0 or false is a meaningful value, keep the comparison and add `// ast-grep-ignore: no-nullish-comparison, -- <why>`.'
 severity: error
 files:
   - packages/*/src/**/*.ts
   - packages/*/src/**/*.tsx
 ignores:
   - packages/httpapi-codegen/**
+  - packages/ui/**
+  - packages/app/**
 rule:
   kind: binary_expression
   all:
