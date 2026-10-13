@@ -1,14 +1,15 @@
 export * as Spaces from "./spaces.js"
 
 import type { SpaceMemberInfo } from "@ren/client"
+import type { SpaceMember } from "@ren/schema/space-member"
 
 export interface MemberRow {
   readonly id: string
-  readonly status: "active" | "pending"
+  readonly status: SpaceMember.Status
   readonly name: string
   readonly email: string
   readonly image: string | undefined
-  readonly note?: string
+  readonly tag?: string
 }
 
 export interface Candidate {
@@ -17,7 +18,7 @@ export interface Candidate {
   readonly description: string
   readonly image: string | undefined
   readonly target: { readonly userId: string } | { readonly email: string }
-  readonly added: string
+  readonly addedMessage: string
 }
 
 interface Organization {
@@ -28,21 +29,16 @@ interface Organization {
   readonly invitations: ReadonlyArray<{ readonly email: string; readonly status: string; readonly expiresAt: Date }>
 }
 
-export function memberRows(
-  members: ReadonlyArray<SpaceMemberInfo>,
-  organization: Organization | undefined,
-  userId: string,
-): MemberRow[] {
-  const emails = new Map((organization?.members ?? []).map((member) => [member.userId, member.user.email]))
+export function memberRows(members: ReadonlyArray<SpaceMemberInfo>, userId: string): MemberRow[] {
   return members.map((member) =>
     member.status === "active"
       ? {
           id: member.id,
           status: member.status,
           name: member.name,
-          email: emails.get(member.userId) ?? "",
+          email: member.email,
           image: member.image ?? undefined,
-          ...(member.userId === userId && { note: "You" }),
+          ...(member.userId === userId && { tag: "You" }),
         }
       : {
           id: member.id,
@@ -50,7 +46,7 @@ export function memberRows(
           name: member.email,
           email: member.email,
           image: undefined,
-          note: "Invited",
+          tag: "Invited",
         },
   )
 }
@@ -70,7 +66,7 @@ export function candidates(
         description: member.user.email,
         image: member.user.image ?? undefined,
         target: { userId: member.userId },
-        added: `${member.user.name || member.user.email} added to space`,
+        addedMessage: `${member.user.name || member.user.email} added to space`,
       })),
     ...(organization?.invitations ?? [])
       .filter((invitation) => invitation.status === "pending")
@@ -82,7 +78,7 @@ export function candidates(
         description: invitation.expiresAt.getTime() < now ? "Invite expired" : "Invited",
         image: undefined,
         target: { email: invitation.email },
-        added: `${invitation.email} will join when they accept their invite`,
+        addedMessage: `${invitation.email} will join when they accept their invite`,
       })),
   ]
 }

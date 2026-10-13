@@ -1,3 +1,4 @@
+import { Space } from "@ren/schema/space"
 import { Field } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
 import { PageShell } from "@ren/ui/page-shell"
@@ -25,7 +26,9 @@ export function SpaceOverview(props: { spaceId: string }) {
             alignment="end"
             placeholder="Enter space name"
             required
-            validate={(name) => (name.length > 256 ? "Use 256 characters or fewer." : null)}
+            validate={(name) =>
+              name.length > Space.maximumNameLength ? `Use ${Space.maximumNameLength} characters or fewer.` : null
+            }
             value={space.data.name}
             onCommit={(name) => save({ name })}
           />

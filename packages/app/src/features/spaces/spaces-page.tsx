@@ -1,3 +1,4 @@
+import { Pagination } from "@ren/schema/pagination"
 import { Avatar } from "@ren/ui/avatar"
 import type { SpaceInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
@@ -13,7 +14,6 @@ import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useDeferredValue, useState } from "react"
-import { Auth } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { CreateSpaceDialog } from "./create-space-dialog.js"
 import { JoinSpaceDialog } from "./join-space-dialog.js"
@@ -21,7 +21,7 @@ import { Spaces } from "./spaces.js"
 
 export function SpacesPage(props: { userId: string }) {
   const context = RouterContext.useRouterContext()
-  const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: 100 }))
+  const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
   const [query, setQuery] = useState("")
   const needle = useDeferredValue(query).trim()
   const visible = (spaces.data?.items ?? []).filter((space) =>
@@ -34,7 +34,7 @@ export function SpacesPage(props: { userId: string }) {
       toolbar={
         <Toolbar.Root>
           <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search spaces" />
-          <CreateActions spaces={spaces.data?.items ?? []} userId={props.userId} />
+          <SpaceActions spaces={spaces.data?.items ?? []} userId={props.userId} />
         </Toolbar.Root>
       }
     >
@@ -77,15 +77,13 @@ export function SpacesPage(props: { userId: string }) {
   )
 }
 
-function CreateActions(props: { spaces: ReadonlyArray<SpaceInfo>; userId: string }) {
-  const context = RouterContext.useRouterContext()
-  const role = useQuery(Auth.activeRoleOptions(context.auth))
+function SpaceActions(props: { spaces: ReadonlyArray<SpaceInfo>; userId: string }) {
   const [creating, setCreating] = useState(false)
   const [joining, setJoining] = useState(false)
-  if (!role.data) return null
+  const canJoin = props.spaces.some((space) => !space.membershipId)
   return (
     <>
-      {Auth.isAdminRole(role.data) ? (
+      {canJoin ? (
         <Menu.Root>
           <Menu.Trigger
             render={

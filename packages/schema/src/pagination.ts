@@ -2,7 +2,7 @@ export * as Pagination from "./pagination.js"
 
 import { Effect, Schema } from "effect"
 
-const maximumPageSize = 100
+export const maximumPageSize = 100
 
 export const fields = (defaultPageSize: number) => ({
   page: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(1))),

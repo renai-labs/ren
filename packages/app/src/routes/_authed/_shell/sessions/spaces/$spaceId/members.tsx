@@ -1,3 +1,4 @@
+import { Pagination } from "@ren/schema/pagination"
 import { createFileRoute } from "@tanstack/react-router"
 import { SpaceMembers } from "../../../../../../features/spaces/space-members.js"
 import { Auth } from "../../../../../../lib/auth.js"
@@ -9,7 +10,11 @@ export const Route = createFileRoute("/_authed/_shell/sessions/spaces/$spaceId/m
     const organization = context.me.organization
     return Promise.all([
       context.queryClient.query(
-        context.api["space-member"].list.queryOptions({ spaceId: options.params.spaceId, page: 1, pageSize: 100 }),
+        context.api["space-member"].list.queryOptions({
+          spaceId: options.params.spaceId,
+          page: 1,
+          pageSize: Pagination.maximumPageSize,
+        }),
       ),
       ...(organization ? [context.queryClient.query(Auth.organizationOptions(context.auth, organization.id))] : []),
     ])

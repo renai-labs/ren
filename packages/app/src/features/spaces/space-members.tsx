@@ -1,3 +1,4 @@
+import { Pagination } from "@ren/schema/pagination"
 import { Avatar } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
@@ -10,7 +11,6 @@ import { Toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
-import { Auth } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { AddSpaceMemberDialog } from "./add-space-member-dialog.js"
 import { Spaces } from "./spaces.js"
@@ -18,20 +18,22 @@ import { Spaces } from "./spaces.js"
 export function SpaceMembers(props: { spaceId: string; organizationId: string; userId: string }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
+  const space = useQuery(context.api.space.get.queryOptions({ idOrSlug: props.spaceId }))
   const members = useQuery(
-    context.api["space-member"].list.queryOptions({ spaceId: props.spaceId, page: 1, pageSize: 100 }),
+    context.api["space-member"].list.queryOptions({
+      spaceId: props.spaceId,
+      page: 1,
+      pageSize: Pagination.maximumPageSize,
+    }),
   )
-  const organization = useQuery(Auth.organizationOptions(context.auth, props.organizationId))
-  const archive = useMutation(context.api["space-member"].archive.mutationOptions())
   const [query, setQuery] = useState("")
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<Spaces.MemberRow>()
   const [confirming, setConfirming] = useState(false)
   const needle = useDeferredValue(query)
   const items = members.data?.items ?? []
-  const visible = Spaces.memberRows(items, organization.data, props.userId).filter((row) =>
-    Spaces.matches([row.name, row.email], needle),
-  )
+  const canManageMembers = space.data?.canManageMembers ?? false
+  const visible = Spaces.memberRows(items, props.userId).filter((row) => Spaces.matches([row.name, row.email], needle))
   const refresh = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: context.api["space-member"].list.queryKey() }),
@@ -43,47 +45,67 @@ export function SpaceMembers(props: { spaceId: string; organizationId: string; u
     <>
       <Toolbar.Root>
         <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search members" />
-        <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setAdding(true)}>
-          Add member
-        </Button>
+        {canManageMembers ? (
+          <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setAdding(true)}>
+            Add member
+          </Button>
+        ) : null}
       </Toolbar.Root>
       <MembersTable
         rows={visible}
         state={state[members.status]}
         query={needle.trim()}
-        onRemove={(row) => {
-          setRemoving(row)
-          setConfirming(true)
-        }}
+        onRemove={
+          canManageMembers
+            ? (row) => {
+                setRemoving(row)
+                setConfirming(true)
+              }
+            : undefined
+        }
       />
       {adding ? (
         <AddSpaceMemberDialog
           spaceId={props.spaceId}
-          candidates={Spaces.candidates(items, organization.data)}
-          state={({ pending: "loading", error: "failed", success: "ready" } as const)[organization.status]}
+          organizationId={props.organizationId}
+          members={items}
           onClose={() => setAdding(false)}
           onChanged={refresh}
         />
       ) : null}
-      <ConfirmationDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        title={`Remove ${removing?.name ?? "member"}?`}
-        description={
-          removing?.status === "pending"
-            ? "They will not join this space when they accept their invite."
-            : "They keep their organization account but lose access to this space."
-        }
-        confirmLabel="Remove"
-        tone="danger"
-        onConfirm={async () => {
-          if (!removing) return
-          await archive.mutateAsync({ id: removing.id })
-          await refresh()
-        }}
-        onConfirmed={() => Toast.manager.add({ type: "success", title: `${removing?.name ?? "Member"} removed` })}
-      />
+      <RemoveMemberDialog member={removing} open={confirming} onOpenChange={setConfirming} onRemoved={refresh} />
     </>
+  )
+}
+
+function RemoveMemberDialog(props: {
+  member: Spaces.MemberRow | undefined
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onRemoved: () => Promise<unknown>
+}) {
+  const context = RouterContext.useRouterContext()
+  const remove = useMutation(context.api["space-member"].archive.mutationOptions())
+  const name = props.member?.name ?? "member"
+  return (
+    <ConfirmationDialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      title={`Remove ${name}?`}
+      description={
+        props.member?.status === "pending"
+          ? "They will not join this space when they accept their invite."
+          : "They keep their organization account but lose access to this space."
+      }
+      confirmLabel="Remove"
+      tone="danger"
+      onConfirm={async () => {
+        if (!props.member) return
+        await remove.mutateAsync({ id: props.member.id })
+        await props.onRemoved()
+      }}
+      onConfirmed={() => Toast.manager.add({ type: "success", title: `${props.member?.name ?? "Member"} removed` })}
+    />
   )
 }
 
@@ -91,7 +113,7 @@ function MembersTable(props: {
   rows: ReadonlyArray<Spaces.MemberRow>
   state: "loading" | "failed" | "ready" | "empty"
   query: string
-  onRemove: (row: Spaces.MemberRow) => void
+  onRemove: ((row: Spaces.MemberRow) => void) | undefined
 }) {
   return (
     <Table.Root
@@ -105,7 +127,7 @@ function MembersTable(props: {
         <Table.HeaderCell width="third" visibility="wide-screens">
           Email
         </Table.HeaderCell>
-        <Table.RowActionsHeaderCell />
+        {props.onRemove ? <Table.RowActionsHeaderCell /> : null}
       </Table.Header>
       <Table.Body>
         {props.rows.map((row) => (
@@ -114,11 +136,13 @@ function MembersTable(props: {
               <MemberName row={row} />
             </Table.Cell>
             <Table.Cell visibility="wide-screens">{row.email || "—"}</Table.Cell>
-            <Table.RowActions label="Member actions">
-              <Menu.Item tone="danger" icon={<Icon glyph="Trash2" />} onSelect={() => props.onRemove(row)}>
-                Remove
-              </Menu.Item>
-            </Table.RowActions>
+            {props.onRemove ? (
+              <Table.RowActions label="Member actions">
+                <Menu.Item tone="danger" icon={<Icon glyph="Trash2" />} onSelect={() => props.onRemove?.(row)}>
+                  Remove
+                </Menu.Item>
+              </Table.RowActions>
+            ) : null}
           </Table.Row>
         ))}
       </Table.Body>
@@ -133,10 +157,10 @@ function MemberName(props: { row: Spaces.MemberRow }) {
       <Text truncation="single-line" element="span" title={props.row.name}>
         {props.row.name}
       </Text>
-      {props.row.note ? (
+      {props.row.tag ? (
         <span className="shrink-0">
           <Text purpose="caption" element="span">
-            {props.row.note}
+            {props.row.tag}
           </Text>
         </span>
       ) : null}

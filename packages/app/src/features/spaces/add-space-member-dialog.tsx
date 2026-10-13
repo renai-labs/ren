@@ -6,29 +6,33 @@ import { FormActions } from "@ren/ui/form-actions"
 import { Icon } from "@ren/ui/icon"
 import { Notice } from "@ren/ui/notice"
 import { Toast } from "@ren/ui/toast"
-import { useMutation } from "@tanstack/react-query"
+import type { SpaceMemberInfo } from "@ren/client"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useState } from "react"
+import { Auth } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
-import type { Spaces } from "./spaces.js"
+import { Spaces } from "./spaces.js"
 
 export function AddSpaceMemberDialog(props: {
   spaceId: string
-  candidates: ReadonlyArray<Spaces.Candidate>
-  state: "loading" | "failed" | "ready"
+  organizationId: string
+  members: ReadonlyArray<SpaceMemberInfo>
   onClose: () => void
   onChanged: () => Promise<unknown>
 }) {
   const context = RouterContext.useRouterContext()
+  const organization = useQuery(Auth.organizationOptions(context.auth, props.organizationId))
   const create = useMutation(context.api["space-member"].create.mutationOptions())
   const [selected, setSelected] = useState<string | null>(null)
-  const candidate = props.candidates.find((each) => each.value === selected)
+  const candidates = Spaces.candidates(props.members, organization.data)
+  const candidate = candidates.find((each) => each.value === selected)
   const submit = () => {
     if (!candidate) return
     create.mutate(
       { payload: { spaceId: props.spaceId, ...candidate.target } },
       {
         onSuccess: () => {
-          Toast.manager.add({ type: "success", title: candidate.added })
+          Toast.manager.add({ type: "success", title: candidate.addedMessage })
           props.onClose()
           void props.onChanged()
         },
@@ -53,8 +57,8 @@ export function AddSpaceMemberDialog(props: {
         <Dialog.Body>
           <Field.Root label="Person">
             <PersonPicker
-              candidates={props.candidates}
-              state={props.state}
+              candidates={candidates}
+              state={({ pending: "loading", error: "failed", success: "ready" } as const)[organization.status]}
               value={selected}
               onValueChange={setSelected}
             />

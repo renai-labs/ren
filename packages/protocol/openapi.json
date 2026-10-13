@@ -1042,6 +1042,9 @@
           "canManage": {
             "type": "boolean"
           },
+          "canManageMembers": {
+            "type": "boolean"
+          },
           "canArchive": {
             "type": "boolean"
           },
@@ -1070,6 +1073,7 @@
           "memberCount",
           "membershipId",
           "canManage",
+          "canManageMembers",
           "canArchive",
           "createdAt",
           "updatedAt",
@@ -1158,6 +1162,9 @@
           "name": {
             "type": "string"
           },
+          "email": {
+            "type": "string"
+          },
           "image": {
             "anyOf": [
               {
@@ -1182,7 +1189,7 @@
             ]
           }
         },
-        "required": ["id", "spaceId", "status", "userId", "name", "image", "createdAt", "archivedAt"],
+        "required": ["id", "spaceId", "status", "userId", "name", "email", "image", "createdAt", "archivedAt"],
         "additionalProperties": false
       },
       "SpaceMember.CreateInput": {

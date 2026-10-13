@@ -69,6 +69,7 @@ export const layer = Layer.effect(
           memberCount: row.memberCount,
           membershipId: row.membershipId,
           canManage: permissions.canManage(access),
+          canManageMembers: permissions.canManageMembers(access),
           canArchive: permissions.canArchive({ ...access, isFirstSpace: row.isFirstSpace }),
           createdAt: DateTime.fromDateUnsafe(row.space.created_at),
           updatedAt: DateTime.fromDateUnsafe(row.space.updated_at),

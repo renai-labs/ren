@@ -1,3 +1,4 @@
+import { Space } from "@ren/schema/space"
 import { Dialog } from "@ren/ui/dialog"
 import { Form } from "@ren/ui/form"
 import { Notice } from "@ren/ui/notice"
@@ -10,7 +11,11 @@ const schema = Schema.toStandardSchemaV1(
   Schema.Struct({
     name: Schema.String.check(
       Schema.makeFilter((name) => (name.trim() ? undefined : "Name is required.")),
-      Schema.makeFilter((name) => (name.trim().length > 256 ? "Use 256 characters or fewer." : undefined)),
+      Schema.makeFilter((name) =>
+        name.trim().length > Space.maximumNameLength
+          ? `Use ${Space.maximumNameLength} characters or fewer.`
+          : undefined,
+      ),
     ),
     description: Schema.String,
   }),

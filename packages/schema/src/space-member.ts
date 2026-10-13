@@ -18,6 +18,7 @@ const Active = Schema.Struct({
   status: Schema.Literal("active"),
   userId: Auth.UserID,
   name: Schema.String,
+  email: Schema.String,
   image: Schema.NullOr(Schema.String),
   createdAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),
