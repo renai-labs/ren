@@ -15,7 +15,7 @@ const celld = await Shared.celld()
 const stub = Shared.stub()
 
 const host = (config: Record<string, string>) =>
-  BrainHost.layerCelld.pipe(
+  Layer.fresh(BrainHost.layerCelld).pipe(
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config))),
   )
