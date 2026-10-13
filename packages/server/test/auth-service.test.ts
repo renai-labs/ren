@@ -103,6 +103,12 @@ describe("Auth", () => {
     }),
   )
 
+  it.effect("refuses Google sessions for unverified emails, so every session proves its email", () =>
+    Effect.sync(() => {
+      expect(auth.options.socialProviders.google.requireEmailVerification).toBe(true)
+    }),
+  )
+
   it.live("names default organizations after the user or their company domain", () =>
     Effect.gen(function* () {
       const personal = yield* defaultOrganization("barbara@gmail.com", "Barbara Liskov")
@@ -168,7 +174,7 @@ describe("Auth", () => {
     }),
   )
 
-  it.live("applies pending space assignments when an unverified user accepts an invitation", () =>
+  it.live("applies pending space assignments when the invitation is accepted", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
       const owner = cookie(yield* signUp("lynn@example.org", "Lynn"))
@@ -186,7 +192,6 @@ describe("Auth", () => {
 
       const invitee = yield* signUp("alan@example.org", "Alan")
       const session = yield* get("/get-session", cookie(invitee))
-      expect(session.user.emailVerified).toBe(false)
       const accepted = yield* post("/organization/accept-invitation", { invitationId: invitation.id }, cookie(invitee))
       expect(accepted.status).toBe(200)
 
