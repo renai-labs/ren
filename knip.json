@@ -12,6 +12,11 @@
       "entry": ["parity/*.stories.tsx", "test/**/*.test.{ts,tsx}", "script/**/*.ts"],
       "ignoreDependencies": ["@ren/app", "ren-v1"]
     },
+    "packages/cell": {
+      "entry": ["src/worker.ts", "test/**/*.test.ts", "test/lib/preload.ts"],
+      "ignoreBinaries": ["celld"],
+      "ignoreDependencies": ["cloudflare"]
+    },
     "packages/db": {
       "entry": ["test/**/*.test.ts", "script/**/*.ts"],
       "ignoreDependencies": ["@ren/schema"]

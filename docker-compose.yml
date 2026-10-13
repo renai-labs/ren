@@ -17,5 +17,18 @@ services:
       timeout: 5s
       retries: 20
 
+  celld:
+    build: packages/cell/docker
+    image: ren-celld
+    command: ["dev", "/repo/packages/cell", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:9876:9876"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/repo
+      - celld:/repo/packages/cell/.celld
+
 volumes:
   postgres:
+  celld:
