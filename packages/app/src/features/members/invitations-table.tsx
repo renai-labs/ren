@@ -130,7 +130,7 @@ function InvitationRow(props: {
         <Menu.Item
           icon={<Icon glyph="Link" />}
           onSelect={() => {
-            void platform.writeClipboardText?.(`${platform.serverUrl}/signup?invitationId=${row.id}`)
+            void platform.writeClipboardText?.(`${platform.appUrl}/signup?invitationId=${row.id}`)
             Toast.manager.add({ type: "success", title: "Invite link copied" })
           }}
         >

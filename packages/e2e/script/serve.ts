@@ -10,7 +10,8 @@ const base = new URL(process.env.DATABASE_URL ?? "postgres://ren:ren@localhost:5
 const name = `ren_e2e_${crypto.randomUUID().replaceAll("-", "")}`
 const database = new URL(base)
 database.pathname = `/${name}`
-const appURL = `http://127.0.0.1:${ports.app}`
+const appOrigin = `http://127.0.0.1:${ports.app}`
+const serverURL = `http://127.0.0.1:${ports.server}`
 
 const admin = new Bun.SQL(base.href)
 await admin.unsafe(`CREATE DATABASE "${name}"`)
@@ -31,9 +32,9 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     PORT: String(ports.server),
     DATABASE_URL: database.href,
     BETTER_AUTH_SECRET: "e2e-secret-do-not-use-in-production",
-    BETTER_AUTH_URL: appURL,
-    TRUSTED_ORIGINS: appURL,
-    APP_URL: appURL,
+    BETTER_AUTH_URL: serverURL,
+    TRUSTED_ORIGINS: appOrigin,
+    APP_URL: `${appOrigin}/app`,
     GOOGLE_CLIENT_ID: "e2e-google-client-id",
     GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
     SIGNUP_MX_CHECK: "false",
@@ -44,7 +45,7 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
 
 const app = Bun.spawn(["bunx", "vite", "--host", "127.0.0.1", "--port", String(ports.app), "--strictPort"], {
   cwd: path.join(root, "app"),
-  env: { ...process.env, REN_API_URL: `http://127.0.0.1:${ports.server}` },
+  env: { ...process.env, VITE_REN_API_URL: serverURL },
   stdout: "inherit",
   stderr: "inherit",
 })

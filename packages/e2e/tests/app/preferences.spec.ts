@@ -3,7 +3,7 @@ import { appURL, createUser, signIn, uniqueEmail } from "../lib/servers.js"
 
 test("opens settings from the profile card and searches them", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("settings"), password: "first password" })
-  await page.goto("/")
+  await page.goto("/app/")
   await page.getByRole("button", { name: "Settings" }).click()
   await expect(page).toHaveURL(`${appURL}/settings/preferences`)
   await expect(page.getByRole("heading", { level: 1, name: "Preferences" })).toBeVisible()
@@ -25,7 +25,7 @@ test("opens settings from the profile card and searches them", async ({ page }) 
 
 test("renames the account and picks a theme", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("rename"), password: "first password" })
-  await page.goto("/settings/preferences")
+  await page.goto("/app/settings/preferences")
   await expect(page.getByText("Contact support to change.")).toBeVisible()
   await page.getByRole("button", { name: "Edit Name" }).click()
   await page.getByRole("textbox", { name: "Name" }).fill("Ada King")
@@ -44,7 +44,7 @@ test("renames the account and picks a theme", async ({ page }) => {
 test("changes the password", async ({ page, request }) => {
   const email = uniqueEmail("password")
   await createUser(page.request, { name: "Ada Lovelace", email, password: "first password" })
-  await page.goto("/settings/preferences")
+  await page.goto("/app/settings/preferences")
   await page.getByRole("button", { name: "Change", exact: true }).click()
   const dialog = page.getByRole("dialog", { name: "Change password" })
   await expect(dialog).toContainText("Confirm your current password, then pick a new one.")

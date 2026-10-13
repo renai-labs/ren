@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
-import { makeApp } from "./lib/app.js"
+import { makeApp, origin } from "./lib/app.js"
 
 const app = makeApp()
 
@@ -16,5 +16,36 @@ describe("GET /health", () => {
     const response = await app.handler(new Request("http://localhost/openapi.json"))
     expect(response.status).toBe(200)
     expect(Object.keys((await response.json()).paths)).toContain("/health")
+  })
+
+  test("allows credentialed requests from trusted origins", async () => {
+    const response = await app.handler(new Request("http://localhost/health", { headers: { origin } }))
+    expect(response.headers.get("access-control-allow-origin")).toBe(origin)
+    expect(response.headers.get("access-control-allow-credentials")).toBe("true")
+  })
+
+  test("answers preflight requests from trusted origins", async () => {
+    const response = await app.handler(
+      new Request("http://localhost/me", {
+        method: "OPTIONS",
+        headers: {
+          origin,
+          "access-control-request-method": "GET",
+          "access-control-request-headers": "content-type",
+        },
+      }),
+    )
+    expect(response.headers.get("access-control-allow-origin")).toBe(origin)
+    expect(response.headers.get("access-control-allow-credentials")).toBe("true")
+  })
+
+  test("withholds CORS headers from other origins", async () => {
+    const response = await app.handler(
+      new Request("http://localhost/health", {
+        headers: { origin: "https://evil.example" },
+      }),
+    )
+    expect(response.status).toBe(200)
+    expect(response.headers.get("access-control-allow-origin")).toBeNull()
   })
 })

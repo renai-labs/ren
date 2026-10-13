@@ -12,6 +12,7 @@ export interface Storage {
 interface Base {
   readonly version: string
   readonly serverUrl: string
+  readonly appUrl: string
   readonly storage: Storage
   readonly openExternal: (url: string) => void
   readonly notify: (title: string, body?: string) => Promise<void>

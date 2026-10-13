@@ -8,7 +8,7 @@ test("creates an organization from the profile card and switches to it", async (
     email: `ada@${company.toLowerCase()}.com`,
     password: "correct horse battery",
   })
-  await page.goto("/")
+  await page.goto("/app/")
   await page.getByRole("combobox", { name: `Switch organization (current: ${company})` }).click()
   await page.getByRole("button", { name: "Create organization" }).click()
 

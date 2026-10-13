@@ -3,7 +3,7 @@ import { appURL, createUser, uniqueEmail } from "../lib/servers.js"
 
 test("searches actions and settings from the sidebar and the keyboard", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("search"), password: "first password" })
-  await page.goto("/")
+  await page.goto("/app/")
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
 
   await page.keyboard.press("ControlOrMeta+k")

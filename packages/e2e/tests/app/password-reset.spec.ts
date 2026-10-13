@@ -5,7 +5,7 @@ test("a forgotten password is reset through the emailed link", async ({ page, re
   const email = uniqueEmail("reset")
   await createUser(request, { name: "Ada Lovelace", email, password: "first password" })
 
-  await page.goto(`/forgot-password?email=${encodeURIComponent(email)}`)
+  await page.goto(`/app/forgot-password?email=${encodeURIComponent(email)}`)
   await expect(page.getByLabel("Email")).toHaveValue(email)
   await page.getByRole("button", { name: "Send reset instructions" }).click()
   await expect(page.getByText("If an account exists for")).toBeVisible()
@@ -26,7 +26,7 @@ test("a forgotten password is reset through the emailed link", async ({ page, re
 })
 
 test("a used or missing reset link offers a new one", async ({ page }) => {
-  await page.goto("/reset-password?token=not-a-token")
+  await page.goto("/app/reset-password?token=not-a-token")
   await page.getByLabel("New password", { exact: true }).fill("second password")
   await page.getByLabel("Confirm new password").fill("second password")
   await page.getByRole("button", { name: "Continue", exact: true }).click()
@@ -39,7 +39,7 @@ test("a used or missing reset link offers a new one", async ({ page }) => {
 })
 
 test("the forgot password form validates the email before sending", async ({ page }) => {
-  await page.goto("/forgot-password")
+  await page.goto("/app/forgot-password")
   await page.getByLabel("Email").fill("not an email")
   await page.getByRole("button", { name: "Send reset instructions" }).click()
   await expect(page.getByText("Enter a valid email")).toBeVisible()
