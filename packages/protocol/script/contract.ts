@@ -6,7 +6,6 @@ const exceptions = new Map([
   ["health", "Server status for clients and load balancers."],
   ["me", "The signed-in user and their active organization."],
   ["invitation", "Invitation preview before the invitee signs in."],
-  ["brain", "The internal Brain API that hosts serve under /ren/, because the harness owns /api/ on the same origin."],
 ])
 
 const operations = [

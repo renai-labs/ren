@@ -8,8 +8,8 @@ const vendored = {
   message: "repos/ holds vendored reference source. Import from the package dependency instead.",
 }
 const serverOnly = {
-  regex: "^@ren/(core|db|server)(/|$)",
-  message: "Client-side packages never import core, db or server. Go through @ren/client.",
+  regex: "^@ren/(core|db|server|brain-api)(/|$)",
+  message: "Client-side packages never import core, db, server or the internal Brain API. Go through @ren/client.",
 }
 const packageBoundaries = [
   { files: ["packages/schema/**"], regex: "^@ren/", message: "Schema imports nothing from Ren." },
@@ -17,6 +17,11 @@ const packageBoundaries = [
     files: ["packages/protocol/**"],
     regex: "^@ren/(core|db|server)(/|$)",
     message: "Protocol depends only on schema.",
+  },
+  {
+    files: ["packages/brain-api/**"],
+    regex: "^@ren/(core|db|server|protocol|cell)(/|$)",
+    message: "The Brain API depends only on schema. Core calls it and hosts serve it.",
   },
   {
     files: ["packages/db/**"],
@@ -30,20 +35,20 @@ const packageBoundaries = [
   },
   {
     files: ["packages/cell/**"],
-    regex: "^@ren/(core|db|server)(/|$)",
-    message: "The cell bundle runs in workerd. It depends only on schema and protocol.",
+    regex: "^@ren/(core|db|server|protocol)(/|$)",
+    message: "The cell bundle runs in workerd. It depends only on schema and the Brain API.",
   },
   {
     files: ["packages/cell/src/*.ts"],
-    regex: "^(@ren/(core|db|server)(/|$)|@opencode/)",
+    regex: "^(@ren/(core|db|server|protocol)(/|$)|@opencode/)",
     message:
-      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema and protocol.",
+      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema and the Brain API.",
   },
   {
     files: ["packages/cell/src/harness/**"],
-    regex: "^(@ren/(core|db|server)(/|$)|cloudflare:)",
+    regex: "^(@ren/(core|db|server|protocol)(/|$)|cloudflare:)",
     message:
-      "A harness never uses Durable Object APIs; the host passes it storage and requests. The cell depends only on schema and protocol.",
+      "A harness never uses Durable Object APIs; the host passes it storage and requests. The cell depends only on schema and the Brain API.",
   },
   {
     files: ["packages/server/src/handlers/**"],
