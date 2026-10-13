@@ -64,6 +64,8 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     GOOGLE_CLIENT_ID: "e2e-google-client-id",
     GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
     SIGNUP_MX_CHECK: "false",
+    CELL_URL: "http://127.0.0.1:9876",
+    CELL_KEYS: JSON.stringify([{ id: "e2e", secret: "e2e-cell-key-do-not-use-in-production" }]),
   },
   stdout: "pipe",
   stderr: "inherit",

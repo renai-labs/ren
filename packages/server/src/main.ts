@@ -1,4 +1,5 @@
 import { BunHttpServer, BunRuntime } from "@effect/platform-bun"
+import { BrainHost } from "@ren/core/brain-host"
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { AuthDatabase } from "@ren/db/auth-database"
@@ -9,7 +10,7 @@ import { FetchHttpClient, HttpRouter } from "effect/http"
 import { Routes } from "./routes.js"
 
 HttpRouter.serve(Routes.layer).pipe(
-  Layer.provide([Mailer.layer, SignupGuard.layer]),
+  Layer.provide([BrainHost.layerCelld, Mailer.layer, SignupGuard.layer]),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, Postgres.layer]),
   Layer.provide(BunHttpServer.layerConfig({ port: Config.Port("PORT").pipe(Config.withDefault(4000)) })),

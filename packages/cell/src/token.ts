@@ -3,7 +3,6 @@ export * as Token from "./token.js"
 import { CellToken } from "@ren/schema/cell-token"
 import { Clock, Effect, Option, Result, Schema } from "effect"
 import { Base64, Base64Url } from "effect/encoding"
-import type { Env } from "./env.js"
 
 class InvalidToken extends Schema.TaggedError<InvalidToken>()("Token.InvalidToken", {}) {}
 
@@ -16,7 +15,7 @@ export const read = (authorization: string | null) =>
   )
 
 export const verify = Effect.fn("Token.verify")(
-  function* (keys: ReadonlyArray<Env.Key>, token: string) {
+  function* (keys: ReadonlyArray<CellToken.Key>, token: string) {
     if (!/^[\w-]+\.[\w-]+$/.test(token)) return yield* new InvalidToken()
     const signed = token.slice(0, token.indexOf("."))
     const signature = yield* Effect.fromResult(Base64Url.decode(token.slice(signed.length + 1)))

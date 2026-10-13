@@ -5,6 +5,9 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
+  "exports": {
+    "./testing": "./test/lib/testing.ts"
+  },
   "scripts": {
     "deploy:celld": "celld deploy",
     "test": "bun ../../script/test.ts",
