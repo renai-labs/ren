@@ -62,13 +62,17 @@ export const layer = Layer.effect(
         hasVerifiedAlias: (email) => runPromise(signupGuard.hasVerifiedAlias(email)),
       },
       provisioning: {
-        provisionMember: (organizationId, user) =>
-          runPromise(provisioning.provisionMember(Auth.OrganizationID.make(organizationId), toProvisioningUser(user))),
-        applyAssignments: (organizationId, user) =>
-          runPromise(provisioning.applyAssignments(Auth.OrganizationID.make(organizationId), toProvisioningUser(user))),
-        removeMemberships: (organizationId, userId) =>
+        createInitialMemberships: (organizationId, user) =>
           runPromise(
-            provisioning.removeMemberships(Auth.OrganizationID.make(organizationId), Auth.UserID.make(userId)),
+            provisioning.createInitialMemberships(Auth.OrganizationID.make(organizationId), toProvisioningUser(user)),
+          ),
+        activatePendingMemberships: (organizationId, user) =>
+          runPromise(
+            provisioning.activatePendingMemberships(Auth.OrganizationID.make(organizationId), toProvisioningUser(user)),
+          ),
+        archiveMemberships: (organizationId, userId) =>
+          runPromise(
+            provisioning.archiveMemberships(Auth.OrganizationID.make(organizationId), Auth.UserID.make(userId)),
           ),
       },
     })

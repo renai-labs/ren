@@ -1039,10 +1039,13 @@
               }
             ]
           },
-          "canManage": {
+          "canUpdate": {
             "type": "boolean"
           },
-          "canManageMembers": {
+          "canAddMember": {
+            "type": "boolean"
+          },
+          "canRemoveMember": {
             "type": "boolean"
           },
           "canArchive": {
@@ -1072,8 +1075,9 @@
           "description",
           "memberCount",
           "membershipId",
-          "canManage",
-          "canManageMembers",
+          "canUpdate",
+          "canAddMember",
+          "canRemoveMember",
           "canArchive",
           "createdAt",
           "updatedAt",

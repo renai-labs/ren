@@ -18,8 +18,8 @@ export const auth = BetterAuth.make({
     hasVerifiedAlias: () => Promise.resolve(false),
   },
   provisioning: {
-    provisionMember: () => Promise.resolve(),
-    applyAssignments: () => Promise.resolve(),
-    removeMemberships: () => Promise.resolve(),
+    createInitialMemberships: () => Promise.resolve(),
+    activatePendingMemberships: () => Promise.resolve(),
+    archiveMemberships: () => Promise.resolve(),
   },
 })

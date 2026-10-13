@@ -24,7 +24,7 @@ const memberCount = sql<number>`(
 
 const firstSpace = alias(Database.Schema.space, "first_space")
 
-const isFirstSpace = sql<boolean>`${Database.Schema.space.id} = (
+const isFirstOrganizationSpace = sql<boolean>`${Database.Schema.space.id} = (
   select ${firstSpace.id} from ${Database.Schema.space} as ${firstSpace}
   where ${firstSpace.organization_id} = ${Database.Schema.space.organization_id}
   order by ${firstSpace.created_at}, ${firstSpace.id}
@@ -36,7 +36,7 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
     .select({
       space: Database.Schema.space,
       membershipId: SpaceQueries.membership.id,
-      isFirstSpace,
+      isFirstOrganizationSpace,
       memberCount,
     })
     .from(Database.Schema.space)
@@ -50,7 +50,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const permissions = yield* SpacePermissions.Service
 
-    const visibleTo = (actor: Actor.Info, isAdministrator: boolean) =>
+    const spaceVisibilityFilter = (actor: Actor.Info, isAdministrator: boolean) =>
       and(
         eq(Database.Schema.space.organization_id, actor.organizationId),
         isNull(Database.Schema.space.archived_at),
@@ -68,9 +68,10 @@ export const layer = Layer.effect(
           description: row.space.description,
           memberCount: row.memberCount,
           membershipId: row.membershipId,
-          canManage: permissions.canManage(access),
-          canManageMembers: permissions.canManageMembers(access),
-          canArchive: permissions.canArchive({ ...access, isFirstSpace: row.isFirstSpace }),
+          canUpdate: permissions.canUpdate(access),
+          canAddMember: permissions.canAddMember(access),
+          canRemoveMember: permissions.canRemoveMember(access),
+          canArchive: permissions.canArchive({ ...access, isFirstOrganizationSpace: row.isFirstOrganizationSpace }),
           createdAt: DateTime.fromDateUnsafe(row.space.created_at),
           updatedAt: DateTime.fromDateUnsafe(row.space.updated_at),
           archivedAt: row.space.archived_at && DateTime.fromDateUnsafe(row.space.archived_at),
@@ -108,7 +109,7 @@ export const layer = Layer.effect(
             if (!role) return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
             const isAdministrator = permissions.isAdministrator(role)
             const where = and(
-              visibleTo(actor, isAdministrator),
+              spaceVisibilityFilter(actor, isAdministrator),
               input.joined ? isNotNull(SpaceQueries.membership.id) : undefined,
             )
             const rows = yield* select(transaction, actor)
@@ -141,7 +142,7 @@ export const layer = Layer.effect(
               transaction,
               actor,
               isAdministrator,
-              and(visibleTo(actor, isAdministrator), eq(Database.Schema.space.id, idOrSlug)),
+              and(spaceVisibilityFilter(actor, isAdministrator), eq(Database.Schema.space.id, idOrSlug)),
             )
           }),
         )
@@ -150,7 +151,9 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const role = yield* SpaceQueries.organizationRole(transaction, actor)
-            if (!role) return yield* new Primitive.Forbidden({ message: "Join the organization to create spaces." })
+            if (!permissions.canCreate(role)) {
+              return yield* new Primitive.Forbidden({ message: "Join the organization to create spaces." })
+            }
             const id = Space.ID.create()
             yield* transaction.insert(Database.Schema.space).values({
               id,
@@ -170,7 +173,7 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             const locked = yield* lock(transaction, actor, id)
             if (!locked || locked.row.space.archived_at || !permissions.canRead(locked.access)) return yield* notFound
-            if (!permissions.canManage(locked.access)) {
+            if (!permissions.canUpdate(locked.access)) {
               return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
             const updated = yield* transaction
@@ -191,7 +194,12 @@ export const layer = Layer.effect(
             if (!locked || !permissions.canRead(locked.access)) return yield* notFound
             const info = toInfo(locked.isAdministrator)
             if (locked.row.space.archived_at) return info(locked.row)
-            if (!permissions.canArchive({ ...locked.access, isFirstSpace: locked.row.isFirstSpace })) {
+            if (
+              !permissions.canArchive({
+                ...locked.access,
+                isFirstOrganizationSpace: locked.row.isFirstOrganizationSpace,
+              })
+            ) {
               return yield* new Primitive.Forbidden({ message: "This space cannot be archived." })
             }
             const archived = yield* transaction

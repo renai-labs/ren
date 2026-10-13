@@ -20,7 +20,7 @@ export function SpaceOverview(props: { spaceId: string }) {
   return (
     <PageShell.Section frame="divided">
       <Field.Root label="Name" orientation="row">
-        {space.data.canManage ? (
+        {space.data.canUpdate ? (
           <InlineEdit
             label="Space name"
             alignment="end"
@@ -35,7 +35,7 @@ export function SpaceOverview(props: { spaceId: string }) {
         )}
       </Field.Root>
       <Field.Root label="Description" orientation="row">
-        {space.data.canManage ? (
+        {space.data.canUpdate ? (
           <InlineEdit
             label="Space description"
             alignment="end"

@@ -29,9 +29,9 @@ export interface Input {
     readonly hasVerifiedAlias: (email: string) => Promise<boolean>
   }
   readonly provisioning: {
-    readonly provisionMember: (organizationId: string, user: ProvisioningUser) => Promise<void>
-    readonly applyAssignments: (organizationId: string, user: ProvisioningUser) => Promise<void>
-    readonly removeMemberships: (organizationId: string, userId: string) => Promise<void>
+    readonly createInitialMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
+    readonly activatePendingMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
+    readonly archiveMemberships: (organizationId: string, userId: string) => Promise<void>
   }
 }
 
@@ -109,7 +109,7 @@ const provisionOrganization =
     if (!organization) return { data: session }
     if (organization.user) {
       await input.provisioning
-        .provisionMember(organization.id, organization.user)
+        .createInitialMemberships(organization.id, organization.user)
         .catch((error: unknown) => logFailure("Space provisioning failed", error, session.userId))
     }
     return { data: { ...session, activeOrganizationId: organization.id } }
@@ -159,12 +159,12 @@ export const make = (input: Input) => {
     invitationExpiresIn: 60 * 60 * 24 * 7,
     requireEmailVerificationOnInvitation: false,
     organizationHooks: {
-      afterAddMember: (data) => input.provisioning.provisionMember(data.organization.id, data.user),
+      afterAddMember: (data) => input.provisioning.createInitialMemberships(data.organization.id, data.user),
       afterAcceptInvitation: async (data) => {
-        await input.provisioning.provisionMember(data.organization.id, data.user)
-        await input.provisioning.applyAssignments(data.organization.id, data.user)
+        await input.provisioning.createInitialMemberships(data.organization.id, data.user)
+        await input.provisioning.activatePendingMemberships(data.organization.id, data.user)
       },
-      afterRemoveMember: (data) => input.provisioning.removeMemberships(data.organization.id, data.user.id),
+      afterRemoveMember: (data) => input.provisioning.archiveMemberships(data.organization.id, data.user.id),
     },
     sendInvitationEmail: async (data) => {
       const url = new URL("signup", appURL)

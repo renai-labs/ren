@@ -438,9 +438,9 @@ describe("Auth", () => {
             hasVerifiedAlias: (email) => Effect.runPromise(guard.hasVerifiedAlias(email)),
           },
           provisioning: {
-            provisionMember: () => Promise.resolve(),
-            applyAssignments: () => Promise.resolve(),
-            removeMemberships: () => Promise.resolve(),
+            createInitialMemberships: () => Promise.resolve(),
+            activatePendingMemberships: () => Promise.resolve(),
+            archiveMemberships: () => Promise.resolve(),
           },
         })
         const context = yield* Effect.promise(() => instance.$context)

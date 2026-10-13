@@ -32,7 +32,8 @@ export function SpaceMembers(props: { spaceId: string; organizationId: string; u
   const [confirming, setConfirming] = useState(false)
   const needle = useDeferredValue(query)
   const items = members.data?.items ?? []
-  const canManageMembers = space.data?.canManageMembers ?? false
+  const canAddMember = space.data?.canAddMember ?? false
+  const canRemoveMember = space.data?.canRemoveMember ?? false
   const visible = Spaces.memberRows(items, props.userId).filter((row) => Spaces.matches([row.name, row.email], needle))
   const refresh = () =>
     Promise.all([
@@ -45,7 +46,7 @@ export function SpaceMembers(props: { spaceId: string; organizationId: string; u
     <>
       <Toolbar.Root>
         <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search members" />
-        {canManageMembers ? (
+        {canAddMember ? (
           <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setAdding(true)}>
             Add member
           </Button>
@@ -56,7 +57,7 @@ export function SpaceMembers(props: { spaceId: string; organizationId: string; u
         state={state[members.status]}
         query={needle.trim()}
         onRemove={
-          canManageMembers
+          canRemoveMember
             ? (row) => {
                 setRemoving(row)
                 setConfirming(true)

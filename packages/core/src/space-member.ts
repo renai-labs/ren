@@ -21,7 +21,7 @@ const notFound = new Primitive.NotFound({ message: "Space member not found." })
 
 const forbidden = new Primitive.Forbidden({ message: "You cannot manage the members of this space." })
 
-const activeMembers = (transaction: Database.Transaction) =>
+const selectMembers = (transaction: Database.Transaction) =>
   transaction
     .select({
       id: sql<string>`${Database.Schema.space_member.id}`.as("id"),
@@ -37,7 +37,7 @@ const activeMembers = (transaction: Database.Transaction) =>
     .from(Database.Schema.space_member)
     .innerJoin(Database.Schema.user, eq(Database.Schema.user.id, Database.Schema.space_member.user_id))
 
-const pendingMembers = (transaction: Database.Transaction) =>
+const selectPendingMembers = (transaction: Database.Transaction) =>
   transaction
     .select({
       id: sql<string>`${Database.Schema.space_pending_member.id}`.as("id"),
@@ -52,35 +52,35 @@ const pendingMembers = (transaction: Database.Transaction) =>
     })
     .from(Database.Schema.space_pending_member)
 
-const decode = (row: Effect.Success<ReturnType<typeof pendingMembers>>[number]) =>
+const toInfo = (row: Effect.Success<ReturnType<typeof selectPendingMembers>>[number]) =>
   Schema.decodeUnknownEffect(SpaceMember.Info)({
     ...row,
     createdAt: DateTime.fromDateUnsafe(row.createdAt),
     archivedAt: row.archivedAt && DateTime.fromDateUnsafe(row.archivedAt),
   }).pipe(Effect.orDie)
 
-const find = Effect.fnUntraced(function* (transaction: Database.Transaction, id: SpaceMember.ID) {
+const findMember = Effect.fnUntraced(function* (transaction: Database.Transaction, id: SpaceMember.ID) {
   const rows = Schema.is(Space.MembershipID)(id)
-    ? yield* activeMembers(transaction).where(eq(Database.Schema.space_member.id, id))
-    : yield* pendingMembers(transaction).where(eq(Database.Schema.space_pending_member.id, id))
+    ? yield* selectMembers(transaction).where(eq(Database.Schema.space_member.id, id))
+    : yield* selectPendingMembers(transaction).where(eq(Database.Schema.space_pending_member.id, id))
   const row = rows.at(0)
   if (!row) return yield* notFound
-  return yield* decode(row)
+  return yield* toInfo(row)
 })
 
-const conflictOn =
+const mapUniqueConflict =
   (constraint: string, message: string) =>
   (error: EffectDrizzleQueryError): Effect.Effect<never, Primitive.Conflict | EffectDrizzleQueryError> => {
     const failure = Cause.isCause(error.cause) ? Cause.findErrorOption(error.cause) : Option.none()
-    const isViolation =
+    const isMatchingUniqueViolation =
       Option.isSome(failure) &&
       SqlError.isSqlError(failure.value) &&
       failure.value.reason._tag === "UniqueViolation" &&
       failure.value.reason.constraint === constraint
-    return isViolation ? Effect.fail(new Primitive.Conflict({ message })) : Effect.fail(error)
+    return isMatchingUniqueViolation ? Effect.fail(new Primitive.Conflict({ message })) : Effect.fail(error)
   }
 
-const addUser = Effect.fnUntraced(function* (
+const addMember = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   actor: Actor.Info,
   spaceId: Space.ID,
@@ -103,13 +103,13 @@ const addUser = Effect.fnUntraced(function* (
     .pipe(
       Effect.catchTag(
         "EffectDrizzleQueryError",
-        conflictOn("space_member_space_id_user_id_uidx", "The user is already a member of this space."),
+        mapUniqueConflict("space_member_space_id_user_id_uidx", "The user is already a member of this space."),
       ),
     )
-  return yield* find(transaction, id)
+  return yield* findMember(transaction, id)
 })
 
-const addPending = Effect.fnUntraced(function* (
+const addPendingMember = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   actor: Actor.Info,
   spaceId: Space.ID,
@@ -129,7 +129,7 @@ const addPending = Effect.fnUntraced(function* (
   if (organizationMembers.length > 0) {
     return yield* new Primitive.Conflict({ message: "This person is already in the organization. Add them directly." })
   }
-  const invitations = yield* transaction
+  const pendingInvitations = yield* transaction
     .select({ id: Database.Schema.invitation.id })
     .from(Database.Schema.invitation)
     .where(
@@ -139,7 +139,7 @@ const addPending = Effect.fnUntraced(function* (
         eq(sql`lower(${Database.Schema.invitation.email})`, normalizedEmail),
       ),
     )
-  if (invitations.length === 0) {
+  if (pendingInvitations.length === 0) {
     return yield* new Primitive.Conflict({ message: "Invite this person to the organization first." })
   }
   const id = Space.AssignmentID.create()
@@ -149,10 +149,10 @@ const addPending = Effect.fnUntraced(function* (
     .pipe(
       Effect.catchTag(
         "EffectDrizzleQueryError",
-        conflictOn("space_pending_member_space_id_email_uidx", "This email is already pending in this space."),
+        mapUniqueConflict("space_pending_member_space_id_email_uidx", "This email is already pending in this space."),
       ),
     )
-  return yield* find(transaction, id)
+  return yield* findMember(transaction, id)
 })
 
 export const layer = Layer.effect(
@@ -161,7 +161,11 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const permissions = yield* SpacePermissions.Service
 
-    const load = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, spaceId: Space.ID) {
+    const lockSpaceAccess = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      spaceId: Space.ID,
+    ) {
       const role = yield* SpaceQueries.organizationRole(transaction, actor)
       if (!role) return
       const rows = yield* transaction
@@ -184,11 +188,11 @@ export const layer = Layer.effect(
       list: Effect.fn("SpaceMember.list")(function* (actor: Actor.Info, input: SpaceMember.ListInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const space = yield* load(transaction, actor, input.spaceId)
+            const space = yield* lockSpaceAccess(transaction, actor, input.spaceId)
             if (!space || space.archivedAt || !permissions.canRead(space.access)) {
               return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
             }
-            const members = activeMembers(transaction)
+            const members = selectMembers(transaction)
               .where(
                 and(
                   eq(Database.Schema.space_member.space_id, input.spaceId),
@@ -196,7 +200,7 @@ export const layer = Layer.effect(
                 ),
               )
               .unionAll(
-                pendingMembers(transaction).where(
+                selectPendingMembers(transaction).where(
                   and(
                     eq(Database.Schema.space_pending_member.space_id, input.spaceId),
                     isNull(Database.Schema.space_pending_member.archived_at),
@@ -204,17 +208,17 @@ export const layer = Layer.effect(
                 ),
               )
               .as("members")
-            const where = input.status ? eq(members.status, input.status) : undefined
+            const statusFilter = input.status ? eq(members.status, input.status) : undefined
             const rows = yield* transaction
               .select()
               .from(members)
-              .where(where)
+              .where(statusFilter)
               .orderBy(asc(members.createdAt), asc(members.id))
               .limit(input.pageSize)
               .offset((input.page - 1) * input.pageSize)
-            const totals = yield* transaction.select({ total: count() }).from(members).where(where)
+            const totals = yield* transaction.select({ total: count() }).from(members).where(statusFilter)
             return {
-              items: yield* Effect.forEach(rows, decode),
+              items: yield* Effect.forEach(rows, toInfo),
               page: input.page,
               pageSize: input.pageSize,
               total: totals.at(0)?.total ?? 0,
@@ -225,29 +229,29 @@ export const layer = Layer.effect(
       create: Effect.fn("SpaceMember.create")(function* (actor: Actor.Info, input: SpaceMember.CreateInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const space = yield* load(transaction, actor, input.spaceId)
+            const space = yield* lockSpaceAccess(transaction, actor, input.spaceId)
             if (!space || space.archivedAt || !permissions.canRead(space.access)) return yield* notFound
-            if (!permissions.canManageMembers(space.access)) return yield* forbidden
-            if ("userId" in input) return yield* addUser(transaction, actor, input.spaceId, input.userId)
-            return yield* addPending(transaction, actor, input.spaceId, input.email)
+            if (!permissions.canAddMember(space.access)) return yield* forbidden
+            if ("userId" in input) return yield* addMember(transaction, actor, input.spaceId, input.userId)
+            return yield* addPendingMember(transaction, actor, input.spaceId, input.email)
           }),
         )
       }),
       archive: Effect.fn("SpaceMember.archive")(function* (actor: Actor.Info, id: SpaceMember.ID) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const member = yield* find(transaction, id)
-            const space = yield* load(transaction, actor, member.spaceId)
+            const member = yield* findMember(transaction, id)
+            const space = yield* lockSpaceAccess(transaction, actor, member.spaceId)
             if (!space || space.archivedAt || !permissions.canRead(space.access)) return yield* notFound
             if (member.archivedAt) return member
-            if (!permissions.canManageMembers(space.access)) return yield* forbidden
+            if (!permissions.canRemoveMember(space.access)) return yield* forbidden
             const table =
               member.status === "active" ? Database.Schema.space_member : Database.Schema.space_pending_member
             yield* transaction
               .update(table)
               .set({ archived_at: sql`now()` })
               .where(and(eq(table.id, member.id), isNull(table.archived_at)))
-            return yield* find(transaction, id)
+            return yield* findMember(transaction, id)
           }),
         )
       }),

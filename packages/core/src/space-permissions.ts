@@ -10,15 +10,17 @@ export interface Access {
 }
 
 interface ArchiveAccess extends Access {
-  readonly isFirstSpace: boolean
+  readonly isFirstOrganizationSpace: boolean
 }
 
 export interface Interface {
   readonly isAdministrator: (role: string) => boolean
   readonly visibility: (isAdministrator: boolean) => "organization" | "membership"
   readonly canRead: (access: Access) => boolean
-  readonly canManage: (access: Access) => boolean
-  readonly canManageMembers: (access: Access) => boolean
+  readonly canCreate: (role: string | undefined) => role is string
+  readonly canUpdate: (access: Access) => boolean
+  readonly canAddMember: (access: Access) => boolean
+  readonly canRemoveMember: (access: Access) => boolean
   readonly canArchive: (access: ArchiveAccess) => boolean
 }
 
@@ -32,8 +34,11 @@ export const layer = Layer.succeed(
     isAdministrator: Auth.isAdministrator,
     visibility: (isAdministrator) => (isAdministrator ? "organization" : "membership"),
     canRead: canAccess,
-    canManage: canAccess,
-    canManageMembers: canAccess,
-    canArchive: (access) => !access.isFirstSpace && canAccess(access),
+    // ast-grep-ignore: no-nullish-comparison, -- the type guard must narrow exactly undefined away
+    canCreate: (role): role is string => role !== undefined,
+    canUpdate: canAccess,
+    canAddMember: canAccess,
+    canRemoveMember: canAccess,
+    canArchive: (access) => !access.isFirstOrganizationSpace && canAccess(access),
   }),
 )
