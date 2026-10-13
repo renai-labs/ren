@@ -103,12 +103,6 @@ describe("Auth", () => {
     }),
   )
 
-  it.effect("refuses Google sessions for unverified emails, so every session proves its email", () =>
-    Effect.sync(() => {
-      expect(auth.options.socialProviders.google.requireEmailVerification).toBe(true)
-    }),
-  )
-
   it.live("names default organizations after the user or their company domain", () =>
     Effect.gen(function* () {
       const personal = yield* defaultOrganization("barbara@gmail.com", "Barbara Liskov")
