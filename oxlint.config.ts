@@ -705,9 +705,7 @@ export default defineConfig({
     "**/*.d.ts",
     "**/*.gen.ts",
     "**/generated/**",
-    "packages/client/src/generated/**",
-    "packages/client/src/effect/generated/**",
-    "packages/client/src/react/generated/**",
+    "packages/db/src/auth.sql.ts",
     ".opencode/**",
   ],
 })
