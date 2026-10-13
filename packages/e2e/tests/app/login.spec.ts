@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test"
-import { appURL, createUser, emailedCode, uniqueEmail } from "../lib/servers.js"
+import { appOrigin, appURL, createUser, emailedCode, serverURL, uniqueEmail } from "../lib/servers.js"
 
 test("signs in with a password and returns to the requested page", async ({ page, request }) => {
   const email = uniqueEmail("login")
   await createUser(request, { name: "Ada Lovelace", email, password: "correct horse battery" })
 
-  await page.goto("/")
+  await page.goto("/app/")
   await expect(page).toHaveURL(/\/login\?redirect=%2F$/)
   await page.getByLabel("Email").fill(email)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
@@ -18,7 +18,7 @@ test("signs in with a password and returns to the requested page", async ({ page
   await expect(page).toHaveURL(`${appURL}/`)
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
 
-  await page.goto("/login")
+  await page.goto("/app/login")
   await expect(page).toHaveURL(`${appURL}/`)
 })
 
@@ -26,7 +26,7 @@ test("signs in with an emailed code", async ({ page, request }) => {
   const email = uniqueEmail("code")
   await createUser(request, { name: "Grace Hopper", email, password: "correct horse battery" })
 
-  await page.goto("/login")
+  await page.goto("/app/login")
   await page.getByLabel("Email").fill(email)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByRole("button", { name: "Email sign-in code" }).click()
@@ -40,13 +40,13 @@ test("signs in with an emailed code", async ({ page, request }) => {
 
 test("an unverified account is sent to verify its email", async ({ page, request }) => {
   const email = uniqueEmail("unverified")
-  const signUp = await request.post(`${appURL}/auth/sign-up/email`, {
-    headers: { origin: appURL },
+  const signUp = await request.post(`${serverURL}/auth/sign-up/email`, {
+    headers: { origin: appOrigin },
     data: { name: "Alan Turing", email, password: "correct horse battery" },
   })
   expect(signUp.ok()).toBe(true)
 
-  await page.goto("/login")
+  await page.goto("/app/login")
   await page.getByLabel("Email").fill(email)
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
@@ -56,10 +56,10 @@ test("an unverified account is sent to verify its email", async ({ page, request
 })
 
 test("links to sign up and to reset the password with the email filled in", async ({ page }) => {
-  await page.goto("/login")
+  await page.goto("/app/login")
   await page.getByRole("link", { name: "Sign up" }).click()
   await expect(page).toHaveURL(/\/signup$/)
-  await page.goto("/login")
+  await page.goto("/app/login")
   await page.getByLabel("Email").fill("ada@example.com")
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByRole("link", { name: "Forgot your password?" }).click()
@@ -68,9 +68,9 @@ test("links to sign up and to reset the password with the email filled in", asyn
 
 test("continues with Google and comes back to the app", async ({ page }) => {
   await page.route(/accounts\.google\.com/, (route) => route.abort())
-  await page.goto("/login?redirect=%2Fsettings")
+  await page.goto("/app/login?redirect=%2Fsettings")
   const request = page.waitForRequest(/accounts\.google\.com/)
   await page.getByRole("button", { name: "Continue with Google" }).click()
   const google = new URL((await request).url())
-  expect(google.searchParams.get("redirect_uri")).toBe(`${appURL}/auth/callback/google`)
+  expect(google.searchParams.get("redirect_uri")).toBe(`${serverURL}/auth/callback/google`)
 })

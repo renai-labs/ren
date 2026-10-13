@@ -30,6 +30,7 @@ export function make(platform: Platform.Info) {
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
+    basepath: "/app",
   })
   return { context, router }
 }

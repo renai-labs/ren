@@ -21,7 +21,7 @@ docker compose up -d
 | `bun run format`   | Format the repo with Prettier                             |
 | `bun run check`    | Lint (oxlint, ast-grep and knip) and typecheck everything |
 
-The web app and the API share one origin. In development Vite proxies `/auth`, `/openapi.json` and every API resource root in `packages/protocol/openapi.json` (`/spaces`, `/me`, …) to `REN_API_URL` (default `http://localhost:4000`). A request that accepts `text/html` on a resource root is served the app instead, so reloading `/spaces` still loads the page.
+The web app and the API run on separate origins. The app is served under `/app/` (`http://localhost:5173/app/` in development, `https://useren.ai/app/` in production) and calls the API directly at `VITE_REN_API_URL` (default `http://localhost:4000` in development, `https://api.useren.ai` in production) with credentials. The server allows the origins in `TRUSTED_ORIGINS` (CORS and Better Auth) and builds email links from `APP_URL`, which includes `/app`.
 
 ## Verification
 

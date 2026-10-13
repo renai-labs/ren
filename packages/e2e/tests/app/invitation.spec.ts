@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
 import type { APIRequestContext } from "@playwright/test"
-import { appURL, createUser, emailedCode, lastEmail, uniqueEmail } from "../lib/servers.js"
+import { appOrigin, appURL, createUser, emailedCode, lastEmail, serverURL, uniqueEmail } from "../lib/servers.js"
 
 async function invite(request: APIRequestContext, email: string) {
   const company = `Northwind${crypto.randomUUID().slice(0, 8)}`
@@ -9,8 +9,8 @@ async function invite(request: APIRequestContext, email: string) {
     email: `grace@${company.toLowerCase()}.com`,
     password: "correct horse battery",
   })
-  const response = await request.post(`${appURL}/auth/organization/invite-member`, {
-    headers: { origin: appURL },
+  const response = await request.post(`${serverURL}/auth/organization/invite-member`, {
+    headers: { origin: appOrigin },
     data: { email, role: "member" },
   })
   expect(response.ok()).toBe(true)
@@ -39,10 +39,10 @@ test("an invited person signs up and joins the organization", async ({ page, req
   await expect(page.getByText("Joined organization")).toBeVisible()
   await expect(page).toHaveURL(`${appURL}/`)
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
-  const me = await page.request.get(`${appURL}/me`)
+  const me = await page.request.get(`${serverURL}/me`)
   expect((await me.json()).organization.name).toBe(invitation.organization)
 
-  await page.goto(`/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
+  await page.goto(`/app/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
   await expect(page.getByRole("heading", { name: "This invitation has already been accepted" })).toBeVisible()
   await expect(page.getByRole("button", { name: "Go to workspace" })).toBeVisible()
 })
@@ -52,7 +52,7 @@ test("a signed-in person declines an invitation", async ({ page, request }) => {
   await createUser(page.request, { name: "Alan Turing", email, password: "correct horse battery" })
   const invitation = await invite(request, email)
 
-  await page.goto(`/invites/accept?id=${invitation.link.searchParams.get("invitationId") ?? ""}`)
+  await page.goto(`/app/invites/accept?id=${invitation.link.searchParams.get("invitationId") ?? ""}`)
   await expect(
     page.getByRole("heading", { name: `You’ve been invited to join ${invitation.organization}` }),
   ).toBeVisible()
@@ -67,7 +67,7 @@ test("an invitation for another address offers to switch accounts", async ({ pag
   const email = uniqueEmail("wrong-account")
   await createUser(page.request, { name: "Alan Turing", email, password: "correct horse battery" })
 
-  await page.goto(`/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
+  await page.goto(`/app/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
   await page.getByRole("button", { name: "Continue to join" }).click()
   await expect(page.getByText("This invitation is for another email address")).toBeVisible()
   await expect(
@@ -78,7 +78,7 @@ test("an invitation for another address offers to switch accounts", async ({ pag
 })
 
 test("an unknown invitation explains itself", async ({ page }) => {
-  await page.goto("/invites/accept?id=inv_unknown")
+  await page.goto("/app/invites/accept?id=inv_unknown")
   await expect(page.getByRole("heading", { name: "This invitation isn’t valid" })).toBeVisible()
   await page.getByRole("link", { name: "Return to homepage" }).click()
   await expect(page).toHaveURL(/\/login\?redirect=/)
@@ -89,11 +89,11 @@ test("an account with only a pending invitation is sent to it", async ({ page, r
   const invitation = await invite(request, email)
   await createUser(page.request, { name: "Alan Turing", email, password: "correct horse battery" })
 
-  await page.goto("/")
+  await page.goto("/app/")
   await expect(page).toHaveURL(/\/invites\/accept\?id=.+&redirect=%2F$/)
   await page.getByRole("button", { name: "Continue to join" }).click()
   await expect(page.getByText("Joined organization")).toBeVisible()
   await expect(page).toHaveURL(`${appURL}/`)
-  const me = await page.request.get(`${appURL}/me`)
+  const me = await page.request.get(`${serverURL}/me`)
   expect((await me.json()).organization.name).toBe(invitation.organization)
 })

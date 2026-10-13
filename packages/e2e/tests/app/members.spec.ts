@@ -3,7 +3,7 @@ import { addMember, appURL, createOrganization, lastEmail, uniqueEmail } from ".
 
 test("an owner invites people, then resends and revokes an invitation", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/settings/members")
+  await page.goto("/app/settings/members")
   await expect(page.getByRole("heading", { level: 1, name: "Members" })).toBeVisible()
   await expect(page.getByRole("row", { name: /Grace Hopper/ })).toContainText("You")
   await expect(page.getByRole("combobox", { name: "Role for Grace Hopper" })).toBeDisabled()
@@ -57,7 +57,7 @@ test("an owner changes a member’s role, then removes them", async ({ page, req
   await createOrganization(page.request, { name: "Grace Hopper" })
   const alan = uniqueEmail("member")
   await addMember(page.request, request, { name: "Alan Turing", email: alan })
-  await page.goto("/settings/members")
+  await page.goto("/app/settings/members")
 
   await page.getByRole("button", { name: "Add member" }).click()
   const dialog = page.getByRole("dialog", { name: "Add members" })

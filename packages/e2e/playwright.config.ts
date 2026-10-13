@@ -12,7 +12,7 @@ export default defineConfig({
   },
   webServer: {
     command: "bun script/serve.ts",
-    url: `http://127.0.0.1:${app}/openapi.json`,
+    url: `http://127.0.0.1:${app}/app/`,
     timeout: 120_000,
     gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
     reuseExistingServer: !process.env.CI,

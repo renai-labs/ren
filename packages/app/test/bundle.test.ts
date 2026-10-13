@@ -21,8 +21,11 @@ test(
     const exitCode = await build.exited
     if (exitCode !== 0) throw new Error(await new Response(build.stderr).text())
     const html = await Bun.file(path.join(outDir, "index.html")).text()
+    expect(html).toContain('src="/app/assets/')
     const gzipSize = async (pattern: RegExp) => {
-      const files = new Set(Array.from(html.matchAll(pattern), (match) => path.join(outDir, match[1] ?? "")))
+      const files = new Set(
+        Array.from(html.matchAll(pattern), (match) => path.join(outDir, (match[1] ?? "").replace(/^\/app\//, ""))),
+      )
       const sizes = await Promise.all(
         Array.from(files, async (file) => gzipSync(await Bun.file(file).arrayBuffer()).byteLength),
       )

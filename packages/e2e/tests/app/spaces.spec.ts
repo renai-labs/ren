@@ -1,9 +1,17 @@
 import { expect, test } from "@playwright/test"
-import { addMember, appURL, createOrganization, inviteMember, uniqueEmail } from "../lib/servers.js"
+import {
+  addMember,
+  appOrigin,
+  appURL,
+  createOrganization,
+  inviteMember,
+  serverURL,
+  uniqueEmail,
+} from "../lib/servers.js"
 
 test("a new organization starts with a protected shared space and a personal space", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/")
+  await page.goto("/app/")
   await page.getByRole("link", { name: "Spaces" }).click()
   await expect(page.getByRole("heading", { level: 1, name: "Spaces" })).toBeVisible()
   await expect(page.locator('a[aria-current="page"]')).toHaveCount(1)
@@ -22,7 +30,7 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   const invitee = uniqueEmail("invitee")
   await inviteMember(page.request, invitee)
 
-  await page.goto("/spaces")
+  await page.goto("/app/spaces")
   await page.getByRole("button", { name: "Create or join a space" }).click()
   await page.getByRole("menuitem", { name: "Create space" }).click()
   const create = page.getByRole("dialog", { name: "New space" })
@@ -79,13 +87,13 @@ test("an admin joins a space they are not in, and a member creates one from a bu
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await addMember(page.request, request, { name: "Alan Turing", email: uniqueEmail("member") })
-  const created = await request.post(`${appURL}/spaces`, {
-    headers: { origin: appURL },
+  const created = await request.post(`${serverURL}/spaces`, {
+    headers: { origin: appOrigin },
     data: { name: "Cryptography" },
   })
   expect(created.ok()).toBe(true)
 
-  await page.goto("/spaces")
+  await page.goto("/app/spaces")
   await page.getByRole("button", { name: "Create or join a space" }).click()
   await page.getByRole("menuitem", { name: "Join space" }).click()
   const join = page.getByRole("dialog", { name: "Join space" })
@@ -94,9 +102,9 @@ test("an admin joins a space they are not in, and a member creates one from a bu
   await expect(page.getByText("Joined Cryptography")).toBeVisible()
   await expect(page.getByRole("heading", { level: 1, name: "Cryptography" })).toBeVisible()
 
-  const context = await browser.newContext({ storageState: await request.storageState(), baseURL: appURL })
+  const context = await browser.newContext({ storageState: await request.storageState(), baseURL: appOrigin })
   const alan = await context.newPage()
-  await alan.goto("/spaces")
+  await alan.goto("/app/spaces")
   await expect(alan.getByRole("button", { name: "New space" })).toBeVisible()
   await expect(alan.getByRole("button", { name: "Create or join a space" })).toBeHidden()
   await context.close()
