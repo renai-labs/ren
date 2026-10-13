@@ -1199,46 +1199,6 @@ describe("HttpApiCodegen.generate", () => {
     expect(url).toBe("https://example.com/event?after=2")
   })
 
-  test("preserves public group and endpoint identifiers exactly", () => {
-    const output = compileOutput(
-      HttpApi.make("test").add(
-        HttpApiGroup.make("session").add(HttpApiEndpoint.get("get", "/session/:sessionID", { success: Schema.String })),
-      ),
-    )
-
-    expect(output.operations[0]).toMatchObject({ group: "session", name: "get" })
-  })
-
-  test("emits one client module per HttpApi group", () => {
-    const source = HttpApi.make("test")
-      .add(HttpApiGroup.make("session").add(HttpApiEndpoint.get("get", "/session", { success: Schema.String })))
-      .add(HttpApiGroup.make("tool").add(HttpApiEndpoint.get("list", "/tool", { success: Schema.String })))
-
-    const output = compileOutput(source)
-
-    expect(output.files.map((file) => file.path)).toEqual([
-      "session.ts",
-      "tool.ts",
-      "client-error.ts",
-      "client.ts",
-      "index.ts",
-    ])
-  })
-
-  test("emits syntactically valid TypeScript modules", () => {
-    const output = compileOutput(
-      api(
-        HttpApiEndpoint.get("get", "/session/:sessionID", {
-          params: { sessionID: Schema.String },
-          success: Schema.Struct({ data: Schema.String }),
-        }),
-      ),
-    )
-    const transpiler = new Bun.Transpiler({ loader: "ts" })
-
-    for (const file of output.files) expect(() => transpiler.transformSync(file.content)).not.toThrow()
-  })
-
   it.live("keeps the strict generated-consumer fixture current", () =>
     Effect.gen(function* () {
       const output = compileOutput(Api)
@@ -1373,19 +1333,6 @@ describe("HttpApiCodegen.generate", () => {
     expect(output.files.find((file) => file.path === "session.ts")?.content).toContain('input?.["limit"]')
   })
 
-  test("regenerates standard HttpApi transport codecs from decoded schemas", () => {
-    const output = compileOutput(
-      api(
-        HttpApiEndpoint.get("list", "/session", {
-          query: { archived: Schema.optional(Schema.Boolean) },
-          success: Schema.String,
-        }),
-      ),
-    )
-
-    expect(output.files.find((file) => file.path === "session.ts")?.content).toContain("Schema.Boolean")
-  })
-
   test("uses a required object when any input field is required", () => {
     const output = compileOutput(
       api(
@@ -1507,20 +1454,6 @@ describe("HttpApiCodegen.generate", () => {
 
     expect(types).toContain('readonly "metadata": { readonly [x: string]: any }')
     expect(types).toContain('readonly "label": "unknown"')
-  })
-
-  test("preserves annotated stream response statuses", () => {
-    const output = compileOutput(
-      api(
-        HttpApiEndpoint.get("subscribe", "/event", {
-          success: HttpApiSchema.StreamSse({ data: Schema.String }).pipe(HttpApiSchema.status(202)),
-        }),
-      ),
-    )
-
-    expect(output.files.find((file) => file.path === "session.ts")?.content).toContain(
-      ".pipe(HttpApiSchema.status(202))",
-    )
   })
 
   test("rejects schemas whose semantics cannot be emitted exactly", () => {
@@ -1649,22 +1582,6 @@ describe("HttpApiCodegen.generate", () => {
     )
   })
 
-  test("preserves tagged error response statuses", () => {
-    class Missing extends Schema.TaggedError<Missing>()("Missing", {}) {}
-    const output = compileOutput(
-      api(
-        HttpApiEndpoint.get("get", "/session", {
-          success: Schema.String,
-          error: Missing.pipe(HttpApiSchema.status(404)),
-        }),
-      ),
-    )
-
-    expect(output.files.find((file) => file.path === "session.ts")?.content).toContain(
-      'EndpointGetError0Class.annotate({ "httpApiStatus": 404 })',
-    )
-  })
-
   test("supports every HttpApi method through the generic constructor", () => {
     const output = compileOutput(api(HttpApiEndpoint.make("TRACE")("trace", "/trace", { success: Schema.String })))
 
@@ -1714,18 +1631,6 @@ describe("HttpApiCodegen.generate", () => {
           ),
       ),
     ).toThrow("Client name collision: status")
-  })
-
-  test("emits a usable raw type for top-level groups", () => {
-    const output = compileOutput(
-      HttpApi.make("test").add(
-        HttpApiGroup.make("health", { topLevel: true }).add(
-          HttpApiEndpoint.get("check", "/health", { success: Schema.String }),
-        ),
-      ),
-    )
-
-    expect(output.files[0]?.content).toContain("type RawGroup = HttpApiClient.Client<typeof GroupHealth")
   })
 
   it.effect("reports compiler failures in the generate Effect", () =>

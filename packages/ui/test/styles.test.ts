@@ -19,15 +19,6 @@ describe("frontend sources", () => {
     expect(offending).toEqual([])
   })
 
-  test("CSS and HTML carry no comments", () => {
-    const comment = /\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->|^\s*\/\/(?!.*https?:)/m
-    const offending = sources
-      .filter((source) => source.file.endsWith(".css") || source.file.endsWith(".html"))
-      .filter((source) => comment.test(source.text.replaceAll(/"[^"\n]*"/g, '""')))
-      .map((source) => source.file)
-    expect(offending).toEqual([])
-  })
-
   test("stylesheets avoid declarations that break motion, type or touch", () => {
     const banned = [
       /transition(?:-property)?:\s*all\b/,

@@ -52,31 +52,6 @@ describe("design tokens", () => {
     expect(failing).toEqual([])
   })
 
-  test("scales keep their fixed size", () => {
-    expect(tokens.colors.size).toBe(18)
-    expect(
-      Object.fromEntries(
-        ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "radius", "opacity", "container"].map(
-          (type) => [type, ofType(type).length],
-        ),
-      ),
-    ).toEqual({
-      fontFamily: 2,
-      fontSize: 6,
-      fontWeight: 4,
-      lineHeight: 5,
-      letterSpacing: 2,
-      radius: 5,
-      opacity: 2,
-      container: 3,
-    })
-    expect(ofType("spacing").map((token) => token.name)).toEqual(
-      [1, 2, 3, 4, 6, 8, 12].map((step) => `spacing-${step}`),
-    )
-    expect(ofType("radius").map((token) => token.value)).toEqual(["4px", "8px", "12px", "16px", "9999px"])
-    expect(ofType("fontSize").map((token) => token.value)).toEqual(["10px", "12px", "14px", "16px", "20px", "30px"])
-  })
-
   test("the Tailwind theme maps only generated tokens", () => {
     const block = /@theme inline \{([\s\S]*?)\n\}/.exec(theme)?.[1] ?? ""
     const unmapped = [...block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)]

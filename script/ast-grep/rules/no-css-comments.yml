@@ -1,0 +1,6 @@
+id: no-css-comments
+language: css
+severity: error
+message: Remove the comment and make the stylesheet explain itself through names and structure.
+rule:
+  kind: comment

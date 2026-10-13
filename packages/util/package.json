@@ -9,7 +9,6 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "test": "bun test --only-failures",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
