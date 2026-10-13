@@ -105,7 +105,7 @@ async function* reply(body: ChatRequest, behaviour: Behaviour, gate: Promise<voi
   const last = body.messages.findLastIndex((message) => message.role === "user")
   const answered = body.messages.slice(last + 1).some((message) => message.role === "tool")
   const tool = answered ? undefined : behaviour.tool
-  const words = (behaviour.reply ?? "stub reply").split(/(?<= )/)
+  const words = tool ? [] : (behaviour.reply ?? "stub reply").split(/(?<= )/)
   const pause = () => (behaviour.dripMs ? Bun.sleep(behaviour.dripMs) : Promise.resolve())
   yield chunk({ role: "assistant", content: "" })
   await pause()
@@ -116,7 +116,7 @@ async function* reply(body: ChatRequest, behaviour: Behaviour, gate: Promise<voi
       tool_calls: [{ index: 0, id: `call_${crypto.randomUUID().slice(0, 8)}`, type: "function", function: call }],
     })
   }
-  if (!tool) yield* words.slice(0, 1).map((word) => chunk({ content: word }))
+  yield* words.slice(0, 1).map((word) => chunk({ content: word }))
   if (behaviour.cut) {
     // oxlint-disable-next-line ren/no-comments -- Without a turn of the event loop, Bun breaks the connection before it sends the headers and the first chunk.
     await Bun.sleep(0)

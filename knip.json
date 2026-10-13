@@ -13,7 +13,7 @@
       "ignoreDependencies": ["@ren/app", "ren-v1"]
     },
     "packages/cell": {
-      "entry": ["src/worker.ts", "test/**/*.test.ts", "test/lib/preload.ts"],
+      "entry": ["src/worker.ts", "test/**/*.test.ts", "test/lib/preload.ts", "test/worker/worker.ts"],
       "ignoreBinaries": ["celld"],
       "ignoreDependencies": ["cloudflare"]
     },

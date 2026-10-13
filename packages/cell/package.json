@@ -11,6 +11,9 @@
     "typecheck": "tsgo -b"
   },
   "dependencies": {
+    "@opencode/client": "catalog:",
+    "@opencode/core": "catalog:",
+    "@opencode/server": "catalog:",
     "@ren/schema": "workspace:*",
     "effect": "catalog:"
   },

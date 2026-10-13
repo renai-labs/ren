@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { Reconcile } from "../src/reconcile.js"
 
+const parkAfterMs = 600_000
+
 const work = (fields: Partial<Reconcile.Session>) =>
-  Reconcile.work({ active: false, inbox: [], unfinished: false, ...fields })
+  Reconcile.work({ active: false, inbox: [], unfinished: false, askedMs: undefined, ...fields }, parkAfterMs)
 
 const user = (id: string): Reconcile.Item => ({ id, type: "user" })
 
@@ -44,6 +46,20 @@ describe("reconcile work", () => {
 
   test("a stopped session whose last turn is unfinished is resuming", () => {
     expect(work({ unfinished: true })).toEqual({ _tag: "Resuming" })
+  })
+
+  test("a session waiting on a question is running until the question has waited the park time", () => {
+    expect([0, parkAfterMs - 1].map((askedMs) => work({ active: true, askedMs }))).toEqual([
+      { _tag: "Running" },
+      { _tag: "Running" },
+    ])
+  })
+
+  test("a question that has waited the park time or longer is unanswered", () => {
+    expect([parkAfterMs, parkAfterMs * 10].map((askedMs) => work({ active: true, askedMs }))).toEqual([
+      { _tag: "Unanswered" },
+      { _tag: "Unanswered" },
+    ])
   })
 
   test("input in the inbox wins over an unfinished last turn", () => {

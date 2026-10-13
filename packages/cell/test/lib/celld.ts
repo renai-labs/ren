@@ -41,15 +41,19 @@ const ready = async (url: string, container: string, deadline: number): Promise<
   return ready(url, container, deadline)
 }
 
-export const make = async (vars: Readonly<Record<string, string>>): Promise<Instance> => {
+export const make = async (vars: Readonly<Record<string, string>>, main = "src/worker.ts"): Promise<Instance> => {
   const project = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "ren-celld-")))
-  // oxlint-disable-next-line ren/no-comments -- celld keeps its state and reads .dev.vars beside the config, and follows a linked config to its real folder, so each instance gets a copy. The repository is mounted at its host path so the src link and node_modules links resolve in the container.
-  await fs.copyFile(path.join(cell, "wrangler.jsonc"), path.join(project, "wrangler.jsonc"))
+  const config = await Bun.file(path.join(cell, "wrangler.jsonc")).text()
+  if (!config.includes('"main": "src/worker.ts"'))
+    throw new Error("wrangler.jsonc no longer sets main to src/worker.ts")
+  // oxlint-disable-next-line ren/no-comments -- celld keeps its state and reads .dev.vars beside the config, and follows a linked config to its real folder, so each instance gets a copy. The repository is mounted at its host path so the src and test links and node_modules links resolve in the container.
+  await Bun.write(path.join(project, "wrangler.jsonc"), config.replace('"main": "src/worker.ts"', `"main": "${main}"`))
   await fs.symlink(path.join(cell, "src"), path.join(project, "src"))
+  await fs.symlink(path.join(cell, "test"), path.join(project, "test"))
   await Bun.write(
     path.join(project, ".dev.vars"),
     Object.entries(vars)
-      .map((entry) => `${entry[0]}=${entry[1]}`)
+      .map((entry) => `${entry[0]}='${entry[1]}'`)
       .join("\n"),
   )
   const state = { container: "", port: "" }
