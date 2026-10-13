@@ -230,5 +230,3 @@ export const make = (input: Input) => {
     },
   })
 }
-
-export type Instance = ReturnType<typeof make>

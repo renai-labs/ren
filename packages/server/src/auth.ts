@@ -22,29 +22,6 @@ interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/server/Auth") {}
 
-const getActiveOrganization = (database: AuthDatabase.Interface["db"], auth: BetterAuth.Instance) =>
-  Effect.fn("Auth.getActiveOrganization")(function* (session: AuthenticatedSession, headers: Headers) {
-    const membership = yield* Effect.promise(() =>
-      database.query.member.findFirst({
-        columns: {},
-        with: { organization: { columns: { id: true, name: true, slug: true, logo: true } } },
-        where: { userId: session.user.id },
-        orderBy: (member, { asc, desc, sql }) => [
-          desc(sql`${member.organizationId} is not distinct from ${session.session.activeOrganizationId}`),
-          asc(member.createdAt),
-          asc(member.id),
-        ],
-      }),
-    )
-    const active = membership?.organization
-    if (!active) return Option.none()
-    if (active.id !== session.session.activeOrganizationId) {
-      yield* Effect.promise(() => auth.api.setActiveOrganization({ headers, body: { organizationId: active.id } }))
-    }
-    const organization: typeof Auth.Organization.Encoded = active
-    return Option.some(yield* Schema.decodeEffect(Auth.Organization)(organization).pipe(Effect.orDie))
-  })
-
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -107,7 +84,30 @@ export const layer = Layer.effect(
           session: { activeOrganizationId: session.session.activeOrganizationId ?? null },
         })
       }),
-      getActiveOrganization: getActiveOrganization(database.db, auth),
+      getActiveOrganization: Effect.fn("Auth.getActiveOrganization")(function* (
+        session: AuthenticatedSession,
+        headers: Headers,
+      ) {
+        const membership = yield* Effect.promise(() =>
+          database.db.query.member.findFirst({
+            columns: {},
+            with: { organization: { columns: { id: true, name: true, slug: true, logo: true } } },
+            where: { userId: session.user.id },
+            orderBy: (member, { asc, desc, sql }) => [
+              desc(sql`${member.organizationId} is not distinct from ${session.session.activeOrganizationId}`),
+              asc(member.createdAt),
+              asc(member.id),
+            ],
+          }),
+        )
+        const active = membership?.organization
+        if (!active) return Option.none()
+        if (active.id !== session.session.activeOrganizationId) {
+          yield* Effect.promise(() => auth.api.setActiveOrganization({ headers, body: { organizationId: active.id } }))
+        }
+        const organization: typeof Auth.Organization.Encoded = active
+        return Option.some(yield* Schema.decodeEffect(Auth.Organization)(organization).pipe(Effect.orDie))
+      }),
     })
   }),
 ).pipe(Layer.provide(SpaceProvisioning.layer))

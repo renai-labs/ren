@@ -1,4 +1,3 @@
-// oxlint-disable eslint/max-lines -- one import and one entry per glyph
 import {
   IconActivity,
   IconAdjustmentsHorizontal,

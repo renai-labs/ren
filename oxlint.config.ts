@@ -355,8 +355,6 @@ export default defineConfig({
     "eslint/no-var": "error",
     "eslint/max-depth": ["error", 3],
     "eslint/complexity": ["error", 12],
-    "eslint/max-lines": ["error", { max: 250, skipBlankLines: true, skipComments: true }],
-    "eslint/max-lines-per-function": ["error", { max: 80, skipBlankLines: true, skipComments: true }],
     "typescript/switch-exhaustiveness-check": "error",
 
     "eslint/object-shorthand": "error",
@@ -548,8 +546,6 @@ export default defineConfig({
     {
       files: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
       rules: {
-        "eslint/max-lines": "off",
-        "eslint/max-lines-per-function": "off",
         "eslint/no-await-in-loop": "off",
         "typescript/await-thenable": "off",
         "no-restricted-properties": "off",
@@ -562,7 +558,7 @@ export default defineConfig({
     },
     {
       files: ["**/script/**", "**/scripts/**"],
-      rules: { "eslint/no-console": "off", "eslint/max-lines-per-function": "off" },
+      rules: { "eslint/no-console": "off" },
     },
     {
       files: [
@@ -573,10 +569,6 @@ export default defineConfig({
         "script/oxlint/ren/index.ts",
       ],
       rules: { "import/no-default-export": "off" },
-    },
-    {
-      files: ["**/*.config.ts", "**/*.stories.tsx"],
-      rules: { "eslint/max-lines": "off", "eslint/max-lines-per-function": "off" },
     },
     {
       files: ["**/parity/*.stories.tsx"],
