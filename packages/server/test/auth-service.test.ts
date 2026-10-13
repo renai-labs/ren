@@ -64,7 +64,7 @@ const post = (path: string, body: unknown, cookie = "") =>
     const auth = yield* Auth.Service
     return yield* Effect.promise(() =>
       auth.handler(
-        new Request(`http://localhost:4000/api/auth${path}`, {
+        new Request(`http://localhost:4000/auth${path}`, {
           method: "POST",
           headers: { "content-type": "application/json", origin: "http://localhost:4000", cookie },
           body: JSON.stringify(body),
@@ -77,7 +77,7 @@ const get = (path: string, cookie: string) =>
   Effect.gen(function* () {
     const auth = yield* Auth.Service
     const response = yield* Effect.promise(() =>
-      auth.handler(new Request(`http://localhost:4000/api/auth${path}`, { headers: { cookie } })),
+      auth.handler(new Request(`http://localhost:4000/auth${path}`, { headers: { cookie } })),
     )
     return yield* Effect.promise(() => response.json())
   })

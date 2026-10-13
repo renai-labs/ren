@@ -19,16 +19,15 @@ import { Route as AuthedShellRouteImport } from "./routes/_authed/_shell"
 import { Route as InvitesAcceptRouteImport } from "./routes/invites/accept"
 import { Route as AuthedShellIndexRouteImport } from "./routes/_authed/_shell/index"
 import { Route as AuthedShellSplatRouteImport } from "./routes/_authed/_shell/$"
-import { Route as AuthedShellSessionsIndexRouteImport } from "./routes/_authed/_shell/sessions/index"
-import { Route as AuthedShellSessionsSettingsIndexRouteImport } from "./routes/_authed/_shell/sessions/settings/index"
-import { Route as AuthedShellSessionsSettingsAdminRouteImport } from "./routes/_authed/_shell/sessions/settings/_admin"
-import { Route as AuthedShellSessionsSettingsPreferencesRouteImport } from "./routes/_authed/_shell/sessions/settings/preferences"
-import { Route as AuthedShellSessionsSpacesIndexRouteImport } from "./routes/_authed/_shell/sessions/spaces/index"
-import { Route as AuthedShellSessionsSpacesSpaceIdRouteRouteImport } from "./routes/_authed/_shell/sessions/spaces/$spaceId/route"
-import { Route as AuthedShellSessionsSettingsAdminGeneralRouteImport } from "./routes/_authed/_shell/sessions/settings/_admin/general"
-import { Route as AuthedShellSessionsSpacesSpaceIdIndexRouteImport } from "./routes/_authed/_shell/sessions/spaces/$spaceId/index"
-import { Route as AuthedShellSessionsSpacesSpaceIdMembersRouteImport } from "./routes/_authed/_shell/sessions/spaces/$spaceId/members"
-import { Route as AuthedShellSessionsSettingsAdminMembersIndexRouteImport } from "./routes/_authed/_shell/sessions/settings/_admin/members/index"
+import { Route as AuthedShellSettingsIndexRouteImport } from "./routes/_authed/_shell/settings/index"
+import { Route as AuthedShellSettingsAdminRouteImport } from "./routes/_authed/_shell/settings/_admin"
+import { Route as AuthedShellSettingsPreferencesRouteImport } from "./routes/_authed/_shell/settings/preferences"
+import { Route as AuthedShellSpacesIndexRouteImport } from "./routes/_authed/_shell/spaces/index"
+import { Route as AuthedShellSpacesSpaceIdRouteRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/route"
+import { Route as AuthedShellSettingsAdminGeneralRouteImport } from "./routes/_authed/_shell/settings/_admin/general"
+import { Route as AuthedShellSpacesSpaceIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/index"
+import { Route as AuthedShellSpacesSpaceIdMembersRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/members"
+import { Route as AuthedShellSettingsAdminMembersIndexRouteImport } from "./routes/_authed/_shell/settings/_admin/members/index"
 
 const AuthedRoute = AuthedRouteImport.update({
   id: "/_authed",
@@ -78,65 +77,58 @@ const AuthedShellSplatRoute = AuthedShellSplatRouteImport.update({
   path: "/$",
   getParentRoute: () => AuthedShellRoute,
 } as any)
-const AuthedShellSessionsIndexRoute =
-  AuthedShellSessionsIndexRouteImport.update({
-    id: "/sessions/",
-    path: "/sessions/",
+const AuthedShellSettingsIndexRoute =
+  AuthedShellSettingsIndexRouteImport.update({
+    id: "/settings/",
+    path: "/settings/",
     getParentRoute: () => AuthedShellRoute,
   } as any)
-const AuthedShellSessionsSettingsIndexRoute =
-  AuthedShellSessionsSettingsIndexRouteImport.update({
-    id: "/sessions/settings/",
-    path: "/sessions/settings/",
+const AuthedShellSettingsAdminRoute =
+  AuthedShellSettingsAdminRouteImport.update({
+    id: "/settings/_admin",
+    path: "/settings",
     getParentRoute: () => AuthedShellRoute,
   } as any)
-const AuthedShellSessionsSettingsAdminRoute =
-  AuthedShellSessionsSettingsAdminRouteImport.update({
-    id: "/sessions/settings/_admin",
-    path: "/sessions/settings",
+const AuthedShellSettingsPreferencesRoute =
+  AuthedShellSettingsPreferencesRouteImport.update({
+    id: "/settings/preferences",
+    path: "/settings/preferences",
     getParentRoute: () => AuthedShellRoute,
   } as any)
-const AuthedShellSessionsSettingsPreferencesRoute =
-  AuthedShellSessionsSettingsPreferencesRouteImport.update({
-    id: "/sessions/settings/preferences",
-    path: "/sessions/settings/preferences",
+const AuthedShellSpacesIndexRoute = AuthedShellSpacesIndexRouteImport.update({
+  id: "/spaces/",
+  path: "/spaces/",
+  getParentRoute: () => AuthedShellRoute,
+} as any)
+const AuthedShellSpacesSpaceIdRouteRoute =
+  AuthedShellSpacesSpaceIdRouteRouteImport.update({
+    id: "/spaces/$spaceId",
+    path: "/spaces/$spaceId",
     getParentRoute: () => AuthedShellRoute,
   } as any)
-const AuthedShellSessionsSpacesIndexRoute =
-  AuthedShellSessionsSpacesIndexRouteImport.update({
-    id: "/sessions/spaces/",
-    path: "/sessions/spaces/",
-    getParentRoute: () => AuthedShellRoute,
-  } as any)
-const AuthedShellSessionsSpacesSpaceIdRouteRoute =
-  AuthedShellSessionsSpacesSpaceIdRouteRouteImport.update({
-    id: "/sessions/spaces/$spaceId",
-    path: "/sessions/spaces/$spaceId",
-    getParentRoute: () => AuthedShellRoute,
-  } as any)
-const AuthedShellSessionsSettingsAdminGeneralRoute =
-  AuthedShellSessionsSettingsAdminGeneralRouteImport.update({
+const AuthedShellSettingsAdminGeneralRoute =
+  AuthedShellSettingsAdminGeneralRouteImport.update({
     id: "/general",
     path: "/general",
-    getParentRoute: () => AuthedShellSessionsSettingsAdminRoute,
+    getParentRoute: () => AuthedShellSettingsAdminRoute,
   } as any)
-const AuthedShellSessionsSpacesSpaceIdIndexRoute =
-  AuthedShellSessionsSpacesSpaceIdIndexRouteImport.update({
+const AuthedShellSpacesSpaceIdIndexRoute =
+  AuthedShellSpacesSpaceIdIndexRouteImport.update({
     id: "/",
     path: "/",
-    getParentRoute: () => AuthedShellSessionsSpacesSpaceIdRouteRoute,
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
   } as any)
-const AuthedShellSessionsSpacesSpaceIdMembersRoute =
-  AuthedShellSessionsSpacesSpaceIdMembersRouteImport.update({
+const AuthedShellSpacesSpaceIdMembersRoute =
+  AuthedShellSpacesSpaceIdMembersRouteImport.update({
     id: "/members",
     path: "/members",
-    getParentRoute: () => AuthedShellSessionsSpacesSpaceIdRouteRoute,
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
   } as any)
-const AuthedShellSessionsSettingsAdminMembersIndexRoute =
-  AuthedShellSessionsSettingsAdminMembersIndexRouteImport.update({
+const AuthedShellSettingsAdminMembersIndexRoute =
+  AuthedShellSettingsAdminMembersIndexRouteImport.update({
     id: "/members/",
     path: "/members/",
-    getParentRoute: () => AuthedShellSessionsSettingsAdminRoute,
+    getParentRoute: () => AuthedShellSettingsAdminRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -148,16 +140,15 @@ export interface FileRoutesByFullPath {
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
-  "/sessions/": typeof AuthedShellSessionsIndexRoute
-  "/sessions/spaces/$spaceId": typeof AuthedShellSessionsSpacesSpaceIdRouteRouteWithChildren
-  "/sessions/settings": typeof AuthedShellSessionsSettingsAdminRouteWithChildren
-  "/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
-  "/sessions/settings/": typeof AuthedShellSessionsSettingsIndexRoute
-  "/sessions/spaces/": typeof AuthedShellSessionsSpacesIndexRoute
-  "/sessions/settings/general": typeof AuthedShellSessionsSettingsAdminGeneralRoute
-  "/sessions/spaces/$spaceId/members": typeof AuthedShellSessionsSpacesSpaceIdMembersRoute
-  "/sessions/spaces/$spaceId/": typeof AuthedShellSessionsSpacesSpaceIdIndexRoute
-  "/sessions/settings/members/": typeof AuthedShellSessionsSettingsAdminMembersIndexRoute
+  "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
+  "/settings": typeof AuthedShellSettingsAdminRouteWithChildren
+  "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
+  "/settings/": typeof AuthedShellSettingsIndexRoute
+  "/spaces/": typeof AuthedShellSpacesIndexRoute
+  "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
+  "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
+  "/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
+  "/settings/members/": typeof AuthedShellSettingsAdminMembersIndexRoute
 }
 export interface FileRoutesByTo {
   "/": typeof AuthedShellIndexRoute
@@ -168,14 +159,13 @@ export interface FileRoutesByTo {
   "/verify-email": typeof VerifyEmailRoute
   "/invites/accept": typeof InvitesAcceptRoute
   "/$": typeof AuthedShellSplatRoute
-  "/sessions": typeof AuthedShellSessionsIndexRoute
-  "/sessions/settings": typeof AuthedShellSessionsSettingsIndexRoute
-  "/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
-  "/sessions/spaces": typeof AuthedShellSessionsSpacesIndexRoute
-  "/sessions/settings/general": typeof AuthedShellSessionsSettingsAdminGeneralRoute
-  "/sessions/spaces/$spaceId/members": typeof AuthedShellSessionsSpacesSpaceIdMembersRoute
-  "/sessions/spaces/$spaceId": typeof AuthedShellSessionsSpacesSpaceIdIndexRoute
-  "/sessions/settings/members": typeof AuthedShellSessionsSettingsAdminMembersIndexRoute
+  "/settings": typeof AuthedShellSettingsIndexRoute
+  "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
+  "/spaces": typeof AuthedShellSpacesIndexRoute
+  "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
+  "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
+  "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdIndexRoute
+  "/settings/members": typeof AuthedShellSettingsAdminMembersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -189,16 +179,15 @@ export interface FileRoutesById {
   "/invites/accept": typeof InvitesAcceptRoute
   "/_authed/_shell/$": typeof AuthedShellSplatRoute
   "/_authed/_shell/": typeof AuthedShellIndexRoute
-  "/_authed/_shell/sessions/": typeof AuthedShellSessionsIndexRoute
-  "/_authed/_shell/sessions/spaces/$spaceId": typeof AuthedShellSessionsSpacesSpaceIdRouteRouteWithChildren
-  "/_authed/_shell/sessions/settings/_admin": typeof AuthedShellSessionsSettingsAdminRouteWithChildren
-  "/_authed/_shell/sessions/settings/preferences": typeof AuthedShellSessionsSettingsPreferencesRoute
-  "/_authed/_shell/sessions/settings/": typeof AuthedShellSessionsSettingsIndexRoute
-  "/_authed/_shell/sessions/spaces/": typeof AuthedShellSessionsSpacesIndexRoute
-  "/_authed/_shell/sessions/settings/_admin/general": typeof AuthedShellSessionsSettingsAdminGeneralRoute
-  "/_authed/_shell/sessions/spaces/$spaceId/members": typeof AuthedShellSessionsSpacesSpaceIdMembersRoute
-  "/_authed/_shell/sessions/spaces/$spaceId/": typeof AuthedShellSessionsSpacesSpaceIdIndexRoute
-  "/_authed/_shell/sessions/settings/_admin/members/": typeof AuthedShellSessionsSettingsAdminMembersIndexRoute
+  "/_authed/_shell/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
+  "/_authed/_shell/settings/_admin": typeof AuthedShellSettingsAdminRouteWithChildren
+  "/_authed/_shell/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
+  "/_authed/_shell/settings/": typeof AuthedShellSettingsIndexRoute
+  "/_authed/_shell/spaces/": typeof AuthedShellSpacesIndexRoute
+  "/_authed/_shell/settings/_admin/general": typeof AuthedShellSettingsAdminGeneralRoute
+  "/_authed/_shell/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
+  "/_authed/_shell/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
+  "/_authed/_shell/settings/_admin/members/": typeof AuthedShellSettingsAdminMembersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -211,16 +200,15 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/invites/accept"
     | "/$"
-    | "/sessions/"
-    | "/sessions/spaces/$spaceId"
-    | "/sessions/settings"
-    | "/sessions/settings/preferences"
-    | "/sessions/settings/"
-    | "/sessions/spaces/"
-    | "/sessions/settings/general"
-    | "/sessions/spaces/$spaceId/members"
-    | "/sessions/spaces/$spaceId/"
-    | "/sessions/settings/members/"
+    | "/spaces/$spaceId"
+    | "/settings"
+    | "/settings/preferences"
+    | "/settings/"
+    | "/spaces/"
+    | "/settings/general"
+    | "/spaces/$spaceId/members"
+    | "/spaces/$spaceId/"
+    | "/settings/members/"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
@@ -231,14 +219,13 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/invites/accept"
     | "/$"
-    | "/sessions"
-    | "/sessions/settings"
-    | "/sessions/settings/preferences"
-    | "/sessions/spaces"
-    | "/sessions/settings/general"
-    | "/sessions/spaces/$spaceId/members"
-    | "/sessions/spaces/$spaceId"
-    | "/sessions/settings/members"
+    | "/settings"
+    | "/settings/preferences"
+    | "/spaces"
+    | "/settings/general"
+    | "/spaces/$spaceId/members"
+    | "/spaces/$spaceId"
+    | "/settings/members"
   id:
     | "__root__"
     | "/_authed"
@@ -251,16 +238,15 @@ export interface FileRouteTypes {
     | "/invites/accept"
     | "/_authed/_shell/$"
     | "/_authed/_shell/"
-    | "/_authed/_shell/sessions/"
-    | "/_authed/_shell/sessions/spaces/$spaceId"
-    | "/_authed/_shell/sessions/settings/_admin"
-    | "/_authed/_shell/sessions/settings/preferences"
-    | "/_authed/_shell/sessions/settings/"
-    | "/_authed/_shell/sessions/spaces/"
-    | "/_authed/_shell/sessions/settings/_admin/general"
-    | "/_authed/_shell/sessions/spaces/$spaceId/members"
-    | "/_authed/_shell/sessions/spaces/$spaceId/"
-    | "/_authed/_shell/sessions/settings/_admin/members/"
+    | "/_authed/_shell/spaces/$spaceId"
+    | "/_authed/_shell/settings/_admin"
+    | "/_authed/_shell/settings/preferences"
+    | "/_authed/_shell/settings/"
+    | "/_authed/_shell/spaces/"
+    | "/_authed/_shell/settings/_admin/general"
+    | "/_authed/_shell/spaces/$spaceId/members"
+    | "/_authed/_shell/spaces/$spaceId/"
+    | "/_authed/_shell/settings/_admin/members/"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -345,138 +331,124 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSplatRouteImport
       parentRoute: typeof AuthedShellRoute
     }
-    "/_authed/_shell/sessions/": {
-      id: "/_authed/_shell/sessions/"
-      path: "/sessions"
-      fullPath: "/sessions/"
-      preLoaderRoute: typeof AuthedShellSessionsIndexRouteImport
+    "/_authed/_shell/settings/": {
+      id: "/_authed/_shell/settings/"
+      path: "/settings"
+      fullPath: "/settings/"
+      preLoaderRoute: typeof AuthedShellSettingsIndexRouteImport
       parentRoute: typeof AuthedShellRoute
     }
-    "/_authed/_shell/sessions/settings/": {
-      id: "/_authed/_shell/sessions/settings/"
-      path: "/sessions/settings"
-      fullPath: "/sessions/settings/"
-      preLoaderRoute: typeof AuthedShellSessionsSettingsIndexRouteImport
+    "/_authed/_shell/settings/_admin": {
+      id: "/_authed/_shell/settings/_admin"
+      path: "/settings"
+      fullPath: "/settings"
+      preLoaderRoute: typeof AuthedShellSettingsAdminRouteImport
       parentRoute: typeof AuthedShellRoute
     }
-    "/_authed/_shell/sessions/settings/_admin": {
-      id: "/_authed/_shell/sessions/settings/_admin"
-      path: "/sessions/settings"
-      fullPath: "/sessions/settings"
-      preLoaderRoute: typeof AuthedShellSessionsSettingsAdminRouteImport
+    "/_authed/_shell/settings/preferences": {
+      id: "/_authed/_shell/settings/preferences"
+      path: "/settings/preferences"
+      fullPath: "/settings/preferences"
+      preLoaderRoute: typeof AuthedShellSettingsPreferencesRouteImport
       parentRoute: typeof AuthedShellRoute
     }
-    "/_authed/_shell/sessions/settings/preferences": {
-      id: "/_authed/_shell/sessions/settings/preferences"
-      path: "/sessions/settings/preferences"
-      fullPath: "/sessions/settings/preferences"
-      preLoaderRoute: typeof AuthedShellSessionsSettingsPreferencesRouteImport
+    "/_authed/_shell/spaces/": {
+      id: "/_authed/_shell/spaces/"
+      path: "/spaces"
+      fullPath: "/spaces/"
+      preLoaderRoute: typeof AuthedShellSpacesIndexRouteImport
       parentRoute: typeof AuthedShellRoute
     }
-    "/_authed/_shell/sessions/spaces/": {
-      id: "/_authed/_shell/sessions/spaces/"
-      path: "/sessions/spaces"
-      fullPath: "/sessions/spaces/"
-      preLoaderRoute: typeof AuthedShellSessionsSpacesIndexRouteImport
+    "/_authed/_shell/spaces/$spaceId": {
+      id: "/_authed/_shell/spaces/$spaceId"
+      path: "/spaces/$spaceId"
+      fullPath: "/spaces/$spaceId"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdRouteRouteImport
       parentRoute: typeof AuthedShellRoute
     }
-    "/_authed/_shell/sessions/spaces/$spaceId": {
-      id: "/_authed/_shell/sessions/spaces/$spaceId"
-      path: "/sessions/spaces/$spaceId"
-      fullPath: "/sessions/spaces/$spaceId"
-      preLoaderRoute: typeof AuthedShellSessionsSpacesSpaceIdRouteRouteImport
-      parentRoute: typeof AuthedShellRoute
-    }
-    "/_authed/_shell/sessions/settings/_admin/general": {
-      id: "/_authed/_shell/sessions/settings/_admin/general"
+    "/_authed/_shell/settings/_admin/general": {
+      id: "/_authed/_shell/settings/_admin/general"
       path: "/general"
-      fullPath: "/sessions/settings/general"
-      preLoaderRoute: typeof AuthedShellSessionsSettingsAdminGeneralRouteImport
-      parentRoute: typeof AuthedShellSessionsSettingsAdminRoute
+      fullPath: "/settings/general"
+      preLoaderRoute: typeof AuthedShellSettingsAdminGeneralRouteImport
+      parentRoute: typeof AuthedShellSettingsAdminRoute
     }
-    "/_authed/_shell/sessions/spaces/$spaceId/": {
-      id: "/_authed/_shell/sessions/spaces/$spaceId/"
+    "/_authed/_shell/spaces/$spaceId/": {
+      id: "/_authed/_shell/spaces/$spaceId/"
       path: "/"
-      fullPath: "/sessions/spaces/$spaceId/"
-      preLoaderRoute: typeof AuthedShellSessionsSpacesSpaceIdIndexRouteImport
-      parentRoute: typeof AuthedShellSessionsSpacesSpaceIdRouteRoute
+      fullPath: "/spaces/$spaceId/"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdIndexRouteImport
+      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
     }
-    "/_authed/_shell/sessions/spaces/$spaceId/members": {
-      id: "/_authed/_shell/sessions/spaces/$spaceId/members"
+    "/_authed/_shell/spaces/$spaceId/members": {
+      id: "/_authed/_shell/spaces/$spaceId/members"
       path: "/members"
-      fullPath: "/sessions/spaces/$spaceId/members"
-      preLoaderRoute: typeof AuthedShellSessionsSpacesSpaceIdMembersRouteImport
-      parentRoute: typeof AuthedShellSessionsSpacesSpaceIdRouteRoute
+      fullPath: "/spaces/$spaceId/members"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdMembersRouteImport
+      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
     }
-    "/_authed/_shell/sessions/settings/_admin/members/": {
-      id: "/_authed/_shell/sessions/settings/_admin/members/"
+    "/_authed/_shell/settings/_admin/members/": {
+      id: "/_authed/_shell/settings/_admin/members/"
       path: "/members"
-      fullPath: "/sessions/settings/members/"
-      preLoaderRoute: typeof AuthedShellSessionsSettingsAdminMembersIndexRouteImport
-      parentRoute: typeof AuthedShellSessionsSettingsAdminRoute
+      fullPath: "/settings/members/"
+      preLoaderRoute: typeof AuthedShellSettingsAdminMembersIndexRouteImport
+      parentRoute: typeof AuthedShellSettingsAdminRoute
     }
   }
 }
 
-interface AuthedShellSessionsSpacesSpaceIdRouteRouteChildren {
-  AuthedShellSessionsSpacesSpaceIdMembersRoute: typeof AuthedShellSessionsSpacesSpaceIdMembersRoute
-  AuthedShellSessionsSpacesSpaceIdIndexRoute: typeof AuthedShellSessionsSpacesSpaceIdIndexRoute
+interface AuthedShellSpacesSpaceIdRouteRouteChildren {
+  AuthedShellSpacesSpaceIdMembersRoute: typeof AuthedShellSpacesSpaceIdMembersRoute
+  AuthedShellSpacesSpaceIdIndexRoute: typeof AuthedShellSpacesSpaceIdIndexRoute
 }
 
-const AuthedShellSessionsSpacesSpaceIdRouteRouteChildren: AuthedShellSessionsSpacesSpaceIdRouteRouteChildren =
+const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteRouteChildren =
   {
-    AuthedShellSessionsSpacesSpaceIdMembersRoute:
-      AuthedShellSessionsSpacesSpaceIdMembersRoute,
-    AuthedShellSessionsSpacesSpaceIdIndexRoute:
-      AuthedShellSessionsSpacesSpaceIdIndexRoute,
+    AuthedShellSpacesSpaceIdMembersRoute: AuthedShellSpacesSpaceIdMembersRoute,
+    AuthedShellSpacesSpaceIdIndexRoute: AuthedShellSpacesSpaceIdIndexRoute,
   }
 
-const AuthedShellSessionsSpacesSpaceIdRouteRouteWithChildren =
-  AuthedShellSessionsSpacesSpaceIdRouteRoute._addFileChildren(
-    AuthedShellSessionsSpacesSpaceIdRouteRouteChildren,
+const AuthedShellSpacesSpaceIdRouteRouteWithChildren =
+  AuthedShellSpacesSpaceIdRouteRoute._addFileChildren(
+    AuthedShellSpacesSpaceIdRouteRouteChildren,
   )
 
-interface AuthedShellSessionsSettingsAdminRouteChildren {
-  AuthedShellSessionsSettingsAdminGeneralRoute: typeof AuthedShellSessionsSettingsAdminGeneralRoute
-  AuthedShellSessionsSettingsAdminMembersIndexRoute: typeof AuthedShellSessionsSettingsAdminMembersIndexRoute
+interface AuthedShellSettingsAdminRouteChildren {
+  AuthedShellSettingsAdminGeneralRoute: typeof AuthedShellSettingsAdminGeneralRoute
+  AuthedShellSettingsAdminMembersIndexRoute: typeof AuthedShellSettingsAdminMembersIndexRoute
 }
 
-const AuthedShellSessionsSettingsAdminRouteChildren: AuthedShellSessionsSettingsAdminRouteChildren =
+const AuthedShellSettingsAdminRouteChildren: AuthedShellSettingsAdminRouteChildren =
   {
-    AuthedShellSessionsSettingsAdminGeneralRoute:
-      AuthedShellSessionsSettingsAdminGeneralRoute,
-    AuthedShellSessionsSettingsAdminMembersIndexRoute:
-      AuthedShellSessionsSettingsAdminMembersIndexRoute,
+    AuthedShellSettingsAdminGeneralRoute: AuthedShellSettingsAdminGeneralRoute,
+    AuthedShellSettingsAdminMembersIndexRoute:
+      AuthedShellSettingsAdminMembersIndexRoute,
   }
 
-const AuthedShellSessionsSettingsAdminRouteWithChildren =
-  AuthedShellSessionsSettingsAdminRoute._addFileChildren(
-    AuthedShellSessionsSettingsAdminRouteChildren,
+const AuthedShellSettingsAdminRouteWithChildren =
+  AuthedShellSettingsAdminRoute._addFileChildren(
+    AuthedShellSettingsAdminRouteChildren,
   )
 
 interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
   AuthedShellIndexRoute: typeof AuthedShellIndexRoute
-  AuthedShellSessionsIndexRoute: typeof AuthedShellSessionsIndexRoute
-  AuthedShellSessionsSpacesSpaceIdRouteRoute: typeof AuthedShellSessionsSpacesSpaceIdRouteRouteWithChildren
-  AuthedShellSessionsSettingsAdminRoute: typeof AuthedShellSessionsSettingsAdminRouteWithChildren
-  AuthedShellSessionsSettingsPreferencesRoute: typeof AuthedShellSessionsSettingsPreferencesRoute
-  AuthedShellSessionsSettingsIndexRoute: typeof AuthedShellSessionsSettingsIndexRoute
-  AuthedShellSessionsSpacesIndexRoute: typeof AuthedShellSessionsSpacesIndexRoute
+  AuthedShellSpacesSpaceIdRouteRoute: typeof AuthedShellSpacesSpaceIdRouteRouteWithChildren
+  AuthedShellSettingsAdminRoute: typeof AuthedShellSettingsAdminRouteWithChildren
+  AuthedShellSettingsPreferencesRoute: typeof AuthedShellSettingsPreferencesRoute
+  AuthedShellSettingsIndexRoute: typeof AuthedShellSettingsIndexRoute
+  AuthedShellSpacesIndexRoute: typeof AuthedShellSpacesIndexRoute
 }
 
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
-  AuthedShellSessionsIndexRoute: AuthedShellSessionsIndexRoute,
-  AuthedShellSessionsSpacesSpaceIdRouteRoute:
-    AuthedShellSessionsSpacesSpaceIdRouteRouteWithChildren,
-  AuthedShellSessionsSettingsAdminRoute:
-    AuthedShellSessionsSettingsAdminRouteWithChildren,
-  AuthedShellSessionsSettingsPreferencesRoute:
-    AuthedShellSessionsSettingsPreferencesRoute,
-  AuthedShellSessionsSettingsIndexRoute: AuthedShellSessionsSettingsIndexRoute,
-  AuthedShellSessionsSpacesIndexRoute: AuthedShellSessionsSpacesIndexRoute,
+  AuthedShellSpacesSpaceIdRouteRoute:
+    AuthedShellSpacesSpaceIdRouteRouteWithChildren,
+  AuthedShellSettingsAdminRoute: AuthedShellSettingsAdminRouteWithChildren,
+  AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
+  AuthedShellSettingsIndexRoute: AuthedShellSettingsIndexRoute,
+  AuthedShellSpacesIndexRoute: AuthedShellSpacesIndexRoute,
 }
 
 const AuthedShellRouteWithChildren = AuthedShellRoute._addFileChildren(

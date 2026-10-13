@@ -31,7 +31,7 @@ Changes with no visual effect: `CodeField` can reference a description; bound fo
 | ⌘K search dialog: filters            | All, Chats, Projects, Teams, Actions, Settings                                      | All, Actions, Settings                                                          | Later  |
 | ⌘K search dialog: results            | Recent chats, projects, teams, chat-search note in the footer                       | Actions and settings pages only                                                 | Later  |
 | ⌘K search dialog: filter header      | Tabs on a surface with a bottom border                                              | Tabs in a padded row, no border (no `Surface` variant has a bottom-only border) | Review |
-| `/sessions`                          | Last chat or the composer                                                           | Placeholder page with a “Welcome, {name}” heading                               | Later  |
+| `/`                                  | Last chat or the composer                                                           | Placeholder page with a “Welcome, {name}” heading                               | Later  |
 | Sign-in and sign-up                  | Google and Slack buttons                                                            | Google only                                                                     | Review |
 
 ## 3. Copy
@@ -48,7 +48,7 @@ Changes with no visual effect: `CodeField` can reference a description; bound fo
 | --------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------ |
 | Add members dialog          | Submit disabled until every email is valid    | Submit stays enabled and shows the field error (`no-disabled-submit`)                                        | Review |
 | Members page                | Tab held in component state                   | Tab lives in the URL (`?tab=invitations`)                                                                    | Review |
-| Settings “Back to app”      | Returns to the last chat                      | Returns to `/sessions`                                                                                       | Later  |
+| Settings “Back to app”      | Returns to the last chat                      | Returns to `/`                                                                                               | Later  |
 | Offline error page          | Retries automatically                         | Manual retry only                                                                                            | Review |
 | Sidebar collapsed state     | Stored under v1's key                         | Stored under `sidebar.v1`, the app's versioned preference key                                                | Review |
 | Organization settings guard | `me.role`, owner and admin collapsed to admin | Better Auth `getActiveMemberRole`; owner and admin pass, members are sent to Preferences                     | —      |

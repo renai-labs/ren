@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { Preferences } from "../../../../../features/account/preferences.js"
+import { Preferences } from "../../../../features/account/preferences.js"
 
-export const Route = createFileRoute("/_authed/_shell/sessions/settings/preferences")({
+export const Route = createFileRoute("/_authed/_shell/settings/preferences")({
   head: () => ({ meta: [{ title: "Preferences · Ren" }] }),
   component: PreferencesPage,
 })

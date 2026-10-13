@@ -6,7 +6,7 @@
     "description": "Ren HTTP API."
   },
   "paths": {
-    "/api/health": {
+    "/health": {
       "get": {
         "tags": ["health"],
         "operationId": "health.get",
@@ -28,7 +28,7 @@
         "summary": "Get server health"
       }
     },
-    "/api/me": {
+    "/me": {
       "get": {
         "tags": ["me"],
         "operationId": "me.get",
@@ -67,7 +67,7 @@
         "summary": "Get the signed-in user"
       }
     },
-    "/api/invitations/{id}/preview": {
+    "/invitations/{id}/preview": {
       "get": {
         "tags": ["invitation"],
         "operationId": "invitation.preview",
@@ -100,7 +100,7 @@
         "summary": "Preview an organization invitation"
       }
     },
-    "/api/spaces": {
+    "/spaces": {
       "get": {
         "tags": ["space"],
         "operationId": "space.list",
@@ -261,7 +261,7 @@
         }
       }
     },
-    "/api/spaces/{idOrSlug}": {
+    "/spaces/{idOrSlug}": {
       "get": {
         "tags": ["space"],
         "operationId": "space.get",
@@ -329,7 +329,7 @@
         "summary": "Get space"
       }
     },
-    "/api/spaces/{id}": {
+    "/spaces/{id}": {
       "patch": {
         "tags": ["space"],
         "operationId": "space.update",
@@ -483,7 +483,7 @@
         "summary": "Archive space"
       }
     },
-    "/api/space-members": {
+    "/space-members": {
       "get": {
         "tags": ["space-member"],
         "operationId": "space-member.list",
@@ -651,7 +651,7 @@
         }
       }
     },
-    "/api/space-members/{id}": {
+    "/space-members/{id}": {
       "delete": {
         "tags": ["space-member"],
         "operationId": "space-member.archive",

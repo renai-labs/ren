@@ -15,11 +15,13 @@ docker compose up -d
 | Command            | What it does                                              |
 | ------------------ | --------------------------------------------------------- |
 | `bun run dev`      | Start the API server on port 4000 with watch              |
-| `bun run dev:app`  | Start the web app (proxies `/api` to the server)          |
+| `bun run dev:app`  | Start the web app (proxies the API to the server)         |
 | `bun run dev:site` | Start the docs site                                       |
 | `bun run generate` | Regenerate `openapi.json` and the clients                 |
 | `bun run format`   | Format the repo with Prettier                             |
 | `bun run check`    | Lint (oxlint, ast-grep and knip) and typecheck everything |
+
+The web app and the API share one origin. In development Vite proxies `/auth`, `/openapi.json` and every API resource root in `packages/protocol/openapi.json` (`/spaces`, `/me`, …) to `REN_API_URL` (default `http://localhost:4000`). A request that accepts `text/html` on a resource root is served the app instead, so reloading `/spaces` still loads the page.
 
 ## Verification
 

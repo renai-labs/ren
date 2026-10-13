@@ -54,7 +54,7 @@ export function SpacesPage(props: { userId: string }) {
                 key={space.id}
                 interaction="link"
                 density="spacious"
-                render={<Link to="/sessions/spaces/$spaceId" params={{ spaceId: space.id }} />}
+                render={<Link to="/spaces/$spaceId" params={{ spaceId: space.id }} />}
                 label={`Open ${space.name}`}
                 appearanceOrder={index}
                 media={<Avatar.Root name={space.name} glyph="Cube" size="extra-large" shape="square" decorative />}

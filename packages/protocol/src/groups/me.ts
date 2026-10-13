@@ -6,7 +6,7 @@ import { Authentication } from "../middleware/authentication.js"
 
 export const MeGroup = HttpApiGroup.make("me")
   .add(
-    HttpApiEndpoint.get("me.get", "/api/me", {
+    HttpApiEndpoint.get("me.get", "/me", {
       success: Auth.Me,
       error: UnauthorizedError,
     }).annotateMerge(

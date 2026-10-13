@@ -11,7 +11,7 @@ import { makeApp } from "./lib/app.js"
 const ProtectedApi = HttpApi.make("protected").add(
   HttpApiGroup.make("test.protected")
     .add(
-      HttpApiEndpoint.get("me", "/api/test/me", {
+      HttpApiEndpoint.get("me", "/test/me", {
         success: Schema.Struct({ id: Schema.String, email: Schema.String }),
         error: UnauthorizedError,
       }),
@@ -45,7 +45,7 @@ afterAll(async () => {
 
 const signUp = async (email: string, handler = app.handler, baseURL = "http://localhost:4000") => {
   const response = await handler(
-    new Request(`${baseURL}/api/auth/sign-up/email`, {
+    new Request(`${baseURL}/auth/sign-up/email`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, password: "correct horse battery staple", name: "Ada" }),
@@ -61,7 +61,7 @@ const sessionCookie = (response: Response) =>
     .map((cookie) => cookie.split(";")[0])
     .join("; ")
 
-const me = (headers: HeadersInit = {}) => app.handler(new Request("http://localhost:4000/api/test/me", { headers }))
+const me = (headers: HeadersInit = {}) => app.handler(new Request("http://localhost:4000/test/me", { headers }))
 
 describe("Authentication", () => {
   test("returns 401 without credentials", async () => {
@@ -92,7 +92,7 @@ describe("Authentication", () => {
     const response = await signUp("ivy@example.com", secureApp.handler, "https://localhost:4000")
     const cookie = sessionCookie(response)
     expect(cookie.startsWith("__Secure-")).toBe(true)
-    const user = await secureApp.handler(new Request("https://localhost:4000/api/test/me", { headers: { cookie } }))
+    const user = await secureApp.handler(new Request("https://localhost:4000/test/me", { headers: { cookie } }))
     expect(user.status).toBe(200)
     expect(await user.json()).toMatchObject({ email: "ivy@example.com" })
   })

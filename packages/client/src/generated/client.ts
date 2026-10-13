@@ -106,14 +106,14 @@ export function make(options: ClientOptions) {
     health: {
       get: (requestOptions?: RequestOptions) =>
         request<HealthGetOutput>(
-          { method: "GET", path: `/api/health`, successStatus: 200, declaredStatuses: [], empty: false },
+          { method: "GET", path: `/health`, successStatus: 200, declaredStatuses: [], empty: false },
           requestOptions,
         ),
     },
     me: {
       get: (requestOptions?: RequestOptions) =>
         request<MeGetOutput>(
-          { method: "GET", path: `/api/me`, successStatus: 200, declaredStatuses: [401], empty: false },
+          { method: "GET", path: `/me`, successStatus: 200, declaredStatuses: [401], empty: false },
           requestOptions,
         ),
     },
@@ -122,7 +122,7 @@ export function make(options: ClientOptions) {
         request<InvitationPreviewOutput>(
           {
             method: "GET",
-            path: `/api/invitations/${encodeURIComponent(input.id)}/preview`,
+            path: `/invitations/${encodeURIComponent(input.id)}/preview`,
             successStatus: 200,
             declaredStatuses: [],
             empty: false,
@@ -135,7 +135,7 @@ export function make(options: ClientOptions) {
         request<SpaceListOutput>(
           {
             method: "GET",
-            path: `/api/spaces`,
+            path: `/spaces`,
             query: { joined: input["joined"], page: input["page"], pageSize: input["pageSize"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
@@ -147,7 +147,7 @@ export function make(options: ClientOptions) {
         request<SpaceGetOutput>(
           {
             method: "GET",
-            path: `/api/spaces/${encodeURIComponent(input.idOrSlug)}`,
+            path: `/spaces/${encodeURIComponent(input.idOrSlug)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,
@@ -158,7 +158,7 @@ export function make(options: ClientOptions) {
         request<SpaceCreateOutput>(
           {
             method: "POST",
-            path: `/api/spaces`,
+            path: `/spaces`,
             body: { name: input["name"], description: input["description"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
@@ -170,7 +170,7 @@ export function make(options: ClientOptions) {
         request<SpaceUpdateOutput>(
           {
             method: "PATCH",
-            path: `/api/spaces/${encodeURIComponent(input.id)}`,
+            path: `/spaces/${encodeURIComponent(input.id)}`,
             body: { name: input["name"], description: input["description"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
@@ -182,7 +182,7 @@ export function make(options: ClientOptions) {
         request<SpaceArchiveOutput>(
           {
             method: "DELETE",
-            path: `/api/spaces/${encodeURIComponent(input.id)}`,
+            path: `/spaces/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,
@@ -195,7 +195,7 @@ export function make(options: ClientOptions) {
         request<SpaceMemberListOutput>(
           {
             method: "GET",
-            path: `/api/space-members`,
+            path: `/space-members`,
             query: {
               spaceId: input["spaceId"],
               status: input["status"],
@@ -212,7 +212,7 @@ export function make(options: ClientOptions) {
         request<SpaceMemberCreateOutput>(
           {
             method: "POST",
-            path: `/api/space-members`,
+            path: `/space-members`,
             body: input["payload"],
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
@@ -224,7 +224,7 @@ export function make(options: ClientOptions) {
         request<SpaceMemberArchiveOutput>(
           {
             method: "DELETE",
-            path: `/api/space-members/${encodeURIComponent(input.id)}`,
+            path: `/space-members/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,

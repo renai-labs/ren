@@ -5,12 +5,12 @@ const app = makeApp()
 
 afterAll(() => app.dispose())
 
-const me = (cookie: string) => app.handler(new Request("http://localhost:4000/api/me", { headers: { cookie } }))
+const me = (cookie: string) => app.handler(new Request("http://localhost:4000/me", { headers: { cookie } }))
 
 const getSession = async (cookie: string) =>
-  (await app.handler(new Request("http://localhost:4000/api/auth/get-session", { headers: { cookie } }))).json()
+  (await app.handler(new Request("http://localhost:4000/auth/get-session", { headers: { cookie } }))).json()
 
-describe("GET /api/me", () => {
+describe("GET /me", () => {
   test("returns the user and their active organization", async () => {
     const response = await me(sessionCookie(await signUp(app, "ada@gmail.com", "Ada Lovelace")))
     expect(await response.json()).toEqual({
@@ -75,7 +75,7 @@ describe("GET /api/me", () => {
     await app.handler(authRequest("/organization/delete", { organizationId: apollo.id }, cookie))
     expect((await (await me(cookie)).json()).organization).toEqual(personal)
     const session = await (
-      await app.handler(new Request("http://localhost:4000/api/auth/get-session", { headers: { cookie } }))
+      await app.handler(new Request("http://localhost:4000/auth/get-session", { headers: { cookie } }))
     ).json()
     expect(session.session.activeOrganizationId).toBe(personal.id)
   })

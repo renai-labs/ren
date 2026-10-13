@@ -39,7 +39,7 @@ export function SettingsSidebar() {
         <ApplicationShell.NavigationItem
           icon={<Icon glyph="ArrowLeft" />}
           label="Back to app"
-          render={<Link to="/sessions" />}
+          render={<Link to="/" />}
         />
         <li>
           <TextField

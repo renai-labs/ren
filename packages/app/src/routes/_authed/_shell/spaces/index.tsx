@@ -1,8 +1,8 @@
 import { Pagination } from "@ren/schema/pagination"
 import { createFileRoute } from "@tanstack/react-router"
-import { SpacesPage } from "../../../../../features/spaces/spaces-page.js"
+import { SpacesPage } from "../../../../features/spaces/spaces-page.js"
 
-export const Route = createFileRoute("/_authed/_shell/sessions/spaces/")({
+export const Route = createFileRoute("/_authed/_shell/spaces/")({
   head: () => ({ meta: [{ title: "Spaces · Ren" }] }),
   loader: (options) =>
     options.context.queryClient.query(

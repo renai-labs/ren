@@ -28,9 +28,9 @@ export async function emailedCode(request: APIRequestContext, to: string) {
 
 export async function createUser(request: APIRequestContext, input: { name: string; email: string; password: string }) {
   const headers = { origin: appURL }
-  const signUp = await request.post(`${appURL}/api/auth/sign-up/email`, { headers, data: input })
+  const signUp = await request.post(`${appURL}/auth/sign-up/email`, { headers, data: input })
   expect(signUp.ok()).toBe(true)
-  const verify = await request.post(`${appURL}/api/auth/email-otp/verify-email`, {
+  const verify = await request.post(`${appURL}/auth/email-otp/verify-email`, {
     headers,
     data: { email: input.email, otp: await emailedCode(request, input.email) },
   })
@@ -38,7 +38,7 @@ export async function createUser(request: APIRequestContext, input: { name: stri
 }
 
 export async function signIn(request: APIRequestContext, input: { email: string; password: string }) {
-  return request.post(`${appURL}/api/auth/sign-in/email`, { headers: { origin: appURL }, data: input })
+  return request.post(`${appURL}/auth/sign-in/email`, { headers: { origin: appURL }, data: input })
 }
 
 export async function createOrganization(request: APIRequestContext, owner: { name: string }) {
@@ -49,7 +49,7 @@ export async function createOrganization(request: APIRequestContext, owner: { na
 }
 
 export async function inviteMember(request: APIRequestContext, email: string) {
-  const invited = await request.post(`${appURL}/api/auth/organization/invite-member`, {
+  const invited = await request.post(`${appURL}/auth/organization/invite-member`, {
     headers: { origin: appURL },
     data: { email, role: "member" },
   })
@@ -62,14 +62,14 @@ export async function addMember(
   input: { name: string; email: string; role?: "member" | "admin" },
 ) {
   const headers = { origin: appURL }
-  const invited = await owner.post(`${appURL}/api/auth/organization/invite-member`, {
+  const invited = await owner.post(`${appURL}/auth/organization/invite-member`, {
     headers,
     data: { email: input.email, role: input.role ?? "member" },
   })
   expect(invited.ok()).toBe(true)
   const invitation = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await invited.json())
   await createUser(member, { name: input.name, email: input.email, password: "correct horse battery" })
-  const accepted = await member.post(`${appURL}/api/auth/organization/accept-invitation`, {
+  const accepted = await member.post(`${appURL}/auth/organization/accept-invitation`, {
     headers,
     data: { invitationId: invitation.id },
   })

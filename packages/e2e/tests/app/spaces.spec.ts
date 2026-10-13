@@ -3,7 +3,7 @@ import { addMember, appURL, createOrganization, inviteMember, uniqueEmail } from
 
 test("a new organization starts with a protected shared space and a personal space", async ({ page }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
-  await page.goto("/sessions")
+  await page.goto("/")
   await page.getByRole("link", { name: "Spaces" }).click()
   await expect(page.getByRole("heading", { level: 1, name: "Spaces" })).toBeVisible()
   await expect(page.locator('a[aria-current="page"]')).toHaveCount(1)
@@ -22,7 +22,7 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   const invitee = uniqueEmail("invitee")
   await inviteMember(page.request, invitee)
 
-  await page.goto("/sessions/spaces")
+  await page.goto("/spaces")
   await page.getByRole("button", { name: "Create or join a space" }).click()
   await page.getByRole("menuitem", { name: "Create space" }).click()
   const create = page.getByRole("dialog", { name: "New space" })
@@ -33,7 +33,7 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   await expect(page.getByRole("button", { name: "Edit Space description" })).toContainText("Papers and experiments")
 
   await page.getByRole("link", { name: /Members/ }).click()
-  await expect(page).toHaveURL(/\/sessions\/spaces\/spc_\w+\/members$/)
+  await expect(page).toHaveURL(/\/spaces\/spc_\w+\/members$/)
   await expect(page.getByRole("row", { name: /Grace Hopper/ })).toContainText("You")
 
   await page.getByRole("button", { name: "Add member" }).click()
@@ -67,7 +67,7 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   await page.getByRole("button", { name: "Space actions" }).click()
   await page.getByRole("menuitem", { name: "Archive space" }).click()
   await page.getByRole("alertdialog", { name: "Archive “Lab”?" }).getByRole("button", { name: "Archive" }).click()
-  await expect(page).toHaveURL(`${appURL}/sessions/spaces`)
+  await expect(page).toHaveURL(`${appURL}/spaces`)
   await expect(page.getByText("Lab archived")).toBeVisible()
   await expect(page.getByRole("link", { name: "Open Lab" })).toBeHidden()
 })
@@ -79,13 +79,13 @@ test("an admin joins a space they are not in, and a member creates one from a bu
 }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await addMember(page.request, request, { name: "Alan Turing", email: uniqueEmail("member") })
-  const created = await request.post(`${appURL}/api/spaces`, {
+  const created = await request.post(`${appURL}/spaces`, {
     headers: { origin: appURL },
     data: { name: "Cryptography" },
   })
   expect(created.ok()).toBe(true)
 
-  await page.goto("/sessions/spaces")
+  await page.goto("/spaces")
   await page.getByRole("button", { name: "Create or join a space" }).click()
   await page.getByRole("menuitem", { name: "Join space" }).click()
   const join = page.getByRole("dialog", { name: "Join space" })
@@ -96,7 +96,7 @@ test("an admin joins a space they are not in, and a member creates one from a bu
 
   const context = await browser.newContext({ storageState: await request.storageState(), baseURL: appURL })
   const alan = await context.newPage()
-  await alan.goto("/sessions/spaces")
+  await alan.goto("/spaces")
   await expect(alan.getByRole("button", { name: "New space" })).toBeVisible()
   await expect(alan.getByRole("button", { name: "Create or join a space" })).toBeHidden()
   await context.close()

@@ -103,7 +103,7 @@ function ProfileActions() {
           label="Settings"
           onClick={() => {
             navigation.dismiss()
-            void navigate({ to: "/sessions/settings" })
+            void navigate({ to: "/settings" })
           }}
         >
           <Icon glyph="Settings" />

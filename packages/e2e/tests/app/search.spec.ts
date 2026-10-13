@@ -3,7 +3,7 @@ import { appURL, createUser, uniqueEmail } from "../lib/servers.js"
 
 test("searches actions and settings from the sidebar and the keyboard", async ({ page }) => {
   await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("search"), password: "first password" })
-  await page.goto("/sessions")
+  await page.goto("/")
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
 
   await page.keyboard.press("ControlOrMeta+k")
@@ -31,7 +31,7 @@ test("searches actions and settings from the sidebar and the keyboard", async ({
   await page.getByRole("button", { name: "Search" }).click()
   await page.getByRole("combobox", { name: "Search" }).fill("prefer")
   await page.keyboard.press("Enter")
-  await expect(page).toHaveURL(`${appURL}/sessions/settings/preferences`)
+  await expect(page).toHaveURL(`${appURL}/settings/preferences`)
 
   await page.keyboard.press("ControlOrMeta+k")
   await expect(page.getByRole("dialog", { name: "Search" })).toBeVisible()

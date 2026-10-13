@@ -15,11 +15,11 @@ test("signs in with a password and returns to the requested page", async ({ page
   await expect(page.getByRole("alert")).toHaveText("Invalid email or password.")
   await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
   await page.getByRole("button", { name: "Sign in" }).click()
-  await expect(page).toHaveURL(`${appURL}/sessions`)
+  await expect(page).toHaveURL(`${appURL}/`)
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
 
   await page.goto("/login")
-  await expect(page).toHaveURL(`${appURL}/sessions`)
+  await expect(page).toHaveURL(`${appURL}/`)
 })
 
 test("signs in with an emailed code", async ({ page, request }) => {
@@ -34,13 +34,13 @@ test("signs in with an emailed code", async ({ page, request }) => {
   const code = await emailedCode(request, email)
   await page.getByRole("textbox").first().click()
   await page.keyboard.type(code)
-  await expect(page).toHaveURL(`${appURL}/sessions`)
+  await expect(page).toHaveURL(`${appURL}/`)
   await expect(page.getByRole("heading", { name: "Welcome, Grace Hopper" })).toBeVisible()
 })
 
 test("an unverified account is sent to verify its email", async ({ page, request }) => {
   const email = uniqueEmail("unverified")
-  const signUp = await request.post(`${appURL}/api/auth/sign-up/email`, {
+  const signUp = await request.post(`${appURL}/auth/sign-up/email`, {
     headers: { origin: appURL },
     data: { name: "Alan Turing", email, password: "correct horse battery" },
   })
@@ -72,5 +72,5 @@ test("continues with Google and comes back to the app", async ({ page }) => {
   const request = page.waitForRequest(/accounts\.google\.com/)
   await page.getByRole("button", { name: "Continue with Google" }).click()
   const google = new URL((await request).url())
-  expect(google.searchParams.get("redirect_uri")).toBe(`${appURL}/api/auth/callback/google`)
+  expect(google.searchParams.get("redirect_uri")).toBe(`${appURL}/auth/callback/google`)
 })

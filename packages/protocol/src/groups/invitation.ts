@@ -5,7 +5,7 @@ import { Exposure } from "../exposure.js"
 
 export const InvitationGroup = HttpApiGroup.make("invitation")
   .add(
-    HttpApiEndpoint.get("invitation.preview", "/api/invitations/:id/preview", {
+    HttpApiEndpoint.get("invitation.preview", "/invitations/:id/preview", {
       params: { id: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(128)) },
       success: Invitation.Preview,
     }).annotateMerge(

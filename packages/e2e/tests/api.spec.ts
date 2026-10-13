@@ -10,5 +10,5 @@ test("generated client reads server health", async () => {
 test("server publishes its OpenAPI document", async ({ request }) => {
   const response = await request.get(`${serverURL}/openapi.json`)
   expect(response.ok()).toBe(true)
-  expect(Object.keys((await response.json()).paths)).toContain("/api/health")
+  expect(Object.keys((await response.json()).paths)).toContain("/health")
 })

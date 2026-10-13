@@ -10,7 +10,7 @@ import { WorkspaceSearch } from "../../components/workspace-search.js"
 import { ProfileCard } from "../../features/organization/profile-card.js"
 import { Keyboard } from "../../platform/keyboard.js"
 
-const settingsPath = /^\/sessions\/settings(?:\/|$)/
+const settingsPath = /^\/settings(?:\/|$)/
 
 export const Route = createFileRoute("/_authed/_shell")({
   head: () => ({ meta: [{ title: "Ren" }] }),

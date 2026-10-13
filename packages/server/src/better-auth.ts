@@ -176,7 +176,7 @@ export const make = (input: Input) => {
     appName: "Ren",
     secret: input.secret,
     baseURL: input.baseURL,
-    basePath: "/api/auth",
+    basePath: "/auth",
     disabledPaths: [
       "/organization/leave",
       "/email-otp/check-verification-otp",

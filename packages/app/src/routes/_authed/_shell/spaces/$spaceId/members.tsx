@@ -1,9 +1,9 @@
 import { Pagination } from "@ren/schema/pagination"
 import { createFileRoute } from "@tanstack/react-router"
-import { SpaceMembers } from "../../../../../../features/spaces/space-members.js"
-import { Auth } from "../../../../../../lib/auth.js"
+import { SpaceMembers } from "../../../../../features/spaces/space-members.js"
+import { Auth } from "../../../../../lib/auth.js"
 
-export const Route = createFileRoute("/_authed/_shell/sessions/spaces/$spaceId/members")({
+export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/members")({
   head: () => ({ meta: [{ title: "Space members · Ren" }] }),
   loader: (options) => {
     const context = options.context

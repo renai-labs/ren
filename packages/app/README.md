@@ -19,7 +19,7 @@ The Ren product web app (Vite + React).
 ## Commands
 
 ```sh
-bun run dev   # proxies /api to http://localhost:4000
+bun run dev   # proxies the API routes to http://localhost:4000
 bun run build
 bun run test
 bun typecheck

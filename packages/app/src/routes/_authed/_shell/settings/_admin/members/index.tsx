@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
-import { MembersPage } from "../../../../../../../features/members/members-page.js"
+import { MembersPage } from "../../../../../../features/members/members-page.js"
 
-export const Route = createFileRoute("/_authed/_shell/sessions/settings/_admin/members/")({
+export const Route = createFileRoute("/_authed/_shell/settings/_admin/members/")({
   head: () => ({ meta: [{ title: "Members · Ren" }] }),
   validateSearch: Schema.toStandardSchemaV1(
     Schema.Struct({ tab: Schema.optionalKey(Schema.Literals(["members", "invitations"])) }),
