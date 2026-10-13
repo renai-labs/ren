@@ -7,6 +7,5 @@ files:
   - packages/*/src/**/*.tsx
 ignores:
   - packages/httpapi-codegen/**
-  - packages/client/src/**/generated/**
 rule:
   pattern: return undefined
