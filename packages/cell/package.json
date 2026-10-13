@@ -10,7 +10,9 @@
   },
   "scripts": {
     "deploy:celld": "celld deploy",
+    "deploy:cloudflare": "wrangler deploy",
     "test": "bun ../../script/test.ts",
+    "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/brain-api.test.ts test/cell.test.ts test/cloudflare.test.ts test/portability.test.ts",
     "typecheck": "tsgo -b"
   },
   "dependencies": {
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:"
+    "@typescript/native-preview": "catalog:",
+    "wrangler": "catalog:"
   }
 }

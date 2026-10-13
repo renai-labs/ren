@@ -48,25 +48,9 @@ export class SessionCell extends DurableObject {
       await release()
       return response
     }
-    const reader = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>()).getReader()
-    return new Response(
-      new ReadableStream({
-        pull: async (controller) => {
-          const next = await reader.read().catch(async (error: unknown) => {
-            await release()
-            throw error
-          })
-          if (!next.done) return controller.enqueue(next.value)
-          controller.close()
-          await release()
-        },
-        cancel: async (reason) => {
-          await release()
-          await reader.cancel(reason)
-        },
-      }),
-      response,
-    )
+    const stream = new IdentityTransformStream()
+    void body.pipeTo(stream.writable).then(release, release)
+    return new Response(stream.readable, response)
   }
 
   override async alarm() {

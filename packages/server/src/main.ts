@@ -10,7 +10,7 @@ import { FetchHttpClient, HttpRouter } from "effect/http"
 import { Routes } from "./routes.js"
 
 HttpRouter.serve(Routes.layer).pipe(
-  Layer.provide([BrainHost.layerCelld, Mailer.layer, SignupGuard.layer]),
+  Layer.provide([BrainHost.layer, Mailer.layer, SignupGuard.layer]),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, Postgres.layer]),
   Layer.provide(BunHttpServer.layerConfig({ port: Config.Port("PORT").pipe(Config.withDefault(4000)) })),

@@ -67,6 +67,16 @@ jobs:
         working-directory: packages/server
         run: bun run check:generated
 
+      - name: Check cell portability
+        timeout-minutes: 10
+        working-directory: packages/cell
+        run: bun run test:cloudflare
+
+      - name: Check BrainHost portability
+        timeout-minutes: 5
+        working-directory: packages/core
+        run: bun run test:cloudflare
+
       - name: Check generated OpenAPI
         working-directory: packages/protocol
         run: bun run check:generated
