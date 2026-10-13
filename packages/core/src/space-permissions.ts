@@ -17,7 +17,7 @@ export interface Interface {
   readonly isAdministrator: (role: string) => boolean
   readonly visibility: (isAdministrator: boolean) => "organization" | "membership"
   readonly canRead: (access: Access) => boolean
-  readonly canCreate: (role: string | undefined) => role is string
+  readonly canCreate: (role: string) => boolean
   readonly canUpdate: (access: Access) => boolean
   readonly canAddMember: (access: Access) => boolean
   readonly canRemoveMember: (access: Access) => boolean
@@ -34,8 +34,7 @@ export const layer = Layer.succeed(
     isAdministrator: Auth.isAdministrator,
     visibility: (isAdministrator) => (isAdministrator ? "organization" : "membership"),
     canRead: canAccess,
-    // ast-grep-ignore: no-nullish-comparison, -- the type guard must narrow exactly undefined away
-    canCreate: (role): role is string => role !== undefined,
+    canCreate: (role) => Boolean(role),
     canUpdate: canAccess,
     canAddMember: canAccess,
     canRemoveMember: canAccess,

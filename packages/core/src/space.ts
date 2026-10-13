@@ -151,7 +151,7 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const role = yield* SpaceQueries.organizationRole(transaction, actor)
-            if (!permissions.canCreate(role)) {
+            if (!role || !permissions.canCreate(role)) {
               return yield* new Primitive.Forbidden({ message: "Join the organization to create spaces." })
             }
             const id = Space.ID.create()
