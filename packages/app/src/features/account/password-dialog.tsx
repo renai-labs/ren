@@ -3,33 +3,16 @@ import { Form } from "@ren/ui/form"
 import { FormActions } from "@ren/ui/form-actions"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
-import { Schema } from "effect"
 import { useState } from "react"
 import { Auth } from "../../lib/auth.js"
-
-const required = Schema.String.check(Schema.isNonEmpty({ message: "Required" }))
-
-const schema = Schema.toStandardSchemaV1(
-  Schema.Struct({
-    currentPassword: required,
-    newPassword: Schema.String.check(Schema.isMinLength(8, { message: "Must be at least 8 characters" })),
-    newPasswordConfirm: required,
-    revokeOtherSessions: Schema.Boolean,
-  }).check(
-    Schema.makeFilter((value) =>
-      value.newPassword === value.newPasswordConfirm
-        ? undefined
-        : { path: ["newPasswordConfirm"], issue: "Passwords do not match" },
-    ),
-  ),
-)
+import { Forms } from "../../lib/forms.js"
 
 export function PasswordDialog(props: { onClose: () => void }) {
   const auth = Auth.useClient()
   const [error, setError] = useState("")
   const form = Form.useForm({
     defaultValues: { currentPassword: "", newPassword: "", newPasswordConfirm: "", revokeOtherSessions: false },
-    schema,
+    schema: Forms.passwordChange,
     onSubmit: async (value) => {
       setError("")
       const result = await auth.changePassword({

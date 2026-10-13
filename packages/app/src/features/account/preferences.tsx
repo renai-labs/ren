@@ -9,6 +9,7 @@ import { Toast } from "@ren/ui/toast"
 import { useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { Auth } from "../../lib/auth.js"
+import { Forms } from "../../lib/forms.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { PasswordDialog } from "./password-dialog.js"
 
@@ -33,6 +34,7 @@ export function Preferences(props: { user: { name: string; email: string } }) {
             alignment="end"
             value={props.user.name}
             placeholder="Add your name"
+            schema={Forms.userName}
             onCommit={async (name) => {
               const result = await context.auth.updateUser({ name })
               if (result.error !== null) {
