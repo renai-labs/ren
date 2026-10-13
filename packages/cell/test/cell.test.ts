@@ -23,7 +23,7 @@ const cell = () => TestCell.make(celld.url)
 
 describe("cell contract", () => {
   describe("tokens", () => {
-    test("answers 401 to an expired, tampered, malformed or unknown-key token, with the same body for each", async () => {
+    test("answers 401 to an expired, tampered, malformed or unknown-key token, with OpenCode's body for each", async () => {
       const opened = await cell()
       const other = await sign({ sid: "ses_other" })
       const tokens = [
@@ -36,12 +36,31 @@ describe("cell contract", () => {
       const responses = await Promise.all(
         tokens.map((token) =>
           fetch(`${celld.url}/api/session`, { headers: { authorization: TestToken.basic(token) } }).then(
-            async (response) => ({ status: response.status, body: await response.text() }),
+            async (response) => ({
+              status: response.status,
+              type: response.headers.get("content-type"),
+              body: await response.json(),
+            }),
           ),
         ),
       )
-      expect(responses).toEqual(tokens.map(() => ({ status: 401, body: "" })))
+      expect(responses).toEqual(
+        tokens.map(() => ({
+          status: 401,
+          type: "application/json",
+          body: { _tag: "UnauthorizedError", message: "Authentication required" },
+        })),
+      )
       expect(await opened.state()).toEqual(closed)
+    })
+
+    test("an OpenCode client with a bad token fails with OpenCode's own UnauthorizedError", async () => {
+      const opened = await cell()
+      const client = OpenCode.make({ baseUrl: celld.url, headers: { authorization: TestToken.basic("not-a-token") } })
+      await expect(client.session.get({ sessionID: opened.id })).rejects.toMatchObject({
+        _tag: "UnauthorizedError",
+        message: "Authentication required",
+      })
     })
 
     test("accepts the token as the password of Basic auth, with any user name", async () => {

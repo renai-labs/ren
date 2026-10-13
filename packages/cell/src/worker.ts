@@ -19,7 +19,8 @@ export default {
           Effect.flatMap((token) => Token.verify(vars.CELL_KEYS, token)),
           Effect.option,
         )
-        if (Option.isNone(claims)) return new Response(null, { status: 401 })
+        if (Option.isNone(claims))
+          return Response.json({ _tag: "UnauthorizedError", message: "Authentication required" }, { status: 401 })
         const path = new URL(request.url).pathname
         if ((path === "/cell" || path.startsWith("/cell/")) && claims.value.scope !== "server")
           return new Response(null, { status: 403 })
