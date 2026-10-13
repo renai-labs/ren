@@ -24,7 +24,7 @@ export function useTree(input: {
   groups: readonly Group[]
   query?: string
   onQueryChange?: (query: string) => void
-  createLabel?: (query: string) => string
+  createLabel?: ((query: string) => string) | undefined
   createStep?: CreateStep
   onCreate?: Create
   select: (value: string) => void

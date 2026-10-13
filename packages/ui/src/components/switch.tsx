@@ -20,8 +20,8 @@ const thumbVariants = cva("block rounded-full bg-fill-inverse transition-standar
 export type SwitchProps = {
   checked?: boolean
   onCheckedChange?: (checked: boolean) => void
-  disabled?: boolean
-  size?: "small" | "medium"
+  disabled?: boolean | undefined
+  size?: "small" | "medium" | undefined
   label?: string
   id?: string
 }
@@ -35,6 +35,7 @@ function SwitchControl(props: SwitchProps) {
       disabled={props.disabled}
       aria-label={props.label}
       data-slot="switch"
+      // oxlint-disable-next-line jsx-a11y/control-has-associated-label -- Switch.Root renders this button with its aria-label
       render={<button type="button" />}
       nativeButton
       className={composeClasses(switchVariants({ size: props.size }))}

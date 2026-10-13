@@ -5,7 +5,11 @@ import type { CompleteAuth } from "./complete-auth.js"
 import { SignupDetails } from "./signup-details.js"
 import { SignupPassword } from "./signup-password.js"
 
-export function Signup(props: { destination: CompleteAuth.Destination; title?: string; description?: string }) {
+export function Signup(props: {
+  destination: CompleteAuth.Destination
+  title?: string | undefined
+  description?: string | undefined
+}) {
   const [details, setDetails] = useState<{ name: string; email: string }>()
   const [step, setStep] = useState<"details" | "password">("details")
   const [emailError, setEmailError] = useState("")

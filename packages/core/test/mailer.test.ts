@@ -50,10 +50,10 @@ describe("Mailer", () => {
     }),
   )
 
-  Array.of(
+  for (const scenario of [
     { name: "missing token in production", values: { NODE_ENV: "production" } },
     { name: "empty token in production", values: { NODE_ENV: "production", POSTMARK_SERVER_TOKEN: "" } },
-  ).forEach((scenario) => {
+  ]) {
     testEffect(ConfigProvider.layer(ConfigProvider.fromUnknown(scenario.values))).effect(
       `rejects ${scenario.name} without logging email secrets`,
       () =>
@@ -73,5 +73,5 @@ describe("Mailer", () => {
           expect(logs).toEqual([])
         }),
     )
-  })
+  }
 })

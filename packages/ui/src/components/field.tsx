@@ -25,11 +25,11 @@ export type RootProps = {
   label: string
   labelAction?: ReactNode
   description?: ReactNode
-  hint?: string
-  error?: string
-  necessity?: Necessity
-  orientation?: Orientation
-  disabled?: boolean
+  hint?: string | undefined
+  error?: string | undefined
+  necessity?: Necessity | undefined
+  orientation?: Orientation | undefined
+  disabled?: boolean | undefined
   dirty?: boolean
   touched?: boolean
   children: ReactNode

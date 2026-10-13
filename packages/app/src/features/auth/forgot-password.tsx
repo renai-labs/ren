@@ -11,7 +11,7 @@ import { AuthFlowLayout } from "./auth-flow-layout.js"
 import { BackLink } from "./back-link.js"
 import { AuthSchemas } from "./schemas.js"
 
-export function ForgotPassword(props: { email?: string }) {
+export function ForgotPassword(props: { email?: string | undefined }) {
   const auth = Auth.useClient()
   const [sentTo, setSentTo] = useState<string>()
   const [error, setError] = useState("")

@@ -92,8 +92,7 @@ function announce(results: ReadonlyArray<{ email: string; failure: string | unde
   const failed = results.filter((result) => result.failure !== undefined)
   if (sent.length === 1) Toast.manager.add({ type: "success", title: `Invitation sent to ${sent[0]?.email ?? ""}` })
   if (sent.length > 1) Toast.manager.add({ type: "success", title: `${sent.length} invitations sent` })
-  failed.forEach((result) =>
-    Toast.manager.add({ type: "error", title: `Couldn’t invite ${result.email}`, description: result.failure }),
-  )
+  for (const result of failed)
+    Toast.manager.add({ type: "error", title: `Couldn’t invite ${result.email}`, description: result.failure })
   return failed
 }

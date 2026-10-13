@@ -1,0 +1,11 @@
+id: no-module-mocking
+language: Tsx
+message: Do not mock modules. Test the real implementation and pass dependencies through layers or parameters.
+severity: error
+rule:
+  any:
+    - pattern: mock.module($$$ARGS)
+    - pattern: vi.mock($$$ARGS)
+    - pattern: vi.doMock($$$ARGS)
+    - pattern: jest.mock($$$ARGS)
+    - pattern: jest.doMock($$$ARGS)

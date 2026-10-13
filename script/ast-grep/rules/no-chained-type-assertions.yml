@@ -1,0 +1,6 @@
+id: no-chained-type-assertions
+language: Tsx
+message: "`as unknown as T` fabricates a type. Decode the value with Effect Schema or fix the source type."
+severity: error
+rule:
+  pattern: $VALUE as unknown as $TYPE

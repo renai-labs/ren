@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+/* oxlint-disable no-console -- the CLI writes its results to the terminal */
 import { Ren } from "@renai-labs/sdk"
 
 const usage = "Usage: ren health"

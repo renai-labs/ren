@@ -26,10 +26,10 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SignupGuard") {}
 
 const rejections = {
-  disposable: { code: "DISPOSABLE_EMAIL", message: "Please use a permanent email address." },
+  disposable: { code: "DISPOSABLE_EMAIL", message: "Use a permanent email address." },
   undeliverable: {
     code: "UNDELIVERABLE_EMAIL_DOMAIN",
-    message: "This email domain can't receive email. Check the address and try again.",
+    message: "This email domain can’t receive email. Check the address and try again.",
   },
 } satisfies Record<string, Rejection>
 
@@ -59,15 +59,15 @@ export const make = Effect.fnUntraced(function* (resolver: Resolver) {
     blocked: Config.Array(Schema.String, "SIGNUP_BLOCKED_DOMAINS").pipe(Config.withDefault([])),
     allowed: Config.Array(Schema.String, "SIGNUP_ALLOWED_DOMAINS").pipe(Config.withDefault([])),
   })
-  const blocked = config.blocked.map((domain) => domain.trim().toLowerCase())
-  const allowed = config.allowed.map((domain) => domain.trim().toLowerCase())
+  const blocked = new Set(config.blocked.map((domain) => domain.trim().toLowerCase()))
+  const allowed = new Set(config.allowed.map((domain) => domain.trim().toLowerCase()))
   const disposable = disposableEmailBlocklistSet()
 
-  const isAllowed = (domain: string) => parentDomains(domain).some((candidate) => allowed.includes(candidate))
+  const isAllowed = (domain: string) => parentDomains(domain).some((candidate) => allowed.has(candidate))
   const isDisposable = (domain: string) => {
     if (isAllowed(domain)) return false
     const candidates = parentDomains(domain)
-    return candidates.some((candidate) => blocked.includes(candidate) || disposable.has(candidate))
+    return candidates.some((candidate) => blocked.has(candidate) || disposable.has(candidate))
   }
 
   const hasAddress = (domain: string) =>
@@ -106,7 +106,7 @@ export const make = Effect.fnUntraced(function* (resolver: Resolver) {
     hasVerifiedAlias: Effect.fn("SignupGuard.hasVerifiedAlias")(function* (email: string) {
       const normalized = email.trim().toLowerCase()
       const domain = domainOf(normalized)
-      const local = normalized.slice(0, normalized.lastIndexOf("@")).split("+")[0]
+      const local = normalized.slice(0, normalized.lastIndexOf("@")).replace(/\+.*/, "")
       const canonical =
         domain === "gmail.com" || domain === "googlemail.com"
           ? `${local.replaceAll(".", "")}@gmail.com`

@@ -14,11 +14,11 @@ export const requireSuppressionReason = defineRule({
   create(context) {
     return {
       Program() {
-        context.sourceCode
-          .getAllComments()
-          .filter((comment) => DIRECTIVE.test(comment.value) && !/-enable/.test(comment.value))
-          .filter((comment) => !REASON.test(comment.value))
-          .forEach((comment) => context.report({ loc: comment.loc, messageId: "reason" }))
+        for (const comment of context.sourceCode.getAllComments()) {
+          if (!DIRECTIVE.test(comment.value) || comment.value.includes("-enable") || REASON.test(comment.value))
+            continue
+          context.report({ loc: comment.loc, messageId: "reason" })
+        }
       },
     }
   },

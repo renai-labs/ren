@@ -8,7 +8,7 @@ const state: { now: number; timer: ReturnType<typeof setInterval> | undefined } 
 
 function tick() {
   state.now = Date.now()
-  listeners.forEach((listener) => listener())
+  for (const listener of listeners) listener()
 }
 
 export function subscribeClock(listener: () => void) {

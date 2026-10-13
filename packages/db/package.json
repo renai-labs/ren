@@ -16,12 +16,10 @@
   "dependencies": {
     "@effect/sql-pg": "catalog:",
     "@ren/schema": "workspace:*",
-    "@ren/util": "workspace:*",
     "drizzle-orm": "catalog:",
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
     "drizzle-kit": "catalog:"

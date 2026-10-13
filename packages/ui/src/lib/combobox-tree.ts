@@ -87,7 +87,7 @@ export function sections(input: {
   query: string
   draft: string | null
   createStep?: CreateStep
-  createLabel?: (query: string) => string
+  createLabel?: ((query: string) => string) | undefined
 }): Section[] {
   const query = input.query.trim()
   if (input.draft !== null && input.createStep && input.createLabel)

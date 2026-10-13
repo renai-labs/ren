@@ -70,13 +70,27 @@
 - Avoid mocks. Test the actual implementation; do not duplicate logic into tests.
 - Tests cannot run from the repo root. Run `bun run test` from the package directory.
 - Database tests run against real Postgres (`docker compose up -d`) using `@ren/db/testing`, which creates and drops an isolated database per layer.
-- Effect tests use `testEffect(layer)` / `it.effect` / `it.live` from `packages/core/test/lib/effect.ts`. The harness fails any test that makes a non-loopback network request.
+- Effect tests use `const it = testEffect(layer)` from `packages/core/test/lib/effect.ts`, then `it.effect` / `it.live`. The harness fails any test that makes a non-loopback network request.
 
 ## Checks
 
 - Run `bun run check` from the repo root before pushing. The pre-push hook runs it too.
 - Run `bun typecheck` from a package directory to typecheck one package. Never run `tsc` directly.
-- Lint rules live in `oxlint.config.ts`, the Ren Oxlint plugin (`script/oxlint/ren/`) and `script/ast-grep/`. Oxlint loads its config and plugin through Node (see `.node-version`). Add a test for every new rule, then run `bun run test:lint-rules`.
+- Lint rules live in `oxlint.config.ts`, the Ren Oxlint plugin (`script/oxlint/ren/`) and `script/ast-grep/`. Oxlint loads its config and plugin through Node (see `.node-version`).
+
+## Lint Standard
+
+- Optional properties are `key?: T`. Write `key?: T | undefined` only when `undefined` is a meaningful value callers pass through. Omit the key with a conditional spread only where a third-party type forbids `undefined`.
+- Every lint rule applies to every file. Overrides in `oxlint.config.ts` are by file type only; the architecture block at the end is the one package-scoped exception.
+- Rules turned off on purpose:
+  - `oxc/no-barrel-file`: every module starts with `export * as X from "./x.js"`.
+  - `unicorn/throw-new-error`: it misreads Effect's `Schema.TaggedError<X>()(...)`.
+  - `typescript/only-throw-error`: TanStack Router throws `redirect()`.
+  - `unicorn/prefer-global-this`: `globalThis.x` would bypass the `window.x` restrictions.
+  - `eslint/no-useless-return`: it conflicts with `noImplicitReturns`.
+  - `eslint/require-yield`: `Effect.fn` takes generators that may not yield.
+  - `noPropertyAccessFromIndexSignature`: `noUncheckedIndexedAccess` already types index access as possibly `undefined`.
+- Lint rules have no unit tests. The codebase is their test, so a new rule lands with fixes for everything it reports.
 
 ## Vendored Repositories
 
@@ -86,3 +100,14 @@ This project vendors external repositories under @repos/.
 - Do not edit files under @repos/ unless explicitly asked.
 - Do not import from @repos/. Import from normal package dependencies.
 - When writing Effect code, inspect @repos/effect for idiomatic usage, tests, module structure and API design. Treat it as the source of truth for Effect patterns.
+
+<!-- BEGIN:turborepo-agent-rules -->
+
+# This is NOT the Turborepo you know
+
+Turborepo configuration, task behavior, and CLI commands can vary between installed versions and may differ from your training data. Resolve the `turbo` package from this file's directory or relevant workspace; in monorepos, it may not be visible from the repository root. For example, run `node -p "require.resolve('turbo/package.json')"` from a workspace that depends on `turbo`.
+
+Read `docs/README.md` inside that installed package first, then read the relevant pages from its `docs/` directory before changing Turborepo configuration or commands. Heed deprecation notices. These bundled docs match the installed package version and are available without network access.
+
+This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
+<!-- END:turborepo-agent-rules -->

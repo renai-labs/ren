@@ -43,7 +43,7 @@ export type StateMessageProps = {
   description?: ReactNode
   icon?: ReactNode
   action?: ReactNode
-  onRetry?: () => void
+  onRetry?: (() => void) | undefined
   retryLabel?: string
 }
 

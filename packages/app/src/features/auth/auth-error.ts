@@ -7,7 +7,7 @@ const messages = {
   TOO_MANY_ATTEMPTS: "Too many attempts. Request a new code.",
   INVALID_EMAIL_OR_PASSWORD: "Invalid email or password.",
   RATE_LIMITED: "Too many attempts. Please wait and try again.",
-  DISPOSABLE_EMAIL: "Please use a permanent email address.",
+  DISPOSABLE_EMAIL: "Use a permanent email address.",
   UNDELIVERABLE_EMAIL_DOMAIN: "This email domain can’t receive email. Check the address and try again.",
   ALIAS_EMAIL: "An account already exists for this inbox. Sign in instead.",
 }
@@ -33,8 +33,8 @@ const transportMessages = new Set([
 const isKnown = (code: string): code is keyof typeof messages => Object.hasOwn(messages, code)
 
 export function describe(error: {
-  readonly code?: string
-  readonly message?: string
+  readonly code?: string | undefined
+  readonly message?: string | undefined
   readonly status: number
   readonly statusText: string
 }): Failure {

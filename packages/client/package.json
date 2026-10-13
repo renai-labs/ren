@@ -36,7 +36,6 @@
     "@effect/platform-bun": "catalog:",
     "@ren/httpapi-codegen": "workspace:*",
     "@tanstack/react-query": "catalog:",
-    "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
     "effect": "catalog:"

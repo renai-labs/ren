@@ -51,7 +51,7 @@ export function organizationsOptions(client: Client) {
 
 const slugTakenCodes = new Set(["ORGANIZATION_ALREADY_EXISTS", "ORGANIZATION_SLUG_ALREADY_TAKEN"])
 
-export function isSlugTaken(error: { code?: string; message?: string }) {
+export function isSlugTaken(error: { code?: string | undefined; message?: string | undefined }) {
   return (
     slugTakenCodes.has(error.code ?? "") ||
     /organization (slug already taken|already exists)/i.test(error.message ?? "")

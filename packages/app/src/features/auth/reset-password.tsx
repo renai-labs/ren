@@ -12,7 +12,7 @@ import { AuthSchemas } from "./schemas.js"
 
 const expiredPattern = /invalid token|expired/i
 
-export function ResetPassword(props: { token?: string }) {
+export function ResetPassword(props: { token?: string | undefined }) {
   const [expired, setExpired] = useState(false)
   const backToSignIn = <BackLink render={<Link to="/login" />}>Back to sign in</BackLink>
   if (props.token === undefined || expired) {

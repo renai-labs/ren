@@ -154,7 +154,11 @@ export function SortableHeaderCell(
 }
 
 export function RowActionsHeaderCell() {
-  return <th className="w-12" />
+  return (
+    <th className="w-12">
+      <span className="sr-only">Actions</span>
+    </th>
+  )
 }
 
 export function Body(props: { children: ReactNode }) {
@@ -163,7 +167,7 @@ export function Body(props: { children: ReactNode }) {
   return <tbody>{props.children}</tbody>
 }
 
-export function Row(props: { onActivate?: () => void; children: ReactNode }) {
+export function Row(props: { onActivate?: (() => void) | undefined; children: ReactNode }) {
   const onActivate = props.onActivate
   return (
     <tr

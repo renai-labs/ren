@@ -12,7 +12,7 @@ const loopback = new Set(["127.0.0.1", "localhost", "[::1]"])
 export const refuseNetwork = (violations: string[]): typeof fetch =>
   Object.assign(
     (input: string | URL | Request, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
+      const url = input instanceof Request ? input.url : input.toString()
       if (loopback.has(new URL(url).hostname)) return fetch(input, init)
       const method = init?.method ?? (input instanceof Request ? input.method : "GET")
       const message = `test attempted network request: ${method} ${url} — provide an explicit HttpClient or disable the fetch`
@@ -65,8 +65,6 @@ const make = <R, E>(testLayer: Layer.Layer<R, E>, liveLayer: Layer.Layer<R, E>) 
 const testEnv = Layer.mergeAll(TestConsole.layer, TestClock.layer())
 
 const liveEnv = TestConsole.layer
-
-export const it = make(testEnv, liveEnv)
 
 export const testEffect = <R, E>(layer: Layer.Layer<R, E>) =>
   make(Layer.provideMerge(layer, testEnv), Layer.provideMerge(layer, liveEnv))

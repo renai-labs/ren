@@ -47,7 +47,7 @@ test("a rejected address returns to the details step with the server’s reason"
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await page.getByLabel("Password", { exact: true }).fill("correct horse battery")
   await page.getByRole("button", { name: "Continue", exact: true }).click()
-  await expect(page.getByLabel("Email")).toHaveAccessibleDescription("Please use a permanent email address.")
+  await expect(page.getByLabel("Email")).toHaveAccessibleDescription("Use a permanent email address.")
   await expect(page.getByLabel("Email")).toBeFocused()
   await expect(page.getByLabel("Name")).toHaveValue("Ada Lovelace")
 })

@@ -11,7 +11,7 @@ const spaciousRow =
   // oxlint-disable-next-line ren/require-companion-class -- focus stays in the input; data-highlighted marks the active option
   "relative flex h-11 cursor-default items-center gap-3 rounded-control px-3 text-sm text-text-primary outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-disabled data-highlighted:bg-fill-secondary [&_svg]:shrink-0"
 
-type RowProps = { row: Row; tree: Tree; purpose?: "selection" | "command"; spacious: boolean }
+type RowProps = { row: Row; tree: Tree; purpose?: "selection" | "command" | undefined; spacious: boolean }
 
 export function RowView(props: RowProps) {
   const row = props.row
@@ -102,7 +102,7 @@ function Action(props: {
   spacious: boolean
   back?: boolean
   branch?: boolean
-  disabled?: boolean
+  disabled?: boolean | undefined
   busy?: boolean
   onAct: () => void
   children: ReactNode

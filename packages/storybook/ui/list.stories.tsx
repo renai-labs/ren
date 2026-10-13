@@ -201,34 +201,28 @@ export const Sections: Story = {
   },
 }
 export const Group: Story = {
-  render: (args) => <>{args.children}</>,
-  args: {
-    children: (
-      <List.Group
-        label="In progress"
-        title="In progress"
-        leading={<Icon glyph="Clock" tone="accent" />}
-        meta={<Text purpose="caption">3</Text>}
-        actions={
-          <IconButton label="Add a task to In progress" size="compact">
-            <Icon glyph="Plus" />
-          </IconButton>
-        }
-      >
-        {rows}
-      </List.Group>
-    ),
-  },
+  render: () => (
+    <List.Group
+      label="In progress"
+      title="In progress"
+      leading={<Icon glyph="Clock" tone="accent" />}
+      meta={<Text purpose="caption">3</Text>}
+      actions={
+        <IconButton label="Add a task to In progress" size="compact">
+          <Icon glyph="Plus" />
+        </IconButton>
+      }
+    >
+      {rows}
+    </List.Group>
+  ),
 }
 export const GroupCollapsed: Story = {
-  render: (args) => <>{args.children}</>,
-  args: {
-    children: (
-      <List.Group label="Done" title="Done" defaultOpen={false}>
-        {rows}
-      </List.Group>
-    ),
-  },
+  render: () => (
+    <List.Group label="Done" title="Done" defaultOpen={false}>
+      {rows}
+    </List.Group>
+  ),
 }
 export const Loading: Story = { args: { frame: "divided", state: "loading" } }
 export const Empty: Story = { args: { frame: "divided", state: "empty", emptyMessage: "No files yet." } }

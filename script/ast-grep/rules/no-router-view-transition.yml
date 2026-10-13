@@ -1,5 +1,5 @@
 id: no-router-view-transition
-language: TypeScript
+language: Tsx
 message: Use React's <ViewTransition>. The router's document-level view transition interrupts React's.
 severity: error
 files:

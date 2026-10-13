@@ -5,7 +5,7 @@ const port = Number(process.env.STORYBOOK_PORT ?? 6116)
 export default defineConfig({
   testDir: ".",
   testIgnore: /node_modules/,
-  forbidOnly: !!process.env.CI,
+  forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   fullyParallel: true,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",

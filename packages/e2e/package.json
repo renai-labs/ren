@@ -10,11 +10,11 @@
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
-    "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@playwright/test": "catalog:",
     "@ren/client": "workspace:*",
-    "@ren/server": "workspace:*"
+    "@ren/server": "workspace:*",
+    "effect": "catalog:"
   }
 }

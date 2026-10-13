@@ -1,5 +1,5 @@
 id: no-nested-effect-service-yield
-language: TypeScript
+language: Tsx
 message: Bind Effect services before calling methods instead of nesting service yields.
 severity: error
 rule:

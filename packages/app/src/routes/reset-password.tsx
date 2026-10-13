@@ -4,7 +4,7 @@ import { ResetPassword } from "../features/auth/reset-password.js"
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({ meta: [{ title: "Choose a new password · Ren" }] }),
-  validateSearch: Schema.toStandardSchemaV1(Schema.Struct({ token: Schema.optionalKey(Schema.String) })),
+  validateSearch: Schema.toStandardSchemaV1(Schema.Struct({ token: Schema.optional(Schema.String) })),
   component: ResetPasswordPage,
 })
 

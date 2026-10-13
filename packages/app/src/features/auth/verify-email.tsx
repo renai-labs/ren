@@ -17,7 +17,7 @@ export function VerifyEmail(props: { email: string; destination: CompleteAuth.De
           const result = await auth.emailOtp.verifyEmail({ email: props.email, otp })
           if (result.error !== null) return AuthError.describe(result.error)
           await completeAuth()
-          return undefined
+          return
         }}
         resend={async () => {
           const result = await auth.emailOtp.sendVerificationOtp({ email: props.email, type: "email-verification" })

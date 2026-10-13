@@ -1,5 +1,5 @@
 id: no-import-alias
-language: TypeScript
+language: Tsx
 message: Do not alias value imports. For type name collisions, alias inside a dedicated `import type` statement.
 severity: error
 ignores:

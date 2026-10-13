@@ -1,5 +1,5 @@
 id: no-drizzle-column-name
-language: TypeScript
+language: Tsx
 message: Use snake_case object keys instead of explicit drizzle column names.
 severity: error
 files:

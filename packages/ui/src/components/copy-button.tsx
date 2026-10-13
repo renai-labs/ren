@@ -9,7 +9,7 @@ export function CopyButton(props: {
   value: string
   onCopy: (value: string) => void | Promise<void>
   label?: string
-  size?: IconButtonSize
+  size?: IconButtonSize | undefined
 }) {
   const [status, setStatus] = useState<CopyStatus>("idle")
   useEffect(() => {

@@ -23,7 +23,7 @@ export type { ListFrame, ListState } from "../lib/list-chrome.js"
 
 export type RootProps = ListStatusProps & {
   frame?: ListFrame
-  label?: string
+  label?: string | undefined
   children?: ReactNode
 }
 

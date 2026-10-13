@@ -19,7 +19,7 @@ const founderCallURL = "https://calendly.com/shrey-renai/30min"
 const docsURL = "https://useren.ai/docs"
 
 export function ProfileCard(props: {
-  user: { name: string; email: string; image?: string | null }
+  user: { name: string; email: string; image?: string | null | undefined }
   organization: { id: string; name: string }
 }) {
   const auth = Auth.useClient()

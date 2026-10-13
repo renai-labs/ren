@@ -51,7 +51,7 @@ const controls = [
   },
 ] as const
 
-controls.forEach((control) => {
+for (const control of controls) {
   story(`${control.story}: takes its name, description and invalid state from the field`, async ({ visit }) => {
     const element = (await visit(`ui-field--${control.story}`)).getByRole(control.role, {
       name: control.name,
@@ -60,7 +60,7 @@ controls.forEach((control) => {
     await expect(element).toHaveAccessibleDescription(control.description)
     await expect(element).toHaveAttribute("aria-invalid", "true")
   })
-})
+}
 
 story("keeps each radio named by its own label inside a field", async ({ visit }) => {
   const group = (await visit("ui-field--with-radio-group")).getByRole("radiogroup", { name: "Network access" })

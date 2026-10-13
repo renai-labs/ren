@@ -1,7 +1,0 @@
-id: no-disabled-submit
-valid:
-  - "<Button type='submit' disabled={isSubmitting} />"
-  - "<Button disabled={!canEdit} />"
-invalid:
-  - "<Button type='submit' disabled={!canSubmit} />"
-  - "<Button disabled={!state.isValid || isSubmitting} />"

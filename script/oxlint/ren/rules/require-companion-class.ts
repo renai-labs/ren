@@ -40,7 +40,7 @@ const classStrings = (node: ESTree.Node): Array<{ node: ESTree.Node; tokens: str
   if (node.type === "Property") return classStrings(node.value)
   return Object.entries(node)
     .filter((entry) => entry[0] !== "parent")
-    .flatMap((entry) => (Array.isArray(entry[1]) ? entry[1] : [entry[1]]))
+    .flatMap((entry): unknown[] => (Array.isArray(entry[1]) ? entry[1] : [entry[1]]))
     .filter(isNode)
     .flatMap(classStrings)
 }
@@ -56,15 +56,13 @@ export const requireCompanionClass = defineRule({
       if (insideClassRoot(root.parent)) return
       const strings = classStrings(root)
       const tokens = strings.flatMap((entry) => entry.tokens)
-      companions
-        .filter((companion) => !tokens.some((token) => companion.require.test(token)))
-        .forEach((companion) =>
-          strings
-            .filter((entry) => entry.tokens.some((token) => companion.when.test(token)))
-            .forEach((entry) =>
-              context.report({ node: entry.node, messageId: "missing", data: { message: companion.message } }),
-            ),
-        )
+      for (const companion of companions) {
+        if (tokens.some((token) => companion.require.test(token))) continue
+        for (const entry of strings) {
+          if (!entry.tokens.some((token) => companion.when.test(token))) continue
+          context.report({ node: entry.node, messageId: "missing", data: { message: companion.message } })
+        }
+      }
     }
     return {
       JSXAttribute(node) {

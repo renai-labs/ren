@@ -1,8 +1,17 @@
+import { Schema } from "effect"
+
+const OpenApiDocument = Schema.Struct({
+  components: Schema.Struct({ schemas: Schema.Record(Schema.String, Schema.Unknown) }),
+})
+
+const byKey = (left: [string, unknown], right: [string, unknown]) => {
+  if (left[0] === right[0]) return 0
+  return left[0] < right[0] ? -1 : 1
+}
+
 export function stabilizeOpenApi(source: object) {
-  const document = source as {
-    components: { schemas: Record<string, unknown> }
-  }
-  const schemas = document.components.schemas
+  if (!Schema.is(OpenApiDocument)(source)) throw new Error("OpenAPI document has no components.schemas")
+  const schemas = source.components.schemas
   const reference = (name: string) => `#/components/schemas/${name}`
   const families = ["Union", "Objects", "Arrays"].filter((name) => `${name}_` in schemas)
   const anonymous = new Map(
@@ -22,13 +31,13 @@ export function stabilizeOpenApi(source: object) {
         ["$ref", canonical(anonymous.get(name), new Set([...seen, name]))],
         ...Object.entries(node)
           .filter(([key]) => key !== "$ref")
-          .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+          .toSorted(byKey)
           .map(([key, value]) => [key, canonical(value, seen)]),
       ])
     }
     return Object.fromEntries(
       Object.entries(node)
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .toSorted(byKey)
         .map(([key, value]) => [key, canonical(value, seen)]),
     )
   }
@@ -54,7 +63,8 @@ export function stabilizeOpenApi(source: object) {
       }),
     )
   }
-  const result = rewrite(document) as typeof document
+  const result = rewrite(source)
+  if (!Schema.is(OpenApiDocument)(result)) throw new Error("Rewritten OpenAPI document lost components.schemas")
   const stable = new Map<string, unknown>()
   for (const [name, schema] of Object.entries(result.components.schemas)) {
     const target = renames.get(name) ?? name
@@ -64,8 +74,5 @@ export function stabilizeOpenApi(source: object) {
     }
     stable.set(target, schema)
   }
-  result.components.schemas = Object.fromEntries(
-    [...stable].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
-  )
-  return result
+  return { ...result, components: { ...result.components, schemas: Object.fromEntries([...stable].toSorted(byKey)) } }
 }

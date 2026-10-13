@@ -60,7 +60,7 @@ export const storyCoverage = defineRule({
     const imports = new Set<string>()
     return {
       ImportDeclaration(node) {
-        imports.add(String(node.source.value))
+        imports.add(node.source.value)
       },
       MemberExpression(node) {
         if (node.object.type === "Identifier" && node.object.name === namespace && node.property.type === "Identifier")
@@ -73,21 +73,19 @@ export const storyCoverage = defineRule({
         if (node.key.type !== "Identifier" || node.key.name !== "title") return
         const parent = node.parent
         const owner = parent.type === "ObjectExpression" ? parent.parent : undefined
+        const declarator = owner?.type === "TSSatisfiesExpression" ? owner.parent : owner
         const meta =
-          owner?.type === "ExportDefaultDeclaration" ||
-          (owner?.type === "TSSatisfiesExpression" &&
-            owner.parent.type === "VariableDeclarator" &&
-            owner.parent.id.type === "Identifier" &&
-            owner.parent.id.name === "meta") ||
-          (owner?.type === "VariableDeclarator" && owner.id.type === "Identifier" && owner.id.name === "meta")
-        if (meta) context.report({ node, messageId: "title" })
+          declarator?.type === "VariableDeclarator" &&
+          declarator.id.type === "Identifier" &&
+          declarator.id.name === "meta"
+        if (owner?.type === "ExportDefaultDeclaration" || meta) context.report({ node, messageId: "title" })
       },
       "Program:exit"(node) {
         if (!imports.has(`@ren/ui/${name}`)) context.report({ node, messageId: "import", data: { name } })
         if (namespace === undefined) return
-        partsOf(source)
-          .filter((part) => !used.has(part))
-          .forEach((part) => context.report({ node, messageId: "part", data: { part: `${namespace}.${part}` } }))
+        for (const part of partsOf(source)) {
+          if (!used.has(part)) context.report({ node, messageId: "part", data: { part: `${namespace}.${part}` } })
+        }
       },
     }
   },

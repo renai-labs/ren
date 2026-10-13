@@ -12,6 +12,7 @@ import { testEffect } from "../../core/test/lib/effect.js"
 import { Postmark } from "../../core/test/lib/postmark.js"
 import { auth } from "../script/auth-config.js"
 import { Auth } from "../src/auth.js"
+import { BetterAuth } from "../src/better-auth.js"
 
 const dns: SignupGuard.Resolver = {
   resolveMx: (domain) =>
@@ -144,7 +145,7 @@ describe("Auth", () => {
       const orphans = yield* sql<{ n: number }>`
         select count(*)::int as n from organization o
         where not exists (select 1 from member m where m.organization_id = o.id)`
-      expect([memberships[0].n, orphans[0].n]).toEqual([0, 0])
+      expect([...memberships, ...orphans]).toEqual([{ n: 0 }, { n: 0 }])
     }),
   )
 
@@ -202,18 +203,20 @@ describe("Auth", () => {
       yield* sql<{ waiting: number }>`
         select count(*)::int as waiting from pg_locks l join pg_class c on c.oid = l.relation
         where c.relname = 'organization' and not l.granted`.pipe(
-        Effect.map((rows) => rows[0].waiting),
+        Effect.map((rows) => rows[0]?.waiting ?? 0),
         Effect.repeat({ until: (waiting) => waiting >= 2, schedule: Schedule.spaced("10 millis"), times: 500 }),
       )
       yield* Deferred.succeed(release, undefined)
       yield* Fiber.join(holder)
 
-      const statuses = (yield* Fiber.join(creates)).map((response) => response.status).sort()
+      const statuses = (yield* Fiber.join(creates))
+        .map((response) => response.status)
+        .toSorted((left, right) => left - right)
       expect(statuses[0]).toBe(200)
       expect(statuses[1]).toBeGreaterThanOrEqual(400)
       expect(statuses[1]).toBeLessThan(500)
       const rows = yield* sql<{ n: number }>`select count(*)::int as n from organization where slug = 'acme-inc'`
-      expect(rows[0].n).toBe(1)
+      expect(rows).toEqual([{ n: 1 }])
     }),
   )
 
@@ -380,7 +383,7 @@ describe("Auth", () => {
       Effect.gen(function* () {
         const database = yield* AuthDatabase.Service
         const guard = yield* SignupGuard.Service
-        const instance = Auth.make({
+        const instance = BetterAuth.make({
           database: database.db,
           secret: "test-secret-at-least-32-characters-long",
           baseURL: "http://localhost:4000",
@@ -421,7 +424,7 @@ describe("Auth", () => {
       const emails = Effect.fnUntraced(function* () {
         const database = yield* AuthDatabase.Service
         const users = yield* Effect.promise(() => database.db.query.user.findMany({ columns: { email: true } }))
-        return users.map((user) => user.email).sort()
+        return users.map((user) => user.email).toSorted()
       })
 
       const publicShape = Effect.fnUntraced(function* (response: Response) {

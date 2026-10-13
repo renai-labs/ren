@@ -1,19 +1,22 @@
 import AxeBuilder from "@axe-core/playwright"
 import { readdir } from "fs/promises"
 import path from "path"
+import { Schema } from "effect"
 import { expect, story } from "../support/story.js"
 import type { Appearance } from "../support/story.js"
+
+const StorybookIndex = Schema.Struct({
+  entries: Schema.Record(Schema.String, Schema.Struct({ id: Schema.String, type: Schema.String })),
+})
 
 const appearances: ReadonlyArray<Appearance> = ["dark", "light", "girliepop"]
 const files = await readdir(path.resolve(import.meta.dirname, "../ui"))
 const components = files.filter((file) => file.endsWith(".stories.tsx")).map((file) => file.replace(".stories.tsx", ""))
 
-components.forEach((component) =>
+for (const component of components) {
   story(`${component} stories render accessibly`, async ({ visit, page, request }) => {
     story.setTimeout(240_000)
-    const index = (await (await request.get("/index.json")).json()) as {
-      entries: Record<string, { id: string; type: string }>
-    }
+    const index = Schema.decodeUnknownSync(StorybookIndex)(await (await request.get("/index.json")).json())
     const ids = Object.values(index.entries)
       .filter((entry) => entry.type === "story" && entry.id.startsWith(`ui-${component}--`))
       .map((entry) => entry.id)
@@ -50,5 +53,5 @@ components.forEach((component) =>
       }
     }
     expect(errors).toEqual([])
-  }),
-)
+  })
+}

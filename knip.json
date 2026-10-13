@@ -1,16 +1,39 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": ["repos/**", "**/generated/**", "**/*.gen.ts"],
   "workspaces": {
-    "packages/ui": {
-      "entry": ["src/components/*.tsx", "script/*.ts"],
-      "project": ["src/**/*.{ts,tsx}", "script/**/*.ts", "test/**/*.{ts,tsx}"],
-      "ignoreDependencies": ["@fontsource/ibm-plex-mono"]
+    ".": {
+      "entry": ["script/**/*.ts", "oxlint.config.ts"]
     },
-    "packages/app": {
-      "entry": ["src/routes/**/*.tsx", "src/platform/platform.tsx"],
-      "project": ["src/**/*.{ts,tsx}", "test/**/*.{ts,tsx}"],
-      "ignore": ["src/route-tree.gen.ts"],
-      "ignoreDependencies": ["tailwindcss"]
+    "packages/*": {
+      "entry": ["test/**/*.test.{ts,tsx}", "script/**/*.ts"]
+    },
+    "packages/storybook": {
+      "entry": ["parity/*.stories.tsx", "test/**/*.test.{ts,tsx}", "script/**/*.ts"],
+      "ignoreDependencies": ["@ren/app", "ren-v1"]
+    },
+    "packages/db": {
+      "entry": ["test/**/*.test.ts", "script/**/*.ts"],
+      "ignoreDependencies": ["@ren/schema"]
+    },
+    "packages/e2e": {
+      "entry": ["test/**/*.test.ts", "script/**/*.ts"],
+      "ignoreDependencies": ["@ren/server"]
+    },
+    "packages/httpapi-codegen": {
+      "entry": ["test/**/*.test.ts", "test/generated-consumer.ts", "script/**/*.ts"]
     }
+  },
+  "ignoreDependencies": [
+    "tailwindcss",
+    "@fontsource/ibm-plex-mono",
+    "auth",
+    "turbo",
+    "prettier",
+    "@typescript/native-preview"
+  ],
+  "ignoreIssues": {
+    "packages/server/src/primitive.ts": ["duplicates"],
+    "packages/httpapi-codegen/test/generated-consumer.ts": ["duplicates"]
   }
 }

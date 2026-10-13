@@ -38,7 +38,6 @@
         "@tailwindcss/vite": "catalog:",
         "@tanstack/router-cli": "catalog:",
         "@tanstack/router-plugin": "catalog:",
-        "@tsconfig/bun": "catalog:",
         "@types/babel__core": "catalog:",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
@@ -60,7 +59,6 @@
         "@renai-labs/sdk": "workspace:*",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },
@@ -76,7 +74,6 @@
         "@effect/platform-bun": "catalog:",
         "@ren/httpapi-codegen": "workspace:*",
         "@tanstack/react-query": "catalog:",
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "effect": "catalog:",
@@ -102,7 +99,6 @@
         "effect": "catalog:",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },
@@ -113,12 +109,10 @@
       "dependencies": {
         "@effect/sql-pg": "catalog:",
         "@ren/schema": "workspace:*",
-        "@ren/util": "workspace:*",
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "drizzle-kit": "catalog:",
@@ -131,9 +125,9 @@
         "@playwright/test": "catalog:",
         "@ren/client": "workspace:*",
         "@ren/server": "workspace:*",
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
+        "effect": "catalog:",
       },
     },
     "packages/httpapi-codegen": {
@@ -144,7 +138,6 @@
         "prettier": "catalog:",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },
@@ -157,7 +150,6 @@
         "effect": "catalog:",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "prettier": "catalog:",
@@ -171,7 +163,6 @@
         "ulid": "catalog:",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },
@@ -181,10 +172,8 @@
       "version": "0.0.0",
       "dependencies": {
         "@ren/client": "workspace:*",
-        "@ren/schema": "workspace:*",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },
@@ -207,7 +196,6 @@
         "tldts": "catalog:",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "auth": "catalog:",
@@ -223,7 +211,6 @@
       },
       "devDependencies": {
         "@astrojs/check": "catalog:",
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "typescript": "catalog:",
@@ -240,7 +227,6 @@
         "@ren/ui": "workspace:*",
         "@storybook/react-vite": "catalog:",
         "@tailwindcss/vite": "catalog:",
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
@@ -273,7 +259,6 @@
         "tailwindcss": "catalog:",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
@@ -293,7 +278,6 @@
         "effect": "catalog:",
       },
       "devDependencies": {
-        "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },

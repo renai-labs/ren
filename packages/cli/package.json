@@ -25,7 +25,6 @@
     "@renai-labs/sdk": "workspace:*"
   },
   "devDependencies": {
-    "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:"
   }

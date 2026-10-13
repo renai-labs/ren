@@ -22,7 +22,7 @@ export function createWebPlatform(): Platform.Info {
       const permission =
         Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission
       if (permission !== "granted") return
-      new Notification(title, { body })
+      new Notification(title, body === undefined ? undefined : { body })
     },
     writeClipboardText: (text) => navigator.clipboard.writeText(text),
   }

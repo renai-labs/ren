@@ -9,12 +9,12 @@ export type CheckboxProps = {
   checked?: boolean
   indeterminate?: boolean
   onCheckedChange?: (checked: boolean) => void
-  disabled?: boolean
+  disabled?: boolean | undefined
   label?: string
   labelVisibility?: "assistive" | "visible"
   description?: ReactNode
   id?: string
-  size?: "small" | "medium"
+  size?: "small" | "medium" | undefined
   visibility?: "always" | "on-container-hover"
 }
 

@@ -45,10 +45,10 @@ export const PanelSelected: Story = {
 export const PanelScrolling: Story = {
   render: () => (
     <Surface.Panel
+      element="section"
       padding="small"
       overflow="scrolling"
       height="limited"
-      role="region"
       aria-label="Sessions"
       tabIndex={0}
     >

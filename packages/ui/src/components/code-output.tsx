@@ -36,17 +36,16 @@ function classify(part: string, commandNext: boolean): { kind: TokenKind; comman
 }
 
 function shellTokens(source: string) {
-  return source
-    .split(/(\s+|\|\|?|&&|;|"[^"]*"|'[^']*')/)
-    .filter((part) => part !== "")
-    .reduce<ReadonlyArray<{ text: string; start: number; kind: TokenKind; commandNext: boolean }>>((tokens, part) => {
-      const previous = tokens.at(-1)
-      return tokens.concat({
-        text: part,
-        start: previous === undefined ? 0 : previous.start + previous.text.length,
-        ...classify(part, previous?.commandNext ?? true),
-      })
-    }, [])
+  const tokens: Array<{ text: string; start: number; kind: TokenKind; commandNext: boolean }> = []
+  for (const part of source.split(/(\s+|\|\|?|&&|;|"[^"]*"|'[^']*')/).filter((part) => part !== "")) {
+    const previous = tokens.at(-1)
+    tokens.push({
+      text: part,
+      start: previous === undefined ? 0 : previous.start + previous.text.length,
+      ...classify(part, previous?.commandNext ?? true),
+    })
+  }
+  return tokens
 }
 
 export type CodeOutputProps = {
