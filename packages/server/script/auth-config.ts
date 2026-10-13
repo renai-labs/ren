@@ -17,9 +17,9 @@ export const auth = BetterAuth.make({
     checkAccountCreation: () => Promise.resolve(Option.none()),
     hasVerifiedAlias: () => Promise.resolve(false),
   },
-  lifecycle: {
-    join: () => Promise.resolve(),
-    activate: () => Promise.resolve(),
-    leave: () => Promise.resolve(),
+  provisioning: {
+    provisionMember: () => Promise.resolve(),
+    applyAssignments: () => Promise.resolve(),
+    removeMemberships: () => Promise.resolve(),
   },
 })

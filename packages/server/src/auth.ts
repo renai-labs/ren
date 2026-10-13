@@ -2,7 +2,7 @@ export * as Auth from "./auth.js"
 
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
-import { SpaceLifecycle } from "@ren/core/space-lifecycle"
+import { SpaceProvisioning } from "@ren/core/space-provisioning"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { type AuthenticatedSession } from "@ren/protocol/middleware/authentication"
 import { Auth } from "@ren/schema/auth"
@@ -51,8 +51,8 @@ export const layer = Layer.effect(
     const database = yield* AuthDatabase.Service
     const mailer = yield* Mailer.Service
     const signupGuard = yield* SignupGuard.Service
-    const lifecycle = yield* SpaceLifecycle.Service
-    const lifecycleUser = (user: BetterAuth.LifecycleUser) => ({ ...user, id: Auth.UserID.make(user.id) })
+    const provisioning = yield* SpaceProvisioning.Service
+    const toProvisioningUser = (user: BetterAuth.ProvisioningUser) => ({ ...user, id: Auth.UserID.make(user.id) })
     const run = yield* FiberSet.makeRuntime()
     const runPromise = yield* FiberSet.makeRuntimePromise()
     const config = yield* Config.all({
@@ -84,13 +84,15 @@ export const layer = Layer.effect(
         checkAccountCreation: (email) => runPromise(signupGuard.checkAccountCreation(email)),
         hasVerifiedAlias: (email) => runPromise(signupGuard.hasVerifiedAlias(email)),
       },
-      lifecycle: {
-        join: (organizationId, user) =>
-          runPromise(lifecycle.join(Auth.OrganizationID.make(organizationId), lifecycleUser(user))),
-        activate: (organizationId, user) =>
-          runPromise(lifecycle.activate(Auth.OrganizationID.make(organizationId), lifecycleUser(user))),
-        leave: (organizationId, userId) =>
-          runPromise(lifecycle.leave(Auth.OrganizationID.make(organizationId), Auth.UserID.make(userId))),
+      provisioning: {
+        provisionMember: (organizationId, user) =>
+          runPromise(provisioning.provisionMember(Auth.OrganizationID.make(organizationId), toProvisioningUser(user))),
+        applyAssignments: (organizationId, user) =>
+          runPromise(provisioning.applyAssignments(Auth.OrganizationID.make(organizationId), toProvisioningUser(user))),
+        removeMemberships: (organizationId, userId) =>
+          runPromise(
+            provisioning.removeMemberships(Auth.OrganizationID.make(organizationId), Auth.UserID.make(userId)),
+          ),
       },
     })
     return Service.of({
@@ -108,4 +110,4 @@ export const layer = Layer.effect(
       getActiveOrganization: getActiveOrganization(database.db, auth),
     })
   }),
-).pipe(Layer.provide(SpaceLifecycle.layer))
+).pipe(Layer.provide(SpaceProvisioning.layer))

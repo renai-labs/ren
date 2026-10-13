@@ -3,6 +3,7 @@ import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { Testing } from "@ren/db/testing"
+import { Space } from "@ren/schema/space"
 import { getAuthTables } from "better-auth/db"
 import { Cause, ConfigProvider, Deferred, Effect, Exit, Fiber, Layer, Option, Schedule } from "effect"
 import { HttpClient } from "effect/http"
@@ -146,6 +147,56 @@ describe("Auth", () => {
         select count(*)::int as n from organization o
         where not exists (select 1 from member m where m.organization_id = o.id)`
       expect([...memberships, ...orphans]).toEqual([{ n: 0 }, { n: 0 }])
+    }),
+  )
+
+  it.live("keeps the default organization active and logs the failure when its spaces cannot be provisioned", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient
+      yield* sql`alter table space add constraint reject_personal check (name not like '%Personal Space')`
+
+      const log = spyOn(console, "log")
+      const response = yield* signUp("ellen@example.org", "Ellen")
+      const logged = log.mock.calls.flat().join(" ")
+      log.mockRestore()
+      yield* sql`alter table space drop constraint reject_personal`
+      expect(response.status).toBe(200)
+      const session = yield* get("/get-session", cookie(response))
+      expect(session.session.activeOrganizationId).toEqual(expect.stringMatching(/^org_/))
+      expect(logged).toContain("Space provisioning failed")
+      expect(logged).not.toContain("Default organization provisioning failed")
+    }),
+  )
+
+  it.live("applies pending space assignments when an unverified user accepts an invitation", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient
+      const owner = cookie(yield* signUp("lynn@example.org", "Lynn"))
+      const organizationId = (yield* get("/get-session", owner)).session.activeOrganizationId
+      const invitation = yield* json(
+        yield* post("/organization/invite-member", { email: "alan@example.org", role: "member" }, owner),
+      )
+      const spaces = yield* sql<{ id: string }>`
+        select id from space where organization_id = ${organizationId} and name = 'General Space'`
+      const spaceId = spaces.at(0)?.id
+      if (!spaceId) return yield* Effect.die(new Error("Expected a general space"))
+      yield* sql`
+        insert into space_pending_member (id, space_id, email)
+        values (${Space.AssignmentID.create()}, ${spaceId}, 'alan@example.org')`
+
+      const invitee = yield* signUp("alan@example.org", "Alan")
+      const session = yield* get("/get-session", cookie(invitee))
+      expect(session.user.emailVerified).toBe(false)
+      const accepted = yield* post("/organization/accept-invitation", { invitationId: invitation.id }, cookie(invitee))
+      expect(accepted.status).toBe(200)
+
+      const memberships = yield* sql<{ n: number }>`
+        select count(*)::int as n from space_member
+        where space_id = ${spaceId} and user_id = ${session.user.id} and archived_at is null`
+      const pending = yield* sql<{ n: number }>`
+        select count(*)::int as n from space_pending_member
+        where space_id = ${spaceId} and archived_at is null`
+      expect([...memberships, ...pending]).toEqual([{ n: 1 }, { n: 0 }])
     }),
   )
 
@@ -397,10 +448,10 @@ describe("Auth", () => {
             checkAccountCreation: (email) => Effect.runPromise(guard.checkAccountCreation(email)),
             hasVerifiedAlias: (email) => Effect.runPromise(guard.hasVerifiedAlias(email)),
           },
-          lifecycle: {
-            join: () => Promise.resolve(),
-            activate: () => Promise.resolve(),
-            leave: () => Promise.resolve(),
+          provisioning: {
+            provisionMember: () => Promise.resolve(),
+            applyAssignments: () => Promise.resolve(),
+            removeMemberships: () => Promise.resolve(),
           },
         })
         const context = yield* Effect.promise(() => instance.$context)
