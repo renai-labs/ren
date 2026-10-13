@@ -4,8 +4,8 @@ import { Text } from "@ren/ui/text"
 import type { ReactNode } from "react"
 
 export function AuthFlowLayout(props: {
-  title?: string
-  description?: string
+  title?: string | undefined
+  description?: string | undefined
   footer?: ReactNode
   children?: ReactNode
 }) {

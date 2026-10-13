@@ -41,7 +41,7 @@ export type IconButtonSize = "extra-small" | "compact" | "small" | "medium" | "l
 export type IconButtonProps = Omit<useRender.ComponentProps<"button">, "className" | "style" | "children"> & {
   label: string
   appearance?: "plain" | "secondary" | "outline" | "primary" | "overlay"
-  size?: IconButtonSize
+  size?: IconButtonSize | undefined
   shape?: "square" | "circle"
   glyphMotion?: "none" | "turn-when-open"
   indicator?: "none" | "attention"

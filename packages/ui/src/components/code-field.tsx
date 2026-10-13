@@ -22,7 +22,7 @@ export type CodeFieldProps = {
   name?: string
   slotLabel?: string
   "aria-labelledby"?: string
-  "aria-describedby"?: string
+  "aria-describedby"?: string | undefined
 }
 
 export function CodeField(props: CodeFieldProps) {

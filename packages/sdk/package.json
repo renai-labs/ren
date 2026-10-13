@@ -18,11 +18,9 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@ren/client": "workspace:*",
-    "@ren/schema": "workspace:*"
+    "@ren/client": "workspace:*"
   },
   "devDependencies": {
-    "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:"
   }

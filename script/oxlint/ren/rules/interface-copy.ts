@@ -13,6 +13,7 @@ const COPY_ATTRIBUTES = new Set([
   "label",
   "description",
 ])
+const TRANSPARENT = new Set(["ConditionalExpression", "LogicalExpression", "JSXExpressionContainer"])
 const COPY_KEYS = new Set(["title", "description", "label", "placeholder", "message"])
 
 const checks = [
@@ -42,17 +43,16 @@ const attributeName = (node: ESTree.JSXAttribute) =>
   node.name.type === "JSXIdentifier" ? node.name.name : node.name.name.name
 
 const keyName = (node: Extract<ESTree.Node, { type: "Property" }>) => {
-  if (node.computed) return undefined
+  if (node.computed) return ""
   if (node.key.type === "Identifier") return node.key.name
   if (node.key.type === "Literal" && typeof node.key.value === "string") return node.key.value
-  return undefined
+  return ""
 }
 
 const copyContext = (node: ESTree.Node): string | undefined => {
   if (node.type === "Program") return undefined
   const parent = node.parent
-  if (parent.type === "ConditionalExpression" || parent.type === "LogicalExpression") return copyContext(parent)
-  if (parent.type === "JSXExpressionContainer") return copyContext(parent)
+  if (TRANSPARENT.has(parent.type)) return copyContext(parent)
   if (parent.type === "JSXElement" || parent.type === "JSXFragment") return "children"
   if (parent.type === "JSXAttribute") {
     const name = attributeName(parent)
@@ -60,7 +60,7 @@ const copyContext = (node: ESTree.Node): string | undefined => {
   }
   if (parent.type === "Property" && parent.value === node) {
     const name = keyName(parent)
-    return name !== undefined && COPY_KEYS.has(name) ? name : undefined
+    return COPY_KEYS.has(name) ? name : undefined
   }
   return undefined
 }
@@ -74,9 +74,9 @@ export const interfaceCopy = defineRule({
   create(context) {
     const check = (node: ESTree.Node, text: string, where: string) => {
       const applicable = where === "aria-label" ? [...checks, glyphLabel] : checks
-      applicable
-        .filter((entry) => entry.pattern.test(text))
-        .forEach((entry) => context.report({ node, messageId: "copy", data: { message: entry.message } }))
+      for (const entry of applicable) {
+        if (entry.pattern.test(text)) context.report({ node, messageId: "copy", data: { message: entry.message } })
+      }
     }
     return {
       JSXText(node) {

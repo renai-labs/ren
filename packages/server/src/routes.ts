@@ -12,6 +12,7 @@ import { InvitationHandler } from "./handlers/invitation.js"
 import { MeHandler } from "./handlers/me.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 
+// oxlint-disable-next-line react-hooks/rules-of-hooks -- Effect's HttpRouter.use, not a React hook
 const AuthRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const auth = yield* Auth.Service

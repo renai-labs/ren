@@ -12,13 +12,13 @@ docker compose up -d
 
 ## Development
 
-| Command            | What it does                                      |
-| ------------------ | ------------------------------------------------- |
-| `bun run dev`      | Start the API server on port 4000 with watch      |
-| `bun run dev:app`  | Start the web app (proxies `/api` to the server)  |
-| `bun run dev:site` | Start the docs site                               |
-| `bun run generate` | Regenerate `openapi.json` and the clients         |
-| `bun run format`   | Format the repo with Prettier                     |
+| Command            | What it does                                              |
+| ------------------ | --------------------------------------------------------- |
+| `bun run dev`      | Start the API server on port 4000 with watch              |
+| `bun run dev:app`  | Start the web app (proxies `/api` to the server)          |
+| `bun run dev:site` | Start the docs site                                       |
+| `bun run generate` | Regenerate `openapi.json` and the clients                 |
+| `bun run format`   | Format the repo with Prettier                             |
 | `bun run check`    | Lint (oxlint, ast-grep and knip) and typecheck everything |
 
 ## Verification

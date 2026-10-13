@@ -14,7 +14,7 @@ The public TypeScript SDK for Ren.
 
 ## Dependencies
 
-`@ren/client`, `@ren/schema`.
+`@ren/client`.
 
 ## Commands
 

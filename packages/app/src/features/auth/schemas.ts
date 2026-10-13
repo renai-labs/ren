@@ -11,27 +11,27 @@ const NewPassword = Schema.String.check(Schema.isMinLength(8, { message: "Passwo
 
 const isSafeRedirect = (path: string) => path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\")
 
-export const Redirect = Schema.optionalKey(Schema.String).pipe(
+export const Redirect = Schema.optional(Schema.String).pipe(
   Schema.decodeTo(
-    Schema.optionalKey(Schema.String),
+    Schema.optional(Schema.String),
     SchemaTransformation.transformOptional({
-      decode: Option.filter(isSafeRedirect),
+      decode: Option.filter((value) => value !== undefined && isSafeRedirect(value)),
       encode: (value) => value,
     }),
   ),
 )
 
-export const OptionalEmail = Schema.optionalKey(Schema.String).pipe(
+export const OptionalEmail = Schema.optional(Schema.String).pipe(
   Schema.decodeTo(
-    Schema.optionalKey(Schema.String),
+    Schema.optional(Schema.String),
     SchemaTransformation.transformOptional({
-      decode: Option.filter((value) => emailPattern.test(value)),
+      decode: Option.filter((value) => value !== undefined && emailPattern.test(value)),
       encode: (value) => value,
     }),
   ),
 )
 
-export const InvitationId = Schema.optionalKey(Schema.NonEmptyString)
+export const InvitationId = Schema.optional(Schema.NonEmptyString)
 
 export const EmailStep = Schema.toStandardSchemaV1(Schema.Struct({ email: EmailAddress }))
 

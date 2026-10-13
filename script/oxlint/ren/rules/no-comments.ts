@@ -14,10 +14,10 @@ export const noComments = defineRule({
   create(context) {
     return {
       Program() {
-        context.sourceCode
-          .getAllComments()
-          .filter((comment) => !DIRECTIVE.test(comment.value))
-          .forEach((comment) => context.report({ loc: comment.loc, messageId: "comment" }))
+        for (const comment of context.sourceCode.getAllComments()) {
+          if (comment.type === "Shebang" || DIRECTIVE.test(comment.value)) continue
+          context.report({ loc: comment.loc, messageId: "comment" })
+        }
       },
     }
   },

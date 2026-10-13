@@ -81,13 +81,12 @@ async function bundleInputs(specifier: string) {
     const visit = (file: string) => {
       if (eager.has(file)) return
       eager.add(file)
-      inputs
-        .get(file)
-        ?.imports.filter((input) => !input.external && input.kind !== "dynamic-import")
-        .forEach((input) => visit(resolve(directory, input.path)))
+      for (const input of inputs.get(file)?.imports ?? []) {
+        if (!input.external && input.kind !== "dynamic-import") visit(resolve(directory, input.path))
+      }
     }
     visit(entrypoint)
-    return { all: Array.from(inputs.keys()), eager: Array.from(eager) }
+    return { all: [...inputs.keys()], eager: [...eager] }
   } finally {
     await rm(temporary, { recursive: true, force: true })
   }

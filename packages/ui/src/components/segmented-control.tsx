@@ -30,8 +30,8 @@ export type SegmentedControlProps<Value extends string> = {
   onValueChange: (value: Value) => void
   options: readonly SegmentedControlOption<Value>[]
   label: string
-  size?: "small" | "medium"
-  width?: "content" | "full"
+  size?: "small" | "medium" | undefined
+  width?: "content" | "full" | undefined
 }
 
 export function SegmentedControl<Value extends string>(props: SegmentedControlProps<Value>) {

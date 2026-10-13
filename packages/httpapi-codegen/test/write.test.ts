@@ -1,19 +1,19 @@
 import { describe, expect } from "bun:test"
 import { join } from "node:path"
 import { ByteSize, Effect, FileSystem, Option } from "effect"
-import { write, type Output } from "../src"
+import { Write, type Types } from "../src/index.js"
 import { it } from "./effect"
 
 describe("HttpApiCodegen.write", () => {
   it.effect("writes compiled files beneath the output directory", () => {
     const writes: Array<{ readonly path: string; readonly content: string }> = []
-    const output: Output = {
+    const output: Types.Output = {
       operations: [],
       files: [{ path: "session.ts", content: "export const session = {}" }],
     }
 
     return Effect.gen(function* () {
-      yield* write(output, "/generated")
+      yield* Write.write(output, "/generated")
 
       expect(writes).toEqual([
         { path: join("/generated", "session.ts"), content: "export const session = {}\n" },
@@ -36,7 +36,7 @@ describe("HttpApiCodegen.write", () => {
 
   it.effect("removes only stale files owned by the previous manifest", () => {
     const removed: Array<string> = []
-    return write(
+    return Write.write(
       {
         operations: [],
         files: [{ path: "session.ts", content: "" }],
@@ -63,7 +63,7 @@ describe("HttpApiCodegen.write", () => {
   it.effect("rejects unsafe and duplicate output paths before writing", () => {
     const writes: Array<string> = []
     return Effect.gen(function* () {
-      const error = yield* write(
+      const error = yield* Write.write(
         {
           operations: [],
           files: [
@@ -93,7 +93,7 @@ describe("HttpApiCodegen.write", () => {
   it.effect("rejects case-insensitive duplicate output paths", () => {
     const writes: Array<string> = []
     return Effect.gen(function* () {
-      const error = yield* write(
+      const error = yield* Write.write(
         {
           operations: [],
           files: [
@@ -121,7 +121,7 @@ describe("HttpApiCodegen.write", () => {
   })
 
   it.effect("reserves the private manifest path", () =>
-    write({ operations: [], files: [{ path: ".httpapi-codegen.json", content: "" }] }, "/generated").pipe(
+    Write.write({ operations: [], files: [{ path: ".httpapi-codegen.json", content: "" }] }, "/generated").pipe(
       Effect.flip,
       Effect.tap((error) => Effect.sync(() => expect(error.reason).toContain("Unsafe output path"))),
       Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})),
@@ -129,7 +129,7 @@ describe("HttpApiCodegen.write", () => {
   )
 
   it.effect("rejects existing symbolic-link output targets", () =>
-    write({ operations: [], files: [{ path: "session.ts", content: "" }] }, "/generated").pipe(
+    Write.write({ operations: [], files: [{ path: "session.ts", content: "" }] }, "/generated").pipe(
       Effect.flip,
       Effect.tap((error) => Effect.sync(() => expect(error.reason).toBe("Unsafe output path: session.ts"))),
       Effect.provideService(

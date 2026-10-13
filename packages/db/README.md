@@ -19,7 +19,7 @@ Postgres access: Drizzle tables, migrations, connection layers and isolated test
 
 ## Dependencies
 
-`@ren/schema`, `@ren/util`, `@effect/sql-pg`, `drizzle-orm`, `effect`.
+`@ren/schema`, `@effect/sql-pg`, `drizzle-orm`, `effect`.
 
 ## Commands
 

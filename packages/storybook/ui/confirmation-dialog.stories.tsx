@@ -38,7 +38,10 @@ export const Failing: Story = {
   args: { onConfirm: () => Promise.reject(new Error("Unable to delete the report. Try again.")) },
 }
 export const FailingWithoutReason: Story = {
-  args: { onConfirm: () => Promise.reject(new Response(null, { status: 503 })) },
+  args: {
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- this story covers rejections that are not Errors
+    onConfirm: () => Promise.reject(new Response(null, { status: 503 })),
+  },
 }
 export const FromTrigger: Story = {
   render: function Render(args) {

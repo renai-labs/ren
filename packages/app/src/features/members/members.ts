@@ -34,7 +34,7 @@ export function memberRows(
     id: string
     role: Role
     userId: string
-    user: { name: string | null; email: string | null; image?: string | null }
+    user: { name: string | null; email: string | null; image?: string | null | undefined }
   }>,
   currentUserId: string,
 ): MemberRow[] {

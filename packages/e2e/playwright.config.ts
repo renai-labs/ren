@@ -4,7 +4,7 @@ const app = Number(process.env.E2E_APP_PORT ?? 4011)
 
 export default defineConfig({
   testDir: "./tests",
-  forbidOnly: !!process.env.CI,
+  forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {

@@ -71,7 +71,7 @@ export function parse(markdown: string): Tokens {
 export function runtimeValue(token: Token) {
   const stack = fontStacks[token.name]
   if (stack !== undefined) return stack
-  if (remTypes.has(token.type) && token.value.endsWith("px")) return `${parseFloat(token.value) / 16}rem`
+  if (remTypes.has(token.type) && token.value.endsWith("px")) return `${Number.parseFloat(token.value) / 16}rem`
   return token.value
 }
 

@@ -1,6 +1,6 @@
 export type DateInput = Date | string | number
 
-type ZoneOptions = { timeZone?: string }
+type ZoneOptions = { timeZone?: string | undefined }
 
 const SECOND = 1000
 const MINUTE = 60 * SECOND

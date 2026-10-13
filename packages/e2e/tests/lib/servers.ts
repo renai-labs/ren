@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test"
 import type { APIRequestContext } from "@playwright/test"
+import { Schema } from "effect"
 
 export const serverURL = `http://127.0.0.1:${process.env.E2E_PORT ?? 4010}`
 export const appURL = `http://127.0.0.1:${process.env.E2E_APP_PORT ?? 4011}`
@@ -58,7 +59,7 @@ export async function addMember(
     data: { email: input.email, role: input.role ?? "member" },
   })
   expect(invited.ok()).toBe(true)
-  const invitation = await invited.json()
+  const invitation = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await invited.json())
   await createUser(member, { name: input.name, email: input.email, password: "correct horse battery" })
   const accepted = await member.post(`${appURL}/api/auth/organization/accept-invitation`, {
     headers,

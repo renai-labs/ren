@@ -19,7 +19,7 @@ const statusDotVariants = cva("inline-block size-2 shrink-0 rounded-full", {
   defaultVariants: { tone: "neutral", activity: "none" },
 })
 
-export function StatusDot(props: { tone?: StatusTone; label?: string; activity?: "none" | "pulse" }) {
+export function StatusDot(props: { tone?: StatusTone | undefined; label?: string; activity?: "none" | "pulse" }) {
   return (
     <span
       data-slot="badge-marker"

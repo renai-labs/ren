@@ -28,14 +28,14 @@ const popupVariants = cva(
 
 export type ListProps = Selection &
   ListChrome & {
-    items?: readonly Option[]
+    items?: readonly Option[] | undefined
     groups?: readonly Group[]
     query?: string
     onQueryChange?: (query: string) => void
     filtering?: "internal" | "external"
     onSearchKeyDown?: KeyboardEventHandler<HTMLInputElement>
     onCreate?: Create
-    createLabel?: (query: string) => string
+    createLabel?: ((query: string) => string) | undefined
     createStep?: CreateStep
   }
 

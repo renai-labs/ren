@@ -1,10 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "@tsconfig/bun/tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "noUnusedLocals": true,
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "noUncheckedIndexedAccess": true,
     "types": ["bun", "vite/client"]
   }
 }

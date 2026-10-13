@@ -22,7 +22,7 @@ export const featureBoundaries = defineRule({
     if (from === undefined && layer === undefined) return {}
     const check = (node: ESTree.Node, source: string) => {
       if (!source.startsWith(".")) return
-      const to = FEATURE.exec(path.resolve(path.dirname(file), source) + "/")?.[1]
+      const to = FEATURE.exec(`${path.resolve(path.dirname(file), source)}/`)?.[1]
       if (to === undefined || to === from) return
       if (from !== undefined) return context.report({ node, messageId: "crossFeature", data: { from, to } })
       context.report({ node, messageId: "sharedToFeature", data: { layer: layer ?? "", to } })

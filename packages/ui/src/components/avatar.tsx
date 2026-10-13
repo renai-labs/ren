@@ -55,7 +55,7 @@ const imageVariants = cva("", {
 
 export type RootProps = {
   name: string
-  image?: string
+  image?: string | undefined
   glyph?: Glyph
   emoji?: string
   size?: AvatarSize
@@ -134,7 +134,7 @@ export function Root(props: RootProps) {
   )
 }
 
-export type GroupItem = { key: string; name: string; image?: string }
+export type GroupItem = { key: string; name: string; image?: string | undefined }
 
 export function Group(props: { items: ReadonlyArray<GroupItem>; limit?: number; size?: "extra-small" | "small" }) {
   if (props.items.length === 0) return null

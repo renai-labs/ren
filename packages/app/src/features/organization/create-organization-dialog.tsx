@@ -14,10 +14,10 @@ const slugTaken = "This slug is already in use."
 function organizationSlug(name: string) {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "")
     .slice(0, 128)
-    .replace(/-+$/g, "")
+    .replaceAll(/-+$/g, "")
 }
 
 const schema = Schema.toStandardSchemaV1(

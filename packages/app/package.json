@@ -30,7 +30,6 @@
     "@tailwindcss/vite": "catalog:",
     "@tanstack/router-cli": "catalog:",
     "@tanstack/router-plugin": "catalog:",
-    "@tsconfig/bun": "catalog:",
     "@types/babel__core": "catalog:",
     "@types/bun": "catalog:",
     "@types/react": "catalog:",

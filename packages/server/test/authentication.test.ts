@@ -61,7 +61,7 @@ const sessionCookie = (response: Response) =>
     .map((cookie) => cookie.split(";")[0])
     .join("; ")
 
-const me = (headers?: HeadersInit) => app.handler(new Request("http://localhost:4000/api/test/me", { headers }))
+const me = (headers: HeadersInit = {}) => app.handler(new Request("http://localhost:4000/api/test/me", { headers }))
 
 describe("Authentication", () => {
   test("returns 401 without credentials", async () => {

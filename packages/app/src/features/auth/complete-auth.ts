@@ -4,8 +4,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 
 export interface Destination {
-  readonly invitationId?: string
-  readonly redirect?: string
+  readonly invitationId?: string | undefined
+  readonly redirect?: string | undefined
 }
 
 export function href(destination: Destination & { readonly join?: boolean }) {

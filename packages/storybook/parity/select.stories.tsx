@@ -6,7 +6,7 @@ import meta from "../ui/select.stories.js"
 
 export default { ...meta, component: Select }
 
-const opened: Decorator = (Story) => {
+const opened: Decorator = function Opened(Story) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => ref.current?.querySelector<HTMLElement>('[data-slot="select"]')?.click(), [])
   return (

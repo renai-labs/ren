@@ -20,7 +20,7 @@ const popupVariants = cva(
 export type RootProps = {
   open?: boolean
   defaultOpen?: boolean
-  onOpenChange?: (open: boolean) => void
+  onOpenChange?: ((open: boolean) => void) | undefined
   children: ReactNode
 }
 

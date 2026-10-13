@@ -3,20 +3,20 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { type Brand, Effect, FileSystem, Schema, SchemaAST, SchemaGetter, Stream } from "effect"
+import { Effect, FileSystem, Schema, SchemaAST, SchemaGetter, Stream } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api"
 import { format } from "prettier"
 import {
-  compile,
-  emitEffect,
-  emitEffectImported,
-  emitEffectShape,
-  emitPromise,
-  emitReactQuery,
-  generate,
-  GenerationError,
-  type Output,
-} from "../src"
+  Compile,
+  EmitEffect,
+  EmitEffectImported,
+  EmitEffectShape,
+  EmitPromise,
+  EmitReactQuery,
+  Errors,
+  Write,
+  type Types,
+} from "../src/index.js"
 import { it } from "./effect"
 import { Api, Missing } from "./fixture"
 
@@ -25,16 +25,17 @@ function api(endpoint: HttpApiEndpoint.Constraint) {
 }
 
 function compileOutput<Id extends string, Groups extends HttpApiGroup.Constraint>(source: HttpApi.HttpApi<Id, Groups>) {
-  return emitEffect(compile(source))
+  return EmitEffect.emitEffect(Compile.compile(source))
 }
 
-async function emittedModule(output: Output) {
+async function emittedModule(output: Types.Output) {
   const directory = await mkdtemp(join(tmpdir(), "ren-httpapi-codegen-"))
   const dispose = () => rm(directory, { recursive: true, force: true })
 
   try {
-    // Finish each write before cleanup can run, even when a later write fails.
+    // oxlint-disable-next-line ren/no-comments -- Finish each write before cleanup can run, even when a later write fails.
     await Array.fromAsync(output.files, (file) => Bun.write(join(directory, file.path), file.content))
+    // oxlint-disable-next-line ren/no-dynamic-import-path -- The module is emitted into a temporary directory at runtime, so its path cannot be literal.
     const module = await import(`${join(directory, "index.ts")}?t=${crypto.randomUUID()}`)
     return { module, [Symbol.asyncDispose]: dispose }
   } catch (cause) {
@@ -45,7 +46,7 @@ async function emittedModule(output: Output) {
 
 describe("HttpApiCodegen.generate", () => {
   test("compiles one contract for Promise and Effect emitters", () => {
-    const contract = compile(
+    const contract = Compile.compile(
       api(
         HttpApiEndpoint.get("get", "/session/:sessionID", {
           params: { sessionID: Schema.String },
@@ -54,8 +55,8 @@ describe("HttpApiCodegen.generate", () => {
       ),
     )
 
-    const promise = emitPromise(contract)
-    const effect = emitEffect(contract)
+    const promise = EmitPromise.emitPromise(contract)
+    const effect = EmitEffect.emitEffect(contract)
 
     expect(promise.operations).toEqual(effect.operations)
     expect(promise.files.map((file) => file.path)).toEqual(["types.ts", "client-error.ts", "client.ts", "index.ts"])
@@ -68,10 +69,10 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("allows Promise outputs to use an authoritative imported wire type", () => {
-    const contract = compile(
+    const contract = Compile.compile(
       api(HttpApiEndpoint.get("events", "/event", { success: HttpApiSchema.StreamSse({ data: Schema.Unknown }) })),
     )
-    const output = emitPromise(contract, {
+    const output = EmitPromise.emitPromise(contract, {
       outputTypes: {
         "session.events": {
           name: "EventWire",
@@ -86,8 +87,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("emits an Effect client against an imported authoritative API", () => {
-    const output = emitEffectImported(
-      compile(
+    const output = EmitEffectImported.emitEffectImported(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session/:sessionID", {
             params: { sessionID: Schema.String },
@@ -109,8 +110,8 @@ describe("HttpApiCodegen.generate", () => {
 
   test("generates Effect API types from schemas instead of the imported API", () => {
     const Info = Schema.Struct({ id: Schema.String }).annotate({ identifier: "Session.Info" })
-    const output = emitEffectShape(
-      compile(
+    const output = EmitEffectShape.emitEffectShape(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session/:id", {
             params: { id: Schema.String },
@@ -139,8 +140,8 @@ describe("HttpApiCodegen.generate", () => {
 
   test("preserves named Effect references across optional schema occurrences", () => {
     const State = Schema.Record(Schema.String, Schema.Unknown).annotate({ identifier: "Message.State" })
-    const output = emitEffectShape(
-      compile(
+    const output = EmitEffectShape.emitEffectShape(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session", {
             success: Schema.Struct({
@@ -164,8 +165,8 @@ describe("HttpApiCodegen.generate", () => {
   test("does not reuse named Effect references for different suffixed shapes", () => {
     const State = Schema.Record(Schema.String, Schema.Unknown).annotate({ identifier: "Message.State" })
     const Different = Schema.Record(Schema.String, Schema.Number).annotate({ identifier: "Message.State" })
-    const output = emitEffectShape(
-      compile(
+    const output = EmitEffectShape.emitEffectShape(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session", {
             success: Schema.Struct({ original: State, different: Different }),
@@ -194,8 +195,8 @@ describe("HttpApiCodegen.generate", () => {
       Schema.annotate({ identifier: "SessionsCursor" }),
     ).annotate({ description: "Cursor" })
     const Cost = Schema.Finite.pipe(Schema.brand("Money.USD"), Schema.annotate({ identifier: "Money.USD" }))
-    const output = emitEffectShape(
-      compile(
+    const output = EmitEffectShape.emitEffectShape(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("list", "/session/:sessionID", {
             params: { sessionID: SessionID },
@@ -239,14 +240,17 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("allows composed Effect outputs to use an authoritative named type", () => {
-    const output = emitEffectShape(compile(api(HttpApiEndpoint.get("events", "/event", { success: Schema.Unknown }))), {
-      outputTypes: {
-        "session.events": {
-          name: "RenEvent",
-          import: 'import type { RenEvent } from "@example/protocol/event"',
+    const output = EmitEffectShape.emitEffectShape(
+      Compile.compile(api(HttpApiEndpoint.get("events", "/event", { success: Schema.Unknown }))),
+      {
+        outputTypes: {
+          "session.events": {
+            name: "RenEvent",
+            import: 'import type { RenEvent } from "@example/protocol/event"',
+          },
         },
       },
-    })
+    )
     const source = output.files[0]?.content
 
     expect(source).toContain('import type { RenEvent } from "@example/protocol/event"')
@@ -255,14 +259,17 @@ describe("HttpApiCodegen.generate", () => {
 
   test("rejects authoritative Effect types colliding with generated aliases", () => {
     expect(() =>
-      emitEffectShape(compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String }))), {
-        outputTypes: {
-          "session.get": {
-            name: "SessionGetOutput",
-            import: 'import type { SessionGetOutput } from "@example/schema/session"',
+      EmitEffectShape.emitEffectShape(
+        Compile.compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String }))),
+        {
+          outputTypes: {
+            "session.get": {
+              name: "SessionGetOutput",
+              import: 'import type { SessionGetOutput } from "@example/schema/session"',
+            },
           },
         },
-      }),
+      ),
     ).toThrow("Generated Effect type collides with imported type: SessionGetOutput")
   })
 
@@ -270,7 +277,7 @@ describe("HttpApiCodegen.generate", () => {
     const Info = Schema.Struct({ id: Schema.String }).annotate({ identifier: "Session.Info" })
 
     expect(() =>
-      emitEffectShape(compile(api(HttpApiEndpoint.get("get", "/session", { success: Info }))), {
+      EmitEffectShape.emitEffectShape(Compile.compile(api(HttpApiEndpoint.get("get", "/session", { success: Info }))), {
         typeReferences: [
           {
             schema: Info,
@@ -283,16 +290,16 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("rejects imported endpoints colliding with generated adapter values", () => {
-    const contract = compile(api(HttpApiEndpoint.get("session.get", "/session", { success: Schema.String })))
+    const contract = Compile.compile(api(HttpApiEndpoint.get("session.get", "/session", { success: Schema.String })))
 
     expect(() =>
-      emitEffectImported(contract, {
+      EmitEffectImported.emitEffectImported(contract, {
         module: "@example/api",
         endpoints: { "session.session.get": "EndpointSessionGet" },
       }),
     ).toThrow("Generated Effect adapter collides with imported endpoint: EndpointSessionGet")
     expect(() =>
-      emitEffectImported(contract, {
+      EmitEffectImported.emitEffectImported(contract, {
         module: "@example/api",
         api: "EndpointSessionGet",
       }),
@@ -300,8 +307,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("exposes an imported Effect client through its generated shape and rejects widened outputs", () => {
-    const output = emitEffectImported(
-      compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String }))),
+    const output = EmitEffectImported.emitEffectImported(
+      Compile.compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String }))),
       { module: "@example/api", api: "Api", shapeModule: "../api" },
     )
     const source = output.files.find((file) => file.path === "client.ts")?.content
@@ -310,7 +317,8 @@ describe("HttpApiCodegen.generate", () => {
     expect(source).toContain("preserveEffect<SessionGetOutput>()")
     expect(source).toContain("__generatedOutputWiderThanContract")
 
-    type BrandedID = string & Brand.Brand<"Session.ID">
+    const BrandedID = Schema.String.pipe(Schema.brand("Session.ID"))
+    type BrandedID = typeof BrandedID.Type
     const preserveEffect =
       <A>() =>
       <Actual extends A, E, R>(
@@ -330,8 +338,8 @@ describe("HttpApiCodegen.generate", () => {
       ): Stream.Stream<A, E, R> =>
         stream
 
-    const brandedEffect = Effect.succeed("ses_1" as BrandedID)
-    const brandedStream = Stream.make("ses_1" as BrandedID)
+    const brandedEffect = Effect.succeed(Schema.decodeSync(BrandedID)("ses_1"))
+    const brandedStream = Stream.make(Schema.decodeSync(BrandedID)("ses_1"))
 
     preserveEffect<BrandedID>()(brandedEffect)
     preserveStream<BrandedID>()(brandedStream)
@@ -342,8 +350,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("projects imported endpoint constants into a generated API", () => {
-    const output = emitEffectImported(
-      compile(
+    const output = EmitEffectImported.emitEffectImported(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session/:sessionID", {
             params: { sessionID: Schema.String },
@@ -360,8 +368,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("imports an authoritative group without reconstructing it", () => {
-    const output = emitEffectImported(
-      compile(
+    const output = EmitEffectImported.emitEffectImported(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session/:sessionID", {
             params: { sessionID: Schema.String },
@@ -384,7 +392,7 @@ describe("HttpApiCodegen.generate", () => {
         HttpApiEndpoint.get("session.get", "/session", { success: Schema.String }),
       ),
     )
-    const contract = compile(source, { groupNames: { "server.session": "sessions" } })
+    const contract = Compile.compile(source, { groupNames: { "server.session": "sessions" } })
 
     expect(contract.groups[0]?.identifier).toBe("sessions")
     expect(contract.groups[0]?.sourceIdentifier).toBe("server.session")
@@ -399,7 +407,7 @@ describe("HttpApiCodegen.generate", () => {
         ),
       ),
     )
-    const contract = compile(source, { groupNames: { "server.session": "session" } })
+    const contract = Compile.compile(source, { groupNames: { "server.session": "session" } })
 
     expect(contract.groups[0]?.endpoints[0]?.clientPath).toEqual(["revert", "stage"])
     expect(OpenApi.fromApi(source).paths["/session/revert/stage"]?.get?.operationId).toBe("v2.session.revert.stage")
@@ -424,7 +432,7 @@ describe("HttpApiCodegen.generate", () => {
           ),
         ),
     )
-    const contract = compile(source, { groupNames: { "server.session": "session" } })
+    const contract = Compile.compile(source, { groupNames: { "server.session": "session" } })
 
     expect(contract.groups[0]?.endpoints.map((endpoint) => endpoint.clientPath)).toEqual([
       ["instructions", "list"],
@@ -437,7 +445,7 @@ describe("HttpApiCodegen.generate", () => {
       "instructions.remove",
     ])
 
-    const promise = emitPromise(contract, {
+    const promise = EmitPromise.emitPromise(contract, {
       outputTypes: {
         "session.instructions.list": {
           name: "InstructionListWire",
@@ -455,17 +463,17 @@ describe("HttpApiCodegen.generate", () => {
     expect(promiseTypes).toContain("export type SessionInstructionsPutOutput = string")
     expect(promiseTypes).toContain("export type SessionInstructionsRemoveOutput = string")
 
-    const effect = emitEffect(contract)
+    const effect = EmitEffect.emitEffect(contract)
     expect(effect.files.find((file) => file.path === "session.ts")?.content).toContain(
       '"instructions": { "list": EndpointInstructionsList(raw), "put": EndpointInstructionsPut(raw), "remove": EndpointInstructionsRemove(raw) }',
     )
 
-    const imported = emitEffectImported(contract, { module: "@example/api", api: "Api" })
+    const imported = EmitEffectImported.emitEffectImported(contract, { module: "@example/api", api: "Api" })
     expect(imported.files.find((file) => file.path === "client.ts")?.content).toContain(
       '"instructions": { "list": EndpointSessionInstructionsList(raw), "put": EndpointSessionInstructionsPut(raw), "remove": EndpointSessionInstructionsRemove(raw) }',
     )
 
-    const shape = emitEffectShape(contract)
+    const shape = EmitEffectShape.emitEffectShape(contract)
     const apiShape = shape.files.find((file) => file.path === "api.ts")?.content
     expect(apiShape).toContain('readonly "instructions": { readonly "list": SessionInstructionsListOperation<E>')
     expect(apiShape).toContain('readonly "put": SessionInstructionsPutOperation<E>')
@@ -491,7 +499,7 @@ describe("HttpApiCodegen.generate", () => {
           ),
         ),
     )
-    const output = emitPromise(compile(source))
+    const output = EmitPromise.emitPromise(Compile.compile(source))
     await using emitted = await emittedModule(output)
     const methods: Array<string> = []
 
@@ -524,7 +532,7 @@ describe("HttpApiCodegen.generate", () => {
         ),
     )
 
-    expect(() => compile(source)).toThrow("Client endpoint name collision: session.instructions.list")
+    expect(() => Compile.compile(source)).toThrow("Client endpoint name collision: session.instructions.list")
   })
 
   test("rejects nested root collisions across top-level groups", () => {
@@ -544,7 +552,7 @@ describe("HttpApiCodegen.generate", () => {
         ),
       )
 
-    expect(() => compile(source)).toThrow("Client name collision: instructions")
+    expect(() => Compile.compile(source)).toThrow("Client name collision: instructions")
   })
 
   test("rejects nested paths that collide after type-name normalization", () => {
@@ -562,7 +570,7 @@ describe("HttpApiCodegen.generate", () => {
         ),
     )
 
-    expect(() => compile(source)).toThrow("Client endpoint type collision: SessionFooBar")
+    expect(() => Compile.compile(source)).toThrow("Client endpoint type collision: SessionFooBar")
   })
 
   test("rejects ambiguous and prototype-mutating nested path segments", () => {
@@ -572,19 +580,19 @@ describe("HttpApiCodegen.generate", () => {
       ),
     )
 
-    expect(() => compile(source)).toThrow("Client endpoint path cannot contain __proto__")
+    expect(() => Compile.compile(source)).toThrow("Client endpoint path cannot contain __proto__")
   })
 
   test("rejects normalized group, operation-key, and group prototype collisions", () => {
     const sanitized = HttpApi.make("test")
       .add(HttpApiGroup.make("foo-bar").add(HttpApiEndpoint.get("get", "/first", { success: Schema.String })))
       .add(HttpApiGroup.make("foo.bar").add(HttpApiEndpoint.get("get", "/second", { success: Schema.String })))
-    expect(() => compile(sanitized)).toThrow("Client module name collision: foo-bar")
+    expect(() => Compile.compile(sanitized)).toThrow("Client module name collision: foo-bar")
 
     const normalized = HttpApi.make("test")
       .add(HttpApiGroup.make("foo_bar").add(HttpApiEndpoint.get("get", "/first", { success: Schema.String })))
       .add(HttpApiGroup.make("foo.bar").add(HttpApiEndpoint.get("get", "/second", { success: Schema.String })))
-    expect(() => compile(normalized)).toThrow("Client group type collision: FooBar")
+    expect(() => Compile.compile(normalized)).toThrow("Client group type collision: FooBar")
 
     const endpointType = HttpApi.make("test")
       .add(
@@ -601,7 +609,7 @@ describe("HttpApiCodegen.generate", () => {
           ),
         ),
       )
-    expect(() => compile(endpointType)).toThrow("Client endpoint type collision: FooBarBaz")
+    expect(() => Compile.compile(endpointType)).toThrow("Client endpoint type collision: FooBarBaz")
 
     const operationKey = HttpApi.make("test")
       .add(
@@ -618,12 +626,12 @@ describe("HttpApiCodegen.generate", () => {
           ),
         ),
       )
-    expect(() => compile(operationKey)).toThrow("Client operation key collision: a.b.c")
+    expect(() => Compile.compile(operationKey)).toThrow("Client operation key collision: a.b.c")
 
     const prototype = HttpApi.make("test").add(
       HttpApiGroup.make("session").add(HttpApiEndpoint.get("get", "/session", { success: Schema.String })),
     )
-    expect(() => compile(prototype, { groupNames: { session: "__proto__" } })).toThrow(
+    expect(() => Compile.compile(prototype, { groupNames: { session: "__proto__" } })).toThrow(
       "Client group name cannot be __proto__",
     )
   })
@@ -634,15 +642,17 @@ describe("HttpApiCodegen.generate", () => {
         .add(HttpApiEndpoint.get("pty.get", "/pty", { success: Schema.String }))
         .add(HttpApiEndpoint.get("pty.connect", "/pty/connect", { success: Schema.Boolean })),
     )
-    const contract = compile(source, { omitEndpoints: new Set(["pty.connect"]) })
+    const contract = Compile.compile(source, { omitEndpoints: new Set(["pty.connect"]) })
 
     expect(contract.groups[0]?.endpoints.map((endpoint) => endpoint.endpoint.identifier)).toEqual(["pty.get"])
   })
 
   test("omits the Promise SSE reader when no endpoint streams", () => {
-    const plain = emitPromise(compile(api(HttpApiEndpoint.get("health", "/health", { success: Schema.String }))))
-    const streaming = emitPromise(compile(Api))
-    const client = (output: Output) => output.files.find((file) => file.path === "client.ts")?.content
+    const plain = EmitPromise.emitPromise(
+      Compile.compile(api(HttpApiEndpoint.get("health", "/health", { success: Schema.String }))),
+    )
+    const streaming = EmitPromise.emitPromise(Compile.compile(Api))
+    const client = (output: Types.Output) => output.files.find((file) => file.path === "client.ts")?.content
 
     expect(client(plain)).not.toContain("const sse =")
     expect(client(plain)).not.toContain("maxSseEventBytes")
@@ -656,9 +666,9 @@ describe("HttpApiCodegen.generate", () => {
         success: Schema.String,
       }),
     )
-    const contract = compile(source)
-    const promise = emitPromise(contract).files.find((file) => file.path === "client.ts")?.content
-    const effect = emitEffectImported(contract, {
+    const contract = Compile.compile(source)
+    const promise = EmitPromise.emitPromise(contract).files.find((file) => file.path === "client.ts")?.content
+    const effect = EmitEffectImported.emitEffectImported(contract, {
       module: "@example/api",
       endpoints: { "session.token": "Token" },
     }).files.find((file) => file.path === "client.ts")?.content
@@ -672,13 +682,13 @@ describe("HttpApiCodegen.generate", () => {
       .add(HttpApiGroup.make("first").add(HttpApiEndpoint.get("one", "/one", { success: Schema.String })))
       .add(HttpApiGroup.make("second").add(HttpApiEndpoint.get("two", "/two", { success: Schema.String })))
 
-    expect(() => compile(source, { groupNames: { first: "same", second: "same" } })).toThrow(
+    expect(() => Compile.compile(source, { groupNames: { first: "same", second: "same" } })).toThrow(
       "Client group name collision: same",
     )
   })
 
   test("uses the unqualified endpoint name for the public client", () => {
-    const contract = compile(
+    const contract = Compile.compile(
       api(
         HttpApiEndpoint.get("session.get", "/session/:sessionID", {
           params: { sessionID: Schema.String },
@@ -686,8 +696,8 @@ describe("HttpApiCodegen.generate", () => {
         }),
       ),
     )
-    const promise = emitPromise(contract).files.find((file) => file.path === "client.ts")?.content
-    const effect = emitEffectImported(contract, {
+    const promise = EmitPromise.emitPromise(contract).files.find((file) => file.path === "client.ts")?.content
+    const effect = EmitEffectImported.emitEffectImported(contract, {
       module: "@example/api",
       endpoints: { "session.session.get": "SessionGet" },
     }).files.find((file) => file.path === "client.ts")?.content
@@ -706,8 +716,8 @@ describe("HttpApiCodegen.generate", () => {
       { message: Schema.String, detail: Schema.String.pipe(Schema.optional) },
       { httpApiStatus: 400 },
     ) {}
-    const output = emitPromise(
-      compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String, error: OptionalError }))),
+    const output = EmitPromise.emitPromise(
+      Compile.compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String, error: OptionalError }))),
     )
 
     expect(output.files.find((file) => file.path === "types.ts")?.content).toContain(
@@ -720,8 +730,10 @@ describe("HttpApiCodegen.generate", () => {
       { name: Schema.Literal("NamedError"), message: Schema.String },
       { httpApiStatus: 400 },
     ) {}
-    const output = emitPromise(
-      compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.NumberFromString, error: NamedError }))),
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
+        api(HttpApiEndpoint.get("get", "/session", { success: Schema.NumberFromString, error: NamedError })),
+      ),
     )
     const types = output.files.find((file) => file.path === "types.ts")?.content
 
@@ -733,16 +745,16 @@ describe("HttpApiCodegen.generate", () => {
     class MissingStatus extends Schema.TaggedError<MissingStatus>()("MissingStatus", {
       message: Schema.String,
     }) {}
-    const output = emitPromise(
-      compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String, error: MissingStatus }))),
+    const output = EmitPromise.emitPromise(
+      Compile.compile(api(HttpApiEndpoint.get("get", "/session", { success: Schema.String, error: MissingStatus }))),
     )
 
     expect(output.files.find((file) => file.path === "client.ts")?.content).toContain("declaredStatuses: [500]")
   })
 
   test("erases brands from Promise wire types", () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session/:sessionID", {
             params: { sessionID: Schema.String.pipe(Schema.brand("SessionID")) },
@@ -761,8 +773,8 @@ describe("HttpApiCodegen.generate", () => {
     const Field = Schema.Union([Schema.Literals(["reasoning", "reasoning_content"]), Schema.String]).annotate({
       identifier: "Field",
     })
-    const output = emitPromise(
-      compile(api(HttpApiEndpoint.get("get", "/model", { success: Schema.Struct({ field: Field }) }))),
+    const output = EmitPromise.emitPromise(
+      Compile.compile(api(HttpApiEndpoint.get("get", "/model", { success: Schema.Struct({ field: Field }) }))),
     )
 
     expect(output.files.find((file) => file.path === "types.ts")?.content).toContain(
@@ -772,8 +784,8 @@ describe("HttpApiCodegen.generate", () => {
 
   test("retains non-recursive references in Promise wire types", () => {
     const Referenced = Schema.Struct({ value: Schema.String }).annotate({ identifier: "Referenced" })
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         HttpApi.make("test").add(
           HttpApiGroup.make("session")
             .add(HttpApiEndpoint.get("get", "/session", { success: Schema.Struct({ data: Referenced }) }))
@@ -794,8 +806,8 @@ describe("HttpApiCodegen.generate", () => {
 
   test("inlines shared anonymous Promise wire types", () => {
     const Shared = Schema.Struct({ value: Schema.String })
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(HttpApiEndpoint.get("get", "/session", { success: Schema.Struct({ first: Shared, second: Shared }) })),
       ),
     )
@@ -807,8 +819,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("emits mutable Promise outputs without restricting inputs", () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.post("create", "/session", {
             payload: Schema.Struct({ values: Schema.Array(Schema.String) }),
@@ -831,8 +843,8 @@ describe("HttpApiCodegen.generate", () => {
       identifier: "Session",
     })
     const SessionID = Schema.String.annotate({ identifier: "SessionID" })
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session", {
             success: Schema.Struct({ session: Session, sessionID: SessionID }),
@@ -850,8 +862,8 @@ describe("HttpApiCodegen.generate", () => {
   test("disambiguates flattened Promise reference names", () => {
     const First = Schema.String.annotate({ identifier: "ExampleName" })
     const Second = Schema.String.annotate({ identifier: "Example_Name" })
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(HttpApiEndpoint.get("get", "/session", { success: Schema.Struct({ first: First, second: Second }) })),
       ),
     )
@@ -865,8 +877,8 @@ describe("HttpApiCodegen.generate", () => {
     const First = Schema.Struct({ value: Schema.String }).annotate({ identifier: "Shared" })
     const Second = Schema.Struct({ value: Schema.Number }).annotate({ identifier: "Shared" })
 
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(HttpApiEndpoint.get("get", "/session", { success: Schema.Struct({ first: First, second: Second }) })),
       ),
     )
@@ -880,8 +892,8 @@ describe("HttpApiCodegen.generate", () => {
   test("deduplicates equivalent Promise references with the same identifier", () => {
     const First = Schema.String.annotate({ identifier: "Shared", description: "first" })
     const Second = Schema.String.annotate({ identifier: "Shared", description: "second" })
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(HttpApiEndpoint.get("get", "/session", { success: Schema.Struct({ first: First, second: Second }) })),
       ),
     )
@@ -893,8 +905,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("emits Effect Json schemas as standalone Promise types", () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session", {
             success: Schema.Json,
@@ -910,8 +922,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("emits an optional Promise input when every field is optional", () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("list", "/session", {
             query: { limit: Schema.optional(Schema.Number) },
@@ -928,8 +940,8 @@ describe("HttpApiCodegen.generate", () => {
 
   test("rejects Promise transports that are not implemented", () => {
     expect(() =>
-      emitPromise(
-        compile(
+      EmitPromise.emitPromise(
+        Compile.compile(
           api(
             HttpApiEndpoint.get("text", "/text", {
               success: Schema.String.pipe(HttpApiSchema.asText()),
@@ -940,12 +952,14 @@ describe("HttpApiCodegen.generate", () => {
     ).toThrow("Unsupported Promise success encoding: session.text")
 
     expect(() =>
-      emitPromise(compile(api(HttpApiEndpoint.get("read", "/file/*/tail", { success: Schema.String })))),
+      EmitPromise.emitPromise(
+        Compile.compile(api(HttpApiEndpoint.get("read", "/file/*/tail", { success: Schema.String }))),
+      ),
     ).toThrow("Unsupported Promise path wildcard: /file/*/tail")
 
     expect(() =>
-      emitPromise(
-        compile(
+      EmitPromise.emitPromise(
+        Compile.compile(
           api(
             HttpApiEndpoint.get("events", "/events", {
               success: HttpApiSchema.StreamSse({ data: Schema.String, error: Missing }),
@@ -957,8 +971,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("executes an emitted Promise GET through fetch", async () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session/:sessionID", {
             params: { sessionID: Schema.String },
@@ -983,8 +997,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("maps an emitted no-content response to undefined", async () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.post("interrupt", "/session/:sessionID/interrupt", {
             params: { sessionID: Schema.String },
@@ -1003,8 +1017,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("executes an emitted binary wildcard GET through fetch", async () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("read", "/file/*", {
             query: { token: Schema.optional(Schema.String) },
@@ -1025,14 +1039,14 @@ describe("HttpApiCodegen.generate", () => {
 
     const result = await client.session.read({ path: "src/a b#c.ts", token: "x/y" })
     expect(result).toBeInstanceOf(Uint8Array)
-    expect(Array.from(result)).toEqual([1, 2, 3])
+    expect([...result]).toEqual([1, 2, 3])
     expect(request?.method).toBe("GET")
     expect(request?.url).toBe("https://example.com/file/src/a%20b%23c.ts?token=x%2Fy")
   })
 
   test("serializes flattened query, header, and JSON payload inputs", async () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.post("prompt", "/session/:sessionID", {
             params: { sessionID: Schema.String },
@@ -1063,8 +1077,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("serializes an opaque union payload as the direct JSON body", async () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.post("configure", "/session", {
             payload: Schema.Union([
@@ -1092,8 +1106,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("serializes explicit null query values", async () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("list", "/session", {
             query: { parentID: Schema.optional(Schema.NullOr(Schema.String)) },
@@ -1118,8 +1132,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("rejects with declared tagged errors and exports a type guard", async () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("get", "/session/:sessionID", {
             params: { sessionID: Schema.String },
@@ -1142,8 +1156,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("iterates an emitted SSE stream lazily without reconnecting", async () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("subscribe", "/event", {
             query: { after: Schema.optional(Schema.Number) },
@@ -1161,7 +1175,7 @@ describe("HttpApiCodegen.generate", () => {
       baseUrl: "https://example.com",
       fetch: async (input: RequestInfo | URL) => {
         requests++
-        url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
+        url = input instanceof Request ? input.url : String(input)
         const encoder = new TextEncoder()
         return new Response(
           new ReadableStream({
@@ -1231,8 +1245,8 @@ describe("HttpApiCodegen.generate", () => {
       const actual = yield* Effect.promise(() =>
         Array.fromAsync(new Bun.Glob("*.ts").scan(fileURLToPath(new URL("generated", import.meta.url)))),
       )
-      expect(actual.sort((a, b) => a.localeCompare(b))).toEqual(
-        output.files.map((file) => file.path).sort((a, b) => a.localeCompare(b)),
+      expect(actual.toSorted((a, b) => a.localeCompare(b))).toEqual(
+        output.files.map((file) => file.path).toSorted((a, b) => a.localeCompare(b)),
       )
       yield* Effect.forEach(output.files, (file) =>
         Effect.tryPromise(() =>
@@ -1279,11 +1293,11 @@ describe("HttpApiCodegen.generate", () => {
         success: Schema.String,
       }),
     )
-    const contract = compile(source)
-    const effect = emitEffect(contract)
-    const imported = emitEffectImported(contract, { module: "@example/api", api: "Api" })
-    const shape = emitEffectShape(contract)
-    const promise = emitPromise(contract)
+    const contract = Compile.compile(source)
+    const effect = EmitEffect.emitEffect(contract)
+    const imported = EmitEffectImported.emitEffectImported(contract, { module: "@example/api", api: "Api" })
+    const shape = EmitEffectShape.emitEffectShape(contract)
+    const promise = EmitPromise.emitPromise(contract)
 
     expect(effect.operations[0]).toMatchObject({
       input: [{ name: "payload", source: "payload" }],
@@ -1303,15 +1317,15 @@ describe("HttpApiCodegen.generate", () => {
   test("routes arrays, primitives, and index-signature records through the opaque payload path", () => {
     for (const payload of [Schema.Array(Schema.String), Schema.String, Schema.Record(Schema.String, Schema.Number)]) {
       expect(
-        compile(api(HttpApiEndpoint.post("set", "/session", { payload, success: HttpApiSchema.NoContent }))).groups[0]
-          ?.endpoints[0]?.operation.input,
+        Compile.compile(api(HttpApiEndpoint.post("set", "/session", { payload, success: HttpApiSchema.NoContent })))
+          .groups[0]?.endpoints[0]?.operation.input,
       ).toEqual([{ name: "payload", source: "payload" }])
     }
   })
 
   test("rejects an opaque payload field that collides with another input channel", () => {
     expect(() =>
-      compile(
+      Compile.compile(
         api(
           HttpApiEndpoint.post("configure", "/session", {
             query: { payload: Schema.String },
@@ -1324,7 +1338,7 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("preserves required empty struct payloads in imported Effect adapters", () => {
-    const contract = compile(
+    const contract = Compile.compile(
       api(
         HttpApiEndpoint.post("empty", "/session", {
           payload: Schema.Struct({}),
@@ -1332,8 +1346,8 @@ describe("HttpApiCodegen.generate", () => {
         }),
       ),
     )
-    const effect = emitEffectImported(contract, { module: "@example/api", api: "Api" })
-    const promise = emitPromise(contract)
+    const effect = EmitEffectImported.emitEffectImported(contract, { module: "@example/api", api: "Api" })
+    const promise = EmitPromise.emitPromise(contract)
 
     expect(effect.files.find((file) => file.path === "client.ts")?.content).toContain("payload: { }")
     expect(promise.files.find((file) => file.path === "client.ts")?.content).toContain("body: { }")
@@ -1475,8 +1489,8 @@ describe("HttpApiCodegen.generate", () => {
   })
 
   test("emits opaque Promise SSE fields as any", () => {
-    const output = emitPromise(
-      compile(
+    const output = EmitPromise.emitPromise(
+      Compile.compile(
         api(
           HttpApiEndpoint.get("subscribe", "/event", {
             success: HttpApiSchema.StreamSse({
@@ -1562,7 +1576,9 @@ describe("HttpApiCodegen.generate", () => {
     class Attempt extends Schema.Class<Attempt>("Attempt")({
       count: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
     }) {}
-    const output = emitPromise(compile(api(HttpApiEndpoint.get("get", "/session", { success: Attempt }))))
+    const output = EmitPromise.emitPromise(
+      Compile.compile(api(HttpApiEndpoint.get("get", "/session", { success: Attempt }))),
+    )
     const types = output.files.find((file) => file.path === "types.ts")?.content
 
     expect(types).toContain('export type Attempt = { readonly "count": number }')
@@ -1587,7 +1603,6 @@ describe("HttpApiCodegen.generate", () => {
     const JsonNumber = Schema.toCodecJson(Schema.Number)
     const link = JsonNumber.ast.encoding?.[0]
     if (link === undefined) throw new Error("Expected JSON number encoding")
-    // This helper is present at runtime but omitted from the public declaration surface.
     // oxlint-disable-next-line no-restricted-globals -- The test verifies an Effect runtime helper without a public type.
     const replaceEncoding: unknown = Reflect.get(SchemaAST, "replaceEncoding")
     if (typeof replaceEncoding !== "function") throw new Error("Expected SchemaAST.replaceEncoding")
@@ -1715,7 +1730,7 @@ describe("HttpApiCodegen.generate", () => {
 
   it.effect("reports compiler failures in the generate Effect", () =>
     Effect.gen(function* () {
-      const error = yield* generate(
+      const error = yield* Write.generate(
         api(
           HttpApiEndpoint.get("get", "/url", {
             success: Schema.declare((input): input is URL => input instanceof URL),
@@ -1726,8 +1741,8 @@ describe("HttpApiCodegen.generate", () => {
         },
       ).pipe(Effect.flip)
 
-      expect(error).toBeInstanceOf(GenerationError)
-      if (error instanceof GenerationError) expect(error.reason).toBe("Unportable schema: session.get.success")
+      expect(error).toBeInstanceOf(Errors.GenerationError)
+      if (error instanceof Errors.GenerationError) expect(error.reason).toBe("Unportable schema: session.get.success")
     }).pipe(Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({}))),
   )
 
@@ -1758,7 +1773,7 @@ describe("HttpApiCodegen.generate", () => {
     )
   })
   test("emits TanStack Query factories over the Promise client", () => {
-    const output = emitReactQuery(compile(Api), { client: "../client/index.js" })
+    const output = EmitReactQuery.emitReactQuery(Compile.compile(Api), { client: "../client/index.js" })
     const query = output.files.find((file) => file.path === "query.ts")?.content
 
     expect(output.files.map((file) => file.path)).toEqual(["query.ts", "index.ts"])

@@ -1,0 +1,9 @@
+id: no-try-in-effect
+language: Tsx
+message: Do not use try/catch inside Effect code. Use Effect.try, Effect.tryPromise or the Effect error channel.
+severity: error
+rule:
+  kind: try_statement
+  inside:
+    pattern: Effect.gen($$$ARGS)
+    stopBy: end

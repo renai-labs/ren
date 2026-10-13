@@ -1,5 +1,5 @@
 id: no-effect-die-string
-language: TypeScript
+language: Tsx
 message: die with `new Error(...)`.
 severity: error
 rule:

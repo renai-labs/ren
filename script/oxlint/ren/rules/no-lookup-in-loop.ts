@@ -53,7 +53,7 @@ export const noLookupInLoop = defineRule({
         const receiver = rootName(node.callee.object)
         if (receiver === undefined) return
         const callback = enclosingFunction(node.parent)
-        if (callback === undefined || callback.parent.type !== "CallExpression") return
+        if (callback?.parent.type !== "CallExpression") return
         const loop = methodName(callback.parent)
         if (loop === undefined || !ITERATIONS.has(loop) || !callback.parent.arguments.includes(callback)) return
         if (callback.params.flatMap(bindings).includes(receiver)) return

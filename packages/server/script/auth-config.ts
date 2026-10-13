@@ -1,9 +1,9 @@
 import { Database } from "@ren/db/database"
 import { drizzle } from "drizzle-orm/bun-sql/postgres"
 import { Option } from "effect"
-import { Auth } from "../src/auth.js"
+import { BetterAuth } from "../src/better-auth.js"
 
-export const auth = Auth.make({
+export const auth = BetterAuth.make({
   database: drizzle.mock({ relations: Database.Schema.authRelations }),
   secret: "generate-auth-schema",
   baseURL: "http://localhost",

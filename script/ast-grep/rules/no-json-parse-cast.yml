@@ -1,5 +1,5 @@
 id: no-json-parse-cast
-language: TypeScript
+language: Tsx
 message: Prefer Effect Schema JSON decoding over JSON.parse casts.
 severity: error
 rule:

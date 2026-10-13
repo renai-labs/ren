@@ -4,12 +4,12 @@ import { designFile, generatedFile, modes, parse, render, root, runtimeValue } f
 
 const tokens = parse(await Bun.file(designFile).text())
 const generated = await Bun.file(generatedFile).text()
-const theme = (await Bun.file(path.join(root, "src/styles/theme.css")).text()).replace(/\/\*[\s\S]*?\*\//g, "")
+const theme = (await Bun.file(path.join(root, "src/styles/theme.css")).text()).replaceAll(/\/\*[\s\S]*?\*\//g, "")
 const defined = new Set(Array.from(generated.matchAll(/(--ren-[\w-]+)\s*:/g), (match) => match[1]))
 
 const luminance = (hex: string) => {
-  const channels = Array.from(hex.slice(1).match(/../g) ?? [], (pair) => parseInt(pair, 16) / 255).map((channel) =>
-    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  const channels = Array.from(hex.slice(1).match(/../g) ?? [], (pair) => Number.parseInt(pair, 16) / 255).map(
+    (channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4),
   )
   return (channels[0] ?? 0) * 0.2126 + (channels[1] ?? 0) * 0.7152 + (channels[2] ?? 0) * 0.0722
 }
@@ -79,7 +79,7 @@ describe("design tokens", () => {
 
   test("the Tailwind theme maps only generated tokens", () => {
     const block = /@theme inline \{([\s\S]*?)\n\}/.exec(theme)?.[1] ?? ""
-    const unmapped = Array.from(block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g))
+    const unmapped = [...block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)]
       .filter((match) => match[1] !== "--*")
       .filter((match) => !defined.has(/^var\((--ren-[\w-]+)\)$/.exec(match[2] ?? "")?.[1] ?? ""))
       .map((match) => match[1])

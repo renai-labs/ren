@@ -3,7 +3,7 @@ import { ClientError } from "./client-error.js"
 
 export interface ClientOptions {
   readonly baseUrl: string
-  readonly fetch?: typeof globalThis.fetch
+  readonly fetch?: typeof globalThis.fetch | undefined
   readonly headers?: RequestInit["headers"]
 }
 
@@ -44,9 +44,9 @@ export function make(options: ClientOptions) {
       url,
       init: {
         method: descriptor.method,
-        signal: requestOptions?.signal,
         headers,
-        body: descriptor.body === undefined ? undefined : JSON.stringify(descriptor.body),
+        ...(requestOptions?.signal !== undefined && { signal: requestOptions.signal }),
+        ...(descriptor.body !== undefined && { body: JSON.stringify(descriptor.body) }),
       } satisfies RequestInit,
     }
   }

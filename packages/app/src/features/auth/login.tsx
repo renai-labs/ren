@@ -43,7 +43,7 @@ export function Login(props: { destination: CompleteAuth.Destination }) {
                 const result = await auth.signIn.emailOtp({ email, otp })
                 if (result.error !== null) return AuthError.describe(result.error)
                 await completeAuth()
-                return undefined
+                return
               }}
               resend={async () => {
                 const result = await auth.emailOtp.sendVerificationOtp({ email, type: "sign-in" })

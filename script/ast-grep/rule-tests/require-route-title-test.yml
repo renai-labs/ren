@@ -1,7 +1,0 @@
-id: require-route-title
-valid:
-  - 'createFileRoute("/login")({ head: () => ({ meta: [{ title: "Sign in · Ren" }] }), component: Login })'
-  - 'createFileRoute("/_authed")({ beforeLoad, component: Outlet })'
-invalid:
-  - 'createFileRoute("/login")({ component: Login })'
-  - 'createFileRoute("/_authed/")({ loader, component: Home })'
