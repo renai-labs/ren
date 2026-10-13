@@ -1,0 +1,19 @@
+id: prefer-lazy-state-init
+language: Tsx
+message: "This runs on every render. Pass an initializer: `useState(() => ...)`."
+severity: error
+rule:
+  any:
+    - pattern: useState($INITIAL)
+    - pattern: useState($INITIAL, $$$REST)
+    - pattern: useReducer($REDUCER, $INITIAL)
+    - pattern: useReducer($REDUCER, $INITIAL, $$$REST)
+    - pattern: useState<$TYPE>($INITIAL)
+    - pattern: useState<$TYPE>($INITIAL, $$$REST)
+    - pattern: useReducer<$TYPE>($REDUCER, $INITIAL)
+    - pattern: useReducer<$TYPE>($REDUCER, $INITIAL, $$$REST)
+constraints:
+  INITIAL:
+    any:
+      - kind: call_expression
+      - kind: new_expression

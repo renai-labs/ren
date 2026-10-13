@@ -1,0 +1,15 @@
+id: no-render-props
+language: Tsx
+message: >-
+  This is a render prop. Pass children or compose compound parts. Keep a render prop only when the parent hands data back (for example a virtualized row), and suppress with a reason.
+severity: error
+rule:
+  any:
+    - kind: property_signature
+      has:
+        field: name
+        regex: ^render[A-Z]
+    - kind: jsx_attribute
+      has:
+        kind: property_identifier
+        regex: ^render[A-Z]

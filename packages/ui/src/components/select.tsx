@@ -83,7 +83,7 @@ export type RootProps<Value extends string> = Chrome & {
   label?: string
   id?: string
   name?: string
-  // oxlint-disable-next-line ren/no-render-props -- hands the selected option back to the caller
+  // ast-grep-ignore: no-render-props, -- hands the selected option back to the caller
   renderValue?: (option: Option<Value> | undefined) => ReactNode
 }
 

@@ -426,7 +426,6 @@ export default defineConfig({
     "import/no-namespace": "error",
     "import/no-default-export": "error",
     "unicorn/filename-case": ["error", { case: "kebabCase" }],
-    "ren/no-dynamic-import-path": "error",
     "ren/no-comments": "error",
     "eslint/no-console": "error",
     "eslint/require-yield": "off",
@@ -450,7 +449,6 @@ export default defineConfig({
     "react/rule-suppression": "error",
     "react/no-deriving-state-in-effects": "error",
     "react/hook-use-state": "error",
-    "ren/prefer-lazy-state-init": "error",
     "ren/require-passive-listener": "error",
 
     "react/jsx-key": "error",
@@ -486,9 +484,6 @@ export default defineConfig({
     ],
     "react/only-export-components": "error",
     "ren/interface-copy": "error",
-    "ren/jsx-no-leaked-render": "error",
-    "ren/no-boolean-mode-props": "error",
-    "ren/no-render-props": "error",
     "ren/require-companion-class": "error",
 
     "jsx-a11y/alt-text": "error",
@@ -638,7 +633,6 @@ export default defineConfig({
       rules: {
         "better-tailwindcss/no-restricted-classes": ["error", { restrict: [importantClass, appClasses] }],
         "ren/feature-boundaries": "error",
-        "ren/no-query-key-literal": "error",
         "react/forbid-component-props": [
           "error",
           {

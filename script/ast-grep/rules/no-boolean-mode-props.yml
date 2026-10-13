@@ -1,0 +1,24 @@
+id: no-boolean-mode-props
+language: Tsx
+message: >-
+  This boolean switches the component between modes. Compose an explicit variant (`ThreadComposer`, not `Composer isThread`) or compound parts instead.
+severity: error
+files:
+  - "**/*.tsx"
+rule:
+  kind: property_signature
+  all:
+    - has:
+        field: name
+        regex: ^(is|show|hide|has|with|without|enable|disable|use|should|can|allow)[A-Z]
+    - has:
+        field: type
+        has:
+          any:
+            - regex: ^boolean$
+              kind: predefined_type
+            - kind: union_type
+              has:
+                kind: predefined_type
+                regex: ^boolean$
+                stopBy: end
