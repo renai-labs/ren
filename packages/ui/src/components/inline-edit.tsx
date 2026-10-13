@@ -27,11 +27,14 @@ export function InlineEdit(props: {
     if (draft === null || saving) return
     const next = draft.trim()
     if ((props.required === true && !next) || next === props.value) return finish()
-    const result = await props.schema?.["~standard"].validate(next)
-    const problem = result?.issues?.at(0)?.message
-    if (problem) return setError(problem)
     setSaving(true)
     setError(null)
+    const result = await props.schema?.["~standard"].validate(next)
+    const problem = result?.issues?.at(0)?.message
+    if (problem) {
+      setSaving(false)
+      return setError(problem)
+    }
     const saved = await Promise.resolve()
       .then(() => props.onCommit(next))
       .then(

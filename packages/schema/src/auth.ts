@@ -56,7 +56,7 @@ export const isEmail = (value: string) => emailPattern.test(value)
 
 export const Email = Schema.Trim.check(Schema.isPattern(emailPattern, { message: "Enter a valid email" }))
 
-export const minimumPasswordLength = 8
+const minimumPasswordLength = 8
 
 export const Password = Schema.String.check(
   Schema.isMinLength(minimumPasswordLength, {
@@ -68,7 +68,7 @@ export const CurrentPassword = Schema.String.check(Schema.isNonEmpty({ message: 
 
 const PasswordConfirmation = Schema.String.check(Schema.isNonEmpty({ message: "Confirm your password" }))
 
-export const maximumUserNameLength = 100
+const maximumUserNameLength = 100
 
 export const UserName = Schema.Trim.check(
   Schema.isNonEmpty({ message: "Enter your name" }),
