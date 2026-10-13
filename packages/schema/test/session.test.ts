@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Exit, Schema } from "effect"
 import { Session } from "../src/index.js"
 
@@ -22,6 +23,20 @@ const send = {
 
 const file = (url: string) => ({ ...send, prompt: { text: "look", files: [{ url }] } })
 
+const key = { type: "key" as const, key: "sk-1" }
+const oauth = {
+  type: "oauth" as const,
+  methodID: IntegrationMethodID.make("chatgpt-browser"),
+  access: "a",
+  refresh: "r",
+  expires: 1_000,
+}
+const external = {
+  type: "external" as const,
+  methodID: IntegrationMethodID.make("aws"),
+  metadata: { region: "us-east-1" },
+}
+
 describe("Session.ID", () => {
   test("create mints ses_ followed by a ULID, and two ids made in a row sort in creation order", () => {
     const first = Session.ID.create()
@@ -41,28 +56,31 @@ describe("Session.ID", () => {
 
 describe("StartInput", () => {
   test("decodes harness, agent, model and context, with title absent and interactive defaulting to true", () => {
-    expect(Schema.decodeUnknownSync(Session.StartInput)(start)).toEqual({ ...start, interactive: true })
+    expect(Schema.decodeUnknownSync(Session.StartInput)(start)).toEqual({
+      ...start,
+      credentials: {},
+      interactive: true,
+    })
     expect(Schema.decodeUnknownSync(Session.StartInput)({ ...start, title: "Fix", interactive: false })).toEqual({
       ...start,
       title: "Fix",
+      credentials: {},
       interactive: false,
     })
   })
 
-  test("agent, model and context are optional, and a missing context means no entries", () => {
+  test("agent, model, context and credentials are optional, and missing ones mean none", () => {
     expect(Schema.decodeUnknownSync(Session.StartInput)({ sessionId: start.sessionId, harness: "opencode" })).toEqual({
       sessionId: start.sessionId,
       harness: "opencode",
       context: {},
+      credentials: {},
       interactive: true,
     })
   })
 
-  test("carries the Ren-minted session id, and no provider until phase 4", () => {
+  test("carries the Ren-minted session id", () => {
     expect(decodes(Session.StartInput, { ...start, sessionId: "msg_1" })).toBe(false)
-    expect(Schema.decodeUnknownSync(Session.StartInput)({ ...start, provider: { id: "stub" } })).not.toHaveProperty(
-      "provider",
-    )
   })
 
   test("context keys follow OpenCode's instruction entry keys: lowercase letters, digits, dot, underscore and dash, starting with a letter or digit", () => {
@@ -90,6 +108,36 @@ describe("StartInput", () => {
 
   test("an empty context is allowed and means no entries", () => {
     expect(Schema.decodeUnknownSync(Session.StartInput)({ ...start, context: {} }).context).toEqual({})
+  })
+
+  test("credentials map a provider id to OpenCode's credential value: key, oauth or external", () => {
+    const credentials = { openai: key, "openai-codex": oauth, "amazon-bedrock": external }
+    expect(Schema.decodeUnknownSync(Session.StartInput)({ ...start, credentials }).credentials).toEqual(credentials)
+  })
+
+  test("a credential that is not one of OpenCode's credential values is rejected, and so is an empty provider id", () => {
+    expect(
+      [
+        { openai: { type: "token", key: "sk-1" } },
+        { openai: { type: "key" } },
+        { openai: { ...oauth, expires: -1 } },
+        { openai: "sk-1" },
+        { "": key },
+      ].map((credentials) => decodes(Session.StartInput, { ...start, credentials })),
+    ).toEqual([false, false, false, false, false])
+  })
+
+  test("a Ren-managed key is an oauth credential under the ren method, with its expiry", () => {
+    const managed = {
+      type: "oauth" as const,
+      methodID: Session.ManagedMethod,
+      access: "sk-ren",
+      refresh: "",
+      expires: 5_000,
+    }
+    expect(
+      Schema.decodeUnknownSync(Session.StartInput)({ ...start, credentials: { ren: managed } }).credentials,
+    ).toEqual({ ren: managed })
   })
 })
 
@@ -157,5 +205,13 @@ describe("SendInput", () => {
         ),
       ),
     ).toEqual([true, true, true, true, true])
+  })
+
+  test("credentials are optional and have the same shape as start's", () => {
+    expect(Schema.decodeUnknownSync(Session.SendInput)(send)).not.toHaveProperty("credentials")
+    expect(Schema.decodeUnknownSync(Session.SendInput)({ ...send, credentials: { openai: key } }).credentials).toEqual({
+      openai: key,
+    })
+    expect(decodes(Session.SendInput, { ...send, credentials: { openai: { type: "key" } } })).toBe(false)
   })
 })

@@ -39,8 +39,8 @@ const user = (content: string) => [{ role: "user", content }]
 const frames = (body: string) =>
   body
     .split("\n\n")
-    .filter((frame) => frame.startsWith("data: "))
-    .map((frame) => frame.slice("data: ".length))
+    .flatMap((frame) => frame.split("\n").filter((line) => line.startsWith("data: ")))
+    .map((line) => line.slice("data: ".length))
 
 const read = async (response: Response) => {
   const data = frames(await response.text())
@@ -184,6 +184,42 @@ describe("stub model", () => {
     const script = stub.script()
     await read(await complete(user(script.marker), { authorization: "Bearer key-1" }))
     expect(script.calls[0]).toMatchObject({ authorization: "Bearer key-1", tools: ["question"] })
+  })
+
+  test("answers an Anthropic messages request with a streamed reply, routed to its script by marker, and records its x-api-key", async () => {
+    const script = stub.script({ reply: "from claude" })
+    const response = await fetch(`${stub.url}/messages?beta=true`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": "sk-ant" },
+      body: JSON.stringify({
+        model: "stub-claude",
+        max_tokens: 100,
+        stream: true,
+        system: [{ type: "text", text: "be brief" }],
+        messages: [{ role: "user", content: [{ type: "text", text: `hi ${script.marker}` }] }],
+      }),
+    })
+    const events = frames(await response.text()).map((frame) =>
+      Schema.decodeUnknownSync(
+        Schema.fromJsonString(
+          Schema.Struct({
+            type: Schema.String,
+            delta: Schema.optional(Schema.Struct({ text: Schema.optional(Schema.String) })),
+          }),
+        ),
+      )(frame),
+    )
+    expect(events.map((event) => event.type)).toEqual([
+      "message_start",
+      "content_block_start",
+      "content_block_delta",
+      "content_block_delta",
+      "content_block_stop",
+      "message_delta",
+      "message_stop",
+    ])
+    expect(events.map((event) => event.delta?.text ?? "").join("")).toBe("from claude")
+    expect(script.calls[0]).toMatchObject({ apiKey: "sk-ant", authorization: null, system: "be brief" })
   })
 
   test("rejects a body that is not a chat completion request, and unknown paths", async () => {

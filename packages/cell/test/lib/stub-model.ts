@@ -1,6 +1,6 @@
 export * as StubModel from "./stub-model.js"
 
-import { Option, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 
 interface Behaviour {
   readonly reply?: string
@@ -19,6 +19,7 @@ export interface Call {
   readonly system: string
   readonly tools: ReadonlyArray<string>
   readonly authorization: string | null
+  readonly apiKey: string | null
   readonly body: ChatRequest
 }
 
@@ -54,6 +55,13 @@ const ChatRequest = Schema.Struct({
 })
 interface ChatRequest extends Schema.Schema.Type<typeof ChatRequest> {}
 
+const MessagesRequest = Schema.Struct({
+  model: Schema.String,
+  system: Content.pipe(Schema.withDecodingDefaultKey(Effect.succeed(null))),
+  messages: Schema.Array(Message),
+  tools: Schema.Array(Schema.Struct({ name: Schema.String })).pipe(Schema.withDecodingDefaultKey(Effect.succeed([]))),
+})
+
 const text = (content: typeof Content.Type | undefined) => {
   if (typeof content === "string") return content
   if (!content) return ""
@@ -87,7 +95,35 @@ const usage = frame({
   usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
 })
 
-const toCall = (body: ChatRequest, authorization: string | null): Call => {
+const event = (data: { readonly type: string } & Record<string, unknown>) =>
+  encoder.encode(`event: ${data.type}\ndata: ${JSON.stringify(data)}\n\n`)
+
+async function* messages(text: string) {
+  yield event({
+    type: "message_start",
+    message: {
+      id: "msg_stub",
+      type: "message",
+      role: "assistant",
+      model: "stub",
+      content: [],
+      usage: { input_tokens: 10, output_tokens: 0 },
+    },
+  })
+  yield event({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } })
+  yield* text
+    .split(/(?<= )/)
+    .map((word) => event({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: word } }))
+  yield event({ type: "content_block_stop", index: 0 })
+  yield event({
+    type: "message_delta",
+    delta: { stop_reason: "end_turn", stop_sequence: null },
+    usage: { output_tokens: 5 },
+  })
+  yield event({ type: "message_stop" })
+}
+
+const toCall = (body: ChatRequest, headers: Headers): Call => {
   const system = body.messages
     .filter((message) => message.role === "system")
     .map((message) => text(message.content))
@@ -102,7 +138,8 @@ const toCall = (body: ChatRequest, authorization: string | null): Call => {
     text: prompt,
     system,
     tools: body.tools?.map((tool) => tool.function.name) ?? [],
-    authorization,
+    authorization: headers.get("authorization"),
+    apiKey: headers.get("x-api-key"),
     body,
   }
 }
@@ -137,6 +174,24 @@ async function* reply(body: ChatRequest, behaviour: Behaviour, gate: Promise<voi
   yield chunk({}, tool ? "tool_calls" : "stop")
   yield usage
   yield encoder.encode("data: [DONE]\n\n")
+}
+
+interface Endpoint {
+  readonly decode: (json: unknown) => Option.Option<ChatRequest>
+  readonly stream: (body: ChatRequest, behaviour: Behaviour, gate: Promise<void>) => AsyncGenerator<Uint8Array>
+}
+
+const endpoints: Readonly<Record<string, Endpoint>> = {
+  "/v1/chat/completions": { decode: Schema.decodeUnknownOption(ChatRequest), stream: reply },
+  "/v1/messages": {
+    decode: (json) =>
+      Option.map(Schema.decodeUnknownOption(MessagesRequest)(json), (body) => ({
+        model: body.model,
+        messages: [{ role: "system", content: body.system }, ...body.messages],
+        tools: body.tools.map((tool) => ({ function: { name: tool.name } })),
+      })),
+    stream: (_body, behaviour) => messages(behaviour.reply ?? "stub reply"),
+  },
 }
 
 interface Entry {
@@ -179,10 +234,11 @@ export const start = (): Server => {
     port: 0,
     idleTimeout: 0,
     async fetch(request) {
-      if (new URL(request.url).pathname !== "/v1/chat/completions") return new Response("not found", { status: 404 })
-      const decoded = Schema.decodeUnknownOption(ChatRequest)(await request.json().catch(() => undefined))
-      if (Option.isNone(decoded)) return new Response("not a chat completion request", { status: 400 })
-      const call = toCall(decoded.value, request.headers.get("authorization"))
+      const endpoint = endpoints[new URL(request.url).pathname]
+      if (!endpoint) return new Response("not found", { status: 404 })
+      const decoded = endpoint.decode(await request.json().catch(() => undefined))
+      if (Option.isNone(decoded)) return new Response("not a chat completion or messages request", { status: 400 })
+      const call = toCall(decoded.value, request.headers)
       const entry = record(call)
       const behaviour = call.kind === "title" ? { reply: "Stub title" } : (entry?.behaviour ?? {})
       if (behaviour.status)
@@ -190,7 +246,7 @@ export const start = (): Server => {
           { error: { message: `stub model status ${behaviour.status}`, type: "stub_error" } },
           { status: behaviour.status },
         )
-      return new Response(reply(call.body, behaviour, entry?.gate.promise ?? Promise.resolve()), {
+      return new Response(endpoint.stream(call.body, behaviour, entry?.gate.promise ?? Promise.resolve()), {
         headers: { "content-type": "text/event-stream" },
       })
     },

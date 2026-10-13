@@ -19,6 +19,7 @@
     "@opencode/client": "catalog:",
     "@opencode/core": "catalog:",
     "@opencode/plugin": "catalog:",
+    "@opencode/schema": "catalog:",
     "@opencode/server": "catalog:",
     "@ren/brain-api": "workspace:*",
     "@ren/schema": "workspace:*",

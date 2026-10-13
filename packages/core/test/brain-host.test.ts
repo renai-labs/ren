@@ -27,7 +27,14 @@ const it = testEffect(host(settings))
 
 const start = Effect.fnUntraced(function* (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) {
   const brain = yield* BrainHost.Service
-  return yield* brain.start({ sessionId, harness: "opencode", context: {}, interactive: true, ...input })
+  return yield* brain.start({
+    sessionId,
+    harness: "opencode",
+    context: {},
+    credentials: {},
+    interactive: true,
+    ...input,
+  })
 })
 
 const send = Effect.fnUntraced(function* (sessionId: Session.ID, text: string, messageId = Session.MessageID.create()) {
@@ -138,6 +145,31 @@ describe("BrainHost", () => {
     it.live("a send before start fails with SessionNotStartedError", () =>
       Effect.gen(function* () {
         expect((yield* send(Session.ID.create(), "too early").pipe(Effect.flip))._tag).toBe("SessionNotStartedError")
+      }),
+    )
+  })
+
+  describe("credentials", () => {
+    it.live("the key from start reaches the model, and a newer key from send reaches the next model call", () =>
+      Effect.gen(function* () {
+        const brain = yield* BrainHost.Service
+        const sessionId = Session.ID.create()
+        yield* start(sessionId, { credentials: { stub: { type: "key", key: "sk-start" } } })
+        const first = stub.script()
+        yield* send(sessionId, `first ${first.marker}`)
+        const firstCall = yield* Effect.promise(() => first.called())
+        yield* surface(yield* brain.access(sessionId), `/api/experimental/session/${sessionId}/wait`, "POST")
+        const second = stub.script()
+        yield* brain.send({
+          sessionId,
+          messageId: Session.MessageID.create(),
+          prompt: { text: `second ${second.marker}` },
+          delivery: "steer",
+          sender: { userId: "user_1" },
+          credentials: { stub: { type: "key", key: "sk-send" } },
+        })
+        const secondCall = yield* Effect.promise(() => second.called())
+        expect([firstCall.authorization, secondCall.authorization]).toEqual(["Bearer sk-start", "Bearer sk-send"])
       }),
     )
   })

@@ -3,11 +3,13 @@ export * as OpenCodeHarness from "./harness.js"
 import { AbsolutePath, Agent, Model, OpenCode, Provider, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
 import type { SessionListInput } from "@opencode/client/effect/api"
+import type { Credential } from "@opencode/core/credential"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
 import type { SendInput, StartInput } from "@ren/schema/session"
 import { Clock, Effect, Option, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import type { Harness } from "../harness.js"
+import { Credentials } from "./credentials.js"
 import { Host } from "./host.js"
 import { InstructionEntries } from "./instruction-entries.js"
 
@@ -32,7 +34,12 @@ const known = Effect.fn("OpenCodeHarness.known")(function* (client: OpenCodeClie
     return yield* new BrainRejectedError({ message: `Unknown model: ${model.providerId}/${model.modelId}` })
 })
 
-const start = Effect.fn("OpenCodeHarness.start")(function* (client: OpenCodeClient, input: StartInput) {
+const start = Effect.fn("OpenCodeHarness.start")(function* (
+  client: OpenCodeClient,
+  store: Credential.Interface,
+  input: StartInput,
+) {
+  yield* Credentials.apply(client, store, input.credentials, "replace")
   yield* known(client, input)
   const agent = input.agent ? Agent.ID.make(input.agent) : undefined
   const wanted = input.model
@@ -76,10 +83,15 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (client: OpenCodeClie
   return { sessionId: input.sessionId, harness: "opencode" as const }
 })
 
-const send = Effect.fn("OpenCodeHarness.send")(function* (client: OpenCodeClient, input: SendInput) {
+const send = Effect.fn("OpenCodeHarness.send")(function* (
+  client: OpenCodeClient,
+  store: Credential.Interface,
+  input: SendInput,
+) {
   const sessionID = Session.ID.make(input.sessionId)
   if (Option.isNone(yield* find(client, sessionID)))
     return yield* new SessionNotStartedError({ message: `Session ${input.sessionId} has not been started` })
+  if (input.credentials) yield* Credentials.apply(client, store, input.credentials, "merge")
   const messageID = SessionMessage.ID.make(input.messageId)
   const sent = yield* client.session.message.get({ sessionID, messageID }).pipe(
     Effect.as(true),
@@ -111,8 +123,8 @@ export const open = Effect.fn("OpenCodeHarness.open")(function* (storage: Durabl
   return {
     fetch: host.fetch,
     close: host.close,
-    start: (input: StartInput) => start(client, input),
-    send: (input: SendInput) => send(client, input),
+    start: (input: StartInput) => start(client, host.credentials, input),
+    send: (input: SendInput) => send(client, host.credentials, input),
     sessions: Effect.gen(function* () {
       const roots = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>
         client.session.list({ parentID: null, cursor }).pipe(
