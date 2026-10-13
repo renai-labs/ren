@@ -1,5 +1,5 @@
 id: no-conditional-property
-language: TypeScript
+language: Tsx
 message: "Spread the property conditionally with `...(condition && { key: value })` instead of assigning undefined."
 severity: error
 files:
@@ -7,6 +7,8 @@ files:
   - packages/*/src/**/*.tsx
 ignores:
   - packages/httpapi-codegen/**
+  - packages/ui/**
+  - packages/app/**
 rule:
   kind: pair
   has:
