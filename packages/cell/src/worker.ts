@@ -22,7 +22,7 @@ export default {
         if (Option.isNone(claims))
           return Response.json({ _tag: "UnauthorizedError", message: "Authentication required" }, { status: 401 })
         const path = new URL(request.url).pathname
-        if ((path === "/cell" || path.startsWith("/cell/")) && claims.value.scope !== "server")
+        if (/^\/(cell|ren)(\/|$)/.test(path) && claims.value.scope !== "server")
           return new Response(null, { status: 403 })
         const headers = new Headers(request.headers)
         headers.delete("authorization")

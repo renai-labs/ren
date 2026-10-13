@@ -194,4 +194,54 @@ describe("crash recovery", () => {
     expect(await opened.outcome()).toBe("failed")
     expect(script.calls).toHaveLength(2)
   })
+
+  test("killed right after send is accepted: the turn runs with no client request", async () => {
+    const opened = await started()
+    expect((await opened.brain("/ren/sessions", { sessionId: opened.id, harness: "opencode" })).status).toBe(200)
+    const script = stub.script({ hold: true, reply: "cut off" })
+    const messageId = `msg_${crypto.randomUUID().replaceAll("-", "")}`
+    const sent = await opened.brain(`/ren/sessions/${opened.id}/messages`, {
+      messageId,
+      prompt: { text: `send ${script.marker}` },
+      sender: { userId: "user_1" },
+    })
+    await celld.kill()
+    expect(sent.status).toBe(200)
+    const before = script.calls.length
+    script.set({ reply: "after the crash" })
+    await celld.start()
+    await script.called(before + 1)
+    expect(await opened.ended()).toEqual(TestCell.closed)
+    expect(await opened.outcome()).toBe("succeeded")
+    expect((await opened.messages()).filter((message) => message.id === messageId)).toHaveLength(1)
+    expect((await opened.answers()).at(-1)).toBe("after the crash")
+    script.release()
+  })
+
+  test("killed during a second start: whatever it kept, a retried start leaves exactly the new state", async () => {
+    const opened = await started()
+    const first = { sessionId: opened.id, harness: "opencode", title: "First", context: { team: "Ren", goal: "ship" } }
+    expect((await opened.brain("/ren/sessions", first)).status).toBe(200)
+    const context = Object.fromEntries(Array.from({ length: 3000 }, (_, index) => [`block-${index}`, `value ${index}`]))
+    const second = { sessionId: opened.id, harness: "opencode", title: "Second", agent: "plan", context }
+    const inflight = opened.brain("/ren/sessions", second).then(
+      (response) => response.status,
+      () => "dropped",
+    )
+    await Bun.sleep(600)
+    await celld.kill()
+    expect(await inflight).toBe("dropped")
+    await celld.start()
+    const partial = await opened.opencode.session.instructions.entry.list({ sessionID: opened.id })
+    expect(partial.map((entry) => entry.key)).toEqual(expect.arrayContaining(["team", "goal"]))
+    expect(partial.filter((entry) => !(entry.key in context) && !(entry.key in first.context))).toEqual([])
+    expect((await opened.brain("/ren/sessions", second)).status).toBe(200)
+    const entries = await opened.opencode.session.instructions.entry.list({ sessionID: opened.id })
+    expect(Object.fromEntries(entries.map((entry) => [entry.key, entry.value]))).toEqual(context)
+    expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({
+      title: "Second",
+      agent: "plan",
+    })
+    expect(await opened.ended()).toEqual(TestCell.closed)
+  })
 })

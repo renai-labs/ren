@@ -24,9 +24,15 @@ const until = async (
   return next.value.type === type ? next.value : until(iterator, type)
 }
 
+const fresh = () => {
+  const id = `ses_${crypto.randomUUID().replaceAll("-", "")}`
+  return { id, client: OpenCode.make({ baseUrl: celld.url, headers: { authorization: TestToken.basic(id) } }) }
+}
+
 const session = async (parentID?: string) => {
-  const root = `ses_${crypto.randomUUID().replaceAll("-", "")}`
-  const client = OpenCode.make({ baseUrl: celld.url, headers: { authorization: TestToken.basic(root) } })
+  const made = fresh()
+  const root = made.id
+  const client = made.client
   await client.session.create({ id: root })
   const child =
     parentID === undefined ? undefined : await client.session.create({ id: `${root}_child`, parentID: root })
@@ -217,6 +223,23 @@ describe("OpenCode in a cell", () => {
       await opened.prompt(`once ${script.marker}`, { id: "msg_once", resume: true })
       await opened.wait()
       expect((await opened.messages()).filter((message) => message.id === "msg_once")).toHaveLength(1)
+      expect(script.calls).toHaveLength(1)
+    })
+    test("re-sending a prompt id that already ran, even without resume, appends a second idle marker, so send looks the message up first", async () => {
+      const opened = await session()
+      const script = stub.script()
+      await opened.prompt(`once ${script.marker}`, { id: "msg_twice" })
+      await opened.wait()
+      await expect(
+        opened.client.session.message.get({ sessionID: opened.id, messageID: "msg_unknown" }),
+      ).rejects.toMatchObject({ _tag: "MessageNotFoundError" })
+      expect(await opened.client.session.message.get({ sessionID: opened.id, messageID: "msg_twice" })).toMatchObject({
+        id: "msg_twice",
+        type: "user",
+      })
+      await opened.prompt(`once ${script.marker}`, { id: "msg_twice" })
+      await opened.wait()
+      expect(kinds(await opened.messages())).toEqual(["user", "assistant", "idle:succeeded", "idle:succeeded"])
       expect(script.calls).toHaveLength(1)
     })
   })
@@ -426,6 +449,276 @@ describe("OpenCode in a cell", () => {
         { key: "team", value: "Ren" },
       ])
       expect(await finished.active()).toBe(false)
+    })
+  })
+
+  describe("creating and updating a session", () => {
+    test("a create with the Ren id, title, agent, model and location /workspace reports each back, and without a location the session is at /", async () => {
+      const made = fresh()
+      const created = await made.client.session.create({
+        id: made.id,
+        title: "First",
+        agent: "build",
+        model: { providerID: "stub", id: "stub-model" },
+        location: { directory: "/workspace" },
+      })
+      expect(created).toMatchObject({
+        id: made.id,
+        title: "First",
+        agent: "build",
+        model: { providerID: "stub", id: "stub-model" },
+        location: { directory: "/workspace" },
+      })
+      expect((await made.client.session.create({ id: `${made.id}_bare` })).location).toEqual({ directory: "/" })
+    })
+
+    test("a second create with the same id returns the existing row unchanged, ignoring a new title, agent and model", async () => {
+      const made = fresh()
+      const created = await made.client.session.create({ id: made.id, title: "First", agent: "build" })
+      expect(
+        await made.client.session.create({
+          id: made.id,
+          title: "Second",
+          agent: "plan",
+          model: { providerID: "stub", id: "stub-other" },
+        }),
+      ).toEqual(created)
+      expect(await made.client.session.get({ sessionID: made.id })).toEqual(created)
+    })
+
+    test("a create with an unknown agent or model is accepted, and the first turn fails without a model call", async () => {
+      const failed = await Promise.all(
+        [{ agent: "nope" }, { model: { providerID: "stub", id: "nope" } }].map(async (input) => {
+          const made = fresh()
+          await made.client.session.create({ id: made.id, ...input })
+          const script = stub.script()
+          await made.client.session.prompt({ sessionID: made.id, text: `fail ${script.marker}` })
+          await made.client.session.wait({ sessionID: made.id })
+          const messages = (await made.client.message.list({ sessionID: made.id, order: "asc" })).data
+          return { calls: script.calls.length, last: messages.at(-1) }
+        }),
+      )
+      expect(failed).toMatchObject([
+        {
+          calls: 0,
+          last: { type: "idle", outcome: "failed", error: { message: expect.stringContaining("Agent not found") } },
+        },
+        { calls: 0, last: { type: "idle", outcome: "failed", error: { type: "provider.no-route" } } },
+      ])
+    })
+
+    test("agent.list and model.list name the agents and models a session can use, so a start can check them first", async () => {
+      const opened = await session()
+      const agents = (await opened.client.agent.list()).data.map((agent) => agent.id)
+      const models = (await opened.client.model.list()).data.map((model) => `${model.providerID}/${model.modelID}`)
+      expect(agents).toEqual(expect.arrayContaining(["build", "plan", "general", "explore"]))
+      expect(agents).not.toContain("nope")
+      expect(models).toEqual(expect.arrayContaining(["stub/stub-model", "stub/stub-other"]))
+      expect(models).not.toContain("stub/nope")
+    })
+
+    test("updating the title, switching the agent and switching the model apply to the next turn's model call", async () => {
+      const opened = await session()
+      await opened.client.session.update({ sessionID: opened.id, title: "Renamed" })
+      await opened.client.session.switchAgent({ sessionID: opened.id, agent: "plan" })
+      await opened.client.session.switchModel({ sessionID: opened.id, model: { providerID: "stub", id: "stub-other" } })
+      const script = stub.script()
+      await opened.prompt(`next ${script.marker}`)
+      await opened.wait()
+      expect((await stub.waitFor((call) => call.kind === "turn" && mentions(script.marker)(call))).body.model).toBe(
+        "stub-other",
+      )
+      expect((await opened.messages()).find((message) => message.type === "assistant")).toMatchObject({
+        agent: "plan",
+        model: { providerID: "stub", id: "stub-other" },
+      })
+      expect(await opened.info()).toMatchObject({ title: "Renamed", agent: "plan" })
+    })
+
+    test("switching to the plan agent leaves a synthetic reminder in the inbox that waits for the next prompt, without starting the session", async () => {
+      const made = fresh()
+      const sessionID = made.id
+      const client = made.client
+      await client.session.create({ id: sessionID, location: { directory: "/workspace" } })
+      await client.session.switchAgent({ sessionID, agent: "plan" })
+      const reminded = async (): Promise<unknown> => {
+        const inbox = await client.session.inbox.list({ sessionID })
+        if (inbox.length > 0) return inbox
+        await Bun.sleep(25)
+        return reminded()
+      }
+      expect(await reminded()).toMatchObject([
+        { type: "synthetic", payload: { text: expect.stringContaining("Plan mode") } },
+      ])
+      expect(Object.keys(await client.session.active())).not.toContain(sessionID)
+      const script = stub.script()
+      await client.session.prompt({ sessionID, text: `plan ${script.marker}` })
+      await client.session.wait({ sessionID })
+      expect(JSON.stringify(script.calls[0]?.body.messages)).toContain("Plan mode")
+      expect(await client.session.inbox.list({ sessionID })).toEqual([])
+    })
+
+    test("updating a session with its own title and permissions adds no message", async () => {
+      const made = fresh()
+      const permissions = [{ action: "question", resource: "*", effect: "deny" as const }]
+      await made.client.session.create({ id: made.id, title: "Same", permissions })
+      await made.client.session.update({ sessionID: made.id, title: "Same", permissions })
+      await made.client.session.update({ sessionID: made.id, title: undefined, permissions })
+      expect((await made.client.message.list({ sessionID: made.id })).data).toEqual([])
+      expect(await made.client.session.get({ sessionID: made.id })).toMatchObject({ title: "Same", permissions })
+    })
+
+    test("a model given without a variant is the default variant: switching from another variant to it switches back", async () => {
+      const made = fresh()
+      await made.client.session.create({
+        id: made.id,
+        model: { providerID: "stub", id: "stub-model", variant: "high" },
+      })
+      await made.client.session.switchModel({ sessionID: made.id, model: { providerID: "stub", id: "stub-model" } })
+      expect((await made.client.session.get({ sessionID: made.id })).model).toEqual({
+        providerID: "stub",
+        id: "stub-model",
+        variant: "default",
+      })
+      expect(
+        (await made.client.message.list({ sessionID: made.id, order: "asc" })).data.map((message) => message.type),
+      ).toEqual(["model-switched"])
+    })
+
+    test("switching to the agent the session already has still adds an agent-switched message, and the same model adds nothing", async () => {
+      const made = fresh()
+      await made.client.session.create({ id: made.id, agent: "build", model: { providerID: "stub", id: "stub-model" } })
+      await made.client.session.switchAgent({ sessionID: made.id, agent: "build" })
+      await made.client.session.switchModel({ sessionID: made.id, model: { providerID: "stub", id: "stub-model" } })
+      expect(
+        (await made.client.message.list({ sessionID: made.id, order: "asc" })).data.map((message) => message.type),
+      ).toEqual(["agent-switched"])
+    })
+  })
+
+  describe("instruction entries", () => {
+    const put = (opened: Session, key: string, value: string) =>
+      opened.client.session.instructions.entry.put({ sessionID: opened.id, key, value })
+
+    const turn = async (opened: Session) => {
+      const script = stub.script()
+      await opened.prompt(`turn ${script.marker}`)
+      await opened.wait()
+      return script.calls[0]
+    }
+
+    const updates = (call: StubModel.Call | undefined) =>
+      (call?.body.messages ?? []).flatMap((message) =>
+        typeof message.content === "string" && message.content.startsWith("<system-update>") ? [message.content] : [],
+      )
+
+    test("an entry put before the first turn is in the first turn's system prompt, with no system update message", async () => {
+      const opened = await session()
+      await put(opened, "team", "Ren before the first turn")
+      const call = await turn(opened)
+      expect(call?.system).toContain("Ren before the first turn")
+      expect(updates(call)).toEqual([])
+      expect(kinds(await opened.messages())).toEqual(["user", "assistant", "idle:succeeded"])
+    })
+
+    test("putting the same value again adds no system update", async () => {
+      const opened = await session()
+      await put(opened, "team", "Ren")
+      await turn(opened)
+      await put(opened, "team", "Ren")
+      expect(updates(await turn(opened))).toEqual([])
+      expect(kinds(await opened.messages())).not.toContain("system")
+    })
+
+    test("changing an entry's value adds one system update with the new block before the next turn", async () => {
+      const opened = await session()
+      await put(opened, "team", "Ren")
+      await turn(opened)
+      await put(opened, "team", "Ren AI")
+      const call = await turn(opened)
+      expect(updates(call)).toHaveLength(1)
+      expect(updates(call)[0]).toContain("Ren AI")
+      expect(kinds(await opened.messages()).filter((kind) => kind === "system")).toHaveLength(1)
+    })
+
+    test("removing an entry adds a note that the key no longer applies", async () => {
+      const opened = await session()
+      await put(opened, "team", "Ren")
+      await turn(opened)
+      await opened.client.session.instructions.entry.remove({ sessionID: opened.id, key: "team" })
+      expect(updates(await turn(opened))).toEqual([
+        '<system-update>\nThe context under "team" no longer applies. Disregard it.\n</system-update>',
+      ])
+    })
+
+    test("listing entries returns each key and value that was put", async () => {
+      const opened = await session()
+      await put(opened, "team", "Ren")
+      await put(opened, "goal", "ship")
+      expect(
+        (await opened.client.session.instructions.entry.list({ sessionID: opened.id })).toSorted((left, right) =>
+          left.key < right.key ? -1 : 1,
+        ),
+      ).toEqual([
+        { key: "goal", value: "ship" },
+        { key: "team", value: "Ren" },
+      ])
+    })
+
+    test("a value whose JSON encoding is 256 KiB is accepted and one byte more is refused with InstructionEntryValueTooLargeError, matching Ren's limit", async () => {
+      const opened = await session()
+      await put(opened, "large", "a".repeat(256 * 1024 - 2))
+      await expect(put(opened, "larger", "a".repeat(256 * 1024 - 1))).rejects.toMatchObject({
+        _tag: "InstructionEntryValueTooLargeError",
+        actualBytes: 256 * 1024 + 1,
+      })
+    })
+  })
+
+  describe("delivery", () => {
+    test("a prompt sent to an idle session runs at once with either delivery", async () => {
+      const ran = await Promise.all(
+        (["steer", "queue"] as const).map(async (delivery) => {
+          const opened = await session()
+          const script = stub.script()
+          await opened.prompt(`idle ${script.marker}`, { delivery })
+          await opened.wait()
+          return { calls: script.calls.length, kinds: kinds(await opened.messages()) }
+        }),
+      )
+      expect(ran).toEqual([
+        { calls: 1, kinds: ["user", "assistant", "idle:succeeded"] },
+        { calls: 1, kinds: ["user", "assistant", "idle:succeeded"] },
+      ])
+    })
+  })
+
+  describe("prompts", () => {
+    test("an inline text file is inlined into the prompt's text", async () => {
+      const opened = await session()
+      const script = stub.script()
+      await opened.client.session.prompt({
+        sessionID: opened.id,
+        text: `file ${script.marker}`,
+        files: [{ uri: "data:text/plain,hello%20text", name: "a.txt" }],
+      })
+      await opened.wait()
+      expect(script.calls[0]?.body.messages.at(-1)?.content).toBe(
+        `file ${script.marker}\n\nAttached file: a.txt\n\nhello text`,
+      )
+    })
+
+    test("an inline file the model cannot read is replaced by a note telling the model so, and the turn succeeds", async () => {
+      const opened = await session()
+      const script = stub.script()
+      await opened.client.session.prompt({
+        sessionID: opened.id,
+        text: `pdf ${script.marker}`,
+        files: [{ uri: "data:application/pdf;base64,JVBERi0=", name: "a.pdf" }],
+      })
+      await opened.wait()
+      expect(script.calls[0]?.text).toContain('ERROR: Cannot read "a.pdf" (this model does not support pdf input).')
+      expect(await opened.info()).toMatchObject({ outcome: "succeeded" })
     })
   })
 })

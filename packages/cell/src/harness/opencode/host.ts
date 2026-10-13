@@ -1,10 +1,12 @@
 export * as Host from "./host.js"
 
+import { SdkPlugins } from "@opencode/core/plugin/sdk"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
 import { Context, Effect, Layer, ManagedRuntime } from "effect"
 import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
+import { RenPlugin } from "./plugin.js"
 
 export const open = Effect.fn("Host.open")(function* (storage: DurableObjectStorage, config: string) {
   const options = {
@@ -19,6 +21,8 @@ export const open = Effect.fn("Host.open")(function* (storage: DurableObjectStor
     ),
   )
   const services = yield* runtime.contextEffect.pipe(Effect.onError(() => runtime.disposeEffect))
+  const plugins = Context.get(services, SdkPlugins.Service)
+  yield* plugins.register(RenPlugin.plugin).pipe(Effect.onError(() => runtime.disposeEffect))
   runtime.runFork(Context.get(services, SessionRestart.Service).resumeSuspendedSessions)
   return {
     fetch: HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect()),
