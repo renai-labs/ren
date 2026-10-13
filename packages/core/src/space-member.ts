@@ -30,7 +30,7 @@ const activeMembers = (transaction: Database.Transaction) =>
       userId: sql<string | null>`${Database.Schema.space_member.user_id}`.as("user_id"),
       name: sql<string | null>`${Database.Schema.user.name}`.as("name"),
       image: Database.Schema.user.image,
-      email: sql<string | null>`null`.as("email"),
+      email: sql<string | null>`${Database.Schema.user.email}`.as("email"),
       createdAt: Database.Schema.space_member.created_at,
       archivedAt: Database.Schema.space_member.archived_at,
     })

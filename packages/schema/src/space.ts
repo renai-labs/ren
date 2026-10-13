@@ -15,7 +15,9 @@ export type MembershipID = typeof MembershipID.Type
 export const AssignmentID = Identifier.make("spp", "Space.AssignmentID")
 export type AssignmentID = typeof AssignmentID.Type
 
-const Name = Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(256))
+export const maximumNameLength = 256
+
+const Name = Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(maximumNameLength))
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
@@ -26,6 +28,7 @@ export const Info = Schema.Struct({
   memberCount: Schema.Int,
   membershipId: Schema.NullOr(MembershipID),
   canManage: Schema.Boolean,
+  canManageMembers: Schema.Boolean,
   canArchive: Schema.Boolean,
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,

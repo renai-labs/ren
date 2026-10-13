@@ -20,7 +20,10 @@ export const space = pgTable(
   },
   (table) => [
     index("space_organization_id_created_at_id_idx").on(table.organization_id, table.created_at, table.id),
-    check("space_name_length_check", sql`char_length(${table.name}) between 1 and 256`),
+    check(
+      "space_name_length_check",
+      sql`char_length(${table.name}) between 1 and ${sql.raw(String(Space.maximumNameLength))}`,
+    ),
   ],
 )
 

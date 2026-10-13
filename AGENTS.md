@@ -9,7 +9,7 @@
 ## Layering
 
 - Runtime dependencies point from `schema` to `protocol`, `db` and `core`, and from those to `server`.
-- `client` may depend only on `schema` and `protocol`. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client` and `ui`, and uses `better-auth/client` for auth flows.
+- `client` may depend only on `schema` and `protocol`. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `schema` and `ui`, and uses `better-auth/client` for auth flows.
 - `client`, `sdk`, `cli`, `app` and `ui` never import `core`, `db` or `server`. oxlint and `packages/client/test/import-boundaries.test.ts` enforce this.
 - `httpapi-codegen` stays independent of every Ren package.
 

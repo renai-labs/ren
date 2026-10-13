@@ -38,6 +38,7 @@ export type SpaceInfo = {
   memberCount: number
   membershipId: SpaceMembershipID | null
   canManage: boolean
+  canManageMembers: boolean
   canArchive: boolean
   createdAt: string
   updatedAt: string
@@ -50,6 +51,7 @@ export type SpaceMemberActive = {
   status: "active"
   userId: AuthUserID
   name: string
+  email: string
   image: string | null
   createdAt: string
   archivedAt: string | null

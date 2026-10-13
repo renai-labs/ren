@@ -24,6 +24,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@ren/client": "workspace:*",
+        "@ren/schema": "workspace:*",
         "@ren/ui": "workspace:*",
         "@tanstack/react-query": "catalog:",
         "@tanstack/react-router": "catalog:",
