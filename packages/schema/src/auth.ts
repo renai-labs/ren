@@ -50,7 +50,7 @@ export const Me = Schema.Struct({
   organization: Schema.NullOr(Organization),
 }).annotate({ identifier: "Auth.Me" })
 
-const emailPattern = /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export const isEmail = (value: string) => emailPattern.test(value)
 
