@@ -3,6 +3,7 @@ export * as Shared from "./shared.js"
 import { Celld } from "./celld.js"
 import { StubModel } from "./stub-model.js"
 import { TestToken } from "./token.js"
+import { Wrangler } from "./wrangler.js"
 
 const state: { stub: StubModel.Server | undefined; celld: Promise<Celld.Instance> | undefined } = {
   stub: undefined,
@@ -11,7 +12,7 @@ const state: { stub: StubModel.Server | undefined; celld: Promise<Celld.Instance
 
 export const stub = () => (state.stub ??= StubModel.start())
 
-export const vars = () => ({
+export const vars = (baseURL = stub().cellUrl) => ({
   ...TestToken.vars,
   ALARM_INTERVAL_MS: "1000",
   WAIT_BUDGET_MS: "3000",
@@ -21,7 +22,7 @@ export const vars = () => ({
     providers: {
       stub: {
         package: "@ai-sdk/openai-compatible",
-        settings: { baseURL: stub().cellUrl, apiKey: "stub-key" },
+        settings: { baseURL, apiKey: "stub-key" },
         models: {
           "stub-model": { name: "Stub", limit: { context: 100_000, output: 4000 }, variants: [{ id: "high" }] },
           "stub-other": { name: "Stub Other", limit: { context: 100_000, output: 4000 } },
@@ -31,7 +32,8 @@ export const vars = () => ({
   }),
 })
 
-export const celld = () => (state.celld ??= Celld.make(vars()))
+export const celld = () =>
+  (state.celld ??= process.env.CELL_RUNTIME === "wrangler" ? Wrangler.make(vars(stub().url)) : Celld.make(vars()))
 
 export const dispose = async () => {
   await state.celld?.then((instance) => instance.dispose())

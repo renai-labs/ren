@@ -59,7 +59,7 @@ const failures = {
   SchemaError: Effect.die,
 }
 
-export const layerCelld = Layer.effect(
+export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.all({

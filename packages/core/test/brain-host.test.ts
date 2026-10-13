@@ -15,7 +15,7 @@ const celld = await Shared.celld()
 const stub = Shared.stub()
 
 const host = (config: Record<string, string>) =>
-  Layer.fresh(BrainHost.layerCelld).pipe(
+  Layer.fresh(BrainHost.layer).pipe(
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config))),
   )
@@ -61,7 +61,7 @@ const closedPort = Effect.promise(async () => {
 const died = (exit: Exit.Exit<unknown, unknown>) =>
   Exit.isFailure(exit) && Cause.hasDies(exit.cause) && !Cause.hasFails(exit.cause)
 
-describe("BrainHost on celld", () => {
+describe("BrainHost", () => {
   describe("start", () => {
     it.live("creates the session in a fresh cell and answers its id and harness", () =>
       Effect.gen(function* () {

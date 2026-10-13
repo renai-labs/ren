@@ -262,15 +262,15 @@ describe("cell contract", () => {
       const stream = await opened.stream()
       expect((await opened.state()).leases).toBe(1)
       stream.close()
-      expect((await opened.until((state) => state.leases === 0)).leases).toBe(0)
-    })
+      expect((await opened.until((state) => state.leases === 0, 45_000)).leases).toBe(0)
+    }, 60_000)
 
     test("the alarm after the interval reconciles an idle harness by closing it and setting no alarm", async () => {
       const opened = await cell()
       const started = Date.now()
       await opened.start()
       expect((await opened.state()).harnessOpen).toBe(true)
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(Date.now() - started).toBeGreaterThanOrEqual(interval)
     })
 
@@ -283,8 +283,8 @@ describe("cell contract", () => {
       )
       expect(later).toMatchObject({ harnessOpen: true, leases: 1 })
       stream.close()
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
-    })
+      expect(await opened.until((state) => Bun.deepEquals(state, closed), 45_000)).toEqual(closed)
+    }, 60_000)
 
     test("a request after the idle close opens the harness again and sees the same sessions and messages", async () => {
       const opened = await cell()
@@ -312,7 +312,7 @@ describe("cell contract", () => {
       )
       const page = await opened.opencode.message.list({ sessionID: opened.id, order: "desc", limit: 50 })
       expect(page.data.every((message) => message.type === "agent-switched")).toBe(true)
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
     })
 
     test("a running turn keeps the harness open and shows a wait, and the harness closes after the turn ends", async () => {
@@ -323,7 +323,7 @@ describe("cell contract", () => {
       await script.called()
       expect(await opened.until((state) => state.waiting !== null)).toMatchObject({ harnessOpen: true })
       script.release()
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
     })
 
@@ -340,7 +340,7 @@ describe("cell contract", () => {
       expect(second - first).toBeGreaterThanOrEqual(budget)
       expect(script.calls).toHaveLength(1)
       script.release()
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
       expect(script.calls).toHaveLength(1)
     })
@@ -370,7 +370,7 @@ describe("cell contract", () => {
       expect(later.harnessOpen).toBe(true)
       expect(Object.keys(await opened.opencode.session.active())).toEqual([child.id])
       script.release()
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
     })
 
     test("a question answered within the park time continues the turn with the answer as the tool result", async () => {
@@ -389,7 +389,7 @@ describe("cell contract", () => {
       expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
       expect(script.calls.at(-1)?.body.messages.at(-1)).toMatchObject({ role: "tool" })
       expect(JSON.stringify(script.calls.at(-1)?.body.messages.at(-1))).toContain('\\"Which one?\\"=\\"A\\"')
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
     })
 
     test("a question unanswered for the park time is parked: the turn is interrupted, the harness closes and no alarm is set", async () => {
@@ -401,7 +401,7 @@ describe("cell contract", () => {
       const waiting = (await opened.until((state) => state.waiting !== null)).waiting ?? 0
       await opened.until((state) => state.waiting !== waiting)
       expect(Date.now() - waiting).toBeLessThan(budget)
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(Date.now() - asked).toBeGreaterThanOrEqual(park)
       expect(kinds(await opened.messages())).toEqual(["user", "assistant", "idle:interrupted"])
       expect(script.calls).toHaveLength(1)
@@ -421,7 +421,7 @@ describe("cell contract", () => {
         answer.calls[0]?.body.messages.filter((message) => message.role !== "system").map((message) => message.role),
       ).toEqual(["user", "assistant", "tool", "user"])
       expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
     })
 
     test("a prompt queued behind a running turn runs after it with no client request", async () => {
@@ -434,7 +434,7 @@ describe("cell contract", () => {
       await opened.prompt(`second ${second.marker}`, { delivery: "queue" })
       first.release()
       await second.called()
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       const answers = (await opened.messages()).flatMap((message) =>
         message.type === "assistant"
           ? message.content.flatMap((part) => (part.type === "text" ? [part.text] : []))
@@ -449,7 +449,7 @@ describe("cell contract", () => {
       const script = stub.script({ status: 400 })
       await opened.prompt(`fail ${script.marker}`)
       await script.called()
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "failed" })
       expect(script.calls).toHaveLength(1)
     })
@@ -460,7 +460,7 @@ describe("cell contract", () => {
       const script = stub.script({ cut: true })
       await opened.prompt(`cut ${script.marker}`)
       await script.called()
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
     })
 
@@ -470,7 +470,7 @@ describe("cell contract", () => {
       const script = stub.script({ malformed: true })
       await opened.prompt(`malformed ${script.marker}`)
       await script.called()
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "failed" })
     })
 
@@ -480,7 +480,7 @@ describe("cell contract", () => {
       await opened.prompt(`hello ${stub.script().marker}`)
       await opened.opencode.session.wait({ sessionID: opened.id })
       await opened.opencode.session.instructions.entry.put({ sessionID: opened.id, key: "team", value: "Ren" })
-      expect(await opened.until((state) => !state.harnessOpen)).toEqual(closed)
+      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
     })
   })
 })
