@@ -9,6 +9,12 @@ const decodes = (vars: Record<string, string>) =>
   Option.isSome(Schema.decodeUnknownOption(Env.Vars)({ ...TestToken.vars, ...vars }))
 
 describe("worker env", () => {
+  test("passes the OpenCode config through as text and defaults it to an empty object", () => {
+    expect(
+      [decode({}), decode({ OPENCODE_CONFIG: '{"model":"stub/stub-model"}' })].map((vars) => vars.OPENCODE_CONFIG),
+    ).toEqual(["{}", '{"model":"stub/stub-model"}'])
+  })
+
   test("defaults the alarm interval to 30 s, the wait budget to 10 min and the park time to 10 min", () => {
     expect(decode({})).toMatchObject({ ALARM_INTERVAL_MS: 30_000, WAIT_BUDGET_MS: 600_000, PARK_AFTER_MS: 600_000 })
   })

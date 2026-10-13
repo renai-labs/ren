@@ -23,7 +23,7 @@ const docker = async (args: ReadonlyArray<string>) => {
   return { stdout: output[0].trim(), stderr: output[1].trim() }
 }
 
-const image = { build: undefined as Promise<string> | undefined }
+const image: { build: Promise<string> | undefined } = { build: undefined }
 
 const build = () =>
   (image.build ??= docker(["build", "--quiet", path.join(cell, "docker")]).then((result) => result.stdout))

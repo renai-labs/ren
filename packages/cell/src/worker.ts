@@ -1,6 +1,33 @@
+import { Effect, Option, Schema } from "effect"
+import { Env } from "./env.js"
+import type { SessionCell } from "./session-cell.js"
+import { Token } from "./token.js"
+
 export { SessionCell } from "./session-cell.js"
+
+interface Bindings {
+  readonly SESSION_CELL: DurableObjectNamespace<SessionCell>
+}
 
 // oxlint-disable-next-line import/no-default-export -- workerd, celld and Cloudflare load the worker's default export
 export default {
-  fetch: () => new Response(null, { status: 401 }),
-} satisfies ExportedHandler
+  fetch: (request, env) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const vars = yield* Schema.decodeUnknownEffect(Env.Vars)(env).pipe(Effect.orDie)
+        const claims = yield* Effect.fromOption(Token.read(request.headers.get("authorization"))).pipe(
+          Effect.flatMap((token) => Token.verify(vars.CELL_KEYS, token)),
+          Effect.option,
+        )
+        if (Option.isNone(claims)) return new Response(null, { status: 401 })
+        const path = new URL(request.url).pathname
+        if ((path === "/cell" || path.startsWith("/cell/")) && claims.value.scope !== "server")
+          return new Response(null, { status: 403 })
+        const headers = new Headers(request.headers)
+        headers.delete("authorization")
+        return yield* Effect.promise(() =>
+          env.SESSION_CELL.getByName(claims.value.sid).fetch(new Request(request, { headers })),
+        )
+      }),
+    ),
+} satisfies ExportedHandler<Bindings>

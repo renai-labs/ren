@@ -4,15 +4,18 @@ import { Celld } from "./celld.js"
 import { StubModel } from "./stub-model.js"
 import { TestToken } from "./token.js"
 
-const state = {
-  stub: undefined as StubModel.Server | undefined,
-  celld: undefined as Promise<Celld.Instance> | undefined,
+const state: { stub: StubModel.Server | undefined; celld: Promise<Celld.Instance> | undefined } = {
+  stub: undefined,
+  celld: undefined,
 }
 
 export const stub = () => (state.stub ??= StubModel.start())
 
 export const vars = () => ({
   ...TestToken.vars,
+  ALARM_INTERVAL_MS: "1000",
+  WAIT_BUDGET_MS: "3000",
+  PARK_AFTER_MS: "2000",
   OPENCODE_CONFIG: JSON.stringify({
     model: "stub/stub-model",
     providers: {
