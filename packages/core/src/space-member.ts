@@ -68,28 +68,6 @@ const find = Effect.fnUntraced(function* (transaction: Database.Transaction, id:
   return yield* decode(row)
 })
 
-const load = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  permissions: SpacePermissions.Interface,
-  actor: Actor.Info,
-  spaceId: Space.ID,
-) {
-  const role = yield* SpaceQueries.organizationRole(transaction, actor)
-  if (!role) return
-  const rows = yield* transaction
-    .select({ archivedAt: Database.Schema.space.archived_at, membershipId: SpaceQueries.membership.id })
-    .from(Database.Schema.space)
-    .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
-    .where(and(eq(Database.Schema.space.id, spaceId), eq(Database.Schema.space.organization_id, actor.organizationId)))
-    .for("share", { of: Database.Schema.space })
-  const row = rows.at(0)
-  if (!row) return
-  return {
-    archivedAt: row.archivedAt,
-    access: { isAdministrator: permissions.isAdministrator(role), membershipId: row.membershipId },
-  }
-})
-
 const conflictOn =
   (constraint: string, message: string) =>
   (error: EffectDrizzleQueryError): Effect.Effect<never, Primitive.Conflict | EffectDrizzleQueryError> => {
@@ -101,49 +79,6 @@ const conflictOn =
       failure.value.reason.constraint === constraint
     return isViolation ? Effect.fail(new Primitive.Conflict({ message })) : Effect.fail(error)
   }
-
-const list = (database: Database.Interface, permissions: SpacePermissions.Interface) =>
-  Effect.fn("SpaceMember.list")(function* (actor: Actor.Info, input: SpaceMember.ListInput) {
-    return yield* database.transaction((transaction) =>
-      Effect.gen(function* () {
-        const space = yield* load(transaction, permissions, actor, input.spaceId)
-        if (!space || space.archivedAt || !permissions.canRead(space.access)) {
-          return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
-        }
-        const members = activeMembers(transaction)
-          .where(
-            and(
-              eq(Database.Schema.space_member.space_id, input.spaceId),
-              isNull(Database.Schema.space_member.archived_at),
-            ),
-          )
-          .unionAll(
-            pendingMembers(transaction).where(
-              and(
-                eq(Database.Schema.space_pending_member.space_id, input.spaceId),
-                isNull(Database.Schema.space_pending_member.archived_at),
-              ),
-            ),
-          )
-          .as("members")
-        const where = input.status ? eq(members.status, input.status) : undefined
-        const rows = yield* transaction
-          .select()
-          .from(members)
-          .where(where)
-          .orderBy(asc(members.createdAt), asc(members.id))
-          .limit(input.pageSize)
-          .offset((input.page - 1) * input.pageSize)
-        const totals = yield* transaction.select({ total: count() }).from(members).where(where)
-        return {
-          items: yield* Effect.forEach(rows, decode),
-          page: input.page,
-          pageSize: input.pageSize,
-          total: totals.at(0)?.total ?? 0,
-        }
-      }),
-    )
-  })
 
 const addUser = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
@@ -220,47 +155,102 @@ const addPending = Effect.fnUntraced(function* (
   return yield* find(transaction, id)
 })
 
-const create = (database: Database.Interface, permissions: SpacePermissions.Interface) =>
-  Effect.fn("SpaceMember.create")(function* (actor: Actor.Info, input: SpaceMember.CreateInput) {
-    return yield* database.transaction((transaction) =>
-      Effect.gen(function* () {
-        const space = yield* load(transaction, permissions, actor, input.spaceId)
-        if (!space || space.archivedAt || !permissions.canRead(space.access)) return yield* notFound
-        if (!permissions.canManageMembers(space.access)) return yield* forbidden
-        if ("userId" in input) return yield* addUser(transaction, actor, input.spaceId, input.userId)
-        return yield* addPending(transaction, actor, input.spaceId, input.email)
-      }),
-    )
-  })
-
-const archive = (database: Database.Interface, permissions: SpacePermissions.Interface) =>
-  Effect.fn("SpaceMember.archive")(function* (actor: Actor.Info, id: SpaceMember.ID) {
-    return yield* database.transaction((transaction) =>
-      Effect.gen(function* () {
-        const member = yield* find(transaction, id)
-        const space = yield* load(transaction, permissions, actor, member.spaceId)
-        if (!space || space.archivedAt || !permissions.canRead(space.access)) return yield* notFound
-        if (member.archivedAt) return member
-        if (!permissions.canManageMembers(space.access)) return yield* forbidden
-        const table = member.status === "active" ? Database.Schema.space_member : Database.Schema.space_pending_member
-        yield* transaction
-          .update(table)
-          .set({ archived_at: sql`now()` })
-          .where(and(eq(table.id, member.id), isNull(table.archived_at)))
-        return yield* find(transaction, id)
-      }),
-    )
-  })
-
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
     const permissions = yield* SpacePermissions.Service
+
+    const load = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, spaceId: Space.ID) {
+      const role = yield* SpaceQueries.organizationRole(transaction, actor)
+      if (!role) return
+      const rows = yield* transaction
+        .select({ archivedAt: Database.Schema.space.archived_at, membershipId: SpaceQueries.membership.id })
+        .from(Database.Schema.space)
+        .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+        .where(
+          and(eq(Database.Schema.space.id, spaceId), eq(Database.Schema.space.organization_id, actor.organizationId)),
+        )
+        .for("share", { of: Database.Schema.space })
+      const row = rows.at(0)
+      if (!row) return
+      return {
+        archivedAt: row.archivedAt,
+        access: { isAdministrator: permissions.isAdministrator(role), membershipId: row.membershipId },
+      }
+    })
+
     return Service.of({
-      list: list(database, permissions),
-      create: create(database, permissions),
-      archive: archive(database, permissions),
+      list: Effect.fn("SpaceMember.list")(function* (actor: Actor.Info, input: SpaceMember.ListInput) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const space = yield* load(transaction, actor, input.spaceId)
+            if (!space || space.archivedAt || !permissions.canRead(space.access)) {
+              return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
+            }
+            const members = activeMembers(transaction)
+              .where(
+                and(
+                  eq(Database.Schema.space_member.space_id, input.spaceId),
+                  isNull(Database.Schema.space_member.archived_at),
+                ),
+              )
+              .unionAll(
+                pendingMembers(transaction).where(
+                  and(
+                    eq(Database.Schema.space_pending_member.space_id, input.spaceId),
+                    isNull(Database.Schema.space_pending_member.archived_at),
+                  ),
+                ),
+              )
+              .as("members")
+            const where = input.status ? eq(members.status, input.status) : undefined
+            const rows = yield* transaction
+              .select()
+              .from(members)
+              .where(where)
+              .orderBy(asc(members.createdAt), asc(members.id))
+              .limit(input.pageSize)
+              .offset((input.page - 1) * input.pageSize)
+            const totals = yield* transaction.select({ total: count() }).from(members).where(where)
+            return {
+              items: yield* Effect.forEach(rows, decode),
+              page: input.page,
+              pageSize: input.pageSize,
+              total: totals.at(0)?.total ?? 0,
+            }
+          }),
+        )
+      }),
+      create: Effect.fn("SpaceMember.create")(function* (actor: Actor.Info, input: SpaceMember.CreateInput) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const space = yield* load(transaction, actor, input.spaceId)
+            if (!space || space.archivedAt || !permissions.canRead(space.access)) return yield* notFound
+            if (!permissions.canManageMembers(space.access)) return yield* forbidden
+            if ("userId" in input) return yield* addUser(transaction, actor, input.spaceId, input.userId)
+            return yield* addPending(transaction, actor, input.spaceId, input.email)
+          }),
+        )
+      }),
+      archive: Effect.fn("SpaceMember.archive")(function* (actor: Actor.Info, id: SpaceMember.ID) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const member = yield* find(transaction, id)
+            const space = yield* load(transaction, actor, member.spaceId)
+            if (!space || space.archivedAt || !permissions.canRead(space.access)) return yield* notFound
+            if (member.archivedAt) return member
+            if (!permissions.canManageMembers(space.access)) return yield* forbidden
+            const table =
+              member.status === "active" ? Database.Schema.space_member : Database.Schema.space_pending_member
+            yield* transaction
+              .update(table)
+              .set({ archived_at: sql`now()` })
+              .where(and(eq(table.id, member.id), isNull(table.archived_at)))
+            return yield* find(transaction, id)
+          }),
+        )
+      }),
     })
   }),
 )
