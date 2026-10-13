@@ -29,6 +29,11 @@ const packageBoundaries = [
     message: "Core never knows about HTTP. Take an Actor instead of protocol services.",
   },
   {
+    files: ["packages/cell/**"],
+    regex: "^@ren/(core|db|server)(/|$)",
+    message: "The cell bundle runs in workerd. It depends only on schema and protocol.",
+  },
+  {
     files: ["packages/server/src/handlers/**"],
     regex: "^@ren/db(/|$)",
     message: "Handlers decode, call a core service and map errors. Queries belong in core.",
