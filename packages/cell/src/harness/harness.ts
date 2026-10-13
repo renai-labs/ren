@@ -1,6 +1,6 @@
 export * as Harness from "./harness.js"
 
-import type { BrainRejectedError, SessionNotStartedError } from "@ren/protocol/errors"
+import type { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
 import type { Session } from "@ren/schema/session"
 import type { Effect } from "effect"
 import type { Reconcile } from "../reconcile.js"

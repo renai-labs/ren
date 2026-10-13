@@ -51,6 +51,18 @@
         "vite": "catalog:",
       },
     },
+    "packages/brain-api": {
+      "name": "@ren/brain-api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ren/schema": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+      },
+    },
     "packages/cell": {
       "name": "@ren/cell",
       "version": "0.0.0",
@@ -59,7 +71,7 @@
         "@opencode/core": "catalog:",
         "@opencode/plugin": "catalog:",
         "@opencode/server": "catalog:",
-        "@ren/protocol": "workspace:*",
+        "@ren/brain-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
       },
@@ -1178,6 +1190,8 @@
     "@redis/time-series": ["@redis/time-series@6.3.0", "", { "peerDependencies": { "@redis/client": "^6.3.0" } }, "sha512-+fJOB8mN1z5WRakCJNh5lVdz1KqvHGSOistsKeitD24QsCtPwyRQXWC0iq6T/i/ubLE/YcguZqPm8F598MKk4A=="],
 
     "@ren/app": ["@ren/app@workspace:packages/app"],
+
+    "@ren/brain-api": ["@ren/brain-api@workspace:packages/brain-api"],
 
     "@ren/cell": ["@ren/cell@workspace:packages/cell"],
 

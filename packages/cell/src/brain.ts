@@ -1,7 +1,7 @@
 export * as Brain from "./brain.js"
 
-import { BrainApi } from "@ren/protocol/brain-api"
-import { ForbiddenError } from "@ren/protocol/errors"
+import { BrainApi } from "@ren/brain-api/brain-api"
+import { ForbiddenError } from "@ren/brain-api/errors"
 import { Effect, Layer, type Scope } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"

@@ -15,7 +15,7 @@
     "@opencode/core": "catalog:",
     "@opencode/plugin": "catalog:",
     "@opencode/server": "catalog:",
-    "@ren/protocol": "workspace:*",
+    "@ren/brain-api": "workspace:*",
     "@ren/schema": "workspace:*",
     "effect": "catalog:"
   },

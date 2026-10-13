@@ -1,12 +1,11 @@
 import { Session } from "@ren/schema/session"
 import { Struct } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
-import { BrainRejectedError, ForbiddenError, SessionNotStartedError } from "../errors.js"
-import { Exposure } from "../exposure.js"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { BrainRejectedError, ForbiddenError, SessionNotStartedError } from "./errors.js"
 
 const SendBody = Session.SendInput.mapFields(Struct.omit(["sessionId"])).annotate({ identifier: "Brain.SendBody" })
 
-export const BrainGroup = HttpApiGroup.make("brain")
+const BrainGroup = HttpApiGroup.make("brain")
   .add(
     HttpApiEndpoint.post("brain.start", "/ren/sessions", {
       payload: Session.StartInput,
@@ -36,5 +35,14 @@ export const BrainGroup = HttpApiGroup.make("brain")
       }),
     ),
   )
-  .annotate(Exposure, "internal")
   .annotateMerge(OpenApi.annotations({ title: "brain" }))
+
+export const BrainApi = HttpApi.make("brain")
+  .add(BrainGroup)
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Ren Brain API",
+      version: "0.0.0",
+      description: "What any host of a session serves to the Ren server. Internal, not part of the public API.",
+    }),
+  )
