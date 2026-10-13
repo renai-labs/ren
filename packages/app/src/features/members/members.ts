@@ -1,8 +1,9 @@
 export * as Members from "./members.js"
 
+import type { Auth } from "@ren/schema/auth"
 import { Email } from "../../lib/email.js"
 
-export type Role = "member" | "admin" | "owner"
+export type Role = Auth.Role
 
 export type Tab = "members" | "invitations"
 

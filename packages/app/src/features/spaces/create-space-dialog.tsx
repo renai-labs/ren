@@ -8,17 +8,7 @@ import { Schema } from "effect"
 import { RouterContext } from "../../lib/router-context.js"
 
 const schema = Schema.toStandardSchemaV1(
-  Schema.Struct({
-    name: Schema.String.check(
-      Schema.makeFilter((name) => (name.trim() ? undefined : "Name is required.")),
-      Schema.makeFilter((name) =>
-        name.trim().length > Space.maximumNameLength
-          ? `Use ${Space.maximumNameLength} characters or fewer.`
-          : undefined,
-      ),
-    ),
-    description: Schema.String,
-  }),
+  Schema.Struct({ name: Schema.Trim.pipe(Schema.decodeTo(Space.Name)), description: Schema.String }),
 )
 
 export function CreateSpaceDialog(props: { onClose: () => void }) {

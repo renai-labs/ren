@@ -19,6 +19,14 @@ export const MemberID = Identifier.make("mem", "Auth.MemberID")
 
 export const InvitationID = Identifier.make("inv", "Auth.InvitationID")
 
+export const Role = Schema.Literals(["owner", "admin", "member"]).annotate({ identifier: "Auth.Role" })
+export type Role = typeof Role.Type
+
+const administratorRoles: ReadonlyArray<string> = ["owner", "admin"] satisfies ReadonlyArray<Role>
+
+export const isAdministrator = (role: string) =>
+  role.split(",").some((each) => administratorRoles.includes(each.trim()))
+
 export interface User extends Schema.Schema.Type<typeof User> {}
 export const User = Schema.Struct({
   id: UserID,

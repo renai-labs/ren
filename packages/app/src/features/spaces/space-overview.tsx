@@ -1,10 +1,10 @@
-import { Space } from "@ren/schema/space"
 import { Field } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
 import { PageShell } from "@ren/ui/page-shell"
 import { Text } from "@ren/ui/text"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { RouterContext } from "../../lib/router-context.js"
+import { Spaces } from "./spaces.js"
 
 export function SpaceOverview(props: { spaceId: string }) {
   const context = RouterContext.useRouterContext()
@@ -26,9 +26,7 @@ export function SpaceOverview(props: { spaceId: string }) {
             alignment="end"
             placeholder="Enter space name"
             required
-            validate={(name) =>
-              name.length > Space.maximumNameLength ? `Use ${Space.maximumNameLength} characters or fewer.` : null
-            }
+            validate={Spaces.nameProblem}
             value={space.data.name}
             onCommit={(name) => save({ name })}
           />
