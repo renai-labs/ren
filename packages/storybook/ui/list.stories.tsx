@@ -251,7 +251,7 @@ export const Virtual: Story = {
       items={sessions}
       itemKey={(session) => session.id}
       estimateSize={57}
-      // oxlint-disable-next-line ren/no-render-props -- the virtualized list hands each session back
+      // ast-grep-ignore: no-render-props, -- the virtualized list hands each session back
       renderItem={(session) => (
         <List.Item title={session.title} description={session.description} onActivate={() => undefined} />
       )}

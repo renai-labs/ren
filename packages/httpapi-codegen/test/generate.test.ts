@@ -35,7 +35,7 @@ async function emittedModule(output: Types.Output) {
   try {
     // oxlint-disable-next-line ren/no-comments -- Finish each write before cleanup can run, even when a later write fails.
     await Array.fromAsync(output.files, (file) => Bun.write(join(directory, file.path), file.content))
-    // oxlint-disable-next-line ren/no-dynamic-import-path -- The module is emitted into a temporary directory at runtime, so its path cannot be literal.
+    // ast-grep-ignore: no-dynamic-import-path, -- The module is emitted into a temporary directory at runtime, so its path cannot be literal.
     const module = await import(`${join(directory, "index.ts")}?t=${crypto.randomUUID()}`)
     return { module, [Symbol.asyncDispose]: dispose }
   } catch (cause) {

@@ -11,7 +11,7 @@ export type VirtualProps<Item> = ListStatusProps & {
   items: ReadonlyArray<Item>
   itemKey: (item: Item) => string
   estimateSize: number
-  // oxlint-disable-next-line ren/no-render-props -- hands each virtualized item back to the caller
+  // ast-grep-ignore: no-render-props, -- hands each virtualized item back to the caller
   renderItem: (item: Item) => ReactNode
   frame?: ListFrame
   label?: string

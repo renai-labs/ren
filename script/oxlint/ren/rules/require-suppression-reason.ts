@@ -1,6 +1,6 @@
 import { defineRule } from "@oxlint/plugins"
 
-const DIRECTIVE = /^\s*(oxlint|eslint)-(disable|enable)(-next-line|-line)?\b/
+const DIRECTIVE = /^\s*((oxlint|eslint)-(disable|enable)(-next-line|-line)?\b|ast-grep-ignore:)/
 const REASON = /\s--\s+\S/
 
 export const requireSuppressionReason = defineRule({
@@ -8,7 +8,8 @@ export const requireSuppressionReason = defineRule({
     type: "problem",
     docs: { description: "Require a reason on every lint suppression comment." },
     messages: {
-      reason: "Explain the suppression: `// oxlint-disable-next-line <rule> -- <why this case is the exception>`.",
+      reason:
+        "Explain the suppression: `// oxlint-disable-next-line <rule> -- <why>` or `// ast-grep-ignore: <rule>, -- <why>`.",
     },
   },
   create(context) {

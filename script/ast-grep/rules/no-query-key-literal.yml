@@ -1,0 +1,16 @@
+id: no-query-key-literal
+language: Tsx
+message: >-
+  Hand-written query keys drift from the API. Use the generated query options from @ren/client/react, or a key factory next to them.
+severity: error
+files:
+  - packages/app/src/**
+rule:
+  kind: pair
+  all:
+    - has:
+        field: key
+        regex: ^(queryKey|mutationKey)$
+    - has:
+        field: value
+        kind: array

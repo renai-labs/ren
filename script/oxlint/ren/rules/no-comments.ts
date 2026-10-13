@@ -1,6 +1,6 @@
 import { defineRule } from "@oxlint/plugins"
 
-const DIRECTIVE = /^\s*((oxlint|eslint)-(disable|enable)(-next-line|-line)?\b|@ts-expect-error\s+\S)/
+const DIRECTIVE = /^\s*((oxlint|eslint)-(disable|enable)(-next-line|-line)?\b|ast-grep-ignore:|@ts-expect-error\s+\S)/
 
 export const noComments = defineRule({
   meta: {

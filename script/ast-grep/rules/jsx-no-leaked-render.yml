@@ -1,0 +1,21 @@
+id: jsx-no-leaked-render
+language: Tsx
+message: >-
+  Use `condition ? <Element /> : null`. `&&` renders `0` and `NaN` when the condition is a number.
+severity: error
+rule:
+  kind: binary_expression
+  all:
+    - has:
+        field: operator
+        regex: ^&&$
+    - has:
+        field: right
+        any:
+          - kind: jsx_element
+          - kind: jsx_self_closing_element
+          - kind: parenthesized_expression
+            has:
+              any:
+                - kind: jsx_element
+                - kind: jsx_self_closing_element

@@ -1,0 +1,21 @@
+id: no-dynamic-import-path
+language: Tsx
+message: >-
+  The bundler cannot tell what this imports, so it bundles every candidate. Use a literal path, or a map of literal `() => import(...)` loaders.
+severity: error
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: import
+  not:
+    has:
+      field: arguments
+      has:
+        nthChild: 1
+        any:
+          - kind: string
+          - kind: template_string
+            not:
+              has:
+                kind: template_substitution
