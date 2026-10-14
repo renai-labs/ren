@@ -16,7 +16,7 @@ const BrainGroup = HttpApiGroup.make("brain")
         identifier: "brain.start",
         summary: "Start a session",
         description:
-          "Create the session in its harness, or re-apply the title, agent, model and context to a session that exists. The session id must be the token’s.",
+          "Create the session in its harness, or re-apply the title, agent, model and instructions to a session that exists. The session id must be the token’s.",
       }),
     ),
   )

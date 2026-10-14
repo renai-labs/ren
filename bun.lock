@@ -197,7 +197,6 @@
       "name": "@ren/schema",
       "version": "0.0.0",
       "dependencies": {
-        "@opencode/schema": "catalog:",
         "effect": "catalog:",
         "ulid": "catalog:",
       },

@@ -1,7 +1,5 @@
 export * as Session from "./session.js"
 
-import { Credential } from "@opencode/schema/credential"
-import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Effect, Schema } from "effect"
 import { Identifier } from "./identifier.js"
 
@@ -23,29 +21,37 @@ export const Model = Schema.Struct({
   variant: Schema.optionalKey(Schema.NonEmptyString),
 }).annotate({ identifier: "Session.Model" })
 
-const contextKey = /^[a-z0-9][a-z0-9._-]*$/u
+const instructionKey = /^[a-z0-9][a-z0-9._-]*$/u
 
-export const Context = Schema.Record(
+export const Instructions = Schema.Record(
   Schema.String,
   Schema.String.check(
     Schema.makeFilter(
-      (value) => encoder.encode(JSON.stringify(value)).length <= 256 * 1024 || "a context value is at most 256 KiB",
+      (value) => encoder.encode(JSON.stringify(value)).length <= 256 * 1024 || "an instruction is at most 256 KiB",
     ),
   ),
 )
   .check(
     Schema.makeFilter(
-      (context) =>
-        Object.keys(context).every((key) => contextKey.test(key)) ||
-        "context keys are lowercase letters, digits, dot, underscore and dash, starting with a letter or digit",
+      (instructions) =>
+        Object.keys(instructions).every((key) => instructionKey.test(key)) ||
+        "instruction keys are lowercase letters, digits, dot, underscore and dash, starting with a letter or digit",
     ),
   )
-  .annotate({ identifier: "Session.Context" })
-export type Context = typeof Context.Type
+  .annotate({ identifier: "Session.Instructions" })
+export type Instructions = typeof Instructions.Type
 
-export const ManagedMethod = IntegrationMethodID.make("ren")
+export const Credential = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("key"), key: Schema.NonEmptyString }),
+  Schema.Struct({
+    type: Schema.Literal("managed"),
+    key: Schema.NonEmptyString,
+    expires: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  }),
+]).annotate({ identifier: "Session.Credential" })
+export type Credential = typeof Credential.Type
 
-export const Credentials = Schema.Record(Schema.String, Credential.Value)
+export const Credentials = Schema.Record(Schema.String, Credential)
   .check(
     Schema.makeFilter(
       (credentials) => Object.keys(credentials).every((key) => key.length > 0) || "a provider id is not empty",
@@ -61,7 +67,7 @@ export const StartInput = Schema.Struct({
   title: Schema.optionalKey(Schema.String),
   agent: Schema.optionalKey(Schema.NonEmptyString),
   model: Schema.optionalKey(Model),
-  context: Context.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
+  instructions: Instructions.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
   credentials: Credentials.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
   interactive: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
 }).annotate({ identifier: "Session.StartInput" })

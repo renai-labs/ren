@@ -2,10 +2,12 @@ export * as RenPlugin from "./plugin.js"
 
 import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
-import { Session } from "@ren/schema/session"
+import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Clock, Effect, Schema } from "effect"
 
 const unavailable = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
+
+export const method = IntegrationMethodID.make("ren")
 
 export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("ManagedKeyError", {
   message: Schema.String,
@@ -33,7 +35,7 @@ export const make = (configured: ReadonlyArray<string>) =>
           for (const integrationID of new Set([...editor.list().map((item) => item.id), ...configured]))
             editor.method.update({
               integrationID,
-              method: { id: Session.ManagedMethod, type: "oauth", label: "Ren" },
+              method: { id: method, type: "oauth", label: "Ren" },
               authorize: () =>
                 new ManagedKeyError({ message: "Ren issues this credential; it cannot be signed in to" }),
               refresh: (credential) => refresh(integrationID, credential),

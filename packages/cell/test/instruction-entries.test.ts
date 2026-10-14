@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import { InstructionEntries } from "../src/harness/opencode/instruction-entries.js"
 
-const entries = (context: Record<string, unknown>) =>
-  Object.entries(context).map((entry) => ({ key: entry[0], value: entry[1] }))
+const entries = (instructions: Record<string, unknown>) =>
+  Object.entries(instructions).map((entry) => ({ key: entry[0], value: entry[1] }))
 
 describe("instruction entry changes", () => {
-  test("a key in the wanted context that the session lacks is put", () => {
+  test("a key in the wanted instructions that the session lacks is put", () => {
     expect(InstructionEntries.changes([], { team: "Ren" })).toEqual({
       put: [{ key: "team", value: "Ren" }],
       remove: [],
@@ -43,14 +43,14 @@ describe("instruction entry changes", () => {
     })
   })
 
-  test("a key the session has that left the wanted context is removed", () => {
+  test("a key the session has that left the wanted instructions is removed", () => {
     expect(InstructionEntries.changes(entries({ team: "Ren", goal: "ship" }), { team: "Ren" })).toEqual({
       put: [],
       remove: ["goal"],
     })
   })
 
-  test("the wanted context is the session's whole set of entries: one a client added is removed too", () => {
+  test("the wanted instructions are the session's whole set of entries: one a client added is removed too", () => {
     expect(InstructionEntries.changes(entries({ team: "Ren", note: { by: "tui" } }), { team: "Ren" })).toEqual({
       put: [],
       remove: ["note"],
@@ -70,14 +70,14 @@ describe("instruction entry changes", () => {
     })
   })
 
-  test("an empty wanted context removes every entry and puts nothing", () => {
+  test("empty wanted instructions remove every entry and put nothing", () => {
     expect(InstructionEntries.changes(entries({ team: "Ren", goal: "ship" }), {})).toEqual({
       put: [],
       remove: ["goal", "team"],
     })
   })
 
-  test("no entries and an empty wanted context change nothing", () => {
+  test("no entries and empty wanted instructions change nothing", () => {
     expect(InstructionEntries.changes([], {})).toEqual({ put: [], remove: [] })
   })
 })

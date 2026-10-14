@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Exit, Schema } from "effect"
 import { Session } from "../src/index.js"
 
@@ -11,7 +10,7 @@ const start = {
   harness: "opencode" as const,
   agent: "build",
   model: { providerId: "stub", modelId: "stub-model" },
-  context: { team: "Ren" },
+  instructions: { team: "Ren" },
 }
 
 const send = {
@@ -24,18 +23,7 @@ const send = {
 const file = (url: string) => ({ ...send, prompt: { text: "look", files: [{ url }] } })
 
 const key = { type: "key" as const, key: "sk-1" }
-const oauth = {
-  type: "oauth" as const,
-  methodID: IntegrationMethodID.make("chatgpt-browser"),
-  access: "a",
-  refresh: "r",
-  expires: 1_000,
-}
-const external = {
-  type: "external" as const,
-  methodID: IntegrationMethodID.make("aws"),
-  metadata: { region: "us-east-1" },
-}
+const managed = { type: "managed" as const, key: "sk-ren", expires: 5_000 }
 
 describe("Session.ID", () => {
   test("create mints ses_ followed by a ULID, and two ids made in a row sort in creation order", () => {
@@ -55,7 +43,7 @@ describe("Session.ID", () => {
 })
 
 describe("StartInput", () => {
-  test("decodes harness, agent, model and context, with title absent and interactive defaulting to true", () => {
+  test("decodes harness, agent, model and instructions, with title absent and interactive defaulting to true", () => {
     expect(Schema.decodeUnknownSync(Session.StartInput)(start)).toEqual({
       ...start,
       credentials: {},
@@ -69,11 +57,11 @@ describe("StartInput", () => {
     })
   })
 
-  test("agent, model, context and credentials are optional, and missing ones mean none", () => {
+  test("agent, model, instructions and credentials are optional, and missing ones mean none", () => {
     expect(Schema.decodeUnknownSync(Session.StartInput)({ sessionId: start.sessionId, harness: "opencode" })).toEqual({
       sessionId: start.sessionId,
       harness: "opencode",
-      context: {},
+      instructions: {},
       credentials: {},
       interactive: true,
     })
@@ -83,15 +71,15 @@ describe("StartInput", () => {
     expect(decodes(Session.StartInput, { ...start, sessionId: "msg_1" })).toBe(false)
   })
 
-  test("context keys follow OpenCode's instruction entry keys: lowercase letters, digits, dot, underscore and dash, starting with a letter or digit", () => {
+  test("instruction keys follow OpenCode's instruction entry keys: lowercase letters, digits, dot, underscore and dash, starting with a letter or digit", () => {
     expect(
       ["team", "a.b_c-d", "0day", "Team", "-team", ".team", "_team", "a b", ""].map((key) =>
-        decodes(Session.StartInput, { ...start, context: { [key]: "value" } }),
+        decodes(Session.StartInput, { ...start, instructions: { [key]: "value" } }),
       ),
     ).toEqual([true, true, true, false, false, false, false, false, false])
   })
 
-  test("accepts a context value whose JSON encoding is exactly 256 KiB in UTF-8, as OpenCode measures it, and rejects one byte more", () => {
+  test("accepts an instruction whose JSON encoding is exactly 256 KiB in UTF-8, as OpenCode measures it, and rejects one byte more", () => {
     expect(
       [
         "a".repeat(262_142),
@@ -102,42 +90,32 @@ describe("StartInput", () => {
         `${'"'.repeat(131_071)}a`,
         "\n".repeat(131_071),
         `${"\n".repeat(131_071)}a`,
-      ].map((value) => decodes(Session.StartInput, { ...start, context: { team: value } })),
+      ].map((value) => decodes(Session.StartInput, { ...start, instructions: { team: value } })),
     ).toEqual([true, false, true, false, true, false, true, false])
   })
 
-  test("an empty context is allowed and means no entries", () => {
-    expect(Schema.decodeUnknownSync(Session.StartInput)({ ...start, context: {} }).context).toEqual({})
+  test("empty instructions are allowed and mean no entries", () => {
+    expect(Schema.decodeUnknownSync(Session.StartInput)({ ...start, instructions: {} }).instructions).toEqual({})
   })
 
-  test("credentials map a provider id to OpenCode's credential value: key, oauth or external", () => {
-    const credentials = { openai: key, "openai-codex": oauth, "amazon-bedrock": external }
+  test("credentials map a provider id to a key, or to a Ren-managed key with its expiry", () => {
+    const credentials = { openai: key, litellm: managed }
     expect(Schema.decodeUnknownSync(Session.StartInput)({ ...start, credentials }).credentials).toEqual(credentials)
   })
 
-  test("a credential that is not one of OpenCode's credential values is rejected, and so is an empty provider id", () => {
+  test("a credential that is not a key or a managed key is rejected, and so is an empty provider id", () => {
     expect(
       [
-        { openai: { type: "token", key: "sk-1" } },
+        { openai: { type: "oauth", methodID: "chatgpt-browser", access: "a", refresh: "r", expires: 1_000 } },
         { openai: { type: "key" } },
-        { openai: { ...oauth, expires: -1 } },
+        { openai: { type: "key", key: "" } },
+        { openai: { type: "managed", key: "sk-ren" } },
+        { openai: { ...managed, expires: -1 } },
+        { openai: { ...managed, expires: 1.5 } },
         { openai: "sk-1" },
         { "": key },
       ].map((credentials) => decodes(Session.StartInput, { ...start, credentials })),
-    ).toEqual([false, false, false, false, false])
-  })
-
-  test("a Ren-managed key is an oauth credential under the ren method, with its expiry", () => {
-    const managed = {
-      type: "oauth" as const,
-      methodID: Session.ManagedMethod,
-      access: "sk-ren",
-      refresh: "",
-      expires: 5_000,
-    }
-    expect(
-      Schema.decodeUnknownSync(Session.StartInput)({ ...start, credentials: { ren: managed } }).credentials,
-    ).toEqual({ ren: managed })
+    ).toEqual([false, false, false, false, false, false, false, false])
   })
 })
 
