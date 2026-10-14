@@ -42,7 +42,11 @@ export const Instructions = Schema.Record(
 export type Instructions = typeof Instructions.Type
 
 export const Credential = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("key"), key: Schema.NonEmptyString }),
+  Schema.Struct({
+    type: Schema.Literal("key"),
+    key: Schema.NonEmptyString,
+    configuration: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  }),
   Schema.Struct({
     type: Schema.Literal("managed"),
     key: Schema.NonEmptyString,

@@ -39,7 +39,11 @@ export const apply: (
       const integrationID = IntegrationID.make(providerId)
       const value: Credential.Value =
         credential.type === "key"
-          ? { type: "key", key: credential.key }
+          ? {
+              type: "key",
+              key: credential.key,
+              ...(credential.configuration && { configuration: credential.configuration }),
+            }
           : {
               type: "oauth",
               methodID: RenPlugin.method,

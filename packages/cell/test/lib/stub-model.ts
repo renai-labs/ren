@@ -14,6 +14,7 @@ interface Behaviour {
 
 export interface Call {
   readonly kind: "title" | "turn"
+  readonly path: string
   readonly marker: string | undefined
   readonly text: string
   readonly system: string
@@ -123,7 +124,7 @@ async function* messages(text: string) {
   yield event({ type: "message_stop" })
 }
 
-const toCall = (body: ChatRequest, headers: Headers): Call => {
+const toCall = (body: ChatRequest, request: Request): Call => {
   const system = body.messages
     .filter((message) => message.role === "system")
     .map((message) => text(message.content))
@@ -132,14 +133,15 @@ const toCall = (body: ChatRequest, headers: Headers): Call => {
   const prompt = prompts.at(-1) ?? ""
   return {
     kind: system.includes("title generator") ? "title" : "turn",
+    path: new URL(request.url).pathname,
     marker: (prompt === restarted ? prompts.findLast((candidate) => markerPattern.test(candidate)) : prompt)?.match(
       markerPattern,
     )?.[0],
     text: prompt,
     system,
     tools: body.tools?.map((tool) => tool.function.name) ?? [],
-    authorization: headers.get("authorization"),
-    apiKey: headers.get("x-api-key"),
+    authorization: request.headers.get("authorization"),
+    apiKey: request.headers.get("x-api-key"),
     body,
   }
 }
@@ -234,11 +236,11 @@ export const start = (): Server => {
     port: 0,
     idleTimeout: 0,
     async fetch(request) {
-      const endpoint = endpoints[new URL(request.url).pathname]
+      const endpoint = Object.entries(endpoints).find((entry) => new URL(request.url).pathname.endsWith(entry[0]))?.[1]
       if (!endpoint) return new Response("not found", { status: 404 })
       const decoded = endpoint.decode(await request.json().catch(() => undefined))
       if (Option.isNone(decoded)) return new Response("not a chat completion or messages request", { status: 400 })
-      const call = toCall(decoded.value, request.headers)
+      const call = toCall(decoded.value, request)
       const entry = record(call)
       const behaviour = call.kind === "title" ? { reply: "Stub title" } : (entry?.behaviour ?? {})
       if (behaviour.status)

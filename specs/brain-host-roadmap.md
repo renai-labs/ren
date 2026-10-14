@@ -66,6 +66,9 @@ Each is its own spec, on the same Brain API:
 
 - **Hands.** A `WorkspaceDriver` so tools that need a computer (shell, files, terminal) run in a sandbox.
 - **Skills, MCP and agents.** Through plugin transforms. Blocking plan mode means removing the `plan` agent with `agent.transform`.
+- **Bring-your-own providers.** Today a user's own key works for any provider in the cell's `OPENCODE_CONFIG`, with its key form's answers (Azure's `resourceName`, Cloudflare's `accountId`) in `configuration`. Two pieces remain:
+  - Per-session provider definitions, so a user can add an OpenAI-compatible endpoint or a custom base URL: `start` carries them and the cell applies them to OpenCode's config. Check whether OpenCode takes a config change without a reopen. Sign-in through local tools (AWS profiles, Azure CLI, gcloud) cannot run in a cell; those providers use their key methods.
+  - Subscription sign-in (ChatGPT/Codex, Copilot). A `managed` key is stored under the `ren` method, but some drivers branch on the method and read data from the credential (OpenAI reads `accountID` for ChatGPT), so a subscription token needs its method and metadata to reach OpenCode. Decide together with who refreshes the grant (below).
 - **Other harnesses.** Claude Code, Codex and others as new adapters that produce the same client protocol. Each brings its own runtime, so each becomes its own deployable package and the cell host moves to a shared one.
 
 ## Open decisions

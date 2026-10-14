@@ -98,8 +98,12 @@ describe("StartInput", () => {
     expect(Schema.decodeUnknownSync(Session.StartInput)({ ...start, instructions: {} }).instructions).toEqual({})
   })
 
-  test("credentials map a provider id to a key, or to a Ren-managed key with its expiry", () => {
-    const credentials = { openai: key, litellm: managed }
+  test("credentials map a provider id to a key, with the answers to the provider's key form, or to a Ren-managed key with its expiry", () => {
+    const credentials = {
+      openai: key,
+      azure: { type: "key" as const, key: "sk-az", configuration: { resourceName: "my-models" } },
+      litellm: managed,
+    }
     expect(Schema.decodeUnknownSync(Session.StartInput)({ ...start, credentials }).credentials).toEqual(credentials)
   })
 
@@ -109,13 +113,14 @@ describe("StartInput", () => {
         { openai: { type: "oauth", methodID: "chatgpt-browser", access: "a", refresh: "r", expires: 1_000 } },
         { openai: { type: "key" } },
         { openai: { type: "key", key: "" } },
+        { azure: { type: "key", key: "sk-az", configuration: { resourceName: 1 } } },
         { openai: { type: "managed", key: "sk-ren" } },
         { openai: { ...managed, expires: -1 } },
         { openai: { ...managed, expires: 1.5 } },
         { openai: "sk-1" },
         { "": key },
       ].map((credentials) => decodes(Session.StartInput, { ...start, credentials })),
-    ).toEqual([false, false, false, false, false, false, false, false])
+    ).toEqual([false, false, false, false, false, false, false, false, false])
   })
 })
 
