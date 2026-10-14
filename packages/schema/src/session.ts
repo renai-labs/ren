@@ -1,6 +1,6 @@
 export * as Session from "./session.js"
 
-import { Effect, Schema } from "effect"
+import { Effect, Schema, Struct } from "effect"
 import { Identifier } from "./identifier.js"
 
 const encoder = new TextEncoder()
@@ -64,18 +64,6 @@ export const Credentials = Schema.Record(Schema.String, Credential)
   .annotate({ identifier: "Session.Credentials" })
 export type Credentials = typeof Credentials.Type
 
-export interface StartInput extends Schema.Schema.Type<typeof StartInput> {}
-export const StartInput = Schema.Struct({
-  sessionId: ID,
-  harness: Harness,
-  title: Schema.optionalKey(Schema.String),
-  agent: Schema.optionalKey(Schema.NonEmptyString),
-  model: Schema.optionalKey(Model),
-  instructions: Instructions.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
-  credentials: Credentials.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
-  interactive: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
-}).annotate({ identifier: "Session.StartInput" })
-
 export const Delivery = Schema.Literals(["steer", "queue"]).annotate({ identifier: "Session.Delivery" })
 export type Delivery = typeof Delivery.Type
 
@@ -126,6 +114,23 @@ export const SendInput = Schema.Struct({
   sender: Sender,
   credentials: Schema.optionalKey(Credentials),
 }).annotate({ identifier: "Session.SendInput" })
+
+export interface StartInput extends Schema.Schema.Type<typeof StartInput> {}
+export const StartInput = Schema.Struct({
+  sessionId: ID,
+  harness: Harness,
+  title: Schema.optionalKey(Schema.String),
+  agent: Schema.optionalKey(Schema.NonEmptyString),
+  model: Schema.optionalKey(Model),
+  instructions: Instructions.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
+  credentials: Credentials.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
+  interactive: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
+  initialMessage: Schema.optionalKey(
+    SendInput.mapFields(Struct.omit(["sessionId", "credentials", "delivery"])).annotate({
+      identifier: "Session.InitialMessage",
+    }),
+  ),
+}).annotate({ identifier: "Session.StartInput" })
 
 export interface Started extends Schema.Schema.Type<typeof Started> {}
 export const Started = Schema.Struct({ sessionId: ID, harness: Harness }).annotate({ identifier: "Session.Started" })

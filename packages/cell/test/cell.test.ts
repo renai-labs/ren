@@ -148,6 +148,19 @@ describe("cell contract", () => {
           })
         ).status,
       ).toBe(400)
+      expect(
+        (
+          await opened.brain("/ren/sessions", {
+            sessionId: opened.id,
+            harness: "opencode",
+            initialMessage: {
+              messageId: Session.MessageID.create(),
+              prompt: { text: "look", files: files[1] },
+              sender: { userId: "user_1" },
+            },
+          })
+        ).status,
+      ).toBe(400)
       expect(await opened.state()).toEqual(closed)
     })
 
@@ -176,9 +189,23 @@ describe("cell contract", () => {
 
     test("the deployed Brain API creates, sends and reports the same host under server authorization", async () => {
       const opened = await cell()
+      const initial = stub.script()
       expect(
-        (await opened.brain("/ren/sessions", { sessionId: opened.id, harness: "opencode", interactive: false })).status,
+        (
+          await opened.brain("/ren/sessions", {
+            sessionId: opened.id,
+            harness: "opencode",
+            interactive: false,
+            initialMessage: {
+              messageId: Session.MessageID.create(),
+              prompt: { text: `initial ${initial.marker}` },
+              sender: { userId: "user_1" },
+            },
+          })
+        ).status,
       ).toBe(200)
+      await opened.opencode.session.wait({ sessionID: opened.id })
+      expect(initial.calls).toHaveLength(1)
       const script = stub.script()
       const messageId = Session.MessageID.create()
       const sent = await opened.brain(`/ren/sessions/${opened.id}/messages`, {

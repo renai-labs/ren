@@ -15,8 +15,7 @@ const BrainGroup = HttpApiGroup.make("brain")
       OpenApi.annotations({
         identifier: "brain.start",
         summary: "Start a session",
-        description:
-          "Create the session in its harness, or re-apply the title, agent, model and instructions to a session that exists. The session id must be the token’s.",
+        description: "Create or reconfigure a session, optionally submitting an initial message.",
       }),
     ),
   )
@@ -30,8 +29,7 @@ const BrainGroup = HttpApiGroup.make("brain")
       OpenApi.annotations({
         identifier: "brain.send",
         summary: "Send a message",
-        description:
-          "Send a message to a started session. Answers once the harness accepts it, before the turn ends. A repeated message id runs no second turn.",
+        description: "Accept a message for a started session, deduplicated by message ID.",
       }),
     ),
   )
@@ -40,8 +38,7 @@ const BrainGroup = HttpApiGroup.make("brain")
       OpenApi.annotations({
         identifier: "brain.state",
         summary: "Read the host's state",
-        description:
-          "Whether the harness is open, how many requests hold it, since when the host waits on a running turn, and when it next reconciles. Never opens the harness.",
+        description: "Read host activity without opening the harness.",
       }),
     ),
   )
@@ -53,6 +50,6 @@ export const BrainApi = HttpApi.make("brain")
     OpenApi.annotations({
       title: "Ren Brain API",
       version: "0.0.0",
-      description: "What any host of a session serves to the Ren server. Internal, not part of the public API.",
+      description: "Internal API between Ren and session hosts.",
     }),
   )

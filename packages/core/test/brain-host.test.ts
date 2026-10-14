@@ -85,6 +85,40 @@ const died = (exit: Exit.Exit<unknown, unknown>) =>
 
 describe("BrainHost", () => {
   describe("start", () => {
+    it.live("starts a session and accepts its initial message in the same call", () =>
+      Effect.gen(function* () {
+        const sessionId = Session.ID.create()
+        const script = stub.script()
+        expect(
+          yield* start(sessionId, {
+            credentials: { stub: { type: "key", key: "initial-key" } },
+            initialMessage: {
+              messageId: Session.MessageID.create(),
+              prompt: { text: `initial ${script.marker}` },
+              sender: { userId: "user_1" },
+            },
+          }),
+        ).toEqual({ sessionId, harness: "opencode" })
+        expect((yield* Effect.promise(() => script.called())).authorization).toBe("Bearer initial-key")
+      }),
+    )
+
+    it.live("rejects oversized initial files before contacting or creating a session on the host", () =>
+      Effect.gen(function* () {
+        const failure = yield* start(Session.ID.create(), {
+          initialMessage: {
+            messageId: Session.MessageID.create(),
+            prompt: { text: "initial", files: [{ url: `data:text/plain,${"a".repeat(3001)}` }] },
+            sender: { userId: "user_1" },
+          },
+        }).pipe(
+          Effect.flip,
+          Effect.provide(host({ ...settings, CELL_URL: yield* closedPort, BRAIN_MAX_FILE_SIZE: "3kB" })),
+        )
+        expect(failure).toMatchObject({ _tag: "BrainRejectedError" })
+      }),
+    )
+
     it.live("creates the session in a fresh cell and answers its id and harness", () =>
       Effect.gen(function* () {
         const brain = yield* BrainHost.Service

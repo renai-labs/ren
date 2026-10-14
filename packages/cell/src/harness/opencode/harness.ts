@@ -83,13 +83,18 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   yield* Effect.forEach(changes.remove, (key) => client.session.instructions.entry.remove({ sessionID, key }), {
     discard: true,
   }).pipe(Effect.orDie)
+  if (input.initialMessage)
+    yield* send(client, store, {
+      ...input.initialMessage,
+      sessionId: input.sessionId,
+    }).pipe(Effect.catchTag("SessionNotStartedError", Effect.die))
   return { sessionId: input.sessionId, harness: "opencode" as const }
 })
 
 const send = Effect.fn("OpenCodeHarness.send")(function* (
   client: OpenCodeClient,
   store: Credential.Interface,
-  input: SendInput,
+  input: Omit<SendInput, "delivery"> & { readonly delivery?: SendInput["delivery"] },
 ) {
   const sessionID = Session.ID.make(input.sessionId)
   if (Option.isNone(yield* findSession(client, sessionID)))
