@@ -30,7 +30,7 @@ export const list = <
 >(
   definition: Named<Name, Plural> & { readonly list: { readonly input: Input; readonly page: Page } },
 ) => {
-  const identifier = `${definition.name}.list` as const
+  const identifier = Primitive.action(definition, "list")
   return HttpApiEndpoint.get(identifier, `/${definition.plural}`, {
     query: definition.list.input,
     success: definition.list.page,
@@ -46,7 +46,7 @@ export const list = <
 export const get = <const Name extends string, const Plural extends string, Info extends Schema.Top>(
   definition: Named<Name, Plural> & { readonly info: Info; readonly get: true },
 ) => {
-  const identifier = `${definition.name}.get` as const
+  const identifier = Primitive.action(definition, "get")
   return HttpApiEndpoint.get(identifier, `/${definition.plural}/:idOrSlug`, {
     params: { idOrSlug: Schema.String },
     success: definition.info,
@@ -68,7 +68,7 @@ export const create = <
 >(
   definition: Named<Name, Plural> & { readonly create: { readonly input: Input; readonly result: Result } },
 ) => {
-  const identifier = `${definition.name}.create` as const
+  const identifier = Primitive.action(definition, "create")
   return HttpApiEndpoint.post(identifier, `/${definition.plural}`, {
     payload: definition.create.input,
     success: definition.create.result,
@@ -91,7 +91,7 @@ export const update = <
 >(
   definition: Identified<Name, Plural, ID> & { readonly update: { readonly input: Input; readonly result: Result } },
 ) => {
-  const identifier = `${definition.name}.update` as const
+  const identifier = Primitive.action(definition, "update")
   return HttpApiEndpoint.patch(identifier, `/${definition.plural}/:id`, {
     params: { id: definition.id },
     payload: definition.update.input,
@@ -114,7 +114,7 @@ export const archive = <
 >(
   definition: Identified<Name, Plural, ID> & { readonly info: Info; readonly archive: true },
 ) => {
-  const identifier = `${definition.name}.archive` as const
+  const identifier = Primitive.action(definition, "archive")
   return HttpApiEndpoint.delete(identifier, `/${definition.plural}/:id`, {
     params: { id: definition.id },
     success: definition.info,
@@ -141,7 +141,7 @@ export const action = <
   },
   action: Action,
 ) => {
-  const identifier = `${definition.name}.${action}` as const
+  const identifier = Primitive.action(definition, action)
   return HttpApiEndpoint.post(identifier, `/${definition.plural}/:id/${action}`, {
     params: { id: definition.id },
     payload: definition.actions[action].input,

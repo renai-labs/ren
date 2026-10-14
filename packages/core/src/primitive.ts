@@ -4,6 +4,8 @@ import { Primitive } from "@ren/schema/primitive"
 import { Effect, Schema } from "effect"
 import { Actor } from "./actor.js"
 
+export const action = Primitive.action
+
 export class NotFound extends Schema.TaggedError<NotFound>()("Primitive.NotFound", { message: Schema.String }) {}
 
 export class Forbidden extends Schema.TaggedError<Forbidden>()("Primitive.Forbidden", { message: Schema.String }) {}
