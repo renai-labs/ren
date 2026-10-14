@@ -576,7 +576,7 @@ describe("Brain API", () => {
 
     test("a key's configuration reaches the provider's settings, as the answers to its key form do", async () => {
       const opened = await cell()
-      const baseURL = stub.cellUrl.replace(/\/v1$/, "/configured/v1")
+      const baseURL = Shared.modelUrl().replace(/\/v1$/, "/configured/v1")
       await opened.started({ credentials: { stub: { type: "key", key: "sk-configured", configuration: { baseURL } } } })
       const script = stub.script()
       await opened.send(`configured ${script.marker}`)

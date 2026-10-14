@@ -12,6 +12,8 @@ const state: { stub: StubModel.Server | undefined; celld: Promise<Celld.Instance
 
 export const stub = () => (state.stub ??= StubModel.start())
 
+export const modelUrl = () => (process.env.CELL_RUNTIME === "wrangler" ? stub().url : stub().cellUrl)
+
 export const vars = (baseURL = stub().cellUrl) => ({
   ...TestToken.vars,
   ALARM_INTERVAL_MS: "1000",
@@ -38,7 +40,7 @@ export const vars = (baseURL = stub().cellUrl) => ({
 })
 
 export const celld = () =>
-  (state.celld ??= process.env.CELL_RUNTIME === "wrangler" ? Wrangler.make(vars(stub().url)) : Celld.make(vars()))
+  (state.celld ??= process.env.CELL_RUNTIME === "wrangler" ? Wrangler.make(vars(modelUrl())) : Celld.make(vars()))
 
 export const dispose = async () => {
   await state.celld?.then((instance) => instance.dispose())
