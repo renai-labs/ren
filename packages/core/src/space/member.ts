@@ -175,7 +175,7 @@ export const layer = Layer.effect(
       const row = rows.at(0)
       if (!row) return
       if (row.archivedAt) return
-      const policyContext = { role, membershipId: row.membershipId }
+      const policyContext = { role, membershipId: row.membershipId, spaceId }
       if (!SpacePolicy.canAccess(policyContext)) return
       return policyContext
     })

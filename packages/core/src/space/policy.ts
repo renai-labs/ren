@@ -49,20 +49,76 @@ const isAdministrator = (policyContext: OrganizationContext) =>
 export const canAccess = (policyContext: SpaceAccessContext) =>
   Boolean(policyContext.role) && (isAdministrator(policyContext) || Boolean(policyContext.membershipId))
 
+const statements: readonly Policy.Statement[] = [
+  {
+    id: "space.organization-member",
+    scope: { kind: "global" },
+    effect: "allow",
+    subjects: [{ kind: "everyone" }],
+    actions: [Primitive.action(Space.definition, "list"), Primitive.action(Space.definition, "create")],
+    resources: [{ kind: "organization", id: "*" }],
+    when: ["organization-member"],
+  },
+  ...(["organization-administrator", "space-member"] as const).map((condition): Policy.Statement => ({
+    id: `space.${condition}`,
+    scope: { kind: "global" },
+    effect: "allow",
+    subjects: [{ kind: "everyone" }],
+    actions: [
+      Primitive.action(Space.definition, "get"),
+      Primitive.action(Space.definition, "update"),
+      Primitive.action(Space.definition, "archive"),
+    ],
+    resources: [{ kind: "space", id: "*" }],
+    when: ["organization-member", condition],
+  })),
+]
+
+export const facts = (policyContext: OrganizationContext & { readonly membershipId?: Space.MembershipID | null }) => ({
+  "organization-member": Boolean(policyContext.role),
+  "organization-administrator": isAdministrator(policyContext),
+  "space-member": Boolean(policyContext.membershipId),
+})
+
 const check = (request: Request): Policy.Decision => {
+  const scopes = [{ kind: "organization", id: request.who.organizationId }] as const
   switch (request.action) {
     case "space.list":
-      return request.policyContext.role ? Policy.allow : Policy.deny("Join the organization to see spaces.")
     case "space.create":
-      return request.policyContext.role ? Policy.allow : Policy.deny("Join the organization to create spaces.")
+      return Policy.evaluate(
+        statements,
+        {
+          who: request.who,
+          action: request.action,
+          resource: { kind: "organization", id: request.target },
+          scopes,
+          facts: facts(request.policyContext),
+        },
+        request.action === "space.list"
+          ? "Join the organization to see spaces."
+          : "Join the organization to create spaces.",
+      )
     case "space.get":
-      return canAccess(request.policyContext) ? Policy.allow : Policy.deny("Space not found.")
     case "space.update":
-      return canAccess(request.policyContext) ? Policy.allow : Policy.deny("You cannot edit this space.")
     case "space.archive":
-      return canAccess(request.policyContext) && !request.policyContext.isFirstOrganizationSpace
-        ? Policy.allow
-        : Policy.deny("This space cannot be archived.")
+      if (request.action === "space.archive" && request.policyContext.isFirstOrganizationSpace) {
+        return Policy.deny("This space cannot be archived.")
+      }
+      return Policy.evaluate(
+        statements,
+        {
+          who: request.who,
+          action: request.action,
+          resource: { kind: "space", id: request.target },
+          scopes: [...scopes, { kind: "space", id: request.target }],
+          facts: facts(request.policyContext),
+        },
+        {
+          "space.get": "Space not found.",
+          "space.update": "You cannot edit this space.",
+          "space.archive": "This space cannot be archived.",
+        }[request.action],
+      )
   }
 }
 

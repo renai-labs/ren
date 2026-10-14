@@ -63,6 +63,35 @@ const invite = Effect.fnUntraced(function* (
 })
 
 describe("Space", () => {
+  it.live("preserves the accountable user's access through delegated core calls", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const members = yield* SpaceMember.Service
+      const organizationId = yield* organization()
+      const ada = yield* user(organizationId)
+      const grace = yield* user(organizationId)
+      const delegated = {
+        ...grace,
+        delegation: { agentId: "assistant", sessionId: "space-test-session" },
+      }
+      const team = yield* spaces.create(ada, { name: "Team" })
+      expect((yield* Effect.flip(spaces.update(delegated, team.id, { name: "Hidden" })))._tag).toBe(
+        "Primitive.NotFound",
+      )
+      const membership = yield* members.create(ada, { spaceId: team.id, userId: grace.userId })
+      expect(yield* spaces.update(delegated, team.id, { name: "Shared" })).toMatchObject({
+        name: "Shared",
+        canUpdate: true,
+      })
+      yield* members.archive(ada, membership.id)
+      expect((yield* Effect.flip(spaces.get(delegated, team.id)))._tag).toBe("Primitive.NotFound")
+      expect((yield* spaces.list(delegated, page)).items.map((space) => space.id)).not.toContain(team.id)
+      expect((yield* Effect.flip(spaces.update(delegated, team.id, { name: "Revoked" })))._tag).toBe(
+        "Primitive.NotFound",
+      )
+    }),
+  )
+
   it.live("provisions one shared first space and a personal space per member", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service

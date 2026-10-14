@@ -65,6 +65,7 @@ export const layer = Layer.effect(
       (row: Row): Space.Info => {
         const policyContext = {
           role,
+          spaceId: row.space.id,
           membershipId: row.membershipId,
           isFirstOrganizationSpace: row.isFirstOrganizationSpace,
         }
@@ -107,9 +108,22 @@ export const layer = Layer.effect(
       role: string | undefined,
       where: SQL | undefined,
     ) {
-      const info = (yield* select(transaction, actor).where(where)).map(toInfo(actor, role)).at(0)
-      if (!info) return yield* notFound
-      return info
+      const row = (yield* select(transaction, actor).where(where)).at(0)
+      if (!row) return yield* notFound
+      if (
+        !policy.check({
+          who: actor,
+          action: Primitive.action(Space.definition, "get"),
+          target: row.space.id,
+          policyContext: {
+            role,
+            membershipId: row.membershipId,
+            isFirstOrganizationSpace: row.isFirstOrganizationSpace,
+          },
+        }).allowed
+      )
+        return yield* notFound
+      return toInfo(actor, role)(row)
     })
 
     const lock = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Space.ID) {

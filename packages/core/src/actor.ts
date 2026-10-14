@@ -5,4 +5,8 @@ import { Auth } from "@ren/schema/auth"
 export interface Info {
   readonly userId: Auth.UserID
   readonly organizationId: Auth.OrganizationID
+  readonly delegation?: {
+    readonly agentId: string
+    readonly sessionId: string
+  }
 }

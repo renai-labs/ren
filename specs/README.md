@@ -19,7 +19,7 @@ Generated clients follow the protocol `HttpApi`. Active work is tracked in [TODO
 
 ## Current contracts
 
-None yet.
+- [Policies](policies.md): statement semantics, delegated authority and the initial space-policy implementation.
 
 ## Decision records
 
