@@ -110,23 +110,25 @@ export const layer = Layer.effect(
         ),
       )
 
+    const validatePrompt = Effect.fn("BrainHost.validatePrompt")(function* (prompt: Session.Prompt) {
+      const large = prompt.files?.find((file) =>
+        ByteSize.isGreaterThan(ByteSize.bytes(Session.fileBytes(file.url)), config.maxFileSize),
+      )
+      if (large)
+        return yield* new BrainRejectedError({
+          message: `${large.name ?? "A file"} is larger than ${ByteSize.format(config.maxFileSize, { system: "decimal" })}`,
+        })
+      if ((prompt.files ?? []).reduce((bytes, file) => bytes + Session.fileBytes(file.url), 0) > Session.maxFileBytes)
+        return yield* new BrainRejectedError({ message: "A message’s files total more than 10 MB" })
+    })
+
     return Service.of({
       start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput) {
+        if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
         return yield* call(input.sessionId, brain.brain["brain.start"]({ payload: input }))
       }),
       send: Effect.fn("BrainHost.send")(function* (input: Session.SendInput) {
-        const large = input.prompt.files?.find((file) =>
-          ByteSize.isGreaterThan(ByteSize.bytes(Session.fileBytes(file.url)), config.maxFileSize),
-        )
-        if (large)
-          return yield* new BrainRejectedError({
-            message: `${large.name ?? "A file"} is larger than ${ByteSize.format(config.maxFileSize, { system: "decimal" })}`,
-          })
-        if (
-          (input.prompt.files ?? []).reduce((bytes, file) => bytes + Session.fileBytes(file.url), 0) >
-          Session.maxFileBytes
-        )
-          return yield* new BrainRejectedError({ message: "A message’s files total more than 10 MB" })
+        yield* validatePrompt(input.prompt)
         return yield* call(
           input.sessionId,
           brain.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),

@@ -12,6 +12,25 @@ Start and send mutations share a semaphore, so a rejected start's credential rol
 
 `app.version` identifies **Ren's cell package**, derived from this package's `package.json`. OpenCode dependency versions are pinned in the workspace catalog.
 
+## Starting with a message
+
+`BrainHost.start` and `POST /ren/sessions` accept an optional `initialMessage`:
+
+```json
+{
+  "sessionId": "ses_example",
+  "harness": "opencode",
+  "instructions": { "team": "Help the Ren team" },
+  "initialMessage": {
+    "messageId": "msg_example",
+    "prompt": { "text": "Summarize the work we should do next" },
+    "sender": { "userId": "user_1" }
+  }
+}
+```
+
+The message is submitted after applying the session configuration, credentials and instructions, using OpenCode’s default delivery. Start returns its existing `Started` response once the message is accepted, before the turn finishes. Reuse the same message ID on retries: an existing session with a missing message receives it, while an already accepted message is not submitted again. Initial files have the same limits as files in `send`.
+
 ## Limits
 
 - The shared Brain contract caps decoded files at 10 MB per file and 10 MB in total per message. Invalid payloads receive 400 before acquiring the harness.

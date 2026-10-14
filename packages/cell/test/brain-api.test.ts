@@ -62,6 +62,81 @@ it.live("start creates a session with Ren's identity, model, agent and instructi
   }),
 )
 
+it.live("start accepts its initial message after configuration and deduplicates concurrent and completed retries", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    const script = Shared.stub().script({ hold: true })
+    const input = {
+      instructions: { team: "Ren initial instructions" },
+      credentials: { stub: { type: "key", key: "initial-key" } },
+      interactive: false,
+      initialMessage: {
+        messageId: Session.MessageID.create(),
+        prompt: { text: `initial ${script.marker}` },
+        sender: { userId: "user_initial" },
+      },
+    } satisfies Partial<Session.StartInput>
+    expect(yield* Effect.all([brain.start(input), brain.start(input)], { concurrency: 2 })).toEqual([
+      { sessionId: brain.id, harness: "opencode" },
+      { sessionId: brain.id, harness: "opencode" },
+    ])
+    const call = yield* Effect.promise(() => script.called())
+    expect(call.system).toContain("Ren initial instructions")
+    expect(call.authorization).toBe("Bearer initial-key")
+    expect(call.tools).not.toContain("question")
+    script.release()
+    const sessionID = SessionID.make(brain.id)
+    yield* brain.opencode.session.wait({ sessionID })
+    const messages = (yield* brain.opencode.message.list({ sessionID })).data
+    expect(messages.filter((message) => message.type === "user")).toMatchObject([
+      { id: input.initialMessage.messageId, metadata: { userID: "user_initial" } },
+    ])
+    yield* brain.start(input)
+    yield* brain.opencode.session.wait({ sessionID })
+    expect((yield* brain.opencode.message.list({ sessionID })).data).toEqual(messages)
+    expect(script.calls).toHaveLength(1)
+  }),
+)
+
+it.live("a retried start can submit its initial message when the session already exists without that message", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    const script = Shared.stub().script()
+    const messageId = Session.MessageID.create()
+    yield* brain.start({
+      initialMessage: { messageId, prompt: { text: `initial ${script.marker}` }, sender: { userId: "user_1" } },
+    })
+    const sessionID = SessionID.make(brain.id)
+    yield* brain.opencode.session.wait({ sessionID })
+    expect(
+      (yield* brain.opencode.message.list({ sessionID })).data.filter((message) => String(message.id) === messageId),
+    ).toHaveLength(1)
+    expect(script.calls).toHaveLength(1)
+  }),
+)
+
+it.live("a rejected start submits no initial message", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    const script = Shared.stub().script()
+    expect(
+      yield* brain
+        .start({
+          agent: "missing",
+          initialMessage: {
+            messageId: Session.MessageID.create(),
+            prompt: { text: `initial ${script.marker}` },
+            sender: { userId: "user_1" },
+          },
+        })
+        .pipe(Effect.flip),
+    ).toBeInstanceOf(BrainRejectedError)
+    expect((yield* brain.opencode.session.list()).data).toEqual([])
+    expect(script.calls).toEqual([])
+  }),
+)
+
 it.live(
   "a repeated start updates title, agent, model and the whole instruction set without duplicating the session",
   () =>
