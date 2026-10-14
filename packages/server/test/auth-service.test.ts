@@ -199,6 +199,38 @@ describe("Auth", () => {
     }),
   )
 
+  it.live("lets owners and admins manage the organization and only owners delete it", () =>
+    Effect.gen(function* () {
+      const owner = cookie(yield* signUp("olga@example.org", "Olga"))
+      const organizationId = (yield* get("/get-session", owner)).session.activeOrganizationId
+      const join = Effect.fnUntraced(function* (email: string, role: string) {
+        const invitation = yield* json(yield* post("/organization/invite-member", { email, role }, owner))
+        const session = cookie(yield* signUp(email))
+        yield* post("/organization/accept-invitation", { invitationId: invitation.id }, session)
+        yield* post("/organization/set-active", { organizationId }, session)
+        return session
+      })
+      const admin = yield* join("adam@example.org", "admin")
+      const member = yield* join("mia@example.org", "member")
+      const status = Effect.fnUntraced(function* (path: string, body: unknown, session: string) {
+        return (yield* post(path, body, session)).status
+      })
+      const update = { organizationId, data: { name: "Renamed" } }
+      const invite = (email: string) => ({ organizationId, email, role: "member" })
+      expect(yield* status("/organization/update", update, member)).toBe(403)
+      expect(yield* status("/organization/invite-member", invite("x@example.org"), member)).toBe(403)
+      expect(yield* status("/organization/update", update, admin)).toBe(200)
+      expect(yield* status("/organization/invite-member", invite("y@example.org"), admin)).toBe(200)
+      const members = (yield* get(`/organization/list-members?organizationId=${organizationId}`, owner)).members
+      const memberId = members.find((each: { role: string }) => each.role === "member").id
+      const promote = { organizationId, memberId, role: "admin" }
+      expect(yield* status("/organization/update-member-role", promote, member)).toBe(403)
+      expect(yield* status("/organization/update-member-role", promote, admin)).toBe(200)
+      expect(yield* status("/organization/delete", { organizationId }, admin)).toBe(403)
+      expect(yield* status("/organization/delete", { organizationId }, owner)).toBe(200)
+    }),
+  )
+
   it.live("signs back in to the oldest organization", () =>
     Effect.gen(function* () {
       const session = cookie(yield* signUp("frances@example.org"))

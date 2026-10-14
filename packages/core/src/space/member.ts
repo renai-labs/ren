@@ -10,7 +10,8 @@ import { Cause, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { SqlError } from "effect/sql"
 import { Actor } from "../actor.js"
 import { Primitive } from "../primitive.js"
-import { SpacePermissions } from "./permissions.js"
+import { SpaceMemberPolicy } from "./member-policy.js"
+import { SpacePolicy } from "./policy.js"
 import { SpaceQueries } from "./queries.js"
 
 export type Interface = Primitive.Interface<typeof SpaceMember.definition>
@@ -18,8 +19,6 @@ export type Interface = Primitive.Interface<typeof SpaceMember.definition>
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SpaceMember") {}
 
 const notFound = new Primitive.NotFound({ message: "Space member not found." })
-
-const forbidden = new Primitive.Forbidden({ message: "You cannot manage the members of this space." })
 
 const selectMembers = (transaction: Database.Transaction) =>
   transaction
@@ -156,9 +155,9 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const permissions = yield* SpacePermissions.Service
+    const policy = yield* SpaceMemberPolicy.Service
 
-    const lockSpaceAccess = Effect.fnUntraced(function* (
+    const lockSpaceAccessContext = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       actor: Actor.Info,
       spaceId: Space.ID,
@@ -176,17 +175,25 @@ export const layer = Layer.effect(
       const row = rows.at(0)
       if (!row) return
       if (row.archivedAt) return
-      const access = { isAdministrator: permissions.isAdministrator(role), membershipId: row.membershipId }
-      if (!permissions.canRead(access)) return
-      return access
+      const policyContext = { role, membershipId: row.membershipId }
+      if (!SpacePolicy.canAccess(policyContext)) return
+      return policyContext
     })
 
     return Service.of({
       list: Effect.fn("SpaceMember.list")(function* (actor: Actor.Info, input: SpaceMember.ListInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const access = yield* lockSpaceAccess(transaction, actor, input.spaceId)
-            if (!access) {
+            const policyContext = yield* lockSpaceAccessContext(transaction, actor, input.spaceId)
+            if (
+              !policyContext ||
+              !policy.check({
+                who: actor,
+                action: Primitive.action(SpaceMember.definition, "list"),
+                target: input.spaceId,
+                policyContext,
+              }).allowed
+            ) {
               return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
             }
             const members = selectMembers(transaction)
@@ -226,9 +233,15 @@ export const layer = Layer.effect(
       create: Effect.fn("SpaceMember.create")(function* (actor: Actor.Info, input: SpaceMember.CreateInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const access = yield* lockSpaceAccess(transaction, actor, input.spaceId)
-            if (!access) return yield* notFound
-            if (!permissions.canAddMember(access)) return yield* forbidden
+            const policyContext = yield* lockSpaceAccessContext(transaction, actor, input.spaceId)
+            if (!policyContext) return yield* notFound
+            const decision = policy.check({
+              who: actor,
+              action: Primitive.action(SpaceMember.definition, "create"),
+              target: input.spaceId,
+              policyContext,
+            })
+            if (!decision.allowed) return yield* new Primitive.Forbidden({ message: decision.reason })
             if ("userId" in input) return yield* addMember(transaction, actor, input.spaceId, input.userId)
             return yield* addPendingMember(transaction, actor, input.spaceId, input.email)
           }),
@@ -238,10 +251,16 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const member = yield* findMember(transaction, id)
-            const access = yield* lockSpaceAccess(transaction, actor, member.spaceId)
-            if (!access) return yield* notFound
+            const policyContext = yield* lockSpaceAccessContext(transaction, actor, member.spaceId)
+            if (!policyContext) return yield* notFound
             if (member.archivedAt) return member
-            if (!permissions.canRemoveMember(access)) return yield* forbidden
+            const decision = policy.check({
+              who: actor,
+              action: Primitive.action(SpaceMember.definition, "archive"),
+              target: member.id,
+              policyContext,
+            })
+            if (!decision.allowed) return yield* new Primitive.Forbidden({ message: decision.reason })
             const table =
               member.status === "active" ? Database.Schema.space_member : Database.Schema.space_pending_member
             yield* transaction

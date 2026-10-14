@@ -41,4 +41,19 @@ interface Checked<D extends Definition> {
   readonly actions?: { readonly [Name in keyof D["actions"]]: { readonly result: Result<D["info"]> } }
 }
 
+type Operation<D extends { readonly name: string }> =
+  | Extract<keyof D, "list" | "get" | "create" | "update" | "archive">
+  | ("actions" extends keyof D ? keyof D["actions" & keyof D] & string : never)
+
+export type Action<D extends Definition> = `${D["name"]}.${Operation<D>}`
+
+export const action = <
+  const Name extends string,
+  const D extends { readonly name: Name },
+  const O extends Operation<D>,
+>(
+  definition: D & { readonly name: Name },
+  operation: O,
+) => `${definition.name}.${operation}` as const
+
 export const define = <const D extends Definition>(definition: D & Checked<D>): D => definition

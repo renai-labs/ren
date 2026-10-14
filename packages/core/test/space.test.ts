@@ -6,13 +6,14 @@ import { and, eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
-import { SpacePermissions } from "../src/space/permissions.js"
+import { SpaceMemberPolicy } from "../src/space/member-policy.js"
+import { SpacePolicy } from "../src/space/policy.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
 
 const it = testEffect(
   Layer.mergeAll(Space.layer, SpaceMember.layer, SpaceProvisioning.layer).pipe(
-    Layer.provideMerge(SpacePermissions.layer),
+    Layer.provideMerge(Layer.mergeAll(SpacePolicy.layer, SpaceMemberPolicy.layer)),
     Layer.provideMerge(Testing.layer),
   ),
 )
@@ -85,6 +86,13 @@ describe("Space", () => {
       const admin = yield* user(organizationId, "admin")
       const team = yield* spaces.create(ada, { name: "Team" })
       expect(team.canUpdate).toBe(true)
+      expect(yield* spaces.get(admin, team.id)).toMatchObject({
+        membershipId: null,
+        canUpdate: true,
+        canAddMember: true,
+        canRemoveMember: true,
+        canArchive: true,
+      })
       expect((yield* Effect.flip(spaces.get(grace, team.id)))._tag).toBe("Primitive.NotFound")
       expect((yield* spaces.list(grace, page)).items.map((space) => space.id)).not.toContain(team.id)
       const managed = yield* spaces.update(admin, team.id, { description: "Shared" })
@@ -101,16 +109,74 @@ describe("Space", () => {
       const spaces = yield* Space.Service
       const organizationId = yield* organization()
       const ada = yield* user(organizationId)
+      const owner = yield* user(organizationId, "owner")
       const general = (yield* spaces.list(ada, page)).items.at(0)
       if (!general) return yield* Effect.die(new Error("Expected a general space"))
       expect(general.canArchive).toBe(false)
-      const blocked = yield* Effect.flip(spaces.archive(ada, general.id))
-      expect(blocked._tag).toBe("Primitive.Forbidden")
+      expect((yield* Effect.flip(spaces.archive(ada, general.id)))._tag).toBe("Primitive.Forbidden")
+      expect((yield* spaces.get(owner, general.id)).canArchive).toBe(false)
+      expect(yield* Effect.flip(spaces.archive(owner, general.id))).toMatchObject({
+        _tag: "Primitive.Forbidden",
+        message: "This space cannot be archived.",
+      })
       const team = yield* spaces.create(ada, { name: "Team" })
       const archived = yield* spaces.archive(ada, team.id)
       expect(archived.archivedAt).not.toBeNull()
       expect(yield* spaces.archive(ada, team.id)).toEqual(archived)
       expect((yield* Effect.flip(spaces.get(ada, team.id)))._tag).toBe("Primitive.NotFound")
+    }),
+  )
+
+  it.live("hides spaces from non-members and other organizations on every operation", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const members = yield* SpaceMember.Service
+      const organizationId = yield* organization()
+      const ada = yield* user(organizationId)
+      const grace = yield* user(organizationId)
+      const outsider = yield* user(yield* organization(), "owner")
+      const team = yield* spaces.create(ada, { name: "Team" })
+      const added = yield* members.create(ada, { spaceId: team.id, userId: grace.userId })
+      yield* members.archive(ada, added.id)
+      const withoutOrganizationRole = { userId: outsider.userId, organizationId }
+      expect(yield* Effect.flip(spaces.create(withoutOrganizationRole, { name: "Intruder" }))).toMatchObject({
+        _tag: "Primitive.Forbidden",
+        message: "Join the organization to create spaces.",
+      })
+      expect((yield* spaces.list(withoutOrganizationRole, page)).items).toEqual([])
+      const hidden = [grace, outsider].flatMap((actor): Effect.Effect<unknown, { readonly _tag: string }>[] => [
+        spaces.get(actor, team.id),
+        spaces.update(actor, team.id, { name: "Taken" }),
+        spaces.archive(actor, team.id),
+        members.create(actor, { spaceId: team.id, userId: actor.userId }),
+        members.archive(actor, added.id),
+      ])
+      const failures = yield* Effect.forEach(hidden, (operation) => Effect.flip(operation))
+      expect(failures.map((failure) => failure._tag)).toEqual(hidden.map(() => "Primitive.NotFound"))
+      for (const actor of [grace, outsider]) {
+        expect(yield* members.list(actor, { ...page, spaceId: team.id })).toEqual({ ...page, items: [], total: 0 })
+      }
+      expect((yield* spaces.list(outsider, page)).items.map((space) => space.id)).not.toContain(team.id)
+    }),
+  )
+
+  it.live("rejects updates to archived spaces and new members in them, but repeats the archive", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const members = yield* SpaceMember.Service
+      const organizationId = yield* organization()
+      const ada = yield* user(organizationId)
+      const grace = yield* user(organizationId)
+      const admin = yield* user(organizationId, "admin")
+      const team = yield* spaces.create(ada, { name: "Team" })
+      const archived = yield* spaces.archive(ada, team.id)
+      expect(yield* spaces.archive(admin, team.id)).toMatchObject({ id: team.id, archivedAt: archived.archivedAt })
+      for (const actor of [ada, admin]) {
+        expect((yield* Effect.flip(spaces.update(actor, team.id, { name: "Late" })))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(members.create(actor, { spaceId: team.id, userId: grace.userId })))._tag).toBe(
+          "Primitive.NotFound",
+        )
+      }
     }),
   )
 })

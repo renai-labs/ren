@@ -14,6 +14,7 @@ import { bearer, emailOTP, organization } from "better-auth/plugins"
 import { Effect, Option, Schema } from "effect"
 import { AuthEmail } from "./auth-email.js"
 import { DefaultOrganization } from "./default-organization.js"
+import { OrganizationAccess } from "./organization-access.js"
 
 export interface Input {
   readonly database: AuthDatabase.Interface["db"]
@@ -153,6 +154,8 @@ const guardAccountCreation =
 export const make = (input: Input) => {
   const appURL = `${input.appURL.replace(/\/$/, "")}/`
   const organizationPlugin = organization({
+    ac: OrganizationAccess.control,
+    roles: OrganizationAccess.roles,
     invitationExpiresIn: 60 * 60 * 24 * 7,
     requireEmailVerificationOnInvitation: false,
     organizationHooks: {
