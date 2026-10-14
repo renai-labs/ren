@@ -574,6 +574,18 @@ describe("Brain API", () => {
       expect(await turn(opened)).toBe("Bearer sk-second")
     })
 
+    test("a key's configuration reaches the provider's settings, as the answers to its key form do", async () => {
+      const opened = await cell()
+      const baseURL = stub.cellUrl.replace(/\/v1$/, "/configured/v1")
+      await opened.started({ credentials: { stub: { type: "key", key: "sk-configured", configuration: { baseURL } } } })
+      const script = stub.script()
+      await opened.send(`configured ${script.marker}`)
+      await opened.wait()
+      expect(script.calls.map((call) => [call.path, call.authorization])).toEqual([
+        ["/configured/v1/chat/completions", "Bearer sk-configured"],
+      ])
+    })
+
     test("a repeated start with Ren's older copy of a managed key keeps the cell's newer one", async () => {
       const opened = await cell()
       const older = { credentials: { stub: managed("sk-older", Date.now() + hour) } }
