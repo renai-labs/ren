@@ -3,8 +3,8 @@ import { Reconcile } from "../src/reconcile.js"
 
 const parkAfterMs = 600_000
 
-const work = (fields: Partial<Reconcile.Session>) =>
-  Reconcile.work({ active: false, inbox: [], unfinished: false, askedMs: undefined, ...fields }, parkAfterMs)
+const work = (fields: Partial<Reconcile.Snapshot>) =>
+  Reconcile.work({ active: false, inbox: [], unfinished: false, questionAgeMs: undefined, ...fields }, parkAfterMs)
 
 const user = (id: string): Reconcile.Item => ({ id, type: "user" })
 
@@ -49,14 +49,14 @@ describe("reconcile work", () => {
   })
 
   test("a session waiting on a question is running until the question has waited the park time", () => {
-    expect([0, parkAfterMs - 1].map((askedMs) => work({ active: true, askedMs }))).toEqual([
+    expect([0, parkAfterMs - 1].map((questionAgeMs) => work({ active: true, questionAgeMs }))).toEqual([
       { _tag: "Running" },
       { _tag: "Running" },
     ])
   })
 
   test("a question that has waited the park time or longer is unanswered", () => {
-    expect([parkAfterMs, parkAfterMs * 10].map((askedMs) => work({ active: true, askedMs }))).toEqual([
+    expect([parkAfterMs, parkAfterMs * 10].map((questionAgeMs) => work({ active: true, questionAgeMs }))).toEqual([
       { _tag: "Unanswered" },
       { _tag: "Unanswered" },
     ])

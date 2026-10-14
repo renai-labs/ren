@@ -94,10 +94,19 @@ export const layer = Layer.effect(
             HttpClientError.isHttpClientError(error) ||
             Schema.isSchemaError(error) ||
             error instanceof ForbiddenError,
-          (error) =>
-            Cause.isTimeoutError(error) || (HttpClientError.isHttpClientError(error) && unavailable(error))
+          (error): Effect.Effect<never, BrainRejectedError | BrainUnavailable> => {
+            if (
+              HttpClientError.isHttpClientError(error) &&
+              "response" in error.reason &&
+              error.reason.response.status === 413
+            )
+              return Effect.fail(
+                new BrainRejectedError({ message: "The host rejected the request because its body is too large" }),
+              )
+            return Cause.isTimeoutError(error) || (HttpClientError.isHttpClientError(error) && unavailable(error))
               ? Effect.fail(new BrainUnavailable({ cause: error }))
-              : Effect.die(error),
+              : Effect.die(error)
+          },
         ),
       )
 
@@ -106,16 +115,18 @@ export const layer = Layer.effect(
         return yield* call(input.sessionId, brain.brain["brain.start"]({ payload: input }))
       }),
       send: Effect.fn("BrainHost.send")(function* (input: Session.SendInput) {
-        const large = input.prompt.files?.find((file) => {
-          const data = file.url.slice(file.url.indexOf(",") + 1)
-          const base64 = /;base64,/i.test(file.url.slice(0, file.url.indexOf(",") + 1))
-          const bytes = base64 ? Math.floor((data.replace(/=+$/, "").length * 3) / 4) : data.length
-          return ByteSize.isGreaterThan(ByteSize.bytes(bytes), config.maxFileSize)
-        })
+        const large = input.prompt.files?.find((file) =>
+          ByteSize.isGreaterThan(ByteSize.bytes(Session.fileBytes(file.url)), config.maxFileSize),
+        )
         if (large)
           return yield* new BrainRejectedError({
             message: `${large.name ?? "A file"} is larger than ${ByteSize.format(config.maxFileSize, { system: "decimal" })}`,
           })
+        if (
+          (input.prompt.files ?? []).reduce((bytes, file) => bytes + Session.fileBytes(file.url), 0) >
+          Session.maxFileBytes
+        )
+          return yield* new BrainRejectedError({ message: "A message’s files total more than 10 MB" })
         return yield* call(
           input.sessionId,
           brain.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),

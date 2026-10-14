@@ -35,6 +35,16 @@ const BrainGroup = HttpApiGroup.make("brain")
       }),
     ),
   )
+  .add(
+    HttpApiEndpoint.get("brain.state", "/ren/state", { success: Session.HostState }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "brain.state",
+        summary: "Read the host's state",
+        description:
+          "Whether the harness is open, how many requests hold it, since when the host waits on a running turn, and when it next reconciles. Never opens the harness.",
+      }),
+    ),
+  )
   .annotateMerge(OpenApi.annotations({ title: "brain" }))
 
 export const BrainApi = HttpApi.make("brain")

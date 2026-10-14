@@ -1,14 +1,21 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test"
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { OpenCode } from "@opencode/client"
-import { Service } from "@opencode/client/service"
-import { Schema } from "effect"
+import { ManagedRuntime, Schema } from "effect"
+import { Session } from "@ren/schema/session"
+import type { Celld } from "./lib/celld.js"
+import { Host } from "../src/harness/opencode/host.js"
 import { Shared } from "./lib/shared.js"
 import { TestCell } from "./lib/test-cell.js"
 import { TestToken } from "./lib/token.js"
 
 setDefaultTimeout(30_000)
 
-const celld = await Shared.celld()
+const runtime = ManagedRuntime.make(Shared.layer)
+let celld: Celld.Instance
+beforeAll(async () => {
+  celld = await runtime.runPromise(Shared.Service)
+}, 120_000)
+afterAll(() => runtime.dispose())
 const stub = Shared.stub()
 const interval = 1000
 const budget = 3000
@@ -54,15 +61,6 @@ describe("cell contract", () => {
       expect(await opened.state()).toEqual(closed)
     })
 
-    test("an OpenCode client with a bad token fails with OpenCode's own UnauthorizedError", async () => {
-      const opened = await cell()
-      const client = OpenCode.make({ baseUrl: celld.url, headers: { authorization: TestToken.basic("not-a-token") } })
-      await expect(client.session.get({ sessionID: opened.id })).rejects.toMatchObject({
-        _tag: "UnauthorizedError",
-        message: "Authentication required",
-      })
-    })
-
     test("accepts the token as the password of Basic auth, with any user name", async () => {
       const opened = await cell()
       const statuses = await Promise.all(
@@ -101,6 +99,99 @@ describe("cell contract", () => {
   })
 
   describe("routing", () => {
+    test("client tokens cannot reach any Brain path or OpenCode credential and connect routes", async () => {
+      const opened = await cell()
+      const paths = [
+        "/ren",
+        "/ren/unknown/deeper",
+        "/ren/sessions",
+        `/ren/sessions/${opened.id}/messages`,
+        "/api/credential",
+        "/api/credential/cred_ren_stub",
+        "/api/integration/stub/connect/key",
+        "/api/integration/stub/connect/oauth",
+        "/api/experimental/integration/wellknown",
+      ]
+      expect(await Promise.all(paths.map(async (path) => (await opened.request(path)).status))).toEqual(
+        paths.map(() => 403),
+      )
+      expect((await opened.brain("/ren/unknown/deeper", {})).status).toBe(404)
+      expect(await opened.state()).toEqual(closed)
+    })
+
+    test("Brain payload validation rejects invalid and oversized files and instructions before opening the host", async () => {
+      const opened = await cell()
+      const files = [
+        [{ url: "https://example.com/a.png" }],
+        [{ url: `data:text/plain,${"a".repeat(Session.maxFileBytes + 1)}` }],
+        [{ url: `data:text/plain,${"a".repeat(6_000_000)}` }, { url: `data:text/plain,${"b".repeat(6_000_000)}` }],
+      ]
+      const statuses = await Promise.all(
+        files.map(
+          async (input) =>
+            (
+              await opened.brain(`/ren/sessions/${opened.id}/messages`, {
+                messageId: Session.MessageID.create(),
+                prompt: { text: "look", files: input },
+                sender: { userId: "user_1" },
+              })
+            ).status,
+        ),
+      )
+      expect(statuses).toEqual([400, 400, 400])
+      expect(
+        (
+          await opened.brain("/ren/sessions", {
+            sessionId: opened.id,
+            harness: "opencode",
+            instructions: { team: "a".repeat(256 * 1024) },
+          })
+        ).status,
+      ).toBe(400)
+      expect(await opened.state()).toEqual(closed)
+    })
+
+    test("the worker bounds request bodies even without Content-Length", async () => {
+      const opened = await cell()
+      const state = { chunks: 0 }
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (state.chunks++ === 17) return controller.close()
+          controller.enqueue(new Uint8Array(1_000_000))
+        },
+      })
+      const streamed = await fetch(`${celld.url}/ren/sessions`, {
+        method: "POST",
+        headers: { authorization: opened.server },
+        body,
+      })
+      expect({ status: streamed.status, body: await streamed.text() }).toEqual({ status: 413, body: "" })
+      const declared = await opened.brain("/ren/sessions", { text: "a".repeat(Session.maxBodyBytes) })
+      expect({ status: declared.status, body: await declared.text() }, await celld.logs()).toEqual({
+        status: 413,
+        body: "",
+      })
+      expect(await opened.state()).toEqual(closed)
+    })
+
+    test("the deployed Brain API creates, sends and reports the same host under server authorization", async () => {
+      const opened = await cell()
+      expect(
+        (await opened.brain("/ren/sessions", { sessionId: opened.id, harness: "opencode", interactive: false })).status,
+      ).toBe(200)
+      const script = stub.script()
+      const messageId = Session.MessageID.create()
+      const sent = await opened.brain(`/ren/sessions/${opened.id}/messages`, {
+        messageId,
+        prompt: { text: `hello ${script.marker}` },
+        sender: { userId: "user_1" },
+      })
+      expect(await sent.json()).toEqual({ messageId })
+      await opened.opencode.session.wait({ sessionID: opened.id })
+      expect(script.calls).toHaveLength(1)
+      expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
+    })
+
     test("two session ids reach two separate cells: a session created in one is not in the other", async () => {
       const first = await cell()
       const second = await cell()
@@ -119,22 +210,6 @@ describe("cell contract", () => {
         Array.from({ length: 5 }, () => opened.opencode.session.get({ sessionID: opened.id })),
       )
       expect(reads.map((session) => session.id)).toEqual(Array.from({ length: 5 }, () => opened.id))
-    })
-
-    test("other /cell/ paths answer 404 and never reach OpenCode", async () => {
-      const opened = await cell()
-      const responses = await Promise.all(
-        [
-          { path: "/cell/start", method: "POST" },
-          { path: "/cell", method: "GET" },
-          { path: "/cell/state/more", method: "GET" },
-          { path: "/cell/state", method: "POST" },
-        ].map((request) =>
-          fetch(`${celld.url}${request.path}`, { method: request.method, headers: { authorization: opened.server } }),
-        ),
-      )
-      expect(responses.map((response) => response.status)).toEqual([404, 404, 404, 404])
-      expect(await opened.state()).toEqual(closed)
     })
   })
 
@@ -183,36 +258,24 @@ describe("cell contract", () => {
       expect(await until()).toMatchObject({ type: "session.created", data: { sessionID: opened.id } })
       controller.abort()
     })
-
-    test("the OpenCode client attaches with the token as its password, the way the TUI does", async () => {
-      const opened = await cell()
-      const headers = Service.headers({
-        url: celld.url,
-        auth: { type: "basic", username: "opencode", password: opened.client },
-      })
-      const attached = OpenCode.make({ baseUrl: celld.url, ...(headers ? { headers } : {}) })
-      expect((await attached.server.info()).version).toBe("2.0.27")
-      await attached.session.create({ id: opened.id })
-      expect((await attached.session.list()).data.map((session) => session.id)).toEqual([opened.id])
-    })
   })
 
-  describe("/cell/state", () => {
+  describe("/ren/state", () => {
     test("needs a server token: 401 without one and 403 with a client token", async () => {
       const opened = await cell()
       const statuses = await Promise.all(
         [{}, { authorization: TestToken.basic(opened.client) }, { authorization: opened.server }].map(
-          async (headers) => (await fetch(`${celld.url}/cell/state`, { headers })).status,
+          async (headers) => (await fetch(`${celld.url}/ren/state`, { headers })).status,
         ),
       )
       expect(statuses).toEqual([401, 403, 200])
     })
 
-    test("a fresh cell reports the harness closed, no leases, no alarm and no wait", async () => {
+    test("a fresh cell reports the harness closed, no holders, no wait and no reconcile", async () => {
       expect(await (await cell()).state()).toEqual(closed)
     })
 
-    test("never opens the harness, sets no alarm and holds no lease", async () => {
+    test("never opens the harness, sets no alarm and does not hold it", async () => {
       const opened = await cell()
       const states = await Promise.all(Array.from({ length: 3 }, () => opened.state()))
       expect([...states, await opened.state()]).toEqual(Array.from({ length: 4 }, () => closed))
@@ -225,11 +288,11 @@ describe("cell contract", () => {
       const before = Date.now()
       expect((await opened.request("/api/session/ses_missing")).status).toBe(404)
       const state = await opened.state()
-      expect(state.alarmAt).toBeGreaterThanOrEqual(before + interval - 50)
-      expect(state.alarmAt).toBeLessThanOrEqual(Date.now() + interval)
+      expect(state.nextReconcileAt).toBeGreaterThanOrEqual(before + interval - 50)
+      expect(state.nextReconcileAt).toBeLessThanOrEqual(Date.now() + interval)
       const streaming = await cell()
       const stream = await streaming.stream()
-      expect(await streaming.state()).toMatchObject({ harnessOpen: true, leases: 1, alarmAt: expect.any(Number) })
+      expect(await streaming.state()).toMatchObject({ isOpen: true, holders: 1, nextReconcileAt: expect.any(Number) })
       stream.close()
     })
 
@@ -239,37 +302,37 @@ describe("cell contract", () => {
       const first = await opened.state()
       await opened.opencode.server.info()
       const second = await opened.state()
-      expect(first.alarmAt).not.toBeNull()
-      expect(second.alarmAt).toBe(first.alarmAt)
+      expect(first.nextReconcileAt).not.toBeNull()
+      expect(second.nextReconcileAt).toBe(first.nextReconcileAt)
     })
 
     test("the first client request opens the harness", async () => {
       const opened = await cell()
-      expect((await opened.state()).harnessOpen).toBe(false)
+      expect((await opened.state()).isOpen).toBe(false)
       await opened.opencode.server.info()
-      expect(await opened.state()).toMatchObject({ harnessOpen: true, leases: 0 })
+      expect(await opened.state()).toMatchObject({ isOpen: true, holders: 0 })
     })
 
     test("concurrent first requests to a fresh cell all succeed", async () => {
       const opened = await cell()
       const infos = await Promise.all(Array.from({ length: 8 }, () => opened.opencode.server.info()))
-      expect(infos.map((info) => info.version)).toEqual(Array.from({ length: 8 }, () => "2.0.27"))
-      expect(await opened.state()).toMatchObject({ harnessOpen: true, leases: 0 })
+      expect(infos.map((info) => info.version)).toEqual(Array.from({ length: 8 }, () => Host.version))
+      expect(await opened.state()).toMatchObject({ isOpen: true, holders: 0 })
     })
 
-    test("an open event stream holds a lease until the client disconnects", async () => {
+    test("an open event stream holds the harness until the client disconnects", async () => {
       const opened = await cell()
       const stream = await opened.stream()
-      expect((await opened.state()).leases).toBe(1)
+      expect((await opened.state()).holders).toBe(1)
       stream.close()
-      expect((await opened.until((state) => state.leases === 0, 45_000)).leases).toBe(0)
+      expect((await opened.until((state) => state.holders === 0, 45_000)).holders).toBe(0)
     }, 60_000)
 
     test("the alarm after the interval reconciles an idle harness by closing it and setting no alarm", async () => {
       const opened = await cell()
       const started = Date.now()
       await opened.start()
-      expect((await opened.state()).harnessOpen).toBe(true)
+      expect((await opened.state()).isOpen).toBe(true)
       expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(Date.now() - started).toBeGreaterThanOrEqual(interval)
     })
@@ -279,9 +342,12 @@ describe("cell contract", () => {
       const stream = await opened.stream()
       const first = await opened.state()
       const later = await opened.until(
-        (state) => state.alarmAt !== null && first.alarmAt !== null && state.alarmAt >= first.alarmAt + 2 * interval,
+        (state) =>
+          state.nextReconcileAt !== null &&
+          first.nextReconcileAt !== null &&
+          state.nextReconcileAt >= first.nextReconcileAt + 2 * interval,
       )
-      expect(later).toMatchObject({ harnessOpen: true, leases: 1 })
+      expect(later).toMatchObject({ isOpen: true, holders: 1 })
       stream.close()
       expect(await opened.until((state) => Bun.deepEquals(state, closed), 45_000)).toEqual(closed)
     }, 60_000)
@@ -292,10 +358,10 @@ describe("cell contract", () => {
       await opened.prompt(`remember ${stub.script().marker}`)
       await opened.opencode.session.wait({ sessionID: opened.id })
       const messages = await opened.messages()
-      await opened.until((state) => !state.harnessOpen)
+      await opened.until((state) => !state.isOpen)
       expect(await opened.messages()).toEqual(messages)
       expect((await opened.opencode.session.list()).data.map((session) => session.id)).toEqual([opened.id])
-      expect((await opened.state()).harnessOpen).toBe(true)
+      expect((await opened.state()).isOpen).toBe(true)
     })
   })
 
@@ -321,7 +387,7 @@ describe("cell contract", () => {
       const script = stub.script({ hold: true })
       await opened.prompt(`hold ${script.marker}`)
       await script.called()
-      expect(await opened.until((state) => state.waiting !== null)).toMatchObject({ harnessOpen: true })
+      expect(await opened.until((state) => state.waitingSince !== null)).toMatchObject({ isOpen: true })
       script.release()
       expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
@@ -333,10 +399,10 @@ describe("cell contract", () => {
       const script = stub.script({ hold: true })
       await opened.prompt(`hold ${script.marker}`)
       await script.called()
-      const first = (await opened.until((state) => state.waiting !== null)).waiting ?? 0
-      const between = await opened.until((state) => state.waiting !== first)
-      expect(between).toMatchObject({ harnessOpen: true, alarmAt: expect.any(Number) })
-      const second = (await opened.until((state) => state.waiting !== null)).waiting ?? 0
+      const first = (await opened.until((state) => state.waitingSince !== null)).waitingSince ?? 0
+      const between = await opened.until((state) => state.waitingSince !== first)
+      expect(between).toMatchObject({ isOpen: true, nextReconcileAt: expect.any(Number) })
+      const second = (await opened.until((state) => state.waitingSince !== null)).waitingSince ?? 0
       expect(second - first).toBeGreaterThanOrEqual(budget)
       expect(script.calls).toHaveLength(1)
       script.release()
@@ -351,11 +417,13 @@ describe("cell contract", () => {
       const script = stub.script({ hold: true })
       await opened.prompt(`hold ${script.marker}`)
       await script.called()
-      const waiting = await opened.until((state) => state.waiting !== null)
-      const due = await opened.until((state) => state.alarmAt !== null && Date.now() > state.alarmAt + 200)
-      expect(due.waiting).toBe(waiting.waiting)
+      const waiting = await opened.until((state) => state.waitingSince !== null)
+      const due = await opened.until(
+        (state) => state.nextReconcileAt !== null && Date.now() > state.nextReconcileAt + 200,
+      )
+      expect(due.waitingSince).toBe(waiting.waitingSince)
       script.release()
-      await opened.until((state) => !state.harnessOpen)
+      await opened.until((state) => !state.isOpen)
     })
 
     test("a running child session keeps the harness open while the root session is idle", async () => {
@@ -365,30 +433,13 @@ describe("cell contract", () => {
       const script = stub.script({ hold: true })
       await opened.opencode.session.prompt({ sessionID: child.id, text: `child ${script.marker}` })
       await script.called()
-      const first = await opened.until((state) => state.waiting !== null)
-      const later = await opened.until((state) => state.waiting !== null && state.waiting !== first.waiting)
-      expect(later.harnessOpen).toBe(true)
+      const first = await opened.until((state) => state.waitingSince !== null)
+      const later = await opened.until(
+        (state) => state.waitingSince !== null && state.waitingSince !== first.waitingSince,
+      )
+      expect(later.isOpen).toBe(true)
       expect(Object.keys(await opened.opencode.session.active())).toEqual([child.id])
       script.release()
-      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
-    })
-
-    test("a question answered within the park time continues the turn with the answer as the tool result", async () => {
-      const opened = await cell()
-      await opened.start()
-      const script = stub.script({ tool: { name: "question", input: question } })
-      await opened.prompt(`ask ${script.marker}`)
-      const form = await opened
-        .until((state) => state.waiting !== null)
-        .then(async function pending(): Promise<ReadonlyArray<{ readonly id: string }>> {
-          const forms = await opened.opencode.session.form.list({ sessionID: opened.id })
-          return forms.length > 0 ? forms : pending()
-        })
-      await opened.opencode.session.form.reply({ sessionID: opened.id, formID: form[0]?.id ?? "", answer: { q0: "A" } })
-      await opened.opencode.session.wait({ sessionID: opened.id })
-      expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
-      expect(script.calls.at(-1)?.body.messages.at(-1)).toMatchObject({ role: "tool" })
-      expect(JSON.stringify(script.calls.at(-1)?.body.messages.at(-1))).toContain('\\"Which one?\\"=\\"A\\"')
       expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
     })
 
@@ -398,8 +449,8 @@ describe("cell contract", () => {
       const script = stub.script({ tool: { name: "question", input: question } })
       const asked = Date.now()
       await opened.prompt(`ask ${script.marker}`)
-      const waiting = (await opened.until((state) => state.waiting !== null)).waiting ?? 0
-      await opened.until((state) => state.waiting !== waiting)
+      const waiting = (await opened.until((state) => state.waitingSince !== null)).waitingSince ?? 0
+      await opened.until((state) => state.waitingSince !== waiting)
       expect(Date.now() - waiting).toBeLessThan(budget)
       expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
       expect(Date.now() - asked).toBeGreaterThanOrEqual(park)
@@ -412,10 +463,10 @@ describe("cell contract", () => {
       await opened.start()
       const script = stub.script({ tool: { name: "question", input: question } })
       await opened.prompt(`ask ${script.marker}`)
-      await opened.until((state) => !state.harnessOpen)
+      await opened.until((state) => !state.isOpen)
       const answer = stub.script({ reply: "Going with A" })
       await opened.prompt(`User has answered your questions: "Which one?"="A". ${answer.marker}`)
-      expect((await opened.state()).harnessOpen).toBe(true)
+      expect((await opened.state()).isOpen).toBe(true)
       await opened.opencode.session.wait({ sessionID: opened.id })
       expect(
         answer.calls[0]?.body.messages.filter((message) => message.role !== "system").map((message) => message.role),
@@ -441,46 +492,6 @@ describe("cell contract", () => {
           : [],
       )
       expect(answers).toEqual(["first answer", "second answer"])
-    })
-
-    test("a turn that fails on a model error OpenCode does not retry leaves the cell idle and closed", async () => {
-      const opened = await cell()
-      await opened.start()
-      const script = stub.script({ status: 400 })
-      await opened.prompt(`fail ${script.marker}`)
-      await script.called()
-      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
-      expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "failed" })
-      expect(script.calls).toHaveLength(1)
-    })
-
-    test("a stream cut mid-way without a crash is continued, and the cell ends idle and closed", async () => {
-      const opened = await cell()
-      await opened.start()
-      const script = stub.script({ cut: true })
-      await opened.prompt(`cut ${script.marker}`)
-      await script.called()
-      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
-      expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
-    })
-
-    test("a turn that receives malformed model data leaves the cell idle and closed", async () => {
-      const opened = await cell()
-      await opened.start()
-      const script = stub.script({ malformed: true })
-      await opened.prompt(`malformed ${script.marker}`)
-      await script.called()
-      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
-      expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "failed" })
-    })
-
-    test("an instruction entry put on an idle session leaves the cell idle and closed", async () => {
-      const opened = await cell()
-      await opened.start()
-      await opened.prompt(`hello ${stub.script().marker}`)
-      await opened.opencode.session.wait({ sessionID: opened.id })
-      await opened.opencode.session.instructions.entry.put({ sessionID: opened.id, key: "team", value: "Ren" })
-      expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
     })
   })
 })

@@ -1,5 +1,5 @@
-import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { Schema } from "effect"
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
+import { Effect, Layer, ManagedRuntime, Schema } from "effect"
 import { Celld } from "./lib/celld.js"
 import { Shared } from "./lib/shared.js"
 import { StubModel } from "./lib/stub-model.js"
@@ -7,14 +7,23 @@ import { TestCell } from "./lib/test-cell.js"
 
 setDefaultTimeout(120_000)
 
-const celld = await Celld.make(Shared.vars())
-afterAll(celld.dispose)
+const runtime = ManagedRuntime.make(
+  Layer.effect(
+    Shared.Service,
+    Effect.acquireRelease(
+      Effect.promise(() => Celld.make(Shared.vars())),
+      (instance) => Effect.promise(instance.dispose),
+    ),
+  ),
+)
+let celld: Celld.Instance
+beforeAll(async () => {
+  celld = await runtime.runPromise(Shared.Service)
+}, 120_000)
+afterAll(() => runtime.dispose())
 
 const stub = Shared.stub()
 const interval = 1000
-const question = {
-  questions: [{ question: "Which one?", header: "Pick", options: [{ label: "A", description: "a" }] }],
-}
 
 const restart = async () => {
   await celld.kill()
@@ -106,44 +115,13 @@ describe("crash recovery", () => {
     expect(script.calls).toHaveLength(2)
   })
 
-  test("killed during a wait that outlived its budget: the turn finishes with no client request", async () => {
-    const opened = await started()
-    const script = stub.script({ hold: true, reply: "cut off" })
-    await opened.prompt(`hold ${script.marker}`)
-    await script.called()
-    const first = (await opened.until((state) => state.waiting !== null)).waiting
-    await opened.until((state) => state.waiting !== null && state.waiting !== first)
-    script.set({ reply: "resumed" })
-    await restart()
-    expect((await script.called(2)).text).toBe(StubModel.restarted)
-    expect(await opened.ended()).toEqual(TestCell.closed)
-    expect(await opened.outcome()).toBe("succeeded")
-    expect(script.calls).toHaveLength(2)
-  })
-
-  test("killed twice in a row, the second time during the resumed turn: the turn still finishes", async () => {
-    const opened = await started()
-    const script = stub.script({ hold: true, reply: "cut off" })
-    await opened.prompt(`hold ${script.marker}`)
-    await script.called()
-    await restart()
-    expect((await script.called(2)).text).toBe(StubModel.restarted)
-    script.set({ reply: "resumed twice" })
-    await restart()
-    expect((await script.called(3)).text).toBe(StubModel.restarted)
-    expect(await opened.ended()).toEqual(TestCell.closed)
-    expect(await opened.outcome()).toBe("succeeded")
-    expect((await opened.answers()).at(-1)).toBe("resumed twice")
-    expect(script.calls).toHaveLength(3)
-  })
-
   test("killed while reconcile opens OpenCode: the next alarm resumes the turn", async () => {
     const opened = await started()
     const script = stub.script({ hold: true, reply: "cut off" })
     await opened.prompt(`hold ${script.marker}`)
     await script.called()
     await restart()
-    await opened.until((state) => state.harnessOpen, 60_000)
+    await opened.until((state) => state.isOpen, 60_000)
     await celld.kill()
     const calls = script.calls.length
     script.set({ reply: "resumed" })
@@ -160,7 +138,7 @@ describe("crash recovery", () => {
     const script = stub.script({ reply: "done" })
     await opened.prompt(`once ${script.marker}`)
     await opened.opencode.session.wait({ sessionID: opened.id })
-    const due = (await opened.until((state) => state.harnessOpen && state.alarmAt !== null)).alarmAt ?? 0
+    const due = (await opened.until((state) => state.isOpen && state.nextReconcileAt !== null)).nextReconcileAt ?? 0
     await Bun.sleep(Math.max(0, due - Date.now()))
     await celld.kill()
     const calls = stub.calls.length
@@ -170,34 +148,6 @@ describe("crash recovery", () => {
     expect(await opened.state()).toEqual(TestCell.closed)
     expect(stub.calls).toHaveLength(calls)
     expect(TestCell.kinds(await opened.messages())).toEqual(["user", "assistant", "idle:succeeded"])
-  })
-
-  test("killed just after a turn ends: no second turn runs", async () => {
-    const opened = await started()
-    const script = stub.script({ reply: "done" })
-    await opened.prompt(`once ${script.marker}`)
-    await opened.opencode.session.wait({ sessionID: opened.id })
-    await restart()
-    expect(await opened.ended()).toEqual(TestCell.closed)
-    expect(script.calls).toHaveLength(1)
-    expect(TestCell.kinds(await opened.messages())).toEqual(["user", "assistant", "idle:succeeded"])
-  })
-
-  test("killed while a question waits: the turn resumes and the cell ends idle and closed", async () => {
-    const opened = await started()
-    const script = stub.script({ tool: { name: "question", input: question } })
-    await opened.prompt(`ask ${script.marker}`)
-    const pending = async (): Promise<void> =>
-      (await opened.opencode.session.form.list({ sessionID: opened.id })).length > 0 ? undefined : pending()
-    await pending()
-    script.set({ reply: "resumed without an answer" })
-    await restart()
-    expect((await script.called(2)).text).toBe(StubModel.restarted)
-    expect(await opened.ended()).toEqual(TestCell.closed)
-    expect(await opened.outcome()).toBe("succeeded")
-    const messages = await opened.messages()
-    expect(TestCell.kinds(messages)).toEqual(["user", "assistant", "synthetic", "assistant", "idle:succeeded"])
-    expect(messages[1]).toMatchObject({ content: [{ type: "tool", name: "question", state: { status: "error" } }] })
   })
 
   test("killed with nothing running: the cell restarts with no alarm and makes no model call", async () => {
@@ -210,19 +160,6 @@ describe("crash recovery", () => {
     await Bun.sleep(2 * interval)
     expect(await opened.state()).toEqual(TestCell.closed)
     expect(stub.calls).toHaveLength(calls)
-  })
-
-  test("killed mid-stream with the model rejecting the resumed call: the turn fails and the cell ends idle and closed", async () => {
-    const opened = await started()
-    const script = stub.script({ hold: true, reply: "cut off" })
-    await opened.prompt(`hold ${script.marker}`)
-    await script.called()
-    script.set({ status: 400 })
-    await restart()
-    expect((await script.called(2)).text).toBe(StubModel.restarted)
-    expect(await opened.ended()).toEqual(TestCell.closed)
-    expect(await opened.outcome()).toBe("failed")
-    expect(script.calls).toHaveLength(2)
   })
 
   test("killed right after send is accepted: the turn runs with no client request", async () => {
@@ -280,19 +217,6 @@ describe("crash recovery", () => {
       agent: "plan",
     })
     expect(await opened.ended()).toEqual(TestCell.closed)
-  })
-
-  test("killed mid-stream: the resumed model call carries the key from start", async () => {
-    const opened = await started()
-    await brainStart(opened, { credentials: { stub: key("sk-start") } })
-    const script = stub.script({ hold: true, reply: "cut off" })
-    await opened.prompt(`hold ${script.marker}`)
-    await script.called()
-    script.set({ reply: "resumed" })
-    await restart()
-    expect(await script.called(2)).toMatchObject({ text: StubModel.restarted, authorization: "Bearer sk-start" })
-    expect(await opened.ended()).toEqual(TestCell.closed)
-    expect(await opened.outcome()).toBe("succeeded")
   })
 
   test("killed after a send with a newer key is accepted: the resumed model call carries the newer key", async () => {

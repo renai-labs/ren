@@ -2,31 +2,49 @@ export * as Brain from "./brain.js"
 
 import { BrainApi } from "@ren/brain-api/brain-api"
 import { ForbiddenError } from "@ren/brain-api/errors"
-import { Effect, Layer, type Scope } from "effect"
-import { HttpRouter, HttpServer } from "effect/http"
+import { Effect, Layer } from "effect"
+import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
-import type { Harness } from "./harness/harness.js"
+import { Cell } from "./cell.js"
+import { Harness } from "./harness/harness.js"
 
-export const make = (sessionId: string | undefined, open: Effect.Effect<Harness.Instance, Error, Scope.Scope>) => {
-  const harness = Effect.orDie(open)
-  const forbidden = new ForbiddenError({ message: "The token is for another session" })
-  const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
-    group
+const prefix = "/ren"
+
+export const owns = (pathname: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+
+const forbidden = new ForbiddenError({ message: "The token is for another session" })
+
+export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
+  Effect.gen(function* () {
+    const context = yield* Effect.context<Cell.Info | Cell.Activity | Harness.Service>()
+    return group
       .handle("brain.start", (request) =>
-        request.payload.sessionId === sessionId
-          ? Effect.scoped(Effect.flatMap(harness, (opened) => opened.start(request.payload)))
-          : Effect.fail(forbidden),
+        Effect.gen(function* () {
+          const info = yield* Cell.Info
+          if (request.payload.sessionId !== info.sessionId) return yield* Effect.fail(forbidden)
+          const harness = yield* Cell.acquire
+          return yield* harness.start(request.payload)
+        }).pipe(Effect.scoped, Effect.provide(context)),
       )
       .handle("brain.send", (request) =>
-        request.params.id === sessionId
-          ? Effect.scoped(
-              Effect.flatMap(harness, (opened) => opened.send({ ...request.payload, sessionId: request.params.id })),
-            )
-          : Effect.fail(forbidden),
-      ),
-  )
-  return HttpRouter.toWebHandler(
-    HttpApiBuilder.layer(BrainApi).pipe(Layer.provide(handlers), Layer.provide(HttpServer.layerServices)),
-    { disableLogger: true },
-  ).handler
-}
+        Effect.gen(function* () {
+          const info = yield* Cell.Info
+          if (request.params.id !== info.sessionId) return yield* Effect.fail(forbidden)
+          const harness = yield* Cell.acquire
+          return yield* harness.send({ ...request.payload, sessionId: request.params.id })
+        }).pipe(Effect.scoped, Effect.provide(context)),
+      )
+      .handle("brain.state", () => Cell.state.pipe(Effect.provide(context)))
+  }),
+)
+
+export const layer = Layer.effect(
+  Cell.Brain,
+  Effect.gen(function* () {
+    const app = yield* HttpRouter.toHttpEffect(
+      HttpApiBuilder.layer(BrainApi).pipe(Layer.provide(handlers), Layer.provide(HttpServer.layerServices)),
+    )
+    const context = yield* Effect.context<Cell.Info | Cell.Activity | Harness.Service>()
+    return Cell.Brain.of({ owns, fetch: HttpEffect.toWebHandler(app.pipe(Effect.provide(context))) })
+  }),
+)

@@ -27,6 +27,30 @@ const host = (
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 
 describe("host leases", () => {
+  test("failed disposal fails waiting and future leases without opening a second host", () =>
+    run(
+      Effect.gen(function* () {
+        const closing = yield* Deferred.make<void>()
+        const state = { opens: 0 }
+        const failure = new Error("dispose failed")
+        const lease = Lease.make(
+          Effect.sync(() => ++state.opens),
+          () => Deferred.await(closing).pipe(Effect.andThen(Effect.die(failure))),
+        )
+        yield* Effect.scoped(lease.acquire)
+        const closed = yield* Effect.forkChild(Effect.exit(lease.close))
+        yield* Effect.yieldNow
+        const waiting = yield* Effect.forkChild(Effect.exit(Effect.scoped(lease.acquire)))
+        yield* Effect.yieldNow
+        yield* Deferred.succeed(closing, undefined)
+        expect(yield* Fiber.join(closed)).toEqual(Exit.die(failure))
+        expect(yield* Fiber.join(waiting)).toEqual(Exit.die(failure))
+        expect(yield* Effect.exit(Effect.scoped(lease.acquire))).toEqual(Exit.die(failure))
+        expect(state.opens).toBe(1)
+        expect(lease.state().leases).toBe(0)
+      }),
+    ))
+
   test("the first lease opens the host and later leases reuse it", () =>
     run(
       Effect.gen(function* () {

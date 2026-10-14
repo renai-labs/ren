@@ -1,18 +1,20 @@
 export * as TestCell from "./test-cell.js"
 
 import { OpenCode } from "@opencode/client"
-import { Schema } from "effect"
+import { BrainApi } from "@ren/brain-api/brain-api"
+import { DateTime, Effect } from "effect"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
+import { HttpApiClient } from "effect/http-api"
 import { TestToken } from "./token.js"
 
-const State = Schema.Struct({
-  harnessOpen: Schema.Boolean,
-  leases: Schema.Number,
-  alarmAt: Schema.NullOr(Schema.Number),
-  waiting: Schema.NullOr(Schema.Number),
-})
-type State = typeof State.Type
+interface State {
+  readonly isOpen: boolean
+  readonly holders: number
+  readonly waitingSince: number | null
+  readonly nextReconcileAt: number | null
+}
 
-export const closed = { harnessOpen: false, leases: 0, alarmAt: null, waiting: null }
+export const closed: State = { isOpen: false, holders: 0, waitingSince: null, nextReconcileAt: null }
 
 export const sign = (payload: Record<string, unknown>, secret: string = TestToken.keys[0].secret) =>
   TestToken.sign(secret, { kid: "active", scope: "client", exp: Math.floor(Date.now() / 1000) + 600, ...payload })
@@ -22,14 +24,25 @@ export const make = async (url: string) => {
   const client = await sign({ sid: id })
   const server = TestToken.basic(await sign({ sid: id, scope: "server" }))
   const opencode = OpenCode.make({ baseUrl: url, headers: { authorization: TestToken.basic(client) } })
-  const state = async () =>
-    Schema.decodeUnknownSync(State)(
-      await (await fetch(`${url}/cell/state`, { headers: { authorization: server } })).json(),
-    )
+  const state = (): Promise<State> =>
+    Effect.gen(function* () {
+      const http = yield* HttpClient.HttpClient
+      const brain = yield* HttpApiClient.makeWith(BrainApi, {
+        baseUrl: url,
+        httpClient: HttpClient.mapRequest(http, HttpClientRequest.setHeader("authorization", server)),
+      })
+      const read = yield* brain.brain["brain.state"]()
+      return {
+        isOpen: read.isOpen,
+        holders: read.holders,
+        waitingSince: read.waitingSince && DateTime.toEpochMillis(read.waitingSince),
+        nextReconcileAt: read.nextReconcileAt && DateTime.toEpochMillis(read.nextReconcileAt),
+      }
+    }).pipe(Effect.provide(FetchHttpClient.layer), Effect.runPromise)
   const until = async (predicate: (state: State) => boolean, timeout = 20_000): Promise<State> => {
     const current = await state()
     if (predicate(current)) return current
-    if (timeout <= 0) throw new Error(`/cell/state never matched; last ${JSON.stringify(current)}`)
+    if (timeout <= 0) throw new Error(`/ren/state never matched; last ${JSON.stringify(current)}`)
     await Bun.sleep(25)
     return until(predicate, timeout - 25)
   }

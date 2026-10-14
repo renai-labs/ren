@@ -1,8 +1,8 @@
-import { describe, expect, setDefaultTimeout } from "bun:test"
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
 import { Shared, TestToken } from "@ren/cell/testing"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Session } from "@ren/schema/session"
-import { Cause, ConfigProvider, DateTime, Effect, Exit, Fiber, Layer, Result, Schema } from "effect"
+import { Cause, ConfigProvider, DateTime, Effect, Exit, Fiber, Layer, ManagedRuntime, Result, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
@@ -11,7 +11,11 @@ import { testEffect } from "./lib/effect.js"
 
 setDefaultTimeout(30_000)
 
-const celld = await Shared.celld()
+const runtime = ManagedRuntime.make(Shared.layer)
+beforeAll(async () => {
+  settings.CELL_URL = (await runtime.runPromise(Shared.Service)).url
+}, 120_000)
+afterAll(() => runtime.dispose())
 const stub = Shared.stub()
 
 const host = (config: Record<string, string>) =>
@@ -20,10 +24,10 @@ const host = (config: Record<string, string>) =>
     Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config))),
   )
 
-const settings = { CELL_URL: celld.url, CELL_KEYS: TestToken.vars.CELL_KEYS }
+const settings = { CELL_URL: "", CELL_KEYS: TestToken.vars.CELL_KEYS }
 const unknownKey = { id: "unknown", secret: "a-key-the-cell-does-not-list-at-all" }
 
-const it = testEffect(host(settings))
+const it = testEffect(Layer.unwrap(Effect.sync(() => host(settings))))
 
 const start = Effect.fnUntraced(function* (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) {
   const brain = yield* BrainHost.Service
@@ -163,11 +167,19 @@ describe("BrainHost", () => {
               `data:image/png;base64,${"A".repeat(4002)}==`,
               `data:text/plain,${"a".repeat(3000)}`,
               `data:text/plain,${"a".repeat(3001)}`,
+              `data:text/plain,${"界".repeat(1000)}`,
+              `data:text/plain,${"界".repeat(1001)}`,
+              `data:text/plain,${"%E7%95%8C".repeat(1000)}`,
+              `data:text/plain,${"%E7%95%8C".repeat(1001)}`,
             ],
             (url) =>
               send(Session.ID.create(), "look", Session.MessageID.create(), [{ url, name: "a.png" }]).pipe(Effect.flip),
           ).pipe(Effect.provide(host({ ...settings, CELL_URL: yield* closedPort, BRAIN_MAX_FILE_SIZE: "3kB" })))
           expect(failures.map((failure) => failure._tag)).toEqual([
+            "BrainUnavailable",
+            "BrainRejectedError",
+            "BrainUnavailable",
+            "BrainRejectedError",
             "BrainUnavailable",
             "BrainRejectedError",
             "BrainUnavailable",
@@ -192,6 +204,21 @@ describe("BrainHost", () => {
       Effect.gen(function* () {
         expect((yield* send(Session.ID.create(), "too early").pipe(Effect.flip))._tag).toBe("SessionNotStartedError")
       }),
+    )
+
+    it.live(
+      "rejects a message whose individually valid files exceed the aggregate limit before contacting the host",
+      () =>
+        Effect.gen(function* () {
+          const failure = yield* send(Session.ID.create(), "look", Session.MessageID.create(), [
+            { url: `data:text/plain,${"a".repeat(6_000_000)}` },
+            { url: `data:text/plain,${"b".repeat(6_000_000)}` },
+          ]).pipe(Effect.flip, Effect.provide(host({ ...settings, CELL_URL: yield* closedPort })))
+          expect(failure).toMatchObject({
+            _tag: "BrainRejectedError",
+            message: "A message’s files total more than 10 MB",
+          })
+        }),
     )
   })
 
@@ -228,7 +255,7 @@ describe("BrainHost", () => {
         const before = Math.floor(Date.now() / 1000)
         const access = yield* brain.access(sessionId)
         const payload = claims(access.token)
-        expect(access.url).toBe(new URL(celld.url).origin)
+        expect(access.url).toBe(new URL(settings.CELL_URL).origin)
         expect(payload).toMatchObject({ kid: TestToken.keys[0].id, sid: sessionId, scope: "client" })
         expect(payload.exp - before).toBeGreaterThanOrEqual(3600)
         expect(payload.exp - before).toBeLessThanOrEqual(3601)
@@ -259,6 +286,23 @@ describe("BrainHost", () => {
   })
 
   describe("failures", () => {
+    it.live("a host body-size rejection is a typed BrainRejectedError and is not retried", () =>
+      Effect.gen(function* () {
+        const requests: Array<string> = []
+        const server = yield* serve((request) => {
+          requests.push(new URL(request.url).pathname)
+          return new Response(null, { status: 413 })
+        })
+        const sessionId = Session.ID.create()
+        const failures = yield* Effect.all([
+          start(sessionId).pipe(Effect.flip),
+          send(sessionId, "hello").pipe(Effect.flip),
+        ]).pipe(Effect.provide(host({ ...settings, CELL_URL: server.url.origin })))
+        expect(failures.map((failure) => failure._tag)).toEqual(["BrainRejectedError", "BrainRejectedError"])
+        expect(requests).toEqual(["/ren/sessions", `/ren/sessions/${sessionId}/messages`])
+      }),
+    )
+
     it.live("a host that refuses connections fails start and send with BrainUnavailable", () =>
       Effect.gen(function* () {
         const failures = yield* Effect.all([

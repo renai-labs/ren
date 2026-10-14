@@ -18,6 +18,9 @@ export const replaces = (stored: Credential.Value, next: Credential.Value) => {
   return !same(stored, next)
 }
 
+export const saved = (store: Credential.Interface) =>
+  store.all().pipe(Effect.map((credentials) => credentials.filter((credential) => credential.id.startsWith(owned))))
+
 export const apply: (
   client: OpenCodeClient,
   store: Credential.Interface,
@@ -28,11 +31,7 @@ export const apply: (
   const unknown = Object.keys(wanted).filter((providerId) => !integrations.has(IntegrationID.make(providerId)))
   if (unknown.length > 0)
     return yield* new BrainRejectedError({ message: `Unknown provider: ${unknown.toSorted().join(", ")}` })
-  const stored = new Map(
-    (yield* store.all())
-      .filter((credential) => credential.id.startsWith(owned))
-      .map((credential) => [credential.integrationID, credential]),
-  )
+  const stored = new Map((yield* saved(store)).map((credential) => [credential.integrationID, credential]))
   yield* Effect.forEach(
     Object.entries(wanted),
     ([providerId, credential]) => {
@@ -62,6 +61,32 @@ export const apply: (
   yield* Effect.forEach(
     [...stored.values()].filter((credential) => !Object.hasOwn(wanted, credential.integrationID)),
     (credential) => store.remove(credential.id),
+    { discard: true },
+  )
+})
+
+export const restore = Effect.fn("Credentials.restore")(function* (
+  store: Credential.Interface,
+  previous: ReadonlyArray<Credential.Info>,
+) {
+  const current = new Map((yield* saved(store)).map((credential) => [credential.id, credential]))
+  const kept = new Set(previous.map((credential) => credential.id))
+  yield* Effect.forEach(
+    [...current.keys()].filter((id) => !kept.has(id)),
+    (id) => store.remove(id),
+    { discard: true },
+  )
+  yield* Effect.forEach(
+    previous,
+    (credential) =>
+      current.has(credential.id)
+        ? store.update(credential.id, { value: credential.value })
+        : store.create({
+            id: credential.id,
+            integrationID: credential.integrationID,
+            value: credential.value,
+            label: credential.label,
+          }),
     { discard: true },
   )
 })

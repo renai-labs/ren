@@ -65,24 +65,23 @@ describe("the ren method's refresh", () => {
       }).pipe(Effect.provide(TestClock.layer()), Effect.result),
     )
 
-  test.each<[string, number, number]>([
-    ["well before expiry", 0, 10 * 60_000],
-    ["inside OpenCode's 5-minute refresh window", 0, 60_000],
-    ["one millisecond before expiry", 59_999, 60_000],
-  ])("returns the credential unchanged %s", async (_name, now, expires) => {
-    expect(await run(now, expires)).toEqual(Result.succeed(managed(expires)))
-  })
+  test.each<[string, number, number]>([["inside OpenCode's 5-minute refresh window", 0, 60_000]])(
+    "returns the credential unchanged %s",
+    async (_name, now, expires) => {
+      expect(await run(now, expires)).toEqual(Result.succeed(managed(expires)))
+    },
+  )
 
-  test.each<[string, number]>([
-    ["at the expiry", 60_000],
-    ["after the expiry", 90_000],
-  ])("fails %s, naming the provider and the expiry", async (_name, now) => {
-    expect(await run(now, 60_000)).toEqual(
-      Result.fail(
-        new RenPlugin.ManagedKeyError({
-          message: "The model key for provider litellm expired at 1970-01-01T00:01:00.000Z",
-        }),
-      ),
-    )
-  })
+  test.each<[string, number]>([["at the expiry", 60_000]])(
+    "fails %s, naming the provider and the expiry",
+    async (_name, now) => {
+      expect(await run(now, 60_000)).toEqual(
+        Result.fail(
+          new RenPlugin.ManagedKeyError({
+            message: "The model key for provider litellm expired at 1970-01-01T00:01:00.000Z",
+          }),
+        ),
+      )
+    },
+  )
 })

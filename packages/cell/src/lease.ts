@@ -42,9 +42,10 @@ export const make = <A, E>(open: Effect.Effect<A, E>, close: (value: A) => Effec
         state.current = undefined
         state.closing = closing
         const opened = yield* Effect.exit(Deferred.await(current))
-        if (Exit.isSuccess(opened)) yield* close(opened.value)
-        state.closing = undefined
-        yield* Deferred.succeed(closing, undefined)
+        const closed = yield* Effect.exit(Exit.isSuccess(opened) ? close(opened.value) : Effect.void)
+        if (Exit.isSuccess(closed)) state.closing = undefined
+        yield* Deferred.done(closing, closed)
+        yield* closed
       }),
     ),
   }

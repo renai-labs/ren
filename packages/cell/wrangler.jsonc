@@ -1,5 +1,5 @@
 {
-  // Must stay inside the subset that both celld and Cloudflare accept (specs/brain-host.md §7).
+  // Must stay inside the subset that both celld and Cloudflare accept.
   // `name` and the `SessionCell` class name are permanent: celld keys cells by both.
   "name": "ren-cell-opencode",
   "main": "src/worker.ts",
