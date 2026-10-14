@@ -89,7 +89,7 @@ describe("Brain API", () => {
       const opened = await cell()
       const responses = await Promise.all([
         opened.start({ harness: "claude-code" }),
-        opened.start({ context: { Team: "Ren" } }),
+        opened.start({ instructions: { Team: "Ren" } }),
         opened.send("", {}),
         opened.send("hello", { messageId: "not-a-message-id" }),
         opened.brain("/ren/sessions", "not json"),
@@ -133,9 +133,9 @@ describe("Brain API", () => {
       expect((await opened.info()).title).toBe("Stub title")
     })
 
-    test("puts each context block as an instruction entry, which the first turn's model call sees", async () => {
+    test("puts each instruction as an instruction entry, which the first turn's model call sees", async () => {
       const opened = await cell()
-      await opened.started({ context: { team: "Ren builds cells", goal: "ship phase 2" } })
+      await opened.started({ instructions: { team: "Ren builds cells", goal: "ship phase 2" } })
       const script = stub.script()
       await opened.send(`first ${script.marker}`)
       await script.called()
@@ -147,7 +147,7 @@ describe("Brain API", () => {
 
     test("start twice with the same input gives one session, the same answer and no second system update", async () => {
       const opened = await cell()
-      const input = { title: "Fix", agent: "build", context: { team: "Ren" } }
+      const input = { title: "Fix", agent: "build", instructions: { team: "Ren" } }
       const first = await answer(await opened.start(input))
       await opened.send(`first ${stub.script().marker}`)
       await opened.wait()
@@ -204,12 +204,12 @@ describe("Brain API", () => {
       expect(await opened.opencode.session.inbox.list({ sessionID: opened.id })).toHaveLength(1)
     })
 
-    test("a second start puts changed context blocks and removes ones that left, and unchanged blocks add nothing", async () => {
+    test("a second start puts changed instructions and removes ones that left, and unchanged ones add nothing", async () => {
       const opened = await cell()
-      await opened.started({ context: { team: "Ren", goal: "ship" } })
+      await opened.started({ instructions: { team: "Ren", goal: "ship" } })
       await opened.send(`first ${stub.script().marker}`)
       await opened.wait()
-      await opened.started({ context: { team: "Ren", note: "new block" } })
+      await opened.started({ instructions: { team: "Ren", note: "new block" } })
       const script = stub.script()
       await opened.send(`second ${script.marker}`)
       await opened.wait()
@@ -239,11 +239,11 @@ describe("Brain API", () => {
       ])
     })
 
-    test("a context block over 256 KiB answers 400 before anything reaches OpenCode, so a repeated start changes nothing", async () => {
+    test("an instruction over 256 KiB answers 400 before anything reaches OpenCode, so a repeated start changes nothing", async () => {
       const opened = await cell()
-      await opened.started({ context: { team: "Ren" } })
+      await opened.started({ instructions: { team: "Ren" } })
       await opened.ended()
-      const response = await opened.start({ context: { team: "changed", large: "a".repeat(256 * 1024) } })
+      const response = await opened.start({ instructions: { team: "changed", large: "a".repeat(256 * 1024) } })
       expect(response.status).toBe(400)
       expect((await opened.state()).harnessOpen).toBe(false)
       expect(await opened.opencode.session.instructions.entry.list({ sessionID: opened.id })).toEqual([
@@ -257,7 +257,7 @@ describe("Brain API", () => {
       const script = stub.script({ hold: true, reply: "finished" })
       await opened.send(`hold ${script.marker}`)
       await script.called()
-      await opened.started({ title: "While busy", context: { team: "Ren" } })
+      await opened.started({ title: "While busy", instructions: { team: "Ren" } })
       script.release()
       await opened.wait()
       expect(await opened.info()).toMatchObject({ title: "While busy", outcome: "succeeded" })
@@ -483,13 +483,7 @@ describe("Brain API", () => {
 
   describe("credentials", () => {
     const key = (value: string) => ({ type: "key", key: value })
-    const managed = (access: string, expires: number) => ({
-      type: "oauth",
-      methodID: "ren",
-      access,
-      refresh: "",
-      expires,
-    })
+    const managed = (value: string, expires: number) => ({ type: "managed", key: value, expires })
     const hour = 60 * 60 * 1000
     const turn = async (opened: Awaited<ReturnType<typeof cell>>, input: Record<string, unknown> = {}) => {
       const script = stub.script()
@@ -580,7 +574,7 @@ describe("Brain API", () => {
       expect(await turn(opened)).toBe("Bearer sk-second")
     })
 
-    test("a repeated start with Ren's older copy of an oauth credential keeps the cell's newer one", async () => {
+    test("a repeated start with Ren's older copy of a managed key keeps the cell's newer one", async () => {
       const opened = await cell()
       const older = { credentials: { stub: managed("sk-older", Date.now() + hour) } }
       await opened.started(older)

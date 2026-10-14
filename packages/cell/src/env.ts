@@ -1,6 +1,6 @@
 export * as Env from "./env.js"
 
-import { CellToken } from "@ren/schema/cell-token"
+import { SessionToken } from "@ren/brain-api/session-token"
 import { Effect, Schema } from "effect"
 
 const Millis = (fallback: number) =>
@@ -10,7 +10,7 @@ const Millis = (fallback: number) =>
 
 export interface Vars extends Schema.Schema.Type<typeof Vars> {}
 export const Vars = Schema.Struct({
-  CELL_KEYS: CellToken.Keys,
+  CELL_KEYS: SessionToken.Keys,
   ALARM_INTERVAL_MS: Millis(30_000),
   WAIT_BUDGET_MS: Millis(600_000),
   PARK_AFTER_MS: Millis(600_000),

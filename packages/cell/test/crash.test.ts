@@ -39,7 +39,7 @@ const started = async () => {
 
 const hour = 60 * 60 * 1000
 const key = (value: string) => ({ type: "key", key: value })
-const managed = (access: string, expires: number) => ({ type: "oauth", methodID: "ren", access, refresh: "", expires })
+const managed = (value: string, expires: number) => ({ type: "managed", key: value, expires })
 
 const Stored = Schema.Struct({
   data: Schema.Array(
@@ -250,10 +250,17 @@ describe("crash recovery", () => {
 
   test("killed during a second start: whatever it kept, a retried start leaves exactly the new state", async () => {
     const opened = await started()
-    const first = { sessionId: opened.id, harness: "opencode", title: "First", context: { team: "Ren", goal: "ship" } }
+    const first = {
+      sessionId: opened.id,
+      harness: "opencode",
+      title: "First",
+      instructions: { team: "Ren", goal: "ship" },
+    }
     expect((await opened.brain("/ren/sessions", first)).status).toBe(200)
-    const context = Object.fromEntries(Array.from({ length: 3000 }, (_, index) => [`block-${index}`, `value ${index}`]))
-    const second = { sessionId: opened.id, harness: "opencode", title: "Second", agent: "plan", context }
+    const instructions = Object.fromEntries(
+      Array.from({ length: 3000 }, (_, index) => [`block-${index}`, `value ${index}`]),
+    )
+    const second = { sessionId: opened.id, harness: "opencode", title: "Second", agent: "plan", instructions }
     const inflight = opened.brain("/ren/sessions", second).then(
       (response) => response.status,
       () => "dropped",
@@ -264,10 +271,10 @@ describe("crash recovery", () => {
     await celld.start()
     const partial = await opened.opencode.session.instructions.entry.list({ sessionID: opened.id })
     expect(partial.map((entry) => entry.key)).toEqual(expect.arrayContaining(["team", "goal"]))
-    expect(partial.filter((entry) => !(entry.key in context) && !(entry.key in first.context))).toEqual([])
+    expect(partial.filter((entry) => !(entry.key in instructions) && !(entry.key in first.instructions))).toEqual([])
     expect((await opened.brain("/ren/sessions", second)).status).toBe(200)
     const entries = await opened.opencode.session.instructions.entry.list({ sessionID: opened.id })
-    expect(Object.fromEntries(entries.map((entry) => [entry.key, entry.value]))).toEqual(context)
+    expect(Object.fromEntries(entries.map((entry) => [entry.key, entry.value]))).toEqual(instructions)
     expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({
       title: "Second",
       agent: "plan",
@@ -310,8 +317,10 @@ describe("crash recovery", () => {
   test("killed during a start that changes credentials: each provider keeps its old or gets its new credential, and a retried start leaves exactly the new set", async () => {
     const opened = await started()
     await brainStart(opened, { credentials: { stub: key("sk-old"), anthropic: key("sk-ant") } })
-    const context = Object.fromEntries(Array.from({ length: 3000 }, (_, index) => [`block-${index}`, `value ${index}`]))
-    const second = { sessionId: opened.id, harness: "opencode", context, credentials: { stub: key("sk-new") } }
+    const instructions = Object.fromEntries(
+      Array.from({ length: 3000 }, (_, index) => [`block-${index}`, `value ${index}`]),
+    )
+    const second = { sessionId: opened.id, harness: "opencode", instructions, credentials: { stub: key("sk-new") } }
     const inflight = opened.brain("/ren/sessions", second).then(
       (response) => response.status,
       () => "dropped",

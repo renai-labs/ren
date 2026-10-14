@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
-import { Session } from "@ren/schema/session"
 import { Effect, Result } from "effect"
 import { TestClock } from "effect/testing"
 import { Credentials } from "../src/harness/opencode/credentials.js"
@@ -23,7 +22,7 @@ const oauth = (expires: number, access = "access", method = "chatgpt-browser"): 
 
 const managed = (expires: number) => ({
   type: "oauth" as const,
-  methodID: Session.ManagedMethod,
+  methodID: RenPlugin.method,
   access: "sk-ren",
   refresh: "",
   expires,

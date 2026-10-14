@@ -1,3 +1,4 @@
+import { SessionToken } from "@ren/brain-api/session-token"
 import { Effect, Option, Schema } from "effect"
 import { Env } from "./env.js"
 import type { SessionCell } from "./session-cell.js"
@@ -23,7 +24,7 @@ export default {
       Effect.gen(function* () {
         const vars = yield* Schema.decodeUnknownEffect(Env.Vars)(env).pipe(Effect.orDie)
         const claims = yield* Effect.fromOption(Token.read(request.headers.get("authorization"))).pipe(
-          Effect.flatMap((token) => Token.verify(vars.CELL_KEYS, token)),
+          Effect.flatMap((token) => SessionToken.verify(vars.CELL_KEYS, token)),
           Effect.option,
         )
         if (Option.isNone(claims))

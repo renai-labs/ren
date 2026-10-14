@@ -6,6 +6,7 @@ import { IntegrationID } from "@opencode/schema/integration-id"
 import { BrainRejectedError } from "@ren/brain-api/errors"
 import type { Session } from "@ren/schema/session"
 import { Effect, Schema } from "effect"
+import { RenPlugin } from "./plugin.js"
 
 const owned = "cred_ren_"
 
@@ -34,8 +35,18 @@ export const apply: (
   )
   yield* Effect.forEach(
     Object.entries(wanted),
-    ([providerId, value]) => {
+    ([providerId, credential]) => {
       const integrationID = IntegrationID.make(providerId)
+      const value: Credential.Value =
+        credential.type === "key"
+          ? { type: "key", key: credential.key }
+          : {
+              type: "oauth",
+              methodID: RenPlugin.method,
+              access: credential.key,
+              refresh: "",
+              expires: credential.expires,
+            }
       const current = stored.get(integrationID)
       if (!current)
         return store.create({ id: Credential.ID.make(`${owned}${providerId}`), integrationID, value, label: "Ren" })

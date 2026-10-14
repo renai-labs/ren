@@ -70,7 +70,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    input.context,
+    input.instructions,
   )
   yield* Effect.forEach(
     changes.put,

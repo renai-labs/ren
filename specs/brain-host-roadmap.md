@@ -25,6 +25,8 @@ Needs a real Cloudflare deployment and an account with credentials.
 - Postgres tables for sessions: owner, harness, title, status. ren-v1's `agent_session` is the reference.
 - Public endpoints: create a session, send to it (for channels and schedules), and connect (`BrainHost.access`: the cell URL and a client token, refreshed before it expires).
 - A harness-neutral client protocol for the app, designed with it: a snapshot (transcript, pending operations, busy, open permissions), then normalized events, plus submit, abort and reply. Cloudflare's `OpenCodeSessionEvent` is the reference. The app never speaks OpenCode's API, so a later harness only has to produce this protocol.
+- Instruction layers. Org, space, agent and session instructions are composed in core (set, append, unset or lock by key); `start` carries only the composed map, so the cell never sees the layers.
+- Message size limits. `BrainHost` rejects a file over `BRAIN_MAX_FILE_SIZE` (10 MB by default); add a total for all of a message's files, and a request body limit in the worker so a host protects itself from callers that skip the check. Check the 10 MB default against Durable Object SQLite's 2 MB limit on a row, if OpenCode stores a message's files in its tables.
 - The first end-to-end test in `packages/e2e`: the Ren server's endpoints drive a cell on a test celld, then the client token from `access` reads the session.
 
 **Done when:** a signed-in user creates a session in the app, chats with it through the cell, and finds it again in the session list.

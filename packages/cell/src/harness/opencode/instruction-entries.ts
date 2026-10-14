@@ -4,7 +4,7 @@ import type { Session } from "@ren/schema/session"
 
 export const changes = (
   current: ReadonlyArray<{ readonly key: string; readonly value: unknown }>,
-  wanted: Session.Context,
+  wanted: Session.Instructions,
 ) => {
   const existing = new Map(current.map((item) => [item.key, item.value]))
   return {

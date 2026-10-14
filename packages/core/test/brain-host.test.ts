@@ -1,6 +1,6 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { Shared, TestToken } from "@ren/cell/testing"
-import { CellToken } from "@ren/schema/cell-token"
+import { SessionToken } from "@ren/brain-api/session-token"
 import { Session } from "@ren/schema/session"
 import { Cause, ConfigProvider, DateTime, Effect, Exit, Fiber, Layer, Result, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
@@ -30,16 +30,27 @@ const start = Effect.fnUntraced(function* (sessionId: Session.ID, input: Partial
   return yield* brain.start({
     sessionId,
     harness: "opencode",
-    context: {},
+    instructions: {},
     credentials: {},
     interactive: true,
     ...input,
   })
 })
 
-const send = Effect.fnUntraced(function* (sessionId: Session.ID, text: string, messageId = Session.MessageID.create()) {
+const send = Effect.fnUntraced(function* (
+  sessionId: Session.ID,
+  text: string,
+  messageId = Session.MessageID.create(),
+  files?: ReadonlyArray<Session.File>,
+) {
   const brain = yield* BrainHost.Service
-  return yield* brain.send({ sessionId, messageId, prompt: { text }, delivery: "steer", sender: { userId: "user_1" } })
+  return yield* brain.send({
+    sessionId,
+    messageId,
+    prompt: { text, ...(files && { files }) },
+    delivery: "steer",
+    sender: { userId: "user_1" },
+  })
 })
 
 const surface = (access: Session.ClientAccess, path: string, method = "GET") =>
@@ -48,7 +59,7 @@ const surface = (access: Session.ClientAccess, path: string, method = "GET") =>
   )
 
 const claims = (token: string) =>
-  Schema.decodeUnknownSync(Schema.fromJsonString(CellToken.Payload))(
+  Schema.decodeUnknownSync(Schema.fromJsonString(SessionToken.Claims))(
     Result.getOrThrow(Base64Url.decodeString(token.slice(0, token.indexOf(".")))),
   )
 
@@ -139,6 +150,41 @@ describe("BrainHost", () => {
         expect(waited.status).toBe(204)
         expect(second).toEqual(first)
         expect(script.calls).toHaveLength(1)
+      }),
+    )
+
+    it.live(
+      "a file larger than BRAIN_MAX_FILE_SIZE, decoded, fails with BrainRejectedError before reaching the host",
+      () =>
+        Effect.gen(function* () {
+          const failures = yield* Effect.forEach(
+            [
+              `data:image/png;base64,${"A".repeat(4000)}`,
+              `data:image/png;base64,${"A".repeat(4002)}==`,
+              `data:text/plain,${"a".repeat(3000)}`,
+              `data:text/plain,${"a".repeat(3001)}`,
+            ],
+            (url) =>
+              send(Session.ID.create(), "look", Session.MessageID.create(), [{ url, name: "a.png" }]).pipe(Effect.flip),
+          ).pipe(Effect.provide(host({ ...settings, CELL_URL: yield* closedPort, BRAIN_MAX_FILE_SIZE: "3kB" })))
+          expect(failures.map((failure) => failure._tag)).toEqual([
+            "BrainUnavailable",
+            "BrainRejectedError",
+            "BrainUnavailable",
+            "BrainRejectedError",
+          ])
+          expect(failures[1]).toMatchObject({ message: "a.png is larger than 3 kB" })
+        }),
+    )
+
+    it.live("BRAIN_MAX_FILE_SIZE defaults to 10 MB", () =>
+      Effect.gen(function* () {
+        const failures = yield* Effect.forEach([10_000_000, 10_000_001], (bytes) =>
+          send(Session.ID.create(), "look", Session.MessageID.create(), [
+            { url: `data:text/plain,${"a".repeat(bytes)}` },
+          ]).pipe(Effect.flip),
+        ).pipe(Effect.provide(host({ ...settings, CELL_URL: yield* closedPort })))
+        expect(failures.map((failure) => failure._tag)).toEqual(["BrainUnavailable", "BrainRejectedError"])
       }),
     )
 
@@ -244,7 +290,7 @@ describe("BrainHost", () => {
       }),
     )
 
-    it.live("start retries a transient answer and send does not", () =>
+    it.live("start and send retry a transient answer three times", () =>
       Effect.gen(function* () {
         const requests: Array<string> = []
         const server = yield* serve((request) => {
@@ -259,7 +305,7 @@ describe("BrainHost", () => {
         expect(failures.map((failure) => failure._tag)).toEqual(["BrainUnavailable", "BrainUnavailable"])
         expect(requests).toEqual([
           ...Array.from({ length: 4 }, () => "/ren/sessions"),
-          `/ren/sessions/${sessionId}/messages`,
+          ...Array.from({ length: 4 }, () => `/ren/sessions/${sessionId}/messages`),
         ])
       }),
     )
@@ -290,13 +336,18 @@ describe("BrainHost", () => {
       }),
     )
 
-    it.effect("a missing CELL_URL or CELL_KEYS fails the layer", () =>
+    it.effect("a missing CELL_URL or CELL_KEYS, or a BRAIN_MAX_FILE_SIZE that is not a size, fails the layer", () =>
       Effect.gen(function* () {
         const exits = yield* Effect.forEach(
-          [{ CELL_KEYS: settings.CELL_KEYS }, { CELL_URL: settings.CELL_URL }, settings],
+          [
+            { CELL_KEYS: settings.CELL_KEYS },
+            { CELL_URL: settings.CELL_URL },
+            { ...settings, BRAIN_MAX_FILE_SIZE: "lots" },
+            settings,
+          ],
           (config) => Effect.exit(Effect.provide(BrainHost.Service.use(Effect.succeed), host(config))),
         )
-        expect(exits.map(Exit.isSuccess)).toEqual([false, false, true])
+        expect(exits.map(Exit.isSuccess)).toEqual([false, false, false, true])
       }),
     )
   })
