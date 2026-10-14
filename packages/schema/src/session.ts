@@ -79,16 +79,39 @@ export const StartInput = Schema.Struct({
 export const Delivery = Schema.Literals(["steer", "queue"]).annotate({ identifier: "Session.Delivery" })
 export type Delivery = typeof Delivery.Type
 
+export const maxFileBytes = 10_000_000
+export const maxBodyBytes = 16_000_000
+
+export const fileBytes = (url: string) => {
+  const comma = url.indexOf(",")
+  const data = url.slice(comma + 1)
+  return /;base64$/iu.test(url.slice(0, comma))
+    ? Math.floor((data.replace(/=+$/, "").length * 3) / 4)
+    : encoder.encode(data.replaceAll(/%[a-f0-9]{2}/giu, "x")).length
+}
+
 export interface File extends Schema.Schema.Type<typeof File> {}
 export const File = Schema.Struct({
-  url: Schema.String.check(Schema.isPattern(/^data:[a-z]+\/[a-z0-9.+-]+(;[^,]*)?,/iu)),
+  url: Schema.String.check(
+    Schema.isPattern(/^data:[a-z]+\/[a-z0-9.+-]+(;[^,]*)?,/iu),
+    Schema.isMaxLength(maxBodyBytes),
+    Schema.makeFilter((url) => fileBytes(url) <= maxFileBytes || "a file is at most 10 MB"),
+  ),
   name: Schema.optionalKey(Schema.String),
 }).annotate({ identifier: "Session.File" })
 
 export interface Prompt extends Schema.Schema.Type<typeof Prompt> {}
 export const Prompt = Schema.Struct({
   text: Schema.NonEmptyString,
-  files: Schema.optionalKey(Schema.Array(File)),
+  files: Schema.optionalKey(
+    Schema.Array(File).check(
+      Schema.makeFilter(
+        (files) =>
+          files.reduce((bytes, file) => bytes + fileBytes(file.url), 0) <= maxFileBytes ||
+          "a message's files total at most 10 MB",
+      ),
+    ),
+  ),
 }).annotate({ identifier: "Session.Prompt" })
 
 export interface Sender extends Schema.Schema.Type<typeof Sender> {}
@@ -116,3 +139,11 @@ export const ClientAccess = Schema.Struct({
   token: Schema.String,
   expiresAt: Schema.DateTimeUtc,
 }).annotate({ identifier: "Session.ClientAccess" })
+
+export interface HostState extends Schema.Schema.Type<typeof HostState> {}
+export const HostState = Schema.Struct({
+  isOpen: Schema.Boolean,
+  holders: Schema.Int,
+  waitingSince: Schema.NullOr(Schema.DateTimeUtc),
+  nextReconcileAt: Schema.NullOr(Schema.DateTimeUtc),
+}).annotate({ identifier: "Session.HostState" })

@@ -1,9 +1,5 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "files": [],
-  "references": [
-    { "path": "./tsconfig.worker.json" },
-    { "path": "./test/worker/tsconfig.json" },
-    { "path": "./tsconfig.tests.json" }
-  ]
+  "references": [{ "path": "./tsconfig.worker.json" }, { "path": "./tsconfig.tests.json" }]
 }

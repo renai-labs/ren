@@ -1,10 +1,8 @@
 export * as SessionToken from "./session-token.js"
 
 import { Session } from "@ren/schema/session"
-import { Clock, Effect, Schema } from "effect"
+import { Clock, Effect, Option, Result, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
-
-export class InvalidToken extends Schema.TaggedError<InvalidToken>()("SessionToken.InvalidToken", {}) {}
 
 export const Scope = Schema.Literals(["server", "client"]).annotate({ identifier: "SessionToken.Scope" })
 export type Scope = typeof Scope.Type
@@ -45,22 +43,26 @@ export const seal = Effect.fnUntraced(function* (secret: string, payload: unknow
 
 export const sign = (key: Key, claims: Omit<Claims, "kid">) => seal(key.secret, { kid: key.id, ...claims })
 
-export const verify = Effect.fn("SessionToken.verify")(
-  function* (keys: ReadonlyArray<Key>, token: string) {
-    if (!/^[\w-]+\.[\w-]+$/.test(token)) return yield* new InvalidToken()
-    const signed = token.slice(0, token.indexOf("."))
-    const signature = yield* Effect.fromResult(Base64Url.decode(token.slice(signed.length + 1)))
-    const claims = yield* Effect.fromResult(Base64Url.decodeString(signed)).pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Claims))),
-    )
-    const key = keys.find((candidate) => candidate.id === claims.kid)
-    if (!key) return yield* new InvalidToken()
-    const subtle = yield* hmac(key.secret, "verify")
-    const valid = yield* Effect.promise(() =>
-      crypto.subtle.verify("HMAC", subtle, new Uint8Array(signature), encoder.encode(signed)),
-    )
-    if (!valid || (yield* Clock.currentTimeMillis) >= claims.exp * 1000) return yield* new InvalidToken()
-    return claims
-  },
-  Effect.mapError(() => new InvalidToken()),
-)
+export const verify = Effect.fn("SessionToken.verify")(function* (
+  keys: ReadonlyArray<Key>,
+  token: string,
+): Effect.fn.Return<Option.Option<Claims>> {
+  const parts = /^([\w-]+)\.([\w-]+)$/.exec(token)
+  const head = parts?.at(1)
+  const signature = Option.fromNullishOr(parts?.at(2)).pipe(
+    Option.flatMap((part) => Result.getSuccess(Base64Url.decode(part))),
+  )
+  const claims = Option.fromNullishOr(head).pipe(
+    Option.flatMap((part) => Result.getSuccess(Base64Url.decodeString(part))),
+    Option.flatMap(Schema.decodeUnknownOption(Schema.fromJsonString(Claims))),
+  )
+  if (!head || Option.isNone(signature) || Option.isNone(claims)) return Option.none()
+  const key = keys.find((candidate) => candidate.id === claims.value.kid)
+  if (!key) return Option.none()
+  const subtle = yield* hmac(key.secret, "verify")
+  const isSigned = yield* Effect.promise(() =>
+    crypto.subtle.verify("HMAC", subtle, new Uint8Array(signature.value), encoder.encode(head)),
+  )
+  const now = yield* Clock.currentTimeMillis
+  return isSigned && now < claims.value.exp * 1000 ? claims : Option.none()
+})

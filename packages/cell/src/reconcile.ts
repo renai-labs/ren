@@ -5,11 +5,11 @@ export interface Item {
   readonly type: "user" | "synthetic" | "compaction" | "move"
 }
 
-export interface Session {
+export interface Snapshot {
   readonly active: boolean
   readonly inbox: ReadonlyArray<Item>
   readonly unfinished: boolean
-  readonly askedMs: number | undefined
+  readonly questionAgeMs: number | undefined
 }
 
 export type Work =
@@ -19,10 +19,10 @@ export type Work =
   | { readonly _tag: "Resuming" }
   | { readonly _tag: "Idle" }
 
-export const work = (session: Session, parkAfterMs: number): Work => {
-  if (session.active && (session.askedMs ?? 0) >= parkAfterMs) return { _tag: "Unanswered" }
-  if (session.active) return { _tag: "Running" }
-  const item = session.inbox.find((candidate) => candidate.type === "user")
+export const work = (snapshot: Snapshot, parkAfterMs: number): Work => {
+  if (snapshot.active && (snapshot.questionAgeMs ?? 0) >= parkAfterMs) return { _tag: "Unanswered" }
+  if (snapshot.active) return { _tag: "Running" }
+  const item = snapshot.inbox.find((candidate) => candidate.type === "user")
   if (item) return { _tag: "Queued", item }
-  return session.unfinished ? { _tag: "Resuming" } : { _tag: "Idle" }
+  return snapshot.unfinished ? { _tag: "Resuming" } : { _tag: "Idle" }
 }

@@ -11,6 +11,7 @@ const protocol = resolve(import.meta.dir, "../../protocol")
 const core = resolve(import.meta.dir, "../../core")
 const db = resolve(import.meta.dir, "../../db")
 const server = resolve(import.meta.dir, "../../server")
+const brainApi = resolve(import.meta.dir, "../../brain-api")
 
 describe("public import boundaries", () => {
   test("promise entrypoint pulls in no Effect, schema, protocol or server code", async () => {
@@ -22,6 +23,7 @@ describe("public import boundaries", () => {
     expect(within(root.all, core)).toEqual([])
     expect(within(root.all, db)).toEqual([])
     expect(within(root.all, server)).toEqual([])
+    expect(within(root.all, brainApi)).toEqual([])
   })
 
   test("react entrypoint adds TanStack Query but no Effect, schema, protocol or server code", async () => {
@@ -34,9 +36,10 @@ describe("public import boundaries", () => {
     expect(within(react.all, core)).toEqual([])
     expect(within(react.all, db)).toEqual([])
     expect(within(react.all, server)).toEqual([])
+    expect(within(react.all, brainApi)).toEqual([])
   })
 
-  test("effect entrypoint uses schema and protocol but never core, db or server", async () => {
+  test("effect entrypoint uses schema and protocol but never core, db, server or brain-api", async () => {
     const network = await bundleInputs("@ren/client/effect")
 
     expect(within(network.eager, effect).length).toBeGreaterThan(0)
@@ -45,6 +48,7 @@ describe("public import boundaries", () => {
     expect(within(network.all, core)).toEqual([])
     expect(within(network.all, db)).toEqual([])
     expect(within(network.all, server)).toEqual([])
+    expect(within(network.all, brainApi)).toEqual([])
   })
 })
 
