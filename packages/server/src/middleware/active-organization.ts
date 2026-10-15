@@ -13,11 +13,14 @@ export const ActiveOrganizationLayer = Layer.effect(
       Effect.fn("ActiveOrganization")(function* (httpEffect) {
         const session = yield* CurrentSession
         const request = yield* HttpServerRequest.HttpServerRequest
-        const organization = yield* auth.getActiveOrganization(session, new Headers(request.headers))
-        if (Option.isNone(organization)) {
+        const membership = yield* auth.getActiveMembership(session, new Headers(request.headers))
+        if (Option.isNone(membership)) {
           return yield* new ForbiddenError({ message: "Join or create an organization to continue." })
         }
-        return yield* Effect.provideService(httpEffect, CurrentOrganization, { id: organization.value.id })
+        return yield* Effect.provideService(httpEffect, CurrentOrganization, {
+          id: membership.value.organization.id,
+          roles: membership.value.roles,
+        })
       }),
     )
   }),

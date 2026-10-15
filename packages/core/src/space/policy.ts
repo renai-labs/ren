@@ -1,75 +1,57 @@
 export * as SpacePolicy from "./policy.js"
 
 import { Auth } from "@ren/schema/auth"
+import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { Space } from "@ren/schema/space"
-import { Context, Layer } from "effect"
-import { Actor } from "../actor.js"
-import { Policy } from "../policy.js"
+import { SpaceMember } from "@ren/schema/space-member"
+import { isNotNull, or, sql } from "drizzle-orm"
+import type { Access } from "../access.js"
+import { SpaceQueries } from "./queries.js"
 
-type Action = Primitive.Action<typeof Space.definition>
-
-type OrganizationTargetAction = Extract<Action, "space.list" | "space.create">
-
-export interface OrganizationContext {
-  readonly role: string | undefined
+const spaceMember = {
+  name: "space.member",
+  holds: (membershipId: Space.MembershipID | null) => Boolean(membershipId),
+  condition: isNotNull(SpaceQueries.membership.id),
 }
 
-export interface SpaceAccessContext extends OrganizationContext {
-  readonly membershipId: Space.MembershipID | null
-}
+const conditions = new Map([spaceMember].map((relationship) => [relationship.name, relationship.condition]))
 
-export interface SpaceContext extends SpaceAccessContext {
-  readonly isFirstOrganizationSpace: boolean
-}
+const organizationRoles = Auth.Role.literals
 
-export type Request =
-  | {
-      readonly who: Actor.Info
-      readonly action: OrganizationTargetAction
-      readonly target: Auth.OrganizationID
-      readonly policyContext: OrganizationContext
-    }
-  | {
-      readonly who: Actor.Info
-      readonly action: Exclude<Action, OrganizationTargetAction>
-      readonly target: Space.ID
-      readonly policyContext: SpaceContext
-    }
+const administratorRoles = ["owner", "admin"] as const satisfies ReadonlyArray<Auth.Role>
 
-export interface Interface extends Policy.Interface<Request> {
-  readonly visibility: (policyContext: OrganizationContext) => "organization" | "membership"
-}
+const organizationActions = Primitive.actions(Space.definition, ["list", "create"])
 
-export class Service extends Context.Service<Service, Interface>()("@ren/core/SpacePolicy") {}
+const spaceActions = Primitive.actions(Space.definition, ["get", "update", "archive"])
 
-const isAdministrator = (policyContext: OrganizationContext) =>
-  Boolean(policyContext.role && Auth.isAdministrator(policyContext.role))
+const memberActions = Primitive.actions(SpaceMember.definition)
 
-export const canAccess = (policyContext: SpaceAccessContext) =>
-  Boolean(policyContext.role) && (isAdministrator(policyContext) || Boolean(policyContext.membershipId))
+export const documents = [
+  {
+    primitive: Space.definition.name,
+    statements: [
+      { actions: organizationActions, roles: organizationRoles, on: Policy.everywhere },
+      { actions: spaceActions, roles: administratorRoles, on: Policy.everywhere },
+      { actions: spaceActions, roles: organizationRoles, on: spaceMember.name },
+    ],
+  },
+  {
+    primitive: SpaceMember.definition.name,
+    statements: [
+      { actions: memberActions, roles: administratorRoles, on: Policy.everywhere },
+      { actions: memberActions, roles: organizationRoles, on: spaceMember.name },
+    ],
+  },
+] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
 
-const check = (request: Request): Policy.Decision => {
-  switch (request.action) {
-    case "space.list":
-      return request.policyContext.role ? Policy.allow : Policy.deny("Join the organization to see spaces.")
-    case "space.create":
-      return request.policyContext.role ? Policy.allow : Policy.deny("Join the organization to create spaces.")
-    case "space.get":
-      return canAccess(request.policyContext) ? Policy.allow : Policy.deny("Space not found.")
-    case "space.update":
-      return canAccess(request.policyContext) ? Policy.allow : Policy.deny("You cannot edit this space.")
-    case "space.archive":
-      return canAccess(request.policyContext) && !request.policyContext.isFirstOrganizationSpace
-        ? Policy.allow
-        : Policy.deny("This space cannot be archived.")
-  }
-}
+export const organization: Access.Resource = { relationships: [] }
 
-export const layer = Layer.succeed(
-  Service,
-  Service.of({
-    check,
-    visibility: (policyContext) => (isAdministrator(policyContext) ? "organization" : "membership"),
-  }),
-)
+export const resource = (membershipId: Space.MembershipID | null): Access.Resource => ({
+  relationships: spaceMember.holds(membershipId) ? [spaceMember.name] : [],
+})
+
+export const filter = (plan: Access.Plan) =>
+  plan.isAllowedEverywhere
+    ? undefined
+    : (or(...plan.allowedWhere.map((relationship) => conditions.get(relationship))) ?? sql`false`)

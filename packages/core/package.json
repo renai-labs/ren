@@ -9,6 +9,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
+    "print-policies": "bun run script/print-policies.ts",
     "test": "bun ../../script/test.ts",
     "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/brain-host.test.ts",
     "typecheck": "tsgo -b tsconfig.json tsconfig.tests.json"
