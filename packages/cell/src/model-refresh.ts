@@ -11,19 +11,21 @@ const key = "ren:host-token"
 
 const window = Duration.minutes(5)
 
-export const write = Effect.fn("ModelRefresh.write")(function* (
-  storage: ModelStore.Storage,
-  token: string | undefined,
-) {
-  if (!token) return yield* remove(storage)
+export const write = Effect.fn("ModelRefresh.write")(function* (token: string | undefined) {
+  if (!token) return yield* remove()
+  const storage = yield* ModelStore.Storage
   yield* Effect.promise(() => storage.put(key, token))
 })
 
-export const remove = Effect.fn("ModelRefresh.remove")(function* (storage: ModelStore.Storage) {
+export const remove = Effect.fn("ModelRefresh.remove")(function* () {
+  const storage = yield* ModelStore.Storage
   yield* Effect.promise(() => storage.delete(key))
 })
 
-export const make = Effect.fn("ModelRefresh.make")(function* (storage: ModelStore.Storage, url: string | undefined) {
+export const make = Effect.fn("ModelRefresh.make")(function* (url: string | undefined) {
+  const storage = yield* ModelStore.Storage
+  const store = yield* ModelStore.Service
+  const context = yield* Effect.context<ModelStore.Storage>()
   const refreshing = yield* Semaphore.make(1)
   const client = url
     ? Option.some(yield* HttpApiClient.make(ModelsApi, { baseUrl: url }).pipe(Effect.provide(FetchHttpClient.layer)))
@@ -39,22 +41,23 @@ export const make = Effect.fn("ModelRefresh.make")(function* (storage: ModelStor
     refreshing.withPermit(
       Effect.gen(function* () {
         const nowMs = yield* Clock.currentTimeMillis
-        const stored = yield* ModelStore.read(storage)
+        const stored = yield* store.read
         const current = Option.getOrUndefined(stored)?.endpoints.find((endpoint) => endpoint.id === endpointId)?.apiKey
         if (current && fresh(current, expiresAtMs, nowMs)) return Option.some(current)
         const token = yield* Effect.promise(() => storage.get(key))
         if (Option.isNone(client) || Option.isNone(stored) || typeof token !== "string") return Option.none()
         const body = yield* client.value.models["models.refresh"]({
           headers: { authorization: `Bearer ${token}` },
-        }).pipe(Effect.tapErrorTag("ForbiddenError", () => remove(storage)))
+        }).pipe(Effect.tapErrorTag("ForbiddenError", () => remove()))
         if ((yield* Effect.promise(() => storage.get(key))) !== token) return Option.none()
-        yield* ModelStore.write(storage, body.access)
-        yield* write(storage, body.hostToken)
+        yield* store.write(body.access)
+        yield* write(body.hostToken)
         return Option.fromNullishOr(body.access.endpoints.find((endpoint) => endpoint.id === endpointId)?.apiKey)
       }).pipe(
         Effect.catch((error) =>
           Effect.logWarning("Model access refresh failed", error).pipe(Effect.as(Option.none<Models.ApiKey>())),
         ),
+        Effect.provide(context),
       ),
     )
 })

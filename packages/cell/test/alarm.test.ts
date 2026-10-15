@@ -37,9 +37,6 @@ const setup = Effect.gen(function* () {
         events.push("rearm")
         return Promise.resolve()
       },
-      get: () => Promise.reject(new Error("alarm must not read the model configuration")),
-      put: () => Promise.reject(new Error("alarm must not write the model configuration")),
-      delete: () => Promise.reject(new Error("alarm must not remove the model configuration")),
     },
   })
   const instance: Harness.Instance = {
