@@ -27,7 +27,6 @@ const make = Effect.gen(function* () {
     (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
   )
   const host = yield* Host.make(
-    vars.OPENCODE_CONFIG,
     createEmbeddedRoutes({
       database: { path: ":memory:" },
       config: { project: false, content: vars.OPENCODE_CONFIG },

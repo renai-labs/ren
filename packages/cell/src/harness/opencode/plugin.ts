@@ -16,26 +16,26 @@ export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("Mana
   message: Schema.String,
 }) {}
 
+const never = Number.MAX_SAFE_INTEGER
+
 export const refresh = Effect.fn("RenPlugin.refresh")(function* (
-  providerId: string,
+  endpointId: string,
   credential: Credential.OAuth,
   renew: Harness.Renew,
 ) {
-  const renewed = yield* renew(providerId, credential.expires)
-  const expiresAt = Option.flatMap(renewed, (apiKey) => Option.fromNullishOr(apiKey.expiresAt))
-  if (Option.isSome(renewed) && Option.isSome(expiresAt))
+  const renewed = yield* renew(endpointId, credential.expires)
+  if (Option.isSome(renewed))
     return Struct.evolve(credential, {
       access: () => Redacted.value(renewed.value.key),
-      expires: () => DateTime.toEpochMillis(expiresAt.value),
+      expires: () => (renewed.value.expiresAt ? DateTime.toEpochMillis(renewed.value.expiresAt) : never),
     })
   if ((yield* Clock.currentTimeMillis) < credential.expires) return credential
   return yield* new ManagedKeyError({
-    message: `The model key for provider ${providerId} expired at ${new Date(credential.expires).toISOString()}`,
+    message: `The model key for endpoint ${endpointId} expired at ${new Date(credential.expires).toISOString()}`,
   })
 })
 
 export const make = (
-  baseProviders: ReadonlyArray<string>,
   endpoints: Ref.Ref<ReadonlyArray<Models.Endpoint>>,
   reload: Ref.Ref<Effect.Effect<void>>,
   renew: Harness.Renew,
@@ -51,13 +51,8 @@ export const make = (
           for (const id of unavailable) editor.remove(id)
         })
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(endpoints)))
-        // oxlint-disable-next-line ren/no-comments -- Config providers are registered after SDK transforms, so include their ids explicitly.
         yield* integration.transform((editor) => {
-          for (const integrationID of new Set([
-            ...editor.list().map((item) => item.id),
-            ...baseProviders,
-            ...Ref.getUnsafe(endpoints).map((endpoint) => endpoint.id),
-          ]))
+          for (const integrationID of Ref.getUnsafe(endpoints).map((endpoint) => endpoint.id))
             editor.method.update({
               integrationID,
               method: { id: method, type: "oauth", label: "Ren" },

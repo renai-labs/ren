@@ -81,13 +81,20 @@ describe("the ren method's refresh", () => {
     expect(renewed).toMatchObject({ access: "renewed", expires: 3_600_000 })
   })
 
+  test("takes a renewed key that never expires and stops refreshing it", async () => {
+    const renewed = await Effect.runPromise(
+      RenPlugin.refresh("litellm", managed(60_000), () => Effect.succeedSome({ key: Redacted.make("forever") })),
+    )
+    expect(renewed).toMatchObject({ access: "forever", expires: Number.MAX_SAFE_INTEGER })
+  })
+
   test.each<[string, number]>([["at the expiry", 60_000]])(
     "fails %s, naming the provider and the expiry",
     async (_name, now) => {
       expect(await run(now, 60_000)).toEqual(
         Result.fail(
           new RenPlugin.ManagedKeyError({
-            message: "The model key for provider litellm expired at 1970-01-01T00:01:00.000Z",
+            message: "The model key for endpoint litellm expired at 1970-01-01T00:01:00.000Z",
           }),
         ),
       )
