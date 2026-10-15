@@ -1,10 +1,11 @@
 export * as SessionToken from "./session-token.js"
 
+import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { Clock, Effect, Option, Result, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
 
-export const Scope = Schema.Literals(["server", "client"]).annotate({ identifier: "SessionToken.Scope" })
+export const Scope = Schema.Literals(["server", "client", "renewal"]).annotate({ identifier: "SessionToken.Scope" })
 export type Scope = typeof Scope.Type
 
 export interface Claims extends Schema.Schema.Type<typeof Claims> {}
@@ -12,6 +13,7 @@ export const Claims = Schema.Struct({
   kid: Schema.NonEmptyString,
   sid: Session.ID,
   scope: Scope,
+  org: Schema.optionalKey(Auth.OrganizationID),
   exp: Schema.Int,
 }).annotate({ identifier: "SessionToken.Claims" })
 

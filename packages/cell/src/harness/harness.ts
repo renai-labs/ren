@@ -3,7 +3,7 @@ export * as Harness from "./harness.js"
 import type { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
 import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
-import { Context, Effect, Exit, Layer, Scope } from "effect"
+import { Context, Effect, Exit, Layer, type Option, Scope } from "effect"
 import { Lease } from "../lease.js"
 import type { Reconcile } from "../reconcile.js"
 
@@ -13,6 +13,8 @@ interface SessionState extends Reconcile.Snapshot {
   readonly wait: (ms: number) => Effect.Effect<void>
   readonly interrupt: Effect.Effect<void>
 }
+
+export type Renew = (endpointId: string, expiresAtMs: number) => Effect.Effect<Option.Option<Models.ApiKey>>
 
 export interface Instance {
   readonly fetch: (request: Request) => Promise<Response>

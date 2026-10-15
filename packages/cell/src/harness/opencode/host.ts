@@ -12,6 +12,7 @@ import type { Models } from "@ren/schema/models"
 import { Context, Effect, Fiber, Layer, ManagedRuntime, Schema, Struct, type Scope } from "effect"
 import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import manifest from "../../../package.json"
+import type { Harness } from "../harness.js"
 import { RenPlugin } from "./plugin.js"
 
 export const version = manifest.version
@@ -82,6 +83,7 @@ export const open = Effect.fn("Host.open")(function* (
   storage: DurableObjectStorage,
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
+  renew: Harness.Renew,
 ) {
   const merged = yield* content(config, endpoints)
   const options = {
@@ -95,12 +97,14 @@ export const open = Effect.fn("Host.open")(function* (
     createEmbeddedRoutes(ServerWorkerd.serverOptions(options), ServerWorkerd.replacements(options)).pipe(
       Layer.provide(HttpServer.layerServices),
     ),
+    renew,
   )
 })
 
 export const make = Effect.fn("Host.make")(function* (
   config: string,
   routes: Layer.Layer<Credential.Service | SdkPlugins.Service | SessionRestart.Service | HttpRouter.HttpRouter, Error>,
+  renew: Harness.Renew,
 ): Effect.fn.Return<Instance, Error, Scope.Scope> {
   const configured = Object.keys(
     (yield* Schema.decodeUnknownEffect(Document)(config).pipe(Effect.orDie)).providers ?? {},
@@ -111,7 +115,7 @@ export const make = Effect.fn("Host.make")(function* (
   )
   const services = yield* runtime.contextEffect
   const plugins = Context.get(services, SdkPlugins.Service)
-  yield* plugins.register(RenPlugin.make(configured))
+  yield* plugins.register(RenPlugin.make(configured, renew))
   const resuming = runtime.runFork(Context.get(services, SessionRestart.Service).resumeSuspendedSessions)
   yield* Effect.addFinalizer(() => Fiber.interrupt(resuming))
   return {

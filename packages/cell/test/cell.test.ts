@@ -30,7 +30,7 @@ const cell = () => TestCell.make(celld.url)
 
 describe("cell contract", () => {
   describe("tokens", () => {
-    test("answers 401 to an expired, tampered, malformed or unknown-key token, with OpenCode's body for each", async () => {
+    test("answers 401 to an expired, tampered, malformed, unknown-key or renewal token, with OpenCode's body for each", async () => {
       const opened = await cell()
       const other = await sign({ sid: "ses_other" })
       const tokens = [
@@ -39,6 +39,7 @@ describe("cell contract", () => {
         "not-a-token",
         await sign({ sid: opened.id, kid: "gone" }),
         await sign({ sid: opened.id }, "a-secret-that-no-listed-key-has-at-all"),
+        await sign({ sid: opened.id, scope: "renewal" }),
       ]
       const responses = await Promise.all(
         tokens.map((token) =>

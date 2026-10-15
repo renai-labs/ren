@@ -1,8 +1,14 @@
 import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Struct } from "effect"
+import { Schema, Struct } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { BrainRejectedError, ForbiddenError, ModelsNotConfiguredError, SessionNotStartedError } from "./errors.js"
+
+export const ModelsBody = Schema.Struct({
+  access: Models.Access,
+  renewalToken: Schema.optionalKey(Schema.NonEmptyString),
+}).annotate({ identifier: "Brain.ModelsBody" })
+export type ModelsBody = typeof ModelsBody.Type
 
 const SendBody = Session.SendInput.mapFields(Struct.omit(["sessionId"])).annotate({ identifier: "Brain.SendBody" })
 
@@ -36,13 +42,13 @@ const BrainGroup = HttpApiGroup.make("brain")
   )
   .add(
     HttpApiEndpoint.put("brain.models", "/ren/models", {
-      payload: Models.Access,
+      payload: ModelsBody,
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.models",
         summary: "Configure models",
         description:
-          "Store the brain’s model endpoints and apply their API keys. New endpoints and models apply when the harness next opens.",
+          "Store the brain’s model endpoints and apply their API keys. New endpoints and models apply when the harness next opens. The renewal token lets the host renew expiring keys.",
       }),
     ),
   )

@@ -21,7 +21,10 @@ export default {
         const vars = yield* Schema.decodeUnknownEffect(Env.Vars)(env).pipe(Effect.orDie)
         const claims = yield* Option.match(Token.read(request.headers.get("authorization")), {
           onNone: () => Effect.succeedNone,
-          onSome: (token) => SessionToken.verify(vars.CELL_KEYS, token),
+          onSome: (token) =>
+            SessionToken.verify(vars.CELL_KEYS, token).pipe(
+              Effect.map(Option.filter((verified) => verified.scope === "server" || verified.scope === "client")),
+            ),
         })
         if (Option.isNone(claims))
           return Response.json({ _tag: "UnauthorizedError", message: "Authentication required" }, { status: 401 })

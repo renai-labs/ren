@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
-import { Effect, Result } from "effect"
+import { DateTime, Effect, Result } from "effect"
 import { TestClock } from "effect/testing"
 import { Credentials } from "../src/harness/opencode/credentials.js"
 import { RenPlugin } from "../src/harness/opencode/plugin.js"
@@ -61,7 +61,7 @@ describe("the ren method's refresh", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         yield* TestClock.setTime(now)
-        return yield* RenPlugin.refresh("litellm", managed(expires))
+        return yield* RenPlugin.refresh("litellm", managed(expires), () => Effect.succeedNone)
       }).pipe(Effect.provide(TestClock.layer()), Effect.result),
     )
 
@@ -71,6 +71,15 @@ describe("the ren method's refresh", () => {
       expect(await run(now, expires)).toEqual(Result.succeed(managed(expires)))
     },
   )
+
+  test("takes a renewed key in place of the expiring one", async () => {
+    const renewed = await Effect.runPromise(
+      RenPlugin.refresh("litellm", managed(60_000), () =>
+        Effect.succeedSome({ key: "renewed", expiresAt: DateTime.makeUnsafe(3_600_000) }),
+      ),
+    )
+    expect(renewed).toMatchObject({ access: "renewed", expires: 3_600_000 })
+  })
 
   test.each<[string, number]>([["at the expiry", 60_000]])(
     "fails %s, naming the provider and the expiry",

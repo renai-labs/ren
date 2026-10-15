@@ -15,4 +15,5 @@ export const Vars = Schema.Struct({
   WAIT_BUDGET_MS: Millis(600_000),
   PARK_AFTER_MS: Millis(600_000),
   OPENCODE_CONFIG: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed("{}"))),
+  REN_URL: Schema.optional(Schema.String),
 })
