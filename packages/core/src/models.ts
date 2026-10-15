@@ -19,7 +19,7 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Models.Unava
 export interface Interface {
   readonly catalog: (subject: Subject) => Effect.Effect<Models.Catalog, Unavailable>
   readonly grant: (subject: Subject) => Effect.Effect<Models.Access, Unavailable>
-  readonly renewIfDue: (subject: Subject) => Effect.Effect<Option.Option<Models.Access>, Unavailable>
+  readonly refreshIfDue: (subject: Subject) => Effect.Effect<Option.Option<Models.Access>, Unavailable>
   readonly revoke: (subject: Subject) => Effect.Effect<void, Unavailable>
 }
 
@@ -44,7 +44,7 @@ export const layerConfigured = Layer.effect(
       grant: Effect.fn("Models.grant")(function* () {
         return access
       }),
-      renewIfDue: Effect.fn("Models.renewIfDue")(function* () {
+      refreshIfDue: Effect.fn("Models.refreshIfDue")(function* () {
         return Option.none()
       }),
       revoke: Effect.fn("Models.revoke")(function* () {}),

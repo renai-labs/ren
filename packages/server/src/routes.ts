@@ -1,6 +1,6 @@
 export * as Routes from "./routes.js"
 
-import { RenewalApi } from "@ren/brain-api/renewal-api"
+import { ModelsApi } from "@ren/brain-api/models-api"
 import { Access } from "@ren/core/access"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
@@ -14,7 +14,7 @@ import { Auth } from "./auth.js"
 import { HealthHandler } from "./handlers/health.js"
 import { InvitationHandler } from "./handlers/invitation.js"
 import { MeHandler } from "./handlers/me.js"
-import { RenewalHandler } from "./handlers/renewal.js"
+import { ModelsHandler } from "./handlers/models.js"
 import { SpaceHandler } from "./handlers/space.js"
 import { SpaceMemberHandler } from "./handlers/space-member.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
@@ -46,7 +46,7 @@ export const layer = Layer.mergeAll(
     Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
     Layer.provide([Health.layer, Invitation.layer, Space.layer, SpaceMember.layer]),
   ),
-  HttpApiBuilder.layer(RenewalApi).pipe(Layer.provide(RenewalHandler)),
+  HttpApiBuilder.layer(ModelsApi).pipe(Layer.provide(ModelsHandler)),
   AuthRoute,
   Cors,
 ).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))

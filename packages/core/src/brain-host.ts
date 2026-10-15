@@ -56,7 +56,7 @@ export interface Interface {
     sessionId: Session.ID,
     organizationId: Auth.OrganizationID,
   ) => Effect.Effect<void, BrainUnavailable | BrainRejectedError>
-  readonly renewModels: (renewalToken: string) => Effect.Effect<ModelsBody, ForbiddenError | ModelsUnavailableError>
+  readonly refreshModels: (hostToken: string) => Effect.Effect<ModelsBody, ForbiddenError | ModelsUnavailableError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
@@ -66,7 +66,7 @@ class Target extends Context.Service<Target, Session.ID>()("@ren/core/BrainHost/
 const limit = "30 seconds"
 const serverLifetime = 5 * 60
 const clientLifetime = 60 * 60
-const renewalLifetime = 2 * 60 * 60
+const hostTokenLifetime = 2 * 60 * 60
 const transient = new Set([408, 429, 500, 502, 503, 504])
 
 const unavailable = (error: HttpClientError.HttpClientError) =>
@@ -136,12 +136,12 @@ export const layer = Layer.effect(
       )
 
     const body = Effect.fnUntraced(function* (subject: Models.Subject, access: Models.Access) {
-      const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + renewalLifetime
+      const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + hostTokenLifetime
       return {
         access,
-        renewalToken: yield* SessionToken.sign(key, {
+        hostToken: yield* SessionToken.sign(key, {
           sid: subject.brainId,
-          scope: "renewal",
+          scope: "host",
           org: subject.organizationId,
           exp,
         }),
@@ -157,16 +157,16 @@ export const layer = Layer.effect(
       subject: Models.Subject,
       request: Effect.Effect<A, E | ModelsNotConfiguredError>,
     ) {
-      const renewed = yield* models
-        .renewIfDue(subject)
+      const refreshed = yield* models
+        .refreshIfDue(subject)
         .pipe(
           Effect.catchTag("Models.Unavailable", (error) =>
-            Effect.logWarning("Model access renewal failed; the brain keeps its current credentials", error).pipe(
+            Effect.logWarning("Model access refresh failed; the brain keeps its current credentials", error).pipe(
               Effect.as(Option.none()),
             ),
           ),
         )
-      if (Option.isSome(renewed)) yield* configure(subject, renewed.value)
+      if (Option.isSome(refreshed)) yield* configure(subject, refreshed.value)
       return yield* request.pipe(
         Effect.catchTag("ModelsNotConfiguredError", () =>
           models.grant(subject).pipe(
@@ -219,13 +219,13 @@ export const layer = Layer.effect(
           .pipe(Effect.mapError((cause) => new BrainUnavailable({ cause })))
         return yield* cleared
       }),
-      renewModels: Effect.fn("BrainHost.renewModels")(function* (renewalToken: string) {
-        const claims = yield* SessionToken.verify(Redacted.value(config.keys), renewalToken)
-        if (Option.isNone(claims) || claims.value.scope !== "renewal" || !claims.value.org)
-          return yield* new ForbiddenError({ message: "The renewal token is not valid" })
+      refreshModels: Effect.fn("BrainHost.refreshModels")(function* (hostToken: string) {
+        const claims = yield* SessionToken.verify(Redacted.value(config.keys), hostToken)
+        if (Option.isNone(claims) || claims.value.scope !== "host" || !claims.value.org)
+          return yield* new ForbiddenError({ message: "The host token is not valid" })
         const subject = { brainId: claims.value.sid, organizationId: claims.value.org }
         const access = yield* models.grant(subject).pipe(
-          Effect.tapError((error) => Effect.logWarning("Model access renewal failed", error)),
+          Effect.tapError((error) => Effect.logWarning("Model access refresh failed", error)),
           Effect.mapError(() => new ModelsUnavailableError({ message: "Model access is unavailable" })),
         )
         return yield* body(subject, access)

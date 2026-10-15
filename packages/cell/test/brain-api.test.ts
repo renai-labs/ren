@@ -370,9 +370,7 @@ it.live("an endpoint configured while the harness is open serves the next start"
     yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
     expect(script.calls[0]?.authorization).toBe("Bearer later")
     yield* brain.removeModels
-    expect(
-      (yield* brain.opencode.model.list()).data.filter((model) => model.providerID === "later"),
-    ).toEqual([])
+    expect((yield* brain.opencode.model.list()).data.filter((model) => model.providerID === "later")).toEqual([])
   }),
 )
 

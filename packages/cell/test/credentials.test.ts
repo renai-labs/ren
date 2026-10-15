@@ -72,20 +72,20 @@ describe("the ren method's refresh", () => {
     },
   )
 
-  test("takes a renewed key in place of the expiring one", async () => {
-    const renewed = await Effect.runPromise(
+  test("takes a refreshed key in place of the expiring one", async () => {
+    const refreshed = await Effect.runPromise(
       RenPlugin.refresh("litellm", managed(60_000), () =>
-        Effect.succeedSome({ key: Redacted.make("renewed"), expiresAt: DateTime.makeUnsafe(3_600_000) }),
+        Effect.succeedSome({ key: Redacted.make("refreshed"), expiresAt: DateTime.makeUnsafe(3_600_000) }),
       ),
     )
-    expect(renewed).toMatchObject({ access: "renewed", expires: 3_600_000 })
+    expect(refreshed).toMatchObject({ access: "refreshed", expires: 3_600_000 })
   })
 
-  test("takes a renewed key that never expires and stops refreshing it", async () => {
-    const renewed = await Effect.runPromise(
+  test("takes a refreshed key that never expires and stops refreshing it", async () => {
+    const refreshed = await Effect.runPromise(
       RenPlugin.refresh("litellm", managed(60_000), () => Effect.succeedSome({ key: Redacted.make("forever") })),
     )
-    expect(renewed).toMatchObject({ access: "forever", expires: Number.MAX_SAFE_INTEGER })
+    expect(refreshed).toMatchObject({ access: "forever", expires: Number.MAX_SAFE_INTEGER })
   })
 
   test.each<[string, number]>([["at the expiry", 60_000]])(

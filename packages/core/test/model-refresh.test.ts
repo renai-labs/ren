@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
-import { RenewalApi } from "@ren/brain-api/renewal-api"
+import { ModelsApi } from "@ren/brain-api/models-api"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
@@ -27,7 +27,7 @@ const models = Layer.succeed(
         const lifetimeMs = count === 1 ? 2 * minuteMs : 60 * minuteMs
         return Shared.access({ stub: Shared.apiKey(`sk-granted-${count}`, Date.now() + lifetimeMs) })
       }),
-    renewIfDue: () => Effect.succeedNone,
+    refreshIfDue: () => Effect.succeedNone,
     revoke: () => Effect.void,
   }),
 )
@@ -41,14 +41,14 @@ const hostWith = (config: Record<string, string>) =>
     Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config))),
   )
 
-const renewal = HttpRouter.toWebHandler(
-  HttpApiBuilder.layer(RenewalApi).pipe(
+const api = HttpRouter.toWebHandler(
+  HttpApiBuilder.layer(ModelsApi).pipe(
     Layer.provide(
-      HttpApiBuilder.group(RenewalApi, "renewal", (handlers) =>
+      HttpApiBuilder.group(ModelsApi, "models", (handlers) =>
         Effect.gen(function* () {
           const brain = yield* BrainHost.Service
-          return handlers.handle("renewal.models", (request) =>
-            brain.renewModels(request.headers.authorization.replace(/^Bearer /u, "")),
+          return handlers.handle("models.refresh", (request) =>
+            brain.refreshModels(request.headers.authorization.replace(/^Bearer /u, "")),
           )
         }),
       ),
@@ -59,7 +59,7 @@ const renewal = HttpRouter.toWebHandler(
   { disableLogger: true },
 )
 
-const server = Bun.serve({ hostname: "0.0.0.0", port: 0, fetch: (request) => renewal.handler(request) })
+const server = Bun.serve({ hostname: "0.0.0.0", port: 0, fetch: (request) => api.handler(request) })
 const runtime = ManagedRuntime.make(
   Layer.effect(
     Shared.Service,
@@ -74,15 +74,15 @@ beforeAll(async () => {
 }, 120_000)
 afterAll(async () => {
   await runtime.dispose()
-  await renewal.dispose()
+  await api.dispose()
   await server.stop(true)
 })
 
 const it = testEffect(Layer.unwrap(Effect.sync(() => hostWith(settings))))
 const organizationId = Auth.OrganizationID.create()
 
-describe("model renewal", () => {
-  it.live("an expiring key is renewed by the cell before the model call, through BrainHost.renewModels", () =>
+describe("model refresh", () => {
+  it.live("an expiring key is refreshed by the cell before the model call, through BrainHost.refreshModels", () =>
     Effect.gen(function* () {
       const brain = yield* BrainHost.Service
       const sessionId = Session.ID.create()
@@ -96,7 +96,7 @@ describe("model renewal", () => {
           interactive: true,
           initialMessage: {
             messageId: Session.MessageID.create(),
-            prompt: { text: `renew ${script.marker}` },
+            prompt: { text: `refresh ${script.marker}` },
             sender: { userId: "user_1" },
           },
         },
@@ -107,7 +107,7 @@ describe("model renewal", () => {
     }),
   )
 
-  it.live("renewModels refuses tokens that are not valid renewal tokens", () =>
+  it.live("refreshModels refuses tokens that are not valid host tokens", () =>
     Effect.gen(function* () {
       const brain = yield* BrainHost.Service
       const key = TestToken.keys[0]
@@ -116,15 +116,15 @@ describe("model renewal", () => {
       const tokens = [
         "not-a-token",
         yield* SessionToken.sign(key, { sid, scope: "server", exp }),
-        yield* SessionToken.sign(key, { sid, scope: "renewal", exp }),
-        yield* SessionToken.sign(key, { sid, scope: "renewal", org: organizationId, exp: exp - 1200 }),
+        yield* SessionToken.sign(key, { sid, scope: "host", exp }),
+        yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp: exp - 1200 }),
       ]
-      const failures = yield* Effect.forEach(tokens, (token) => brain.renewModels(token).pipe(Effect.flip))
+      const failures = yield* Effect.forEach(tokens, (token) => brain.refreshModels(token).pipe(Effect.flip))
       expect(failures.map((failure) => failure._tag)).toEqual(Array.from({ length: 4 }, () => "ForbiddenError"))
-      const valid = yield* SessionToken.sign(key, { sid, scope: "renewal", org: organizationId, exp })
-      const renewed = yield* brain.renewModels(valid)
-      expect(renewed.renewalToken).toBeString()
-      expect(renewed.access.endpoints.map((endpoint) => endpoint.id)).toEqual(["stub"])
+      const valid = yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp })
+      const refreshed = yield* brain.refreshModels(valid)
+      expect(refreshed.hostToken).toBeString()
+      expect(refreshed.access.endpoints.map((endpoint) => endpoint.id)).toEqual(["stub"])
     }),
   )
 })

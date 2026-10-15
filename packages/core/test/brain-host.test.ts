@@ -287,7 +287,7 @@ describe("BrainHost", () => {
 
   describe("model access", () => {
     const scripted = (
-      renewals: Ref.Ref<ReadonlyArray<Models.Access>>,
+      refreshes: Ref.Ref<ReadonlyArray<Models.Access>>,
       granted: Ref.Ref<number>,
       revoked: Ref.Ref<ReadonlyArray<Models.Subject>> = Ref.makeUnsafe<ReadonlyArray<Models.Subject>>([]),
     ) =>
@@ -299,8 +299,8 @@ describe("BrainHost", () => {
             Ref.updateAndGet(granted, (count) => count + 1).pipe(
               Effect.map((count) => Shared.access({ stub: Shared.apiKey(`sk-granted-${count}`) })),
             ),
-          renewIfDue: () =>
-            Ref.modify(renewals, (pending) => [Option.fromNullishOr(pending[0]), pending.slice(1)] as const),
+          refreshIfDue: () =>
+            Ref.modify(refreshes, (pending) => [Option.fromNullishOr(pending[0]), pending.slice(1)] as const),
           revoke: (subject) => Ref.update(revoked, (subjects) => [...subjects, subject]),
         }),
       )
@@ -319,9 +319,9 @@ describe("BrainHost", () => {
       }),
     )
 
-    it.live("a renewed access reaches the next model call", () =>
+    it.live("a refreshed access reaches the next model call", () =>
       Effect.gen(function* () {
-        const renewals = yield* Ref.make<ReadonlyArray<Models.Access>>([])
+        const refreshes = yield* Ref.make<ReadonlyArray<Models.Access>>([])
         const sessionId = Session.ID.create()
         const first = stub.script()
         const second = stub.script()
@@ -331,13 +331,13 @@ describe("BrainHost", () => {
           yield* send(sessionId, `first ${first.marker}`)
           yield* Effect.promise(() => first.called())
           yield* surface(yield* brain.access(sessionId), `/api/experimental/session/${sessionId}/wait`, "POST")
-          yield* Ref.set(renewals, [Shared.access({ stub: Shared.apiKey("sk-renewed") })])
+          yield* Ref.set(refreshes, [Shared.access({ stub: Shared.apiKey("sk-refreshed") })])
           yield* send(sessionId, `second ${second.marker}`)
           yield* Effect.promise(() => second.called())
-        }).pipe(Effect.provide(host(settings, scripted(renewals, yield* Ref.make(0)))))
+        }).pipe(Effect.provide(host(settings, scripted(refreshes, yield* Ref.make(0)))))
         expect([first.calls[0]?.authorization, second.calls[0]?.authorization]).toEqual([
           "Bearer sk-granted-1",
-          "Bearer sk-renewed",
+          "Bearer sk-refreshed",
         ])
       }),
     )
@@ -411,7 +411,7 @@ describe("BrainHost", () => {
       ),
     )
 
-    it.live("a failed renewal keeps the brain's credentials, and a failed grant is BrainUnavailable", () =>
+    it.live("a failed refresh keeps the brain's credentials, and a failed grant is BrainUnavailable", () =>
       Effect.gen(function* () {
         const sessionId = Session.ID.create()
         yield* start(sessionId)
@@ -421,7 +421,7 @@ describe("BrainHost", () => {
           Models.Service.of({
             catalog: () => Effect.fail(unavailable),
             grant: () => Effect.fail(unavailable),
-            renewIfDue: () => Effect.fail(unavailable),
+            refreshIfDue: () => Effect.fail(unavailable),
             revoke: () => Effect.void,
           }),
         )
