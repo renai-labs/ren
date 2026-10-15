@@ -19,8 +19,8 @@ const forbidden = new ForbiddenError({ message: "The token is for another sessio
 const notConfigured = new ModelsNotConfiguredError({ message: "The brain has no model configuration" })
 
 const configured = Effect.gen(function* () {
-  const info = yield* Cell.Info
-  const stored = yield* ModelStore.read(info.storage)
+  const store = yield* ModelStore.Service
+  const stored = yield* store.read
   if (Option.isNone(stored)) return yield* Effect.fail(notConfigured)
   const now = yield* DateTime.now
   const expired = stored.value.endpoints.flatMap((endpoint) =>
@@ -37,7 +37,7 @@ const configured = Effect.gen(function* () {
 
 export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
   Effect.gen(function* () {
-    const context = yield* Effect.context<Cell.Info | Cell.Activity | Harness.Service>()
+    const context = yield* Effect.context<Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service | ModelStore.Storage>()
     return group
       .handle("brain.start", (request) =>
         Effect.gen(function* () {
@@ -59,14 +59,14 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
       )
       .handle("brain.models", (request) =>
         Effect.gen(function* () {
-          const info = yield* Cell.Info
+          const store = yield* ModelStore.Service
           const activity = yield* Cell.Activity
           const host = yield* Harness.Service
           return yield* activity.configuring.withPermit(
             Effect.gen(function* () {
               // oxlint-disable-next-line ren/no-comments -- Writing before checking whether the harness is open guarantees that either a later open reads this configuration or this request applies it to the open instance.
-              yield* ModelStore.write(info.storage, request.payload.access)
-              yield* ModelRefresh.write(info.storage, request.payload.hostToken)
+              yield* store.write(request.payload.access)
+              yield* ModelRefresh.write(request.payload.hostToken)
               if ((yield* host.state).isOpen) {
                 const harness = yield* Cell.acquire
                 yield* harness.configure(request.payload.access.endpoints)
@@ -77,13 +77,13 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
       )
       .handle("brain.removeModels", () =>
         Effect.gen(function* () {
-          const info = yield* Cell.Info
+          const store = yield* ModelStore.Service
           const activity = yield* Cell.Activity
           const host = yield* Harness.Service
           yield* activity.configuring.withPermit(
             Effect.gen(function* () {
-              yield* ModelStore.remove(info.storage)
-              yield* ModelRefresh.remove(info.storage)
+              yield* store.remove
+              yield* ModelRefresh.remove()
               if ((yield* host.state).isOpen) {
                 const harness = yield* Cell.acquire
                 yield* harness.configure([])
@@ -102,7 +102,7 @@ export const layer = Layer.effect(
     const app = yield* HttpRouter.toHttpEffect(
       HttpApiBuilder.layer(BrainApi).pipe(Layer.provide(handlers), Layer.provide(HttpServer.layerServices)),
     )
-    const context = yield* Effect.context<Cell.Info | Cell.Activity | Harness.Service>()
+    const context = yield* Effect.context<Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service | ModelStore.Storage>()
     return Cell.Brain.of({ owns, fetch: HttpEffect.toWebHandler(app.pipe(Effect.provide(context))) })
   }),
 )

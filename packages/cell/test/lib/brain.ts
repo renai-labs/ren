@@ -60,7 +60,11 @@ const make = Effect.gen(function* () {
     put: (key: string, value: string) => Promise.resolve(void stored.set(key, value)),
     delete: (key: string) => Promise.resolve(stored.delete(key)),
   }
-  yield* ModelStore.write(storage, Shared.access(undefined, Shared.stub().url))
+  const modelStore = ModelStore.layer.pipe(Layer.provideMerge(Layer.succeed(ModelStore.Storage, storage)))
+  yield* ModelStore.Service.pipe(
+    Effect.flatMap((store) => store.write(Shared.access(undefined, Shared.stub().url))),
+    Effect.provide(modelStore),
+  )
   const info = Layer.succeed(
     Cell.Info,
     Cell.Info.of({
@@ -72,7 +76,6 @@ const make = Effect.gen(function* () {
           alarm.at = Number(at)
           return Promise.resolve()
         },
-        ...storage,
       },
     }),
   )
@@ -92,6 +95,7 @@ const make = Effect.gen(function* () {
           Layer.mergeAll(
             info,
             activity,
+            modelStore,
             Harness.layer(
               Effect.succeed({
                 ...harness,

@@ -26,7 +26,7 @@ import { Reconcile } from "./reconcile.js"
 export class Info extends Context.Service<
   Info,
   {
-    readonly storage: Pick<DurableObjectStorage, "getAlarm" | "setAlarm"> & ModelStore.Storage
+    readonly storage: Pick<DurableObjectStorage, "getAlarm" | "setAlarm">
     readonly sessionId: Session.ID
     readonly vars: Env.Vars
   }
@@ -168,9 +168,10 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
   const harness = Layer.unwrap(
     Effect.gen(function* () {
       const cell = yield* Info
-      const refreshKey = yield* ModelRefresh.make(cell.storage, cell.vars.REN_URL)
+      const store = yield* ModelStore.Service
+      const refreshKey = yield* ModelRefresh.make(cell.vars.REN_URL)
       return Harness.layer(
-        ModelStore.read(cell.storage).pipe(
+        store.read.pipe(
           Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
           Effect.flatMap((endpoints) =>
             OpenCodeHarness.open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey),
@@ -188,5 +189,6 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
       configuring: Semaphore.make(1),
     }),
   )
-  return Layer.mergeAll(harness, activity).pipe(Layer.provideMerge(info))
+  const models = ModelStore.layer.pipe(Layer.provideMerge(Layer.succeed(ModelStore.Storage, storage)))
+  return Layer.mergeAll(harness, activity).pipe(Layer.provideMerge(models), Layer.provideMerge(info))
 }
