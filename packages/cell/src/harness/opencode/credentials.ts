@@ -1,13 +1,13 @@
 export * as Credentials from "./credentials.js"
 
-import type { OpenCodeClient } from "@opencode/client/effect"
 import { Credential } from "@opencode/core/credential"
-import { IntegrationID } from "@opencode/schema/integration-id"
-import type { Models } from "@ren/schema/models"
-import { DateTime, Effect, Schema } from "effect"
-import { RenPlugin } from "./plugin.js"
+import type { IntegrationID } from "@opencode/schema/integration-id"
+import { Effect, Schema } from "effect"
 
-const owned = "cred_ren_"
+export interface Entry {
+  readonly integrationID: IntegrationID
+  readonly value: Credential.Value
+}
 
 const same = Schema.toEquivalence(Credential.Value)
 
@@ -17,36 +17,30 @@ export const replaces = (stored: Credential.Value, next: Credential.Value) => {
   return !same(stored, next)
 }
 
-export const apply: (
-  client: OpenCodeClient,
+export const sync = Effect.fn("Credentials.sync")(function* (
   store: Credential.Interface,
-  endpoints: ReadonlyArray<Models.Endpoint>,
-) => Effect.Effect<void> = Effect.fn("Credentials.apply")(function* (client, store, endpoints) {
-  const integrations = new Set((yield* client.integration.list().pipe(Effect.orDie)).data.map((item) => item.id))
-  const wanted = new Set(endpoints.map((endpoint) => endpoint.id))
+  owner: string,
+  entries: ReadonlyArray<Entry>,
+) {
+  const prefix = `cred_ren_${owner}_`
+  const wanted = new Set(entries.map((entry) => entry.integrationID))
   const stored = new Map(
     (yield* store.all())
-      .filter((credential) => credential.id.startsWith(owned))
+      .filter((credential) => credential.id.startsWith(prefix))
       .map((credential) => [credential.integrationID, credential]),
   )
   yield* Effect.forEach(
-    endpoints.filter((endpoint) => integrations.has(IntegrationID.make(endpoint.id))),
-    (endpoint) => {
-      const integrationID = IntegrationID.make(endpoint.id)
-      const apiKey = endpoint.apiKey
-      const value: Credential.Value = apiKey.expiresAt
-        ? {
-            type: "oauth",
-            methodID: RenPlugin.method,
-            access: apiKey.key,
-            refresh: "",
-            expires: DateTime.toEpochMillis(apiKey.expiresAt),
-          }
-        : { type: "key", key: apiKey.key }
-      const current = stored.get(integrationID)
+    entries,
+    (entry) => {
+      const current = stored.get(entry.integrationID)
       if (!current)
-        return store.create({ id: Credential.ID.make(`${owned}${endpoint.id}`), integrationID, value, label: "Ren" })
-      return replaces(current.value, value) ? store.update(current.id, { value }) : Effect.void
+        return store.create({
+          id: Credential.ID.make(`${prefix}${entry.integrationID}`),
+          integrationID: entry.integrationID,
+          value: entry.value,
+          label: "Ren",
+        })
+      return replaces(current.value, entry.value) ? store.update(current.id, { value: entry.value }) : Effect.void
     },
     { discard: true },
   )

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
-import { DateTime, Effect, Result } from "effect"
+import { DateTime, Effect, Redacted, Result } from "effect"
 import { TestClock } from "effect/testing"
 import { Credentials } from "../src/harness/opencode/credentials.js"
 import { RenPlugin } from "../src/harness/opencode/plugin.js"
@@ -75,7 +75,7 @@ describe("the ren method's refresh", () => {
   test("takes a renewed key in place of the expiring one", async () => {
     const renewed = await Effect.runPromise(
       RenPlugin.refresh("litellm", managed(60_000), () =>
-        Effect.succeedSome({ key: "renewed", expiresAt: DateTime.makeUnsafe(3_600_000) }),
+        Effect.succeedSome({ key: Redacted.make("renewed"), expiresAt: DateTime.makeUnsafe(3_600_000) }),
       ),
     )
     expect(renewed).toMatchObject({ access: "renewed", expires: 3_600_000 })

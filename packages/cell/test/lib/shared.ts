@@ -5,7 +5,7 @@ import { StubModel } from "./stub-model.js"
 import { TestToken } from "./token.js"
 import { Wrangler } from "./wrangler.js"
 import type { Models } from "@ren/schema/models"
-import { Context, DateTime, Effect, Layer } from "effect"
+import { Context, DateTime, Effect, Layer, Redacted } from "effect"
 
 export class Service extends Context.Service<Service, Celld.Instance>()("@ren/cell/test/Shared") {}
 
@@ -64,7 +64,7 @@ const endpoints: Readonly<Record<string, Pick<Models.Endpoint, "protocol" | "mod
 }
 
 export const apiKey = (key: string, expiresAtMs?: number): Models.ApiKey => ({
-  key,
+  key: Redacted.make(key),
   ...(expiresAtMs !== undefined && { expiresAt: DateTime.makeUnsafe(expiresAtMs) }),
 })
 

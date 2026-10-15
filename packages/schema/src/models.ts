@@ -4,7 +4,7 @@ import { Schema, Struct } from "effect"
 
 export interface ApiKey extends Schema.Schema.Type<typeof ApiKey> {}
 export const ApiKey = Schema.Struct({
-  key: Schema.NonEmptyString,
+  key: Schema.RedactedFromValue(Schema.NonEmptyString),
   expiresAt: Schema.optionalKey(Schema.DateTimeUtc),
 }).annotate({ identifier: "Models.ApiKey" })
 
