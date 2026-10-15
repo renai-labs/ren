@@ -23,3 +23,9 @@ export class ModelsNotConfiguredError extends Schema.TaggedError<ModelsNotConfig
   { message: Schema.String },
   { httpApiStatus: 409 },
 ) {}
+
+export class ModelsUnavailableError extends Schema.TaggedError<ModelsUnavailableError>()(
+  "ModelsUnavailableError",
+  { message: Schema.String },
+  { httpApiStatus: 503 },
+) {}

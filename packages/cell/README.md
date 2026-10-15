@@ -14,6 +14,8 @@ Start, send and API key changes share a semaphore. Model turns continue independ
 
 `PUT /ren/models` takes a `Models.Access`: endpoints, each with a protocol, a base URL, an API key and its models. The cell stores it in Durable Object storage, so it survives a restart. If OpenCode is open, its API keys apply at once; otherwise the next open applies them. Each endpoint becomes an OpenCode provider with the endpoint's id when OpenCode opens, and each model's efforts become its OpenCode variants, so endpoints and models added while it is open wait for the next open. `start` and `send` answer `ModelsNotConfiguredError` (409) until access is stored; `BrainHost` then grants it and retries once. `DELETE /ren/models` removes the access and Ren's API keys; `BrainHost.revokeModels` calls it and revokes the keys at their source even when the cell cannot be reached.
 
+Access comes with a renewal token. When OpenCode finds an API key within five minutes of expiring, the cell posts the token to `${REN_URL}/brain/models/renew` and stores the fresh access and token it gets back, so a long turn or a re-sent message never runs on an expired key. Concurrent refreshes share one request. Without `REN_URL`, an expiring key is used until it expires. A model OpenCode already knows keeps its own reasoning variants; `efforts` adds to them.
+
 `app.version` identifies **Ren's cell package**, derived from this package's `package.json`. OpenCode dependency versions are pinned in the workspace catalog.
 
 ## Starting with a message

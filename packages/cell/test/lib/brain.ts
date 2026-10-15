@@ -34,6 +34,7 @@ const make = Effect.gen(function* () {
       models: { fetch: false },
       fs: { filewatcher: false, fff: false },
     }).pipe(Layer.provide(HttpServer.layerServices)),
+    () => Effect.succeedNone,
   )
   const requests: Array<string> = []
   const transport: { before: (request: Request) => Effect.Effect<void>; sending: Effect.Effect<void> } = {
@@ -115,7 +116,7 @@ const make = Effect.gen(function* () {
     ),
   )
   const models = (apiKeys?: Readonly<Record<string, Models.ApiKey>>) =>
-    client.brain["brain.models"]({ payload: Shared.access(apiKeys, Shared.stub().url) })
+    client.brain["brain.models"]({ payload: { access: Shared.access(apiKeys, Shared.stub().url) } })
   return {
     id,
     directory,

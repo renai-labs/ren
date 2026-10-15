@@ -8,6 +8,7 @@ import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
 import { Harness } from "./harness/harness.js"
 import { ModelStore } from "./model-store.js"
+import { Renewal } from "./renewal.js"
 
 const prefix = "/ren"
 
@@ -52,10 +53,11 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
           return yield* activity.configuring.withPermit(
             Effect.gen(function* () {
               // oxlint-disable-next-line ren/no-comments -- Writing before checking whether the harness is open guarantees that either a later open reads this configuration or this request applies it to the open instance.
-              yield* ModelStore.write(info.storage, request.payload)
+              yield* ModelStore.write(info.storage, request.payload.access)
+              yield* Renewal.write(info.storage, request.payload.renewalToken)
               if ((yield* host.state).isOpen) {
                 const harness = yield* Cell.acquire
-                yield* harness.configure(request.payload.endpoints)
+                yield* harness.configure(request.payload.access.endpoints)
               }
             }),
           )
@@ -69,6 +71,7 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
           yield* activity.configuring.withPermit(
             Effect.gen(function* () {
               yield* ModelStore.remove(info.storage)
+              yield* Renewal.remove(info.storage)
               if ((yield* host.state).isOpen) {
                 const harness = yield* Cell.acquire
                 yield* harness.configure([])

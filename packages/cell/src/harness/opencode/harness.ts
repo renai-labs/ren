@@ -117,8 +117,9 @@ export const open = Effect.fn("OpenCodeHarness.open")(function* (
   storage: DurableObjectStorage,
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
+  renew: Harness.Renew,
 ) {
-  return yield* make(yield* Host.open(storage, config, endpoints), endpoints)
+  return yield* make(yield* Host.open(storage, config, endpoints, renew), endpoints)
 })
 
 export const make = Effect.fn("OpenCodeHarness.make")(function* (
