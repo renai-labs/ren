@@ -28,8 +28,3 @@ export const organizationMember = Effect.fnUntraced(function* (
     .for("share")
   return rows.at(0)
 })
-
-export const organizationRole = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info) {
-  const member = yield* organizationMember(transaction, actor.organizationId, actor.userId)
-  return member?.role
-})

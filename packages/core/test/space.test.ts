@@ -4,16 +4,15 @@ import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { and, eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
+import { Access } from "../src/access.js"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
-import { SpaceMemberPolicy } from "../src/space/member-policy.js"
-import { SpacePolicy } from "../src/space/policy.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
 
 const it = testEffect(
   Layer.mergeAll(Space.layer, SpaceMember.layer, SpaceProvisioning.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(SpacePolicy.layer, SpaceMemberPolicy.layer)),
+    Layer.provideMerge(Access.layer),
     Layer.provideMerge(Testing.layer),
   ),
 )
@@ -41,7 +40,7 @@ const user = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, r
     .insert(Database.Schema.member)
     .values({ id: Auth.MemberID.create(), organizationId, userId: id, role, createdAt: new Date() })
   yield* provisioning.createInitialMemberships(organizationId, { id, name: "Ada", email })
-  return { userId: id, organizationId, email }
+  return { userId: id, organizationId, roles: [role], email }
 })
 
 const invite = Effect.fnUntraced(function* (
@@ -85,7 +84,7 @@ describe("Space", () => {
       const grace = yield* user(organizationId)
       const admin = yield* user(organizationId, "admin")
       const team = yield* spaces.create(ada, { name: "Team" })
-      expect(team.canUpdate).toBe(true)
+      expect(team).toMatchObject({ canUpdate: true, canAddMember: true, canRemoveMember: true, canArchive: true })
       expect(yield* spaces.get(admin, team.id)).toMatchObject({
         membershipId: null,
         canUpdate: true,
@@ -138,7 +137,7 @@ describe("Space", () => {
       const team = yield* spaces.create(ada, { name: "Team" })
       const added = yield* members.create(ada, { spaceId: team.id, userId: grace.userId })
       yield* members.archive(ada, added.id)
-      const withoutOrganizationRole = { userId: outsider.userId, organizationId }
+      const withoutOrganizationRole = { userId: outsider.userId, organizationId, roles: [] }
       expect(yield* Effect.flip(spaces.create(withoutOrganizationRole, { name: "Intruder" }))).toMatchObject({
         _tag: "Primitive.Forbidden",
         message: "Join the organization to create spaces.",
@@ -265,7 +264,7 @@ describe("SpaceMember", () => {
         })
         const statuses = (yield* members.list(ada, { ...page, spaceId: team.id })).items.map((member) => member.status)
         expect(statuses).toEqual(["active", "active"])
-        expect((yield* spaces.get({ userId: late, organizationId }, team.id)).memberCount).toBe(2)
+        expect((yield* spaces.get({ userId: late, organizationId, roles: ["member"] }, team.id)).memberCount).toBe(2)
       }),
   )
 

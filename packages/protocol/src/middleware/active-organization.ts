@@ -4,9 +4,10 @@ import { HttpApiMiddleware } from "effect/http-api"
 import { ForbiddenError } from "../errors.js"
 import { CurrentSession } from "./authentication.js"
 
-export class CurrentOrganization extends Context.Service<CurrentOrganization, { readonly id: Auth.OrganizationID }>()(
-  "@ren/protocol/CurrentOrganization",
-) {}
+export class CurrentOrganization extends Context.Service<
+  CurrentOrganization,
+  { readonly id: Auth.OrganizationID; readonly roles: ReadonlyArray<string> }
+>()("@ren/protocol/CurrentOrganization") {}
 
 export class ActiveOrganization extends HttpApiMiddleware.Service<
   ActiveOrganization,

@@ -56,4 +56,17 @@ export const action = <
   operation: O,
 ) => `${definition.name}.${operation}` as const
 
+const operations = ["list", "get", "create", "update", "archive"] as const
+
+export const actions = <const D extends Definition>(
+  definition: D,
+  selected?: ReadonlyArray<Operation<D>>,
+): ReadonlyArray<Action<D>> =>
+  (
+    selected ??
+    [...operations, ...Object.keys(definition.actions ?? {})].filter(
+      (operation): operation is Operation<D> => operation in definition || operation in (definition.actions ?? {}),
+    )
+  ).map((operation) => action(definition, operation))
+
 export const define = <const D extends Definition>(definition: D & Checked<D>): D => definition

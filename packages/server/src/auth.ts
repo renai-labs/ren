@@ -14,10 +14,15 @@ interface Interface {
   readonly handler: (request: Request) => Promise<Response>
   readonly trustedOrigins: ReadonlyArray<string>
   readonly getSession: (headers: Headers) => Effect.Effect<Option.Option<AuthenticatedSession>>
-  readonly getActiveOrganization: (
+  readonly getActiveMembership: (
     session: AuthenticatedSession,
     headers: Headers,
-  ) => Effect.Effect<Option.Option<Auth.Organization>>
+  ) => Effect.Effect<Option.Option<Membership>>
+}
+
+interface Membership {
+  readonly organization: Auth.Organization
+  readonly roles: ReadonlyArray<string>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/server/Auth") {}
@@ -88,13 +93,13 @@ export const layer = Layer.effect(
           session: { activeOrganizationId: session.session.activeOrganizationId ?? null },
         })
       }),
-      getActiveOrganization: Effect.fn("Auth.getActiveOrganization")(function* (
+      getActiveMembership: Effect.fn("Auth.getActiveMembership")(function* (
         session: AuthenticatedSession,
         headers: Headers,
       ) {
         const membership = yield* Effect.promise(() =>
           database.db.query.member.findFirst({
-            columns: {},
+            columns: { role: true },
             with: { organization: { columns: { id: true, name: true, slug: true, logo: true } } },
             where: { userId: session.user.id },
             orderBy: (member, { asc, desc, sql }) => [
@@ -105,12 +110,15 @@ export const layer = Layer.effect(
           }),
         )
         const active = membership?.organization
-        if (!active) return Option.none()
+        if (!membership || !active) return Option.none()
         if (active.id !== session.session.activeOrganizationId) {
           yield* Effect.promise(() => auth.api.setActiveOrganization({ headers, body: { organizationId: active.id } }))
         }
         const organization: typeof Auth.Organization.Encoded = active
-        return Option.some(yield* Schema.decodeEffect(Auth.Organization)(organization).pipe(Effect.orDie))
+        return Option.some({
+          organization: yield* Schema.decodeEffect(Auth.Organization)(organization).pipe(Effect.orDie),
+          roles: Auth.roles(membership.role),
+        })
       }),
     })
   }),

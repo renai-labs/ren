@@ -10,7 +10,7 @@ import { Effect } from "effect"
 const currentActor = Effect.gen(function* () {
   const user = yield* CurrentUser
   const organization = yield* CurrentOrganization
-  return { userId: user.id, organizationId: organization.id } satisfies Actor.Info
+  return { userId: user.id, organizationId: organization.id, roles: organization.roles } satisfies Actor.Info
 })
 
 const notFound = (error: Primitive.NotFound) => Effect.fail(new NotFoundError({ message: error.message }))

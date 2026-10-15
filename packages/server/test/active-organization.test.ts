@@ -14,7 +14,7 @@ const ScopedApi = HttpApi.make("scoped").add(
   HttpApiGroup.make("test.scoped")
     .add(
       HttpApiEndpoint.get("organization", "/test/organization", {
-        success: Schema.Struct({ id: Schema.String }),
+        success: Schema.Struct({ id: Schema.String, roles: Schema.Array(Schema.String) }),
         error: [UnauthorizedError, ForbiddenError],
       }),
     )
@@ -44,10 +44,10 @@ const organization = (cookie: string) =>
   app.handler(new Request("http://localhost:4000/test/organization", { headers: { cookie } }))
 
 describe("ActiveOrganization", () => {
-  test("provides the active organization", async () => {
+  test("provides the active organization and the caller's roles in it", async () => {
     const response = await organization(sessionCookie(await signUp(app, "margaret@gmail.com", "Margaret")))
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ id: expect.stringMatching(/^org_/) })
+    expect(await response.json()).toEqual({ id: expect.stringMatching(/^org_/), roles: ["owner"] })
   })
 
   test("returns 403 when the user has no organization", async () => {

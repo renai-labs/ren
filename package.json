@@ -11,6 +11,7 @@
     "dev:app": "bun run --cwd packages/app dev",
     "dev:site": "bun run --cwd packages/site dev",
     "dev:storybook": "bun run --cwd packages/storybook dev",
+    "print-policies": "bun run --cwd packages/core print-policies",
     "lint": "oxlint --disable-nested-config --type-aware --deny-warnings && ast-grep scan -c script/ast-grep/sgconfig.yml --globs '!**/generated/**' --globs '!**/*.gen.ts' --globs '!packages/db/src/auth.sql.ts' packages script && knip --no-config-hints",
     "typecheck": "bun turbo typecheck --concurrency=3 && tsgo --noEmit",
     "check": "bun run lint && bun run typecheck",

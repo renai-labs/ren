@@ -6,9 +6,9 @@ import { SpaceMember } from "@ren/schema/space-member"
 import { and, asc, count, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { Context, DateTime, Effect, Layer, Schema } from "effect"
+import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { Primitive } from "./primitive.js"
-import { SpaceMemberPolicy } from "./space/member-policy.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 
@@ -46,29 +46,34 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
 
 type Row = Effect.Success<ReturnType<typeof select>>[number]
 
+const actions = {
+  list: Primitive.action(Space.definition, "list"),
+  get: Primitive.action(Space.definition, "get"),
+  create: Primitive.action(Space.definition, "create"),
+  update: Primitive.action(Space.definition, "update"),
+  archive: Primitive.action(Space.definition, "archive"),
+  addMember: Primitive.action(SpaceMember.definition, "create"),
+  removeMember: Primitive.action(SpaceMember.definition, "archive"),
+}
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const policy = yield* SpacePolicy.Service
-    const memberPolicy = yield* SpaceMemberPolicy.Service
+    const access = yield* Access.Service
 
-    const spaceVisibilityFilter = (actor: Actor.Info, policyContext: SpacePolicy.OrganizationContext) =>
+    const visibleTo = (actor: Actor.Info) =>
       and(
         eq(Database.Schema.space.organization_id, actor.organizationId),
         isNull(Database.Schema.space.archived_at),
-        policy.visibility(policyContext) === "membership" ? isNotNull(SpaceQueries.membership.id) : undefined,
+        SpacePolicy.filter(access.plan(actor, actions.get)),
       )
 
     const toInfo =
-      (actor: Actor.Info, role: string | undefined) =>
+      (actor: Actor.Info) =>
       (row: Row): Space.Info => {
-        const policyContext = {
-          role,
-          membershipId: row.membershipId,
-          isFirstOrganizationSpace: row.isFirstOrganizationSpace,
-        }
-        const target = row.space.id
+        const resource = SpacePolicy.resource(row.membershipId)
+        const isAllowed = (action: string) => access.isAllowed({ actor, action, resource })
         return {
           id: row.space.id,
           organizationId: row.space.organization_id,
@@ -76,25 +81,10 @@ export const layer = Layer.effect(
           description: row.space.description,
           memberCount: row.memberCount,
           membershipId: row.membershipId,
-          canUpdate: policy.check({
-            who: actor,
-            action: Primitive.action(Space.definition, "update"),
-            target,
-            policyContext,
-          }).allowed,
-          canAddMember: memberPolicy.check({
-            who: actor,
-            action: Primitive.action(SpaceMember.definition, "create"),
-            target,
-            policyContext,
-          }).allowed,
-          canRemoveMember: memberPolicy.canArchiveMembers(policyContext),
-          canArchive: policy.check({
-            who: actor,
-            action: Primitive.action(Space.definition, "archive"),
-            target,
-            policyContext,
-          }).allowed,
+          canUpdate: isAllowed(actions.update),
+          canAddMember: isAllowed(actions.addMember),
+          canRemoveMember: isAllowed(actions.removeMember),
+          canArchive: isAllowed(actions.archive) && !row.isFirstOrganizationSpace,
           createdAt: DateTime.fromDateUnsafe(row.space.created_at),
           updatedAt: DateTime.fromDateUnsafe(row.space.updated_at),
           archivedAt: row.space.archived_at && DateTime.fromDateUnsafe(row.space.archived_at),
@@ -104,55 +94,36 @@ export const layer = Layer.effect(
     const find = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       actor: Actor.Info,
-      role: string | undefined,
       where: SQL | undefined,
     ) {
-      const info = (yield* select(transaction, actor).where(where)).map(toInfo(actor, role)).at(0)
+      const info = (yield* select(transaction, actor).where(where)).map(toInfo(actor)).at(0)
       if (!info) return yield* notFound
       return info
     })
 
-    const lock = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Space.ID) {
-      const role = yield* SpaceQueries.organizationRole(transaction, actor)
-      if (!role) return
+    const findVisible = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      id: Space.ID,
+    ) {
       const rows = yield* select(transaction, actor)
         .where(and(eq(Database.Schema.space.id, id), eq(Database.Schema.space.organization_id, actor.organizationId)))
         .for("update", { of: Database.Schema.space })
       const row = rows.at(0)
       if (!row) return
-      return {
-        row,
-        role,
-        policyContext: {
-          role,
-          membershipId: row.membershipId,
-          isFirstOrganizationSpace: row.isFirstOrganizationSpace,
-        },
-      }
+      const resource = SpacePolicy.resource(row.membershipId)
+      if (!access.isAllowed({ actor, action: actions.get, resource })) return
+      return { row, resource }
     })
 
     return Service.of({
       list: Effect.fn("Space.list")(function* (actor: Actor.Info, input: Space.ListInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const role = yield* SpaceQueries.organizationRole(transaction, actor)
-            const empty = { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
-            if (!role) return empty
-            const policyContext = { role }
-            if (
-              !policy.check({
-                who: actor,
-                action: Primitive.action(Space.definition, "list"),
-                target: actor.organizationId,
-                policyContext,
-              }).allowed
-            ) {
-              return empty
+            if (!access.isAllowed({ actor, action: actions.list, resource: SpacePolicy.organization })) {
+              return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
             }
-            const where = and(
-              spaceVisibilityFilter(actor, policyContext),
-              input.joined ? isNotNull(SpaceQueries.membership.id) : undefined,
-            )
+            const where = and(visibleTo(actor), input.joined ? isNotNull(SpaceQueries.membership.id) : undefined)
             const rows = yield* select(transaction, actor)
               .where(where)
               .orderBy(asc(Database.Schema.space.created_at), asc(Database.Schema.space.id))
@@ -164,7 +135,7 @@ export const layer = Layer.effect(
               .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
               .where(where)
             return {
-              items: rows.map(toInfo(actor, role)),
+              items: rows.map(toInfo(actor)),
               page: input.page,
               pageSize: input.pageSize,
               total: totals.at(0)?.total ?? 0,
@@ -175,29 +146,15 @@ export const layer = Layer.effect(
       get: Effect.fn("Space.get")(function* (actor: Actor.Info, idOrSlug: string) {
         if (!Schema.is(Space.ID)(idOrSlug)) return yield* notFound
         return yield* database.transaction((transaction) =>
-          Effect.gen(function* () {
-            const role = yield* SpaceQueries.organizationRole(transaction, actor)
-            if (!role) return yield* notFound
-            return yield* find(
-              transaction,
-              actor,
-              role,
-              and(spaceVisibilityFilter(actor, { role }), eq(Database.Schema.space.id, idOrSlug)),
-            )
-          }),
+          find(transaction, actor, and(visibleTo(actor), eq(Database.Schema.space.id, idOrSlug))),
         )
       }),
       create: Effect.fn("Space.create")(function* (actor: Actor.Info, input: Space.CreateInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const role = yield* SpaceQueries.organizationRole(transaction, actor)
-            const decision = policy.check({
-              who: actor,
-              action: Primitive.action(Space.definition, "create"),
-              target: actor.organizationId,
-              policyContext: { role },
-            })
-            if (!decision.allowed) return yield* new Primitive.Forbidden({ message: decision.reason })
+            if (!access.isAllowed({ actor, action: actions.create, resource: SpacePolicy.organization })) {
+              return yield* new Primitive.Forbidden({ message: "Join the organization to create spaces." })
+            }
             const id = Space.ID.create()
             yield* transaction.insert(Database.Schema.space).values({
               id,
@@ -208,33 +165,18 @@ export const layer = Layer.effect(
             yield* transaction
               .insert(Database.Schema.space_member)
               .values({ id: Space.MembershipID.create(), space_id: id, user_id: actor.userId })
-            return yield* find(transaction, actor, role, eq(Database.Schema.space.id, id))
+            return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
           }),
         )
       }),
       update: Effect.fn("Space.update")(function* (actor: Actor.Info, id: Space.ID, input: Space.UpdateInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const locked = yield* lock(transaction, actor, id)
-            if (
-              !locked ||
-              locked.row.space.archived_at ||
-              !policy.check({
-                who: actor,
-                action: Primitive.action(Space.definition, "get"),
-                target: id,
-                policyContext: locked.policyContext,
-              }).allowed
-            ) {
-              return yield* notFound
+            const visible = yield* findVisible(transaction, actor, id)
+            if (!visible || visible.row.space.archived_at) return yield* notFound
+            if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource })) {
+              return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
-            const decision = policy.check({
-              who: actor,
-              action: Primitive.action(Space.definition, "update"),
-              target: id,
-              policyContext: locked.policyContext,
-            })
-            if (!decision.allowed) return yield* new Primitive.Forbidden({ message: decision.reason })
             const updated = yield* transaction
               .update(Database.Schema.space)
               .set({ name: input.name, description: input.description, updated_at: sql`now()` })
@@ -242,34 +184,22 @@ export const layer = Layer.effect(
               .returning()
             const space = updated.at(0)
             if (!space) return yield* notFound
-            return toInfo(actor, locked.role)({ ...locked.row, space })
+            return toInfo(actor)({ ...visible.row, space })
           }),
         )
       }),
       archive: Effect.fn("Space.archive")(function* (actor: Actor.Info, id: Space.ID) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const locked = yield* lock(transaction, actor, id)
+            const visible = yield* findVisible(transaction, actor, id)
+            if (!visible) return yield* notFound
+            if (visible.row.space.archived_at) return toInfo(actor)(visible.row)
             if (
-              !locked ||
-              !policy.check({
-                who: actor,
-                action: Primitive.action(Space.definition, "get"),
-                target: id,
-                policyContext: locked.policyContext,
-              }).allowed
+              !access.isAllowed({ actor, action: actions.archive, resource: visible.resource }) ||
+              visible.row.isFirstOrganizationSpace
             ) {
-              return yield* notFound
+              return yield* new Primitive.Forbidden({ message: "This space cannot be archived." })
             }
-            const info = toInfo(actor, locked.role)
-            if (locked.row.space.archived_at) return info(locked.row)
-            const decision = policy.check({
-              who: actor,
-              action: Primitive.action(Space.definition, "archive"),
-              target: id,
-              policyContext: locked.policyContext,
-            })
-            if (!decision.allowed) return yield* new Primitive.Forbidden({ message: decision.reason })
             const archived = yield* transaction
               .update(Database.Schema.space)
               .set({ archived_at: sql`now()`, updated_at: sql`now()` })
@@ -286,7 +216,7 @@ export const layer = Layer.effect(
               )
             const space = archived.at(0)
             if (!space) return yield* notFound
-            return info({ ...locked.row, space })
+            return toInfo(actor)({ ...visible.row, space })
           }),
         )
       }),

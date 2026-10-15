@@ -13,8 +13,8 @@ export const MeHandler = HttpApiBuilder.group(Api, "me", (handlers) =>
         const user = yield* CurrentUser
         const session = yield* CurrentSession
         const request = yield* HttpServerRequest.HttpServerRequest
-        const organization = yield* auth.getActiveOrganization(session, new Headers(request.headers))
-        return { user, organization: Option.getOrNull(organization) }
+        const membership = yield* auth.getActiveMembership(session, new Headers(request.headers))
+        return { user, organization: Option.getOrNull(Option.map(membership, (active) => active.organization)) }
       }),
     )
   }),

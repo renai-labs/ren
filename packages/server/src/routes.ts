@@ -1,11 +1,10 @@
 export * as Routes from "./routes.js"
 
+import { Access } from "@ren/core/access"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Space } from "@ren/core/space"
 import { SpaceMember } from "@ren/core/space/member"
-import { SpaceMemberPolicy } from "@ren/core/space/member-policy"
-import { SpacePolicy } from "@ren/core/space/policy"
 import { Effect, Layer } from "effect"
 import { HttpEffect, HttpMiddleware, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
@@ -47,4 +46,4 @@ export const layer = Layer.mergeAll(
   ),
   AuthRoute,
   Cors,
-).pipe(Layer.provide(Auth.layer), Layer.provide([SpacePolicy.layer, SpaceMemberPolicy.layer]))
+).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))
