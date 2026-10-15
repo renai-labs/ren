@@ -10,6 +10,8 @@ import { Harness } from "./harness/harness.js"
 import { ModelStore } from "./model-store.js"
 import { ModelRefresh } from "./model-refresh.js"
 
+type Services = Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service | ModelStore.Storage
+
 const prefix = "/ren"
 
 export const owns = (pathname: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -37,7 +39,7 @@ const configured = Effect.gen(function* () {
 
 export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
   Effect.gen(function* () {
-    const context = yield* Effect.context<Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service | ModelStore.Storage>()
+    const context = yield* Effect.context<Services>()
     return group
       .handle("brain.start", (request) =>
         Effect.gen(function* () {
@@ -102,7 +104,7 @@ export const layer = Layer.effect(
     const app = yield* HttpRouter.toHttpEffect(
       HttpApiBuilder.layer(BrainApi).pipe(Layer.provide(handlers), Layer.provide(HttpServer.layerServices)),
     )
-    const context = yield* Effect.context<Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service | ModelStore.Storage>()
+    const context = yield* Effect.context<Services>()
     return Cell.Brain.of({ owns, fetch: HttpEffect.toWebHandler(app.pipe(Effect.provide(context))) })
   }),
 )

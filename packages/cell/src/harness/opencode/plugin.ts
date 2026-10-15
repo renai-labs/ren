@@ -4,7 +4,7 @@ import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import type { Models } from "@ren/schema/models"
-import { Clock, DateTime, Effect, Option, Redacted, Ref, Schema, Struct } from "effect"
+import { Clock, DateTime, Deferred, Effect, Option, Redacted, Ref, Schema, Struct } from "effect"
 import type { Harness } from "../harness.js"
 import { ModelProviders } from "./model-providers.js"
 
@@ -38,6 +38,7 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
 export const make = (
   endpoints: Ref.Ref<ReadonlyArray<Models.Endpoint>>,
   reload: Ref.Ref<Effect.Effect<void>>,
+  loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
 ) =>
   Plugin.define({
@@ -62,5 +63,6 @@ export const make = (
             })
         })
         yield* Ref.set(reload, Effect.andThen(integration.reload(), provider.reload()))
+        yield* Deferred.succeed(loaded, undefined)
       }),
   })
