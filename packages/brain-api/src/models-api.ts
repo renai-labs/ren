@@ -1,14 +1,32 @@
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
-import { Schema } from "effect"
+import type { Auth } from "@ren/schema/auth"
+import type { Session } from "@ren/schema/session"
+import { Context } from "effect"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { ModelsBody } from "./brain-api.js"
 import { ForbiddenError, ModelsUnavailableError } from "./errors.js"
+
+export class CurrentHost extends Context.Service<
+  CurrentHost,
+  { readonly brainId: Session.ID; readonly organizationId: Auth.OrganizationID }
+>()("@ren/brain-api/CurrentHost") {}
+
+export class HostAuthentication extends HttpApiMiddleware.Service<HostAuthentication, { provides: CurrentHost }>()(
+  "@ren/brain-api/HostAuthentication",
+  {
+    error: ForbiddenError,
+    security: {
+      bearer: HttpApiSecurity.bearer.pipe(
+        HttpApiSecurity.annotate(OpenApi.Description, "The host token that came with the brain's model access."),
+      ),
+    },
+  },
+) {}
 
 const ModelsGroup = HttpApiGroup.make("models")
   .add(
     HttpApiEndpoint.post("models.refresh", "/brain/models/refresh", {
-      headers: { authorization: Schema.String },
       success: ModelsBody,
-      error: [ForbiddenError, ModelsUnavailableError],
+      error: ModelsUnavailableError,
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "models.refresh",
@@ -17,6 +35,7 @@ const ModelsGroup = HttpApiGroup.make("models")
       }),
     ),
   )
+  .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "models" }))
 
 export const ModelsApi = HttpApi.make("models")

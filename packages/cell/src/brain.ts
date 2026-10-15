@@ -8,9 +8,8 @@ import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
 import { Harness } from "./harness/harness.js"
 import { ModelStore } from "./model-store.js"
-import { ModelRefresh } from "./model-refresh.js"
 
-type Services = Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service | ModelStore.Storage
+type Services = Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service
 
 const prefix = "/ren"
 
@@ -25,15 +24,15 @@ const configured = Effect.gen(function* () {
   const stored = yield* store.read
   if (Option.isNone(stored)) return yield* Effect.fail(notConfigured)
   const now = yield* DateTime.now
-  const expired = stored.value.endpoints.flatMap((endpoint) =>
-    endpoint.apiKey.expiresAt && DateTime.isLessThanOrEqualTo(endpoint.apiKey.expiresAt, now)
-      ? [{ id: endpoint.id, expiresAt: endpoint.apiKey.expiresAt }]
-      : [],
+  const expired = stored.value.endpoints.find(
+    (endpoint) =>
+      Option.fromNullishOr(endpoint.apiKey.expiresAt).pipe(
+        Option.exists((expiresAt) => DateTime.isLessThanOrEqualTo(expiresAt, now)),
+      ),
   )
-  const first = expired.at(0)
-  if (first)
+  if (expired?.apiKey.expiresAt)
     return yield* new ModelsNotConfiguredError({
-      message: `Model refresh key expired: the key for endpoint ${first.id} expired at ${DateTime.formatIso(first.expiresAt)}`,
+      message: `Model refresh key expired: the key for endpoint ${expired.id} expired at ${DateTime.formatIso(expired.apiKey.expiresAt)}`,
     })
 })
 
@@ -67,8 +66,7 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
           return yield* activity.configuring.withPermit(
             Effect.gen(function* () {
               // oxlint-disable-next-line ren/no-comments -- Writing before checking whether the harness is open guarantees that either a later open reads this configuration or this request applies it to the open instance.
-              yield* store.write(request.payload.access)
-              yield* ModelRefresh.write(request.payload.hostToken)
+              yield* store.write(request.payload.access, request.payload.hostToken)
               if ((yield* host.state).isOpen) {
                 const harness = yield* Cell.acquire
                 yield* harness.configure(request.payload.access.endpoints)
@@ -85,7 +83,6 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
           yield* activity.configuring.withPermit(
             Effect.gen(function* () {
               yield* store.remove
-              yield* ModelRefresh.remove()
               if ((yield* host.state).isOpen) {
                 const harness = yield* Cell.acquire
                 yield* harness.configure([])

@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
-import { ModelsApi } from "@ren/brain-api/models-api"
+import { CurrentHost, ModelsApi } from "@ren/brain-api/models-api"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, DateTime, Effect, Layer, ManagedRuntime, Option, Ref } from "effect"
+import { ConfigProvider, DateTime, Effect, Layer, ManagedRuntime, Option, Redacted, Ref } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { BrainHost } from "../src/brain-host.js"
@@ -47,12 +47,16 @@ const api = HttpRouter.toWebHandler(
       HttpApiBuilder.group(ModelsApi, "models", (handlers) =>
         Effect.gen(function* () {
           const brain = yield* BrainHost.Service
-          return handlers.handle("models.refresh", (request) =>
-            brain.refreshModels(request.headers.authorization.replace(/^Bearer /u, "")),
+          return handlers.handle("models.refresh", () =>
+            Effect.gen(function* () {
+              const host = yield* CurrentHost
+              return yield* brain.refreshModels(host)
+            }),
           )
         }),
       ),
     ),
+    Layer.provide(BrainHost.hostAuthentication),
     Layer.provide(hostWith({ CELL_URL: "http://127.0.0.1:9", CELL_KEYS: settings.CELL_KEYS })),
     Layer.provide(HttpServer.layerServices),
   ),
@@ -107,7 +111,7 @@ describe("model refresh", () => {
     }),
   )
 
-  it.live("refreshModels refuses tokens that are not valid host tokens", () =>
+  it.live("authenticateHost refuses tokens that are not valid host tokens", () =>
     Effect.gen(function* () {
       const brain = yield* BrainHost.Service
       const key = TestToken.keys[0]
@@ -119,10 +123,14 @@ describe("model refresh", () => {
         yield* SessionToken.sign(key, { sid, scope: "host", exp }),
         yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp: exp - 1200 }),
       ]
-      const failures = yield* Effect.forEach(tokens, (token) => brain.refreshModels(token).pipe(Effect.flip))
+      const failures = yield* Effect.forEach(tokens, (token) =>
+        brain.authenticateHost(Redacted.make(token)).pipe(Effect.flip),
+      )
       expect(failures.map((failure) => failure._tag)).toEqual(Array.from({ length: 4 }, () => "ForbiddenError"))
       const valid = yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp })
-      const refreshed = yield* brain.refreshModels(valid)
+      const host = yield* brain.authenticateHost(Redacted.make(valid))
+      expect(host).toEqual({ brainId: sid, organizationId })
+      const refreshed = yield* brain.refreshModels(host)
       expect(refreshed.access.endpoints.map((endpoint) => endpoint.id)).toEqual(["stub"])
       const claims = yield* SessionToken.verify(TestToken.keys, refreshed.hostToken ?? "")
       const keyExpiresAt = refreshed.access.endpoints[0]?.apiKey.expiresAt

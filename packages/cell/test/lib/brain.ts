@@ -62,7 +62,7 @@ const make = Effect.gen(function* () {
   }
   const modelStore = ModelStore.layer.pipe(Layer.provideMerge(Layer.succeed(ModelStore.Storage, storage)))
   yield* ModelStore.Service.pipe(
-    Effect.flatMap((store) => store.write(Shared.access(undefined, Shared.stub().url))),
+    Effect.flatMap((store) => store.write(Shared.access(undefined, Shared.stub().url), undefined)),
     Effect.provide(modelStore),
   )
   const info = Layer.succeed(

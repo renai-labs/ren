@@ -31,7 +31,7 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
     })
   if ((yield* Clock.currentTimeMillis) < credential.expires) return credential
   return yield* new ManagedKeyError({
-    message: `The model key for endpoint ${endpointId} expired at ${new Date(credential.expires).toISOString()}`,
+    message: `The model key for endpoint ${endpointId} expired at ${DateTime.formatIso(DateTime.makeUnsafe(credential.expires))}`,
   })
 })
 
