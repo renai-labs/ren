@@ -14,16 +14,18 @@ import {
   Option,
   Ref,
   Schema,
+  Semaphore,
 } from "effect"
 import { Env } from "./env.js"
 import { Harness } from "./harness/harness.js"
 import { OpenCodeHarness } from "./harness/opencode/harness.js"
+import { ModelStore } from "./model-store.js"
 import { Reconcile } from "./reconcile.js"
 
 export class Info extends Context.Service<
   Info,
   {
-    readonly storage: Pick<DurableObjectStorage, "getAlarm" | "setAlarm">
+    readonly storage: Pick<DurableObjectStorage, "getAlarm" | "setAlarm"> & ModelStore.Storage
     readonly sessionId: Session.ID
     readonly vars: Env.Vars
   }
@@ -35,6 +37,7 @@ export class Activity extends Context.Service<
     readonly requests: Ref.Ref<number>
     readonly wait: FiberHandle.FiberHandle<void>
     readonly waitingSince: Ref.Ref<Option.Option<DateTime.Utc>>
+    readonly configuring: Semaphore.Semaphore
   }
 >()("@ren/cell/Cell/Activity") {}
 
@@ -164,7 +167,12 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
   const harness = Layer.unwrap(
     Effect.gen(function* () {
       const cell = yield* Info
-      return Harness.layer(OpenCodeHarness.open(storage, cell.vars.OPENCODE_CONFIG))
+      return Harness.layer(
+        ModelStore.read(cell.storage).pipe(
+          Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
+          Effect.flatMap((endpoints) => OpenCodeHarness.open(storage, cell.vars.OPENCODE_CONFIG, endpoints)),
+        ),
+      )
     }),
   )
   const activity = Layer.effect(
@@ -173,6 +181,7 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
       requests: Ref.make(0),
       wait: FiberHandle.make<void>(),
       waitingSince: Ref.make(Option.none<DateTime.Utc>()),
+      configuring: Semaphore.make(1),
     }),
   )
   return Layer.mergeAll(harness, activity).pipe(Layer.provideMerge(info))

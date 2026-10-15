@@ -16,7 +16,7 @@ export type Harness = typeof Harness.Type
 
 export interface Model extends Schema.Schema.Type<typeof Model> {}
 export const Model = Schema.Struct({
-  providerId: Schema.NonEmptyString,
+  endpointId: Schema.NonEmptyString,
   modelId: Schema.NonEmptyString,
   variant: Schema.optionalKey(Schema.NonEmptyString),
 }).annotate({ identifier: "Session.Model" })
@@ -40,29 +40,6 @@ export const Instructions = Schema.Record(
   )
   .annotate({ identifier: "Session.Instructions" })
 export type Instructions = typeof Instructions.Type
-
-export const Credential = Schema.Union([
-  Schema.Struct({
-    type: Schema.Literal("key"),
-    key: Schema.NonEmptyString,
-    configuration: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
-  }),
-  Schema.Struct({
-    type: Schema.Literal("managed"),
-    key: Schema.NonEmptyString,
-    expires: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  }),
-]).annotate({ identifier: "Session.Credential" })
-export type Credential = typeof Credential.Type
-
-export const Credentials = Schema.Record(Schema.String, Credential)
-  .check(
-    Schema.makeFilter(
-      (credentials) => Object.keys(credentials).every((key) => key.length > 0) || "a provider id is not empty",
-    ),
-  )
-  .annotate({ identifier: "Session.Credentials" })
-export type Credentials = typeof Credentials.Type
 
 export const Delivery = Schema.Literals(["steer", "queue"]).annotate({ identifier: "Session.Delivery" })
 export type Delivery = typeof Delivery.Type
@@ -112,7 +89,6 @@ export const SendInput = Schema.Struct({
   prompt: Prompt,
   delivery: Delivery.pipe(Schema.withDecodingDefaultKey(Effect.succeed("steer" as const))),
   sender: Sender,
-  credentials: Schema.optionalKey(Credentials),
 }).annotate({ identifier: "Session.SendInput" })
 
 export interface StartInput extends Schema.Schema.Type<typeof StartInput> {}
@@ -123,10 +99,9 @@ export const StartInput = Schema.Struct({
   agent: Schema.optionalKey(Schema.NonEmptyString),
   model: Schema.optionalKey(Model),
   instructions: Instructions.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
-  credentials: Credentials.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
   interactive: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
   initialMessage: Schema.optionalKey(
-    SendInput.mapFields(Struct.omit(["sessionId", "credentials", "delivery"])).annotate({
+    SendInput.mapFields(Struct.omit(["sessionId", "delivery"])).annotate({
       identifier: "Session.InitialMessage",
     }),
   ),

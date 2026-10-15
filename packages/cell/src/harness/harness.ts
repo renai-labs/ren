@@ -1,6 +1,7 @@
 export * as Harness from "./harness.js"
 
 import type { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
+import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
 import { Context, Effect, Exit, Layer, Scope } from "effect"
 import { Lease } from "../lease.js"
@@ -15,6 +16,7 @@ interface SessionState extends Reconcile.Snapshot {
 
 export interface Instance {
   readonly fetch: (request: Request) => Promise<Response>
+  readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>
   readonly start: (input: Session.StartInput) => Effect.Effect<Session.Started, BrainRejectedError>
   readonly send: (
     input: Session.SendInput,

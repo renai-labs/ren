@@ -4,7 +4,8 @@ import { Celld } from "./celld.js"
 import { StubModel } from "./stub-model.js"
 import { TestToken } from "./token.js"
 import { Wrangler } from "./wrangler.js"
-import { Context, Effect, Layer } from "effect"
+import type { Models } from "@ren/schema/models"
+import { Context, DateTime, Effect, Layer } from "effect"
 
 export class Service extends Context.Service<Service, Celld.Instance>()("@ren/cell/test/Shared") {}
 
@@ -47,6 +48,37 @@ export const vars = (baseURL = stub().cellUrl) => ({
       },
     },
   }),
+})
+
+const limit = { context: 100_000, output: 4000 }
+
+const endpoints: Readonly<Record<string, Pick<Models.Endpoint, "protocol" | "models">>> = {
+  stub: {
+    protocol: "openai-chat",
+    models: [
+      { id: "stub-model", name: "Stub", limit },
+      { id: "stub-other", name: "Stub Other", limit },
+    ],
+  },
+  anthropic: { protocol: "anthropic-messages", models: [{ id: "stub-claude", name: "Stub Claude", limit }] },
+}
+
+export const apiKey = (key: string, expiresAtMs?: number): Models.ApiKey => ({
+  key,
+  ...(expiresAtMs !== undefined && { expiresAt: DateTime.makeUnsafe(expiresAtMs) }),
+})
+
+export const access = (
+  apiKeys: Readonly<Record<string, Models.ApiKey>> = { stub: apiKey("stub-key") },
+  baseUrl = stub().cellUrl,
+): Models.Access => ({
+  endpoints: Object.entries(apiKeys).map((entry) => ({
+    id: entry[0],
+    protocol: endpoints[entry[0]]?.protocol ?? "openai-chat",
+    baseUrl,
+    apiKey: entry[1],
+    models: endpoints[entry[0]]?.models ?? [{ id: "stub-model", name: "Stub", limit }],
+  })),
 })
 
 export const dispose = async () => {

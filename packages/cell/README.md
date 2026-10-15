@@ -8,7 +8,11 @@ One session host per Durable Object, deployed to celld or Cloudflare. `SessionCe
 
 The alarm is persisted before waiting for running turns. A wait lasts at most the configured budget or the remaining question-park time. Interrupting an alarm interrupts its wait before releasing the host lease. A failed host disposal fails waiting and future acquisitions rather than opening another instance alongside an incompletely disposed one.
 
-Start and send mutations share a semaphore, so a rejected start's credential rollback cannot overwrite another request's accepted credentials. Model turns continue independently. Managed credentials replace the stored value only when they expire later.
+Start, send and API key changes share a semaphore. Model turns continue independently. An expiring API key replaces the stored one only when it expires later.
+
+## Models
+
+`PUT /ren/models` takes a `Models.Access`: endpoints, each with a protocol, a base URL, an API key and its models. The cell stores it in Durable Object storage, so it survives a restart. If OpenCode is open, its API keys apply at once; otherwise the next open applies them. Each endpoint becomes an OpenCode provider with the endpoint's id when OpenCode opens, and each model's efforts become its OpenCode variants, so endpoints and models added while it is open wait for the next open. `start` and `send` answer `ModelsNotConfiguredError` (409) until access is stored; `BrainHost` then grants it and retries once. `DELETE /ren/models` removes the access and Ren's API keys; `BrainHost.revokeModels` calls it and revokes the keys at their source even when the cell cannot be reached.
 
 `app.version` identifies **Ren's cell package**, derived from this package's `package.json`. OpenCode dependency versions are pinned in the workspace catalog.
 
@@ -29,7 +33,7 @@ Start and send mutations share a semaphore, so a rejected start's credential rol
 }
 ```
 
-The message is submitted after applying the session configuration, credentials and instructions, using OpenCode’s default delivery. Start returns its existing `Started` response once the message is accepted, before the turn finishes. Reuse the same message ID on retries: an existing session with a missing message receives it, while an already accepted message is not submitted again. Initial files have the same limits as files in `send`.
+The message is submitted after applying the session configuration and instructions, using OpenCode’s default delivery. Start returns its existing `Started` response once the message is accepted, before the turn finishes. Reuse the same message ID on retries: an existing session with a missing message receives it, while an already accepted message is not submitted again. Initial files have the same limits as files in `send`.
 
 ## Limits
 

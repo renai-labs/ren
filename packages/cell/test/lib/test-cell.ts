@@ -2,9 +2,11 @@ export * as TestCell from "./test-cell.js"
 
 import { OpenCode } from "@opencode/client"
 import { BrainApi } from "@ren/brain-api/brain-api"
-import { DateTime, Effect } from "effect"
+import { DateTime, Effect, Schema } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
+import { Models } from "@ren/schema/models"
+import { Shared } from "./shared.js"
 import { TestToken } from "./token.js"
 
 interface State {
@@ -57,6 +59,13 @@ export const make = async (url: string) => {
         headers: { authorization, "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
+    models: (access: Models.Access = Shared.access()) =>
+      fetch(`${url}/ren/models`, {
+        method: "PUT",
+        headers: { authorization: server, "content-type": "application/json" },
+        body: JSON.stringify(Schema.encodeSync(Models.Access)(access)),
+      }),
+    removeModels: () => fetch(`${url}/ren/models`, { method: "DELETE", headers: { authorization: server } }),
     server,
     opencode,
     state,

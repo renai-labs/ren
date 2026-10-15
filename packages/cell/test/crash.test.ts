@@ -47,8 +47,8 @@ const started = async () => {
 }
 
 const hour = 60 * 60 * 1000
-const key = (value: string) => ({ type: "key", key: value })
-const managed = (value: string, expires: number) => ({ type: "managed", key: value, expires })
+const key = (value: string) => Shared.apiKey(value)
+const managed = (value: string, expiresAtMs: number) => Shared.apiKey(value, expiresAtMs)
 
 const Stored = Schema.Struct({
   data: Schema.Array(
@@ -59,6 +59,11 @@ const Stored = Schema.Struct({
     }),
   ),
 })
+
+const configure = async (opened: Awaited<ReturnType<typeof started>>, apiKeys: Parameters<typeof Shared.access>[0]) => {
+  const response = await opened.models(Shared.access(apiKeys))
+  if (response.status !== 204) throw new Error(`models answered ${response.status}: ${await response.text()}`)
+}
 
 const brainStart = async (opened: Awaited<ReturnType<typeof started>>, input: Record<string, unknown>) => {
   const response = await opened.brain("/ren/sessions", { sessionId: opened.id, harness: "opencode", ...input })
@@ -164,6 +169,7 @@ describe("crash recovery", () => {
 
   test("killed right after send is accepted: the turn runs with no client request", async () => {
     const opened = await started()
+    await configure(opened, undefined)
     expect((await opened.brain("/ren/sessions", { sessionId: opened.id, harness: "opencode" })).status).toBe(200)
     const script = stub.script({ hold: true, reply: "cut off" })
     const messageId = `msg_${crypto.randomUUID().replaceAll("-", "")}`
@@ -187,6 +193,7 @@ describe("crash recovery", () => {
 
   test("killed during a second start: whatever it kept, a retried start leaves exactly the new state", async () => {
     const opened = await started()
+    await configure(opened, undefined)
     const first = {
       sessionId: opened.id,
       harness: "opencode",
@@ -219,18 +226,19 @@ describe("crash recovery", () => {
     expect(await opened.ended()).toEqual(TestCell.closed)
   })
 
-  test("killed after a send with a newer key is accepted: the resumed model call carries the newer key", async () => {
+  test("killed after a newer key is configured during a turn: the resumed model call carries the newer key", async () => {
     const opened = await started()
-    await brainStart(opened, { credentials: { stub: managed("sk-older", Date.now() + hour) } })
+    await configure(opened, { stub: managed("sk-older", Date.now() + hour) })
+    await brainStart(opened, {})
     const script = stub.script({ hold: true, reply: "cut off" })
     const sent = await opened.brain(`/ren/sessions/${opened.id}/messages`, {
       messageId: `msg_${crypto.randomUUID().replaceAll("-", "")}`,
       prompt: { text: `send ${script.marker}` },
       sender: { userId: "user_1" },
-      credentials: { stub: managed("sk-newer", Date.now() + 2 * hour) },
     })
     expect(sent.status).toBe(200)
     await script.called()
+    await configure(opened, { stub: managed("sk-newer", Date.now() + 2 * hour) })
     script.set({ reply: "resumed" })
     await restart()
     expect(await script.called(2)).toMatchObject({ text: StubModel.restarted, authorization: "Bearer sk-newer" })
@@ -238,25 +246,13 @@ describe("crash recovery", () => {
     expect(await opened.outcome()).toBe("succeeded")
   })
 
-  test("killed during a start that changes credentials: each provider keeps its old or gets its new credential, and a retried start leaves exactly the new set", async () => {
+  test("killed after a configuration change: the reopened host holds exactly the stored credentials", async () => {
     const opened = await started()
-    await brainStart(opened, { credentials: { stub: key("sk-old"), anthropic: key("sk-ant") } })
-    const instructions = Object.fromEntries(
-      Array.from({ length: 3000 }, (_, index) => [`block-${index}`, `value ${index}`]),
-    )
-    const second = { sessionId: opened.id, harness: "opencode", instructions, credentials: { stub: key("sk-new") } }
-    const inflight = opened.brain("/ren/sessions", second).then(
-      (response) => response.status,
-      () => "dropped",
-    )
-    await Bun.sleep(600)
-    await celld.kill()
-    expect(await inflight).toBe("dropped")
-    await celld.start()
-    const partial = await stored(opened)
-    expect<ReadonlyArray<string | undefined>>(["sk-old", "sk-new"]).toContain(partial.stub)
-    expect<ReadonlyArray<string | undefined>>([undefined, "sk-ant"]).toContain(partial.anthropic)
-    expect((await opened.brain("/ren/sessions", second)).status).toBe(200)
+    await configure(opened, { stub: key("sk-old"), anthropic: key("sk-ant") })
+    await brainStart(opened, {})
+    expect(await stored(opened)).toEqual({ stub: "sk-old", anthropic: "sk-ant" })
+    await configure(opened, { stub: key("sk-new") })
+    await restart()
     expect(await stored(opened)).toEqual({ stub: "sk-new" })
     expect(await opened.ended()).toEqual(TestCell.closed)
   })
