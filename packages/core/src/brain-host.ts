@@ -1,8 +1,14 @@
 export * as BrainHost from "./brain-host.js"
 
 import { BrainApi } from "@ren/brain-api/brain-api"
-import { BrainRejectedError, ForbiddenError, type SessionNotStartedError } from "@ren/brain-api/errors"
+import {
+  BrainRejectedError,
+  ForbiddenError,
+  type ModelsNotConfiguredError,
+  type SessionNotStartedError,
+} from "@ren/brain-api/errors"
 import { SessionToken } from "@ren/brain-api/session-token"
+import type { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import {
   Array,
@@ -14,6 +20,7 @@ import {
   DateTime,
   Effect,
   Layer,
+  Option,
   Redacted,
   Schedule,
   Schema,
@@ -21,6 +28,7 @@ import {
 } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
+import { Models } from "./models.js"
 
 export { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
 
@@ -29,11 +37,19 @@ export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("Br
 }) {}
 
 export interface Interface {
-  readonly start: (input: Session.StartInput) => Effect.Effect<Session.Started, BrainUnavailable | BrainRejectedError>
+  readonly start: (
+    input: Session.StartInput,
+    organizationId: Auth.OrganizationID,
+  ) => Effect.Effect<Session.Started, BrainUnavailable | BrainRejectedError>
   readonly send: (
     input: Session.SendInput,
+    organizationId: Auth.OrganizationID,
   ) => Effect.Effect<Session.Accepted, BrainUnavailable | BrainRejectedError | SessionNotStartedError>
   readonly access: (sessionId: Session.ID) => Effect.Effect<Session.ClientAccess>
+  readonly revokeModels: (
+    sessionId: Session.ID,
+    organizationId: Auth.OrganizationID,
+  ) => Effect.Effect<void, BrainUnavailable | BrainRejectedError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
@@ -61,6 +77,7 @@ export const layer = Layer.effect(
     const url = config.url.origin
     const key = Array.headNonEmpty(Redacted.value(config.keys))
     const http = yield* HttpClient.HttpClient
+    const models = yield* Models.Service
     const brain = yield* HttpApiClient.makeWith(BrainApi, {
       baseUrl: url,
       httpClient: HttpClient.mapRequestEffect(http, (request) =>
@@ -110,6 +127,35 @@ export const layer = Layer.effect(
         ),
       )
 
+    const configure = (sessionId: Session.ID, access: Models.Access) =>
+      call(sessionId, brain.brain["brain.models"]({ payload: access }))
+
+    const withModels = Effect.fnUntraced(function* <A, E>(
+      subject: Models.Subject,
+      request: Effect.Effect<A, E | ModelsNotConfiguredError>,
+    ) {
+      const renewed = yield* models
+        .renewIfDue(subject)
+        .pipe(
+          Effect.catchTag("Models.Unavailable", (error) =>
+            Effect.logWarning("Model access renewal failed; the brain keeps its current credentials", error).pipe(
+              Effect.as(Option.none()),
+            ),
+          ),
+        )
+      if (Option.isSome(renewed)) yield* configure(subject.brainId, renewed.value)
+      return yield* request.pipe(
+        Effect.catchTag("ModelsNotConfiguredError", () =>
+          models.grant(subject).pipe(
+            Effect.mapError((cause) => new BrainUnavailable({ cause })),
+            Effect.flatMap((access) => configure(subject.brainId, access)),
+            Effect.andThen(request),
+            Effect.catchTag("ModelsNotConfiguredError", Effect.die),
+          ),
+        ),
+      )
+    })
+
     const validatePrompt = Effect.fn("BrainHost.validatePrompt")(function* (prompt: Session.Prompt) {
       const large = prompt.files?.find((file) =>
         ByteSize.isGreaterThan(ByteSize.bytes(Session.fileBytes(file.url)), config.maxFileSize),
@@ -123,16 +169,32 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput) {
+      start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, organizationId: Auth.OrganizationID) {
         if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
-        return yield* call(input.sessionId, brain.brain["brain.start"]({ payload: input }))
-      }),
-      send: Effect.fn("BrainHost.send")(function* (input: Session.SendInput) {
-        yield* validatePrompt(input.prompt)
-        return yield* call(
-          input.sessionId,
-          brain.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
+        return yield* withModels(
+          { brainId: input.sessionId, organizationId },
+          call(input.sessionId, brain.brain["brain.start"]({ payload: input })),
         )
+      }),
+      send: Effect.fn("BrainHost.send")(function* (input: Session.SendInput, organizationId: Auth.OrganizationID) {
+        yield* validatePrompt(input.prompt)
+        return yield* withModels(
+          { brainId: input.sessionId, organizationId },
+          call(
+            input.sessionId,
+            brain.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
+          ),
+        )
+      }),
+      revokeModels: Effect.fn("BrainHost.revokeModels")(function* (
+        sessionId: Session.ID,
+        organizationId: Auth.OrganizationID,
+      ) {
+        const cleared = yield* Effect.exit(call(sessionId, brain.brain["brain.removeModels"]()))
+        yield* models
+          .revoke({ brainId: sessionId, organizationId })
+          .pipe(Effect.mapError((cause) => new BrainUnavailable({ cause })))
+        return yield* cleared
       }),
       access: Effect.fn("BrainHost.access")(function* (sessionId: Session.ID) {
         const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + clientLifetime
