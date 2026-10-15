@@ -1,12 +1,27 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
 import { Shared, TestToken } from "@ren/cell/testing"
 import { SessionToken } from "@ren/brain-api/session-token"
+import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
-import { Cause, ConfigProvider, DateTime, Effect, Exit, Fiber, Layer, ManagedRuntime, Result, Schema } from "effect"
+import {
+  Cause,
+  ConfigProvider,
+  DateTime,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  ManagedRuntime,
+  Option,
+  Ref,
+  Result,
+  Schema,
+} from "effect"
 import { Base64Url } from "effect/encoding"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { BrainHost } from "../src/brain-host.js"
+import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
 
 setDefaultTimeout(30_000)
@@ -18,27 +33,39 @@ beforeAll(async () => {
 afterAll(() => runtime.dispose())
 const stub = Shared.stub()
 
-const host = (config: Record<string, string>) =>
+const host = (
+  config: Record<string, string>,
+  models: Layer.Layer<Models.Service> = Layer.fresh(Models.layerConfigured).pipe(
+    Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config))),
+    Layer.orDie,
+  ),
+) =>
   Layer.fresh(BrainHost.layer).pipe(
+    Layer.provide(models),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config))),
   )
 
-const settings = { CELL_URL: "", CELL_KEYS: TestToken.vars.CELL_KEYS }
+const settings = {
+  CELL_URL: "",
+  CELL_KEYS: TestToken.vars.CELL_KEYS,
+  MODEL_ENDPOINTS: JSON.stringify(
+    Schema.encodeSync(Schema.toCodecJson(Schema.Array(Models.Endpoint)))(
+      Shared.access({ stub: Shared.apiKey("sk-configured") }).endpoints,
+    ),
+  ),
+}
+const organizationId = Auth.OrganizationID.create()
 const unknownKey = { id: "unknown", secret: "a-key-the-cell-does-not-list-at-all" }
 
 const it = testEffect(Layer.unwrap(Effect.sync(() => host(settings))))
 
 const start = Effect.fnUntraced(function* (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) {
   const brain = yield* BrainHost.Service
-  return yield* brain.start({
-    sessionId,
-    harness: "opencode",
-    instructions: {},
-    credentials: {},
-    interactive: true,
-    ...input,
-  })
+  return yield* brain.start(
+    { sessionId, harness: "opencode", instructions: {}, interactive: true, ...input },
+    organizationId,
+  )
 })
 
 const send = Effect.fnUntraced(function* (
@@ -48,13 +75,16 @@ const send = Effect.fnUntraced(function* (
   files?: ReadonlyArray<Session.File>,
 ) {
   const brain = yield* BrainHost.Service
-  return yield* brain.send({
-    sessionId,
-    messageId,
-    prompt: { text, ...(files && { files }) },
-    delivery: "steer",
-    sender: { userId: "user_1" },
-  })
+  return yield* brain.send(
+    {
+      sessionId,
+      messageId,
+      prompt: { text, ...(files && { files }) },
+      delivery: "steer",
+      sender: { userId: "user_1" },
+    },
+    organizationId,
+  )
 })
 
 const surface = (access: Session.ClientAccess, path: string, method = "GET") =>
@@ -91,7 +121,6 @@ describe("BrainHost", () => {
         const script = stub.script()
         expect(
           yield* start(sessionId, {
-            credentials: { stub: { type: "key", key: "initial-key" } },
             initialMessage: {
               messageId: Session.MessageID.create(),
               prompt: { text: `initial ${script.marker}` },
@@ -99,7 +128,7 @@ describe("BrainHost", () => {
             },
           }),
         ).toEqual({ sessionId, harness: "opencode" })
-        expect((yield* Effect.promise(() => script.called())).authorization).toBe("Bearer initial-key")
+        expect((yield* Effect.promise(() => script.called())).authorization).toBe("Bearer sk-configured")
       }),
     )
 
@@ -150,7 +179,7 @@ describe("BrainHost", () => {
       Effect.gen(function* () {
         const failures = yield* Effect.all([
           start(Session.ID.create(), { agent: "nobody" }).pipe(Effect.flip),
-          start(Session.ID.create(), { model: { providerId: "stub", modelId: "missing" } }).pipe(Effect.flip),
+          start(Session.ID.create(), { model: { endpointId: "stub", modelId: "missing" } }).pipe(Effect.flip),
         ])
         expect(failures.map((failure) => failure._tag)).toEqual(["BrainRejectedError", "BrainRejectedError"])
       }),
@@ -256,27 +285,153 @@ describe("BrainHost", () => {
     )
   })
 
-  describe("credentials", () => {
-    it.live("the key from start reaches the model, and a newer key from send reaches the next model call", () =>
+  describe("model access", () => {
+    const scripted = (
+      renewals: Ref.Ref<ReadonlyArray<Models.Access>>,
+      granted: Ref.Ref<number>,
+      revoked: Ref.Ref<ReadonlyArray<Models.Subject>> = Ref.makeUnsafe<ReadonlyArray<Models.Subject>>([]),
+    ) =>
+      Layer.succeed(
+        Models.Service,
+        Models.Service.of({
+          catalog: () => Effect.succeed({ endpoints: [] }),
+          grant: () =>
+            Ref.updateAndGet(granted, (count) => count + 1).pipe(
+              Effect.map((count) => Shared.access({ stub: Shared.apiKey(`sk-granted-${count}`) })),
+            ),
+          renewIfDue: () =>
+            Ref.modify(renewals, (pending) => [Option.fromNullishOr(pending[0]), pending.slice(1)] as const),
+          revoke: (subject) => Ref.update(revoked, (subjects) => [...subjects, subject]),
+        }),
+      )
+
+    it.live("a fresh brain gets one granted access and keeps it for later calls", () =>
       Effect.gen(function* () {
-        const brain = yield* BrainHost.Service
+        const granted = yield* Ref.make(0)
         const sessionId = Session.ID.create()
-        yield* start(sessionId, { credentials: { stub: { type: "key", key: "sk-start" } } })
+        const script = stub.script()
+        yield* Effect.gen(function* () {
+          yield* start(sessionId)
+          yield* send(sessionId, `granted ${script.marker}`)
+          return yield* Effect.promise(() => script.called())
+        }).pipe(Effect.provide(host(settings, scripted(yield* Ref.make<ReadonlyArray<Models.Access>>([]), granted))))
+        expect([script.calls[0]?.authorization, yield* Ref.get(granted)]).toEqual(["Bearer sk-granted-1", 1])
+      }),
+    )
+
+    it.live("a renewed access reaches the next model call", () =>
+      Effect.gen(function* () {
+        const renewals = yield* Ref.make<ReadonlyArray<Models.Access>>([])
+        const sessionId = Session.ID.create()
         const first = stub.script()
-        yield* send(sessionId, `first ${first.marker}`)
-        const firstCall = yield* Effect.promise(() => first.called())
-        yield* surface(yield* brain.access(sessionId), `/api/experimental/session/${sessionId}/wait`, "POST")
         const second = stub.script()
-        yield* brain.send({
-          sessionId,
-          messageId: Session.MessageID.create(),
-          prompt: { text: `second ${second.marker}` },
-          delivery: "steer",
-          sender: { userId: "user_1" },
-          credentials: { stub: { type: "key", key: "sk-send" } },
+        yield* Effect.gen(function* () {
+          const brain = yield* BrainHost.Service
+          yield* start(sessionId)
+          yield* send(sessionId, `first ${first.marker}`)
+          yield* Effect.promise(() => first.called())
+          yield* surface(yield* brain.access(sessionId), `/api/experimental/session/${sessionId}/wait`, "POST")
+          yield* Ref.set(renewals, [Shared.access({ stub: Shared.apiKey("sk-renewed") })])
+          yield* send(sessionId, `second ${second.marker}`)
+          yield* Effect.promise(() => second.called())
+        }).pipe(Effect.provide(host(settings, scripted(renewals, yield* Ref.make(0)))))
+        expect([first.calls[0]?.authorization, second.calls[0]?.authorization]).toEqual([
+          "Bearer sk-granted-1",
+          "Bearer sk-renewed",
+        ])
+      }),
+    )
+
+    it.live(
+      "revoking a brain's models clears the cell before revoking at the source, and a later send grants anew",
+      () =>
+        Effect.gen(function* () {
+          const granted = yield* Ref.make(0)
+          const revoked = yield* Ref.make<ReadonlyArray<Models.Subject>>([])
+          const sessionId = Session.ID.create()
+          const script = stub.script()
+          yield* Effect.gen(function* () {
+            const brain = yield* BrainHost.Service
+            yield* start(sessionId)
+            yield* brain.revokeModels(sessionId, organizationId)
+            yield* send(sessionId, `regranted ${script.marker}`)
+            yield* Effect.promise(() => script.called())
+          }).pipe(
+            Effect.provide(
+              host(settings, scripted(yield* Ref.make<ReadonlyArray<Models.Access>>([]), granted, revoked)),
+            ),
+          )
+          expect([yield* Ref.get(revoked), yield* Ref.get(granted), script.calls[0]?.authorization]).toEqual([
+            [{ brainId: sessionId, organizationId }],
+            2,
+            "Bearer sk-granted-2",
+          ])
+        }),
+    )
+
+    it.live("revoking a brain's models revokes at the source even when the cell cannot be reached", () =>
+      Effect.gen(function* () {
+        const revoked = yield* Ref.make<ReadonlyArray<Models.Subject>>([])
+        const sessionId = Session.ID.create()
+        const failure = yield* BrainHost.Service.use((brain) => brain.revokeModels(sessionId, organizationId)).pipe(
+          Effect.flip,
+          Effect.provide(
+            host(
+              { ...settings, CELL_URL: yield* closedPort },
+              scripted(yield* Ref.make<ReadonlyArray<Models.Access>>([]), yield* Ref.make(0), revoked),
+            ),
+          ),
+        )
+        expect([failure._tag, yield* Ref.get(revoked)]).toEqual([
+          "BrainUnavailable",
+          [{ brainId: sessionId, organizationId }],
+        ])
+      }),
+    )
+
+    it.live("the configured layer lists its models without credentials", () =>
+      Effect.gen(function* () {
+        const models = yield* Models.Service
+        expect(yield* models.catalog({ brainId: Session.ID.create(), organizationId })).toEqual({
+          endpoints: [
+            {
+              id: "stub",
+              protocol: "openai-chat",
+              models: [
+                { id: "stub-model", name: "Stub", limit: { context: 100_000, output: 4000 } },
+                { id: "stub-other", name: "Stub Other", limit: { context: 100_000, output: 4000 } },
+              ],
+            },
+          ],
         })
-        const secondCall = yield* Effect.promise(() => second.called())
-        expect([firstCall.authorization, secondCall.authorization]).toEqual(["Bearer sk-start", "Bearer sk-send"])
+      }).pipe(
+        Effect.provide(
+          Models.layerConfigured.pipe(Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(settings)))),
+        ),
+      ),
+    )
+
+    it.live("a failed renewal keeps the brain's credentials, and a failed grant is BrainUnavailable", () =>
+      Effect.gen(function* () {
+        const sessionId = Session.ID.create()
+        yield* start(sessionId)
+        const unavailable = new Models.Unavailable({ cause: new Error("gateway down") })
+        const failing = Layer.succeed(
+          Models.Service,
+          Models.Service.of({
+            catalog: () => Effect.fail(unavailable),
+            grant: () => Effect.fail(unavailable),
+            renewIfDue: () => Effect.fail(unavailable),
+            revoke: () => Effect.void,
+          }),
+        )
+        const script = stub.script()
+        const outcomes = yield* Effect.all([
+          send(sessionId, `kept ${script.marker}`),
+          start(Session.ID.create()).pipe(Effect.flip),
+        ]).pipe(Effect.provide(host(settings, failing)))
+        yield* Effect.promise(() => script.called())
+        expect([outcomes[1]._tag, script.calls[0]?.authorization]).toEqual(["BrainUnavailable", "Bearer sk-configured"])
       }),
     )
   })
