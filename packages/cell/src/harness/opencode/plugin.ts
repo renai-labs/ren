@@ -3,8 +3,10 @@ export * as RenPlugin from "./plugin.js"
 import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
-import { Clock, DateTime, Effect, Option, Redacted, Schema, Struct } from "effect"
+import type { Models } from "@ren/schema/models"
+import { Clock, DateTime, Effect, Option, Redacted, Ref, Schema, Struct } from "effect"
 import type { Harness } from "../harness.js"
+import { ModelProviders } from "./model-providers.js"
 
 const unavailable = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
 
@@ -32,19 +34,30 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
   })
 })
 
-export const make = (configured: ReadonlyArray<string>, renew: Harness.Renew) =>
+export const make = (
+  configured: ReadonlyArray<string>,
+  endpoints: Ref.Ref<ReadonlyArray<Models.Endpoint>>,
+  reload: Ref.Ref<Effect.Effect<void>>,
+  renew: Harness.Renew,
+) =>
   Plugin.define({
     id: "ren",
     effect: (context) =>
       Effect.gen(function* () {
         const tool = context.tool
         const integration = context.integration
+        const provider = context.provider
         yield* tool.transform((editor) => {
           for (const id of unavailable) editor.remove(id)
         })
+        yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(endpoints)))
         // oxlint-disable-next-line ren/no-comments -- Config providers are registered after SDK transforms, so include their ids explicitly.
         yield* integration.transform((editor) => {
-          for (const integrationID of new Set([...editor.list().map((item) => item.id), ...configured]))
+          for (const integrationID of new Set([
+            ...editor.list().map((item) => item.id),
+            ...configured,
+            ...Ref.getUnsafe(endpoints).map((endpoint) => endpoint.id),
+          ]))
             editor.method.update({
               integrationID,
               method: { id: method, type: "oauth", label: "Ren" },
@@ -53,5 +66,6 @@ export const make = (configured: ReadonlyArray<string>, renew: Harness.Renew) =>
               refresh: (credential) => refresh(integrationID, credential, renew),
             })
         })
+        yield* Ref.set(reload, Effect.andThen(integration.reload(), provider.reload()))
       }),
   })
