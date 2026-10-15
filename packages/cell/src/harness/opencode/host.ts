@@ -6,7 +6,7 @@ import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
 import type { Models } from "@ren/schema/models"
-import { Context, Effect, Fiber, Layer, ManagedRuntime, Ref, type Scope } from "effect"
+import { Context, Deferred, Effect, Fiber, Layer, ManagedRuntime, Ref, type Scope } from "effect"
 import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import manifest from "../../../package.json"
 import type { Harness } from "../harness.js"
@@ -48,10 +48,12 @@ export const make = Effect.fn("Host.make")(function* (
   const plugins = Context.get(services, SdkPlugins.Service)
   const endpoints = yield* Ref.make(initial)
   const reload = yield* Ref.make(Effect.void)
-  yield* plugins.register(RenPlugin.make(endpoints, reload, refreshKey))
+  const loaded = yield* Deferred.make<void>()
+  yield* plugins.register(RenPlugin.make(endpoints, reload, loaded, refreshKey))
   const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
-  // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location; a start that boots it sees an incomplete agent list.
+  // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
+  yield* Deferred.await(loaded)
   const resuming = runtime.runFork(Context.get(services, SessionRestart.Service).resumeSuspendedSessions)
   yield* Effect.addFinalizer(() => Fiber.interrupt(resuming))
   return {

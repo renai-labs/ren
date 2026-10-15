@@ -136,7 +136,13 @@ export const layer = Layer.effect(
       )
 
     const body = Effect.fnUntraced(function* (subject: Models.Subject, access: Models.Access) {
-      const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + hostTokenLifetime
+      const lastExpiryMs = Math.max(
+        yield* Clock.currentTimeMillis,
+        ...access.endpoints.flatMap((endpoint) =>
+          endpoint.apiKey.expiresAt ? [DateTime.toEpochMillis(endpoint.apiKey.expiresAt)] : [],
+        ),
+      )
+      const exp = Math.floor(lastExpiryMs / 1000) + hostTokenLifetime
       return {
         access,
         hostToken: yield* SessionToken.sign(key, {

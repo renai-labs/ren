@@ -4,7 +4,7 @@ import { SessionToken } from "@ren/brain-api/session-token"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, Effect, Layer, ManagedRuntime, Ref } from "effect"
+import { ConfigProvider, DateTime, Effect, Layer, ManagedRuntime, Option, Ref } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { BrainHost } from "../src/brain-host.js"
@@ -123,8 +123,13 @@ describe("model refresh", () => {
       expect(failures.map((failure) => failure._tag)).toEqual(Array.from({ length: 4 }, () => "ForbiddenError"))
       const valid = yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp })
       const refreshed = yield* brain.refreshModels(valid)
-      expect(refreshed.hostToken).toBeString()
       expect(refreshed.access.endpoints.map((endpoint) => endpoint.id)).toEqual(["stub"])
+      const claims = yield* SessionToken.verify(TestToken.keys, refreshed.hostToken ?? "")
+      const keyExpiresAt = refreshed.access.endpoints[0]?.apiKey.expiresAt
+      expect(keyExpiresAt).toBeDefined()
+      expect(Option.getOrThrow(claims).exp * 1000).toBeGreaterThanOrEqual(
+        (keyExpiresAt ? DateTime.toEpochMillis(keyExpiresAt) : 0) + 2 * 60 * 60 * 1000 - 1000,
+      )
     }),
   )
 })
