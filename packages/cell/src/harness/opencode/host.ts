@@ -14,7 +14,7 @@ import { RenPlugin } from "./plugin.js"
 
 export const version = manifest.version
 
-const Document = Schema.fromJsonString(
+const BaseConfig = Schema.fromJsonString(
   Schema.StructWithRest(Schema.Struct({ providers: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)) }), [
     Schema.Record(Schema.String, Schema.Unknown),
   ]),
@@ -48,8 +48,8 @@ export const make = Effect.fn("Host.make")(function* (
   initial: ReadonlyArray<Models.Endpoint>,
   renew: Harness.Renew,
 ): Effect.fn.Return<Instance, Error, Scope.Scope> {
-  const configured = Object.keys(
-    (yield* Schema.decodeUnknownEffect(Document)(config).pipe(Effect.orDie)).providers ?? {},
+  const baseProviders = Object.keys(
+    (yield* Schema.decodeUnknownEffect(BaseConfig)(config).pipe(Effect.orDie)).providers ?? {},
   )
   const runtime = yield* Effect.acquireRelease(
     Effect.sync(() => ManagedRuntime.make(routes)),
@@ -59,11 +59,14 @@ export const make = Effect.fn("Host.make")(function* (
   const plugins = Context.get(services, SdkPlugins.Service)
   const endpoints = yield* Ref.make(initial)
   const reload = yield* Ref.make(Effect.void)
-  yield* plugins.register(RenPlugin.make(configured, endpoints, reload, renew))
+  yield* plugins.register(RenPlugin.make(baseProviders, endpoints, reload, renew))
+  const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
+  // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location; a start that boots it sees an incomplete agent list.
+  yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
   const resuming = runtime.runFork(Context.get(services, SessionRestart.Service).resumeSuspendedSessions)
   yield* Effect.addFinalizer(() => Fiber.interrupt(resuming))
   return {
-    fetch: HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect()),
+    fetch,
     credentials: Context.get(services, Credential.Service),
     configure: (next) => Ref.set(endpoints, next).pipe(Effect.andThen(Ref.get(reload)), Effect.flatten),
   }

@@ -138,8 +138,6 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     yield* host.configure(next)
     yield* Credentials.sync(host.credentials, ModelCredentials.owner, ModelCredentials.entries(next))
   })
-  // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location; a start that boots it sees an incomplete agent list.
-  yield* client.agent.list().pipe(Effect.orDie)
   yield* configure(endpoints)
 
   return {
