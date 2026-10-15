@@ -12,6 +12,7 @@ import type { Harness } from "../harness.js"
 import { Credentials } from "./credentials.js"
 import { Host } from "./host.js"
 import { InstructionEntries } from "./instruction-entries.js"
+import { ModelCredentials } from "./model-credentials.js"
 
 const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
   client.session.get({ sessionID }).pipe(
@@ -133,12 +134,19 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   )
   const state = { firstAskedAt: new Map<string, number>() }
   const mutations = yield* Semaphore.make(1)
-  yield* Credentials.apply(client, host.credentials, endpoints)
+  const configure = Effect.fn("OpenCodeHarness.configure")(function* (next: ReadonlyArray<Models.Endpoint>) {
+    const integrations = new Set((yield* client.integration.list().pipe(Effect.orDie)).data.map((item) => item.id))
+    yield* Credentials.sync(
+      host.credentials,
+      ModelCredentials.owner,
+      ModelCredentials.entries(next).filter((entry) => integrations.has(entry.integrationID)),
+    )
+  })
+  yield* configure(endpoints)
 
   return {
     fetch: host.fetch,
-    configure: (next: ReadonlyArray<Models.Endpoint>) =>
-      mutations.withPermit(Credentials.apply(client, host.credentials, next)),
+    configure: (next: ReadonlyArray<Models.Endpoint>) => mutations.withPermit(configure(next)),
     start: (input: StartInput) => mutations.withPermit(start(client, input, directory)),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
     sessions: Effect.gen(function* () {

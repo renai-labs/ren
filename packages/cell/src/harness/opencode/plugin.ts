@@ -3,7 +3,7 @@ export * as RenPlugin from "./plugin.js"
 import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
-import { Clock, DateTime, Effect, Option, Schema, Struct } from "effect"
+import { Clock, DateTime, Effect, Option, Redacted, Schema, Struct } from "effect"
 import type { Harness } from "../harness.js"
 
 const unavailable = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
@@ -23,7 +23,7 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
   const expiresAt = Option.flatMap(renewed, (apiKey) => Option.fromNullishOr(apiKey.expiresAt))
   if (Option.isSome(renewed) && Option.isSome(expiresAt))
     return Struct.evolve(credential, {
-      access: () => renewed.value.key,
+      access: () => Redacted.value(renewed.value.key),
       expires: () => DateTime.toEpochMillis(expiresAt.value),
     })
   if ((yield* Clock.currentTimeMillis) < credential.expires) return credential

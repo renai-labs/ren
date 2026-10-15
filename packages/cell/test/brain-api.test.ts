@@ -1,4 +1,6 @@
 import { expect } from "bun:test"
+import { Credential } from "@opencode/schema/credential"
+import { IntegrationID } from "@opencode/schema/integration-id"
 import { SessionID } from "@opencode/schema/session-id"
 import {
   BrainRejectedError,
@@ -337,6 +339,24 @@ it.live(
       yield* brain.models()
       expect(yield* brain.start()).toEqual({ sessionId: brain.id, harness: "opencode" })
     }),
+)
+
+it.live("a configuration keeps Ren credentials that models do not own", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    yield* brain.credentials.create({
+      id: Credential.ID.make("cred_ren_other_stub"),
+      integrationID: IntegrationID.make("stub"),
+      value: { type: "key", key: "other" },
+      label: "Ren",
+    })
+    yield* brain.models({ stub: Shared.apiKey("model") })
+    yield* brain.removeModels
+    expect((yield* brain.credentials.all()).map((credential) => credential.id)).toEqual([
+      Credential.ID.make("cred_ren_other_stub"),
+    ])
+  }),
 )
 
 it.live("a connection the open harness does not know waits for the next open", () =>
