@@ -1,7 +1,8 @@
+import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Struct } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
-import { BrainRejectedError, ForbiddenError, SessionNotStartedError } from "./errors.js"
+import { BrainRejectedError, ForbiddenError, ModelsNotConfiguredError, SessionNotStartedError } from "./errors.js"
 
 const SendBody = Session.SendInput.mapFields(Struct.omit(["sessionId"])).annotate({ identifier: "Brain.SendBody" })
 
@@ -10,7 +11,7 @@ const BrainGroup = HttpApiGroup.make("brain")
     HttpApiEndpoint.post("brain.start", "/ren/sessions", {
       payload: Session.StartInput,
       success: Session.Started,
-      error: [ForbiddenError, BrainRejectedError],
+      error: [ForbiddenError, BrainRejectedError, ModelsNotConfiguredError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.start",
@@ -24,12 +25,34 @@ const BrainGroup = HttpApiGroup.make("brain")
       params: { id: Session.ID },
       payload: SendBody,
       success: Session.Accepted,
-      error: [ForbiddenError, BrainRejectedError, SessionNotStartedError],
+      error: [ForbiddenError, BrainRejectedError, SessionNotStartedError, ModelsNotConfiguredError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.send",
         summary: "Send a message",
         description: "Accept a message for a started session, deduplicated by message ID.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.put("brain.models", "/ren/models", {
+      payload: Models.Access,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "brain.models",
+        summary: "Configure models",
+        description:
+          "Store the brain’s model endpoints and apply their API keys. New endpoints and models apply when the harness next opens.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("brain.removeModels", "/ren/models").annotateMerge(
+      OpenApi.annotations({
+        identifier: "brain.removeModels",
+        summary: "Remove models",
+        description:
+          "Delete the brain’s model configuration and its credentials. Start and send fail until a configuration is stored again.",
       }),
     ),
   )

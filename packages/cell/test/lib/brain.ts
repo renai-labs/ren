@@ -3,8 +3,9 @@ export * as BrainTest from "./brain.js"
 import { AbsolutePath, OpenCode } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/brain-api/brain-api"
+import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Effect, FiberHandle, Layer, Option, Ref, Schema } from "effect"
+import { Context, DateTime, Effect, FiberHandle, Layer, Option, Ref, Schema, Semaphore } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -16,6 +17,7 @@ import { Env } from "../../src/env.js"
 import { Harness } from "../../src/harness/harness.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
 import { Host } from "../../src/harness/opencode/host.js"
+import { ModelStore } from "../../src/model-store.js"
 import { Shared } from "./shared.js"
 
 const make = Effect.gen(function* () {
@@ -46,10 +48,18 @@ const make = Effect.gen(function* () {
         return Effect.runPromise(transport.before(request)).then(() => host.fetch(request))
       },
     },
+    [],
     AbsolutePath.make(directory),
   )
   const id = Session.ID.create()
   const alarm: { at: number | null } = { at: null }
+  const stored = new Map<string, string>()
+  const storage = {
+    get: (key: string) => Promise.resolve(stored.get(key)),
+    put: (key: string, value: string) => Promise.resolve(void stored.set(key, value)),
+    delete: (key: string) => Promise.resolve(stored.delete(key)),
+  }
+  yield* ModelStore.write(storage, Shared.access(undefined, Shared.stub().url))
   const info = Layer.succeed(
     Cell.Info,
     Cell.Info.of({
@@ -61,6 +71,7 @@ const make = Effect.gen(function* () {
           alarm.at = Number(at)
           return Promise.resolve()
         },
+        ...storage,
       },
     }),
   )
@@ -70,6 +81,7 @@ const make = Effect.gen(function* () {
       requests: Ref.make(0),
       wait: FiberHandle.make<void>(),
       waitingSince: Ref.make(Option.none<DateTime.Utc>()),
+      configuring: Semaphore.make(1),
     }),
   )
   const client = yield* HttpApiTest.groups(BrainApi, ["brain"]).pipe(
@@ -102,9 +114,14 @@ const make = Effect.gen(function* () {
       ),
     ),
   )
+  const models = (apiKeys?: Readonly<Record<string, Models.ApiKey>>) =>
+    client.brain["brain.models"]({ payload: Shared.access(apiKeys, Shared.stub().url) })
   return {
     id,
     directory,
+    stored,
+    models,
+    removeModels: client.brain["brain.removeModels"](),
     requests,
     transport,
     client,
@@ -116,7 +133,6 @@ const make = Effect.gen(function* () {
           sessionId: id,
           harness: "opencode",
           instructions: {},
-          credentials: {},
           interactive: true,
           ...input,
         },

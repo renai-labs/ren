@@ -106,6 +106,7 @@ describe("cell contract", () => {
         "/ren/unknown/deeper",
         "/ren/sessions",
         `/ren/sessions/${opened.id}/messages`,
+        "/ren/models",
         "/api/credential",
         "/api/credential/cred_ren_stub",
         "/api/integration/stub/connect/key",
@@ -187,8 +188,114 @@ describe("cell contract", () => {
       expect(await opened.state()).toEqual(closed)
     })
 
+    test("start and send answer 409 before a model configuration and after its removal, and open no host", async () => {
+      const opened = await cell()
+      const started = await opened.brain("/ren/sessions", { sessionId: opened.id, harness: "opencode" })
+      const sent = await opened.brain(`/ren/sessions/${opened.id}/messages`, {
+        messageId: Session.MessageID.create(),
+        prompt: { text: "early" },
+        sender: { userId: "user_1" },
+      })
+      expect([
+        { status: started.status, body: await started.json() },
+        { status: sent.status, body: await sent.json() },
+      ]).toEqual(
+        Array.from({ length: 2 }, () => ({
+          status: 409,
+          body: { _tag: "ModelsNotConfiguredError", message: "The brain has no model configuration" },
+        })),
+      )
+      expect((await opened.models()).status).toBe(204)
+      expect((await opened.removeModels()).status).toBe(204)
+      const removed = await opened.brain("/ren/sessions", { sessionId: opened.id, harness: "opencode" })
+      expect(removed.status).toBe(409)
+      expect(await opened.state()).toEqual(closed)
+    })
+
+    test("endpoints become providers when the host opens, their efforts become variants, and their keys reach the model", async () => {
+      const opened = await cell()
+      const limit = { context: 100_000, output: 4000 }
+      expect(
+        (
+          await opened.models({
+            endpoints: [
+              {
+                id: "gateway",
+                protocol: "openai-chat",
+                baseUrl: stub.cellUrl,
+                apiKey: Shared.apiKey("gateway-key"),
+                models: [{ id: "stub-model", name: "Gateway", limit, efforts: ["low", "high"] }],
+              },
+              {
+                id: "gateway-anthropic",
+                protocol: "anthropic-messages",
+                baseUrl: stub.cellUrl,
+                apiKey: Shared.apiKey("anthropic-key", Date.now() + 3_600_000),
+                models: [{ id: "stub-claude", name: "Gateway Claude", limit, efforts: ["low", "max"] }],
+              },
+              ...Shared.access({ stub: Shared.apiKey("unused") }).endpoints,
+            ],
+          })
+        ).status,
+      ).toBe(204)
+      const chat = stub.script()
+      const started = await opened.brain("/ren/sessions", {
+        sessionId: opened.id,
+        harness: "opencode",
+        model: { endpointId: "gateway", modelId: "stub-model", variant: "high" },
+        initialMessage: {
+          messageId: Session.MessageID.create(),
+          prompt: { text: `gateway ${chat.marker}` },
+          sender: { userId: "user_1" },
+        },
+      })
+      expect(started.status, await celld.logs()).toBe(200)
+      await opened.opencode.session.wait({ sessionID: opened.id })
+      const variants = (await opened.opencode.model.list()).data
+        .filter((model) => model.providerID.startsWith("gateway"))
+        .toSorted((left, right) => left.providerID.localeCompare(right.providerID))
+        .map((model) => [model.providerID, model.variants.map((variant) => [variant.id, variant.settings])])
+      expect(variants).toEqual([
+        [
+          "gateway",
+          [
+            ["low", { reasoningEffort: "low" }],
+            ["high", { reasoningEffort: "high" }],
+          ],
+        ],
+        [
+          "gateway-anthropic",
+          [
+            ["low", { thinking: { type: "adaptive", display: "summarized" }, effort: "low" }],
+            ["max", { thinking: { type: "adaptive", display: "summarized" }, effort: "max" }],
+          ],
+        ],
+      ])
+      const messages = stub.script()
+      expect(
+        (
+          await opened.brain("/ren/sessions", {
+            sessionId: opened.id,
+            harness: "opencode",
+            model: { endpointId: "gateway-anthropic", modelId: "stub-claude" },
+          })
+        ).status,
+      ).toBe(200)
+      await opened.brain(`/ren/sessions/${opened.id}/messages`, {
+        messageId: Session.MessageID.create(),
+        prompt: { text: `anthropic ${messages.marker}` },
+        sender: { userId: "user_1" },
+      })
+      await opened.opencode.session.wait({ sessionID: opened.id })
+      expect([
+        chat.calls.map((call) => [call.path, call.authorization]),
+        messages.calls.map((call) => [call.path, call.authorization, call.apiKey]),
+      ]).toEqual([[["/v1/chat/completions", "Bearer gateway-key"]], [["/v1/messages", "Bearer anthropic-key", null]]])
+    })
+
     test("the deployed Brain API creates, sends and reports the same host under server authorization", async () => {
       const opened = await cell()
+      expect((await opened.models()).status).toBe(204)
       const initial = stub.script()
       expect(
         (

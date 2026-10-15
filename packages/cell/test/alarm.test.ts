@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Deferred, Effect, Fiber, FiberHandle, Layer, Option, Ref } from "effect"
+import { Context, DateTime, Deferred, Effect, Fiber, FiberHandle, Layer, Option, Ref, Semaphore } from "effect"
 import { TestClock } from "effect/testing"
 import { Cell } from "../src/cell.js"
 import { Harness } from "../src/harness/harness.js"
@@ -19,6 +19,7 @@ const setup = Effect.gen(function* () {
     requests: yield* Ref.make(0),
     wait: yield* FiberHandle.make<void>(),
     waitingSince: yield* Ref.make(Option.none<DateTime.Utc>()),
+    configuring: yield* Semaphore.make(1),
   })
   const info = Cell.Info.of({
     sessionId: Session.ID.create(),
@@ -36,10 +37,14 @@ const setup = Effect.gen(function* () {
         events.push("rearm")
         return Promise.resolve()
       },
+      get: () => Promise.reject(new Error("alarm must not read the model configuration")),
+      put: () => Promise.reject(new Error("alarm must not write the model configuration")),
+      delete: () => Promise.reject(new Error("alarm must not remove the model configuration")),
     },
   })
   const instance: Harness.Instance = {
     fetch: () => Promise.resolve(new Response(null)),
+    configure: () => Effect.die(new Error("alarm must not configure models")),
     start: () => Effect.die(new Error("alarm must not start sessions")),
     send: () => Effect.die(new Error("alarm must not send messages")),
     sessions: Effect.suspend(() => current.reading.pipe(Effect.andThen(Effect.sync(() => current.snapshots)))),

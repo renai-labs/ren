@@ -3,8 +3,8 @@ export * as OpenCodeHarness from "./harness.js"
 import { AbsolutePath, Agent, Model, OpenCode, Provider, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
 import type { SessionListInput } from "@opencode/client/effect/api"
-import type { Credential } from "@opencode/core/credential"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
+import type { Models } from "@ren/schema/models"
 import type { SendInput, StartInput } from "@ren/schema/session"
 import { Clock, Effect, Option, Semaphore, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -28,26 +28,21 @@ const checkKnown = Effect.fn("OpenCodeHarness.checkKnown")(function* (client: Op
   if (
     model &&
     !(yield* client.model.list().pipe(Effect.orDie)).data.some(
-      (item) => item.providerID === model.providerId && item.modelID === model.modelId,
+      (item) => item.providerID === model.endpointId && item.modelID === model.modelId,
     )
   )
-    return yield* new BrainRejectedError({ message: `Unknown model: ${model.providerId}/${model.modelId}` })
+    return yield* new BrainRejectedError({ message: `Unknown model: ${model.endpointId}/${model.modelId}` })
 })
 
 const start = Effect.fn("OpenCodeHarness.start")(function* (
   client: OpenCodeClient,
-  store: Credential.Interface,
   input: StartInput,
   directory: AbsolutePath,
 ) {
-  const previous = yield* Credentials.saved(store)
-  yield* Credentials.apply(client, store, input.credentials, "replace").pipe(
-    Effect.andThen(checkKnown(client, input)),
-    Effect.onError(() => Credentials.restore(store, previous)),
-  )
+  yield* checkKnown(client, input)
   const agent = input.agent ? Agent.ID.make(input.agent) : undefined
   const model = input.model && {
-    providerID: Provider.ID.make(input.model.providerId),
+    providerID: Provider.ID.make(input.model.endpointId),
     id: Model.ID.make(input.model.modelId),
     ...(input.model.variant && { variant: Model.VariantID.make(input.model.variant) }),
   }
@@ -84,7 +79,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
     discard: true,
   }).pipe(Effect.orDie)
   if (input.initialMessage)
-    yield* send(client, store, {
+    yield* send(client, {
       ...input.initialMessage,
       sessionId: input.sessionId,
     }).pipe(Effect.catchTag("SessionNotStartedError", Effect.die))
@@ -93,13 +88,11 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
 
 const send = Effect.fn("OpenCodeHarness.send")(function* (
   client: OpenCodeClient,
-  store: Credential.Interface,
   input: Omit<SendInput, "delivery"> & { readonly delivery?: SendInput["delivery"] },
 ) {
   const sessionID = Session.ID.make(input.sessionId)
   if (Option.isNone(yield* findSession(client, sessionID)))
     return yield* new SessionNotStartedError({ message: `Session ${input.sessionId} has not been started` })
-  if (input.credentials) yield* Credentials.apply(client, store, input.credentials, "merge")
   const messageID = SessionMessage.ID.make(input.messageId)
   const isSent = yield* client.session.message.get({ sessionID, messageID }).pipe(
     Effect.as(true),
@@ -120,12 +113,17 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
   return { messageId: input.messageId }
 })
 
-export const open = Effect.fn("OpenCodeHarness.open")(function* (storage: DurableObjectStorage, config: string) {
-  return yield* make(yield* Host.open(storage, config))
+export const open = Effect.fn("OpenCodeHarness.open")(function* (
+  storage: DurableObjectStorage,
+  config: string,
+  endpoints: ReadonlyArray<Models.Endpoint>,
+) {
+  return yield* make(yield* Host.open(storage, config, endpoints), endpoints)
 })
 
 export const make = Effect.fn("OpenCodeHarness.make")(function* (
   host: Host.Instance,
+  endpoints: ReadonlyArray<Models.Endpoint>,
   directory: AbsolutePath = AbsolutePath.make("/workspace"),
 ) {
   const client = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
@@ -134,11 +132,14 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   )
   const state = { firstAskedAt: new Map<string, number>() }
   const mutations = yield* Semaphore.make(1)
+  yield* Credentials.apply(client, host.credentials, endpoints)
 
   return {
     fetch: host.fetch,
-    start: (input: StartInput) => mutations.withPermit(start(client, host.credentials, input, directory)),
-    send: (input: SendInput) => mutations.withPermit(send(client, host.credentials, input)),
+    configure: (next: ReadonlyArray<Models.Endpoint>) =>
+      mutations.withPermit(Credentials.apply(client, host.credentials, next)),
+    start: (input: StartInput) => mutations.withPermit(start(client, input, directory)),
+    send: (input: SendInput) => mutations.withPermit(send(client, input)),
     sessions: Effect.gen(function* () {
       const roots = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>
         client.session.list({ parentID: null, cursor }).pipe(
