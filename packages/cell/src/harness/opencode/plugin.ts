@@ -35,7 +35,7 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
 })
 
 export const make = (
-  configured: ReadonlyArray<string>,
+  baseProviders: ReadonlyArray<string>,
   endpoints: Ref.Ref<ReadonlyArray<Models.Endpoint>>,
   reload: Ref.Ref<Effect.Effect<void>>,
   renew: Harness.Renew,
@@ -55,7 +55,7 @@ export const make = (
         yield* integration.transform((editor) => {
           for (const integrationID of new Set([
             ...editor.list().map((item) => item.id),
-            ...configured,
+            ...baseProviders,
             ...Ref.getUnsafe(endpoints).map((endpoint) => endpoint.id),
           ]))
             editor.method.update({
