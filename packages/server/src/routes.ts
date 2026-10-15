@@ -2,6 +2,7 @@ export * as Routes from "./routes.js"
 
 import { ModelsApi } from "@ren/brain-api/models-api"
 import { Access } from "@ren/core/access"
+import { BrainHost } from "@ren/core/brain-host"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Space } from "@ren/core/space"
@@ -46,7 +47,7 @@ export const layer = Layer.mergeAll(
     Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
     Layer.provide([Health.layer, Invitation.layer, Space.layer, SpaceMember.layer]),
   ),
-  HttpApiBuilder.layer(ModelsApi).pipe(Layer.provide(ModelsHandler)),
+  HttpApiBuilder.layer(ModelsApi).pipe(Layer.provide(ModelsHandler), Layer.provide(BrainHost.hostAuthentication)),
   AuthRoute,
   Cors,
 ).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))

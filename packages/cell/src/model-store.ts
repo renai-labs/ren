@@ -1,10 +1,11 @@
 export * as ModelStore from "./model-store.js"
 
 import { Models } from "@ren/schema/models"
-import { Context, Effect, Layer, type Option } from "effect"
+import { Context, Effect, Layer, Option } from "effect"
 import { KeyValueStore } from "effect/persistence"
 
-const key = "ren:models"
+const accessKey = "ren:models"
+const hostTokenKey = "ren:host-token"
 
 export class Storage extends Context.Service<
   Storage,
@@ -17,7 +18,9 @@ export class Storage extends Context.Service<
 
 export interface Interface {
   readonly read: Effect.Effect<Option.Option<Models.Access>>
-  readonly write: (access: Models.Access) => Effect.Effect<void>
+  readonly readHostToken: Effect.Effect<Option.Option<string>>
+  readonly write: (access: Models.Access, hostToken: string | undefined) => Effect.Effect<void>
+  readonly removeHostToken: Effect.Effect<void>
   readonly remove: Effect.Effect<void>
 }
 
@@ -27,24 +30,30 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const storage = yield* Storage
+    const keys = [accessKey, hostTokenKey]
     const get = (key: string) => Effect.promise(() => storage.get(key))
     const remove = (key: string) => Effect.promise(() => storage.delete(key)).pipe(Effect.asVoid)
-    const store = KeyValueStore.toSchemaStore(
-      KeyValueStore.makeStringOnly({
-        get,
-        set: (key, value) => Effect.promise(() => storage.put(key, value)),
-        remove,
-        clear: remove(key),
-        size: get(key).pipe(Effect.map((stored) => (stored ? 1 : 0))),
-      }),
-      Models.Access,
-    )
+    const store = KeyValueStore.makeStringOnly({
+      get,
+      set: (key, value) => Effect.promise(() => storage.put(key, value)),
+      remove,
+      clear: Effect.forEach(keys, remove, { discard: true }),
+      size: Effect.forEach(keys, get).pipe(Effect.map((values) => values.filter(Boolean).length)),
+    })
+    const access = KeyValueStore.toSchemaStore(store, Models.Access)
+    const removeHostToken = store.remove(hostTokenKey).pipe(Effect.orDie, Effect.withSpan("ModelStore.removeHostToken"))
     return Service.of({
-      read: store.get(key).pipe(Effect.orDie, Effect.withSpan("ModelStore.read")),
-      write: Effect.fn("ModelStore.write")(function* (access: Models.Access) {
-        yield* store.set(key, access).pipe(Effect.orDie)
+      read: access.get(accessKey).pipe(Effect.orDie, Effect.withSpan("ModelStore.read")),
+      readHostToken: store
+        .get(hostTokenKey)
+        .pipe(Effect.map(Option.fromNullishOr), Effect.orDie, Effect.withSpan("ModelStore.readHostToken")),
+      write: Effect.fn("ModelStore.write")(function* (next: Models.Access, hostToken: string | undefined) {
+        yield* access.set(accessKey, next).pipe(Effect.orDie)
+        if (!hostToken) return yield* removeHostToken
+        yield* store.set(hostTokenKey, hostToken).pipe(Effect.orDie)
       }),
-      remove: store.remove(key).pipe(Effect.orDie, Effect.withSpan("ModelStore.remove")),
+      removeHostToken,
+      remove: store.clear.pipe(Effect.orDie, Effect.withSpan("ModelStore.remove")),
     })
   }),
 )

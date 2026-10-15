@@ -19,6 +19,7 @@ import {
   Config,
   Context,
   DateTime,
+  Duration,
   Effect,
   Layer,
   Option,
@@ -29,6 +30,7 @@ import {
 } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
+import { CurrentHost, HostAuthentication } from "@ren/brain-api/models-api"
 import { Models } from "./models.js"
 
 export {
@@ -56,7 +58,8 @@ export interface Interface {
     sessionId: Session.ID,
     organizationId: Auth.OrganizationID,
   ) => Effect.Effect<void, BrainUnavailable | BrainRejectedError>
-  readonly refreshModels: (hostToken: string) => Effect.Effect<ModelsBody, ForbiddenError | ModelsUnavailableError>
+  readonly authenticateHost: (hostToken: Redacted.Redacted) => Effect.Effect<CurrentHost["Service"], ForbiddenError>
+  readonly refreshModels: (host: CurrentHost["Service"]) => Effect.Effect<ModelsBody, ModelsUnavailableError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
@@ -66,7 +69,7 @@ class Target extends Context.Service<Target, Session.ID>()("@ren/core/BrainHost/
 const limit = "30 seconds"
 const serverLifetime = 5 * 60
 const clientLifetime = 60 * 60
-const hostTokenLifetime = 2 * 60 * 60
+const hostTokenLifetime = Duration.hours(2)
 const transient = new Set([408, 429, 500, 502, 503, 504])
 
 const unavailable = (error: HttpClientError.HttpClientError) =>
@@ -136,13 +139,11 @@ export const layer = Layer.effect(
       )
 
     const body = Effect.fnUntraced(function* (subject: Models.Subject, access: Models.Access) {
-      const lastExpiryMs = Math.max(
-        yield* Clock.currentTimeMillis,
-        ...access.endpoints.flatMap((endpoint) =>
-          endpoint.apiKey.expiresAt ? [DateTime.toEpochMillis(endpoint.apiKey.expiresAt)] : [],
-        ),
+      const lastExpiry = access.endpoints.reduce(
+        (latest, endpoint) => (endpoint.apiKey.expiresAt ? DateTime.max(latest, endpoint.apiKey.expiresAt) : latest),
+        yield* DateTime.now,
       )
-      const exp = Math.floor(lastExpiryMs / 1000) + hostTokenLifetime
+      const exp = Math.floor(DateTime.toEpochMillis(DateTime.addDuration(lastExpiry, hostTokenLifetime)) / 1000)
       return {
         access,
         hostToken: yield* SessionToken.sign(key, {
@@ -225,16 +226,18 @@ export const layer = Layer.effect(
           .pipe(Effect.mapError((cause) => new BrainUnavailable({ cause })))
         return yield* cleared
       }),
-      refreshModels: Effect.fn("BrainHost.refreshModels")(function* (hostToken: string) {
-        const claims = yield* SessionToken.verify(Redacted.value(config.keys), hostToken)
+      authenticateHost: Effect.fn("BrainHost.authenticateHost")(function* (hostToken: Redacted.Redacted) {
+        const claims = yield* SessionToken.verify(Redacted.value(config.keys), Redacted.value(hostToken))
         if (Option.isNone(claims) || claims.value.scope !== "host" || !claims.value.org)
           return yield* new ForbiddenError({ message: "The host token is not valid" })
-        const subject = { brainId: claims.value.sid, organizationId: claims.value.org }
-        const access = yield* models.grant(subject).pipe(
+        return { brainId: claims.value.sid, organizationId: claims.value.org }
+      }),
+      refreshModels: Effect.fn("BrainHost.refreshModels")(function* (host: CurrentHost["Service"]) {
+        const access = yield* models.grant(host).pipe(
           Effect.tapError((error) => Effect.logWarning("Model access refresh failed", error)),
           Effect.mapError(() => new ModelsUnavailableError({ message: "Model access is unavailable" })),
         )
-        return yield* body(subject, access)
+        return yield* body(host, access)
       }),
       access: Effect.fn("BrainHost.access")(function* (sessionId: Session.ID) {
         const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + clientLifetime
@@ -243,6 +246,19 @@ export const layer = Layer.effect(
           token: yield* SessionToken.sign(key, { sid: sessionId, scope: "client", exp }),
           expiresAt: DateTime.makeUnsafe(exp * 1000),
         } satisfies Session.ClientAccess
+      }),
+    })
+  }),
+)
+
+export const hostAuthentication = Layer.effect(
+  HostAuthentication,
+  Effect.gen(function* () {
+    const brain = yield* Service
+    return HostAuthentication.of({
+      bearer: Effect.fn("BrainHost.hostAuthentication")(function* (httpEffect, options) {
+        const host = yield* brain.authenticateHost(options.credential)
+        return yield* httpEffect.pipe(Effect.provideService(CurrentHost, host))
       }),
     })
   }),
