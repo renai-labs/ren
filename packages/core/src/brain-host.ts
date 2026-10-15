@@ -1,10 +1,11 @@
 export * as BrainHost from "./brain-host.js"
 
-import { BrainApi } from "@ren/brain-api/brain-api"
+import { BrainApi, type ModelsBody } from "@ren/brain-api/brain-api"
 import {
   BrainRejectedError,
   ForbiddenError,
   type ModelsNotConfiguredError,
+  ModelsUnavailableError,
   type SessionNotStartedError,
 } from "@ren/brain-api/errors"
 import { SessionToken } from "@ren/brain-api/session-token"
@@ -30,7 +31,12 @@ import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { Models } from "./models.js"
 
-export { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
+export {
+  BrainRejectedError,
+  ForbiddenError,
+  ModelsUnavailableError,
+  SessionNotStartedError,
+} from "@ren/brain-api/errors"
 
 export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("BrainUnavailable", {
   cause: Schema.Defect(),
@@ -50,6 +56,7 @@ export interface Interface {
     sessionId: Session.ID,
     organizationId: Auth.OrganizationID,
   ) => Effect.Effect<void, BrainUnavailable | BrainRejectedError>
+  readonly renewModels: (renewalToken: string) => Effect.Effect<ModelsBody, ForbiddenError | ModelsUnavailableError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
@@ -59,6 +66,7 @@ class Target extends Context.Service<Target, Session.ID>()("@ren/core/BrainHost/
 const limit = "30 seconds"
 const serverLifetime = 5 * 60
 const clientLifetime = 60 * 60
+const renewalLifetime = 2 * 60 * 60
 const transient = new Set([408, 429, 500, 502, 503, 504])
 
 const unavailable = (error: HttpClientError.HttpClientError) =>
@@ -127,8 +135,23 @@ export const layer = Layer.effect(
         ),
       )
 
-    const configure = (sessionId: Session.ID, access: Models.Access) =>
-      call(sessionId, brain.brain["brain.models"]({ payload: access }))
+    const body = Effect.fnUntraced(function* (subject: Models.Subject, access: Models.Access) {
+      const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + renewalLifetime
+      return {
+        access,
+        renewalToken: yield* SessionToken.sign(key, {
+          sid: subject.brainId,
+          scope: "renewal",
+          org: subject.organizationId,
+          exp,
+        }),
+      } satisfies ModelsBody
+    })
+
+    const configure = (subject: Models.Subject, access: Models.Access) =>
+      body(subject, access).pipe(
+        Effect.flatMap((payload) => call(subject.brainId, brain.brain["brain.models"]({ payload }))),
+      )
 
     const withModels = Effect.fnUntraced(function* <A, E>(
       subject: Models.Subject,
@@ -143,12 +166,12 @@ export const layer = Layer.effect(
             ),
           ),
         )
-      if (Option.isSome(renewed)) yield* configure(subject.brainId, renewed.value)
+      if (Option.isSome(renewed)) yield* configure(subject, renewed.value)
       return yield* request.pipe(
         Effect.catchTag("ModelsNotConfiguredError", () =>
           models.grant(subject).pipe(
             Effect.mapError((cause) => new BrainUnavailable({ cause })),
-            Effect.flatMap((access) => configure(subject.brainId, access)),
+            Effect.flatMap((access) => configure(subject, access)),
             Effect.andThen(request),
             Effect.catchTag("ModelsNotConfiguredError", Effect.die),
           ),
@@ -195,6 +218,17 @@ export const layer = Layer.effect(
           .revoke({ brainId: sessionId, organizationId })
           .pipe(Effect.mapError((cause) => new BrainUnavailable({ cause })))
         return yield* cleared
+      }),
+      renewModels: Effect.fn("BrainHost.renewModels")(function* (renewalToken: string) {
+        const claims = yield* SessionToken.verify(Redacted.value(config.keys), renewalToken)
+        if (Option.isNone(claims) || claims.value.scope !== "renewal" || !claims.value.org)
+          return yield* new ForbiddenError({ message: "The renewal token is not valid" })
+        const subject = { brainId: claims.value.sid, organizationId: claims.value.org }
+        const access = yield* models.grant(subject).pipe(
+          Effect.tapError((error) => Effect.logWarning("Model access renewal failed", error)),
+          Effect.mapError(() => new ModelsUnavailableError({ message: "Model access is unavailable" })),
+        )
+        return yield* body(subject, access)
       }),
       access: Effect.fn("BrainHost.access")(function* (sessionId: Session.ID) {
         const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + clientLifetime
