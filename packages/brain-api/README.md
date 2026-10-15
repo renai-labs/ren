@@ -5,7 +5,7 @@ The Brain API: the internal HTTP contract between the Ren server and whatever ho
 ## What belongs here
 
 - `src/brain-api.ts`: the `BrainApi` and its one group, `brain`.
-- `src/renewal-api.ts`: the `RenewalApi`, which Ren serves and a host calls to renew its brain's model access.
+- `src/models-api.ts`: the `ModelsApi`, which Ren serves and a host calls to refresh its brain's model keys with its host token.
 - `src/errors.ts`: the errors its endpoints declare, with HTTP statuses.
 - `src/session-token.ts`: the token that authorises a call for one session (`SessionToken.Claims`), its signing keys, and `sign`/`verify`. Core signs, the host verifies, and both use this one implementation.
 

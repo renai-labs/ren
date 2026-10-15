@@ -5,7 +5,7 @@ import { Session } from "@ren/schema/session"
 import { Clock, Effect, Option, Result, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
 
-export const Scope = Schema.Literals(["server", "client", "renewal"]).annotate({ identifier: "SessionToken.Scope" })
+export const Scope = Schema.Literals(["server", "client", "host"]).annotate({ identifier: "SessionToken.Scope" })
 export type Scope = typeof Scope.Type
 
 export interface Claims extends Schema.Schema.Type<typeof Claims> {}

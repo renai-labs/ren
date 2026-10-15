@@ -20,7 +20,7 @@ import { Env } from "./env.js"
 import { Harness } from "./harness/harness.js"
 import { OpenCodeHarness } from "./harness/opencode/harness.js"
 import { ModelStore } from "./model-store.js"
-import { Renewal } from "./renewal.js"
+import { ModelRefresh } from "./model-refresh.js"
 import { Reconcile } from "./reconcile.js"
 
 export class Info extends Context.Service<
@@ -168,11 +168,13 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
   const harness = Layer.unwrap(
     Effect.gen(function* () {
       const cell = yield* Info
-      const renew = yield* Renewal.make(cell.storage, cell.vars.REN_URL)
+      const refreshKey = yield* ModelRefresh.make(cell.storage, cell.vars.REN_URL)
       return Harness.layer(
         ModelStore.read(cell.storage).pipe(
           Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
-          Effect.flatMap((endpoints) => OpenCodeHarness.open(storage, cell.vars.OPENCODE_CONFIG, endpoints, renew)),
+          Effect.flatMap((endpoints) =>
+            OpenCodeHarness.open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey),
+          ),
         ),
       )
     }),

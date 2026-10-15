@@ -18,7 +18,7 @@ export const open = Effect.fn("Host.open")(function* (
   storage: DurableObjectStorage,
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
-  renew: Harness.Renew,
+  refreshKey: Harness.Refresh,
 ) {
   const options = {
     storage,
@@ -31,14 +31,14 @@ export const open = Effect.fn("Host.open")(function* (
       Layer.provide(HttpServer.layerServices),
     ),
     endpoints,
-    renew,
+    refreshKey,
   )
 })
 
 export const make = Effect.fn("Host.make")(function* (
   routes: Layer.Layer<Credential.Service | SdkPlugins.Service | SessionRestart.Service | HttpRouter.HttpRouter, Error>,
   initial: ReadonlyArray<Models.Endpoint>,
-  renew: Harness.Renew,
+  refreshKey: Harness.Refresh,
 ): Effect.fn.Return<Instance, Error, Scope.Scope> {
   const runtime = yield* Effect.acquireRelease(
     Effect.sync(() => ManagedRuntime.make(routes)),
@@ -48,7 +48,7 @@ export const make = Effect.fn("Host.make")(function* (
   const plugins = Context.get(services, SdkPlugins.Service)
   const endpoints = yield* Ref.make(initial)
   const reload = yield* Ref.make(Effect.void)
-  yield* plugins.register(RenPlugin.make(endpoints, reload, renew))
+  yield* plugins.register(RenPlugin.make(endpoints, reload, refreshKey))
   const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location; a start that boots it sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))

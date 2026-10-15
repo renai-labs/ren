@@ -21,13 +21,13 @@ const never = Number.MAX_SAFE_INTEGER
 export const refresh = Effect.fn("RenPlugin.refresh")(function* (
   endpointId: string,
   credential: Credential.OAuth,
-  renew: Harness.Renew,
+  refreshKey: Harness.Refresh,
 ) {
-  const renewed = yield* renew(endpointId, credential.expires)
-  if (Option.isSome(renewed))
+  const refreshed = yield* refreshKey(endpointId, credential.expires)
+  if (Option.isSome(refreshed))
     return Struct.evolve(credential, {
-      access: () => Redacted.value(renewed.value.key),
-      expires: () => (renewed.value.expiresAt ? DateTime.toEpochMillis(renewed.value.expiresAt) : never),
+      access: () => Redacted.value(refreshed.value.key),
+      expires: () => (refreshed.value.expiresAt ? DateTime.toEpochMillis(refreshed.value.expiresAt) : never),
     })
   if ((yield* Clock.currentTimeMillis) < credential.expires) return credential
   return yield* new ManagedKeyError({
@@ -38,7 +38,7 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
 export const make = (
   endpoints: Ref.Ref<ReadonlyArray<Models.Endpoint>>,
   reload: Ref.Ref<Effect.Effect<void>>,
-  renew: Harness.Renew,
+  refreshKey: Harness.Refresh,
 ) =>
   Plugin.define({
     id: "ren",
@@ -58,7 +58,7 @@ export const make = (
               method: { id: method, type: "oauth", label: "Ren" },
               authorize: () =>
                 new ManagedKeyError({ message: "Ren issues this credential; it cannot be signed in to" }),
-              refresh: (credential) => refresh(integrationID, credential, renew),
+              refresh: (credential) => refresh(integrationID, credential, refreshKey),
             })
         })
         yield* Ref.set(reload, Effect.andThen(integration.reload(), provider.reload()))

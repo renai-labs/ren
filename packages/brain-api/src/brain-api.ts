@@ -6,7 +6,7 @@ import { BrainRejectedError, ForbiddenError, ModelsNotConfiguredError, SessionNo
 
 export const ModelsBody = Schema.Struct({
   access: Models.Access,
-  renewalToken: Schema.optionalKey(Schema.NonEmptyString),
+  hostToken: Schema.optionalKey(Schema.NonEmptyString),
 }).annotate({ identifier: "Brain.ModelsBody" })
 export type ModelsBody = typeof ModelsBody.Type
 
@@ -48,7 +48,7 @@ const BrainGroup = HttpApiGroup.make("brain")
         identifier: "brain.models",
         summary: "Configure models",
         description:
-          "Store the brain’s model endpoints and apply their API keys. New endpoints and models apply when the harness next opens. The renewal token lets the host renew expiring keys.",
+          "Store the brain’s model endpoints and apply them and their API keys to the open harness. The host token lets the host refresh expiring keys.",
       }),
     ),
   )
