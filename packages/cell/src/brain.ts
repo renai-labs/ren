@@ -2,7 +2,7 @@ export * as Brain from "./brain.js"
 
 import { BrainApi } from "@ren/brain-api/brain-api"
 import { ForbiddenError, ModelsNotConfiguredError } from "@ren/brain-api/errors"
-import { Effect, Layer, Option } from "effect"
+import { DateTime, Effect, Layer, Option } from "effect"
 import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
@@ -20,7 +20,19 @@ const notConfigured = new ModelsNotConfiguredError({ message: "The brain has no 
 
 const configured = Effect.gen(function* () {
   const info = yield* Cell.Info
-  if (Option.isNone(yield* ModelStore.read(info.storage))) return yield* Effect.fail(notConfigured)
+  const stored = yield* ModelStore.read(info.storage)
+  if (Option.isNone(stored)) return yield* Effect.fail(notConfigured)
+  const now = yield* DateTime.now
+  const expired = stored.value.endpoints.flatMap((endpoint) =>
+    endpoint.apiKey.expiresAt && DateTime.isLessThanOrEqualTo(endpoint.apiKey.expiresAt, now)
+      ? [{ id: endpoint.id, expiresAt: endpoint.apiKey.expiresAt }]
+      : [],
+  )
+  const first = expired.at(0)
+  if (first)
+    return yield* new ModelsNotConfiguredError({
+      message: `Model refresh key expired: the key for endpoint ${first.id} expired at ${DateTime.formatIso(first.expiresAt)}`,
+    })
 })
 
 export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>

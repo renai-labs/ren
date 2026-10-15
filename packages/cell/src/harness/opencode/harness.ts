@@ -135,13 +135,11 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   const state = { firstAskedAt: new Map<string, number>() }
   const mutations = yield* Semaphore.make(1)
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (next: ReadonlyArray<Models.Endpoint>) {
-    const integrations = new Set((yield* client.integration.list().pipe(Effect.orDie)).data.map((item) => item.id))
-    yield* Credentials.sync(
-      host.credentials,
-      ModelCredentials.owner,
-      ModelCredentials.entries(next).filter((entry) => integrations.has(entry.integrationID)),
-    )
+    yield* host.configure(next)
+    yield* Credentials.sync(host.credentials, ModelCredentials.owner, ModelCredentials.entries(next))
   })
+  // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location; a start that boots it sees an incomplete agent list.
+  yield* client.agent.list().pipe(Effect.orDie)
   yield* configure(endpoints)
 
   return {

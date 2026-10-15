@@ -359,12 +359,20 @@ it.live("a configuration keeps Ren credentials that models do not own", () =>
   }),
 )
 
-it.live("a connection the open harness does not know waits for the next open", () =>
+it.live("an endpoint configured while the harness is open serves the next start", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service
     yield* brain.start()
     yield* brain.models({ later: Shared.apiKey("later") })
-    expect(yield* brain.credentials.all()).toEqual([])
+    yield* brain.start({ model: { endpointId: "later", modelId: "stub-model" } })
+    const script = Shared.stub().script()
+    yield* brain.send(`later ${script.marker}`)
+    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    expect(script.calls[0]?.authorization).toBe("Bearer later")
+    yield* brain.removeModels
+    expect(
+      (yield* brain.opencode.model.list()).data.filter((model) => model.providerID === "later"),
+    ).toEqual([])
   }),
 )
 
@@ -386,22 +394,20 @@ it.live("an expiring key configured during a turn reaches its next model call", 
   }),
 )
 
-it.live("expired keys fail without a model call and a fresh configuration recovers", () =>
+it.live("an expired key refuses start and send without a model call until a fresh configuration", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service
     const expires = Date.now() - 1000
     yield* brain.start()
     yield* brain.models({ stub: Shared.apiKey("expired", expires) })
     const script = Shared.stub().script()
-    yield* brain.send(`expired ${script.marker}`)
-    const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
-    expect(script.calls).toEqual([])
-    expect((yield* brain.opencode.message.list({ sessionID, order: "desc" })).data[0]).toMatchObject({
-      type: "idle",
-      outcome: "failed",
-      error: { message: expect.stringContaining(`expired at ${new Date(expires).toISOString()}`) },
+    const refused = new ModelsNotConfiguredError({
+      message: `Model refresh key expired: the key for endpoint stub expired at ${new Date(expires).toISOString()}`,
     })
+    expect(yield* brain.send(`expired ${script.marker}`).pipe(Effect.flip)).toEqual(refused)
+    expect(yield* brain.start().pipe(Effect.flip)).toEqual(refused)
+    expect(script.calls).toEqual([])
+    const sessionID = SessionID.make(brain.id)
     yield* brain.models({ stub: Shared.apiKey("fresh", Date.now() + 3_600_000) })
     const fresh = Shared.stub().script()
     yield* brain.send(`fresh ${fresh.marker}`)
