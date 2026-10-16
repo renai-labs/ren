@@ -6,6 +6,7 @@ import { EnvironmentToken } from "@ren/brain-api/environment-token"
 import { Signature } from "@ren/brain-api/signature"
 import { NodeCompatible } from "@ren/executor/node-compatible"
 import { Server } from "@ren/executor/server"
+import { Relay } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { ConfigProvider, Context, DateTime, Effect, Exit, Layer, Schema, Scope, Stream } from "effect"
@@ -39,12 +40,13 @@ const executor = HttpRouter.serve(Server.layer, { disableLogger: true }).pipe(
 )
 const it = testEffect(executor)
 
-const connect = Effect.gen(function* () {
-  const server = yield* HttpServer.HttpServer
+const served = Effect.map(HttpServer.HttpServer, (server) => HttpServer.formatAddress(server.address))
+
+const connectTo = Effect.fnUntraced(function* (url: string) {
   const expiresAt = DateTime.makeUnsafe(Date.now() + 600_000)
   const access = {
     environmentId,
-    url: HttpServer.formatAddress(server.address),
+    url,
     token: yield* EnvironmentToken.sign(pair.privateKey, {
       env: environmentId,
       brain: Brain.ID.create(),
@@ -62,7 +64,19 @@ const connect = Effect.gen(function* () {
   return yield* environments.connect(environmentId)
 })
 
+const connect = Effect.flatMap(served, connectTo)
+
+const throughRelay = Effect.gen(function* () {
+  const relay = yield* Relay.make(Relay.portOf(yield* served))
+  return { relay, spawner: OpenCodeWorkspaceDriver.spawner(yield* connectTo(relay.url)) }
+})
+
 const text = (stream: Stream.Stream<Uint8Array, unknown>) => Stream.decodeText(stream).pipe(Stream.mkString)
+
+const firstLine = (stream: Stream.Stream<Uint8Array, unknown>) =>
+  Stream.decodeText(stream).pipe(Stream.take(1), Stream.mkString)
+
+const disconnected = "[environment disconnected: the command did not finish]"
 
 it.live("runs a command and gives its output and exit code", () =>
   Effect.gen(function* () {
@@ -237,5 +251,81 @@ it.live("fails an executor that refuses the token as unreachable, and does not k
     const errors = yield* Effect.forEach([1, 2], () => environments.connect(environmentId).pipe(Effect.flip))
     expect(errors.map((error) => error.reason)).toEqual(["unreachable", "unreachable"])
     expect(errors[0]?.message).toContain("Authentication required")
+  }),
+)
+
+it.live("loses no output and keeps the exit code when the connection drops mid-command", () =>
+  Effect.gen(function* () {
+    const through = yield* throughRelay
+    const handle = yield* through.spawner.spawn(
+      ChildProcess.make("sh", ["-c", "echo one; sleep 0.5; echo two; sleep 0.5; echo three; exit 7"]),
+    )
+    const first = yield* firstLine(handle.stdout)
+    yield* through.relay.cut
+    expect(first + (yield* text(handle.stdout))).toBe("one\ntwo\nthree\n")
+    expect(yield* text(handle.stderr)).toBe("")
+    expect(Number(yield* handle.exitCode)).toBe(7)
+  }),
+)
+
+it.live(
+  "reconnects when the output stream goes silent for three missed pings",
+  () =>
+    Effect.gen(function* () {
+      const through = yield* throughRelay
+      const handle = yield* through.spawner.spawn(ChildProcess.make("sh", ["-c", "echo before; sleep 1; echo after"]))
+      const first = yield* firstLine(handle.stdout)
+      yield* through.relay.freeze
+      expect(first + (yield* text(handle.stdout))).toBe("before\nafter\n")
+      expect(Number(yield* handle.exitCode)).toBe(0)
+    }),
+  40_000,
+)
+
+it.live("says the environment lost the command when a restarted executor no longer knows it", () =>
+  Effect.gen(function* () {
+    const through = yield* throughRelay
+    const restarted = Context.get(yield* Layer.build(Layer.fresh(executor)), HttpServer.HttpServer)
+    const handle = yield* through.spawner.spawn(ChildProcess.make("sh", ["-c", "echo started; sleep 30"]))
+    yield* firstLine(handle.stdout)
+    yield* through.relay.target(Relay.portOf(HttpServer.formatAddress(restarted.address)))
+    yield* through.relay.cut
+    yield* handle.exitCode.pipe(Effect.flip, Effect.timeout(10_000))
+    expect(yield* text(handle.stderr)).toContain(disconnected)
+  }),
+)
+
+it.live(
+  "gives up, and says so, when the executor stays unreachable for 30 seconds",
+  () =>
+    Effect.gen(function* () {
+      const through = yield* throughRelay
+      const handle = yield* through.spawner.spawn(ChildProcess.make("sh", ["-c", "echo started; sleep 60"]))
+      yield* firstLine(handle.stdout)
+      yield* through.relay.refuse(true)
+      yield* through.relay.cut
+      const started = Date.now()
+      yield* handle.exitCode.pipe(Effect.flip)
+      expect(Date.now() - started).toBeGreaterThanOrEqual(25_000)
+      expect(yield* text(handle.stderr)).toContain(disconnected)
+    }),
+  60_000,
+)
+
+it.live("notes how much output was lost when the executor no longer has it", () =>
+  Effect.gen(function* () {
+    const through = yield* throughRelay
+    const handle = yield* through.spawner.spawn(
+      ChildProcess.make("sh", ["-c", "echo start; sleep 0.5; head -c 3000000 /dev/zero; echo; echo end"]),
+    )
+    yield* firstLine(handle.stdout)
+    yield* through.relay.refuse(true)
+    yield* through.relay.cut
+    yield* Effect.sleep(2_500)
+    yield* through.relay.refuse(false)
+    const stdout = yield* text(handle.stdout)
+    expect(stdout.endsWith("\nend\n")).toBe(true)
+    expect(yield* text(handle.stderr)).toMatch(/\[environment reconnected: \d+ bytes of output were lost\]/)
+    expect(Number(yield* handle.exitCode)).toBe(0)
   }),
 )

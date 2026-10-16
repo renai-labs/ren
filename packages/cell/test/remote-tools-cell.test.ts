@@ -4,10 +4,11 @@ import { EnvironmentToken } from "@ren/brain-api/environment-token"
 import { Signature } from "@ren/brain-api/signature"
 import { NodeCompatible } from "@ren/executor/node-compatible"
 import { Server } from "@ren/executor/server"
+import { Relay } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, DateTime, Effect, Layer, ManagedRuntime, Schema } from "effect"
+import { ConfigProvider, DateTime, Effect, Exit, Layer, ManagedRuntime, Schema, Scope } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -43,7 +44,9 @@ const executor = ManagedRuntime.make(
   ),
 )
 const wrangler = process.env.CELL_RUNTIME === "wrangler"
+const relayScope = Effect.runSync(Scope.make())
 let cell: Celld.Instance
+let relay: Relay.Instance
 
 // oxlint-disable-next-line ren/no-comments -- celld 0.6.2 does not implement node:fs.createWriteStream or url.pathToFileURL, which OpenCode's shell and read tools use in the cell. Run with CELL_RUNTIME=wrangler.
 const suite = wrangler ? describe : describe.skip
@@ -51,11 +54,13 @@ const suite = wrangler ? describe : describe.skip
 suite("remote tools in a cell", () => {
   beforeAll(async () => {
     const server = await executor.runPromise(HttpServer.HttpServer)
-    const port = "port" in server.address ? server.address.port : 0
+    relay = await Effect.runPromise(
+      Relay.make(Relay.portOf(HttpServer.formatAddress(server.address))).pipe(Scope.provide(relayScope)),
+    )
     const expiresAt = DateTime.makeUnsafe(Date.now() + 3_600_000)
     const access = {
       environmentId,
-      url: `http://127.0.0.1:${port}`,
+      url: relay.url,
       token: await Effect.runPromise(
         EnvironmentToken.sign(pair.privateKey, {
           env: environmentId,
@@ -76,6 +81,7 @@ suite("remote tools in a cell", () => {
 
   afterAll(async () => {
     await cell.dispose()
+    await Effect.runPromise(Scope.close(relayScope, Exit.void))
     await executor.dispose()
   })
 
@@ -189,4 +195,20 @@ suite("remote tools in a cell", () => {
     await cell.start()
     expect(toolOutput(await session.turn(stub.script(shell("echo $((30 + 4))"))))).toContain("34")
   }, 180_000)
+
+  test("a cell gives the model a command's whole result when the network drops for a moment", async () => {
+    const session = await begin()
+    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+    const script = stub.script(
+      shell(`echo $$ > ${pidFile}; for i in 1 2 3 4; do echo line$i; sleep 0.5; done; echo exit-code-next; exit 3`),
+    )
+    await session.send(script)
+    await pidIn(pidFile)
+    await Bun.sleep(700)
+    await Effect.runPromise(relay.cut)
+    const result = toolOutput(await script.called(2))
+    expect(["line1", "line2", "line3", "line4", "exit-code-next"].filter((line) => !result.includes(line))).toEqual([])
+    expect(result).toContain("Exited with code 3")
+    expect(result).not.toContain("environment disconnected")
+  })
 })

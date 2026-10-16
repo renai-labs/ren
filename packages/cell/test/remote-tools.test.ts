@@ -9,6 +9,7 @@ import { EnvironmentToken } from "@ren/brain-api/environment-token"
 import { Signature } from "@ren/brain-api/signature"
 import { NodeCompatible } from "@ren/executor/node-compatible"
 import { Server } from "@ren/executor/server"
+import { Relay } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -299,6 +300,26 @@ it.live("keeps running tools after the environment token expires between turns",
   }),
 )
 
+it.live("gives the model a command's whole result when the network drops for a moment mid-command", () =>
+  Effect.gen(function* () {
+    const relay = yield* Relay.make(Relay.portOf(yield* served))
+    const access = yield* accessTo(relay.url, { brain: Brain.ID.create(), lifetimeMs: 600_000 })
+    const session = yield* begin(yield* open(EnvironmentAccess.layerFixed([access])))
+    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+    const script = stub.script(
+      shell(`echo $$ > ${pidFile}; for i in 1 2 3 4; do echo line$i; sleep 0.5; done; echo exit-code-next; exit 3`),
+    )
+    yield* session.send(script)
+    yield* pidIn(pidFile)
+    yield* Effect.sleep(700)
+    yield* relay.cut
+    const result = toolOutput(yield* Effect.promise(() => script.called(2)))
+    expect(["line1", "line2", "line3", "line4", "exit-code-next"].filter((line) => !result.includes(line))).toEqual([])
+    expect(result).toContain("Exited with code 3")
+    expect(result).not.toContain("environment disconnected")
+  }),
+)
+
 it.live("ends the turn, telling the model the command did not finish, when the executor dies mid-command", () =>
   Effect.gen(function* () {
     const socket = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
@@ -334,7 +355,8 @@ it.live("ends the turn, telling the model the command did not finish, when the e
     const pid = yield* pidIn(pidFile)
     yield* Effect.addFinalizer(() => Effect.ignore(Effect.try(() => process.kill(pid, "SIGKILL"))))
     executor.kill("SIGKILL")
-    const answered = yield* Effect.promise(() => script.called(2)).pipe(Effect.timeout(15_000))
-    expect(toolOutput(answered)).not.toBe(JSON.stringify("(no output)"))
+    const answered = yield* Effect.promise(() => script.called(2)).pipe(Effect.timeout(45_000))
+    expect(toolOutput(answered)).toContain("environment disconnected")
   }),
+  60_000,
 )
