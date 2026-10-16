@@ -13,6 +13,7 @@ import {
   Deferred,
   Duration,
   Effect,
+  Exit,
   Layer,
   PlatformError,
   Predicate,
@@ -29,6 +30,8 @@ export const provider = "ren"
 
 export const workspaceId = (environmentId: Environment.ID) =>
   Workspace.ID.make(`wrk_${environmentId.slice(environmentId.indexOf("_") + 1)}`)
+
+const disconnectedNotice = new TextEncoder().encode("\n[environment disconnected: the command did not finish]\n")
 
 const childProcessError = (method: string) => (cause: unknown) =>
   PlatformError.systemError({
@@ -70,8 +73,9 @@ export const spawner = (connection: Environments.Connection) =>
       const stdoutChunks = yield* Queue.unbounded<Uint8Array, Cause.Done>()
       const stderrChunks = yield* Queue.unbounded<Uint8Array, Cause.Done>()
       const exitResult = yield* Deferred.make<ChildProcessSpawner.ExitCode, PlatformError.PlatformError>()
+      const exited = yield* Deferred.make<void>()
       yield* Effect.addFinalizer(() =>
-        Deferred.isDone(exitResult).pipe(
+        Deferred.isDone(exited).pipe(
           Effect.flatMap((hasExited) =>
             hasExited
               ? Effect.void
@@ -84,25 +88,32 @@ export const spawner = (connection: Environments.Connection) =>
           if (event.type === "stdout") return Queue.offer(stdoutChunks, event.bytes)
           if (event.type === "stderr") return Queue.offer(stderrChunks, event.bytes)
           if (event.type === "ping") return Effect.void
-          return event.signal
-            ? Deferred.fail(
-                exitResult,
-                childProcessError("exitCode")(new CrossSpawnSpawner.KilledBySignal(event.signal)),
-              )
-            : Deferred.succeed(exitResult, ChildProcessSpawner.ExitCode(event.exitCode ?? 1))
+          return Deferred.succeed(exited, undefined).pipe(
+            Effect.andThen(
+              event.signal
+                ? Deferred.fail(
+                    exitResult,
+                    childProcessError("exitCode")(new CrossSpawnSpawner.KilledBySignal(event.signal)),
+                  )
+                : Deferred.succeed(exitResult, ChildProcessSpawner.ExitCode(event.exitCode)),
+            ),
+          )
         }),
         Effect.mapError(childProcessError("output")),
         Effect.onExit((exit) =>
-          Effect.all([
-            Queue.end(stdoutChunks),
-            Queue.end(stderrChunks),
-            Deferred.failCause(
+          Effect.gen(function* () {
+            const disconnected =
+              !(yield* Deferred.isDone(exited)) && (Exit.isSuccess(exit) || !Cause.hasInterruptsOnly(exit.cause))
+            if (disconnected) yield* Queue.offer(stderrChunks, disconnectedNotice)
+            yield* Queue.end(stdoutChunks)
+            yield* Queue.end(stderrChunks)
+            yield* Deferred.failCause(
               exitResult,
               exit._tag === "Failure" && Cause.hasFails(exit.cause)
                 ? exit.cause
                 : Cause.fail(childProcessError("output")(new Error("The output ended before the process exited"))),
-            ),
-          ]),
+            )
+          }),
         ),
         Effect.forkScoped,
       )
@@ -131,7 +142,7 @@ export const spawner = (connection: Environments.Connection) =>
           ),
         stdin: Sink.forEachArray((chunks: ReadonlyArray<Uint8Array>) =>
           Effect.forEach(chunks, (bytes) => writeStdin(bytes, false), { discard: true }),
-        ),
+        ).pipe(Sink.mapEffect(() => (shouldEndStdin ? writeStdin(new Uint8Array(), true) : Effect.void))),
         stdout: Stream.fromQueue(stdoutChunks),
         stderr: Stream.fromQueue(stderrChunks),
         all: Stream.merge(Stream.fromQueue(stdoutChunks), Stream.fromQueue(stderrChunks)),
