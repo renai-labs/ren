@@ -8,6 +8,7 @@ import {
   ModelsNotConfiguredError,
   SessionNotStartedError,
 } from "@ren/brain-api/errors"
+import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Effect } from "effect"
@@ -46,6 +47,16 @@ for (const delivery of deliveries) {
     }),
   )
 }
+
+it.live("start refuses an environment when the brain cannot use environments", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    const error = yield* brain
+      .start({ environments: [{ environmentId: Environment.ID.create(), directory: "/workspace" }] })
+      .pipe(Effect.flip)
+    expect(error).toBeInstanceOf(BrainRejectedError)
+  }),
+)
 
 it.live("start creates a session with Ren's identity, model, agent and instructions", () =>
   Effect.gen(function* () {

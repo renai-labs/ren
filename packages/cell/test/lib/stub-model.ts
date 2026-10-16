@@ -24,7 +24,7 @@ export interface Call {
   readonly body: ChatRequest
 }
 
-interface Script {
+export interface Script {
   readonly marker: string
   readonly calls: ReadonlyArray<Call>
   readonly set: (behaviour: Behaviour) => void
