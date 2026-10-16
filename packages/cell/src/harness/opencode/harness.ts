@@ -2,8 +2,12 @@ export * as OpenCodeHarness from "./harness.js"
 
 import { AbsolutePath, Agent, Model, OpenCode, Provider, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
-import type { SessionListInput } from "@opencode/client/effect/api"
+import { Location } from "@opencode/schema/location"
+import { Environments } from "@ren/brain/environments"
+import { OpenCodeWorkspaceDriver } from "@ren/brain/opencode-workspace-driver"
+import type { SessionCreateInput, SessionListInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
+import type { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import type { SendInput, StartInput } from "@ren/schema/session"
 import { Clock, Effect, Layer, Option, Semaphore, Stream } from "effect"
@@ -24,7 +28,10 @@ const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
     Effect.orDie,
   )
 
-const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(function* (client: OpenCodeClient, input: StartInput) {
+const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(function* (
+  client: OpenCodeClient,
+  input: StartInput,
+) {
   const agent = input.agent
   if (agent && !(yield* client.agent.list().pipe(Effect.orDie)).data.some((item) => item.id === agent))
     return yield* new BrainRejectedError({ message: `Unknown agent: ${agent}` })
@@ -38,8 +45,40 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
     return yield* new BrainRejectedError({ message: `Unknown model: ${model.endpointId}/${model.modelId}` })
 })
 
+const create = Effect.fn("OpenCodeHarness.create")(function* (
+  client: OpenCodeClient,
+  host: Host.Instance,
+  location: Environment.Location | undefined,
+  directory: AbsolutePath,
+  session: Pick<SessionCreateInput, "title" | "agent" | "model" | "permissions"> & { readonly id: Session.ID },
+) {
+  if (!location) return yield* client.session.create({ ...session, location: { directory } }).pipe(Effect.orDie)
+  const workspaceID = yield* host.workspaces
+    .create({
+      id: OpenCodeWorkspaceDriver.workspaceId(location.environmentId),
+      provider: OpenCodeWorkspaceDriver.provider,
+    })
+    .pipe(
+      Effect.catchTag("WorkspaceDriver.ProviderNotFound", () =>
+        Effect.fail(new BrainRejectedError({ message: "This brain cannot use environments" })),
+      ),
+      Effect.orDie,
+    )
+  return yield* host.sessions
+    .create({
+      id: session.id,
+      ...(session.title && { title: session.title }),
+      ...(session.agent && { agent: session.agent }),
+      ...(session.model && { model: session.model }),
+      ...(session.permissions && { permissions: session.permissions }),
+      location: Location.Ref.make({ directory: AbsolutePath.make(location.directory), workspaceID }),
+    })
+    .pipe(Effect.orDie)
+})
+
 const start = Effect.fn("OpenCodeHarness.start")(function* (
   client: OpenCodeClient,
+  host: Host.Instance,
   input: StartInput,
   directory: AbsolutePath,
 ) {
@@ -54,16 +93,13 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   const permissions = input.interactive ? [] : [{ action: "question", resource: "*", effect: "deny" as const }]
   const session = yield* findSession(client, sessionID)
   if (Option.isNone(session))
-    yield* client.session
-      .create({
-        id: sessionID,
-        title: input.title,
-        agent,
-        model,
-        location: { directory },
-        permissions,
-      })
-      .pipe(Effect.orDie)
+    yield* create(client, host, input.environments?.at(0), directory, {
+      id: sessionID,
+      title: input.title,
+      agent,
+      model,
+      permissions,
+    })
   if (Option.isSome(session)) {
     yield* client.session.update({ sessionID, title: input.title, permissions }).pipe(Effect.orDie)
     if (agent && agent !== session.value.agent)
@@ -122,8 +158,9 @@ const open = Effect.fn("OpenCodeHarness.open")(function* (
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
+  environments: Option.Option<Environments.Interface>,
 ) {
-  return yield* make(yield* Host.open(storage, config, endpoints, refreshKey), endpoints)
+  return yield* make(yield* Host.open(storage, config, endpoints, refreshKey, environments), endpoints)
 })
 
 export const layer = (storage: DurableObjectStorage) =>
@@ -132,10 +169,11 @@ export const layer = (storage: DurableObjectStorage) =>
       const cell = yield* Cell.Info
       const store = yield* ModelStore.Service
       const refreshKey = yield* ModelRefresh.Service
+      const environments = yield* Effect.serviceOption(Environments.Service)
       return Harness.layer(
         store.read.pipe(
           Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
-          Effect.flatMap((endpoints) => open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey)),
+          Effect.flatMap((endpoints) => open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey, environments)),
         ),
       )
     }),
@@ -147,7 +185,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   directory: AbsolutePath = AbsolutePath.make("/workspace"),
 ) {
   const client = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
-    Effect.provide(FetchHttpClient.layer),
+    Effect.provide(Layer.fresh(FetchHttpClient.layer)),
     Effect.provideService(FetchHttpClient.Fetch, (input, init) => host.fetch(new Request(input, init))),
   )
   const state = { firstAskedAt: new Map<string, number>() }
@@ -161,7 +199,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   return {
     fetch: host.fetch,
     configure: (next: ReadonlyArray<Models.Endpoint>) => mutations.withPermit(configure(next)),
-    start: (input: StartInput) => mutations.withPermit(start(client, input, directory)),
+    start: (input: StartInput) => mutations.withPermit(start(client, host, input, directory)),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
     sessions: Effect.gen(function* () {
       const roots = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>

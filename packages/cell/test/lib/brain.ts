@@ -35,6 +35,7 @@ const make = Effect.gen(function* () {
     }).pipe(Layer.provide(HttpServer.layerServices)),
     [],
     () => Effect.succeedNone,
+    false,
   )
   const requests: Array<string> = []
   const transport: { before: (request: Request) => Effect.Effect<void>; sending: Effect.Effect<void> } = {
