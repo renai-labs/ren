@@ -21,6 +21,20 @@ import { Host } from "./host.js"
 import { InstructionEntries } from "./instruction-entries.js"
 import { ModelCredentials } from "./model-credentials.js"
 
+const environmentActions = ["read", "edit", "glob", "grep", "shell"]
+
+const deniedActions = (
+  host: Host.Instance,
+  input: StartInput,
+  session: Option.Option<{ readonly location: { readonly workspaceID?: string | undefined } }>,
+) => {
+  const isLocal = Option.match(session, {
+    onNone: () => !input.environments?.at(0),
+    onSome: (found) => !found.location.workspaceID,
+  })
+  return [...(input.interactive ? [] : ["question"]), ...(host.hasEnvironments && isLocal ? environmentActions : [])]
+}
+
 const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
   client.session.get({ sessionID }).pipe(
     Effect.map(Option.some),
@@ -59,11 +73,12 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
       provider: OpenCodeWorkspaceDriver.provider,
     })
     .pipe(
-      Effect.catchTag("WorkspaceDriver.ProviderNotFound", () =>
-        Effect.fail(new BrainRejectedError({ message: "This brain cannot use environments" })),
-      ),
+      Effect.map(Option.some),
+      Effect.catchTag("WorkspaceDriver.ProviderNotFound", () => Effect.succeedNone),
       Effect.orDie,
     )
+  if (Option.isNone(workspaceID))
+    return yield* new BrainRejectedError({ message: "This brain cannot use environments" })
   return yield* host.sessions
     .create({
       id: session.id,
@@ -71,7 +86,7 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
       ...(session.agent && { agent: session.agent }),
       ...(session.model && { model: session.model }),
       ...(session.permissions && { permissions: session.permissions }),
-      location: Location.Ref.make({ directory: AbsolutePath.make(location.directory), workspaceID }),
+      location: Location.Ref.make({ directory: AbsolutePath.make(location.directory), workspaceID: workspaceID.value }),
     })
     .pipe(Effect.orDie)
 })
@@ -90,8 +105,12 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
     ...(input.model.variant && { variant: Model.VariantID.make(input.model.variant) }),
   }
   const sessionID = Session.ID.make(input.sessionId)
-  const permissions = input.interactive ? [] : [{ action: "question", resource: "*", effect: "deny" as const }]
   const session = yield* findSession(client, sessionID)
+  const permissions = deniedActions(host, input, session).map((action) => ({
+    action,
+    resource: "*",
+    effect: "deny" as const,
+  }))
   if (Option.isNone(session))
     yield* create(client, host, input.environments?.at(0), directory, {
       id: sessionID,
