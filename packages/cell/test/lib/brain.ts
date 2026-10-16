@@ -119,13 +119,13 @@ const make = Effect.gen(function* () {
       ),
     ),
   )
-  const models = (apiKeys?: Readonly<Record<string, Models.ApiKey>>) =>
-    client.brain["brain.models"]({ payload: { access: Shared.access(apiKeys, Shared.stub().url) } })
+  const configureModels = (apiKeys?: Readonly<Record<string, Models.ApiKey>>) =>
+    client.brain["brain.configureModels"]({ payload: { access: Shared.access(apiKeys, Shared.stub().url) } })
   return {
     id,
     directory,
     stored,
-    models,
+    configureModels,
     removeModels: client.brain["brain.removeModels"](),
     requests,
     transport,

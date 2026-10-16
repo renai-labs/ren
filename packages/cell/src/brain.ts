@@ -58,7 +58,7 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
           return yield* harness.send({ ...request.payload, sessionId: request.params.id })
         }).pipe(Effect.scoped, Effect.provide(context)),
       )
-      .handle("brain.models", (request) =>
+      .handle("brain.configureModels", (request) =>
         Effect.gen(function* () {
           const store = yield* ModelStore.Service
           const activity = yield* Cell.Activity

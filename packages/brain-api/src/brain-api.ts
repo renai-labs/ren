@@ -41,11 +41,11 @@ const BrainGroup = HttpApiGroup.make("brain")
     ),
   )
   .add(
-    HttpApiEndpoint.put("brain.models", "/ren/models", {
+    HttpApiEndpoint.put("brain.configureModels", "/ren/models", {
       payload: ModelsBody,
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "brain.models",
+        identifier: "brain.configureModels",
         summary: "Configure models",
         description:
           "Store the brain’s model endpoints and apply them and their API keys to the open harness. The host token lets the host refresh expiring keys.",
