@@ -3,9 +3,9 @@ export * as Models from "./models.js"
 import type { Auth } from "@ren/schema/auth"
 import { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
-import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Context, Effect, Layer, Option, Schema } from "effect"
 
-export { Access, Catalog, Endpoint } from "@ren/schema/models"
+export { Access, Catalog, Endpoint, catalog } from "@ren/schema/models"
 
 export interface Subject {
   readonly brainId: Session.ID
@@ -25,29 +25,18 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Models") {}
 
-export const layerConfigured = Layer.effect(
+export const layerNone = Layer.succeed(
   Service,
-  Effect.gen(function* () {
-    const endpoints = yield* Config.option(
-      Config.schema(
-        Schema.RedactedFromValue(Schema.fromJsonString(Schema.toCodecJson(Schema.Array(Models.Endpoint)))),
-        "MODEL_ENDPOINTS",
-      ),
-    )
-    const access = Models.Access.make({
-      endpoints: Option.match(endpoints, { onNone: () => [], onSome: (value) => Redacted.value(value) }),
-    })
-    return Service.of({
-      catalog: Effect.fn("Models.catalog")(function* () {
-        return Models.catalog(access)
-      }),
-      grant: Effect.fn("Models.grant")(function* () {
-        return access
-      }),
-      refreshIfDue: Effect.fn("Models.refreshIfDue")(function* () {
-        return Option.none()
-      }),
-      revoke: Effect.fn("Models.revoke")(function* () {}),
-    })
+  Service.of({
+    catalog: Effect.fn("Models.catalog")(function* () {
+      return { endpoints: [] }
+    }),
+    grant: Effect.fn("Models.grant")(function* () {
+      return Models.Access.make({ endpoints: [] })
+    }),
+    refreshIfDue: Effect.fn("Models.refreshIfDue")(function* () {
+      return Option.none()
+    }),
+    revoke: Effect.fn("Models.revoke")(function* () {}),
   }),
 )
