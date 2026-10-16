@@ -157,7 +157,7 @@ export const layer = Layer.effect(
 
     const configure = (subject: Models.Subject, access: Models.Access) =>
       body(subject, access).pipe(
-        Effect.flatMap((payload) => call(subject.brainId, brain.brain["brain.models"]({ payload }))),
+        Effect.flatMap((payload) => call(subject.brainId, brain.brain["brain.configureModels"]({ payload }))),
       )
 
     const withModels = Effect.fnUntraced(function* <A, E>(
@@ -228,7 +228,7 @@ export const layer = Layer.effect(
       }),
       authenticateHost: Effect.fn("BrainHost.authenticateHost")(function* (hostToken: Redacted.Redacted) {
         const claims = yield* SessionToken.verify(Redacted.value(config.keys), Redacted.value(hostToken))
-        if (Option.isNone(claims) || claims.value.scope !== "host" || !claims.value.org)
+        if (Option.isNone(claims) || claims.value.scope !== "host")
           return yield* new ForbiddenError({ message: "The host token is not valid" })
         return { brainId: claims.value.sid, organizationId: claims.value.org }
       }),

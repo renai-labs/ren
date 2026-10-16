@@ -5,17 +5,24 @@ import { Session } from "@ren/schema/session"
 import { Clock, Effect, Option, Result, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
 
-export const Scope = Schema.Literals(["server", "client", "host"]).annotate({ identifier: "SessionToken.Scope" })
-export type Scope = typeof Scope.Type
+export const Claims = Schema.Union([
+  Schema.Struct({
+    kid: Schema.NonEmptyString,
+    sid: Session.ID,
+    scope: Schema.Literals(["server", "client"]),
+    exp: Schema.Int,
+  }),
+  Schema.Struct({
+    kid: Schema.NonEmptyString,
+    sid: Session.ID,
+    scope: Schema.Literal("host"),
+    org: Auth.OrganizationID,
+    exp: Schema.Int,
+  }),
+]).annotate({ identifier: "SessionToken.Claims" })
+export type Claims = typeof Claims.Type
 
-export interface Claims extends Schema.Schema.Type<typeof Claims> {}
-export const Claims = Schema.Struct({
-  kid: Schema.NonEmptyString,
-  sid: Session.ID,
-  scope: Scope,
-  org: Schema.optionalKey(Auth.OrganizationID),
-  exp: Schema.Int,
-}).annotate({ identifier: "SessionToken.Claims" })
+type Unsigned<C> = C extends Claims ? Omit<C, "kid"> : never
 
 export interface Key extends Schema.Schema.Type<typeof Key> {}
 export const Key = Schema.Struct({
@@ -43,7 +50,7 @@ export const seal = Effect.fnUntraced(function* (secret: string, payload: unknow
   return `${signed}.${Base64Url.encode(new Uint8Array(signature))}`
 })
 
-export const sign = (key: Key, claims: Omit<Claims, "kid">) => seal(key.secret, { kid: key.id, ...claims })
+export const sign = (key: Key, claims: Unsigned<Claims>) => seal(key.secret, { kid: key.id, ...claims })
 
 export const verify = Effect.fn("SessionToken.verify")(function* (
   keys: ReadonlyArray<Key>,

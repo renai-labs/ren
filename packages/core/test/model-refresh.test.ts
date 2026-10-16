@@ -120,7 +120,7 @@ describe("model refresh", () => {
       const tokens = [
         "not-a-token",
         yield* SessionToken.sign(key, { sid, scope: "server", exp }),
-        yield* SessionToken.sign(key, { sid, scope: "host", exp }),
+        yield* SessionToken.seal(key.secret, { kid: key.id, sid, scope: "host", exp }),
         yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp: exp - 1200 }),
       ]
       const failures = yield* Effect.forEach(tokens, (token) =>
