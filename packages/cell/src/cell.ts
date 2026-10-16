@@ -18,7 +18,6 @@ import {
 } from "effect"
 import { Env } from "./env.js"
 import { Harness } from "./harness/harness.js"
-import { OpenCodeHarness } from "./harness/opencode/harness.js"
 import { ModelStore } from "./model-store.js"
 import { ModelRefresh } from "./model-refresh.js"
 import { Reconcile } from "./reconcile.js"
@@ -165,19 +164,10 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
       }
     }),
   )
-  const harness = Layer.unwrap(
+  const refresh = Layer.unwrap(
     Effect.gen(function* () {
       const cell = yield* Info
-      const store = yield* ModelStore.Service
-      const refreshKey = yield* ModelRefresh.make(cell.vars.REN_URL)
-      return Harness.layer(
-        store.read.pipe(
-          Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
-          Effect.flatMap((endpoints) =>
-            OpenCodeHarness.open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey),
-          ),
-        ),
-      )
+      return ModelRefresh.layer(cell.vars.REN_URL)
     }),
   )
   const activity = Layer.effect(
@@ -190,5 +180,5 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
     }),
   )
   const models = ModelStore.layer.pipe(Layer.provideMerge(Layer.succeed(ModelStore.Storage, storage)))
-  return Layer.mergeAll(harness, activity).pipe(Layer.provideMerge(models), Layer.provideMerge(info))
+  return Layer.mergeAll(refresh, activity).pipe(Layer.provideMerge(models), Layer.provideMerge(info))
 }

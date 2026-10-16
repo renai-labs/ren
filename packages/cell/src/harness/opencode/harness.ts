@@ -6,9 +6,12 @@ import type { SessionListInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
 import type { Models } from "@ren/schema/models"
 import type { SendInput, StartInput } from "@ren/schema/session"
-import { Clock, Effect, Option, Semaphore, Stream } from "effect"
+import { Clock, Effect, Layer, Option, Semaphore, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
-import type { Harness } from "../harness.js"
+import { Cell } from "../../cell.js"
+import { ModelRefresh } from "../../model-refresh.js"
+import { ModelStore } from "../../model-store.js"
+import { Harness } from "../harness.js"
 import { Credentials } from "./credentials.js"
 import { Host } from "./host.js"
 import { InstructionEntries } from "./instruction-entries.js"
@@ -114,7 +117,7 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
   return { messageId: input.messageId }
 })
 
-export const open = Effect.fn("OpenCodeHarness.open")(function* (
+const open = Effect.fn("OpenCodeHarness.open")(function* (
   storage: DurableObjectStorage,
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
@@ -122,6 +125,21 @@ export const open = Effect.fn("OpenCodeHarness.open")(function* (
 ) {
   return yield* make(yield* Host.open(storage, config, endpoints, refreshKey), endpoints)
 })
+
+export const layer = (storage: DurableObjectStorage) =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const cell = yield* Cell.Info
+      const store = yield* ModelStore.Service
+      const refreshKey = yield* ModelRefresh.Service
+      return Harness.layer(
+        store.read.pipe(
+          Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
+          Effect.flatMap((endpoints) => open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey)),
+        ),
+      )
+    }),
+  )
 
 export const make = Effect.fn("OpenCodeHarness.make")(function* (
   host: Host.Instance,
