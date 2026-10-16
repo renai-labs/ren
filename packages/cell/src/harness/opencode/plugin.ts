@@ -40,6 +40,7 @@ export const make = (
   reloads: Ref.Ref<ReadonlyArray<Effect.Effect<void>>>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
+  hasEnvironments: boolean,
 ) =>
   Plugin.define({
     id: "ren",
@@ -48,9 +49,10 @@ export const make = (
         const tool = context.tool
         const integration = context.integration
         const provider = context.provider
-        yield* tool.transform((editor) => {
-          for (const id of unavailable) editor.remove(id)
-        })
+        if (!hasEnvironments)
+          yield* tool.transform((editor) => {
+            for (const id of unavailable) editor.remove(id)
+          })
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(endpoints)))
         yield* integration.transform((editor) => {
           for (const integrationID of Ref.getUnsafe(endpoints).map((endpoint) => endpoint.id))

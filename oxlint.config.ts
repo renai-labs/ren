@@ -24,6 +24,16 @@ const packageBoundaries = [
     message: "The Brain API depends only on schema. Core calls it and hosts serve it.",
   },
   {
+    files: ["packages/brain/**"],
+    regex: "^@ren/(?!schema(/|$)|brain-api(/|$)|executor(/|$))",
+    message: "Brain code runs on every host. It depends only on schema and the Brain API; tests may start an executor.",
+  },
+  {
+    files: ["packages/brain/src/**"],
+    regex: "^(@ren/executor(/|$)|cloudflare:)",
+    message: "Brain code runs on every host. It never imports a host's APIs or the executor.",
+  },
+  {
     files: ["packages/executor/**"],
     regex: "^@ren/(?!schema(/|$)|brain-api(/|$))",
     message: "The executor runs on an environment's machine. It depends only on schema and the Brain API.",
