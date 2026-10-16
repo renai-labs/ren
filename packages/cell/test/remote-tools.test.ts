@@ -2,6 +2,7 @@ import { expect, setDefaultTimeout } from "bun:test"
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
 import { AbsolutePath } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
+import { EnvironmentBindings } from "@ren/brain/environment-bindings"
 import { Environments } from "@ren/brain/environments"
 import { EnvironmentAccess } from "@ren/brain/environment-access"
 import { OpenCodeWorkspaceDriver } from "@ren/brain/opencode-workspace-driver"
@@ -13,7 +14,8 @@ import { Relay } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, Context, DateTime, Effect, Exit, Layer, Schedule, Schema } from "effect"
+import { ConfigProvider, Context, DateTime, Effect, Exit, Layer, Option, Schedule, Schema, Scope, Stream } from "effect"
+import { KeyValueStore } from "effect/persistence"
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -36,7 +38,7 @@ const local = await realpath(await mkdtemp(join(tmpdir(), "ren-local-")))
 const stub = Shared.stub()
 const fileTools = ["read", "write", "edit", "glob", "grep", "shell"]
 
-const it = testEffect(
+const executor = (served: Environment.ID, directory: string) =>
   HttpRouter.serve(Server.layer, { disableLogger: true }).pipe(
     Layer.provide(HttpServer.layerServices),
     Layer.provide(NodeCompatible.layer),
@@ -44,40 +46,65 @@ const it = testEffect(
     Layer.provide(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          EXECUTOR_ENVIRONMENT_ID: environmentId,
-          EXECUTOR_WORKSPACE: workspace,
+          EXECUTOR_ENVIRONMENT_ID: served,
+          EXECUTOR_WORKSPACE: directory,
           BRAIN_PUBLIC_KEYS: publicKeys,
         }),
       ),
     ),
     Layer.provideMerge(BunHttpServer.layer({ port: 0, hostname: "127.0.0.1" })),
-  ),
-)
+  )
+
+const it = testEffect(executor(environmentId, workspace))
+
+const machine = Effect.fnUntraced(function* (served: Environment.ID) {
+  const directory = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-machine-"))))
+  const scope = yield* Scope.fork(yield* Scope.Scope)
+  const context = yield* Layer.buildWithMemoMap(executor(served, directory), yield* Layer.makeMemoMap, scope)
+  return {
+    directory,
+    url: HttpServer.formatAddress(Context.get(context, HttpServer.HttpServer).address),
+    stop: Scope.close(scope, Exit.void),
+  }
+})
 
 const accessTo = Effect.fnUntraced(function* (
   url: string,
-  options: { readonly brain: Brain.ID; readonly lifetimeMs: number },
+  options: {
+    readonly brain: Brain.ID
+    readonly lifetimeMs: number
+    readonly environmentId?: Environment.ID
+    readonly generation?: number
+  },
 ) {
   const expiresAt = DateTime.makeUnsafe(Date.now() + options.lifetimeMs)
+  const id = options.environmentId ?? environmentId
   return {
-    environmentId,
+    environmentId: id,
     url,
     token: yield* EnvironmentToken.sign(pair.privateKey, {
-      env: environmentId,
+      env: id,
       brain: options.brain,
       exp: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000),
     }),
     expiresAt,
-    generation: 1,
+    generation: options.generation ?? 1,
   }
 })
 
 const served = Effect.map(HttpServer.HttpServer, (server) => HttpServer.formatAddress(server.address))
 
 const open = Effect.fnUntraced(function* (access: Layer.Layer<EnvironmentAccess.Service>, directory = workspace) {
-  const environments = yield* Layer.build(
-    Environments.layer.pipe(Layer.provide(access), Layer.provide(FetchHttpClient.layer)),
-  ).pipe(Effect.map((context) => Context.get(context, Environments.Service)))
+  const context = yield* Layer.build(
+    EnvironmentBindings.layer.pipe(
+      Layer.provideMerge(Environments.layer),
+      Layer.provide(access),
+      Layer.provide(FetchHttpClient.layer),
+      Layer.provide(KeyValueStore.layerMemory),
+    ),
+  )
+  const environments = Context.get(context, Environments.Service)
+  const bindings = Context.get(context, EnvironmentBindings.Service)
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url))
   const endpoints = Shared.access(undefined, stub.url).endpoints
   const host = yield* Host.make(
@@ -88,11 +115,11 @@ const open = Effect.fnUntraced(function* (access: Layer.Layer<EnvironmentAccess.
         models: { fetch: false },
         fs: { filewatcher: false, fff: false },
       },
-      OpenCodeWorkspaceDriver.replacements(environments),
+      OpenCodeWorkspaceDriver.replacements(environments, bindings),
     ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     () => Effect.succeedNone,
-    true,
+    Option.some(bindings),
   )
   return yield* OpenCodeHarness.make(host, endpoints, AbsolutePath.make(directory))
 })
@@ -283,6 +310,142 @@ it.live("runs tools on an environment attached to a session after it started", (
   }),
 )
 
+const restart = (harness: Harness.Instance, sessionId: Session.ID, environments: ReadonlyArray<Environment.Location>) =>
+  harness.start({ sessionId, harness: "opencode", instructions: {}, interactive: false, environments })
+
+it.live("moves a session's tools to another environment between turns, and keeps its conversation", () =>
+  Effect.gen(function* () {
+    const brain = Brain.ID.create()
+    const otherId = Environment.ID.create()
+    const other = yield* machine(otherId)
+    const harness = yield* open(
+      EnvironmentAccess.layerFixed([
+        yield* accessTo(yield* served, { brain, lifetimeMs: 600_000 }),
+        yield* accessTo(other.url, { brain, lifetimeMs: 600_000, environmentId: otherId }),
+      ]),
+    )
+    const session = yield* begin(harness)
+    const file = `${crypto.randomUUID()}.txt`
+    yield* session.turn(stub.script(shell(`echo first > ${file}`)))
+    yield* restart(harness, session.sessionId, [{ environmentId: otherId, directory: other.directory }])
+    const answered = yield* session.turn(stub.script(shell(`echo second > ${file} && pwd`)))
+    expect(toolOutput(answered)).toContain(other.directory)
+    expect(JSON.stringify(answered.body.messages)).toContain("first")
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, file)).text())).toBe("first\n")
+    expect(yield* Effect.promise(() => Bun.file(join(other.directory, file)).text())).toBe("second\n")
+  }),
+)
+
+it.live("tells the model which environment its tools run on after a move", () =>
+  Effect.gen(function* () {
+    const brain = Brain.ID.create()
+    const otherId = Environment.ID.create()
+    const other = yield* machine(otherId)
+    const harness = yield* open(
+      EnvironmentAccess.layerFixed([
+        yield* accessTo(yield* served, { brain, lifetimeMs: 600_000 }),
+        yield* accessTo(other.url, { brain, lifetimeMs: 600_000, environmentId: otherId }),
+      ]),
+    )
+    const session = yield* begin(harness)
+    yield* restart(harness, session.sessionId, [{ environmentId: otherId, directory: other.directory }])
+    const call = yield* session.turn(stub.script(), 1)
+    const prompt = JSON.stringify(call.body.messages)
+    expect(prompt).toContain(otherId)
+    expect(prompt).toContain(`Paths under ${workspace} refer to ${other.directory}`)
+  }),
+)
+
+it.live("searches the environment's directory after a move to a different path", () =>
+  Effect.gen(function* () {
+    const access = yield* accessTo(yield* served, { brain: Brain.ID.create(), lifetimeMs: 600_000 })
+    const harness = yield* open(EnvironmentAccess.layerFixed([access]), local)
+    const session = yield* begin(harness, [])
+    yield* restart(harness, session.sessionId, [{ environmentId, directory: workspace }])
+    const name = `moved-${crypto.randomUUID().slice(0, 8)}.ts`
+    yield* Effect.promise(() => Bun.write(join(workspace, "found", name), "export {}\n"))
+    const globbed = yield* session.turn(stub.script({ tool: { name: "glob", input: { pattern: "**/moved-*.ts" } } }))
+    expect(toolOutput(globbed)).toContain(name)
+    const grepped = yield* session.turn(stub.script({ tool: { name: "grep", input: { pattern: "export" } } }))
+    expect(toolOutput(grepped)).toContain(name)
+  }),
+)
+
+it.live("detaches a session from its environment and takes away the file and shell tools", () =>
+  Effect.gen(function* () {
+    const harness = yield* openServed
+    const session = yield* begin(harness)
+    yield* restart(harness, session.sessionId, [])
+    const call = yield* session.turn(stub.script(), 1)
+    expect(call.tools.filter((tool) => fileTools.includes(tool))).toEqual([])
+  }),
+)
+
+it.live("keeps a session's environment when a later start does not name one", () =>
+  Effect.gen(function* () {
+    const harness = yield* openServed
+    const session = yield* begin(harness)
+    yield* harness.start({ sessionId: session.sessionId, harness: "opencode", instructions: {}, interactive: false })
+    const file = `${crypto.randomUUID()}.txt`
+    yield* session.turn(stub.script(shell(`echo kept > ${file}`)))
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, file)).text())).toBe("kept\n")
+  }),
+)
+
+it.live("refuses a directory the environment does not have, and keeps the session where it was", () =>
+  Effect.gen(function* () {
+    const harness = yield* openServed
+    const session = yield* begin(harness)
+    const error = yield* restart(harness, session.sessionId, [
+      { environmentId, directory: join(workspace, crypto.randomUUID()) },
+    ]).pipe(Effect.flip)
+    expect(error._tag).toBe("BrainRejectedError")
+    expect(error.message).toContain("does not exist")
+    const file = `${crypto.randomUUID()}.txt`
+    yield* session.turn(stub.script(shell(`echo stayed > ${file}`)))
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, file)).text())).toBe("stayed\n")
+  }),
+)
+
+it.live(
+  "refuses to move a session while its turn runs",
+  () =>
+    Effect.gen(function* () {
+      const harness = yield* openServed
+      const session = yield* begin(harness)
+      const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+      yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 30`)))
+      yield* pidIn(pidFile)
+      const error = yield* restart(harness, session.sessionId, []).pipe(Effect.flip)
+      expect(error.message).toContain("is running")
+      const own = (yield* harness.sessions).find((state) => String(state.id) === session.sessionId)
+      if (own) yield* own.interrupt
+    }),
+  30_000,
+)
+
+it.live("runs the next command on a replaced machine as soon as the environment's access changes", () =>
+  Effect.gen(function* () {
+    const brain = Brain.ID.create()
+    const original = yield* machine(environmentId)
+    const replacement = yield* machine(environmentId)
+    const context = yield* Layer.build(
+      EnvironmentAccess.layerMemory([yield* accessTo(original.url, { brain, lifetimeMs: 600_000 })]),
+    )
+    const harness = yield* open(Layer.succeedContext(context))
+    const session = yield* begin(harness)
+    const file = `${crypto.randomUUID()}.txt`
+    yield* session.turn(stub.script(shell(`echo old > ${file}`)))
+    yield* original.stop
+    yield* Context.get(context, EnvironmentAccess.Memory).set(
+      yield* accessTo(replacement.url, { brain, lifetimeMs: 600_000, generation: 2 }),
+    )
+    const answered = yield* session.turn(stub.script(shell(`echo new >> ${file} && echo reached`)))
+    expect(toolOutput(answered)).toContain("reached")
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, file)).text())).toBe("old\nnew\n")
+  }),
+)
+
 it.live("keeps running tools after the environment token expires between turns", () =>
   Effect.gen(function* () {
     const url = yield* served
@@ -290,7 +453,10 @@ it.live("keeps running tools after the environment token expires between turns",
     const harness = yield* open(
       Layer.succeed(
         EnvironmentAccess.Service,
-        EnvironmentAccess.Service.of({ open: () => accessTo(url, { brain, lifetimeMs: 2_000 }) }),
+        EnvironmentAccess.Service.of({
+          open: () => accessTo(url, { brain, lifetimeMs: 2_000 }),
+          subscribe: Effect.succeed(Stream.never),
+        }),
       ),
     )
     const session = yield* begin(harness)

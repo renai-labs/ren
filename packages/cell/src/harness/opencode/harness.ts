@@ -3,6 +3,7 @@ export * as OpenCodeHarness from "./harness.js"
 import { AbsolutePath, Agent, Model, OpenCode, Provider, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
+import { EnvironmentBindings } from "@ren/brain/environment-bindings"
 import { Environments } from "@ren/brain/environments"
 import { OpenCodeWorkspaceDriver } from "@ren/brain/opencode-workspace-driver"
 import type { SessionCreateInput, SessionListInput } from "@opencode/client/effect/api"
@@ -10,9 +11,10 @@ import { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/error
 import type { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import type { SendInput, StartInput } from "@ren/schema/session"
-import { Clock, Effect, Layer, Option, Semaphore, Stream } from "effect"
+import { Clock, Context, Duration, Effect, Layer, Option, Semaphore, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Cell } from "../../cell.js"
+import { DurableStore } from "../../durable-store.js"
 import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
 import { Harness } from "../harness.js"
@@ -23,16 +25,30 @@ import { ModelCredentials } from "./model-credentials.js"
 
 const environmentActions = ["read", "edit", "glob", "grep", "shell"]
 
-const deniedActions = (
-  host: Host.Instance,
-  input: StartInput,
-  session: Option.Option<{ readonly location: { readonly workspaceID?: string | undefined } }>,
-) => {
-  const isLocal = Option.match(session, {
-    onNone: () => !input.environments?.at(0),
-    onSome: (found) => !found.location.workspaceID,
-  })
-  return [...(input.interactive ? [] : ["question"]), ...(host.hasEnvironments && isLocal ? environmentActions : [])]
+const environmentInstruction = "ren.environment"
+
+const bindingsPrefix = "ren:environment-binding:"
+
+const settleWithin = Duration.seconds(10)
+
+const isSameLocation = (left: Environment.Location | null, right: Environment.Location | null) =>
+  left?.environmentId === right?.environmentId && left?.directory === right?.directory
+
+const environmentInstructions = (binding: Option.Option<EnvironmentBindings.Binding>) => {
+  const location = Option.getOrUndefined(binding)?.location
+  if (Option.isNone(binding) || !location) return {}
+  const mapping =
+    binding.value.sessionDirectory === location.directory
+      ? ""
+      : ` Paths under ${binding.value.sessionDirectory} refer to ${location.directory} on that machine.`
+  return {
+    [environmentInstruction]: `Your file and shell tools run on environment ${location.environmentId}, in ${location.directory}.${mapping} Files and processes from an earlier environment are not there.`,
+  }
+}
+
+const deniedActions = (host: Host.Instance, input: StartInput, binding: Option.Option<EnvironmentBindings.Binding>) => {
+  const hasNoEnvironment = Option.isSome(host.bindings) && !Option.exists(binding, (found) => Boolean(found.location))
+  return [...(input.interactive ? [] : ["question"]), ...(hasNoEnvironment ? environmentActions : [])]
 }
 
 const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
@@ -62,23 +78,19 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
 const create = Effect.fn("OpenCodeHarness.create")(function* (
   client: OpenCodeClient,
   host: Host.Instance,
-  location: Environment.Location | undefined,
+  input: StartInput,
+  binding: Option.Option<EnvironmentBindings.Binding>,
   directory: AbsolutePath,
   session: Pick<SessionCreateInput, "title" | "agent" | "model" | "permissions"> & { readonly id: Session.ID },
 ) {
-  if (!location) return yield* client.session.create({ ...session, location: { directory } }).pipe(Effect.orDie)
+  if (Option.isNone(binding))
+    return yield* client.session.create({ ...session, location: { directory } }).pipe(Effect.orDie)
   const workspaceID = yield* host.workspaces
     .create({
-      id: OpenCodeWorkspaceDriver.workspaceId(location.environmentId),
+      id: OpenCodeWorkspaceDriver.workspaceId(input.sessionId),
       provider: OpenCodeWorkspaceDriver.provider,
     })
-    .pipe(
-      Effect.map(Option.some),
-      Effect.catchTag("WorkspaceDriver.ProviderNotFound", () => Effect.succeedNone),
-      Effect.orDie,
-    )
-  if (Option.isNone(workspaceID))
-    return yield* new BrainRejectedError({ message: "This brain cannot use environments" })
+    .pipe(Effect.orDie)
   return yield* host.sessions
     .create({
       id: session.id,
@@ -86,9 +98,55 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
       ...(session.agent && { agent: session.agent }),
       ...(session.model && { model: session.model }),
       ...(session.permissions && { permissions: session.permissions }),
-      location: Location.Ref.make({ directory: AbsolutePath.make(location.directory), workspaceID: workspaceID.value }),
+      location: Location.Ref.make({ directory: AbsolutePath.make(binding.value.sessionDirectory), workspaceID }),
     })
     .pipe(Effect.orDie)
+})
+
+const settle = Effect.fn("OpenCodeHarness.settle")(function* (client: OpenCodeClient, sessionID: Session.ID) {
+  yield* client.session.wait({ sessionID }).pipe(Effect.timeout(settleWithin), Effect.ignore)
+  if (Object.hasOwn(yield* client.session.active().pipe(Effect.orDie), sessionID))
+    return yield* new BrainRejectedError({
+      message: `Session ${sessionID} is running; change its environment between turns`,
+    })
+})
+
+const bind = Effect.fn("OpenCodeHarness.bind")(function* (
+  client: OpenCodeClient,
+  host: Host.Instance,
+  input: StartInput,
+  session: Option.Option<Session.Info>,
+  directory: AbsolutePath,
+) {
+  const requested = input.environments?.at(0) ?? null
+  if (Option.isNone(host.bindings)) {
+    if (requested) return yield* new BrainRejectedError({ message: "This brain cannot use environments" })
+    return Option.none<EnvironmentBindings.Binding>()
+  }
+  const bindings = host.bindings.value
+  const current = yield* bindings.get(input.sessionId)
+  if (Option.isSome(session) && Option.isNone(current)) {
+    if (requested)
+      return yield* new BrainRejectedError({
+        message: `Session ${input.sessionId} started without a workspace for environments, so it cannot attach one`,
+      })
+    return Option.none<EnvironmentBindings.Binding>()
+  }
+  const wanted = {
+    sessionDirectory: Option.match(current, {
+      onNone: () => requested?.directory ?? directory,
+      onSome: (found) => found.sessionDirectory,
+    }),
+    location: input.environments
+      ? requested
+      : Option.match(current, { onNone: () => null, onSome: (found) => found.location }),
+  }
+  if (Option.isSome(current) && isSameLocation(current.value.location, wanted.location)) return current
+  if (Option.isSome(session)) yield* settle(client, session.value.id)
+  yield* bindings
+    .set(input.sessionId, wanted)
+    .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message })))
+  return Option.some(wanted)
 })
 
 const start = Effect.fn("OpenCodeHarness.start")(function* (
@@ -106,13 +164,14 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const sessionID = Session.ID.make(input.sessionId)
   const session = yield* findSession(client, sessionID)
-  const permissions = deniedActions(host, input, session).map((action) => ({
+  const binding = yield* bind(client, host, input, session, directory)
+  const permissions = deniedActions(host, input, binding).map((action) => ({
     action,
     resource: "*",
     effect: "deny" as const,
   }))
   if (Option.isNone(session))
-    yield* create(client, host, input.environments?.at(0), directory, {
+    yield* create(client, host, input, binding, directory, {
       id: sessionID,
       title: input.title,
       agent,
@@ -127,7 +186,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    input.instructions,
+    { ...input.instructions, ...environmentInstructions(binding) },
   )
   yield* Effect.forEach(
     changes.put,
@@ -179,7 +238,19 @@ const open = Effect.fn("OpenCodeHarness.open")(function* (
   refreshKey: Harness.Refresh,
   environments: Option.Option<Environments.Interface>,
 ) {
-  return yield* make(yield* Host.open(storage, config, endpoints, refreshKey, environments), endpoints)
+  const bound = yield* Effect.transposeOption(
+    Option.map(environments, (found) =>
+      Layer.build(
+        EnvironmentBindings.layer.pipe(
+          Layer.provide(Layer.succeed(Environments.Service, found)),
+          Layer.provide(DurableStore.layer(storage, bindingsPrefix)),
+        ),
+      ).pipe(
+        Effect.map((context) => ({ environments: found, bindings: Context.get(context, EnvironmentBindings.Service) })),
+      ),
+    ),
+  )
+  return yield* make(yield* Host.open(storage, config, endpoints, refreshKey, bound), endpoints)
 })
 
 export const layer = (storage: DurableObjectStorage) =>
