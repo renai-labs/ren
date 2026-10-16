@@ -77,6 +77,7 @@ export const make = Effect.fn("Host.make")(function* (
     credentials: Context.get(services, Credential.Service),
     sessions: Context.get(services, Session.Service),
     workspaces: Context.get(services, Workspace.Service),
+    hasEnvironments,
     configure: (next) => Ref.set(endpoints, next).pipe(Effect.andThen(Ref.get(reload)), Effect.flatten),
   }
 })
@@ -86,5 +87,6 @@ export interface Instance {
   readonly credentials: Credential.Interface
   readonly sessions: Session.Interface
   readonly workspaces: Workspace.Interface
+  readonly hasEnvironments: boolean
   readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>
 }
