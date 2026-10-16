@@ -6,7 +6,21 @@ import { NodeCompatible } from "@ren/executor/node-compatible"
 import { Server } from "@ren/executor/server"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
-import { ConfigProvider, Cause, Context, DateTime, Deferred, Effect, Exit, Layer, Ref, Schema, Scope } from "effect"
+import {
+  ConfigProvider,
+  Cause,
+  Context,
+  DateTime,
+  Deferred,
+  Effect,
+  Exit,
+  Layer,
+  Ref,
+  Schema,
+  Schedule,
+  Scope,
+  Stream,
+} from "effect"
 import { FetchHttpClient, HttpClient, HttpRouter, HttpServer } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -76,6 +90,7 @@ const build = (options: { readonly failures: number; readonly gate?: Deferred.De
     const host = Layer.succeed(
       EnvironmentAccess.Service,
       EnvironmentAccess.Service.of({
+        subscribe: Effect.succeed(Stream.never),
         open: () =>
           Effect.gen(function* () {
             if (options.gate) yield* Deferred.await(options.gate)
@@ -193,6 +208,7 @@ it.live("a connection outlives its token, and still reaches the processes it sta
       Layer.succeed(
         EnvironmentAccess.Service,
         EnvironmentAccess.Service.of({
+          subscribe: Effect.succeed(Stream.never),
           open: (id) =>
             Ref.update(opens, (count) => count + 1).pipe(
               Effect.andThen(accessTo(server, id, { brain, lifetimeMs: 2_000 })),
@@ -220,6 +236,7 @@ it.live("refreshes a token in its last five minutes, once for many concurrent ca
       Layer.succeed(
         EnvironmentAccess.Service,
         EnvironmentAccess.Service.of({
+          subscribe: Effect.succeed(Stream.never),
           open: (id) =>
             Ref.update(opens, (count) => count + 1).pipe(
               Effect.andThen(accessTo(server, id, { brain, lifetimeMs: 5 * 60_000 + 1_500 })),
@@ -249,6 +266,7 @@ it.live("keeps using a token it could not refresh until the token expires", () =
       Layer.succeed(
         EnvironmentAccess.Service,
         EnvironmentAccess.Service.of({
+          subscribe: Effect.succeed(Stream.never),
           open: (id) =>
             Ref.getAndUpdate(opens, (count) => count + 1).pipe(
               Effect.flatMap((count) =>
@@ -273,6 +291,72 @@ it.live("a connection stays cached until the layer closes, then its client is in
     expect(yield* subject.environments.connect(environmentId)).toBe(connection)
     expect((yield* connection.client["executor.hello"]()).environmentId).toBe(environmentId)
     yield* Scope.close(subject.scope, Exit.void)
+    const exit = yield* Effect.exit(connection.client["executor.hello"]())
+    expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(true)
+  }),
+)
+
+const memoryAccess = Effect.fnUntraced(function* (options: { readonly brain: Brain.ID }) {
+  const server = yield* HttpServer.HttpServer
+  const access = yield* accessTo(server, environmentId, { brain: options.brain, lifetimeMs: 600_000 })
+  const context = yield* Layer.build(EnvironmentAccess.layerMemory([access]))
+  return {
+    access,
+    memory: Context.get(context, EnvironmentAccess.Memory),
+    environments: yield* environmentsWith(Layer.succeedContext(context)),
+  }
+})
+
+const settle = Effect.sleep(50)
+
+const eventually = <A, E, R>(attempt: Effect.Effect<A, E, R>, isDone: (value: A) => boolean) =>
+  attempt.pipe(Effect.repeat({ until: isDone, schedule: Schedule.spaced(10) }), Effect.timeout(5_000))
+
+it.live("keeps the connection when only the environment's token changes", () =>
+  Effect.gen(function* () {
+    const brain = Brain.ID.create()
+    const subject = yield* memoryAccess({ brain })
+    const connection = yield* subject.environments.connect(environmentId)
+    yield* subject.memory.set(
+      yield* accessTo(yield* HttpServer.HttpServer, environmentId, { brain, lifetimeMs: 900_000 }),
+    )
+    yield* settle
+    expect(yield* subject.environments.connect(environmentId)).toBe(connection)
+  }),
+)
+
+it.live(
+  "connects again when the environment's machine is replaced, and the old connection still serves its holders",
+  () =>
+    Effect.gen(function* () {
+      const subject = yield* memoryAccess({ brain: Brain.ID.create() })
+      const connection = yield* subject.environments.connect(environmentId)
+      yield* subject.memory.set({ ...subject.access, generation: 2 })
+      const replaced = yield* eventually(subject.environments.connect(environmentId), (next) => next !== connection)
+      expect((yield* connection.client["executor.hello"]()).environmentId).toBe(environmentId)
+      expect((yield* replaced.client["executor.hello"]()).environmentId).toBe(environmentId)
+    }),
+)
+
+it.live("stops connecting to an environment once its access is removed", () =>
+  Effect.gen(function* () {
+    const subject = yield* memoryAccess({ brain: Brain.ID.create() })
+    yield* subject.environments.connect(environmentId)
+    yield* subject.memory.remove(environmentId)
+    const exit = yield* eventually(Effect.exit(subject.environments.connect(environmentId)), Exit.isFailure)
+    expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toMatchObject({ reason: "not_found" })
+  }),
+)
+
+it.live("closes a replaced connection once its last holder lets it go", () =>
+  Effect.gen(function* () {
+    const subject = yield* memoryAccess({ brain: Brain.ID.create() })
+    const holder = yield* Scope.make()
+    const connection = yield* subject.environments.connect(environmentId).pipe(Scope.provide(holder))
+    yield* subject.memory.set({ ...subject.access, generation: 2 })
+    yield* eventually(Effect.scoped(subject.environments.connect(environmentId)), (next) => next !== connection)
+    expect((yield* connection.client["executor.hello"]()).environmentId).toBe(environmentId)
+    yield* Scope.close(holder, Exit.void)
     const exit = yield* Effect.exit(connection.client["executor.hello"]())
     expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(true)
   }),
