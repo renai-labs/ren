@@ -13,7 +13,7 @@ import {
   stallAfter,
   WrongKindError,
 } from "@ren/brain-api/executor-api"
-import { Environment } from "@ren/schema/environment"
+import { Session } from "@ren/schema/session"
 import {
   Cause,
   Clock,
@@ -22,6 +22,7 @@ import {
   Effect,
   Exit,
   Layer,
+  Option,
   PlatformError,
   Predicate,
   Queue,
@@ -32,13 +33,30 @@ import {
   Sink,
   Stream,
 } from "effect"
-import { ChildProcessSpawner } from "effect/process"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
+import { EnvironmentBindings } from "./environment-bindings.js"
 import { Environments } from "./environments.js"
 
 export const provider = "ren"
 
-export const workspaceId = (environmentId: Environment.ID) =>
-  Workspace.ID.make(`wrk_${environmentId.slice(environmentId.indexOf("_") + 1)}`)
+export const workspaceId = (sessionId: Session.ID) =>
+  Workspace.ID.make(`wrk_${sessionId.slice(sessionId.indexOf("_") + 1)}`)
+
+export class NoEnvironment extends Schema.TaggedError<NoEnvironment>()("OpenCodeWorkspaceDriver.NoEnvironment", {
+  sessionId: Session.ID,
+  message: Schema.String,
+}) {}
+
+export const physicalPath = (sessionDirectory: string, directory: string) => {
+  const prefix = sessionDirectory.endsWith("/") ? sessionDirectory : `${sessionDirectory}/`
+  const root = directory.endsWith("/") ? directory : `${directory}/`
+  return (path: string) => {
+    if (sessionDirectory === directory) return path
+    if (path === sessionDirectory) return directory
+    if (!path.startsWith(prefix)) return path
+    return `${root}${path.slice(prefix.length)}`
+  }
+}
 
 const disconnectedNotice = new TextEncoder().encode("\n[environment disconnected: the command did not finish]\n")
 
@@ -205,7 +223,10 @@ export const spawner = (connection: Environments.Connection) =>
     }),
   )
 
-export const files = (connection: Environments.Connection): EnvironmentFiles.FilesImpl => {
+export const files = (
+  connection: Environments.Connection,
+  physical: (path: string) => string = (path) => path,
+): EnvironmentFiles.FilesImpl => {
   const client = connection.client
   const fileError = (path: string) => (cause: unknown) => new EnvironmentFiles.Failed({ path, cause })
   const fileLookupError = (path: string) => (error: unknown) =>
@@ -216,37 +237,91 @@ export const files = (connection: Environments.Connection): EnvironmentFiles.Fil
       : fileLookupError(path)(error)
   return {
     read: (path, range) =>
-      client["files.read"]({ path, ...(range && { range }) }).pipe(
+      client["files.read"]({ path: physical(path), ...(range && { range }) }).pipe(
         Effect.map((result) => ({
           bytes: result.bytes,
           info: { type: result.info.type, size: result.info.sizeBytes, mtimeMs: result.info.modifiedAtMs },
         })),
         Effect.mapError(fileKindError(path)),
       ),
-    write: (path, bytes) => client["files.write"]({ path, bytes }).pipe(Effect.mapError(fileError(path))),
+    write: (path, bytes) =>
+      client["files.write"]({ path: physical(path), bytes }).pipe(Effect.mapError(fileError(path))),
     stat: (path) =>
-      client["files.stat"]({ path }).pipe(
+      client["files.stat"]({ path: physical(path) }).pipe(
         Effect.map((info) => ({ type: info.type, size: info.sizeBytes, mtimeMs: info.modifiedAtMs })),
         Effect.mapError(fileLookupError(path)),
       ),
-    list: (path) => client["files.list"]({ path }).pipe(Effect.mapError(fileKindError(path))),
-    remove: (path) => client["files.remove"]({ path }).pipe(Effect.mapError(fileError(path))),
-    move: (from, to) => client["files.move"]({ from, to }).pipe(Effect.mapError(fileLookupError(from))),
-    mkdir: (path) => client["files.mkdir"]({ path }).pipe(Effect.mapError(fileError(path))),
+    list: (path) => client["files.list"]({ path: physical(path) }).pipe(Effect.mapError(fileKindError(path))),
+    remove: (path) => client["files.remove"]({ path: physical(path) }).pipe(Effect.mapError(fileError(path))),
+    move: (from, to) =>
+      client["files.move"]({ from: physical(from), to: physical(to) }).pipe(Effect.mapError(fileLookupError(from))),
+    mkdir: (path) => client["files.mkdir"]({ path: physical(path) }).pipe(Effect.mapError(fileError(path))),
   }
 }
 
-export const replacements = (environments: Environments.Interface): LayerNode.Replacements => [
+export const sessionConnection = (
+  environments: Environments.Interface,
+  bindings: EnvironmentBindings.Interface,
+  sessionId: Session.ID,
+) => {
+  const target = Effect.gen(function* () {
+    const binding = yield* bindings.get(sessionId)
+    const location = Option.flatMap(binding, (found) => Option.fromNullishOr(found.location))
+    if (Option.isNone(binding) || Option.isNone(location))
+      return yield* new NoEnvironment({ sessionId, message: `Session ${sessionId} has no environment` })
+    return {
+      connection: yield* environments.connect(location.value.environmentId),
+      physical: physicalPath(binding.value.sessionDirectory, location.value.directory),
+    }
+  })
+  const withFiles = <A, E>(path: string, use: (files: EnvironmentFiles.FilesImpl) => Effect.Effect<A, E>) =>
+    target.pipe(
+      Effect.mapError((cause) => new EnvironmentFiles.Failed({ path, cause })),
+      Effect.flatMap((found) => use(files(found.connection, found.physical))),
+      Effect.scoped,
+    )
+  const overrides: EnvironmentFiles.FilesImpl = {
+    read: (path, range) => withFiles(path, (targetFiles) => targetFiles.read(path, range)),
+    write: (path, bytes) => withFiles(path, (targetFiles) => targetFiles.write(path, bytes)),
+    stat: (path) => withFiles(path, (targetFiles) => targetFiles.stat(path)),
+    list: (path) => withFiles(path, (targetFiles) => targetFiles.list(path)),
+    remove: (path) => withFiles(path, (targetFiles) => targetFiles.remove(path)),
+    move: (from, to) => withFiles(from, (targetFiles) => targetFiles.move(from, to)),
+    mkdir: (path) => withFiles(path, (targetFiles) => targetFiles.mkdir(path)),
+  }
+  return {
+    spawner: ChildProcessSpawner.make((command) =>
+      target.pipe(
+        Effect.mapError(childProcessError("spawn")),
+        Effect.flatMap((found) =>
+          spawner(found.connection).spawn(
+            command._tag === "StandardCommand"
+              ? ChildProcess.make(command.command, command.args, {
+                  ...command.options,
+                  ...(command.options.cwd && { cwd: found.physical(command.options.cwd) }),
+                })
+              : command,
+          ),
+        ),
+      ),
+    ),
+    overrides,
+  }
+}
+
+export const replacements = (
+  environments: Environments.Interface,
+  bindings: EnvironmentBindings.Interface,
+): LayerNode.Replacements => [
   WorkspaceDriver.node.replace(
     WorkspaceDriver.registryNode({
       [provider]: WorkspaceDriver.make({
         create: () => Effect.succeed({ binding: {} }),
         connect: (input) =>
-          Schema.decodeUnknownEffect(Environment.ID)(
-            `env_${input.workspaceID.slice(input.workspaceID.indexOf("_") + 1)}`,
+          Schema.decodeUnknownEffect(Session.ID)(
+            `ses_${input.workspaceID.slice(input.workspaceID.indexOf("_") + 1)}`,
           ).pipe(
-            Effect.flatMap(environments.connect),
-            Effect.map((connection) => ({ spawner: spawner(connection), overrides: files(connection) })),
+            Effect.map((sessionId) => sessionConnection(environments, bindings, sessionId)),
             Effect.mapError((cause) => new WorkspaceDriver.Error({ message: cause.message, cause })),
           ),
         suspendForIdle: () => Effect.void,

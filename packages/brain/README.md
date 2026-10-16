@@ -4,13 +4,16 @@ Brain code that is the same on every host. A host (the cell in `packages/cell` t
 
 ## What belongs here
 
-- `src/environment-access.ts`: `EnvironmentAccess`, how a brain gets an environment's `Access`. `layerFixed` gives fixed accesses, for tests and development.
-- `src/environments.ts`: `Environments`, the executors a brain uses. It opens each once, checks `hello`, and keeps the connection. When a token has less than five minutes left, the next call opens the environment again for a new token, as OpenCode does for OAuth credentials. Concurrent calls share that one refresh. A refresh that fails keeps the old token.
+- `src/environment-access.ts`: `EnvironmentAccess`, how a brain gets an environment's `Access` and hears that it changed. `layerFixed` gives fixed accesses, for tests and development. `layerMemory` gives accesses that `Memory` changes, for tests.
+- `src/environments.ts`: `Environments`, the executors a brain uses. It opens each once, checks `hello`, and keeps the connection. When a token has less than five minutes left, the next call opens the environment again for a new token, as OpenCode does for OAuth credentials. Concurrent calls share that one refresh. A refresh that fails keeps the old token. When `EnvironmentAccess` reports a change, a new token replaces the held one; a new URL, a new generation or a removed access drops the connection, so the next call connects again. A caller that holds the old connection keeps it until its scope closes.
+- `src/environment-bindings.ts`: `EnvironmentBindings`, the environment each session's tools run on. A binding is the session's directory and an environment location, or no location. `set` checks that the directory exists on the environment before it stores the binding in a `KeyValueStore` the host gives it, keyed by session ID.
 - `src/opencode-workspace-driver.ts`: the OpenCode `ren` workspace driver. Its spawner runs processes through the Executor API, and its file overrides call the file routes. `replacements` gives the two OpenCode replacements a host adds: the driver, and `rg` from the environment's `PATH`.
 
 ## Notes
 
-- A session uses an environment when its OpenCode workspace has the `ren` provider. The workspace ID is `wrk_` plus the environment ID's suffix, so no table maps them.
+- In a brain with environments, every session has an OpenCode workspace with the `ren` provider. The workspace ID is `wrk_` plus the session ID's suffix, so no table maps them.
+- OpenCode keeps one driver connection for each workspace. The `ren` driver's connection holds no executor: each file call and each spawn reads the session's binding and connects then. Thus a new binding or a replaced machine reaches the next tool call, and OpenCode's cache needs no change. A process keeps the connection it started on until it ends.
+- Paths under the session's directory map onto the binding's directory: a process's working directory and each file path. Command text and arguments go to the environment as they are, so a shell command that names the session's directory runs against that path on the environment. The cell's `ren.environment` instruction tells the model the environment's directory.
 - The spawner refuses piped commands, kills a process when its scope closes, and fails `exitCode` with OpenCode's `KilledBySignal` when a signal ended the process.
 - The spawner follows a process's output from a cursor:
   - **Reconnects.** When the stream drops, or goes silent for 15 seconds (three missed pings), it asks again from the last byte it received, every second, like OpenCode's event stream.

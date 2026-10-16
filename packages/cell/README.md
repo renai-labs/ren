@@ -37,6 +37,10 @@ Access comes with a host token. When OpenCode finds an API key within five minut
 
 The message is submitted after applying the session configuration and instructions, using OpenCode’s default delivery. Start returns its existing `Started` response once the message is accepted, before the turn finishes. Reuse the same message ID on retries: an existing session with a missing message receives it, while an already accepted message is not submitted again. Initial files have the same limits as files in `send`.
 
+## Environments
+
+When the cell has `Environments`, every session gets a `ren` workspace, and `start` sets which environment its file and shell tools run on. `environments: [location]` attaches or moves the session, `environments: []` detaches it, and no `environments` keeps the current one. The cell checks that the directory exists on the environment, then stores the binding in Durable Object storage under `ren:environment-binding:`. The next tool call uses the new binding; the conversation stays. A change waits up to 10 seconds for a running turn to end, and then answers `BrainRejectedError`. The session's directory stays the one it started with: paths under it map onto the environment's directory, and the `ren.environment` instruction tells the model where its tools run. A session without an environment has no file or shell tools.
+
 ## Limits
 
 - The shared Brain contract caps decoded files at 10 MB per file and 10 MB in total per message. Invalid payloads receive 400 before acquiring the harness.

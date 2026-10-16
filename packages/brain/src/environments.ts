@@ -11,9 +11,11 @@ import {
   Effect,
   Exit,
   Layer,
+  Option,
+  RcMap,
   Schema,
   Scope,
-  ScopedCache,
+  Stream,
   SynchronizedRef,
 } from "effect"
 import { HttpClient } from "effect/http"
@@ -35,7 +37,7 @@ export interface Connection {
 }
 
 export interface Interface {
-  readonly connect: (id: Environment.ID) => Effect.Effect<Connection, Unavailable>
+  readonly connect: (id: Environment.ID) => Effect.Effect<Connection, Unavailable, Scope.Scope>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/brain/Environments") {}
@@ -45,9 +47,9 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const environmentAccess = yield* EnvironmentAccess.Service
     const http = yield* HttpClient.HttpClient
-    const cache = yield* ScopedCache.makeWith<Environment.ID, Connection, Unavailable>({
-      capacity: Infinity,
-      timeToLive: (exit) => (Exit.isSuccess(exit) ? Duration.infinity : Duration.zero),
+    const accesses = new Map<Environment.ID, SynchronizedRef.SynchronizedRef<Environment.Access>>()
+    const connections = yield* RcMap.make({
+      idleTimeToLive: Duration.infinity,
       lookup: Effect.fn("Environments.lookup")(function* (id: Environment.ID) {
         const entryScope = yield* Effect.scope
         const attempt = yield* Scope.fork(entryScope)
@@ -63,6 +65,12 @@ export const layer = Layer.effect(
             ),
           )
           const current = yield* SynchronizedRef.make(access)
+          accesses.set(id, current)
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              if (accesses.get(id) === current) accesses.delete(id)
+            }),
+          )
           const token = SynchronizedRef.updateAndGetEffect(current, (held) =>
             Clock.currentTimeMillis.pipe(
               Effect.flatMap((now) =>
@@ -113,9 +121,23 @@ export const layer = Layer.effect(
         )
       }),
     })
+    const apply = Effect.fn("Environments.apply")(function* (id: Environment.ID) {
+      const current = accesses.get(id)
+      if (!current) return yield* RcMap.invalidate(connections, id)
+      const next = yield* environmentAccess.open(id).pipe(Effect.option)
+      const isReplaced = yield* SynchronizedRef.modify(current, (held): [boolean, Environment.Access] =>
+        Option.match(next, {
+          onNone: () => [true, held],
+          onSome: (fresh) =>
+            fresh.url === held.url && fresh.generation === held.generation ? [false, fresh] : [true, held],
+        }),
+      )
+      if (isReplaced) yield* RcMap.invalidate(connections, id)
+    })
+    yield* (yield* environmentAccess.subscribe).pipe(Stream.runForEach(apply), Effect.forkScoped)
     return Service.of({
       connect: Effect.fn("Environments.connect")(function* (id: Environment.ID) {
-        return yield* ScopedCache.get(cache, id)
+        return yield* RcMap.get(connections, id).pipe(Effect.tapError(() => RcMap.invalidate(connections, id)))
       }),
     })
   }),
