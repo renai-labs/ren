@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "types": ["@cloudflare/workers-types"],
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.ts-dist/test-worker.tsbuildinfo"
+  },
+  "include": ["test/lib/environment-worker.ts"],
+  "references": [{ "path": "./tsconfig.worker.json" }]
+}
