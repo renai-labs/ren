@@ -5,12 +5,15 @@ import {
   FileNotFoundError,
   type FileType,
   OperationFailedError,
+  orphanAfter,
+  pingEvery,
   type ProcessEvent,
   ProcessID,
   ProcessNotFoundError,
   protocol,
   type Range,
   type SpawnInput,
+  stallAfter,
   WrongKindError,
 } from "@ren/brain-api/executor-api"
 import { Signal } from "@ren/brain-api/signal"
@@ -26,6 +29,7 @@ import {
   Layer,
   type PlatformError,
   Option,
+  PubSub,
   Queue,
   Schedule,
   Schema,
@@ -38,9 +42,13 @@ import { basename, dirname, join, resolve } from "node:path"
 import manifest from "../package.json"
 import { Executor } from "./executor.js"
 
-export const orphanAfter = Duration.seconds(30)
+export const logLimit = 2 * 1024 * 1024
 
-export const pingEvery = Duration.seconds(5)
+export const exitedLimit = 25
+
+type Chunk = Extract<ProcessEvent, { readonly type: "stdout" | "stderr" }>
+
+type ExitEvent = Extract<ProcessEvent, { readonly type: "exit" }>
 
 interface Entry {
   readonly id: ProcessID
@@ -48,8 +56,14 @@ interface Entry {
   readonly scope: Scope.Closeable
   readonly handle: ChildProcessSpawner.ChildProcessHandle
   readonly stdin: Queue.Queue<Uint8Array, Cause.Done> | undefined
-  readonly events: Queue.Queue<ProcessEvent, Cause.Done>
-  readers: number
+  readonly chunks: Array<Chunk>
+  readonly positions: Map<object, number>
+  readonly appended: PubSub.PubSub<void>
+  readonly advanced: PubSub.Subscription<void>
+  readonly advance: PubSub.PubSub<void>
+  size: number
+  exit: ExitEvent | undefined
+  failure: Cause.Cause<never> | undefined
   seenAt: number
 }
 
@@ -99,6 +113,7 @@ export const layer = Layer.effect(
         })),
       )
     const processes = new Map<ProcessID, Entry>()
+    const exited: Array<ProcessID> = []
     const scope = yield* Effect.scope
 
     const find = Effect.fnUntraced(function* (brain: Brain.ID, id: ProcessID) {
@@ -109,12 +124,52 @@ export const layer = Layer.effect(
     })
 
     const release = (entry: Entry) =>
-      Effect.sync(() => processes.delete(entry.id)).pipe(Effect.andThen(Scope.close(entry.scope, Exit.void)))
+      Effect.sync(() => {
+        processes.delete(entry.id)
+        if (exited.includes(entry.id)) exited.splice(exited.indexOf(entry.id), 1)
+      }).pipe(Effect.andThen(Scope.close(entry.scope, Exit.void)))
+
+    const trim: (entry: Entry) => Effect.Effect<void> = Effect.fnUntraced(function* (entry: Entry) {
+      const first = entry.chunks.at(0)
+      if (!first || entry.chunks.length === 1 || entry.size - first.offset <= logLimit) return
+      const end = first.offset + first.bytes.length
+      if ([...entry.positions.values()].some((position) => position < end)) {
+        const advanced = yield* PubSub.take(entry.advanced).pipe(Effect.timeoutOption(stallAfter))
+        if (Option.isSome(advanced)) return yield* trim(entry)
+      }
+      entry.chunks.shift()
+      return yield* trim(entry)
+    })
+
+    const finish = Effect.fnUntraced(function* (entry: Entry, event: ExitEvent) {
+      entry.exit = event
+      yield* PubSub.publish(entry.appended, undefined)
+      exited.push(entry.id)
+      const own = exited.flatMap((id) => {
+        const found = processes.get(id)
+        return found && found.brain === entry.brain ? [found] : []
+      })
+      yield* Effect.forEach(own.slice(0, Math.max(0, own.length - exitedLimit)), release, { discard: true })
+    })
+
+    const since = (entry: Entry, position: number) =>
+      entry.chunks.flatMap((chunk): ReadonlyArray<Chunk> => {
+        if (chunk.offset + chunk.bytes.length <= position) return []
+        if (chunk.offset >= position) return [chunk]
+        return [{ ...chunk, offset: position, bytes: chunk.bytes.subarray(position - chunk.offset) }]
+      })
+
+    const appendedAfter: (entry: Entry, position: number, appended: PubSub.Subscription<void>) => Effect.Effect<void> =
+      Effect.fnUntraced(function* (entry, position, appended) {
+        if (entry.size > position || entry.exit || entry.failure) return
+        yield* PubSub.take(appended)
+        return yield* appendedAfter(entry, position, appended)
+      })
 
     yield* Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const orphans = [...processes.values()].filter(
-        (entry) => entry.readers === 0 && now - entry.seenAt >= Duration.toMillis(orphanAfter),
+        (entry) => !entry.exit && entry.positions.size === 0 && now - entry.seenAt >= Duration.toMillis(orphanAfter),
       )
       yield* Effect.forEach(orphans, release, { discard: true })
     }).pipe(Effect.repeat(Schedule.spaced(Duration.seconds(1))), Effect.forkIn(scope))
@@ -139,59 +194,91 @@ export const layer = Layer.effect(
           Effect.onError(() => Scope.close(entryScope, Exit.void)),
         )
       const id = ProcessID.create()
-      const events = yield* Queue.bounded<ProcessEvent, Cause.Done>(64)
-      processes.set(id, {
+      const advance = yield* PubSub.sliding<void>(1)
+      const entry: Entry = {
         id,
         brain,
         scope: entryScope,
         handle,
         stdin,
-        events,
-        readers: 0,
+        chunks: [],
+        positions: new Map(),
+        appended: yield* PubSub.sliding<void>(1),
+        advanced: yield* PubSub.subscribe(advance).pipe(Scope.provide(entryScope)),
+        advance,
+        size: 0,
+        exit: undefined,
+        failure: undefined,
         seenAt: yield* Clock.currentTimeMillis,
-      })
-      const pump = (stream: Stream.Stream<Uint8Array, PlatformError.PlatformError>, type: "stdout" | "stderr") =>
+      }
+      processes.set(id, entry)
+      const tagged = (stream: Stream.Stream<Uint8Array, PlatformError.PlatformError>, type: Chunk["type"]) =>
         stream.pipe(
-          Stream.runForEach((bytes) => Queue.offer(events, { type, bytes })),
-          Effect.ignore,
+          Stream.map((bytes) => ({ type, bytes })),
+          Stream.ignore,
         )
-      yield* Effect.all([pump(handle.stdout, "stdout"), pump(handle.stderr, "stderr")], { concurrency: 2 }).pipe(
+      yield* Stream.merge(tagged(handle.stdout, "stdout"), tagged(handle.stderr, "stderr")).pipe(
+        Stream.runForEach((output) =>
+          Effect.gen(function* () {
+            entry.chunks.push({ ...output, offset: entry.size })
+            entry.size += output.bytes.length
+            yield* PubSub.publish(entry.appended, undefined)
+            yield* trim(entry)
+          }),
+        ),
         Effect.andThen(
           handle.exitCode.pipe(
-            Effect.map((exitCode): ProcessEvent => ({ type: "exit", exitCode, signal: null })),
+            Effect.map((exitCode): ExitEvent => ({ type: "exit", exitCode, signal: null })),
             Effect.catch((error) =>
               Option.match(killedBy(error), {
-                onSome: (signal) => Effect.succeed<ProcessEvent>({ type: "exit", exitCode: null, signal }),
+                onSome: (signal) => Effect.succeed<ExitEvent>({ type: "exit", exitCode: null, signal }),
                 onNone: () => Effect.die(error),
               }),
             ),
           ),
         ),
-        Effect.flatMap((event) => Queue.offer(events, event)),
-        Effect.andThen(Queue.end(events)),
+        Effect.flatMap((event) => finish(entry, event)),
         Effect.andThen(stdin ? Queue.shutdown(stdin) : Effect.void),
-        Effect.onError((cause) => Queue.failCause(events, cause)),
+        Effect.onError((cause) =>
+          Effect.sync(() => {
+            entry.failure = cause
+          }).pipe(Effect.andThen(PubSub.publish(entry.appended, undefined))),
+        ),
         Effect.forkIn(entryScope),
       )
       return { id, pid: handle.pid }
     })
 
-    const output = Effect.fn("Executor.output")(function* (brain: Brain.ID, id: ProcessID) {
+    const output = Effect.fn("Executor.output")(function* (brain: Brain.ID, id: ProcessID, cursor?: number) {
       const entry = yield* find(brain, id)
-      const touch = (readers: number) =>
-        Clock.currentTimeMillis.pipe(
-          Effect.map((now) => {
-            entry.readers += readers
-            entry.seenAt = now
-          }),
-        )
-      return Stream.fromQueue(entry.events).pipe(
+      const reader = {}
+      const leave = Clock.currentTimeMillis.pipe(
+        Effect.flatMap((now) => {
+          entry.positions.delete(reader)
+          entry.seenAt = now
+          return PubSub.publish(entry.advance, undefined)
+        }),
+      )
+      const events = Stream.unwrap(
+        Effect.map(PubSub.subscribe(entry.appended), (appended) =>
+          Stream.paginate(cursor ?? 0, (position: number) =>
+            Effect.gen(function* () {
+              entry.positions.set(reader, position)
+              yield* PubSub.publish(entry.advance, undefined)
+              yield* appendedAfter(entry, position, appended)
+              if (entry.failure) return yield* Effect.failCause(entry.failure)
+              const chunks = since(entry, position)
+              if (entry.exit) return [[...chunks, entry.exit], Option.none<number>()] as const
+              return [chunks, Option.some(entry.size)] as const
+            }),
+          ),
+        ),
+      )
+      return events.pipe(
         Stream.merge(Stream.tick(pingEvery).pipe(Stream.drop(1), Stream.as({ type: "ping" as const })), {
           haltStrategy: "left",
         }),
-        Stream.onStart(touch(1)),
-        Stream.onEnd(release(entry)),
-        Stream.ensuring(touch(-1)),
+        Stream.ensuring(leave),
       )
     })
 

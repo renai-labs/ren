@@ -85,7 +85,9 @@ suite("remote tools in a cell", () => {
     await executor.dispose()
   })
 
-  const begin = async (environments: ReadonlyArray<Environment.Location> = [{ environmentId, directory: workspace }]) => {
+  const begin = async (
+    environments: ReadonlyArray<Environment.Location> = [{ environmentId, directory: workspace }],
+  ) => {
     const opened = await TestCell.make(cell.url)
     expect((await opened.models()).status).toBe(204)
     const started = await opened.brain("/ren/sessions", {
@@ -195,6 +197,22 @@ suite("remote tools in a cell", () => {
     await cell.start()
     expect(toolOutput(await session.turn(stub.script(shell("echo $((30 + 4))"))))).toContain("34")
   }, 180_000)
+
+  test("a cell runs tools on an environment attached after the session started", async () => {
+    const session = await begin([])
+    await session.turn(stub.script(), 1)
+    const attached = await session.opened.brain("/ren/sessions", {
+      sessionId: session.opened.id,
+      harness: "opencode",
+      interactive: false,
+      environments: [{ environmentId, directory: workspace }],
+    })
+    expect(attached.status).toBe(200)
+    const file = `${crypto.randomUUID()}.txt`
+    const answered = await session.turn(stub.script(shell(`echo attached > ${file} && pwd`)))
+    expect(answered.tools).toContain("shell")
+    expect(await Bun.file(join(workspace, file)).text()).toBe("attached\n")
+  })
 
   test("a cell gives the model a command's whole result when the network drops for a moment", async () => {
     const session = await begin()
