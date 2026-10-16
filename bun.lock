@@ -57,6 +57,7 @@
       "dependencies": {
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
+        "jose": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -166,6 +167,20 @@
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
         "effect": "catalog:",
+      },
+    },
+    "packages/executor": {
+      "name": "@ren/executor",
+      "version": "0.0.0",
+      "dependencies": {
+        "@effect/platform-bun": "catalog:",
+        "@ren/brain-api": "workspace:*",
+        "@ren/schema": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
       },
     },
     "packages/httpapi-codegen": {
@@ -380,6 +395,7 @@
     "drizzle-orm": "1.0.0-rc.5-5935859",
     "effect": "4.0.1",
     "free-email-domains": "1.12.21",
+    "jose": "6.2.12",
     "prettier": "3.9.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -1231,6 +1247,8 @@
     "@ren/db": ["@ren/db@workspace:packages/db"],
 
     "@ren/e2e": ["@ren/e2e@workspace:packages/e2e"],
+
+    "@ren/executor": ["@ren/executor@workspace:packages/executor"],
 
     "@ren/httpapi-codegen": ["@ren/httpapi-codegen@workspace:packages/httpapi-codegen"],
 

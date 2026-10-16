@@ -73,6 +73,7 @@
       "drizzle-orm": "1.0.0-rc.5-5935859",
       "effect": "4.0.1",
       "free-email-domains": "1.12.21",
+      "jose": "6.2.12",
       "prettier": "3.9.9",
       "react": "19.3.0",
       "react-dom": "19.3.0",
