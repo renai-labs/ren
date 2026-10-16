@@ -48,9 +48,10 @@ const token = (claims: Partial<EnvironmentToken.Claims> = {}) =>
 
 const connect = Effect.fnUntraced(function* (bearer: string) {
   const server = yield* HttpServer.HttpServer
-  return yield* ExecutorClient.make({ url: HttpServer.formatAddress(server.address), token: bearer }).pipe(
-    Effect.provide(FetchHttpClient.layer),
-  )
+  return yield* ExecutorClient.make({
+    url: HttpServer.formatAddress(server.address),
+    token: Effect.succeed(bearer),
+  }).pipe(Effect.provide(FetchHttpClient.layer))
 })
 
 const client = Effect.fnUntraced(function* (claims: Partial<EnvironmentToken.Claims> = {}) {
@@ -171,7 +172,7 @@ it.live("resumes a process's output from the cursor a dropped reader reached", (
       Stream.take(1),
       Stream.runCollect,
     )
-    const reached = first.flatMap((event) => (event.type === "stdout" ? [event.offset + event.bytes.length] : []))
+    const reached = first.map((event) => event.offset + event.bytes.length)
     expect(reached).toEqual([6])
     const rest = yield* api["process.output"]({ id: spawned.id, cursor: 6 }).pipe(
       Stream.filter((event) => event.type !== "ping"),

@@ -6,10 +6,17 @@ import { WorkspaceDriver } from "@opencode/core/workspace/driver"
 import { Workspace } from "@opencode/schema/workspace"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
 import type { LayerNode } from "@opencode/util/effect/layer-node"
-import { FileNotFoundError, WrongKindError } from "@ren/brain-api/executor-api"
+import {
+  FileNotFoundError,
+  orphanAfter,
+  type ProcessEvent,
+  stallAfter,
+  WrongKindError,
+} from "@ren/brain-api/executor-api"
 import { Environment } from "@ren/schema/environment"
 import {
   Cause,
+  Clock,
   Deferred,
   Duration,
   Effect,
@@ -19,6 +26,8 @@ import {
   Predicate,
   Queue,
   Record,
+  Ref,
+  Schedule,
   Schema,
   Sink,
   Stream,
@@ -32,6 +41,15 @@ export const workspaceId = (environmentId: Environment.ID) =>
   Workspace.ID.make(`wrk_${environmentId.slice(environmentId.indexOf("_") + 1)}`)
 
 const disconnectedNotice = new TextEncoder().encode("\n[environment disconnected: the command did not finish]\n")
+
+const lostNotice = (bytes: number) =>
+  new TextEncoder().encode(`\n[environment reconnected: ${bytes} bytes of output were lost]\n`)
+
+export const reconnectAfter = Duration.seconds(1)
+
+class OutputInterrupted extends Schema.TaggedError<OutputInterrupted>()("OpenCodeWorkspaceDriver.OutputInterrupted", {
+  message: Schema.String,
+}) {}
 
 const childProcessError = (method: string) => (cause: unknown) =>
   PlatformError.systemError({
@@ -83,21 +101,55 @@ export const spawner = (connection: Environments.Connection) =>
           ),
         ),
       )
-      yield* executor["process.output"]({ id: remoteProcess.id }).pipe(
-        Stream.runForEach((event) => {
-          if (event.type === "stdout") return Queue.offer(stdoutChunks, event.bytes)
-          if (event.type === "stderr") return Queue.offer(stderrChunks, event.bytes)
-          if (event.type === "ping") return Effect.void
-          return Deferred.succeed(exited, undefined).pipe(
-            Effect.andThen(
-              event.signal
-                ? Deferred.fail(
-                    exitResult,
-                    childProcessError("exitCode")(new CrossSpawnSpawner.KilledBySignal(event.signal)),
-                  )
-                : Deferred.succeed(exitResult, ChildProcessSpawner.ExitCode(event.exitCode)),
+      const position = yield* Ref.make(0)
+      const contactAt = yield* Ref.make(yield* Clock.currentTimeMillis)
+      const receive = Effect.fnUntraced(function* (event: ProcessEvent) {
+        yield* Ref.set(contactAt, yield* Clock.currentTimeMillis)
+        if (event.type === "ping") return
+        if (event.type === "exit") {
+          yield* Deferred.succeed(exited, undefined)
+          yield* event.signal
+            ? Deferred.fail(
+                exitResult,
+                childProcessError("exitCode")(new CrossSpawnSpawner.KilledBySignal(event.signal)),
+              )
+            : Deferred.succeed(exitResult, ChildProcessSpawner.ExitCode(event.exitCode))
+          return
+        }
+        const reached = yield* Ref.get(position)
+        if (event.offset > reached) yield* Queue.offer(stderrChunks, lostNotice(event.offset - reached))
+        const bytes = event.offset < reached ? event.bytes.subarray(reached - event.offset) : event.bytes
+        yield* Ref.set(position, Math.max(reached, event.offset + event.bytes.length))
+        if (bytes.length === 0) return
+        yield* Queue.offer(event.type === "stdout" ? stdoutChunks : stderrChunks, bytes)
+      })
+      yield* Stream.unwrap(
+        Effect.map(Ref.get(position), (cursor) => executor["process.output"]({ id: remoteProcess.id, cursor })),
+      ).pipe(
+        Stream.timeoutOrElse({
+          duration: stallAfter,
+          orElse: () => Stream.fail(new OutputInterrupted({ message: "The output stream went silent" })),
+        }),
+        Stream.runForEach(receive),
+        Effect.andThen(
+          Deferred.isDone(exited).pipe(
+            Effect.flatMap((hasExited) =>
+              hasExited
+                ? Effect.void
+                : Effect.fail(new OutputInterrupted({ message: "The output ended before the process exited" })),
             ),
-          )
+          ),
+        ),
+        Effect.retry({
+          schedule: Schedule.spaced(reconnectAfter),
+          while: (error) =>
+            error._tag === "ProcessNotFoundError"
+              ? Effect.succeed(false)
+              : Effect.zipWith(
+                  Clock.currentTimeMillis,
+                  Ref.get(contactAt),
+                  (now, contact) => now - contact < Duration.toMillis(orphanAfter),
+                ),
         }),
         Effect.mapError(childProcessError("output")),
         Effect.onExit((exit) =>

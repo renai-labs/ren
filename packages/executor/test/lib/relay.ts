@@ -30,7 +30,10 @@ export const make = (port: number) =>
       const live = new Set<Pair>()
       const frozen = new Set<Pair>()
       const server = createServer((client) => {
-        if (state.refusing) return client.destroy()
+        if (state.refusing) {
+          client.destroy()
+          return
+        }
         const pair = { client, upstream: connect(state.port, "127.0.0.1") }
         const close = () => {
           live.delete(pair)
@@ -46,17 +49,19 @@ export const make = (port: number) =>
       const address = server.address()
       const instance: Instance = {
         url: `http://127.0.0.1:${typeof address === "object" && address !== null ? address.port : 0}`,
-        cut: Effect.sync(() => [...live].forEach(destroy)),
-        freeze: Effect.sync(() =>
-          [...live].forEach((pair) => {
+        cut: Effect.sync(() => {
+          for (const pair of live) destroy(pair)
+        }),
+        freeze: Effect.sync(() => {
+          for (const pair of live) {
             live.delete(pair)
             frozen.add(pair)
             pair.client.unpipe(pair.upstream)
             pair.upstream.unpipe(pair.client)
             pair.client.pause()
             pair.upstream.pause()
-          }),
-        ),
+          }
+        }),
         refuse: (refusing) =>
           Effect.sync(() => {
             state.refusing = refusing
@@ -72,7 +77,7 @@ export const make = (port: number) =>
       Effect.promise(
         () =>
           new Promise<void>((resolve) => {
-            relay.pairs().forEach(destroy)
+            for (const pair of relay.pairs()) destroy(pair)
             relay.server.close(() => resolve())
           }),
       ),

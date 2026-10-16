@@ -1,7 +1,7 @@
 export * as ExecutorClient from "./executor-client.js"
 
 import { Effect, Layer } from "effect"
-import { Headers, HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
+import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { RpcClient, RpcClientError, RpcGroup, RpcMiddleware, RpcSerialization } from "effect/rpc"
 import { Authentication, ExecutorApi, UnauthorizedError } from "./executor-api.js"
 
@@ -16,14 +16,16 @@ const isUnauthorizedResponse = (error: unknown) =>
 
 export type Client = RpcClient.RpcClient<RpcGroup.Rpcs<typeof ExecutorApi>, RpcClientError.RpcClientError>
 
-const layer = (options: { readonly url: string; readonly token: string }) =>
+export interface Options {
+  readonly url: string
+  readonly token: Effect.Effect<string>
+}
+
+const layer = (options: Options) =>
   Layer.mergeAll(
     RpcMiddleware.layerClient(Authentication, (call) =>
       call
-        .next({
-          ...call.request,
-          headers: Headers.set(call.request.headers, "authorization", `Bearer ${options.token}`),
-        })
+        .next(call.request)
         .pipe(
           Effect.catchIf(isUnauthorizedResponse, () =>
             Effect.fail(new UnauthorizedError({ message: "Authentication required" })),
@@ -36,7 +38,9 @@ const layer = (options: { readonly url: string; readonly token: string }) =>
         RpcClient.makeProtocolHttp(
           client.pipe(
             HttpClient.mapRequest(HttpClientRequest.prependUrl(options.url + path)),
-            HttpClient.mapRequest(HttpClientRequest.bearerToken(options.token)),
+            HttpClient.mapRequestEffect((request) =>
+              Effect.map(options.token, (token) => HttpClientRequest.bearerToken(request, token)),
+            ),
             HttpClient.filterStatusOk,
           ),
         ),
@@ -44,7 +48,7 @@ const layer = (options: { readonly url: string; readonly token: string }) =>
     ),
   ).pipe(Layer.provide(RpcSerialization.layerNdjson))
 
-export const make = (options: { readonly url: string; readonly token: string }) =>
+export const make = (options: Options) =>
   Layer.build(layer(options)).pipe(
     Effect.flatMap((context) => RpcClient.make(ExecutorApi).pipe(Effect.provide(context))),
   )

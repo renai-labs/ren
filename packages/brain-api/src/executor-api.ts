@@ -1,11 +1,17 @@
 import { Environment } from "@ren/schema/environment"
 import { Identifier } from "@ren/schema/identifier"
 import { Brain } from "@ren/schema/brain"
-import { Context, Schema } from "effect"
+import { Context, Duration, Schema } from "effect"
 import { Rpc, RpcGroup, RpcMiddleware } from "effect/rpc"
 import { Signal } from "./signal.js"
 
 export const protocol = 1
+
+export const pingEvery = Duration.seconds(5)
+
+export const stallAfter = Duration.seconds(15)
+
+export const orphanAfter = Duration.seconds(30)
 
 export const ProcessID = Identifier.make("prc", "Executor.ProcessID")
 export type ProcessID = typeof ProcessID.Type
@@ -39,9 +45,11 @@ export const SpawnResult = Schema.Struct({ id: ProcessID, pid: Schema.Int }).ann
   identifier: "Executor.SpawnResult",
 })
 
+const Offset = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+
 export const ProcessEvent = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("stdout"), bytes: Schema.Uint8ArrayFromBase64 }),
-  Schema.Struct({ type: Schema.Literal("stderr"), bytes: Schema.Uint8ArrayFromBase64 }),
+  Schema.Struct({ type: Schema.Literal("stdout"), offset: Offset, bytes: Schema.Uint8ArrayFromBase64 }),
+  Schema.Struct({ type: Schema.Literal("stderr"), offset: Offset, bytes: Schema.Uint8ArrayFromBase64 }),
   Schema.Struct({ type: Schema.Literal("exit"), exitCode: Schema.Int, signal: Schema.Null }),
   Schema.Struct({ type: Schema.Literal("exit"), exitCode: Schema.Null, signal: Signal.Name }),
   Schema.Struct({ type: Schema.Literal("ping") }),
@@ -115,7 +123,7 @@ export const ExecutorApi = RpcGroup.make(
   Rpc.make("executor.hello", { success: Hello }),
   Rpc.make("process.spawn", { payload: SpawnInput, success: SpawnResult, error: OperationFailedError }),
   Rpc.make("process.output", {
-    payload: ProcessRef,
+    payload: { ...ProcessRef, cursor: Schema.optionalKey(Offset) },
     success: ProcessEvent,
     error: ProcessNotFoundError,
     stream: true,
