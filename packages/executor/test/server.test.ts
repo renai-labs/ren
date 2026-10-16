@@ -138,6 +138,27 @@ it.live("gives stdin through the write call", () =>
   }),
 )
 
+it.live("streams every event of one process to each of its readers", () =>
+  Effect.gen(function* () {
+    const api = yield* client()
+    const spawned = yield* api["process.spawn"]({ command: "sh", arguments: ["-c", "sleep 0.3; echo one; exit 4"] })
+    const outputs = yield* Effect.all(
+      [api["process.output"]({ id: spawned.id }), api["process.output"]({ id: spawned.id })].map((stream) =>
+        stream.pipe(
+          Stream.filter((event) => event.type !== "ping"),
+          Stream.runCollect,
+        ),
+      ),
+      { concurrency: "unbounded" },
+    )
+    const expected = [
+      { type: "stdout" as const, bytes: new TextEncoder().encode("one\n") },
+      { type: "exit" as const, exitCode: 4, signal: null },
+    ]
+    expect(outputs).toEqual([expected, expected])
+  }),
+)
+
 it.live("returns the declared errors", () =>
   Effect.gen(function* () {
     const api = yield* client()
