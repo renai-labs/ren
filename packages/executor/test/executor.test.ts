@@ -3,7 +3,7 @@ import { BunServices } from "@effect/platform-bun"
 import type { ProcessEvent, SpawnInput } from "@ren/brain-api/executor-api"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
-import { ConfigProvider, Duration, Effect, Layer, Option, Stream } from "effect"
+import { ConfigProvider, Context, Duration, Effect, Exit, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { mkdtemp, realpath, symlink } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -14,18 +14,18 @@ import { testEffect } from "./lib/effect.js"
 import { Processes } from "./lib/process.js"
 
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-executor-")))
-const it = testEffect(
-  NodeCompatible.layer.pipe(
-    Layer.provide(BunServices.layer),
-    Layer.provide(
-      ConfigProvider.layer(
-        ConfigProvider.fromUnknown({ EXECUTOR_ENVIRONMENT_ID: Environment.ID.create(), EXECUTOR_WORKSPACE: workspace }),
-      ),
+const executor = NodeCompatible.layer.pipe(
+  Layer.provide(BunServices.layer),
+  Layer.provide(
+    ConfigProvider.layer(
+      ConfigProvider.fromUnknown({ EXECUTOR_ENVIRONMENT_ID: Environment.ID.create(), EXECUTOR_WORKSPACE: workspace }),
     ),
   ),
 )
+const it = testEffect(executor)
 const brain = Brain.ID.create()
 const decoder = new TextDecoder()
+const encoder = new TextEncoder()
 
 const run = Effect.fnUntraced(function* (input: SpawnInput) {
   const executor = yield* Executor.Service
@@ -187,6 +187,95 @@ it.effect("kills the whole group of a process that nobody reads or names for 30 
     yield* TestClock.adjust(Duration.seconds(31))
     expect(yield* Processes.exits(grandchild)).toBe(true)
     expect((yield* executor.output(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
+  }),
+)
+
+it.live("gives every reader every event, and forgets the process once they have all read its exit", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const spawned = yield* executor.spawn(brain, {
+      command: "sh",
+      arguments: ["-c", "sleep 0.3; echo one; echo two >&2; exit 4"],
+    })
+    const readers = yield* Effect.all([executor.output(brain, spawned.id), executor.output(brain, spawned.id)])
+    const expected = { stdout: "one\n", stderr: "two\n", exit: { type: "exit" as const, exitCode: 4, signal: null } }
+    expect(yield* Effect.all(readers.map(collect), { concurrency: "unbounded" })).toEqual([expected, expected])
+    expect((yield* executor.output(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
+  }),
+)
+
+it.live("streams megabytes of output whole", () =>
+  Effect.gen(function* () {
+    const process = yield* run({ command: "head", arguments: ["-c", "5000000", "/dev/zero"] })
+    const size = yield* process.events.pipe(
+      Stream.runFold(
+        () => 0,
+        (total, event) => total + (event.type === "stdout" ? event.bytes.length : 0),
+      ),
+    )
+    expect(size).toBe(5_000_000)
+  }),
+)
+
+it.live("takes a megabyte of stdin in writes larger than its buffer", () =>
+  Effect.gen(function* () {
+    const process = yield* run({ command: "wc", arguments: ["-c"], hasStdin: true })
+    const chunk = new Uint8Array(64 * 1024)
+    yield* Effect.forEach(
+      Array.from({ length: 16 }, () => chunk),
+      (bytes) => process.executor.writeStdin(brain, process.id, bytes, false),
+      { discard: true },
+    )
+    yield* process.executor.writeStdin(brain, process.id, new Uint8Array(), true)
+    expect((yield* collect(process.events)).stdout.trim()).toBe(String(16 * 64 * 1024))
+  }),
+)
+
+it.live("refuses stdin after it was closed", () =>
+  Effect.gen(function* () {
+    const process = yield* run({ command: "sh", arguments: ["-c", "cat; sleep 0.5"], hasStdin: true })
+    yield* process.executor.writeStdin(brain, process.id, encoder.encode("a"), true)
+    const error = yield* process.executor.writeStdin(brain, process.id, encoder.encode("b"), false).pipe(Effect.flip)
+    expect(error._tag).toBe("OperationFailedError")
+    expect((yield* collect(process.events)).stdout).toBe("a")
+  }),
+)
+
+it.live("accepts a kill for a process that exited before anyone read its exit", () =>
+  Effect.gen(function* () {
+    const process = yield* run({ command: "true", arguments: [] })
+    yield* Effect.sleep(300)
+    yield* process.executor.kill(brain, process.id, "SIGTERM")
+    expect((yield* collect(process.events)).exit).toEqual({ type: "exit", exitCode: 0, signal: null })
+  }),
+)
+
+it.live("runs a command through the named shell", () =>
+  Effect.gen(function* () {
+    const process = yield* run({ command: 'echo "${BASH_VERSION:+bash}"', arguments: [], shell: "/bin/bash" })
+    expect((yield* collect(process.events)).stdout).toBe("bash\n")
+  }),
+)
+
+it.live("reports a signal the process sent itself", () =>
+  Effect.gen(function* () {
+    const process = yield* run({ command: "sh", arguments: ["-c", "kill -KILL $$"] })
+    expect((yield* collect(process.events)).exit).toEqual({ type: "exit", exitCode: null, signal: "SIGKILL" })
+  }),
+)
+
+it.live("kills every process group when it shuts down", () =>
+  Effect.gen(function* () {
+    const scope = yield* Scope.make()
+    const own = Context.get(yield* Layer.buildWithScope(Layer.fresh(executor), scope), Executor.Service)
+    const spawned = yield* own.spawn(brain, { command: "sh", arguments: ["-c", "sleep 60 & echo $!; wait"] })
+    const first = yield* Stream.unwrap(own.output(brain, spawned.id)).pipe(Stream.take(1), Stream.runCollect)
+    const event = first.at(0)
+    const grandchild = Number(event?.type === "stdout" ? decoder.decode(event.bytes) : Number.NaN)
+    expect(Processes.running(grandchild)).toBe(true)
+    yield* Scope.close(scope, Exit.void)
+    expect(yield* Processes.exits(spawned.pid)).toBe(true)
+    expect(yield* Processes.exits(grandchild)).toBe(true)
   }),
 )
 
