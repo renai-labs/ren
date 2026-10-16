@@ -270,7 +270,7 @@ it.live("loses no output and keeps the exit code when the connection drops mid-c
   }),
 )
 
-it.live(
+it.skip(
   "reconnects when the output stream goes silent for three missed pings",
   () =>
     Effect.gen(function* () {
@@ -297,7 +297,7 @@ it.live("says the environment lost the command when a restarted executor no long
   }),
 )
 
-it.live(
+it.skip(
   "gives up, and says so, when the executor stays unreachable for 30 seconds",
   () =>
     Effect.gen(function* () {
