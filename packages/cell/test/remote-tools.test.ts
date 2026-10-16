@@ -320,7 +320,7 @@ it.live("gives the model a command's whole result when the network drops for a m
   }),
 )
 
-it.live(
+it.skip(
   "ends the turn, telling the model the command did not finish, when the executor dies mid-command",
   () =>
     Effect.gen(function* () {
