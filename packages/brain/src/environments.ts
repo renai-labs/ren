@@ -3,7 +3,19 @@ export * as Environments from "./environments.js"
 import { type Capability, type Hello, protocol } from "@ren/brain-api/executor-api"
 import { ExecutorClient } from "@ren/brain-api/executor-client"
 import { Environment } from "@ren/schema/environment"
-import { Context, Duration, Effect, Exit, Layer, Schema, Scope, ScopedCache } from "effect"
+import {
+  Clock,
+  Context,
+  DateTime,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  Schema,
+  Scope,
+  ScopedCache,
+  SynchronizedRef,
+} from "effect"
 import { HttpClient } from "effect/http"
 import { EnvironmentAccess } from "./environment-access.js"
 
@@ -15,8 +27,9 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Environments
 
 const capabilities = ["processes", "files"] as const satisfies ReadonlyArray<Capability>
 
+export const refreshBefore = Duration.minutes(5)
+
 export interface Connection {
-  readonly access: Environment.Access
   readonly hello: Hello
   readonly client: ExecutorClient.Client
 }
@@ -49,7 +62,25 @@ export const layer = Layer.effect(
                 }),
             ),
           )
-          const client = yield* ExecutorClient.make({ url: access.url, token: access.token }).pipe(
+          const current = yield* SynchronizedRef.make(access)
+          const token = SynchronizedRef.updateAndGetEffect(current, (held) =>
+            Clock.currentTimeMillis.pipe(
+              Effect.flatMap((now) =>
+                DateTime.toEpochMillis(held.expiresAt) - now > Duration.toMillis(refreshBefore)
+                  ? Effect.succeed(held)
+                  : environmentAccess
+                      .open(id)
+                      .pipe(
+                        Effect.catch((error) =>
+                          Effect.logWarning(`Could not refresh access to environment ${id}: ${error._tag}`).pipe(
+                            Effect.as(held),
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ).pipe(Effect.map((held) => held.token))
+          const client = yield* ExecutorClient.make({ url: access.url, token }).pipe(
             Effect.provideService(HttpClient.HttpClient, http),
           )
           const hello = yield* client["executor.hello"]().pipe(
@@ -75,7 +106,7 @@ export const layer = Layer.effect(
               reason: "incompatible",
               message: `The executor lacks the capabilities ${missing.join(", ")}`,
             })
-          return { access, hello, client }
+          return { hello, client }
         }).pipe(
           Scope.provide(attempt),
           Effect.onError(() => Scope.close(attempt, Exit.void)),

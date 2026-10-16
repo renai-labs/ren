@@ -22,7 +22,11 @@ import { Context, type Effect, type Stream } from "effect"
 export interface Interface {
   readonly hello: Hello
   readonly spawn: (brain: Brain.ID, input: SpawnInput) => Effect.Effect<SpawnResult, OperationFailedError>
-  readonly output: (brain: Brain.ID, id: ProcessID) => Effect.Effect<Stream.Stream<ProcessEvent>, ProcessNotFoundError>
+  readonly output: (
+    brain: Brain.ID,
+    id: ProcessID,
+    cursor?: number,
+  ) => Effect.Effect<Stream.Stream<ProcessEvent>, ProcessNotFoundError>
   readonly writeStdin: (
     brain: Brain.ID,
     id: ProcessID,

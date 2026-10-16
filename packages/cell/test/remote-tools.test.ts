@@ -320,43 +320,48 @@ it.live("gives the model a command's whole result when the network drops for a m
   }),
 )
 
-it.live("ends the turn, telling the model the command did not finish, when the executor dies mid-command", () =>
-  Effect.gen(function* () {
-    const socket = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
-    const port = socket.port
-    yield* Effect.promise(() => socket.stop(true))
-    const url = `http://127.0.0.1:${port}`
-    const executor = yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        Bun.spawn(["bun", "run", Bun.resolveSync("@ren/executor/main", import.meta.dir)], {
-          env: {
-            ...process.env,
-            PORT: String(port),
-            EXECUTOR_ENVIRONMENT_ID: environmentId,
-            EXECUTOR_WORKSPACE: workspace,
-            BRAIN_PUBLIC_KEYS: publicKeys,
-          },
-          stdout: "ignore",
-          stderr: "ignore",
-        }),
-      ),
-      (child) => Effect.sync(() => child.kill("SIGKILL")),
-    )
-    yield* Effect.promise(() =>
-      fetch(`${url}/v1/rpc`, { method: "POST" })
-        .then((response) => response.status)
-        .catch(() => 0),
-    ).pipe(Effect.repeat({ until: (status) => status === 401, schedule: Schedule.spaced(100) }), Effect.timeout(10_000))
-    const access = yield* accessTo(url, { brain: Brain.ID.create(), lifetimeMs: 600_000 })
-    const session = yield* begin(yield* open(EnvironmentAccess.layerFixed([access])))
-    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-    const script = stub.script(shell(`echo $$ > ${pidFile}; exec sleep 30`))
-    yield* session.send(script)
-    const pid = yield* pidIn(pidFile)
-    yield* Effect.addFinalizer(() => Effect.ignore(Effect.try(() => process.kill(pid, "SIGKILL"))))
-    executor.kill("SIGKILL")
-    const answered = yield* Effect.promise(() => script.called(2)).pipe(Effect.timeout(45_000))
-    expect(toolOutput(answered)).toContain("environment disconnected")
-  }),
+it.live(
+  "ends the turn, telling the model the command did not finish, when the executor dies mid-command",
+  () =>
+    Effect.gen(function* () {
+      const socket = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
+      const port = socket.port
+      yield* Effect.promise(() => socket.stop(true))
+      const url = `http://127.0.0.1:${port}`
+      const executor = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          Bun.spawn(["bun", "run", Bun.resolveSync("@ren/executor/main", import.meta.dir)], {
+            env: {
+              ...process.env,
+              PORT: String(port),
+              EXECUTOR_ENVIRONMENT_ID: environmentId,
+              EXECUTOR_WORKSPACE: workspace,
+              BRAIN_PUBLIC_KEYS: publicKeys,
+            },
+            stdout: "ignore",
+            stderr: "ignore",
+          }),
+        ),
+        (child) => Effect.sync(() => child.kill("SIGKILL")),
+      )
+      yield* Effect.promise(() =>
+        fetch(`${url}/v1/rpc`, { method: "POST" })
+          .then((response) => response.status)
+          .catch(() => 0),
+      ).pipe(
+        Effect.repeat({ until: (status) => status === 401, schedule: Schedule.spaced(100) }),
+        Effect.timeout(10_000),
+      )
+      const access = yield* accessTo(url, { brain: Brain.ID.create(), lifetimeMs: 600_000 })
+      const session = yield* begin(yield* open(EnvironmentAccess.layerFixed([access])))
+      const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+      const script = stub.script(shell(`echo $$ > ${pidFile}; exec sleep 30`))
+      yield* session.send(script)
+      const pid = yield* pidIn(pidFile)
+      yield* Effect.addFinalizer(() => Effect.ignore(Effect.try(() => process.kill(pid, "SIGKILL"))))
+      executor.kill("SIGKILL")
+      const answered = yield* Effect.promise(() => script.called(2)).pipe(Effect.timeout(45_000))
+      expect(toolOutput(answered)).toContain("environment disconnected")
+    }),
   60_000,
 )

@@ -179,7 +179,9 @@ it.live("keeps stdin open after the stream ends when endOnDone is false", () =>
   Effect.gen(function* () {
     const spawner = OpenCodeWorkspaceDriver.spawner(yield* connect)
     const handle = yield* spawner.spawn(
-      ChildProcess.make("cat", [], { stdin: { stream: Stream.make(new TextEncoder().encode("open")), endOnDone: false } }),
+      ChildProcess.make("cat", [], {
+        stdin: { stream: Stream.make(new TextEncoder().encode("open")), endOnDone: false },
+      }),
     )
     yield* Effect.sleep(300)
     expect(yield* handle.isRunning).toBe(true)

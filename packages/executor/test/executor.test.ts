@@ -105,7 +105,7 @@ it.live("kills the whole group, and forces it after the delay", () =>
   Effect.gen(function* () {
     const process = yield* run({ command: "sh", arguments: ["-c", "trap '' TERM; sleep 30 & echo started; wait"] })
     const first = yield* process.events.pipe(Stream.take(1), Stream.runCollect)
-    expect(first).toEqual([{ type: "stdout", bytes: new TextEncoder().encode("started\n") }])
+    expect(first).toEqual([{ type: "stdout", offset: 0, bytes: new TextEncoder().encode("started\n") }])
     yield* process.executor.kill(brain, process.id, "SIGTERM", 200)
     const exit = yield* process.events.pipe(Stream.runLast)
     expect(exit).toEqual(Option.some({ type: "exit", exitCode: null, signal: "SIGKILL" }))
@@ -154,9 +154,14 @@ it.live("forgets a brain's oldest exited process once 25 newer ones have exited"
 it.live("replays output from a cursor, and gives each chunk its offset", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
-    const spawned = yield* executor.spawn(brain, { command: "sh", arguments: ["-c", "printf abc; sleep 0.3; printf def"] })
+    const spawned = yield* executor.spawn(brain, {
+      command: "sh",
+      arguments: ["-c", "printf abc; sleep 0.3; printf def"],
+    })
     const chunks = (events: ReadonlyArray<ProcessEvent>) =>
-      events.flatMap((event) => (event.type === "stdout" ? [{ offset: event.offset, text: decoder.decode(event.bytes) }] : []))
+      events.flatMap((event) =>
+        event.type === "stdout" ? [{ offset: event.offset, text: decoder.decode(event.bytes) }] : [],
+      )
     const all = yield* Stream.runCollect(yield* executor.output(brain, spawned.id))
     expect(chunks(all)).toEqual([
       { offset: 0, text: "abc" },
@@ -182,7 +187,7 @@ it.live("keeps the last 2 MiB of a process nobody reads, and starts a late reade
     const chunks = events.flatMap((event) => (event.type === "stdout" ? [event] : []))
     const first = chunks.at(0)
     const last = chunks.at(-1)
-    expect(first && first.offset).toBeGreaterThanOrEqual(5_000_000 - 2 * 1024 * 1024 - 64 * 1024)
+    expect(first?.offset).toBeGreaterThanOrEqual(5_000_000 - 2 * 1024 * 1024 - 64 * 1024)
     expect(last && last.offset + last.bytes.length).toBe(5_000_000)
     expect(events.at(-1)).toEqual({ type: "exit", exitCode: 0, signal: null })
   }),
