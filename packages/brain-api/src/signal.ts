@@ -1,0 +1,45 @@
+export * as Signal from "./signal.js"
+
+import { Schema } from "effect"
+import type { ChildProcess } from "effect/process"
+
+export const Name = Schema.Literals([
+  "SIGABRT",
+  "SIGALRM",
+  "SIGBUS",
+  "SIGCHLD",
+  "SIGCONT",
+  "SIGFPE",
+  "SIGHUP",
+  "SIGILL",
+  "SIGINT",
+  "SIGIO",
+  "SIGIOT",
+  "SIGKILL",
+  "SIGPIPE",
+  "SIGPOLL",
+  "SIGPROF",
+  "SIGPWR",
+  "SIGQUIT",
+  "SIGSEGV",
+  "SIGSTKFLT",
+  "SIGSTOP",
+  "SIGSYS",
+  "SIGTERM",
+  "SIGTRAP",
+  "SIGTSTP",
+  "SIGTTIN",
+  "SIGTTOU",
+  "SIGUNUSED",
+  "SIGURG",
+  "SIGUSR1",
+  "SIGUSR2",
+  "SIGVTALRM",
+  "SIGWINCH",
+  "SIGXCPU",
+  "SIGXFSZ",
+  "SIGBREAK",
+  "SIGLOST",
+  "SIGINFO",
+] satisfies ReadonlyArray<ChildProcess.Signal>).annotate({ identifier: "Executor.Signal" })
+export type Name = typeof Name.Type
