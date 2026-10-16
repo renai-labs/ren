@@ -141,6 +141,77 @@ it.live("maps file errors to OpenCode's", () =>
   }),
 )
 
+it.live("reports whether the process is running", () =>
+  Effect.gen(function* () {
+    const spawner = OpenCodeWorkspaceDriver.spawner(yield* connect)
+    const handle = yield* spawner.spawn(ChildProcess.make("sh", ["-c", "sleep 0.3"]))
+    expect(yield* handle.isRunning).toBe(true)
+    yield* handle.exitCode
+    expect(yield* handle.isRunning).toBe(false)
+  }),
+)
+
+it.live("ends stdin when a stream run into the stdin sink ends, as Effect's spawner does", () =>
+  Effect.gen(function* () {
+    const spawner = OpenCodeWorkspaceDriver.spawner(yield* connect)
+    const handle = yield* spawner.spawn(ChildProcess.make("cat", []))
+    yield* Stream.make(new TextEncoder().encode("sink")).pipe(Stream.run(handle.stdin))
+    expect(Number(yield* handle.exitCode.pipe(Effect.timeout(2_000)))).toBe(0)
+    expect(yield* text(handle.stdout)).toBe("sink")
+  }),
+)
+
+it.live("keeps stdin open after the stream ends when endOnDone is false", () =>
+  Effect.gen(function* () {
+    const spawner = OpenCodeWorkspaceDriver.spawner(yield* connect)
+    const handle = yield* spawner.spawn(
+      ChildProcess.make("cat", [], { stdin: { stream: Stream.make(new TextEncoder().encode("open")), endOnDone: false } }),
+    )
+    yield* Effect.sleep(300)
+    expect(yield* handle.isRunning).toBe(true)
+    yield* handle.kill({ killSignal: "SIGKILL" })
+  }),
+)
+
+it.live("forces a kill after the delay when the process ignores the signal", () =>
+  Effect.gen(function* () {
+    const spawner = OpenCodeWorkspaceDriver.spawner(yield* connect)
+    const handle = yield* spawner.spawn(ChildProcess.make("sh", ["-c", "trap '' TERM; echo ready; sleep 30 & wait"]))
+    yield* handle.stdout.pipe(Stream.take(1), Stream.runDrain)
+    yield* handle.kill({ killSignal: "SIGTERM", forceKillAfter: "200 millis" })
+    const error = yield* handle.exitCode.pipe(Effect.flip)
+    expect(error.cause instanceof CrossSpawnSpawner.KilledBySignal && error.cause.signal).toBe("SIGKILL")
+  }),
+)
+
+it.live("reads a range, makes directories, moves and removes files", () =>
+  Effect.gen(function* () {
+    const files = OpenCodeWorkspaceDriver.files(yield* connect)
+    yield* files.mkdir("tree/a/b")
+    yield* files.write("tree/a/b/file.txt", new TextEncoder().encode("hello world"))
+    const read = yield* files.read("tree/a/b/file.txt", { offset: 6, length: 5 })
+    expect(new TextDecoder().decode(read.bytes)).toBe("world")
+    expect(read.info).toMatchObject({ type: "file", size: 11 })
+    yield* files.move("tree/a/b/file.txt", "tree/moved.txt")
+    expect((yield* files.stat("tree/moved.txt")).size).toBe(11)
+    expect(yield* files.move("tree/a/b/file.txt", "tree/again.txt").pipe(Effect.flip)).toBeInstanceOf(
+      EnvironmentFiles.NotFound,
+    )
+    yield* files.remove("tree")
+    expect(yield* files.stat("tree").pipe(Effect.flip)).toBeInstanceOf(EnvironmentFiles.NotFound)
+  }),
+)
+
+it.live("fails a write under a file with OpenCode's Failed", () =>
+  Effect.gen(function* () {
+    const files = OpenCodeWorkspaceDriver.files(yield* connect)
+    yield* files.write("plain.txt", new TextEncoder().encode("plain"))
+    expect(yield* files.write("plain.txt/child.txt", new Uint8Array()).pipe(Effect.flip)).toBeInstanceOf(
+      EnvironmentFiles.Failed,
+    )
+  }),
+)
+
 it.live("fails an executor that refuses the token as unreachable, and does not keep the connection", () =>
   Effect.gen(function* () {
     const server = yield* HttpServer.HttpServer
