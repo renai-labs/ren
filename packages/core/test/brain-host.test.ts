@@ -33,13 +33,19 @@ beforeAll(async () => {
 afterAll(() => runtime.dispose())
 const stub = Shared.stub()
 
-const host = (
-  config: Record<string, string>,
-  models: Layer.Layer<Models.Service> = Layer.fresh(Models.layerConfigured).pipe(
-    Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config))),
-    Layer.orDie,
-  ),
-) =>
+const configured = Shared.access({ stub: Shared.apiKey("sk-configured") })
+
+const fixed = Layer.succeed(
+  Models.Service,
+  Models.Service.of({
+    catalog: () => Effect.succeed(Models.catalog(configured)),
+    grant: () => Effect.succeed(configured),
+    refreshIfDue: () => Effect.succeedNone,
+    revoke: () => Effect.void,
+  }),
+)
+
+const host = (config: Record<string, string>, models: Layer.Layer<Models.Service> = fixed) =>
   Layer.fresh(BrainHost.layer).pipe(
     Layer.provide(models),
     Layer.provide(FetchHttpClient.layer),
@@ -49,11 +55,6 @@ const host = (
 const settings = {
   CELL_URL: "",
   CELL_KEYS: TestToken.vars.CELL_KEYS,
-  MODEL_ENDPOINTS: JSON.stringify(
-    Schema.encodeSync(Schema.toCodecJson(Schema.Array(Models.Endpoint)))(
-      Shared.access({ stub: Shared.apiKey("sk-configured") }).endpoints,
-    ),
-  ),
 }
 const organizationId = Auth.OrganizationID.create()
 const unknownKey = { id: "unknown", secret: "a-key-the-cell-does-not-list-at-all" }
@@ -389,10 +390,9 @@ describe("BrainHost", () => {
       }),
     )
 
-    it.live("the configured layer lists its models without credentials", () =>
+    it.live("the catalog lists models without credentials", () =>
       Effect.gen(function* () {
-        const models = yield* Models.Service
-        expect(yield* models.catalog({ brainId: Session.ID.create(), organizationId })).toEqual({
+        expect(Models.catalog(configured)).toEqual({
           endpoints: [
             {
               id: "stub",
@@ -404,11 +404,7 @@ describe("BrainHost", () => {
             },
           ],
         })
-      }).pipe(
-        Effect.provide(
-          Models.layerConfigured.pipe(Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(settings)))),
-        ),
-      ),
+      }),
     )
 
     it.live("a failed refresh keeps the brain's credentials, and a failed grant is BrainUnavailable", () =>

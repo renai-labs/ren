@@ -21,7 +21,7 @@ const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
     Effect.orDie,
   )
 
-const checkKnown = Effect.fn("OpenCodeHarness.checkKnown")(function* (client: OpenCodeClient, input: StartInput) {
+const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(function* (client: OpenCodeClient, input: StartInput) {
   const agent = input.agent
   if (agent && !(yield* client.agent.list().pipe(Effect.orDie)).data.some((item) => item.id === agent))
     return yield* new BrainRejectedError({ message: `Unknown agent: ${agent}` })
@@ -40,7 +40,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   input: StartInput,
   directory: AbsolutePath,
 ) {
-  yield* checkKnown(client, input)
+  yield* rejectUnknownModel(client, input)
   const agent = input.agent ? Agent.ID.make(input.agent) : undefined
   const model = input.model && {
     providerID: Provider.ID.make(input.model.endpointId),
