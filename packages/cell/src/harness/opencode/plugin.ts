@@ -23,7 +23,7 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
   credential: Credential.OAuth,
   refreshKey: Harness.Refresh,
 ) {
-  const refreshed = yield* refreshKey(endpointId, credential.expires)
+  const refreshed = yield* refreshKey(endpointId)
   if (Option.isSome(refreshed))
     return Struct.evolve(credential, {
       access: () => Redacted.value(refreshed.value.key),

@@ -14,7 +14,7 @@ interface SessionState extends Reconcile.Snapshot {
   readonly interrupt: Effect.Effect<void>
 }
 
-export type Refresh = (endpointId: string, expiresAtMs: number) => Effect.Effect<Option.Option<Models.ApiKey>>
+export type Refresh = (endpointId: string) => Effect.Effect<Option.Option<Models.ApiKey>>
 
 export interface Instance {
   readonly fetch: (request: Request) => Promise<Response>
