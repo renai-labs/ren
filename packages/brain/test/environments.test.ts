@@ -211,6 +211,61 @@ it.live("a connection outlives its token, and still reaches the processes it sta
   }),
 )
 
+it.live("refreshes a token in its last five minutes, once for many concurrent calls", () =>
+  Effect.gen(function* () {
+    const server = yield* HttpServer.HttpServer
+    const brain = Brain.ID.create()
+    const opens = yield* Ref.make(0)
+    const environments = yield* environmentsWith(
+      Layer.succeed(
+        EnvironmentAccess.Service,
+        EnvironmentAccess.Service.of({
+          open: (id) =>
+            Ref.update(opens, (count) => count + 1).pipe(
+              Effect.andThen(accessTo(server, id, { brain, lifetimeMs: 5 * 60_000 + 1_500 })),
+            ),
+        }),
+      ),
+    )
+    const connection = yield* environments.connect(environmentId)
+    expect(yield* Ref.get(opens)).toBe(1)
+    yield* Effect.sleep(2_000)
+    yield* Effect.all(
+      Array.from({ length: 10 }, () => connection.client["executor.hello"]()),
+      { concurrency: "unbounded" },
+    )
+    expect(yield* Ref.get(opens)).toBe(2)
+    yield* connection.client["executor.hello"]()
+    expect(yield* Ref.get(opens)).toBe(2)
+  }),
+)
+
+it.live("keeps using a token it could not refresh until the token expires", () =>
+  Effect.gen(function* () {
+    const server = yield* HttpServer.HttpServer
+    const brain = Brain.ID.create()
+    const opens = yield* Ref.make(0)
+    const environments = yield* environmentsWith(
+      Layer.succeed(
+        EnvironmentAccess.Service,
+        EnvironmentAccess.Service.of({
+          open: (id) =>
+            Ref.getAndUpdate(opens, (count) => count + 1).pipe(
+              Effect.flatMap((count) =>
+                count === 0
+                  ? accessTo(server, id, { brain, lifetimeMs: 60_000 })
+                  : Effect.fail(new EnvironmentAccess.NotFound({ environmentId: id })),
+              ),
+            ),
+        }),
+      ),
+    )
+    const connection = yield* environments.connect(environmentId)
+    expect((yield* connection.client["executor.hello"]()).environmentId).toBe(environmentId)
+    expect(yield* Ref.get(opens)).toBeGreaterThan(1)
+  }),
+)
+
 it.live("a connection stays cached until the layer closes, then its client is interrupted", () =>
   Effect.gen(function* () {
     const subject = yield* build({ failures: 0 })

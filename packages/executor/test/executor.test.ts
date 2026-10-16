@@ -123,11 +123,82 @@ it.live("hides a process from other brains", () =>
   }),
 )
 
-it.live("forgets a process once its exit is read", () =>
+it.live("keeps an exited process, so a reader that comes back after the exit still gets its output and exit", () =>
   Effect.gen(function* () {
-    const process = yield* run({ command: "true", arguments: [] })
-    yield* Stream.runDrain(process.events)
-    expect((yield* process.executor.output(brain, process.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
+    const process = yield* run({ command: "sh", arguments: ["-c", "echo kept; exit 5"] })
+    const first = yield* collect(process.events)
+    const again = yield* collect(yield* process.executor.output(brain, process.id))
+    expect(again).toEqual(first)
+    expect(again).toEqual({ stdout: "kept\n", stderr: "", exit: { type: "exit", exitCode: 5, signal: null } })
+  }),
+)
+
+it.live("forgets a brain's oldest exited process once 25 newer ones have exited", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const own = Brain.ID.create()
+    const finish = Effect.fnUntraced(function* () {
+      const spawned = yield* executor.spawn(own, { command: "true", arguments: [] })
+      yield* Stream.runDrain(yield* executor.output(own, spawned.id))
+      return spawned.id
+    })
+    const oldest = yield* finish()
+    const newer = yield* Effect.forEach(Array.from({ length: 24 }), () => finish())
+    yield* Stream.runDrain(yield* executor.output(own, oldest))
+    yield* finish()
+    expect((yield* executor.output(own, oldest).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
+    yield* Effect.forEach(newer, (id) => executor.output(own, id), { discard: true })
+  }),
+)
+
+it.live("replays output from a cursor, and gives each chunk its offset", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const spawned = yield* executor.spawn(brain, { command: "sh", arguments: ["-c", "printf abc; sleep 0.3; printf def"] })
+    const chunks = (events: ReadonlyArray<ProcessEvent>) =>
+      events.flatMap((event) => (event.type === "stdout" ? [{ offset: event.offset, text: decoder.decode(event.bytes) }] : []))
+    const all = yield* Stream.runCollect(yield* executor.output(brain, spawned.id))
+    expect(chunks(all)).toEqual([
+      { offset: 0, text: "abc" },
+      { offset: 3, text: "def" },
+    ])
+    const resumed = yield* Stream.runCollect(yield* executor.output(brain, spawned.id, 2))
+    expect(chunks(resumed)).toEqual([
+      { offset: 2, text: "c" },
+      { offset: 3, text: "def" },
+    ])
+    expect(resumed.at(-1)).toEqual({ type: "exit", exitCode: 0, signal: null })
+    const end = yield* Stream.runCollect(yield* executor.output(brain, spawned.id, 6))
+    expect(end).toEqual([{ type: "exit", exitCode: 0, signal: null }])
+  }),
+)
+
+it.live("keeps the last 2 MiB of a process nobody reads, and starts a late reader at the oldest byte it kept", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const spawned = yield* executor.spawn(brain, { command: "head", arguments: ["-c", "5000000", "/dev/zero"] })
+    yield* Effect.sleep(1_000)
+    const events = yield* Stream.runCollect(yield* executor.output(brain, spawned.id))
+    const chunks = events.flatMap((event) => (event.type === "stdout" ? [event] : []))
+    const first = chunks.at(0)
+    const last = chunks.at(-1)
+    expect(first && first.offset).toBeGreaterThanOrEqual(5_000_000 - 2 * 1024 * 1024 - 64 * 1024)
+    expect(last && last.offset + last.bytes.length).toBe(5_000_000)
+    expect(events.at(-1)).toEqual({ type: "exit", exitCode: 0, signal: null })
+  }),
+)
+
+it.live("holds a process back for a slow reader rather than drop output it has not read", () =>
+  Effect.gen(function* () {
+    const process = yield* run({ command: "head", arguments: ["-c", "5000000", "/dev/zero"] })
+    const size = yield* process.events.pipe(
+      Stream.tap(() => Effect.sleep(5)),
+      Stream.runFold(
+        () => 0,
+        (total, event) => total + (event.type === "stdout" ? event.bytes.length : 0),
+      ),
+    )
+    expect(size).toBe(5_000_000)
   }),
 )
 
@@ -190,7 +261,7 @@ it.effect("kills the whole group of a process that nobody reads or names for 30 
   }),
 )
 
-it.live("gives every reader every event, and forgets the process once they have all read its exit", () =>
+it.live("gives every reader every event", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
     const spawned = yield* executor.spawn(brain, {
@@ -200,7 +271,6 @@ it.live("gives every reader every event, and forgets the process once they have 
     const readers = yield* Effect.all([executor.output(brain, spawned.id), executor.output(brain, spawned.id)])
     const expected = { stdout: "one\n", stderr: "two\n", exit: { type: "exit" as const, exitCode: 4, signal: null } }
     expect(yield* Effect.all(readers.map(collect), { concurrency: "unbounded" })).toEqual([expected, expected])
-    expect((yield* executor.output(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
   }),
 )
 

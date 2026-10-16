@@ -120,7 +120,7 @@ it.live("streams a process's bytes until it exits", () =>
       arguments: ["-c", "printf '\\000\\377'; sleep 0.2; echo done"],
     })
     const events = yield* api["process.output"]({ id: spawned.id }).pipe(Stream.runCollect)
-    expect(events.at(0)).toEqual({ type: "stdout", bytes: new Uint8Array([0, 255]) })
+    expect(events.at(0)).toEqual({ type: "stdout", offset: 0, bytes: new Uint8Array([0, 255]) })
     expect(events.at(-1)).toEqual({ type: "exit", exitCode: 0, signal: null })
   }),
 )
@@ -132,7 +132,7 @@ it.live("gives stdin through the write call", () =>
     yield* api["process.write"]({ id: spawned.id, data: new TextEncoder().encode("ping"), end: true })
     const events = yield* api["process.output"]({ id: spawned.id }).pipe(Stream.runCollect)
     expect(events).toEqual([
-      { type: "stdout", bytes: new TextEncoder().encode("ping") },
+      { type: "stdout", offset: 0, bytes: new TextEncoder().encode("ping") },
       { type: "exit", exitCode: 0, signal: null },
     ])
   }),
@@ -152,10 +152,35 @@ it.live("streams every event of one process to each of its readers", () =>
       { concurrency: "unbounded" },
     )
     const expected = [
-      { type: "stdout" as const, bytes: new TextEncoder().encode("one\n") },
+      { type: "stdout" as const, offset: 0, bytes: new TextEncoder().encode("one\n") },
       { type: "exit" as const, exitCode: 4, signal: null },
     ]
     expect(outputs).toEqual([expected, expected])
+  }),
+)
+
+it.live("resumes a process's output from the cursor a dropped reader reached", () =>
+  Effect.gen(function* () {
+    const api = yield* client()
+    const spawned = yield* api["process.spawn"]({
+      command: "sh",
+      arguments: ["-c", "echo first; sleep 0.5; echo second; exit 2"],
+    })
+    const first = yield* api["process.output"]({ id: spawned.id }).pipe(
+      Stream.filter((event) => event.type === "stdout"),
+      Stream.take(1),
+      Stream.runCollect,
+    )
+    const reached = first.flatMap((event) => (event.type === "stdout" ? [event.offset + event.bytes.length] : []))
+    expect(reached).toEqual([6])
+    const rest = yield* api["process.output"]({ id: spawned.id, cursor: 6 }).pipe(
+      Stream.filter((event) => event.type !== "ping"),
+      Stream.runCollect,
+    )
+    expect(rest).toEqual([
+      { type: "stdout", offset: 6, bytes: new TextEncoder().encode("second\n") },
+      { type: "exit", exitCode: 2, signal: null },
+    ])
   }),
 )
 
