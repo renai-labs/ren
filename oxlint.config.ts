@@ -24,6 +24,11 @@ const packageBoundaries = [
     message: "The Brain API depends only on schema. Core calls it and hosts serve it.",
   },
   {
+    files: ["packages/executor/**"],
+    regex: "^@ren/(?!schema(/|$)|brain-api(/|$))",
+    message: "The executor runs on an environment's machine. It depends only on schema and the Brain API.",
+  },
+  {
     files: ["packages/db/**"],
     regex: "^@ren/(core|protocol|server)(/|$)",
     message: "Db never imports core, protocol or server.",
