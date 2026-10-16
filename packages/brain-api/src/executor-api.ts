@@ -42,11 +42,8 @@ export const SpawnResult = Schema.Struct({ id: ProcessID, pid: Schema.Int }).ann
 export const ProcessEvent = Schema.Union([
   Schema.Struct({ type: Schema.Literal("stdout"), bytes: Schema.Uint8ArrayFromBase64 }),
   Schema.Struct({ type: Schema.Literal("stderr"), bytes: Schema.Uint8ArrayFromBase64 }),
-  Schema.Struct({
-    type: Schema.Literal("exit"),
-    exitCode: Schema.NullOr(Schema.Int),
-    signal: Schema.NullOr(Signal.Name),
-  }),
+  Schema.Struct({ type: Schema.Literal("exit"), exitCode: Schema.Int, signal: Schema.Null }),
+  Schema.Struct({ type: Schema.Literal("exit"), exitCode: Schema.Null, signal: Signal.Name }),
   Schema.Struct({ type: Schema.Literal("ping") }),
 ]).annotate({ identifier: "Executor.ProcessEvent" })
 export type ProcessEvent = typeof ProcessEvent.Type
