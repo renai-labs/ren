@@ -14,6 +14,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { Celld } from "./lib/celld.js"
 import { Shared } from "./lib/shared.js"
+import type { StubModel } from "./lib/stub-model.js"
 import { TestCell } from "./lib/test-cell.js"
 import { Wrangler } from "./lib/wrangler.js"
 
@@ -23,6 +24,7 @@ const pair = await Effect.runPromise(Signature.generate("test"))
 const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
 const stub = Shared.stub()
+const fileTools = ["read", "write", "edit", "glob", "grep", "shell"]
 const executor = ManagedRuntime.make(
   HttpRouter.serve(Server.layer, { disableLogger: true }).pipe(
     Layer.provide(HttpServer.layerServices),
@@ -77,29 +79,56 @@ suite("remote tools in a cell", () => {
     await executor.dispose()
   })
 
-  const run = async (tool: { readonly name: string; readonly input: unknown }) => {
+  const begin = async (environments: ReadonlyArray<Environment.Location> = [{ environmentId, directory: workspace }]) => {
     const opened = await TestCell.make(cell.url)
     expect((await opened.models()).status).toBe(204)
     const started = await opened.brain("/ren/sessions", {
       sessionId: opened.id,
       harness: "opencode",
       interactive: false,
-      environments: [{ environmentId, directory: workspace }],
+      environments,
     })
     expect(started.status).toBe(200)
-    const script = stub.script({ tool })
-    const sent = await opened.brain(`/ren/sessions/${opened.id}/messages`, {
-      messageId: Session.MessageID.create(),
-      prompt: { text: `${script.marker} use the tool` },
-      sender: { userId: "user_1" },
-    })
-    expect(sent.status).toBe(200)
-    const answered = await script.called(2)
-    return answered.body.messages
+    const send = async (script: StubModel.Script) => {
+      const sent = await opened.brain(`/ren/sessions/${opened.id}/messages`, {
+        messageId: Session.MessageID.create(),
+        prompt: { text: `${script.marker} use the tool` },
+        sender: { userId: "user_1" },
+      })
+      expect(sent.status).toBe(200)
+    }
+    return {
+      opened,
+      send,
+      turn: async (script: StubModel.Script, calls = 2) => {
+        await send(script)
+        return script.called(calls)
+      },
+    }
+  }
+
+  const toolOutput = (call: StubModel.Call) =>
+    call.body.messages
       .filter((message) => message.role === "tool")
       .map((message) => JSON.stringify(message.content))
       .join("\n")
+
+  const run = async (tool: { readonly name: string; readonly input: unknown }) => {
+    const session = await begin()
+    return toolOutput(await session.turn(stub.script({ tool })))
   }
+
+  const shell = (command: string) => ({ tool: { name: "shell", input: { command } } })
+
+  const pidIn = async (path: string, deadline = Date.now() + 10_000): Promise<number> => {
+    const pid = Number.parseInt((await Bun.file(path).exists()) ? await Bun.file(path).text() : "", 10)
+    if (Number.isInteger(pid)) return pid
+    if (Date.now() > deadline) throw new Error(`${path} never held a pid`)
+    await Bun.sleep(50)
+    return pidIn(path, deadline)
+  }
+
+  const running = (pid: number) => Bun.spawnSync(["kill", "-0", String(pid)]).exitCode === 0
 
   test("a cell reads and greps the environment through its executor", async () => {
     const marker = `needle${crypto.randomUUID().slice(0, 8)}`
@@ -118,4 +147,46 @@ suite("remote tools in a cell", () => {
     expect(await run({ name: "shell", input: { command: "sleep 20 && echo late" } })).toContain("late")
     expect(Date.now() - started).toBeGreaterThanOrEqual(20_000)
   })
+
+  test("a cell writes, edits and globs the environment", async () => {
+    const name = `cell-${crypto.randomUUID().slice(0, 8)}.txt`
+    await run({ name: "write", input: { path: name, content: "before edit\n" } })
+    expect(await Bun.file(join(workspace, name)).text()).toBe("before edit\n")
+    await run({ name: "edit", input: { path: name, oldString: "before", newString: "after" } })
+    expect(await Bun.file(join(workspace, name)).text()).toBe("after edit\n")
+    expect(await run({ name: "glob", input: { pattern: "cell-*.txt" } })).toContain(name)
+  })
+
+  test("a cell offers the file and shell tools only to a session on an environment", async () => {
+    const attached = await (await begin()).turn(stub.script(), 1)
+    expect(fileTools.filter((tool) => !attached.tools.includes(tool))).toEqual([])
+    const detached = await (await begin([])).turn(stub.script(), 1)
+    expect(detached.tools.filter((tool) => fileTools.includes(tool))).toEqual([])
+  })
+
+  test("interrupting a cell's turn kills its command on the environment", async () => {
+    const session = await begin()
+    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+    await session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 60`)))
+    const pid = await pidIn(pidFile)
+    await session.opened.opencode.session.interrupt({ sessionID: session.opened.id })
+    const deadline = Date.now() + 5_000
+    const exited = async (): Promise<boolean> => {
+      if (!running(pid)) return true
+      if (Date.now() > deadline) return false
+      await Bun.sleep(50)
+      return exited()
+    }
+    const killed = await exited()
+    if (!killed) process.kill(pid, "SIGKILL")
+    expect(killed).toBe(true)
+  })
+
+  test("a cell reconnects to the environment after it restarts", async () => {
+    const session = await begin()
+    expect(toolOutput(await session.turn(stub.script(shell("echo $((20 + 3))"))))).toContain("23")
+    await cell.kill()
+    await cell.start()
+    expect(toolOutput(await session.turn(stub.script(shell("echo $((30 + 4))"))))).toContain("34")
+  }, 180_000)
 })
