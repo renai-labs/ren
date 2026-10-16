@@ -261,6 +261,27 @@ it.live("offers no file or shell tools to a session without an environment, in a
   }),
 )
 
+it.live("runs tools on an environment attached to a session after it started", () =>
+  Effect.gen(function* () {
+    const access = yield* accessTo(yield* served, { brain: Brain.ID.create(), lifetimeMs: 600_000 })
+    const harness = yield* open(EnvironmentAccess.layerFixed([access]), local)
+    const session = yield* begin(harness, [])
+    yield* session.turn(stub.script(), 1)
+    yield* harness.start({
+      sessionId: session.sessionId,
+      harness: "opencode",
+      instructions: {},
+      interactive: false,
+      environments: [{ environmentId, directory: workspace }],
+    })
+    const file = `${crypto.randomUUID()}.txt`
+    const answered = yield* session.turn(stub.script(shell(`echo attached > ${file} && pwd`)))
+    expect(answered.tools).toContain("shell")
+    expect(toolOutput(answered)).toContain(workspace)
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, file)).text())).toBe("attached\n")
+  }),
+)
+
 it.live("keeps running tools after the environment token expires between turns", () =>
   Effect.gen(function* () {
     const url = yield* served
