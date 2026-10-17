@@ -3,6 +3,7 @@ import { SessionDriver } from "../lib/drivers/session.js"
 import { Platform } from "../lib/platform.js"
 import { ModelProvider } from "../lib/provider/model.js"
 import { Stack } from "../lib/stack.js"
+import { Wait } from "../lib/wait.js"
 
 describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispatcher", () => {
   const lane: { stack?: Stack.Instance; hand?: Stack.Hand } = {}
@@ -20,14 +21,15 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
   afterAll(() => lane.stack?.dispose())
 
   const attached = (options: { readonly interactive?: boolean } = {}) =>
-    current().stack.session({ start: { ...options, environments: [current().hand.location()] } })
+    current().stack.session({ hand: current().hand, start: options })
 
   const operationsSince = (from: number) =>
     current()
       .hand.proxy.seen.slice(from)
       .map((entry) => entry.operation)
 
-  const read = async (name: string) => (await current().hand.instance.observe(["cat", name])).stdout
+  const read = async (sessionId: string, name: string) =>
+    (await current().hand.instance.observe(["cat", `${sessionId}/${name}`])).stdout
 
   test("a chat-only turn on an attached session sends no executor request", async () => {
     const session = await attached()
@@ -45,16 +47,14 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     const gpt = { id: "gpt-5-chaos", name: "GPT Chaos", limit: { context: 100_000, output: 4000 } }
     const session = await stack.session({
       models: { endpoints: [{ ...endpoint, models: [...endpoint.models, gpt] }] },
-      start: {
-        environments: [current().hand.location()],
-        model: { endpointId: endpoint.id, modelId: gpt.id },
-      },
+      hand: current().hand,
+      start: { model: { endpointId: endpoint.id, modelId: gpt.id } },
     })
     const stem = crypto.randomUUID().slice(0, 8)
     await current().hand.instance.observe([
       "sh",
       "-c",
-      `printf 'one\\ntwo\\n' > update-${stem}.txt; printf 'x\\n' > delete-${stem}.txt`,
+      `mkdir -p ${session.sessionId} && cd ${session.sessionId} && printf 'one\\ntwo\\n' > update-${stem}.txt; printf 'x\\n' > delete-${stem}.txt`,
     ])
     const patchText = [
       "*** Begin Patch",
@@ -72,9 +72,9 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     const call = await turn.script.called(2, 60_000)
     expect(call.tools).not.toContain("edit")
     expect(call.toolResults).toContain("Success")
-    expect(await read(`add-${stem}.txt`)).toBe("added\n")
-    expect(await read(`update-${stem}.txt`)).toBe("one\nthree\n")
-    expect((await current().hand.instance.observe(["test", "-e", `delete-${stem}.txt`])).exitCode).not.toBe(0)
+    expect(await read(session.sessionId, `add-${stem}.txt`)).toBe("added\n")
+    expect(await read(session.sessionId, `update-${stem}.txt`)).toBe("one\nthree\n")
+    expect((await current().hand.instance.observe(["test", "-e", `${session.sessionId}/delete-${stem}.txt`])).exitCode).not.toBe(0)
   })
 
   test("question is answered through the client and never touches the hand", async () => {
@@ -119,11 +119,39 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
   })
 
   test.skipIf(Platform.docker !== undefined)(
+    "a paused container ends a running shell call in its time limit, and stops the command once it runs again",
+    async () => {
+      const stack = current().stack
+      const hand = await stack.dockerHand("paused")
+      const session = await stack.session({ hand })
+      const marker = `paused-${crypto.randomUUID().slice(0, 8)}`
+      const turn = await session.turn([
+        ModelProvider.tool("shell", { command: `echo started; sleep 300; echo ${marker}` }),
+        ModelProvider.text("ok"),
+      ])
+      await Wait.until("the command to start in the container", 60_000, async () =>
+        (await hand.instance.observe(["pgrep", "-f", marker])).exitCode === 0 ? true : undefined,
+      )
+      await hand.instance.freeze()
+      const started = Date.now()
+      const result = (await turn.script.called(2, 120_000)).toolResults
+      expect(Date.now() - started).toBeLessThan(75_000)
+      expect(result).toContain("did not finish")
+      await hand.instance.thaw()
+      await Wait.until("the executor to stop the command", 90_000, async () =>
+        (await hand.instance.observe(["pgrep", "-f", marker])).exitCode !== 0 ? true : undefined,
+      )
+      await session.settled()
+    },
+    300_000,
+  )
+
+  test.skipIf(Platform.docker !== undefined)(
     "a replaced container runs new commands in its empty workspace, and old process IDs are unknown there",
     async () => {
       const stack = current().stack
       const hand = await stack.dockerHand("replaced")
-      const session = await stack.session({ start: { environments: [hand.location()] } })
+      const session = await stack.session({ hand })
       const shell = async (command: string) => {
         const turn = await session.turn([ModelProvider.tool("shell", { command }), ModelProvider.text("ok")])
         const result = (await turn.script.called(2, 60_000)).toolResults

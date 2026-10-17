@@ -55,8 +55,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded fault sequences across 
       stack.issuer.next(() => ({ type: "grant", access: access() }))
       const session = await stack.session({
         models: access(),
-        hostToken: stack.issuer.issue(),
-        start: { environments: [hand.location()] },
+        hand,
       })
       const rules: Array<FaultProxy.Rule> = []
       const send = async (

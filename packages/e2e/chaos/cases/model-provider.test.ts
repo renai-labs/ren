@@ -25,7 +25,7 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
 
   afterAll(() => lane.stack?.dispose())
 
-  const attached = () => current().stack.session({ start: { environments: [current().hand.location()] } })
+  const attached = () => current().stack.session({ hand: current().hand })
 
   test("a 429 with Retry-After is retried after the delay and the turn completes", async () => {
     const session = await current().stack.session()
@@ -104,8 +104,7 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
     })
     const session = await stack.session({
       models: stack.access(Stack.freshKey("start"), Date.now() + windowMs - 60_000),
-      hostToken: stack.issuer.issue(),
-      start: { environments: [current().hand.location()] },
+      hand: current().hand,
     })
     const turn = await session.turn([
       ...Array.from({ length: 3 }, () => ModelProvider.tool("shell", { command: "sleep 3" })),

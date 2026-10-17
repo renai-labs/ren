@@ -27,7 +27,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.soak !== undefined)(
   afterAll(() => lane.stack?.dispose())
 
   const cycle = async (label: string) => {
-    const session = await current().stack.session({ start: { environments: [current().hand.location()] } })
+    const session = await current().stack.session({ hand: current().hand })
     const marker = Ledger.marker(label)
     const turn = await session.turn([
       ModelProvider.tool("shell", { command: Ledger.append(marker) }),

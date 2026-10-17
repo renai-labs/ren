@@ -1,31 +1,26 @@
 # @ren/brain
 
-Brain code that is the same on every host. A host (the cell in `packages/cell` today) supplies storage, alarms and an OpenCode opener; this package supplies the rest. See `specs/brains-and-environments.md` §7.4.
+Brain code that is the same on every host and every harness. A host (the cell in `packages/cell` today) supplies storage, alarms and an `EnvironmentAccess`; a harness adapter (the OpenCode `ren` workspace driver in `packages/cell/src/harness/opencode`) turns a `Hand` into its tools. See `specs/environments/v1.md`.
 
 ## What belongs here
 
-- `src/environment-access.ts`: `EnvironmentAccess`, how a brain gets an environment's `Access` and hears that it changed. `layerFixed` gives fixed accesses, for tests and development. `layerMemory` gives accesses that `Memory` changes, for tests.
-- `src/environments.ts`: `Environments`, the executors a brain uses. It opens each once, checks `hello`, and keeps the connection. When a token has less than five minutes left, the next call opens the environment again for a new token, as OpenCode does for OAuth credentials. Concurrent calls share that one refresh. A refresh that fails keeps the old token. A refresh that names a new URL or generation keeps the old token on the old connection and drops it, so the next call connects to the new machine even if no change is reported. When `EnvironmentAccess` reports a change, a new token replaces the held one; a new URL, a new generation or a removed access drops the connection, so the next call connects again. A caller that holds the old connection keeps it until its scope closes. When the executor refuses a token the brain still thinks is valid, for example because the clocks disagree, the brain opens the environment again and retries once.
-- `src/environment-bindings.ts`: `EnvironmentBindings`, the environment each session's tools run on. A binding is the session's directory and an environment location, or no location. `set` checks that the directory exists on the environment before it stores the binding in a `KeyValueStore` the host gives it, keyed by session ID.
-- `src/opencode-workspace-driver.ts`: the OpenCode `ren` workspace driver. Its spawner runs processes through the Executor API, and its file overrides call the file routes. `replacements` gives the two OpenCode replacements a host adds: the driver, and `rg` from the environment's `PATH`.
+- `src/environment-access.ts`: `EnvironmentAccess`, how a brain gets the access of a session (`{ environmentId, directory, url, token, expiresAt, generation }`) and hears that it changed. `open` fails with `NotFound` (Ren says the session has no access) or `Unavailable` (Ren does not answer, or cannot give a sandbox). `layerFixed` and `layerMemory` are for tests and development; the cell's Host API layer is the production one.
+- `src/environments.ts`: `Environments`, the executor connection of each session. Nothing connects before the first file or shell call. The first contact checks `hello` (protocol, and that the executor serves the environment the access names) and makes the session's folder. `connect(session, capability)` gives the connection only if the executor has that capability, so a hand with only files gets only file tools.
+- `src/hand.ts`: `Hand`, harness-neutral tool plumbing: `spawner` runs processes through the Executor API, `session` gives a session's spawner and file access, and `physicalPath` maps the harness's folder onto the access's folder.
 
 ## Notes
 
-- In a brain with environments, every session has an OpenCode workspace with the `ren` provider. The workspace ID is `wrk_` plus the session ID's suffix, so no table maps them.
-- OpenCode keeps one driver connection for each workspace. The `ren` driver's connection holds no executor: each file call and each spawn reads the session's binding and connects then. Thus a new binding or a replaced machine reaches the next tool call, and OpenCode's cache needs no change. A process keeps the connection it started on until it ends.
-- Paths under the session's directory map onto the binding's directory: a process's working directory and each file path. Command text and arguments go to the environment as they are, so a shell command that names the session's directory runs against that path on the environment. The cell's `ren.environment` instruction tells the model the environment's directory.
-- The spawner refuses piped commands, kills a process when its scope closes, and fails `exitCode` with OpenCode's `KilledBySignal` when a signal ended the process.
-- OpenCode picks a shell from the brain's host. When it asks for a POSIX shell with `-c` that the machine does not have, the spawner runs the script with the machine's default shell from `hello.shells`.
-- While a process runs, the spawner sends `process.heartbeat` every five seconds, so the executor kills it 30 seconds after the brain stops, even if the brain froze with its connection open. An executor without heartbeats rejects them, and the spawner ignores that.
-- The spawner follows a process's output from a cursor:
-  - **Reconnects.** When the stream drops, or goes silent for 15 seconds (three missed pings), it asks again from the last byte it received, every second, like OpenCode's event stream.
-  - **Gives up** when the executor no longer knows the process, or has not been heard from for 30 seconds, the time after which the executor kills a process nobody reads. stderr then ends with `[environment disconnected: the command did not finish]`.
-  - **Notes lost output.** If the executor dropped output the spawner had not read, stderr gets `[environment reconnected: N bytes of output were lost]`.
-- OpenCode's formatters, git snapshots and `AGENTS.md` discovery still use the host, not the environment.
+- Access refresh: a token is renewed in its last five minutes (or its last third, if it lives less than 15 minutes). Concurrent calls share one refresh. When the executor refuses a token the brain still thinks is valid, the brain gets a new access once and retries; a second refusal is "token refused", with no loop.
+- Ren does not answer: the old token is used while it is valid, and Ren is asked at most once in 30 seconds. Once the token expires, calls fail with "Ren does not answer".
+- Ren says no access: the connection closes at once, and the next call fails with "no access". A command that runs keeps its connection until it ends or its token expires (v1 limit).
+- The sandbox does not answer (a transport error or a time limit): the connection closes, so the next call asks Ren again and finds a resumed or replaced sandbox. The failed call is not sent again.
+- A new URL, generation or folder from a refresh or a change notice closes the connection; a new token alone does not. A caller that holds the old connection keeps it until its scope closes.
+- The spawner refuses piped commands, kills a process when its scope closes, sends `process.heartbeat` every five seconds, retries stdin that the executor refuses as full, and fails `exitCode` with the harness's signal error.
+- The spawner follows a process's output from a cursor. It reconnects every second when the stream drops or goes silent for 15 seconds, and gives up when the executor no longer knows the process or has not been heard from for 30 seconds; stderr then ends with `[environment disconnected: the command did not finish]`. Lost output adds `[environment reconnected: N bytes of output were lost]`.
 
 ## Dependencies
 
-`@ren/schema`, `@ren/brain-api`, `@opencode/core`, `@opencode/schema`, `@opencode/util`, `effect`. Tests start an executor from `@ren/executor`.
+`@ren/schema`, `@ren/brain-api`, `effect`. No harness: `@opencode/*` stays out of this package. Tests start an executor from `@ren/executor`.
 
 ## Commands
 

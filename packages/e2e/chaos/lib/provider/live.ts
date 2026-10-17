@@ -50,6 +50,7 @@ interface Selected {
 type Resolve = (reference: string) => string | undefined
 
 const environmentReference: Resolve = (reference) => {
+  if (process.env.CHAOS_LIVE_API_KEY) return process.env.CHAOS_LIVE_API_KEY
   const variable = /^\{env:([A-Z0-9_]+)\}$/i.exec(reference)?.[1]
   if (variable) return process.env[variable]
   return reference.startsWith("{file:") ? process.env["CHAOS_UNRESOLVED_FILE_REFERENCE"] : reference

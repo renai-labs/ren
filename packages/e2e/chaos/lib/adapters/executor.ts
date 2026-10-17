@@ -39,6 +39,9 @@ export interface Instance {
   readonly environmentId: Environment.ID
   readonly workspace: string
   readonly restart: () => Promise<void>
+  readonly replace: () => Promise<void>
+  readonly freeze: () => Promise<void>
+  readonly thaw: () => Promise<void>
   readonly dispose: () => Promise<void>
   readonly observe: (command: ReadonlyArray<string>) => Promise<Observation>
 }
@@ -104,6 +107,13 @@ export const localProcess = async (options: {
     state.child = child
     await ready(`http://127.0.0.1:${state.port}`, () => child.exitCode === null)
   }
+  const signal = (name: "STOP" | "CONT") => {
+    const child = state.child
+    if (!child) return Promise.resolve()
+    for (const member of [child.pid, ...Process.childPids(child.pid)])
+      Bun.spawnSync(["kill", `-${name}`, String(member)], { stderr: "ignore" })
+    return Promise.resolve()
+  }
   const forget = Process.onInterrupt(halt)
   await start()
   return {
@@ -114,6 +124,13 @@ export const localProcess = async (options: {
       await halt()
       await start()
     },
+    replace: async () => {
+      await halt()
+      state.port = await freePort()
+      await start()
+    },
+    freeze: () => signal("STOP"),
+    thaw: () => signal("CONT"),
     dispose: async () => {
       forget()
       await halt()
@@ -147,14 +164,10 @@ const build = () =>
     return tag
   })())
 
-export interface Container extends Instance {
-  readonly replace: () => Promise<void>
-}
-
 export const dockerContainer = async (options: {
   readonly label: string
   readonly environmentId?: Environment.ID
-}): Promise<Container> => {
+}): Promise<Instance> => {
   const environmentId = options.environmentId ?? Environment.ID.create()
   const tag = await build()
   const state = { container: "", url: "" }
@@ -214,6 +227,8 @@ export const dockerContainer = async (options: {
       await remove()
       await start()
     },
+    freeze: () => docker(["pause", state.container]).then(() => undefined),
+    thaw: () => docker(["unpause", state.container]).then(() => undefined),
     dispose: async () => {
       forget()
       await remove()

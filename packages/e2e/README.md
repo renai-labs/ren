@@ -13,7 +13,7 @@ End-to-end tests across server, client, CLI and app (Playwright), and the chaos 
 
 ## Dependencies
 
-Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`Machine` keys), and runs the cell Worker in `packages/cell/test/lib/environment-worker.ts` with `CHAOS_CONTROL_URL`, so the cell reads environment access from the chaos control server.
+Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`Machine` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Host API's `environments.access` and `host.refresh` for the hand each session was placed on.
 
 ## Two runners
 
@@ -75,6 +75,7 @@ bun typecheck
 | `CHAOS_SOAK_MS`                                         | How long the soak cycles run.                                                                                             |
 | `CHAOS_LIVE_MODEL`, `CHAOS_LIVE_MODEL_ALT`              | One or two small models from the effective OpenCode config, such as `ren/anthropic/claude-haiku-5-5`.                     |
 | `CHAOS_LIVE_BASE_URL`                                   | The bridge host the test process may call in live mode.                                                                   |
+| `CHAOS_LIVE_API_KEY`                                    | The live model's key, when the OpenCode config holds it as a literal that `opencode debug config` masks.                  |
 | `CHAOS_LITELLM_ADMIN_URL`, `CHAOS_LITELLM_ADMIN_KEY`    | An isolated LiteLLM key-management credential.                                                                            |
 | `E2B_API_KEY`, `CHAOS_E2B_TEMPLATE`, `CHAOS_E2B_DOMAIN` | Deployed hands.                                                                                                           |
 | `CHAOS_CLOUDFLARE_URL`                                  | The deployed Worker URL, with `{name}` for the per-run Worker name.                                                       |
