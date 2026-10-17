@@ -132,10 +132,7 @@ export class Caller extends Context.Service<Caller, { readonly brain: Brain.ID }
 export class Authentication extends RpcMiddleware.Service<
   Authentication,
   { provides: Caller; clientError: RpcClientError.RpcClientError }
->()(
-  "@ren/brain-api/ExecutorApi.Authentication",
-  { error: UnauthorizedError, requiredForClient: true },
-) {}
+>()("@ren/brain-api/ExecutorApi.Authentication", { error: UnauthorizedError, requiredForClient: true }) {}
 
 const Path = Schema.Struct({ path: Schema.String })
 

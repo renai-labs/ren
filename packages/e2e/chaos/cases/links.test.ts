@@ -204,8 +204,15 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       expect(lost.expectApplied().boundary).toBe("after-commit-before-reply")
       expect(keys[0]).toBe(key)
       expect(keys[2]).toBe(keys[1])
-      expect(stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").length - from).toBeLessThanOrEqual(2)
-      expect(stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").slice(from).at(-1)?.status).not.toBe(200)
+      expect(stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").length - from).toBeLessThanOrEqual(
+        2,
+      )
+      expect(
+        stack.issuer.calls
+          .filter((call) => call.endpoint === "models.refresh")
+          .slice(from)
+          .at(-1)?.status,
+      ).not.toBe(200)
     }, 240_000)
   })
 
@@ -268,8 +275,11 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
     const healthy = await ledgerTurn(session, "both-up")
     await healthy.turn.script.called(2, 60_000)
     expect(await Ledger.count(lanes.hand.instance, healthy.marker)).toBe(1)
-    expect(lanes.stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").slice(from).some((call) => call.hostToken === host && call.status === 200)).toBe(
-      true,
-    )
+    expect(
+      lanes.stack.issuer.calls
+        .filter((call) => call.endpoint === "models.refresh")
+        .slice(from)
+        .some((call) => call.hostToken === host && call.status === 200),
+    ).toBe(true)
   })
 })

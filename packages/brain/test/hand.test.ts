@@ -36,7 +36,9 @@ const environmentsWith = (access: Layer.Layer<EnvironmentAccess.Service>) =>
   )
 
 const connectTo = Effect.fnUntraced(function* (url: string) {
-  const environments = yield* environmentsWith(EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(url)]])))
+  const environments = yield* environmentsWith(
+    EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(url)]])),
+  )
   return yield* environments.connect(sessionId, "processes")
 })
 
@@ -62,7 +64,9 @@ it.live("feeds stdin that outruns the sandbox's stdin queue without losing a byt
     const spawner = Hand.spawner(yield* connect, killed)
     const chunk = new Uint8Array(64 * 1024).fill(97)
     const handle = yield* spawner.spawn(
-      ChildProcess.make("sh", ["-c", "sleep 0.3; wc -c"], { stdin: Stream.make(...Array.from({ length: 40 }, () => chunk)) }),
+      ChildProcess.make("sh", ["-c", "sleep 0.3; wc -c"], {
+        stdin: Stream.make(...Array.from({ length: 40 }, () => chunk)),
+      }),
     )
     expect((yield* text(handle.stdout)).trim()).toBe(String(40 * 64 * 1024))
     expect(Number(yield* handle.exitCode)).toBe(0)

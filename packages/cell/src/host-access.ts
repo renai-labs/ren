@@ -32,9 +32,9 @@ export const layer = (url: string) =>
               Effect.fail(new EnvironmentAccess.NotFound({ sessionId, message: error.message })),
             ),
             Effect.catchTag("ForbiddenError", (error) =>
-              store.removeHostTokenIfUnchanged(token.value).pipe(
-                Effect.andThen(Effect.fail(unavailable(`Ren refused the host token: ${error.message}`))),
-              ),
+              store
+                .removeHostTokenIfUnchanged(token.value)
+                .pipe(Effect.andThen(Effect.fail(unavailable(`Ren refused the host token: ${error.message}`)))),
             ),
             Effect.catchTag("EnvironmentUnavailableError", (error) => Effect.fail(unavailable(error.message))),
             Effect.catchIf(

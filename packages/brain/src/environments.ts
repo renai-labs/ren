@@ -73,12 +73,14 @@ export const layer = Layer.effect(
         Effect.mapError((error) =>
           error._tag === "EnvironmentAccess.NotFound"
             ? new Unavailable({ sessionId, reason: "no_access", message: `No access to a sandbox: ${error.message}` })
-            : new Unavailable({ sessionId, reason: "ren_unavailable", message: `Ren does not answer: ${error.message}` }),
+            : new Unavailable({
+                sessionId,
+                reason: "ren_unavailable",
+                message: `Ren does not answer: ${error.message}`,
+              }),
         ),
         Effect.tapError((error) =>
-          Effect.sync(() =>
-            failures.set(sessionId, { error, retryAtMs: now + Duration.toMillis(retryRenAfter) }),
-          ),
+          Effect.sync(() => failures.set(sessionId, { error, retryAtMs: now + Duration.toMillis(retryRenAfter) })),
         ),
       )
     })
@@ -175,7 +177,11 @@ export const layer = Layer.effect(
             return yield* Option.match(Option.fromNullishOr(failures.get(sessionId)), {
               onNone: () =>
                 Effect.fail(
-                  new Unavailable({ sessionId, reason: "ren_unavailable", message: "The access to the sandbox expired" }),
+                  new Unavailable({
+                    sessionId,
+                    reason: "ren_unavailable",
+                    message: "The access to the sandbox expired",
+                  }),
                 ),
               onSome: (failed) => Effect.fail(failed.error),
             })

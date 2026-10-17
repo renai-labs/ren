@@ -19,9 +19,15 @@ const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-workspace-driver-")))
 const it = testEffect(Machine.layer({ environmentId, workspace }))
 
-const sessionFor = Effect.fnUntraced(function* (accesses: ReadonlyMap<Session.ID, Environment.Access>, sessionId: Session.ID) {
+const sessionFor = Effect.fnUntraced(function* (
+  accesses: ReadonlyMap<Session.ID, Environment.Access>,
+  sessionId: Session.ID,
+) {
   const environments = yield* Layer.build(
-    Environments.layer.pipe(Layer.provide(EnvironmentAccess.layerFixed(accesses)), Layer.provide(FetchHttpClient.layer)),
+    Environments.layer.pipe(
+      Layer.provide(EnvironmentAccess.layerFixed(accesses)),
+      Layer.provide(FetchHttpClient.layer),
+    ),
   ).pipe(Effect.map((context) => Context.get(context, Environments.Service)))
   return RenWorkspaceDriver.session(environments, sessionId)
 })
@@ -59,9 +65,9 @@ it.live("maps file operations and their errors to OpenCode's, under the session'
     expect(yield* files.move(`${root}/tree/a/file.txt`, `${root}/again.txt`).pipe(Effect.flip)).toBeInstanceOf(
       EnvironmentFiles.NotFound,
     )
-    expect(
-      yield* files.write(`${root}/tree/moved.txt/child.txt`, new Uint8Array()).pipe(Effect.flip),
-    ).toBeInstanceOf(EnvironmentFiles.Failed)
+    expect(yield* files.write(`${root}/tree/moved.txt/child.txt`, new Uint8Array()).pipe(Effect.flip)).toBeInstanceOf(
+      EnvironmentFiles.Failed,
+    )
     yield* files.remove(`${root}/tree`)
     expect(yield* files.stat(`${root}/tree`).pipe(Effect.flip)).toBeInstanceOf(EnvironmentFiles.NotFound)
   }),

@@ -185,7 +185,10 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
   beforeAll(async () => {
     first = await sandbox("sandbox-a")
     organizationId = await database.runPromise(Seed.organization())
-    await startCore({ sandboxes: [{ id: first.id, url: first.url, generation: 1, workspace: first.directory }], lifetime: "20 seconds" })
+    await startCore({
+      sandboxes: [{ id: first.id, url: first.url, generation: 1, workspace: first.directory }],
+      lifetime: "20 seconds",
+    })
     cell = await Wrangler.make({ ...Shared.vars(stub.url), REN_URL: `http://127.0.0.1:${port}` })
   }, 240_000)
 
@@ -243,12 +246,18 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     const original = await sandbox("sandbox-b")
     const replacement = await sandbox("sandbox-b")
     const config = current
-    await restartCore({ ...config, sandboxes: [{ id: "sandbox-b", url: original.url, generation: 1, workspace: original.directory }] })
+    await restartCore({
+      ...config,
+      sandboxes: [{ id: "sandbox-b", url: original.url, generation: 1, workspace: original.directory }],
+    })
     const sessionId = Session.ID.create()
     await start(sessionId)
     expect(await turn(sessionId, "pwd")).toContain(original.directory)
     await original.dispose()
-    await restartCore({ ...config, sandboxes: [{ id: "sandbox-b", url: replacement.url, generation: 2, workspace: replacement.directory }] })
+    await restartCore({
+      ...config,
+      sandboxes: [{ id: "sandbox-b", url: replacement.url, generation: 2, workspace: replacement.directory }],
+    })
     expect(await turn(sessionId, "pwd")).toContain("does not answer")
     expect(await turn(sessionId, "pwd")).toContain(join(replacement.directory, sessionId))
     await restartCore(config)
@@ -290,11 +299,17 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     const old = await sandbox("sandbox-old")
     const config = current
     const signedByNewer = { lifetime: "20 seconds", keys: [newer.privateKey, Machine.keys.privateKey] }
-    await restartCore({ ...signedByNewer, sandboxes: [{ id: knowing.id, url: knowing.url, generation: 1, workspace: knowing.directory }] })
+    await restartCore({
+      ...signedByNewer,
+      sandboxes: [{ id: knowing.id, url: knowing.url, generation: 1, workspace: knowing.directory }],
+    })
     const onKnowing = Session.ID.create()
     await start(onKnowing)
     expect(await turn(onKnowing, "echo knows")).toContain("knows")
-    await restartCore({ ...signedByNewer, sandboxes: [{ id: old.id, url: old.url, generation: 1, workspace: old.directory }] })
+    await restartCore({
+      ...signedByNewer,
+      sandboxes: [{ id: old.id, url: old.url, generation: 1, workspace: old.directory }],
+    })
     const onOld = Session.ID.create()
     await start(onOld)
     expect(await turn(onOld, "echo old")).toContain("refused the access token")

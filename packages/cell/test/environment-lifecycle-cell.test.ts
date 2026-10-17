@@ -133,7 +133,9 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     const local = await begin(false)
     expect(await pwdOf(onSandbox)).toContain(join(first.directory, onSandbox.sessionId))
     await Promise.all(
-      [onSandbox, local].map((session) => session.opened.until((state) => Bun.deepEquals(state, TestCell.closed), 30_000)),
+      [onSandbox, local].map((session) =>
+        session.opened.until((state) => Bun.deepEquals(state, TestCell.closed), 30_000),
+      ),
     )
     expect(await pwdOf(onSandbox)).toContain(join(first.directory, onSandbox.sessionId))
     const call = await local.turn(stub.script(), 1)

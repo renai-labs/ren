@@ -14,7 +14,9 @@ const iat = Math.floor(Date.now() / 1000)
 const exp = iat + 600
 
 const post = (path: string, authorization?: string) =>
-  app.handler(new Request(`http://localhost${path}`, { method: "POST", headers: authorization ? { authorization } : {} }))
+  app.handler(
+    new Request(`http://localhost${path}`, { method: "POST", headers: authorization ? { authorization } : {} }),
+  )
 
 const hostToken = (sid: Session.ID, org: Auth.OrganizationID) =>
   Effect.runPromise(SessionToken.sign(key, { sid, scope: "host", org, iat, exp }))
@@ -28,7 +30,10 @@ describe("Host API: environments.access and host.refresh", () => {
       Effect.runPromise(SessionToken.sign(key, { sid, scope: "client", exp })),
       Effect.runPromise(SessionToken.sign(key, { sid, scope: "host", org, iat, exp: exp - 1200 })),
       Effect.runPromise(
-        SessionToken.sign({ id: "test", secret: "another-key-of-at-least-32-characters" }, { sid, scope: "host", org, iat, exp }),
+        SessionToken.sign(
+          { id: "test", secret: "another-key-of-at-least-32-characters" },
+          { sid, scope: "host", org, iat, exp },
+        ),
       ),
     ])
     const paths = ["/brain/environment/access", "/brain/host/refresh"]
