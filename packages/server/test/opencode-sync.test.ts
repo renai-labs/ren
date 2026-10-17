@@ -10,7 +10,7 @@ import { BrainTest } from "@ren/cell/testing/brain"
 import { Seed } from "@ren/core/testing"
 import type { Auth } from "@ren/schema/auth"
 import type { Session as RenSession } from "@ren/schema/session"
-import { Clock, Deferred, Effect, Fiber, Layer, Logger, Metric, Schema } from "effect"
+import { Clock, Deferred, Duration, Effect, Fiber, Layer, Logger, Metric, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { TestClock } from "effect/testing"
 import { mkdtemp, rm } from "node:fs/promises"
@@ -237,7 +237,7 @@ describe("OpenCodeSync", () => {
             Effect.gen(function* () {
               yield* host.rename(host.root, `Case ${index}`)
               host.proxy.once({ match, fault: "fail" })
-              expect(yield* sync.step()).toEqual({ drained: false })
+              expect(yield* sync.step()).toEqual({ drained: false, failed: true })
               expect(yield* sync.step()).toEqual({ drained: true })
               yield* host.expectEqual
             }),
@@ -253,7 +253,7 @@ describe("OpenCodeSync", () => {
       const sync = yield* host.sync()
       yield* host.turn(host.root)
       host.proxy.once({ match: isCommit(host.root), fault: "lose" })
-      expect(yield* sync.step()).toEqual({ drained: false })
+      expect(yield* sync.step()).toEqual({ drained: false, failed: true })
       host.proxy.clear()
       expect(yield* sync.step()).toEqual({ drained: true })
       expect(paths(host.proxy.requests)).toEqual([checkpoints])
@@ -366,7 +366,7 @@ describe("OpenCodeSync", () => {
         if (!large) return yield* Effect.die(new Error("The large message is missing"))
         const before = yield* Metric.value(OpenCodeSync.oversizedRows)
         const captured = logs()
-        expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: false })
+        expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: false, failed: true })
         expect((yield* Metric.value(OpenCodeSync.oversizedRows)).count).toBe(before.count + 1)
         expect(captured.messages.filter((message) => message.includes(large.id))).toHaveLength(1)
         expect((yield* SyncTest.remote(host.brain.id)).sessions.map((session) => session.id)).toEqual([host.brain.id])
@@ -422,13 +422,14 @@ describe("OpenCodeSync", () => {
         yield* Effect.promise(() => script.called())
         expect(yield* passed(first)).toEqual({ drained: true, passed: true })
         expect(yield* SyncTest.status(host.root)).toBe("busy")
+        const interval = Duration.toMillis(OpenCodeSync.busyInterval)
         yield* host.rename(host.root, "One")
-        expect(yield* passed(first)).toEqual({ drained: false, passed: false })
+        expect(yield* passed(first)).toEqual({ drained: false, throttledUntil: interval, passed: false })
         expect(paths(host.proxy.requests)).toEqual([checkpoints])
         yield* TestClock.adjust(OpenCodeSync.busyInterval).pipe(Effect.provideContext(clock))
         expect(yield* passed(first)).toEqual({ drained: true, passed: true })
         yield* host.rename(host.root, "Two")
-        expect(yield* passed(first)).toEqual({ drained: false, passed: false })
+        expect(yield* passed(first)).toEqual({ drained: false, throttledUntil: 2 * interval, passed: false })
         const restarted = yield* host.sync()
         expect(yield* passed(restarted)).toEqual({ drained: true, passed: true })
         script.release()
@@ -468,7 +469,7 @@ describe("OpenCodeSync", () => {
         const child = yield* host.create(host.root)
         const grandchild = yield* host.create(child)
         host.proxy.once({ match: isStart(child), fault: "fail" })
-        expect(yield* sync.step()).toEqual({ drained: false })
+        expect(yield* sync.step()).toEqual({ drained: false, failed: true })
         expect(host.proxy.requests.filter(isStart(grandchild))).toHaveLength(1)
         expect(host.proxy.requests.filter(isCommit(grandchild))).toEqual([])
         expect(yield* sync.step()).toEqual({ drained: true })
@@ -532,7 +533,7 @@ describe("OpenCodeSync", () => {
         yield* host.turn(host.root)
         const expired = yield* hostToken(host.brain.id, host.owner.organizationId, -1)
         host.proxy.once({ match: isBatch(host.root), before: () => Promise.resolve((host.token.value = expired)) })
-        expect(yield* sync.step()).toEqual({ drained: false })
+        expect(yield* sync.step()).toEqual({ drained: false, failed: true })
         expect(host.proxy.requests.filter(isCommit(host.root))).toHaveLength(1)
         expect((yield* SyncTest.remote(host.brain.id)).sessions).toEqual([])
         host.token.value = yield* hostToken(host.brain.id, host.owner.organizationId, 600)

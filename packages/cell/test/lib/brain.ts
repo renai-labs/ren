@@ -20,6 +20,7 @@ import { Host } from "../../src/harness/opencode/host.js"
 import { HostToken } from "../../src/host-token.js"
 import { ModelRefresh } from "../../src/model-refresh.js"
 import { ModelStore } from "../../src/model-store.js"
+import { Sync } from "../../src/sync.js"
 import { ModelsTest } from "./models.js"
 import { Shared } from "./shared.js"
 import { TestToken } from "./token.js"
@@ -59,8 +60,10 @@ export const make = Effect.fnUntraced(function* (
           wait: FiberHandle.make<void>(),
           waitingSince: Ref.make(Option.none<DateTime.Utc>()),
           configuring: Semaphore.make(1),
+          closedIdle: Ref.make(false),
         }),
       ),
+      Layer.effect(Sync.Service, Sync.make(Option.none())),
     ).pipe(Layer.provideMerge(ModelsTest.storage())),
   )
   yield* Context.get(services, ModelStore.Service).write(Shared.access(undefined, Shared.stub().url), undefined)
@@ -99,6 +102,7 @@ export const make = Effect.fnUntraced(function* (
     Effect.provide(Brain.handlers.pipe(Layer.provide(Layer.succeedContext(cell)))),
     Effect.provide(HttpServer.layerServices),
   )
+  const web = Context.get(yield* Layer.build(Brain.layer.pipe(Layer.provide(Layer.succeedContext(cell)))), Cell.Brain)
   const opencode = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.provideService(
@@ -125,6 +129,9 @@ export const make = Effect.fnUntraced(function* (
     }).pipe(Effect.andThen(Cell.alarm()), Effect.provide(cell)),
     waited: Queue.take(waits),
     client,
+    fetch: (path: string, init?: RequestInit) =>
+      Effect.promise(() => web.fetch(new Request(`http://cell${path}`, init))),
+    store: Context.get(services, ModelStore.Service),
     opencode,
     credentials: host.credentials,
     start: (input: Partial<Session.StartInput> = {}) =>

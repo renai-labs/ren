@@ -6,6 +6,7 @@ import {
   Context,
   DateTime,
   Deferred,
+  Duration,
   Effect,
   Exit,
   Fiber,
@@ -22,6 +23,7 @@ import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
 import { ModelRefresh } from "./model-refresh.js"
 import { Reconcile } from "./reconcile.js"
+import { Sync } from "./sync.js"
 
 export class Info extends Context.Service<
   Info,
@@ -39,6 +41,7 @@ export class Activity extends Context.Service<
     readonly wait: FiberHandle.FiberHandle<void>
     readonly waitingSince: Ref.Ref<Option.Option<DateTime.Utc>>
     readonly configuring: Semaphore.Semaphore
+    readonly closedIdle: Ref.Ref<boolean>
   }
 >()("@ren/cell/Cell/Activity") {}
 
@@ -101,10 +104,20 @@ export const alarm = Effect.fn("Cell.alarm")(function* () {
   const info = yield* Info
   const activity = yield* Activity
   const harness = yield* Harness.Service
-  const rearm = Effect.flatMap(Clock.currentTimeMillis, (now) =>
-    Effect.promise(() => info.storage.setAlarm(now + info.vars.ALARM_INTERVAL_MS)),
+  const sync = yield* Sync.Service
+  const pending = yield* sync.step
+  const schedule = (delay: Duration.Duration) =>
+    Effect.flatMap(Clock.currentTimeMillis, (now) =>
+      Effect.promise(() => info.storage.setAlarm(now + Duration.toMillis(delay))),
+    )
+  const interval = Duration.millis(info.vars.ALARM_INTERVAL_MS)
+  const rearm = schedule(
+    Option.match(pending, { onNone: () => interval, onSome: (delay) => Duration.min(delay, interval) }),
   )
+  const resync = Option.match(pending, { onNone: () => Effect.void, onSome: schedule })
   if (activity.wait.state._tag === "Open" && activity.wait.state.fiber) return yield* rearm
+  // oxlint-disable-next-line ren/no-comments -- Only this process's reconcile closed the harness, and any request reopens it, so nothing is left to reconcile. After a restart the flag is false, and reconcile reopens the harness to resume a turn.
+  if ((yield* Ref.get(activity.closedIdle)) && !(yield* harness.state).isOpen) return yield* resync
   const requests = yield* Ref.get(activity.requests)
   const idle = yield* Effect.scoped(
     Effect.gen(function* () {
@@ -151,6 +164,8 @@ export const alarm = Effect.fn("Cell.alarm")(function* () {
   const held = (yield* harness.state).holders > 0
   if (!idle || held || (yield* Ref.get(activity.requests)) !== requests) return yield* rearm
   yield* harness.close
+  yield* Ref.set(activity.closedIdle, true)
+  yield* resync
 })
 
 export const layer = (storage: DurableObjectStorage, name: string | undefined, env: unknown) => {
@@ -180,8 +195,19 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
       wait: FiberHandle.make<void>(),
       waitingSince: Ref.make(Option.none<DateTime.Utc>()),
       configuring: Semaphore.make(1),
+      closedIdle: Ref.make(false),
+    }),
+  )
+  const sync = Layer.unwrap(
+    Effect.gen(function* () {
+      const cell = yield* Info
+      return Sync.layer(storage.sql, cell.vars.REN_URL)
     }),
   )
   const models = ModelStore.layer.pipe(Layer.provideMerge(Layer.succeed(ModelStore.Storage, storage)))
-  return Layer.mergeAll(refresh, activity).pipe(Layer.provideMerge(models), Layer.provideMerge(info))
+  return Layer.mergeAll(activity, sync).pipe(
+    Layer.provideMerge(refresh),
+    Layer.provideMerge(models),
+    Layer.provideMerge(info),
+  )
 }

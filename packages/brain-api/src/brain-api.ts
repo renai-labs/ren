@@ -12,6 +12,9 @@ export type ModelsBody = typeof ModelsBody.Type
 
 const SendBody = Session.SendInput.mapFields(Struct.omit(["sessionId"])).annotate({ identifier: "Brain.SendBody" })
 
+export const Synced = Schema.Struct({ drained: Schema.Boolean }).annotate({ identifier: "Brain.Synced" })
+export type Synced = typeof Synced.Type
+
 const BrainGroup = HttpApiGroup.make("brain")
   .add(
     HttpApiEndpoint.post("brain.start", "/ren/sessions", {
@@ -59,6 +62,16 @@ const BrainGroup = HttpApiGroup.make("brain")
         summary: "Remove models",
         description:
           "Delete the brain’s model configuration and its credentials. Start and send fail until a configuration is stored again.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("brain.sync", "/ren/sync", { success: Synced }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "brain.sync",
+        summary: "Sync the host's sessions",
+        description:
+          "Upload each session that changed to Ren until none needs a pass or a deadline occurs. `drained` is false when a session still needs a pass, or when the host has no Ren URL.",
       }),
     ),
   )

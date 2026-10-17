@@ -28,6 +28,8 @@ export class SyncError extends Schema.TaggedError<SyncError>()("OpenCodeSync.Syn
 
 export interface Step {
   readonly drained: boolean
+  readonly failed?: boolean
+  readonly throttledUntil?: number
 }
 
 export interface Interface {
@@ -66,15 +68,6 @@ const Local = Schema.Struct({
 })
 
 type Local = typeof Local.Type
-
-const isThrottled = (
-  session: Local,
-  checkpoint: { readonly timeSuspended: number | null } | undefined,
-  last: number | undefined,
-  now: number,
-) =>
-  Boolean(session.time_suspended && checkpoint?.timeSuspended) &&
-  now - (last ?? Number.NEGATIVE_INFINITY) < Duration.toMillis(busyInterval)
 
 const Tables = Schema.Array(
   Schema.Struct({
@@ -256,31 +249,33 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
         )
       })
       .toSorted((left, right) => depth(left.id) - depth(right.id))
-    let drained = true
-    for (const session of pending) {
-      if (session.parent_id && refused.has(session.parent_id)) {
-        refused.add(session.id)
-        continue
-      }
-      const now = yield* Clock.currentTimeMillis
-      if (now >= (input.deadline ?? Number.POSITIVE_INFINITY)) return { drained: false }
-      const checkpoint = checkpoints.get(session.id)
-      if (isThrottled(session, checkpoint, lastPass.get(session.id), now)) {
-        drained = false
-        continue
-      }
-      const outcome = yield* pass(session, Boolean(checkpoint)).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning("The sync pass stopped. The next step starts a new upload.", error).pipe(
-            Effect.as("failed" as const),
+    const outcomes = yield* Effect.forEach(pending, (session) =>
+      Effect.gen(function* () {
+        if (session.parent_id && refused.has(session.parent_id)) {
+          refused.add(session.id)
+          return "refused" as const
+        }
+        const now = yield* Clock.currentTimeMillis
+        if (now >= (input.deadline ?? Number.POSITIVE_INFINITY)) return "late" as const
+        const checkpoint = checkpoints.get(session.id)
+        const until = (lastPass.get(session.id) ?? Number.NEGATIVE_INFINITY) + Duration.toMillis(busyInterval)
+        if (session.time_suspended && checkpoint?.timeSuspended && now < until) return until
+        const outcome = yield* pass(session, Boolean(checkpoint)).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("The sync pass stopped. The next step starts a new upload.", error).pipe(
+              Effect.as("failed" as const),
+            ),
           ),
-        ),
-        Effect.annotateLogs({ sessionId: session.id }),
-      )
-      if (outcome === "committed") lastPass.set(session.id, now)
-      if (outcome === "failed") drained = false
-    }
-    return { drained }
+          Effect.annotateLogs({ sessionId: session.id }),
+        )
+        if (outcome === "committed") lastPass.set(session.id, now)
+        return outcome
+      }),
+    )
+    if (outcomes.includes("failed")) return { drained: false, failed: true }
+    if (outcomes.includes("late")) return { drained: false }
+    const held = outcomes.filter((outcome) => typeof outcome === "number")
+    return held.length === 0 ? { drained: true } : { drained: false, throttledUntil: Math.min(...held) }
   })
 
   const opened: Interface = {

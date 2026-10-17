@@ -1,4 +1,4 @@
-import { OpenCodeMessageRow } from "@ren/brain-api/sync-api"
+import { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
 import { Effect, Exit, Result, Schema } from "effect"
 import { Harness } from "../../src/harness/harness.js"
 import { SessionCell } from "../../src/session-cell.js"
@@ -100,6 +100,13 @@ class SyncStorageCell extends SessionCell {
     const sessionId = this.ctx.id.name ?? ""
     if (url.pathname === "/test/read") return Response.json(read(this.ctx.storage.sql, sessionId))
     if (url.pathname === "/test/sizes") return Response.json(sizes(this.ctx.storage.sql, sessionId))
+    if (url.pathname === "/test/rows")
+      return Response.json({
+        sessions: [...this.ctx.storage.sql.exec(`select ${Object.keys(OpenCodeSessionRow.fields).join(", ")} from session_v2`)],
+        messages: [
+          ...this.ctx.storage.sql.exec(`select ${Object.keys(OpenCodeMessageRow.fields).join(", ")} from session_message`),
+        ],
+      })
     if (url.pathname === "/test/bind") {
       const text = "a".repeat(Number(url.searchParams.get("bytes")))
       return Response.json(step(() => this.ctx.storage.sql.exec("select length(?) as length", text).one().length))
