@@ -152,6 +152,29 @@ it.live(
     }),
 )
 
+it.live("start with the same input on an imported session adds no message", () =>
+  Effect.gen(function* () {
+    const source = yield* BrainTest.Service
+    const input = {
+      title: "Imported",
+      agent: "build",
+      model: { endpointId: "stub", modelId: "stub-model" },
+      instructions: { team: "Ren" },
+    }
+    yield* source.start(input)
+    yield* source.send(`${Shared.stub().script().marker} first`)
+    const sessionID = SessionID.make(source.id)
+    yield* source.opencode.session.wait({ sessionID })
+    const data = yield* source.opencode.session.export({ sessionID })
+    const target = yield* BrainTest.make({ id: source.id })
+    yield* target.opencode.session.import({ ...data, location: data.info.location })
+    const messages = target.opencode.message.list({ sessionID }).pipe(Effect.map((page) => page.data))
+    const before = yield* messages
+    yield* target.start(input)
+    expect(yield* messages).toEqual(before)
+  }),
+)
+
 it.live("a token-session mismatch fails before acquiring the harness", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service
@@ -576,4 +599,9 @@ it.live("a key inside OpenCode's refresh window is renewed through the host befo
     expect(script.calls.map((call) => call.authorization)).toEqual(["Bearer renewed"])
     expect(brain.issuer.requests).toEqual(["Bearer host-token"])
   }),
+)
+
+test.todo(
+  "the cell keeps a ren-host-token only when its expiry is later than the stored token, and the plugin refresh uses the stored token",
+  () => {},
 )

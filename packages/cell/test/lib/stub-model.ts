@@ -10,10 +10,11 @@ interface Behaviour {
   readonly malformed?: boolean
   readonly dripMs?: number
   readonly tool?: { readonly name: string; readonly input: unknown }
+  readonly summary?: string
 }
 
 export interface Call {
-  readonly kind: "title" | "turn"
+  readonly kind: "title" | "compaction" | "turn"
   readonly path: string
   readonly marker: string | undefined
   readonly text: string
@@ -47,7 +48,13 @@ const Content = Schema.Union([
   Schema.Array(Schema.Struct({ type: Schema.String, text: Schema.optional(Schema.String) })),
 ])
 
-const Message = Schema.Struct({ role: Schema.String, content: Schema.optional(Content) })
+const Message = Schema.Struct({
+  role: Schema.String,
+  content: Schema.optional(Content),
+  tool_calls: Schema.optional(
+    Schema.Array(Schema.Struct({ function: Schema.Struct({ name: Schema.String, arguments: Schema.String }) })),
+  ),
+})
 
 const ChatRequest = Schema.Struct({
   model: Schema.String,
@@ -131,12 +138,15 @@ const toCall = (body: ChatRequest, request: Request): Call => {
     .join("\n")
   const prompts = body.messages.filter((message) => message.role === "user").map((message) => text(message.content))
   const prompt = prompts.at(-1) ?? ""
+  const summarizes = prompt.includes("## Objective")
+  const kind = summarizes ? "compaction" : "turn"
   return {
-    kind: system.includes("title generator") ? "title" : "turn",
+    kind: system.includes("title generator") ? "title" : kind,
     path: new URL(request.url).pathname,
-    marker: (prompt === restarted ? prompts.findLast((candidate) => markerPattern.test(candidate)) : prompt)?.match(
-      markerPattern,
-    )?.[0],
+    marker: (prompt === restarted || summarizes
+      ? prompts.findLast((candidate) => markerPattern.test(candidate))
+      : prompt
+    )?.match(markerPattern)?.[0],
     text: prompt,
     system,
     tools: body.tools?.map((tool) => tool.function.name) ?? [],
@@ -222,8 +232,8 @@ export const start = (): Server => {
 
   const record = (call: Call) => {
     calls.push(call)
-    const entry = call.kind === "turn" && call.marker ? scripts.get(call.marker) : undefined
-    entry?.calls.push(call)
+    const entry = call.kind !== "title" && call.marker ? scripts.get(call.marker) : undefined
+    if (call.kind === "turn") entry?.calls.push(call)
     for (const waiter of [...waiters].filter((candidate) => candidate.predicate(call))) {
       waiters.delete(waiter)
       waiter.resolve(call)
@@ -242,7 +252,12 @@ export const start = (): Server => {
       if (Option.isNone(decoded)) return new Response("not a chat completion or messages request", { status: 400 })
       const call = toCall(decoded.value, request)
       const entry = record(call)
-      const behaviour = call.kind === "title" ? { reply: "Stub title" } : (entry?.behaviour ?? {})
+      const summary = entry?.behaviour.summary
+      const behaviour: Behaviour = {
+        title: { reply: "Stub title" },
+        compaction: summary === undefined ? {} : { reply: summary },
+        turn: entry?.behaviour ?? {},
+      }[call.kind]
       if (behaviour.status)
         return Response.json(
           { error: { message: `stub model status ${behaviour.status}`, type: "stub_error" } },

@@ -24,14 +24,16 @@ import { ModelsTest } from "./models.js"
 import { Shared } from "./shared.js"
 import { TestToken } from "./token.js"
 
-const make = Effect.gen(function* () {
+export const make = Effect.fnUntraced(function* (
+  options: { readonly database?: string; readonly id?: Session.ID } = {},
+) {
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(Shared.stub().url))
   const directory = yield* Effect.acquireRelease(
     Effect.promise(() => mkdtemp(join(tmpdir(), "ren-brain-"))),
     (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
   )
   const issuer = yield* ModelsTest.issuer
-  const id = Session.ID.create()
+  const id = options.id ?? Session.ID.create()
   const alarm: { at: number | null } = { at: null }
   const services = yield* Layer.build(
     Layer.mergeAll(
@@ -67,7 +69,7 @@ const make = Effect.gen(function* () {
   yield* Context.get(services, ModelStore.Service).write(Shared.access(undefined, Shared.stub().url), undefined)
   const host = yield* OpenCodeServer.make(
     createEmbeddedRoutes({
-      database: { path: ":memory:" },
+      database: { path: options.database ?? ":memory:" },
       config: { project: false, content: vars.OPENCODE_CONFIG },
       models: { fetch: false },
       fs: { filewatcher: false, fff: false },
@@ -155,6 +157,8 @@ const make = Effect.gen(function* () {
   }
 })
 
-export class Service extends Context.Service<Service, Effect.Success<typeof make>>()("@ren/cell/test/Brain") {}
+export class Service extends Context.Service<Service, Effect.Success<ReturnType<typeof make>>>()(
+  "@ren/cell/test/Brain",
+) {}
 
-export const layer = Layer.effect(Service, make)
+export const layer = Layer.effect(Service, make())
