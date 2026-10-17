@@ -115,19 +115,21 @@ describe("model refresh", () => {
     Effect.gen(function* () {
       const brain = yield* BrainHost.Service
       const key = TestToken.keys[0]
-      const exp = Math.floor(Date.now() / 1000) + 600
+      const iat = Math.floor(Date.now() / 1000)
+      const exp = iat + 600
       const sid = Session.ID.create()
       const tokens = [
         "not-a-token",
         yield* SessionToken.sign(key, { sid, scope: "server", exp }),
         yield* SessionToken.seal(key.secret, { kid: key.id, sid, scope: "host", exp }),
-        yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp: exp - 1200 }),
+        yield* SessionToken.seal(key.secret, { kid: key.id, sid, scope: "host", org: organizationId, exp }),
+        yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, iat, exp: exp - 1200 }),
       ]
       const failures = yield* Effect.forEach(tokens, (token) =>
         brain.authenticateHost(Redacted.make(token)).pipe(Effect.flip),
       )
-      expect(failures.map((failure) => failure._tag)).toEqual(Array.from({ length: 4 }, () => "ForbiddenError"))
-      const valid = yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp })
+      expect(failures.map((failure) => failure._tag)).toEqual(Array.from({ length: 5 }, () => "ForbiddenError"))
+      const valid = yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, iat, exp })
       const host = yield* brain.authenticateHost(Redacted.make(valid))
       expect(host).toEqual({ brainId: sid, organizationId })
       const refreshed = yield* brain.refreshModels(host)

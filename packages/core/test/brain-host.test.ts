@@ -390,6 +390,26 @@ describe("BrainHost", () => {
       }),
     )
 
+    it.live("a grant whose key has already expired fails start with a typed error after one grant", () =>
+      Effect.gen(function* () {
+        const granted = yield* Ref.make(0)
+        const expired = Layer.succeed(
+          Models.Service,
+          Models.Service.of({
+            catalog: () => Effect.succeed({ endpoints: [] }),
+            grant: () =>
+              Ref.update(granted, (count) => count + 1).pipe(
+                Effect.as(Shared.access({ stub: Shared.apiKey("sk-expired", Date.now() - 1000) })),
+              ),
+            refreshIfDue: () => Effect.succeedNone,
+            revoke: () => Effect.void,
+          }),
+        )
+        const exit = yield* start(Session.ID.create()).pipe(Effect.exit, Effect.provide(host(settings, expired)))
+        expect([Exit.isFailure(exit), died(exit), yield* Ref.get(granted)]).toEqual([true, false, 1])
+      }),
+    )
+
     it.live("the catalog lists models without credentials", () =>
       Effect.gen(function* () {
         expect(Models.catalog(configured)).toEqual({
