@@ -16,6 +16,7 @@ export const layer = (options: {
   readonly environmentId: Environment.ID
   readonly workspace: string
   readonly executor?: typeof NodeCompatible.layer
+  readonly publicKeys?: readonly [Signature.PublicKey, ...ReadonlyArray<Signature.PublicKey>]
 }) =>
   HttpRouter.serve(Server.layer, { disableListenLog: true, disableLogger: true }).pipe(
     Layer.provide(HttpServer.layerServices),
@@ -26,7 +27,7 @@ export const layer = (options: {
         ConfigProvider.fromUnknown({
           EXECUTOR_ENVIRONMENT_ID: options.environmentId,
           EXECUTOR_WORKSPACE: options.workspace,
-          BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([keys.publicKey]),
+          BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(options.publicKeys ?? [keys.publicKey]),
         }),
       ),
     ),
@@ -38,6 +39,7 @@ export const url = Effect.map(HttpServer.HttpServer, (server) => HttpServer.form
 export const access = Effect.fnUntraced(function* (options: {
   readonly url: string
   readonly environmentId: Environment.ID
+  readonly directory: string
   readonly brain: Brain.ID
   readonly lifetimeMs?: number
   readonly generation?: number
@@ -46,6 +48,7 @@ export const access = Effect.fnUntraced(function* (options: {
   const expiresAt = DateTime.makeUnsafe((options.issuedAt ?? Date.now()) + (options.lifetimeMs ?? 600_000))
   return {
     environmentId: options.environmentId,
+    directory: options.directory,
     url: options.url,
     token: yield* EnvironmentToken.sign(keys.privateKey, {
       env: options.environmentId,

@@ -18,6 +18,7 @@ import {
 } from "effect"
 import { Env } from "./env.js"
 import { Harness } from "./harness/harness.js"
+import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
 import { ModelRefresh } from "./model-refresh.js"
 import { Reconcile } from "./reconcile.js"
@@ -167,7 +168,9 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
   const refresh = Layer.unwrap(
     Effect.gen(function* () {
       const cell = yield* Info
-      return ModelRefresh.layer(cell.vars.REN_URL)
+      return ModelRefresh.layer(cell.vars.REN_URL).pipe(
+        Layer.provideMerge(HostToken.layer(cell.vars.REN_URL, cell.vars.CELL_KEYS)),
+      )
     }),
   )
   const activity = Layer.effect(

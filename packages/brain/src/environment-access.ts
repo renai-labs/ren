@@ -1,57 +1,67 @@
 export * as EnvironmentAccess from "./environment-access.js"
 
-import { Environment } from "@ren/schema/environment"
+import type { Environment } from "@ren/schema/environment"
+import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, PubSub, Ref, Schema, type Scope, Stream } from "effect"
 
 export class NotFound extends Schema.TaggedError<NotFound>()("EnvironmentAccess.NotFound", {
-  environmentId: Environment.ID,
+  sessionId: Session.ID,
+  message: Schema.String,
+}) {}
+
+export class Unavailable extends Schema.TaggedError<Unavailable>()("EnvironmentAccess.Unavailable", {
+  sessionId: Session.ID,
+  message: Schema.String,
 }) {}
 
 export interface Interface {
-  readonly open: (id: Environment.ID) => Effect.Effect<Environment.Access, NotFound>
-  readonly subscribe: Effect.Effect<Stream.Stream<Environment.ID>, never, Scope.Scope>
+  readonly open: (sessionId: Session.ID) => Effect.Effect<Environment.Access, NotFound | Unavailable>
+  readonly subscribe: Effect.Effect<Stream.Stream<Session.ID>, never, Scope.Scope>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/brain/EnvironmentAccess") {}
 
 export interface MemoryInterface {
-  readonly set: (access: Environment.Access) => Effect.Effect<void>
-  readonly remove: (id: Environment.ID) => Effect.Effect<void>
+  readonly set: (sessionId: Session.ID, access: Environment.Access) => Effect.Effect<void>
+  readonly remove: (sessionId: Session.ID) => Effect.Effect<void>
 }
 
 export class Memory extends Context.Service<Memory, MemoryInterface>()("@ren/brain/EnvironmentAccess/Memory") {}
 
-export const layerFixed = (accesses: ReadonlyArray<Environment.Access>) =>
+const notFound = (sessionId: Session.ID) =>
+  new NotFound({ sessionId, message: `Session ${sessionId} has no access to an environment` })
+
+export const layerFixed = (accesses: ReadonlyMap<Session.ID, Environment.Access>) =>
   Layer.succeed(
     Service,
     Service.of({
-      open: (id) => {
-        const access = accesses.find((candidate) => candidate.environmentId === id)
-        return access ? Effect.succeed(access) : Effect.fail(new NotFound({ environmentId: id }))
+      open: (sessionId) => {
+        const access = accesses.get(sessionId)
+        return access ? Effect.succeed(access) : Effect.fail(notFound(sessionId))
       },
       subscribe: Effect.succeed(Stream.never),
     }),
   )
 
-export const layerMemory = (initial: ReadonlyArray<Environment.Access>) =>
+export const layerMemory = (initial: ReadonlyMap<Session.ID, Environment.Access>) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const accesses = yield* Ref.make(new Map(initial.map((access) => [access.environmentId, access])))
-      const changed = yield* PubSub.unbounded<Environment.ID>()
-      const update = (id: Environment.ID, change: (next: Map<Environment.ID, Environment.Access>) => void) =>
+      const accesses = yield* Ref.make(new Map(initial))
+      const changed = yield* PubSub.unbounded<Session.ID>()
+      const update = (sessionId: Session.ID, change: (next: Map<Session.ID, Environment.Access>) => void) =>
         Ref.update(accesses, (current) => {
           const next = new Map(current)
           change(next)
           return next
-        }).pipe(Effect.andThen(PubSub.publish(changed, id)), Effect.asVoid)
+        }).pipe(Effect.andThen(PubSub.publish(changed, sessionId)), Effect.asVoid)
       return Context.make(
         Service,
         Service.of({
-          open: (id) =>
+          open: (sessionId) =>
             Ref.get(accesses).pipe(
               Effect.flatMap((current) => {
-                const access = current.get(id)
-                return access ? Effect.succeed(access) : Effect.fail(new NotFound({ environmentId: id }))
+                const access = current.get(sessionId)
+                return access ? Effect.succeed(access) : Effect.fail(notFound(sessionId))
               }),
             ),
           subscribe: PubSub.subscribe(changed).pipe(Effect.map(Stream.fromSubscription)),
@@ -60,8 +70,8 @@ export const layerMemory = (initial: ReadonlyArray<Environment.Access>) =>
         Context.add(
           Memory,
           Memory.of({
-            set: (access) => update(access.environmentId, (next) => next.set(access.environmentId, access)),
-            remove: (id) => update(id, (next) => next.delete(id)),
+            set: (sessionId, access) => update(sessionId, (next) => next.set(sessionId, access)),
+            remove: (sessionId) => update(sessionId, (next) => next.delete(sessionId)),
           }),
         ),
       )

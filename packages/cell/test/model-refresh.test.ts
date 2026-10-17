@@ -5,9 +5,11 @@ import type { Models } from "@ren/schema/models"
 import { Context, DateTime, Effect, Fiber, Layer, Option, Redacted, Schema, type Scope } from "effect"
 import { TestClock } from "effect/testing"
 import { ModelRefresh } from "../src/model-refresh.js"
+import { HostToken } from "../src/host-token.js"
 import { ModelStore } from "../src/model-store.js"
 import { ModelsTest } from "./lib/models.js"
 import { Shared } from "./lib/shared.js"
+import { TestToken } from "./lib/token.js"
 
 const it = testEffect(Layer.empty)
 
@@ -41,7 +43,10 @@ const keys = (access: Option.Option<Models.Access>) =>
 
 const make = Effect.gen(function* () {
   const issuer = yield* ModelsTest.issuer
-  const services = yield* Layer.build(ModelRefresh.layer(issuer.url).pipe(Layer.provideMerge(ModelsTest.storage())))
+  const services = yield* Layer.build(ModelRefresh.layer(issuer.url).pipe(
+      Layer.provideMerge(HostToken.layer(issuer.url, TestToken.keys)),
+      Layer.provideMerge(ModelsTest.storage()),
+    ))
   return {
     ...issuer,
     store: Context.get(services, ModelStore.Service),

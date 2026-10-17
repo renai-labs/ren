@@ -1,24 +1,22 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
 import { AbsolutePath } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentBindings } from "@ren/brain/environment-bindings"
 import { Environments } from "@ren/brain/environments"
 import { EnvironmentAccess } from "@ren/brain/environment-access"
-import { OpenCodeWorkspaceDriver } from "@ren/brain/opencode-workspace-driver"
 import { Machine, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Exit, Layer, Option, Schema, Scope } from "effect"
-import { KeyValueStore } from "effect/persistence"
+import { Context, Effect, Layer, Ref, Schema, type Scope } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
-import { mkdtemp, realpath } from "node:fs/promises"
+import { mkdtemp, realpath, stat } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Env } from "../src/env.js"
 import type { Harness } from "../src/harness/harness.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { Host } from "../src/harness/opencode/host.js"
+import { RenWorkspaceDriver } from "../src/harness/opencode/ren-workspace-driver.js"
 import { Pid } from "./lib/pid.js"
 import { Shared } from "./lib/shared.js"
 import type { StubModel } from "./lib/stub-model.js"
@@ -35,37 +33,32 @@ const served = Machine.layer({ environmentId, workspace })
 
 const it = testEffect(served)
 
-const live = <A, E>(body: Effect.Effect<A, E, Scope.Scope | Layer.Success<typeof served>>) =>
+const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof served> | Scope.Scope>) =>
   body.pipe(Effect.scoped, Effect.provide(served), Effect.runPromise)
 
-const machine = Effect.fnUntraced(function* (id: Environment.ID) {
-  const directory = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-machine-"))))
-  const scope = yield* Scope.fork(yield* Scope.Scope)
-  const context = yield* Layer.buildWithMemoMap(
-    Machine.layer({ environmentId: id, workspace: directory }),
-    yield* Layer.makeMemoMap,
-    scope,
-  )
-  return {
-    directory,
-    url: yield* Machine.url.pipe(Effect.provideContext(context)),
-    stop: Scope.close(scope, Exit.void),
-  }
-})
+const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
-const accessTo = (url: string, brain: Brain.ID, id = environmentId) => Machine.access({ url, environmentId: id, brain })
+const accessTo = (url: string, sessionId: Session.ID) =>
+  Machine.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
-const open = Effect.fnUntraced(function* (access: Layer.Layer<EnvironmentAccess.Service>, directory = workspace) {
-  const context = yield* Layer.build(
-    EnvironmentBindings.layer.pipe(
-      Layer.provideMerge(Environments.layer),
-      Layer.provide(access),
-      Layer.provide(FetchHttpClient.layer),
-      Layer.provide(KeyValueStore.layerMemory),
-    ),
+const open = Effect.fnUntraced(function* () {
+  const context = yield* Layer.build(EnvironmentAccess.layerMemory(new Map()))
+  const memory = Context.get(context, EnvironmentAccess.Memory)
+  const opens = yield* Ref.make(0)
+  const counted = Layer.succeed(
+    EnvironmentAccess.Service,
+    EnvironmentAccess.Service.of({
+      open: (sessionId) =>
+        Ref.update(opens, (count) => count + 1).pipe(
+          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
+        ),
+      subscribe: Context.get(context, EnvironmentAccess.Service).subscribe,
+    }),
   )
-  const environments = Context.get(context, Environments.Service)
-  const bindings = Context.get(context, EnvironmentBindings.Service)
+  const environments = Context.get(
+    yield* Layer.build(Environments.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
+    Environments.Service,
+  )
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url))
   const endpoints = Shared.access(undefined, stub.url).endpoints
   const host = yield* Host.make(
@@ -76,18 +69,20 @@ const open = Effect.fnUntraced(function* (access: Layer.Layer<EnvironmentAccess.
         models: { fetch: false },
         fs: { filewatcher: false, fff: false },
       },
-      OpenCodeWorkspaceDriver.replacements(environments, bindings),
+      RenWorkspaceDriver.replacements(environments),
     ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     () => Effect.succeedNone,
-    Option.some(bindings),
+    true,
   )
-  return yield* OpenCodeHarness.make(host, endpoints, AbsolutePath.make(directory))
+  return {
+    harness: yield* OpenCodeHarness.make(host, endpoints, AbsolutePath.make(local)),
+    memory,
+    opens: Ref.get(opens),
+  }
 })
 
-const openServed = Effect.fnUntraced(function* (directory = workspace) {
-  return yield* open(EnvironmentAccess.layerFixed([yield* accessTo(yield* Machine.url, Brain.ID.create())]), directory)
-})
+type Opened = Effect.Success<ReturnType<typeof open>>
 
 const sendTo = (
   harness: Harness.Instance,
@@ -106,26 +101,31 @@ const sendTo = (
 const restart = (
   harness: Harness.Instance,
   sessionId: Session.ID,
-  environments?: ReadonlyArray<Environment.Location>,
+  environment?: Environment.Location,
   agent?: string,
+  initialMessage?: Session.StartInput["initialMessage"],
 ) =>
   harness.start({
     sessionId,
     harness: "opencode",
     instructions: {},
     interactive: false,
-    ...(environments && { environments }),
+    ...(environment && { environment }),
     ...(agent && { agent }),
+    ...(initialMessage && { initialMessage }),
   })
 
+const locationOf = (sessionId: Session.ID) => ({ environmentId, directory: Environment.sessionDirectory(sessionId) })
+
 const begin = Effect.fnUntraced(function* (
-  harness: Harness.Instance,
-  environments: ReadonlyArray<Environment.Location> = [{ environmentId, directory: workspace }],
-  agent?: string,
+  opened: Opened,
+  options: { readonly onEnvironment?: boolean; readonly agent?: string; readonly url?: string } = {},
 ) {
   const sessionId = Session.ID.create()
-  yield* restart(harness, sessionId, environments, agent)
-  const send = (script: StubModel.Script) => sendTo(harness, sessionId, script)
+  const onEnvironment = options.onEnvironment ?? true
+  if (onEnvironment) yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* Machine.url), sessionId))
+  yield* restart(opened.harness, sessionId, onEnvironment ? locationOf(sessionId) : undefined, options.agent)
+  const send = (script: StubModel.Script) => sendTo(opened.harness, sessionId, script)
   return {
     sessionId,
     send,
@@ -147,39 +147,12 @@ const shell = (command: string) => ({ tool: { name: "shell", input: { command } 
 
 const text = (path: string) => Effect.promise(() => Bun.file(path).text())
 
-const noteOf = (call: StubModel.Call) =>
-  call.body.messages
-    .map((message) => JSON.stringify(message.content ?? ""))
-    .reduce<RegExpMatchArray | null>((current, content) => {
-      if (content.includes('ren.environment\\\" no longer applies')) return null
-      return content.match(/Your file and shell tools run on environment (env_\w+), in ([^.]+)\./) ?? current
-    }, null)
-
-const refusedTurn = Effect.fnUntraced(function* (session: {
-  readonly turn: (script: StubModel.Script) => Effect.Effect<StubModel.Call, unknown>
-}) {
+const refusedTurn = Effect.fnUntraced(function* (
+  session: { readonly sessionId: Session.ID; readonly turn: (script: StubModel.Script) => Effect.Effect<StubModel.Call, unknown> },
+) {
   const marker = join(workspace, `${crypto.randomUUID()}.ran`)
   const result = lastToolResult(yield* session.turn(stub.script(shell(`touch ${marker}`))))
   return { result, ran: yield* Effect.promise(() => Bun.file(marker).exists()) }
-})
-
-const withSecondMachine = Effect.gen(function* () {
-  const brain = Brain.ID.create()
-  const otherId = Environment.ID.create()
-  const other = yield* machine(otherId)
-  const harness = yield* open(
-    EnvironmentAccess.layerFixed([
-      yield* accessTo(yield* Machine.url, brain),
-      yield* accessTo(other.url, brain, otherId),
-    ]),
-  )
-  return {
-    harness,
-    otherId,
-    other,
-    here: { environmentId, directory: workspace },
-    there: { environmentId: otherId, directory: other.directory },
-  }
 })
 
 const marker = crypto.randomUUID()
@@ -193,13 +166,7 @@ test.each<
     Readonly<Record<string, string>>,
   ]
 >([
-  [
-    "shell",
-    { name: "shell", input: { command: `echo ${marker} > shell.txt && ls && pwd` } },
-    {},
-    ["shell.txt", workspace],
-    { "shell.txt": `${marker}\n` },
-  ],
+  ["shell", { name: "shell", input: { command: `echo ${marker} > shell.txt && ls && pwd` } }, {}, ["shell.txt"], { "shell.txt": `${marker}\n` }],
   ["read", { name: "read", input: { path: "notes.md" } }, { "notes.md": `remote ${marker}\n` }, [marker], {}],
   [
     "grep",
@@ -229,27 +196,59 @@ test.each<
     [`globbed-${marker.slice(0, 8)}.ts`],
     {},
   ],
-])("runs the %s tool on the environment's executor, in the attached directory", (_name, tool, before, output, after) =>
+])("runs the %s tool on the session's sandbox, in the session's folder", (_name, tool, before, output, after) =>
   live(
     Effect.gen(function* () {
+      const opened = yield* open()
+      const session = yield* begin(opened)
       yield* Effect.forEach(Object.entries(before), (entry) =>
-        Effect.promise(() => Bun.write(join(workspace, entry[0]), entry[1])),
+        Effect.promise(() => Bun.write(join(folder(session.sessionId), entry[0]), entry[1])),
       )
-      const session = yield* begin(yield* openServed())
       const result = toolOutput(yield* session.turn(stub.script({ tool })))
       expect(output.filter((part) => !result.includes(part))).toEqual([])
-      expect(yield* Effect.forEach(Object.keys(after), (path) => text(join(workspace, path)))).toEqual(
-        Object.values(after),
-      )
+      expect(
+        yield* Effect.forEach(Object.keys(after), (path) => text(join(folder(session.sessionId), path))),
+      ).toEqual(Object.values(after))
     }),
   ),
 )
 
-it.live("runs a subagent's tools on its parent session's environment", () =>
+it.live("a start and a turn with no file or shell call contact neither Ren nor the sandbox; the first file call does", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    yield* session.turn(stub.script(), 1)
+    expect(yield* opened.opens).toBe(0)
+    expect((yield* Effect.promise(() => stat(folder(session.sessionId)).catch(() => undefined))) === undefined).toBe(
+      true,
+    )
+    yield* session.turn(stub.script(shell("pwd")))
+    expect(yield* opened.opens).toBe(1)
+    expect((yield* Effect.promise(() => stat(folder(session.sessionId)))).isDirectory()).toBe(true)
+    yield* session.turn(stub.script(shell("pwd")))
+    expect(yield* opened.opens).toBe(1)
+  }),
+)
+
+it.live("two sessions on one sandbox work in their own folders", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const first = yield* begin(opened)
+    const second = yield* begin(opened)
+    yield* first.turn(stub.script(shell("echo first > mine.txt")))
+    const listed = toolOutput(yield* second.turn(stub.script(shell("ls; pwd"))))
+    expect(listed).toContain(folder(second.sessionId))
+    expect(listed).not.toContain("mine.txt")
+    expect(yield* text(join(folder(first.sessionId), "mine.txt"))).toBe("first\n")
+  }),
+)
+
+it.live("runs a subagent's tools on its parent session's sandbox", () =>
   Effect.gen(function* () {
     const file = `${crypto.randomUUID()}.txt`
     const child = stub.script(shell(`echo $((40 + 2)) > ${file}`))
-    const session = yield* begin(yield* openServed())
+    const opened = yield* open()
+    const session = yield* begin(opened)
     yield* session.turn(
       stub.script({
         tool: {
@@ -259,18 +258,18 @@ it.live("runs a subagent's tools on its parent session's environment", () =>
       }),
     )
     expect(child.calls.length).toBeGreaterThanOrEqual(2)
-    expect(yield* text(join(workspace, file))).toBe("42\n")
+    expect(yield* text(join(folder(session.sessionId), file))).toBe("42\n")
   }),
 )
 
-it.live("interrupting a turn kills its command on the environment", () =>
+it.live("interrupting a turn kills its command on the sandbox", () =>
   Effect.gen(function* () {
-    const harness = yield* openServed()
-    const session = yield* begin(harness)
+    const opened = yield* open()
+    const session = yield* begin(opened)
     const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
     yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 60`)))
     const pid = yield* Pid.read(pidFile)
-    const own = (yield* harness.sessions).find((state) => String(state.id) === session.sessionId)
+    const own = (yield* opened.harness.sessions).find((state) => String(state.id) === session.sessionId)
     expect(own).toBeDefined()
     if (!own) return
     yield* own.interrupt
@@ -278,216 +277,120 @@ it.live("interrupting a turn kills its command on the environment", () =>
   }),
 )
 
-test.each<[string, string, ReadonlyArray<ReadonlyArray<Environment.Location>>, string | undefined, boolean]>([
-  ["attached", workspace, [[{ environmentId, directory: workspace }]], undefined, true],
-  ["never attached", local, [[]], undefined, false],
-  ["never attached, under an agent that allows the shell", local, [[]], "explore", false],
-  ["detached", workspace, [[{ environmentId, directory: workspace }], []], undefined, false],
-  [
-    "reattached",
-    workspace,
-    [[{ environmentId, directory: workspace }], [], [{ environmentId, directory: workspace }]],
-    undefined,
-    true,
-  ],
+test.each<[string, boolean, string | undefined]>([
+  ["on an environment", true, undefined],
+  ["without an environment", false, undefined],
+  ["without an environment, under an agent that allows the shell", false, "explore"],
 ])(
-  "a session %s to an environment is offered the file and shell tools only while it has one, and never questions",
-  (_name, directory, steps, agent, offered) =>
+  "a session %s gets the file and shell tools only with an environment, keeps the other tools, and never questions",
+  (_name, onEnvironment, agent) =>
     live(
       Effect.gen(function* () {
-        const harness = yield* openServed(directory)
-        const session = yield* begin(harness, steps[0], agent)
-        yield* Effect.forEach(steps.slice(1), (step) => restart(harness, session.sessionId, step))
+        const opened = yield* open()
+        const session = yield* begin(opened, { onEnvironment, ...(agent && { agent }) })
         const call = yield* session.turn(stub.script(), 1)
-        expect(fileTools.filter((tool) => call.tools.includes(tool))).toEqual(offered ? fileTools : [])
+        expect(fileTools.filter((tool) => call.tools.includes(tool))).toEqual(onEnvironment ? fileTools : [])
+        expect(call.tools).toContain("webfetch")
         expect(call.tools).not.toContain("question")
+        expect(JSON.stringify(call.body.messages)).toContain(
+          onEnvironment ? "Your file and shell tools run on a sandbox" : "This session has no environment",
+        )
       }),
     ),
 )
 
-it.live("a session attached after it started runs its shell and search tools in the environment's directory", () =>
-  Effect.gen(function* () {
-    const harness = yield* openServed(local)
-    const session = yield* begin(harness, [])
-    yield* session.turn(stub.script(), 1)
-    yield* restart(harness, session.sessionId, [{ environmentId, directory: workspace }])
-    const file = `${crypto.randomUUID()}.txt`
-    expect(toolOutput(yield* session.turn(stub.script(shell(`echo attached > ${file} && pwd`))))).toContain(workspace)
-    expect(yield* text(join(workspace, file))).toBe("attached\n")
-    const name = `moved-${crypto.randomUUID().slice(0, 8)}.ts`
-    yield* Effect.promise(() => Bun.write(join(workspace, "found", name), "export {}\n"))
-    const globbed = yield* session.turn(stub.script({ tool: { name: "glob", input: { pattern: "**/moved-*.ts" } } }))
-    expect(toolOutput(globbed)).toContain(name)
-    const grepped = yield* session.turn(stub.script({ tool: { name: "grep", input: { pattern: "export" } } }))
-    expect(toolOutput(grepped)).toContain(name)
-  }),
-)
-
-it.live("a move waits for a running turn, then the next turn runs on the new machine and keeps the conversation", () =>
-  Effect.gen(function* () {
-    const setup = yield* withSecondMachine
-    const session = yield* begin(setup.harness)
-    const file = `${crypto.randomUUID()}.txt`
-    yield* session.turn(stub.script(shell(`echo first > ${file}`)))
-    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-    const running = stub.script(shell(`echo $$ > ${pidFile}; sleep 2; echo slept`))
-    yield* session.send(running)
-    yield* Pid.read(pidFile)
-    yield* restart(setup.harness, session.sessionId, [setup.there])
-    expect(toolOutput(yield* Effect.promise(() => running.called(2)))).toContain("slept")
-    const answered = yield* session.turn(stub.script(shell(`echo second > ${file} && pwd`)))
-    expect(toolOutput(answered)).toContain(setup.other.directory)
-    expect(JSON.stringify(answered.body.messages)).toContain("first")
-    expect(yield* text(join(workspace, file))).toBe("first\n")
-    expect(yield* text(join(setup.other.directory, file))).toBe("second\n")
-  }),
-)
-
 it.live("keeps a session's environment when a later start does not name one", () =>
   Effect.gen(function* () {
-    const harness = yield* openServed()
-    const session = yield* begin(harness)
-    yield* restart(harness, session.sessionId)
-    const file = `${crypto.randomUUID()}.txt`
-    yield* session.turn(stub.script(shell(`echo kept > ${file}`)))
-    expect(yield* text(join(workspace, file))).toBe("kept\n")
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    yield* restart(opened.harness, session.sessionId)
+    yield* restart(opened.harness, session.sessionId, locationOf(session.sessionId))
+    yield* session.turn(stub.script(shell("echo kept > kept.txt")))
+    expect(yield* text(join(folder(session.sessionId), "kept.txt"))).toBe("kept\n")
   }),
 )
 
-it.live("refuses to move a session while its turn runs", () =>
+it.live("refuses an environment for a session that started without one, or a folder other than its own", () =>
   Effect.gen(function* () {
-    const harness = yield* openServed()
-    const session = yield* begin(harness)
-    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-    yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 30`)))
-    yield* Pid.read(pidFile)
-    const error = yield* restart(harness, session.sessionId, []).pipe(Effect.flip)
-    expect(error.message).toContain("is running")
-    const own = (yield* harness.sessions).find((state) => String(state.id) === session.sessionId)
-    if (own) yield* own.interrupt
+    const opened = yield* open()
+    const session = yield* begin(opened, { onEnvironment: false })
+    const later = yield* restart(opened.harness, session.sessionId, locationOf(session.sessionId)).pipe(Effect.flip)
+    expect(later.message).toBe(`Session ${session.sessionId} cannot change its environment: not supported yet`)
+    const call = yield* session.turn(stub.script(), 1)
+    expect(fileTools.filter((tool) => call.tools.includes(tool))).toEqual([])
+    const elsewhere = Session.ID.create()
+    const wrong = yield* restart(opened.harness, elsewhere, { environmentId, directory: "/workspace" }).pipe(
+      Effect.flip,
+    )
+    expect(wrong.message).toBe(`Session ${elsewhere} works in /workspace/${elsewhere} on its sandbox, not /workspace`)
+    expect((yield* sendTo(opened.harness, elsewhere, stub.script()).pipe(Effect.flip))._tag).toBe(
+      "SessionNotStartedError",
+    )
   }),
 )
 
-it.live("a new session started on a machine with a first message runs that first turn on the machine", () =>
+it.live("the same start twice makes one session", () =>
   Effect.gen(function* () {
-    const harness = yield* openServed()
-    const file = `${crypto.randomUUID()}.txt`
-    const script = stub.script(shell(`echo first > ${file}`))
-    yield* harness.start({
-      sessionId: Session.ID.create(),
-      harness: "opencode",
-      instructions: {},
-      interactive: false,
-      environments: [{ environmentId, directory: workspace }],
-      initialMessage: {
-        messageId: Session.MessageID.create(),
-        prompt: { text: `${script.marker} use the tool` },
-        sender: { userId: "user_1" },
-      },
+    const opened = yield* open()
+    const sessionId = Session.ID.create()
+    yield* opened.memory.set(sessionId, yield* accessTo(yield* Machine.url, sessionId))
+    yield* Effect.all([restart(opened.harness, sessionId, locationOf(sessionId)), restart(opened.harness, sessionId, locationOf(sessionId))], {
+      concurrency: "unbounded",
+    })
+    const roots = yield* opened.harness.sessions
+    expect(roots.filter((state) => String(state.id) === sessionId).length).toBe(1)
+  }),
+)
+
+it.live("a new session started with a first message runs that first turn on the sandbox", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const sessionId = Session.ID.create()
+    yield* opened.memory.set(sessionId, yield* accessTo(yield* Machine.url, sessionId))
+    const script = stub.script(shell("echo first > first.txt"))
+    yield* restart(opened.harness, sessionId, locationOf(sessionId), undefined, {
+      messageId: Session.MessageID.create(),
+      prompt: { text: `${script.marker} use the tool` },
+      sender: { userId: "user_1" },
     })
     yield* Effect.promise(() => script.called(2))
-    expect(yield* text(join(workspace, file))).toBe("first\n")
+    expect(yield* text(join(folder(sessionId), "first.txt"))).toBe("first\n")
   }),
 )
 
-it.live("refuses to start a new session on a machine it cannot use, and creates no session", () =>
-  Effect.gen(function* () {
-    const brain = Brain.ID.create()
-    const dead = yield* machine(environmentId)
-    yield* dead.stop
-    const deadId = Environment.ID.create()
-    const harness = yield* open(
-      EnvironmentAccess.layerFixed([
-        yield* accessTo(yield* Machine.url, brain),
-        yield* accessTo(dead.url, brain, deadId),
-      ]),
-    )
-    const file = join(workspace, `${crypto.randomUUID()}.txt`)
-    yield* Effect.promise(() => Bun.write(file, "a file"))
-    const attempts = [
-      { environmentId: Environment.ID.create(), directory: workspace },
-      { environmentId: deadId, directory: workspace },
-      { environmentId, directory: file },
-    ]
-    const outcomes = yield* Effect.forEach(attempts, (location) =>
-      Effect.gen(function* () {
-        const sessionId = Session.ID.create()
-        const error = yield* restart(harness, sessionId, [location]).pipe(Effect.flip)
-        const send = yield* sendTo(harness, sessionId, stub.script()).pipe(Effect.flip)
-        return [error._tag, send._tag]
-      }),
-    )
-    expect(outcomes).toEqual(Array(3).fill(["BrainRejectedError", "SessionNotStartedError"]))
-  }),
+it.live(
+  "a sandbox that cannot be used does not stop the start; the first tool call fails with the cause, and contacts the sandbox once",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const dead = yield* begin(opened, { url: "http://127.0.0.1:9" })
+      const deadTurn = yield* refusedTurn(dead)
+      expect([deadTurn.ran, deadTurn.result]).toEqual([false, expect.stringContaining("does not answer")])
+      const fileSession = Session.ID.create()
+      yield* Effect.promise(() => Bun.write(folder(fileSession), "a file, not a folder"))
+      yield* opened.memory.set(fileSession, yield* accessTo(yield* Machine.url, fileSession))
+      yield* restart(opened.harness, fileSession, locationOf(fileSession))
+      const fileTurn = yield* refusedTurn({
+        sessionId: fileSession,
+        turn: (script) =>
+          sendTo(opened.harness, fileSession, script).pipe(Effect.andThen(Effect.promise(() => script.called(2)))),
+      })
+      expect([fileTurn.ran, fileTurn.result]).toEqual([false, expect.stringContaining("Could not make the folder")])
+      const missing = Session.ID.create()
+      yield* restart(opened.harness, missing, locationOf(missing))
+      const missingTurn = yield* refusedTurn({
+        sessionId: missing,
+        turn: (script) =>
+          sendTo(opened.harness, missing, script).pipe(Effect.andThen(Effect.promise(() => script.called(2)))),
+      })
+      expect([missingTurn.ran, missingTurn.result]).toEqual([false, expect.stringContaining("No access to a sandbox")])
+    }),
 )
 
-it.live("a background helper's command finishes where it started, and the helper's next step follows the move", () =>
+it.live("a helper of a session with no environment has no file or shell tools", () =>
   Effect.gen(function* () {
-    const setup = yield* withSecondMachine
-    const session = yield* begin(setup.harness)
-    const childFile = `${crypto.randomUUID()}.txt`
-    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-    const child = stub.script(shell(`echo $$ > ${pidFile}; sleep 2; pwd > ${childFile}`))
-    const launched = yield* session.turn(
-      stub.script({
-        tool: {
-          name: "subagent",
-          input: { agent: "general", description: "Work", prompt: `${child.marker} work`, background: true },
-        },
-      }),
-    )
-    const childId = toolOutput(launched).match(/sessionID: (ses_\w+)/)?.[1]
-    expect(childId).toBeDefined()
-    if (!childId) return
-    yield* Pid.read(pidFile)
-    yield* restart(setup.harness, session.sessionId, [setup.there])
-    yield* Effect.promise(() => child.called(2))
-    expect(yield* text(join(workspace, childFile))).toBe(`${workspace}\n`)
-    const next = stub.script(shell("pwd"))
-    yield* sendTo(setup.harness, Session.ID.make(childId), next)
-    expect(toolOutput(yield* Effect.promise(() => next.called(2)))).toContain(setup.other.directory)
-  }),
-)
-
-it.live("a queued turn that starts while a move lands runs its command where the model is told it runs", () =>
-  Effect.gen(function* () {
-    const setup = yield* withSecondMachine
-    const session = yield* begin(setup.harness)
-    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
-    const running = stub.script(shell(`echo $$ > ${pidFile}; sleep 1`))
-    const queued = stub.script(shell("pwd"))
-    yield* session.send(running)
-    yield* sendTo(setup.harness, session.sessionId, queued, "queue")
-    yield* Pid.read(pidFile)
-    yield* Effect.exit(restart(setup.harness, session.sessionId, [setup.there]))
-    const call = yield* Effect.promise(() => queued.called(2))
-    const told = noteOf(queued.calls.at(0) ?? call)
-    expect(told).not.toBeNull()
-    expect(toolOutput(call)).toContain(told?.[2] ?? "missing note")
-  }),
-)
-
-it.live("two starts at once naming different machines leave the session on one, and the model is told that one", () =>
-  Effect.gen(function* () {
-    const setup = yield* withSecondMachine
-    const session = yield* begin(setup.harness)
-    yield* Effect.all(
-      [
-        restart(setup.harness, session.sessionId, [setup.there]),
-        restart(setup.harness, session.sessionId, [setup.here]),
-      ],
-      { concurrency: "unbounded" },
-    )
-    const call = yield* session.turn(stub.script(shell("pwd")))
-    const told = noteOf(call)
-    expect(told).not.toBeNull()
-    expect(toolOutput(call)).toContain(told?.[2] ?? "missing note")
-  }),
-)
-
-it.live("a helper of a session with no machine has no file or shell tools", () =>
-  Effect.gen(function* () {
-    const session = yield* begin(yield* openServed(local), [])
+    const opened = yield* open()
+    const session = yield* begin(opened, { onEnvironment: false })
     const child = stub.script()
     yield* session.turn(
       stub.script({
@@ -499,106 +402,61 @@ it.live("a helper of a session with no machine has no file or shell tools", () =
   }),
 )
 
-it.live("after a move to another folder, reading a path that search returned works", () =>
-  Effect.gen(function* () {
-    const setup = yield* withSecondMachine
-    const session = yield* begin(setup.harness)
-    yield* restart(setup.harness, session.sessionId, [setup.there])
-    const name = `found-${crypto.randomUUID().slice(0, 8)}.md`
-    yield* Effect.promise(() => Bun.write(join(setup.other.directory, "docs", name), "found on the other machine\n"))
-    const globbed = toolOutput(
-      yield* session.turn(stub.script({ tool: { name: "glob", input: { pattern: "**/found-*.md" } } })),
-    )
-    const path = globbed.match(new RegExp(`[^"\\\\\\s]*${name}`))?.[0]
-    expect(path).toBeDefined()
-    const read = yield* session.turn(stub.script({ tool: { name: "read", input: { path } } }))
-    expect(toolOutput(read)).toContain("found on the other machine")
-  }),
-)
-
-it.live("moving one session leaves other sessions on the same and on another machine where they were", () =>
-  Effect.gen(function* () {
-    const setup = yield* withSecondMachine
-    const moving = yield* begin(setup.harness)
-    const staying = yield* begin(setup.harness)
-    const elsewhere = yield* begin(setup.harness, [setup.there])
-    yield* restart(setup.harness, moving.sessionId, [setup.there])
-    expect(toolOutput(yield* moving.turn(stub.script(shell("pwd"))))).toContain(setup.other.directory)
-    expect(toolOutput(yield* staying.turn(stub.script(shell("pwd"))))).toContain(workspace)
-    expect(toolOutput(yield* elsewhere.turn(stub.script(shell("pwd"))))).toContain(setup.other.directory)
-  }),
-)
-
 it.live(
-  "the model is told the right machine and path mapping after each move, folder change, detach and reattach",
+  "removing a session's access lets a running command finish, fails the next call with no access, and access back restores tools",
   () =>
     Effect.gen(function* () {
-      const setup = yield* withSecondMachine
-      const session = yield* begin(setup.harness)
-      const sub = join(setup.other.directory, "sub")
-      yield* Effect.promise(() => Bun.write(join(sub, ".keep"), ""))
-      const steps: ReadonlyArray<ReadonlyArray<Environment.Location>> = [
-        [setup.there],
-        [{ environmentId: setup.otherId, directory: sub }],
-        [],
-        [setup.here],
-      ]
-      const calls = yield* Effect.forEach(steps, (step) =>
-        restart(setup.harness, session.sessionId, step).pipe(Effect.andThen(session.turn(stub.script(), 1))),
-      )
-      expect(calls.map((call) => noteOf(call)?.slice(1, 3) ?? null)).toEqual([
-        [setup.otherId, setup.other.directory],
-        [setup.otherId, sub],
-        null,
-        [environmentId, workspace],
-      ])
-      expect(JSON.stringify(calls[0]?.body.messages)).toContain(
-        `Paths under ${workspace} refer to ${setup.other.directory}`,
-      )
-    }),
-)
-
-it.live(
-  "removing a machine's access lets a running command finish, refuses the next one, and access back restores tools",
-  () =>
-    Effect.gen(function* () {
-      const access = yield* accessTo(yield* Machine.url, Brain.ID.create())
-      const context = yield* Layer.build(EnvironmentAccess.layerMemory([access]))
-      const memory = Context.get(context, EnvironmentAccess.Memory)
-      const session = yield* begin(yield* open(Layer.succeedContext(context)))
+      const opened = yield* open()
+      const session = yield* begin(opened)
+      const access = yield* accessTo(yield* Machine.url, session.sessionId)
       const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
       const running = stub.script(shell(`echo $$ > ${pidFile}; sleep 2; echo finished`))
       yield* session.send(running)
       yield* Pid.read(pidFile)
-      yield* memory.remove(environmentId)
+      yield* opened.memory.remove(session.sessionId)
       const finished = lastToolResult(yield* Effect.promise(() => running.called(2)))
       const refused = yield* refusedTurn(session)
-      yield* memory.set(access)
+      yield* opened.memory.set(session.sessionId, access)
       const back = lastToolResult(yield* session.turn(stub.script(shell("echo back"))))
-      expect({ finished, ran: refused.ran, failed: refused.result.includes("tool.execution"), back }).toEqual({
+      expect({ finished, ran: refused.ran, noAccess: refused.result.includes("No access to a sandbox"), back }).toEqual({
         finished: JSON.stringify("finished\n"),
         ran: false,
-        failed: true,
+        noAccess: true,
         back: JSON.stringify("back\n"),
       })
     }),
 )
 
-it.live("a tool call fails clearly while the executor is down, and the next one works once it is back", () =>
+it.live("a tool call fails clearly while the sandbox is down, and the next one works once it is back", () =>
   Effect.gen(function* () {
     const relay = yield* Relay.make(Relay.portOf(yield* Machine.url))
-    const access = yield* accessTo(relay.url, Brain.ID.create())
-    const session = yield* begin(yield* open(EnvironmentAccess.layerFixed([access])))
+    const opened = yield* open()
+    const session = yield* begin(opened, { url: relay.url })
     yield* session.turn(stub.script(shell("echo warm")))
     yield* relay.refuse(true)
     yield* relay.cut
     const down = yield* refusedTurn(session)
     yield* relay.refuse(false)
     const back = lastToolResult(yield* session.turn(stub.script(shell("echo back"))))
-    expect({ ran: down.ran, failed: down.result.includes("tool.execution"), back }).toEqual({
+    expect({ ran: down.ran, unreachable: down.result.includes("does not answer"), back }).toEqual({
       ran: false,
-      failed: true,
+      unreachable: true,
       back: JSON.stringify("back\n"),
     })
+    expect(yield* opened.opens).toBe(2)
   }),
+)
+
+test.todo("Q2 the model reads the full output of a long command at the path that OpenCode names", () =>
+  live(
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const session = yield* begin(opened)
+      const call = yield* session.turn(stub.script(shell("seq 1 30000")))
+      const path = toolOutput(call).match(/full output saved to ([^\]"]+)/)?.[1]
+      expect(path).toBeDefined()
+      const read = toolOutput(yield* session.turn(stub.script({ tool: { name: "read", input: { path } } })))
+      expect(read).toContain("15000")
+    }),
+  ),
 )

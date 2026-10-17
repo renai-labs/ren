@@ -7,7 +7,6 @@
     "tsBuildInfoFile": "node_modules/.ts-dist/tests.tsbuildinfo"
   },
   "include": ["test"],
-  "exclude": ["test/lib/environment-worker.ts"],
   "references": [
     {
       "path": "./tsconfig.worker.json"

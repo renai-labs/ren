@@ -1,20 +1,8 @@
-export * as OpenCodeWorkspaceDriver from "./opencode-workspace-driver.js"
+export * as Hand from "./hand.js"
 
-import { EnvironmentFiles } from "@opencode/core/environment/files"
-import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
-import { WorkspaceDriver } from "@opencode/core/workspace/driver"
-import { Workspace } from "@opencode/schema/workspace"
-import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
-import type { LayerNode } from "@opencode/util/effect/layer-node"
-import {
-  FileNotFoundError,
-  orphanAfter,
-  pingEvery,
-  type ProcessEvent,
-  stallAfter,
-  WrongKindError,
-} from "@ren/brain-api/executor-api"
-import { Session } from "@ren/schema/session"
+import { orphanAfter, pingEvery, type ProcessEvent, stallAfter } from "@ren/brain-api/executor-api"
+import type { Signal } from "@ren/brain-api/signal"
+import type { Session } from "@ren/schema/session"
 import {
   Cause,
   Clock,
@@ -22,8 +10,6 @@ import {
   Duration,
   Effect,
   Exit,
-  Layer,
-  Option,
   PlatformError,
   Predicate,
   Queue,
@@ -35,18 +21,7 @@ import {
   Stream,
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-import { EnvironmentBindings } from "./environment-bindings.js"
-import { Environments } from "./environments.js"
-
-export const provider = "ren"
-
-export const workspaceId = (sessionId: Session.ID) =>
-  Workspace.ID.make(`wrk_${sessionId.slice(sessionId.indexOf("_") + 1)}`)
-
-export class NoEnvironment extends Schema.TaggedError<NoEnvironment>()("OpenCodeWorkspaceDriver.NoEnvironment", {
-  sessionId: Session.ID,
-  message: Schema.String,
-}) {}
+import type { Environments } from "./environments.js"
 
 const withoutTrailingSlash = (path: string) => path.replace(/(?<=.)\/+$/, "")
 
@@ -70,6 +45,8 @@ const lostNotice = (bytes: number) =>
 
 export const reconnectAfter = Duration.seconds(1)
 
+export const stdinRetryAfter = Duration.millis(50)
+
 const posixShells = new Set(["sh", "bash", "zsh", "dash", "ksh"])
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1)
@@ -80,11 +57,11 @@ const runnable = (shells: ReadonlyArray<string> = [], command: string, args: Rea
   return shells.at(0) ?? command
 }
 
-class OutputInterrupted extends Schema.TaggedError<OutputInterrupted>()("OpenCodeWorkspaceDriver.OutputInterrupted", {
+class OutputInterrupted extends Schema.TaggedError<OutputInterrupted>()("Hand.OutputInterrupted", {
   message: Schema.String,
 }) {}
 
-const childProcessError = (method: string) => (cause: unknown) =>
+export const childProcessError = (method: string) => (cause: unknown) =>
   PlatformError.systemError({
     _tag: "Unknown",
     module: "ChildProcess",
@@ -93,7 +70,9 @@ const childProcessError = (method: string) => (cause: unknown) =>
     cause,
   })
 
-export const spawner = (connection: Environments.Connection) =>
+export type KilledBySignal = (signal: Signal.Name) => unknown
+
+export const spawner = (connection: Environments.Connection, killedBySignal: KilledBySignal) =>
   ChildProcessSpawner.make(
     Effect.fnUntraced(function* (command) {
       if (command._tag === "PipedCommand")
@@ -119,6 +98,10 @@ export const spawner = (connection: Environments.Connection) =>
       }).pipe(Effect.mapError(childProcessError("spawn")))
       const writeStdin = (bytes: Uint8Array, isLastWrite: boolean) =>
         executor["process.write"]({ id: remoteProcess.id, data: bytes, end: isLastWrite }).pipe(
+          Effect.retry({
+            while: (error) => error._tag === "StdinFullError",
+            schedule: Schedule.spaced(stdinRetryAfter),
+          }),
           Effect.mapError(childProcessError("stdin")),
         )
       const stdoutChunks = yield* Queue.unbounded<Uint8Array, Cause.Done>()
@@ -148,10 +131,7 @@ export const spawner = (connection: Environments.Connection) =>
         if (event.type === "exit") {
           yield* Deferred.succeed(exited, undefined)
           yield* event.signal
-            ? Deferred.fail(
-                exitResult,
-                childProcessError("exitCode")(new CrossSpawnSpawner.KilledBySignal(event.signal)),
-              )
+            ? Deferred.fail(exitResult, childProcessError("exitCode")(killedBySignal(event.signal)))
             : Deferred.succeed(exitResult, ChildProcessSpawner.ExitCode(event.exitCode))
           return
         }
@@ -244,113 +224,38 @@ export const spawner = (connection: Environments.Connection) =>
     }),
   )
 
-export const files = (
-  connection: Environments.Connection,
-  physical: (path: string) => string = (path) => path,
-): EnvironmentFiles.FilesImpl => {
-  const client = connection.client
-  const fileError = (path: string) => (cause: unknown) => new EnvironmentFiles.Failed({ path, cause })
-  const fileLookupError = (path: string) => (error: unknown) =>
-    error instanceof FileNotFoundError ? new EnvironmentFiles.NotFound({ path }) : fileError(path)(error)
-  const fileKindError = (path: string) => (error: unknown) =>
-    error instanceof WrongKindError
-      ? new EnvironmentFiles.WrongKind({ path, actual: error.actual })
-      : fileLookupError(path)(error)
-  return {
-    read: (path, range) =>
-      client["files.read"]({ path: physical(path), ...(range && { range }) }).pipe(
-        Effect.map((result) => ({
-          bytes: result.bytes,
-          info: { type: result.info.type, size: result.info.sizeBytes, mtimeMs: result.info.modifiedAtMs },
-        })),
-        Effect.mapError(fileKindError(path)),
-      ),
-    write: (path, bytes) =>
-      client["files.write"]({ path: physical(path), bytes }).pipe(Effect.mapError(fileError(path))),
-    stat: (path) =>
-      client["files.stat"]({ path: physical(path) }).pipe(
-        Effect.map((info) => ({ type: info.type, size: info.sizeBytes, mtimeMs: info.modifiedAtMs })),
-        Effect.mapError(fileLookupError(path)),
-      ),
-    list: (path) => client["files.list"]({ path: physical(path) }).pipe(Effect.mapError(fileKindError(path))),
-    remove: (path) => client["files.remove"]({ path: physical(path) }).pipe(Effect.mapError(fileError(path))),
-    move: (from, to) =>
-      client["files.move"]({ from: physical(from), to: physical(to) }).pipe(Effect.mapError(fileLookupError(from))),
-    mkdir: (path) => client["files.mkdir"]({ path: physical(path) }).pipe(Effect.mapError(fileError(path))),
-  }
+export interface SessionHand {
+  readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]
+  readonly files: <A, E>(
+    use: (connection: Environments.Connection, physical: (path: string) => string) => Effect.Effect<A, E>,
+  ) => Effect.Effect<A, E | Environments.Unavailable>
 }
 
-export const sessionConnection = (
+export const session = (
   environments: Environments.Interface,
-  bindings: EnvironmentBindings.Interface,
   sessionId: Session.ID,
-) => {
-  const target = Effect.gen(function* () {
-    const binding = yield* bindings.get(sessionId)
-    const location = Option.flatMap(binding, (found) => Option.fromNullishOr(found.location))
-    if (Option.isNone(binding) || Option.isNone(location))
-      return yield* new NoEnvironment({ sessionId, message: `Session ${sessionId} has no environment` })
-    return {
-      connection: yield* environments.connect(location.value.environmentId),
-      physical: physicalPath(binding.value.sessionDirectory, location.value.directory),
-    }
-  })
-  const withFiles = <A, E>(path: string, use: (files: EnvironmentFiles.FilesImpl) => Effect.Effect<A, E>) =>
-    target.pipe(
-      Effect.mapError((cause) => new EnvironmentFiles.Failed({ path, cause })),
-      Effect.flatMap((found) => use(files(found.connection, found.physical))),
-      Effect.scoped,
-    )
-  const overrides: EnvironmentFiles.FilesImpl = {
-    read: (path, range) => withFiles(path, (targetFiles) => targetFiles.read(path, range)),
-    write: (path, bytes) => withFiles(path, (targetFiles) => targetFiles.write(path, bytes)),
-    stat: (path) => withFiles(path, (targetFiles) => targetFiles.stat(path)),
-    list: (path) => withFiles(path, (targetFiles) => targetFiles.list(path)),
-    remove: (path) => withFiles(path, (targetFiles) => targetFiles.remove(path)),
-    move: (from, to) => withFiles(from, (targetFiles) => targetFiles.move(from, to)),
-    mkdir: (path) => withFiles(path, (targetFiles) => targetFiles.mkdir(path)),
-  }
-  return {
-    spawner: ChildProcessSpawner.make((command) =>
-      target.pipe(
-        Effect.mapError(childProcessError("spawn")),
-        Effect.flatMap((found) =>
-          spawner(found.connection).spawn(
-            command._tag === "StandardCommand"
-              ? ChildProcess.make(command.command, command.args, {
-                  ...command.options,
-                  ...(command.options.cwd && { cwd: found.physical(command.options.cwd) }),
-                })
-              : command,
-          ),
-        ),
-      ),
-    ),
-    overrides,
-  }
-}
-
-export const replacements = (
-  environments: Environments.Interface,
-  bindings: EnvironmentBindings.Interface,
-): LayerNode.Replacements => [
-  WorkspaceDriver.node.replace(
-    WorkspaceDriver.registryNode({
-      [provider]: WorkspaceDriver.make({
-        create: () => Effect.succeed({ binding: {} }),
-        connect: (input) =>
-          Schema.decodeUnknownEffect(Session.ID)(
-            `ses_${input.workspaceID.slice(input.workspaceID.indexOf("_") + 1)}`,
-          ).pipe(
-            Effect.map((sessionId) => sessionConnection(environments, bindings, sessionId)),
-            Effect.mapError((cause) => new WorkspaceDriver.Error({ message: cause.message, cause })),
-          ),
-        suspendForIdle: () => Effect.void,
-        destroy: () => Effect.void,
+  sessionDirectory: string,
+  killedBySignal: KilledBySignal,
+): SessionHand => ({
+  spawner: ChildProcessSpawner.make((command) =>
+    environments.connect(sessionId, "processes").pipe(
+      Effect.mapError(childProcessError("spawn")),
+      Effect.flatMap((connection) => {
+        const physical = physicalPath(sessionDirectory, connection.directory)
+        return spawner(connection, killedBySignal).spawn(
+          command._tag === "StandardCommand"
+            ? ChildProcess.make(command.command, command.args, {
+                ...command.options,
+                ...(command.options.cwd && { cwd: physical(command.options.cwd) }),
+              })
+            : command,
+        )
       }),
-    }),
+    ),
   ),
-  RipgrepBinary.node.replace(
-    Layer.succeed(RipgrepBinary.Service, RipgrepBinary.Service.of({ filepath: Effect.succeed("rg") })),
-  ),
-]
+  files: (use) =>
+    environments.connect(sessionId, "files").pipe(
+      Effect.flatMap((connection) => use(connection, physicalPath(sessionDirectory, connection.directory))),
+      Effect.scoped,
+    ),
+})

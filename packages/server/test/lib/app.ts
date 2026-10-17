@@ -1,5 +1,6 @@
 import { BunHttpServer } from "@effect/platform-bun"
 import { BrainHost } from "@ren/core/brain-host"
+import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { SignupGuard } from "@ren/core/signup-guard"
@@ -19,11 +20,14 @@ export const config = {
   APP_URL: `${origin}/app`,
 }
 
-export const makeApp = (routes: typeof Routes.layer = Routes.layer, options?: { readonly baseURL?: string }) =>
+export const makeApp = (
+  routes: typeof Routes.layer = Routes.layer,
+  options?: { readonly baseURL?: string; readonly config?: Readonly<Record<string, string>> },
+) =>
   HttpRouter.toWebHandler(
     routes.pipe(
       Layer.provide([BrainHost.layer, Mailer.layer, SignupGuard.layer]),
-      Layer.provide(Models.layerNone),
+      Layer.provide([Models.layerNone, Environments.layer]),
       Layer.provide(Testing.layer),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(BunHttpServer.layerHttpServices),
@@ -36,6 +40,7 @@ export const makeApp = (routes: typeof Routes.layer = Routes.layer, options?: { 
             SIGNUP_MX_CHECK: "false",
             CELL_URL: "http://127.0.0.1:9",
             CELL_KEYS: JSON.stringify([{ id: "test", secret: "a-test-cell-key-of-at-least-32-characters" }]),
+            ...options?.config,
           }),
           { asPrimary: true },
         ),

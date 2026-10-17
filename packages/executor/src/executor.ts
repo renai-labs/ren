@@ -4,6 +4,7 @@ import type {
   DirectoryEntry,
   FileInfo,
   FileNotFoundError,
+  FileTooLargeError,
   Hello,
   OperationFailedError,
   ProcessEvent,
@@ -13,6 +14,7 @@ import type {
   ReadResult,
   SpawnInput,
   SpawnResult,
+  StdinFullError,
   WrongKindError,
 } from "@ren/brain-api/executor-api"
 import type { Signal } from "@ren/brain-api/signal"
@@ -32,7 +34,7 @@ export interface Interface {
     id: ProcessID,
     data: Uint8Array,
     end: boolean,
-  ) => Effect.Effect<void, ProcessNotFoundError | OperationFailedError>
+  ) => Effect.Effect<void, ProcessNotFoundError | StdinFullError | OperationFailedError>
   readonly heartbeat: (brain: Brain.ID, id: ProcessID) => Effect.Effect<void, ProcessNotFoundError>
   readonly kill: (
     brain: Brain.ID,
@@ -43,8 +45,8 @@ export interface Interface {
   readonly read: (
     path: string,
     range?: Range,
-  ) => Effect.Effect<ReadResult, FileNotFoundError | WrongKindError | OperationFailedError>
-  readonly write: (path: string, bytes: Uint8Array) => Effect.Effect<void, OperationFailedError>
+  ) => Effect.Effect<ReadResult, FileNotFoundError | WrongKindError | FileTooLargeError | OperationFailedError>
+  readonly write: (path: string, bytes: Uint8Array) => Effect.Effect<void, FileTooLargeError | OperationFailedError>
   readonly stat: (path: string) => Effect.Effect<FileInfo, FileNotFoundError | OperationFailedError>
   readonly list: (
     path: string,

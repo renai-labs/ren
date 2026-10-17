@@ -29,3 +29,15 @@ export class ModelsUnavailableError extends Schema.TaggedError<ModelsUnavailable
   { message: Schema.String },
   { httpApiStatus: 503 },
 ) {}
+
+export class EnvironmentNotFoundError extends Schema.TaggedError<EnvironmentNotFoundError>()(
+  "EnvironmentNotFoundError",
+  { message: Schema.String },
+  { httpApiStatus: 404 },
+) {}
+
+export class EnvironmentUnavailableError extends Schema.TaggedError<EnvironmentUnavailableError>()(
+  "EnvironmentUnavailableError",
+  { message: Schema.String },
+  { httpApiStatus: 503 },
+) {}
