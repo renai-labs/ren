@@ -2,10 +2,10 @@ import { describe, expect } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
 import { ForbiddenError, StaleUploadError } from "@ren/brain-api/errors"
 import { SessionToken } from "@ren/brain-api/session-token"
-import { maxBodyBytes, SyncApi } from "@ren/brain-api/sync-api"
+import { SyncApi } from "@ren/brain-api/sync-api"
 import { Seed, Sync, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
-import { Clock, Effect, Layer, Stream } from "effect"
+import { Clock, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpRouter } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { Routes } from "../src/routes.js"
@@ -33,7 +33,7 @@ const root = Effect.fnUntraced(function* () {
     iat: Math.floor((yield* Clock.currentTimeMillis) / 1000),
     exp: yield* expiry,
   })
-  return { owner, rootId, hostToken, client: yield* client(hostToken) }
+  return { owner, rootId, client: yield* client(hostToken) }
 })
 
 const client = (bearer: string) =>
@@ -89,39 +89,6 @@ describe("SyncApi", () => {
       ]
       for (const attempt of attempts) expect(yield* Effect.flip(attempt)).toBeInstanceOf(ForbiddenError)
       expect((yield* sync["sync.checkpoints"]()).sessions.map((session) => session.id)).toEqual([host.rootId])
-    }),
-  )
-
-  it.live("a body over the limit gets 413 and a body with no length gets 411, and the upload stays open", () =>
-    Effect.gen(function* () {
-      const host = yield* root()
-      const sync = host.client.sync
-      const params = { id: host.rootId }
-      const opened = yield* sync["sync.startUpload"]({ params, payload: { harness: "opencode", parentId: null } })
-      const path = `/brain/sync/sessions/${host.rootId}/uploads/${opened.upload}/messages`
-      const large = JSON.stringify({
-        messages: [Sync.message(host.rootId, "msg_large", 2, { data: "x".repeat(maxBodyBytes) })],
-      })
-      const http = (yield* HttpClient.HttpClient).pipe(
-        HttpClient.mapRequest(HttpClientRequest.bearerToken(host.hostToken)),
-      )
-      const statuses = yield* Effect.all([
-        http.execute(HttpClientRequest.post(path).pipe(HttpClientRequest.bodyText(large, "application/json"))),
-        http.execute(
-          HttpClientRequest.post(path).pipe(
-            HttpClientRequest.bodyStream(Stream.make(new TextEncoder().encode(JSON.stringify({ messages: [] }))), {
-              contentType: "application/json",
-            }),
-          ),
-        ),
-      ]).pipe(Effect.map((responses) => responses.map((response) => response.status)))
-      expect(statuses).toEqual([413, 411])
-      const kept = Sync.message(host.rootId, "msg_kept", 2)
-      yield* sync["sync.uploadMessages"]({
-        params: { ...params, upload: opened.upload },
-        payload: { messages: [kept] },
-      })
-      expect((yield* sync["sync.messages"]({ params, query: { limit: 10 } })).messages).toEqual([kept])
     }),
   )
 

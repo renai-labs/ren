@@ -48,19 +48,21 @@ const Cors = HttpRouter.middleware(
 )
 
 export const layer = Layer.mergeAll(
-  HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
-    Layer.provide([HealthHandler, MeHandler, InvitationHandler, SpaceHandler, SpaceMemberHandler]),
-    Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
-    Layer.provide([Health.layer, Invitation.layer, Space.layer, SpaceMember.layer]),
-  ),
-  HttpApiBuilder.layer(HostApi).pipe(
-    Layer.provide([ModelsHandler, EnvironmentsHandler, HostHandler]),
-    Layer.provide(BrainHost.hostAuthentication),
-  ),
+  Layer.mergeAll(
+    HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
+      Layer.provide([HealthHandler, MeHandler, InvitationHandler, SpaceHandler, SpaceMemberHandler]),
+      Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
+      Layer.provide([Health.layer, Invitation.layer, Space.layer, SpaceMember.layer]),
+    ),
+    HttpApiBuilder.layer(HostApi).pipe(
+      Layer.provide([ModelsHandler, EnvironmentsHandler, HostHandler]),
+      Layer.provide(BrainHost.hostAuthentication),
+    ),
+    AuthRoute,
+  ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
     Layer.provide([BrainHost.hostAuthentication, bodyLimit(maxBodyBytes), SessionSync.layer]),
   ),
-  AuthRoute,
   Cors,
 ).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))
