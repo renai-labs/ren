@@ -30,7 +30,8 @@ Test databases are named `ren_test_<uuid>` and are dropped when a test finishes.
 
 ## Tests
 
-- One package: `cd packages/<name> && bun run test`.
+- One package: `cd packages/<name> && bun run test`. It skips `*.slow.test.ts` files; set `REN_SLOW=1` to run them too.
+- Durations: `bun run test` prints only failures. `bun test <file>` prints each test with its duration. Move a test that takes more than 5 seconds to a `*.slow.test.ts` file, as `AGENTS.md` says.
 - End-to-end: `cd packages/e2e && bun run test`. It starts its own server on port 4010.
 - Everything: `bun turbo test`.
 

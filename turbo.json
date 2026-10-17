@@ -8,7 +8,7 @@
     ".github/actions/setup-bun/**",
     ".github/workflows/test.yml"
   ],
-  "globalEnv": ["CI"],
+  "globalEnv": ["CI", "REN_SLOW"],
   "globalPassThroughEnv": ["CI", "DATABASE_URL"],
   "tasks": {
     "typecheck": {

@@ -28,7 +28,13 @@ const environment = {
 }
 
 const child = Bun.spawn({
-  cmd: [process.execPath, "test", "--only-failures", ...process.argv.slice(2)],
+  cmd: [
+    process.execPath,
+    "test",
+    "--only-failures",
+    ...(process.env.REN_SLOW ? [] : ["--path-ignore-patterns", "**/*.slow.test.ts"]),
+    ...process.argv.slice(2),
+  ],
   env: environment,
   stdin: "inherit",
   stdout: "inherit",

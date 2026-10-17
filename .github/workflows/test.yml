@@ -15,6 +15,7 @@ permissions:
 
 env:
   DATABASE_URL: postgres://ren:ren@localhost:54320/ren
+  REN_SLOW: "1"
   TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event.before }}
   TURBO_SCM_HEAD: ${{ github.sha }}
 
