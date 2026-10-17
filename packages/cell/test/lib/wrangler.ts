@@ -10,6 +10,7 @@ const cell = path.resolve(import.meta.dir, "../..")
 export interface Instance extends Celld.Instance {
   readonly restart: (vars: Readonly<Record<string, string>>, main?: string) => Promise<void>
   readonly crash: () => Promise<void>
+  readonly loseStorage: () => Promise<void>
   readonly pid: () => number | undefined
 }
 
@@ -107,6 +108,22 @@ export const make = async (vars: Readonly<Record<string, string>>, main = "src/w
     }
     await ready()
   }
+  const crash = async () => {
+    const child = state.child
+    if (!child) return
+    const descendants = (pid: number): ReadonlyArray<number> => {
+      const children = new TextDecoder()
+        .decode(Bun.spawnSync(["pgrep", "-P", String(pid)]).stdout)
+        .split("\n")
+        .filter(Boolean)
+        .map(Number)
+      return [...children, ...children.flatMap(descendants)]
+    }
+    for (const pid of [child.pid, ...descendants(child.pid)]) Bun.spawnSync(["kill", "-KILL", String(pid)])
+    await child.exited
+    await state.drained
+    state.child = undefined
+  }
   await start()
   return {
     url,
@@ -120,21 +137,11 @@ export const make = async (vars: Readonly<Record<string, string>>, main = "src/w
       await configure(nextVars, nextMain)
       await start()
     },
-    crash: async () => {
-      const child = state.child
-      if (!child) return
-      const descendants = (pid: number): ReadonlyArray<number> => {
-        const children = new TextDecoder()
-          .decode(Bun.spawnSync(["pgrep", "-P", String(pid)]).stdout)
-          .split("\n")
-          .filter(Boolean)
-          .map(Number)
-        return [...children, ...children.flatMap(descendants)]
-      }
-      for (const pid of [child.pid, ...descendants(child.pid)]) Bun.spawnSync(["kill", "-KILL", String(pid)])
-      await child.exited
-      await state.drained
-      state.child = undefined
+    crash,
+    loseStorage: async () => {
+      await crash()
+      await fs.rm(path.join(project, "state"), { recursive: true, force: true })
+      await start()
     },
   }
 }
