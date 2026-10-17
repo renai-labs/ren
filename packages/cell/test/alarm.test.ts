@@ -390,3 +390,15 @@ opencode.effect(
       expect(yield* brain.state).toEqual(closed)
     }),
 )
+
+test.todo(
+  "a sync step that is not drained sets the next alarm at 250 ms, or at the O4 limit of the first busy session",
+  () => {},
+)
+
+test.todo(
+  "sync steps that fail set the next alarm with exponential backoff and jitter from 1 s to 5 min, and a step that succeeds resets the backoff",
+  () => {},
+)
+
+test.todo("the alarm stays set while sync is not drained, also after reconcile closed OpenCode", () => {})
