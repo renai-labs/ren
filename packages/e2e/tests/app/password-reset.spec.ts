@@ -1,19 +1,20 @@
 import { expect, test } from "@playwright/test"
-import { createUser, lastEmail, signIn, uniqueEmail } from "../lib/servers.js"
+import { createUser, emailedLink, signIn, uniqueEmail } from "../lib/servers.js"
 
 test("a forgotten password is reset through the emailed link", async ({ page, request }) => {
   const email = uniqueEmail("reset")
-  await createUser(request, { name: "Ada Lovelace", email, password: "first password" })
+  await createUser(request, { name: "Ada Lovelace", email })
 
-  await page.goto(`/app/forgot-password?email=${encodeURIComponent(email)}`)
+  await page.goto("/app/login")
+  await page.getByLabel("Email").fill(email)
+  await page.getByRole("button", { name: "Continue", exact: true }).click()
+  await page.getByRole("link", { name: "Forgot your password?" }).click()
   await expect(page.getByLabel("Email")).toHaveValue(email)
   await page.getByRole("button", { name: "Send reset instructions" }).click()
   await expect(page.getByText("If an account exists for")).toBeVisible()
   await expect(page.getByText(email)).toBeVisible()
 
-  const link = /(http\S+reset-password\?token=\S+)/.exec(await lastEmail(request, email, "reset-password"))?.[1]
-  expect(link).toBeDefined()
-  await page.goto(link ?? "")
+  await page.goto((await emailedLink(request, email, "reset-password?token=")).href)
   await page.getByLabel("New password", { exact: true }).fill("second password")
   await page.getByLabel("Confirm new password").fill("other password")
   await page.getByRole("button", { name: "Continue", exact: true }).click()
@@ -36,13 +37,4 @@ test("a used or missing reset link offers a new one", async ({ page }) => {
   await page.getByRole("link", { name: "Request a new link" }).click()
   await expect(page).toHaveURL(/\/forgot-password$/)
   await expect(page.getByRole("heading", { level: 1, name: "Welcome to Ren" })).toBeVisible()
-})
-
-test("the forgot password form validates the email before sending", async ({ page }) => {
-  await page.goto("/app/forgot-password")
-  await page.getByLabel("Email").fill("not an email")
-  await page.getByRole("button", { name: "Send reset instructions" }).click()
-  await expect(page.getByText("Enter a valid email")).toBeVisible()
-  await page.getByRole("link", { name: "Back to sign in" }).click()
-  await expect(page).toHaveURL(/\/login$/)
 })

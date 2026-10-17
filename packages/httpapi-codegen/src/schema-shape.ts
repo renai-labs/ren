@@ -86,7 +86,7 @@ export function streamEncodedDataSchema(schema: SseSchema) {
   return Schema.toEncoded(Schema.make<Schema.Top>(ast))
 }
 
-export function streamEventSchema(schema: SseSchema) {
+function streamEventSchema(schema: SseSchema) {
   return schema.sseMode === "data" ? streamDataSchema(schema) : Schema.make<Schema.Top>(schema.events.ast)
 }
 

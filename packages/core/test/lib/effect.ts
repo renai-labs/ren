@@ -9,7 +9,7 @@ const body = <A, E, R>(value: Body<A, E, R>) => Effect.suspend(() => (typeof val
 
 const loopback = new Set(["127.0.0.1", "localhost", "[::1]"])
 
-export const refuseNetwork = (violations: string[]): typeof fetch =>
+const refuseNetwork = (violations: string[]): typeof fetch =>
   Object.assign(
     (input: string | URL | Request, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : input.toString()
@@ -47,8 +47,8 @@ const make = <R, E>(testLayer: Layer.Layer<R, E>, liveLayer: Layer.Layer<R, E>) 
   effect.only = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
     test.only(name, () => run(value, testLayer), opts)
 
-  effect.skip = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
-    test.skip(name, () => run(value, testLayer), opts)
+  effect.todo = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
+    test.todo(name, () => run(value, testLayer), opts)
 
   const live = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
     test(name, () => run(value, liveLayer), opts)
@@ -56,8 +56,8 @@ const make = <R, E>(testLayer: Layer.Layer<R, E>, liveLayer: Layer.Layer<R, E>) 
   live.only = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
     test.only(name, () => run(value, liveLayer), opts)
 
-  live.skip = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
-    test.skip(name, () => run(value, liveLayer), opts)
+  live.todo = <A, E2>(name: string, value: Body<A, E2, R | Scope.Scope>, opts?: number | TestOptions) =>
+    test.todo(name, () => run(value, liveLayer), opts)
 
   return { effect, live }
 }

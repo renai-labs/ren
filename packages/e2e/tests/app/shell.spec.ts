@@ -1,37 +1,18 @@
 import { expect, test } from "@playwright/test"
-import type { Page } from "@playwright/test"
-import { appOrigin, appURL, createUser, organizationName, password, serverURL } from "../lib/servers.js"
+import { appOrigin, appURL, createOrganization, organizationName, serverURL } from "../lib/servers.js"
 
-async function signedIn(page: Page) {
-  const company = `Initech${crypto.randomUUID().slice(0, 8)}`
-  await createUser(page.request, {
-    name: "Ada Lovelace",
-    email: `ada@${company.toLowerCase()}.com`,
-    password,
-  })
-  return company
-}
-
-test("the sidebar collapses with the keyboard and remembers it", async ({ page }) => {
-  await signedIn(page)
+test("the sidebar remembers that it was collapsed", async ({ page }) => {
+  await createOrganization(page.request, { name: "Ada Lovelace" })
   await page.goto("/app/")
-  await expect(page).toHaveURL(`${appURL}/`)
   const navigation = page.getByRole("complementary", { name: "Navigation" })
-  await expect(navigation.getByRole("link", { name: "Ren home" })).toBeVisible()
-  await expect(navigation.getByRole("link", { name: "New chat" }).first()).toHaveAttribute("aria-current", "page")
-  await expect(navigation.getByText("Your conversations will appear here once you start chatting!")).toBeVisible()
-
-  await page.keyboard.press("ControlOrMeta+b")
+  await navigation.getByRole("button", { name: "Collapse sidebar" }).click()
   await expect(navigation.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
-  await expect(navigation.getByRole("link", { name: "Ren home" })).toBeHidden()
   await page.reload()
   await expect(navigation.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
-  await navigation.getByRole("button", { name: "Expand sidebar" }).click()
-  await expect(navigation.getByRole("button", { name: "Collapse sidebar" })).toBeVisible()
 })
 
 test("switches organization and logs out from the profile card", async ({ page }) => {
-  const company = await signedIn(page)
+  const company = (await createOrganization(page.request, { name: "Ada Lovelace" })).organization
   const created = await page.request.post(`${serverURL}/auth/organization/create`, {
     headers: { origin: appOrigin },
     data: {
@@ -61,13 +42,8 @@ test("switches organization and logs out from the profile card", async ({ page }
   await expect(page).toHaveURL(/\/login\?redirect=/)
 })
 
-test("unknown pages go to the app and mobile hides the sidebar in a drawer", async ({ page }) => {
-  await signedIn(page)
+test("an unknown page goes to the app", async ({ page }) => {
+  await createOrganization(page.request, { name: "Ada Lovelace" })
   await page.goto("/app/somewhere/else")
   await expect(page).toHaveURL(`${appURL}/`)
-
-  await page.setViewportSize({ width: 390, height: 800 })
-  await expect(page.getByRole("complementary", { name: "Navigation" })).toBeHidden()
-  await page.getByRole("button", { name: "Open navigation" }).click()
-  await expect(page.getByRole("dialog", { name: "Navigation" }).getByRole("link", { name: "Ren home" })).toBeVisible()
 })

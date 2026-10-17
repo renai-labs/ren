@@ -123,13 +123,7 @@ function normalizeClientContent(content: string, groups: ReadonlyArray<Types.Gro
   return transforms.reduce((result, transform) => transform(result), content)
 }
 
-export function emitPromise(
-  contract: Types.Contract,
-  options?: {
-    readonly outputTypes?: Readonly<Record<string, { readonly name: string; readonly import: string }>>
-    readonly mutableOutputs?: boolean
-  },
-): Types.Output {
+export function emitPromise(contract: Types.Contract, options?: { readonly mutableOutputs?: boolean }): Types.Output {
   const groups = contract.groups
   for (const endpoint of groups.flatMap((group) => group.endpoints)) {
     const name = `${endpoint.group}.${endpoint.endpoint.identifier}`
@@ -140,10 +134,7 @@ export function emitPromise(
   return {
     operations: Operations.promiseOperations(groups),
     files: [
-      {
-        path: "types.ts",
-        content: PromiseTypes.renderPromiseTypes(groups, options?.outputTypes, options?.mutableOutputs ?? false),
-      },
+      { path: "types.ts", content: PromiseTypes.renderPromiseTypes(groups, options?.mutableOutputs ?? false) },
       { path: "client-error.ts", content: clientErrorSource },
       { path: "client.ts", content: normalizeClientContent(PromiseClient.renderPromiseClient(groups), groups) },
       {

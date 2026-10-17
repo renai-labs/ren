@@ -4,51 +4,37 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { join, resolve, sep } from "node:path"
 
 const directory = resolve(import.meta.dir, "..")
-const effect = realpathSync(resolve(import.meta.dir, "../node_modules/effect"))
-const query = realpathSync(resolve(import.meta.dir, "../node_modules/@tanstack/react-query"))
-const schema = resolve(import.meta.dir, "../../schema")
-const protocol = resolve(import.meta.dir, "../../protocol")
-const core = resolve(import.meta.dir, "../../core")
-const db = resolve(import.meta.dir, "../../db")
-const server = resolve(import.meta.dir, "../../server")
-const brainApi = resolve(import.meta.dir, "../../brain-api")
+const packages = {
+  effect: realpathSync(resolve(import.meta.dir, "../node_modules/effect")),
+  "@tanstack/react-query": realpathSync(resolve(import.meta.dir, "../node_modules/@tanstack/react-query")),
+  "@ren/schema": resolve(import.meta.dir, "../../schema"),
+  "@ren/protocol": resolve(import.meta.dir, "../../protocol"),
+  "@ren/core": resolve(import.meta.dir, "../../core"),
+  "@ren/db": resolve(import.meta.dir, "../../db"),
+  "@ren/server": resolve(import.meta.dir, "../../server"),
+  "@ren/brain-api": resolve(import.meta.dir, "../../brain-api"),
+}
+type Package = keyof typeof packages
+const serverSide: ReadonlyArray<Package> = ["@ren/core", "@ren/db", "@ren/server", "@ren/brain-api"]
 
 describe("public import boundaries", () => {
-  test("promise entrypoint pulls in no Effect, schema, protocol or server code", async () => {
-    const root = await bundleInputs("@ren/client")
+  test.each<{
+    readonly entrypoint: string
+    readonly uses: ReadonlyArray<Package>
+    readonly never: ReadonlyArray<Package>
+  }>([
+    { entrypoint: "@ren/client", uses: [], never: ["effect", "@ren/schema", "@ren/protocol", ...serverSide] },
+    {
+      entrypoint: "@ren/client/react",
+      uses: ["@tanstack/react-query"],
+      never: ["effect", "@ren/schema", "@ren/protocol", ...serverSide],
+    },
+    { entrypoint: "@ren/client/effect", uses: ["effect", "@ren/schema", "@ren/protocol"], never: serverSide },
+  ])("$entrypoint imports only what it may", async (row) => {
+    const bundle = await bundleInputs(row.entrypoint)
 
-    expect(within(root.all, effect)).toEqual([])
-    expect(within(root.all, schema)).toEqual([])
-    expect(within(root.all, protocol)).toEqual([])
-    expect(within(root.all, core)).toEqual([])
-    expect(within(root.all, db)).toEqual([])
-    expect(within(root.all, server)).toEqual([])
-    expect(within(root.all, brainApi)).toEqual([])
-  })
-
-  test("react entrypoint adds TanStack Query but no Effect, schema, protocol or server code", async () => {
-    const react = await bundleInputs("@ren/client/react")
-
-    expect(within(react.all, query).length).toBeGreaterThan(0)
-    expect(within(react.all, effect)).toEqual([])
-    expect(within(react.all, schema)).toEqual([])
-    expect(within(react.all, protocol)).toEqual([])
-    expect(within(react.all, core)).toEqual([])
-    expect(within(react.all, db)).toEqual([])
-    expect(within(react.all, server)).toEqual([])
-    expect(within(react.all, brainApi)).toEqual([])
-  })
-
-  test("effect entrypoint uses schema and protocol but never core, db, server or brain-api", async () => {
-    const network = await bundleInputs("@ren/client/effect")
-
-    expect(within(network.eager, effect).length).toBeGreaterThan(0)
-    expect(within(network.eager, schema).length).toBeGreaterThan(0)
-    expect(within(network.eager, protocol).length).toBeGreaterThan(0)
-    expect(within(network.all, core)).toEqual([])
-    expect(within(network.all, db)).toEqual([])
-    expect(within(network.all, server)).toEqual([])
-    expect(within(network.all, brainApi)).toEqual([])
+    expect(row.uses.filter((name) => !within(bundle.eager, packages[name]))).toEqual([])
+    expect(row.never.filter((name) => within(bundle.all, packages[name]))).toEqual([])
   })
 })
 
@@ -98,5 +84,5 @@ async function bundleInputs(specifier: string) {
 
 function within(inputs: ReadonlyArray<string>, directory: string) {
   const prefix = directory.endsWith(sep) ? directory : directory + sep
-  return inputs.filter((input) => input === directory || input.startsWith(prefix))
+  return inputs.some((input) => input === directory || input.startsWith(prefix))
 }

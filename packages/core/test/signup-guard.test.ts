@@ -1,11 +1,10 @@
 import { describe, expect } from "bun:test"
-import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
-import { Auth } from "@ren/schema/auth"
 import { ConfigProvider, Effect, Fiber, Layer, Option } from "effect"
 import { TestClock } from "effect/testing"
 import { SignupGuard } from "../src/signup-guard.js"
 import { testEffect } from "./lib/effect.js"
+import { Seed } from "./lib/seed.js"
 
 const it = testEffect(
   Layer.mergeAll(
@@ -34,18 +33,6 @@ const code = Effect.fnUntraced(function* (email: string, overrides: Partial<Sign
   return Option.getOrUndefined(yield* guard.checkEmailSignUp(email))?.code
 })
 
-const insertUser = Effect.fnUntraced(function* (email: string, emailVerified = true) {
-  const database = yield* Database.Service
-  yield* database.db.insert(Database.Schema.user).values({
-    id: Auth.UserID.create(),
-    name: "Owner",
-    email,
-    emailVerified,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  })
-})
-
 describe("SignupGuard", () => {
   describe("disposable domains", () => {
     it.live("rejects listed domains and their subdomains", () =>
@@ -55,10 +42,11 @@ describe("SignupGuard", () => {
       }),
     )
 
-    it.live("applies the configured allow and block lists first", () =>
+    it.live("applies the configured allow and block lists first, and skips the lookup for allowed domains", () =>
       Effect.gen(function* () {
         expect(yield* code("tester@mailinator.com")).toBeUndefined()
         expect(yield* code("someone@eu.acme.io")).toBe("DISPOSABLE_EMAIL")
+        expect(yield* code("ada@lab.dev", { resolveMx: fail("ENOTFOUND") })).toBeUndefined()
       }),
     )
 
@@ -101,20 +89,9 @@ describe("SignupGuard", () => {
       }),
     )
 
-    it.live("skips the lookup for allowed domains", () =>
-      Effect.gen(function* () {
-        expect(yield* code("ada@lab.dev", { resolveMx: fail("ENOTFOUND") })).toBeUndefined()
-      }),
-    )
-
-    it.live("fails open on DNS errors", () =>
+    it.effect("fails open on DNS errors and when the lookup times out", () =>
       Effect.gen(function* () {
         expect(yield* code("ada@acme.dev", { resolveMx: fail("ESERVFAIL") })).toBeUndefined()
-      }),
-    )
-
-    it.effect("fails open when the lookup times out", () =>
-      Effect.gen(function* () {
         const pending = yield* Effect.forkChild(code("ada@acme.dev", { resolveMx: () => new Promise(() => {}) }))
         yield* TestClock.adjust("1500 millis")
         expect(yield* Fiber.join(pending)).toBeUndefined()
@@ -128,30 +105,29 @@ describe("SignupGuard", () => {
       return yield* guard.hasVerifiedAlias(email)
     })
 
-    it.live("finds plus tags everywhere and Gmail dots of a verified inbox", () =>
+    it.live("finds plus tags everywhere and Gmail dots of a verified inbox, but not distinct inboxes", () =>
       Effect.gen(function* () {
-        yield* insertUser("jdoe@gmail.com")
-        yield* insertUser("owner@acme-tools.dev")
+        yield* Seed.user({ email: "jdoe@gmail.com" })
+        yield* Seed.user({ email: "owner@acme-tools.dev" })
         const aliases = yield* Effect.forEach(
-          ["jdoe+1@gmail.com", "j.doe@googlemail.com", "J.Doe+farm@GoogleMail.com", "owner+x@acme-tools.dev"],
+          [
+            "jdoe+1@gmail.com",
+            "j.doe@googlemail.com",
+            "J.Doe+farm@GoogleMail.com",
+            "owner+x@acme-tools.dev",
+            "jdoex@gmail.com",
+            "o.wner@acme-tools.dev",
+          ],
           alias,
         )
-        expect(aliases).toEqual([true, true, true, true])
+        expect(aliases).toEqual([true, true, true, true, false, false])
       }),
     )
 
     it.live("ignores aliases of unverified accounts", () =>
       Effect.gen(function* () {
-        yield* insertUser("victim+squat@gmail.com", false)
+        yield* Seed.user({ email: "victim+squat@gmail.com", emailVerified: false })
         expect(yield* alias("victim@gmail.com")).toBe(false)
-      }),
-    )
-
-    it.live("keeps distinct inboxes out of it", () =>
-      Effect.gen(function* () {
-        yield* insertUser("grace@gmail.com")
-        expect(yield* alias("gracex@gmail.com")).toBe(false)
-        expect(yield* alias("g.race@acme-tools.dev")).toBe(false)
       }),
     )
   })

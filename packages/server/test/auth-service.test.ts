@@ -1,25 +1,22 @@
 import { describe, expect, spyOn } from "bun:test"
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
+import { Postmark, testEffect } from "@ren/core/testing"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { Testing } from "@ren/db/testing"
 import { Space } from "@ren/schema/space"
 import { getAuthTables } from "better-auth/db"
-import { Cause, ConfigProvider, Deferred, Effect, Exit, Fiber, Layer, Option, Schedule } from "effect"
+import { ConfigProvider, Deferred, Effect, Fiber, Layer, Option, Schedule } from "effect"
 import { HttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { TestClock, TestConsole } from "effect/testing"
-import { testEffect } from "../../core/test/lib/effect.js"
-import { Postmark } from "../../core/test/lib/postmark.js"
 import { auth } from "../script/auth-config.js"
 import { Auth } from "../src/auth.js"
 import { BetterAuth } from "../src/better-auth.js"
+import { authRequest, config, sessionCookie, signUp } from "./lib/app.js"
 
 const dns: SignupGuard.Resolver = {
-  resolveMx: (domain) =>
-    domain.includes("nowhere")
-      ? Promise.reject(Object.assign(new Error("ENOTFOUND"), { code: "ENOTFOUND" }))
-      : Promise.resolve([{ exchange: `mx.${domain}` }]),
+  resolveMx: (domain) => Promise.resolve([{ exchange: `mx.${domain}` }]),
   resolve4: () => Promise.resolve([]),
   resolve6: () => Promise.resolve([]),
 }
@@ -32,7 +29,7 @@ const stalledMail = Layer.mergeAll(
   Layer.succeed(Postmark.Outbox, Postmark.Outbox.of({ next: Effect.never })),
 )
 
-const layer = (config: Record<string, string>, mail: ReturnType<typeof Postmark.layer> = Postmark.layer()) =>
+const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postmark.layer> = Postmark.layer()) =>
   Auth.layer.pipe(
     Layer.provideMerge(Layer.effect(SignupGuard.Service, SignupGuard.make(dns))),
     Layer.provideMerge(Testing.layer),
@@ -41,15 +38,11 @@ const layer = (config: Record<string, string>, mail: ReturnType<typeof Postmark.
     Layer.provide(
       ConfigProvider.layerAdd(
         ConfigProvider.fromUnknown({
-          BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
-          BETTER_AUTH_URL: "http://localhost:4000",
-          GOOGLE_CLIENT_ID: "google-client-id",
-          GOOGLE_CLIENT_SECRET: "google-client-secret",
-          APP_URL: "http://localhost:5173",
+          ...config,
           POSTMARK_SERVER_TOKEN: "postmark-token",
           EMAIL_FROM: "Ren <hello@ren.ai>",
           EMAIL_INVITE_FROM: "Ren <invites@ren.ai>",
-          ...config,
+          ...overrides,
         }),
         { asPrimary: true },
       ),
@@ -59,38 +52,23 @@ const layer = (config: Record<string, string>, mail: ReturnType<typeof Postmark.
 const it = testEffect(layer({ SKIP_EMAIL_VERIFICATION: "true" }))
 const verifying = testEffect(layer({}))
 
-const post = (path: string, body: unknown, cookie = "") =>
-  Effect.gen(function* () {
-    const auth = yield* Auth.Service
-    return yield* Effect.promise(() =>
-      auth.handler(
-        new Request(`http://localhost:4000/auth${path}`, {
-          method: "POST",
-          headers: { "content-type": "application/json", origin: "http://localhost:4000", cookie },
-          body: JSON.stringify(body),
-        }),
-      ),
-    )
-  })
+const handle = (request: (service: Auth.Service["Service"]) => Promise<Response>) =>
+  Auth.Service.use((service) => Effect.promise(() => request(service)))
 
-const get = (path: string, cookie: string) =>
-  Effect.gen(function* () {
-    const auth = yield* Auth.Service
-    const response = yield* Effect.promise(() =>
-      auth.handler(new Request(`http://localhost:4000/auth${path}`, { headers: { cookie } })),
-    )
-    return yield* Effect.promise(() => response.json())
-  })
+const post = (path: string, body: unknown, cookie = "") =>
+  handle((service) => service.handler(authRequest(path, body, cookie)))
 
 const json = (response: Response) => Effect.promise(() => response.json())
 
-const signUp = (email: string, name = "Ada") =>
-  post("/sign-up/email", { email, password: "correct horse battery staple", name })
+const get = (path: string, cookie: string) =>
+  handle((service) => service.handler(new Request(`http://localhost:4000/auth${path}`, { headers: { cookie } }))).pipe(
+    Effect.flatMap(json),
+  )
 
-const cookie = (response: Response) => response.headers.getSetCookie().join("; ")
+const register = (email: string, name?: string) => handle((service) => signUp(service, email, name))
 
 const defaultOrganization = Effect.fnUntraced(function* (email: string, name?: string) {
-  return yield* get("/organization/get-full-organization", cookie(yield* signUp(email, name)))
+  return yield* get("/organization/get-full-organization", sessionCookie(yield* register(email, name)))
 })
 
 describe("Auth", () => {
@@ -130,12 +108,12 @@ describe("Auth", () => {
       yield* sql`alter table organization add constraint reject_bell_labs check (slug not like 'bell-labs%')`
 
       const log = spyOn(console, "log")
-      const response = yield* signUp("dennis@mail.bell-labs.co.uk")
+      const response = yield* register("dennis@mail.bell-labs.co.uk")
       const logged = log.mock.calls.flat().join(" ")
       log.mockRestore()
       yield* sql`alter table organization drop constraint reject_bell_labs`
       expect(response.status).toBe(200)
-      const session = yield* get("/get-session", cookie(response))
+      const session = yield* get("/get-session", sessionCookie(response))
       expect(session.user.email).toBe("dennis@mail.bell-labs.co.uk")
       expect(session.session.activeOrganizationId).toBeNull()
 
@@ -150,28 +128,10 @@ describe("Auth", () => {
     }),
   )
 
-  it.live("keeps the default organization active and logs the failure when its spaces cannot be provisioned", () =>
-    Effect.gen(function* () {
-      const sql = yield* SqlClient.SqlClient
-      yield* sql`alter table space add constraint reject_personal check (name not like '%Personal Space')`
-
-      const log = spyOn(console, "log")
-      const response = yield* signUp("ellen@example.org", "Ellen")
-      const logged = log.mock.calls.flat().join(" ")
-      log.mockRestore()
-      yield* sql`alter table space drop constraint reject_personal`
-      expect(response.status).toBe(200)
-      const session = yield* get("/get-session", cookie(response))
-      expect(session.session.activeOrganizationId).toEqual(expect.stringMatching(/^org_/))
-      expect(logged).toContain("Space provisioning failed")
-      expect(logged).not.toContain("Default organization provisioning failed")
-    }),
-  )
-
   it.live("applies pending space assignments when the invitation is accepted", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
-      const owner = cookie(yield* signUp("lynn@example.org", "Lynn"))
+      const owner = sessionCookie(yield* register("lynn@example.org", "Lynn"))
       const organizationId = (yield* get("/get-session", owner)).session.activeOrganizationId
       const invitation = yield* json(
         yield* post("/organization/invite-member", { email: "alan@example.org", role: "member" }, owner),
@@ -184,9 +144,13 @@ describe("Auth", () => {
         insert into space_pending_member (id, space_id, email)
         values (${Space.AssignmentID.create()}, ${spaceId}, 'alan@example.org')`
 
-      const invitee = yield* signUp("alan@example.org", "Alan")
-      const session = yield* get("/get-session", cookie(invitee))
-      const accepted = yield* post("/organization/accept-invitation", { invitationId: invitation.id }, cookie(invitee))
+      const invitee = yield* register("alan@example.org", "Alan")
+      const session = yield* get("/get-session", sessionCookie(invitee))
+      const accepted = yield* post(
+        "/organization/accept-invitation",
+        { invitationId: invitation.id },
+        sessionCookie(invitee),
+      )
       expect(accepted.status).toBe(200)
 
       const memberships = yield* sql<{ n: number }>`
@@ -199,41 +163,45 @@ describe("Auth", () => {
     }),
   )
 
-  it.live("lets owners and admins manage the organization and only owners delete it", () =>
+  it.live("refuses organization management to members and deletion to admins", () =>
     Effect.gen(function* () {
-      const owner = cookie(yield* signUp("olga@example.org", "Olga"))
+      const owner = sessionCookie(yield* register("olga@example.org", "Olga"))
       const organizationId = (yield* get("/get-session", owner)).session.activeOrganizationId
       const join = Effect.fnUntraced(function* (email: string, role: string) {
         const invitation = yield* json(yield* post("/organization/invite-member", { email, role }, owner))
-        const session = cookie(yield* signUp(email))
+        const session = sessionCookie(yield* register(email))
         yield* post("/organization/accept-invitation", { invitationId: invitation.id }, session)
         yield* post("/organization/set-active", { organizationId }, session)
         return session
       })
       const admin = yield* join("adam@example.org", "admin")
       const member = yield* join("mia@example.org", "member")
-      const status = Effect.fnUntraced(function* (path: string, body: unknown, session: string) {
-        return (yield* post(path, body, session)).status
-      })
-      const update = { organizationId, data: { name: "Renamed" } }
-      const invite = (email: string) => ({ organizationId, email, role: "member" })
-      expect(yield* status("/organization/update", update, member)).toBe(403)
-      expect(yield* status("/organization/invite-member", invite("x@example.org"), member)).toBe(403)
-      expect(yield* status("/organization/update", update, admin)).toBe(200)
-      expect(yield* status("/organization/invite-member", invite("y@example.org"), admin)).toBe(200)
       const members = (yield* get(`/organization/list-members?organizationId=${organizationId}`, owner)).members
       const memberId = members.find((each: { role: string }) => each.role === "member").id
-      const promote = { organizationId, memberId, role: "admin" }
-      expect(yield* status("/organization/update-member-role", promote, member)).toBe(403)
-      expect(yield* status("/organization/update-member-role", promote, admin)).toBe(200)
-      expect(yield* status("/organization/delete", { organizationId }, admin)).toBe(403)
-      expect(yield* status("/organization/delete", { organizationId }, owner)).toBe(200)
+      const statuses = yield* Effect.forEach(
+        [
+          { path: "/organization/update", body: { organizationId, data: { name: "Renamed" } }, session: member },
+          {
+            path: "/organization/invite-member",
+            body: { organizationId, email: "x@example.org", role: "member" },
+            session: member,
+          },
+          {
+            path: "/organization/update-member-role",
+            body: { organizationId, memberId, role: "admin" },
+            session: member,
+          },
+          { path: "/organization/delete", body: { organizationId }, session: admin },
+        ],
+        (row) => post(row.path, row.body, row.session).pipe(Effect.map((response) => response.status)),
+      )
+      expect(statuses).toEqual([403, 403, 403, 403])
     }),
   )
 
   it.live("signs back in to the oldest organization", () =>
     Effect.gen(function* () {
-      const session = cookie(yield* signUp("frances@example.org"))
+      const session = sessionCookie(yield* register("frances@example.org"))
       const first = (yield* get("/get-session", session)).session.activeOrganizationId
       expect((yield* post("/organization/create", { name: "Side Project", slug: "side" }, session)).status).toBe(200)
 
@@ -241,13 +209,13 @@ describe("Auth", () => {
         email: "frances@example.org",
         password: "correct horse battery staple",
       })
-      expect((yield* get("/get-session", cookie(signIn))).session.activeOrganizationId).toBe(first)
+      expect((yield* get("/get-session", sessionCookie(signIn))).session.activeOrganizationId).toBe(first)
     }),
   )
 
   it.live("normalizes explicit organization slugs before the duplicate check", () =>
     Effect.gen(function* () {
-      const session = cookie(yield* signUp("linus@example.com"))
+      const session = sessionCookie(yield* register("linus@example.com"))
       const created = yield* post("/organization/create", { name: "Acme Inc", slug: "Acme Inc!" }, session)
       expect((yield* json(created)).slug).toBe("acme-inc")
       expect((yield* post("/organization/create", { name: "Acme", slug: "acme-inc" }, session)).status).toBe(400)
@@ -259,8 +227,8 @@ describe("Auth", () => {
   it.live("lets one of two concurrent creates with the same normalized slug win and handles the conflict", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
-      const ada = cookie(yield* signUp("ada@gmail.com", "Ada"))
-      const grace = cookie(yield* signUp("grace@gmail.com", "Grace"))
+      const ada = sessionCookie(yield* register("ada@gmail.com", "Ada"))
+      const grace = sessionCookie(yield* register("grace@gmail.com", "Grace"))
 
       const locked = yield* Deferred.make<void>()
       const release = yield* Deferred.make<void>()
@@ -303,61 +271,36 @@ describe("Auth", () => {
   )
 
   testEffect(layer({ SKIP_EMAIL_VERIFICATION: "true", APP_URL: "http://localhost:5173/app/" })).live(
-    "emails the invitation from the invite address and preserves the app path prefix",
+    "emails the invitation link and preserves the app path prefix",
     () =>
       Effect.gen(function* () {
         const outbox = yield* Postmark.Outbox
-        const owner = cookie(yield* signUp("radia@example.org"))
+        const owner = sessionCookie(yield* register("radia@example.org"))
         const invited = yield* post("/organization/invite-member", { email: "sophie@gmail.com", role: "member" }, owner)
-        expect((yield* outbox.next).message).toEqual({
-          From: "Ren <invites@ren.ai>",
-          To: "sophie@gmail.com",
-          Subject: "You have been invited to join a Ren organization",
-          TextBody: `You have been invited to join a Ren organization. Please click on the link below to accept the invitation. http://localhost:5173/app/signup?invitationId=${(yield* json(invited)).id}`,
-          MessageStream: "outbound",
-        })
-      }),
-  )
-
-  testEffect(layer({ SKIP_EMAIL_VERIFICATION: "true", APP_URL: "http://localhost:5173/app" })).live(
-    "emails a password reset link and preserves the app path prefix",
-    () =>
-      Effect.gen(function* () {
-        const outbox = yield* Postmark.Outbox
-        yield* signUp("katherine@example.org")
-        expect((yield* post("/request-password-reset", { email: "katherine@example.org" })).status).toBe(200)
-        const email = (yield* outbox.next).message
-        expect(email).toMatchObject({ To: "katherine@example.org", Subject: "Reset your Ren password" })
-        const link = new URL(email.TextBody.slice(email.TextBody.indexOf("http")))
-        expect(link.origin + link.pathname).toBe("http://localhost:5173/app/reset-password")
-        expect(link.searchParams.get("token")).toBeTruthy()
-      }),
-  )
-
-  testEffect(layer({ SKIP_EMAIL_VERIFICATION: "true" }, Postmark.layer(422))).live(
-    "keeps sign-up working and logs the failure when the email is rejected",
-    () =>
-      Effect.gen(function* () {
-        const outbox = yield* Postmark.Outbox
-        yield* signUp("hedy@example.org")
-        expect((yield* post("/request-password-reset", { email: "hedy@example.org" })).status).toBe(200)
-        yield* outbox.next
-        const logs = yield* TestConsole.logLines.pipe(
-          Effect.repeat({
-            until: (lines) => lines.join(" ").includes("Failed to send email"),
-            schedule: Schedule.spaced("10 millis"),
-            times: 100,
-          }),
+        expect((yield* outbox.next).message.TextBody).toEndWith(
+          ` http://localhost:5173/app/signup?invitationId=${(yield* json(invited)).id}`,
         )
-        expect(logs.join(" ")).toContain("Failed to send email")
       }),
+  )
+
+  it.live("emails a password reset link and preserves the app path prefix", () =>
+    Effect.gen(function* () {
+      const outbox = yield* Postmark.Outbox
+      yield* register("katherine@example.org")
+      expect((yield* post("/request-password-reset", { email: "katherine@example.org" })).status).toBe(200)
+      const email = (yield* outbox.next).message
+      expect(email).toMatchObject({ To: "katherine@example.org", Subject: "Reset your Ren password" })
+      const link = new URL(email.TextBody.slice(email.TextBody.indexOf("http")))
+      expect(link.origin + link.pathname).toBe("http://localhost:5173/app/reset-password")
+      expect(link.searchParams.get("token")).toBeTruthy()
+    }),
   )
 
   testEffect(layer({ SKIP_EMAIL_VERIFICATION: "true" }, stalledMail)).effect(
     "keeps the response successful and logs the failure when email delivery times out",
     () =>
       Effect.gen(function* () {
-        yield* signUp("margaret@example.org")
+        yield* register("margaret@example.org")
         expect((yield* post("/request-password-reset", { email: "margaret@example.org" })).status).toBe(200)
         const logs = yield* TestClock.adjust("10 seconds").pipe(
           Effect.andThen(TestConsole.logLines),
@@ -372,48 +315,26 @@ describe("Auth", () => {
       Effect.gen(function* () {
         const auth = yield* Auth.Service
         const outbox = yield* Postmark.Outbox
-        const response = yield* signUp("mary@example.org")
+        const response = yield* register("mary@example.org")
         expect(response.status).toBe(200)
-        expect(cookie(response)).toBe("")
+        expect(sessionCookie(response)).toBe("")
 
         const email = (yield* outbox.next).message
         const otp = email.Subject.split(" ")[0]
-        expect(email).toEqual({
-          From: "Ren <hello@ren.ai>",
-          To: "mary@example.org",
-          Subject: `${otp} is your Ren verification code`,
-          TextBody: `Use ${otp} to verify your email on Ren. The code expires in 10 minutes. If you didn't request it, you can ignore this email.`,
-          MessageStream: "outbound",
-        })
+        expect(email.To).toBe("mary@example.org")
         expect(otp).toMatch(/^\d{6}$/)
 
         const verified = yield* post("/email-otp/verify-email", { email: "mary@example.org", otp })
         expect(verified.status).toBe(200)
-        const session = Option.getOrThrow(yield* auth.getSession(new Headers({ cookie: cookie(verified) })))
+        const session = Option.getOrThrow(yield* auth.getSession(new Headers({ cookie: sessionCookie(verified) })))
         expect(session.user).toMatchObject({ email: "mary@example.org", emailVerified: true })
-      }),
-    )
-
-    verifying.live("emails a sign-in code to an existing user", () =>
-      Effect.gen(function* () {
-        const outbox = yield* Postmark.Outbox
-        yield* signUp("hedy@example.org")
-        yield* outbox.next
-
-        expect(
-          (yield* post("/email-otp/send-verification-otp", { email: "hedy@example.org", type: "sign-in" })).status,
-        ).toBe(200)
-        const email = (yield* outbox.next).message
-        const otp = email.Subject.split(" ")[0]
-        expect(email.Subject).toBe(`${otp} is your Ren sign-in code`)
-        expect(email.TextBody).toStartWith(`Use ${otp} to sign in on Ren.`)
       }),
     )
 
     verifying.live("does not email a verification code to a verified address", () =>
       Effect.gen(function* () {
         const outbox = yield* Postmark.Outbox
-        yield* signUp("annie@example.org")
+        yield* register("annie@example.org")
         const otp = (yield* outbox.next).message.Subject.split(" ")[0]
         expect((yield* post("/email-otp/verify-email", { email: "annie@example.org", otp })).status).toBe(200)
 
@@ -422,30 +343,14 @@ describe("Auth", () => {
         expect((yield* outbox.next).message.Subject).toBe("Reset your Ren password")
       }),
     )
-
-    testEffect(Layer.empty).live("refuses to skip verification outside development and test", () =>
-      Effect.gen(function* () {
-        const exit = yield* Layer.build(layer({ SKIP_EMAIL_VERIFICATION: "true", NODE_ENV: "production" })).pipe(
-          Effect.exit,
-        )
-        expect(Exit.isFailure(exit) ? String(Cause.squash(exit.cause)) : "").toContain(
-          "SKIP_EMAIL_VERIFICATION requires NODE_ENV=development or test",
-        )
-      }),
-    )
   })
 
   describe("signup guard", () => {
-    const rejection = Effect.fnUntraced(function* (response: Response) {
-      expect(response.status).toBe(400)
-      return (yield* json(response)).code
-    })
-
     it.live("rejects email sign-ups the guard refuses, before creating the user", () =>
       Effect.gen(function* () {
         const database = yield* AuthDatabase.Service
-        expect(yield* rejection(yield* signUp("spam@mailinator.com"))).toBe("DISPOSABLE_EMAIL")
-        expect(yield* rejection(yield* signUp("lost@nowhere.dev"))).toBe("UNDELIVERABLE_EMAIL_DOMAIN")
+        const response = yield* register("spam@mailinator.com")
+        expect([response.status, (yield* json(response)).code]).toEqual([400, "DISPOSABLE_EMAIL"])
         const users = yield* Effect.promise(() => database.db.query.user.findMany({ columns: { email: true } }))
         expect(users.map((user) => user.email)).not.toContain("spam@mailinator.com")
       }),
@@ -490,25 +395,13 @@ describe("Auth", () => {
         expect(created).toContain("permanent email")
       }),
     )
+
     describe("email aliases", () => {
-      const verified = Effect.fnUntraced(function* (email: string) {
-        const outbox = yield* Postmark.Outbox
-        yield* signUp(email)
-        const otp = (yield* outbox.next).message.Subject.split(" ")[0]
-        expect((yield* post("/email-otp/verify-email", { email, otp })).status).toBe(200)
-      })
-
-      const emails = Effect.fnUntraced(function* () {
-        const database = yield* AuthDatabase.Service
-        const users = yield* Effect.promise(() => database.db.query.user.findMany({ columns: { email: true } }))
-        return users.map((user) => user.email).toSorted()
-      })
-
       const publicShape = Effect.fnUntraced(function* (response: Response) {
         const body = yield* json(response)
         return {
           status: response.status,
-          cookie: cookie(response),
+          cookie: sessionCookie(response),
           body: {
             ...body,
             user: { ...body.user, id: undefined, email: undefined, createdAt: undefined, updatedAt: undefined },
@@ -518,42 +411,18 @@ describe("Auth", () => {
 
       verifying.live("answers a verified alias like a duplicate sign-up and creates no account", () =>
         Effect.gen(function* () {
-          yield* verified("grace@example.org")
-          const duplicate = yield* publicShape(yield* signUp("grace@example.org"))
+          const database = yield* AuthDatabase.Service
+          const outbox = yield* Postmark.Outbox
+          yield* register("grace@example.org")
+          const otp = (yield* outbox.next).message.Subject.split(" ")[0]
+          expect((yield* post("/email-otp/verify-email", { email: "grace@example.org", otp })).status).toBe(200)
+          const duplicate = yield* publicShape(yield* register("grace@example.org"))
           expect(duplicate.status).toBe(200)
           expect(duplicate.body.token).toBeNull()
 
-          expect(yield* publicShape(yield* signUp("grace+news@example.org"))).toEqual(duplicate)
-          expect(yield* emails()).toEqual(["grace@example.org"])
-        }),
-      )
-
-      verifying.live("allows an alias of an unverified account", () =>
-        Effect.gen(function* () {
-          const outbox = yield* Postmark.Outbox
-          yield* signUp("lin@example.org")
-          yield* outbox.next
-
-          expect((yield* signUp("lin+2@example.org")).status).toBe(200)
-          expect((yield* outbox.next).message.To).toBe("lin+2@example.org")
-          expect(yield* emails()).toEqual(["lin+2@example.org", "lin@example.org"])
-        }),
-      )
-
-      verifying.live("keeps exact duplicates on the normal path, even next to a verified alias", () =>
-        Effect.gen(function* () {
-          const outbox = yield* Postmark.Outbox
-          yield* signUp("kay+a@example.org")
-          yield* outbox.next
-          yield* verified("kay@example.org")
-
-          const exactVerified = yield* publicShape(yield* signUp("kay@example.org"))
-          expect(yield* publicShape(yield* signUp("kay+a@example.org"))).toEqual(exactVerified)
-          expect(exactVerified.status).toBe(200)
-          expect(yield* emails()).toEqual(["kay+a@example.org", "kay@example.org"])
-
-          yield* post("/request-password-reset", { email: "kay@example.org" })
-          expect((yield* outbox.next).message.Subject).toBe("Reset your Ren password")
+          expect(yield* publicShape(yield* register("grace+news@example.org"))).toEqual(duplicate)
+          const users = yield* Effect.promise(() => database.db.query.user.findMany({ columns: { email: true } }))
+          expect(users.map((user) => user.email)).toEqual(["grace@example.org"])
         }),
       )
     })

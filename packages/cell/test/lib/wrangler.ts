@@ -10,6 +10,7 @@ const cell = path.resolve(import.meta.dir, "../..")
 export interface Instance extends Celld.Instance {
   readonly restart: (vars: Readonly<Record<string, string>>, main?: string) => Promise<void>
   readonly crash: () => Promise<void>
+  readonly pid: () => number | undefined
 }
 
 export const make = async (vars: Readonly<Record<string, string>>, main = "src/worker.ts"): Promise<Instance> => {
@@ -109,6 +110,7 @@ export const make = async (vars: Readonly<Record<string, string>>, main = "src/w
   await start()
   return {
     url,
+    pid: () => state.child?.pid,
     start,
     kill,
     logs: () => Promise.resolve(state.output),

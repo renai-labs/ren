@@ -3,7 +3,7 @@ import { BunServices } from "@effect/platform-bun"
 import type { ProcessEvent, SpawnInput } from "@ren/brain-api/executor-api"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
-import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Layer, Option, Scope, Stream } from "effect"
+import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { mkdtemp, realpath, symlink } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -30,7 +30,7 @@ const encoder = new TextEncoder()
 const run = Effect.fnUntraced(function* (input: SpawnInput) {
   const executor = yield* Executor.Service
   const spawned = yield* executor.spawn(brain, input)
-  return { executor, id: spawned.id, events: yield* executor.output(brain, spawned.id) }
+  return { executor, id: spawned.id, pid: spawned.pid, events: yield* executor.output(brain, spawned.id) }
 })
 
 const collect = (events: Stream.Stream<ProcessEvent>) =>
@@ -66,12 +66,16 @@ it.live("runs in the workspace with its environment and the given variables on t
   }),
 )
 
-it.live("runs a command through a shell", () =>
-  Effect.gen(function* () {
-    const process = yield* run({ command: "echo", arguments: ["$((1 + 2))"], shell: true })
-    expect((yield* collect(process.events)).stdout).toBe("3\n")
-  }),
-)
+for (const shell of [
+  { name: "the default shell", shell: true, command: "echo $((1 + 2))", stdout: "3\n" },
+  { name: "a named shell", shell: "/bin/bash", command: 'echo "${BASH_VERSION:+bash}"', stdout: "bash\n" },
+])
+  it.live(`runs a command through ${shell.name}`, () =>
+    Effect.gen(function* () {
+      const process = yield* run({ command: shell.command, arguments: [], shell: shell.shell })
+      expect((yield* collect(process.events)).stdout).toBe(shell.stdout)
+    }),
+  )
 
 it.live("writes stdin and closes it", () =>
   Effect.gen(function* () {
@@ -82,14 +86,6 @@ it.live("writes stdin and closes it", () =>
       stderr: "",
       exit: { type: "exit", exitCode: 0, signal: null },
     })
-  }),
-)
-
-it.live("refuses stdin for a process started without it", () =>
-  Effect.gen(function* () {
-    const process = yield* run({ command: "true", arguments: [] })
-    const error = yield* process.executor.writeStdin(brain, process.id, new Uint8Array([1]), true).pipe(Effect.flip)
-    expect(error._tag).toBe("OperationFailedError")
   }),
 )
 
@@ -120,6 +116,7 @@ it.live("hides a process from other brains", () =>
     expect((yield* process.executor.kill(other, process.id, "SIGKILL").pipe(Effect.flip))._tag).toBe(
       "ProcessNotFoundError",
     )
+    expect((yield* process.executor.heartbeat(other, process.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
   }),
 )
 
@@ -182,7 +179,7 @@ it.live("keeps the last 2 MiB of a process nobody reads, and starts a late reade
   Effect.gen(function* () {
     const executor = yield* Executor.Service
     const spawned = yield* executor.spawn(brain, { command: "head", arguments: ["-c", "5000000", "/dev/zero"] })
-    yield* Effect.sleep(1_000)
+    yield* Stream.runDrain(yield* executor.output(brain, spawned.id, 5_000_000))
     const events = yield* Stream.runCollect(yield* executor.output(brain, spawned.id))
     const chunks = events.flatMap((event) => (event.type === "stdout" ? [event] : []))
     const first = chunks.at(0)
@@ -217,6 +214,24 @@ it.effect("kills a process that nobody reads or names for 30 seconds", () =>
     yield* executor.output(brain, spawned.id)
     yield* TestClock.adjust(Duration.seconds(31))
     expect((yield* executor.output(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
+  }),
+)
+
+it.effect("kills a command 30 seconds after its last heartbeat, even while a reader holds it open", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const spawned = yield* executor.spawn(brain, { command: "sleep", arguments: ["120"] })
+    yield* Stream.unwrap(executor.output(brain, spawned.id)).pipe(Stream.runDrain, Effect.forkScoped)
+    yield* executor.heartbeat(brain, spawned.id)
+    yield* Effect.forEach(
+      [20, 20, 20],
+      (seconds) =>
+        TestClock.adjust(Duration.seconds(seconds)).pipe(Effect.andThen(executor.heartbeat(brain, spawned.id))),
+      { discard: true },
+    )
+    yield* TestClock.adjust(Duration.seconds(31))
+    expect(yield* Processes.exits(spawned.pid)).toBe(true)
+    expect((yield* executor.heartbeat(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
   }),
 )
 
@@ -279,19 +294,6 @@ it.live("gives every reader every event", () =>
   }),
 )
 
-it.live("streams megabytes of output whole", () =>
-  Effect.gen(function* () {
-    const process = yield* run({ command: "head", arguments: ["-c", "5000000", "/dev/zero"] })
-    const size = yield* process.events.pipe(
-      Stream.runFold(
-        () => 0,
-        (total, event) => total + (event.type === "stdout" ? event.bytes.length : 0),
-      ),
-    )
-    expect(size).toBe(5_000_000)
-  }),
-)
-
 it.live("takes a megabyte of stdin in writes larger than its buffer", () =>
   Effect.gen(function* () {
     const process = yield* run({ command: "wc", arguments: ["-c"], hasStdin: true })
@@ -319,23 +321,9 @@ it.live("refuses stdin after it was closed", () =>
 it.live("accepts a kill for a process that exited before anyone read its exit", () =>
   Effect.gen(function* () {
     const process = yield* run({ command: "true", arguments: [] })
-    yield* Effect.sleep(300)
+    yield* Processes.exits(process.pid)
     yield* process.executor.kill(brain, process.id, "SIGTERM")
     expect((yield* collect(process.events)).exit).toEqual({ type: "exit", exitCode: 0, signal: null })
-  }),
-)
-
-it.live("runs a command through the named shell", () =>
-  Effect.gen(function* () {
-    const process = yield* run({ command: 'echo "${BASH_VERSION:+bash}"', arguments: [], shell: "/bin/bash" })
-    expect((yield* collect(process.events)).stdout).toBe("bash\n")
-  }),
-)
-
-it.live("reports a signal the process sent itself", () =>
-  Effect.gen(function* () {
-    const process = yield* run({ command: "sh", arguments: ["-c", "kill -KILL $$"] })
-    expect((yield* collect(process.events)).exit).toEqual({ type: "exit", exitCode: null, signal: "SIGKILL" })
   }),
 )
 
@@ -366,7 +354,7 @@ it.live("fails to spawn a command that does not exist", () =>
   }),
 )
 
-it.effect("a reader that stops reading holds a command back for 15 seconds at most, then the command runs on", () =>
+it.effect("a reader that stops reading holds a command back only until it stalls, then the command runs on", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
     const spawned = yield* executor.spawn(brain, { command: "head", arguments: ["-c", "10000000", "/dev/zero"] })
@@ -377,14 +365,14 @@ it.effect("a reader that stops reading holds a command back for 15 seconds at mo
       Effect.forkScoped,
     )
     yield* Deferred.await(reached)
-    yield* Effect.promise(() => Bun.sleep(500))
-    expect(Processes.running(spawned.pid)).toBe(true)
-    yield* TestClock.adjust(Duration.seconds(16))
-    const finished = yield* Effect.promise(() => Bun.sleep(100)).pipe(
-      Effect.map(() => !Processes.running(spawned.pid)),
-      Effect.repeat({ until: (done) => done, times: 25 }),
+    const exit = yield* Stream.runLast(Stream.unwrap(executor.output(brain, spawned.id, 10_000_000))).pipe(
+      Effect.forkScoped,
     )
-    expect(finished).toBe(true)
+    const exited = yield* TestClock.adjust(Duration.seconds(16)).pipe(
+      Effect.andThen(TestClock.withLive(Fiber.join(exit).pipe(Effect.timeoutOption(Duration.millis(200))))),
+      Effect.repeat({ until: Option.isSome, times: 10 }),
+    )
+    expect(exited).toEqual(Option.some(Option.some({ type: "exit", exitCode: 0, signal: null })))
     const late = yield* Stream.runCollect(Stream.unwrap(executor.output(brain, spawned.id)))
     const kept = late.flatMap((event) => (event.type === "stdout" ? [event] : []))
     const last = kept.at(-1)

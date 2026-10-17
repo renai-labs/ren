@@ -58,9 +58,13 @@ bun typecheck
 ```
 
 - `brain-api.test.ts`: `HttpApiTest.groups` with the real Brain handlers, OpenCode adapter, in-memory SQLite and a loopback model fixture. No cell process is needed.
-- `alarm.test.ts`: the actual `Cell.alarm` under `TestClock`, scripted snapshots and the real lease implementation.
-- `lease.test.ts`, `reconcile.test.ts`, `credentials.test.ts`, `instruction-entries.test.ts`: Ren's ownership, decisions and transformations.
-- `cell.test.ts`: authentication, routing, body limits, streams and lifecycle against celld; the same suite runs under Wrangler.
+- `alarm.test.ts`: the actual `Cell.alarm` under `TestClock`, first with scripted snapshots, then with the in-process OpenCode harness.
+- `remote-tools.test.ts`: the in-process OpenCode harness with tools on real executors.
+- `lease.test.ts`, `reconcile.test.ts`, `credentials.test.ts`, `model-refresh.test.ts`: Ren's ownership, decisions and transformations.
+- `cell.test.ts`: a smoke set of authentication, routing, body limits, streams and the idle close against celld; the same suite runs under Wrangler.
 - `crash.test.ts`: durable recovery against celld killed at the critical lifecycle boundaries.
+- `environment-lifecycle-cell.test.ts`: environments across workerd sleep, crash and restart; it runs only under Wrangler.
+
+`test/lib/environment-worker.ts` is the cell Worker with environment access. It takes either `TEST_ENVIRONMENT_ACCESS`, a JSON array of `Environment.Access`, or `CHAOS_CONTROL_URL`, a server that answers `GET /environments/:id` with an access or 404 and long-polls `GET /environments/changes?after=:version` with `{ version, ids }`.
 
 Integration processes are acquired and released by scoped layers. Cloudflare deployment measurements and the next host-contract steps remain in [`brain-host-roadmap.md`](../../specs/brain-host-roadmap.md).

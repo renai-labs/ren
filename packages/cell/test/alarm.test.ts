@@ -1,12 +1,29 @@
-import { expect } from "bun:test"
+import { expect, test } from "bun:test"
+import { Agent } from "@opencode/client/effect"
+import { SessionID } from "@opencode/schema/session-id"
+import { testEffect } from "@ren/executor/testing"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Deferred, Effect, Fiber, FiberHandle, Layer, Option, Ref, Semaphore } from "effect"
+import {
+  Context,
+  DateTime,
+  Deferred,
+  Effect,
+  Fiber,
+  FiberHandle,
+  Layer,
+  Option,
+  Queue,
+  Ref,
+  Semaphore,
+  Stream,
+} from "effect"
 import { TestClock } from "effect/testing"
 import { Cell } from "../src/cell.js"
 import { Harness } from "../src/harness/harness.js"
-import { Testing } from "./lib/effect.js"
+import { BrainTest } from "./lib/brain.js"
+import { Shared } from "./lib/shared.js"
 
-const it = Testing.testEffect(Layer.empty)
+const it = testEffect(Layer.empty)
 
 const setup = Effect.gen(function* () {
   const events: Array<string> = []
@@ -102,10 +119,11 @@ it.effect("idle reconciliation releases its lease and closes the host without re
     yield* cell.run(Cell.alarm())
     expect(cell.events).toEqual(["open", "close"])
     expect(yield* cell.harness.state).toEqual({ isOpen: false, holders: 0 })
+    expect(cell.current.alarm).toBeNull()
   }),
 )
 
-it.effect("running work rearms before waiting, uses the budget, and starts no duplicate wait", () =>
+it.effect("running work rearms before waiting, waits exactly the budget, and starts no duplicate wait", () =>
   Effect.gen(function* () {
     const cell = yield* setup
     cell.current.snapshots = [cell.session(), cell.session({ id: "child", active: true })]
@@ -115,11 +133,14 @@ it.effect("running work rearms before waiting, uses the budget, and starts no du
     expect(yield* Ref.get(cell.activity.waitingSince)).toEqual(Option.some(DateTime.makeUnsafe(0)))
     yield* cell.run(Cell.alarm())
     expect(cell.events.filter((event) => event.startsWith("wait:"))).toHaveLength(1)
-    yield* TestClock.adjust("570 seconds")
+    yield* TestClock.adjust(569_999)
+    expect(alarm.pollUnsafe()).toBeUndefined()
+    yield* TestClock.adjust(1)
     yield* Fiber.join(alarm)
     expect(cell.events).not.toContain("close")
     expect(cell.current.alarm).toBe(630_000)
     expect(yield* Ref.get(cell.activity.waitingSince)).toEqual(Option.none())
+    expect((yield* cell.harness.state).holders).toBe(0)
   }),
 )
 
@@ -191,15 +212,156 @@ it.effect("a request that finishes during reconciliation still prevents closing 
   }),
 )
 
-it.effect("interrupting an alarm clears its wait and releases its lease, retaining the durable alarm", () =>
+it.effect(
+  "interrupting an alarm clears its wait and releases its lease, retaining the durable alarm, and the next alarm reconciles",
+  () =>
+    Effect.gen(function* () {
+      const cell = yield* setup
+      cell.current.snapshots = [cell.session({ active: true })]
+      const alarm = yield* Effect.forkChild(cell.run(Cell.alarm()))
+      yield* TestClock.adjust("1 second")
+      yield* Fiber.interrupt(alarm)
+      expect(yield* Ref.get(cell.activity.waitingSince)).toEqual(Option.none())
+      expect((yield* cell.harness.state).holders).toBe(0)
+      expect(cell.current.alarm).toBe(30_000)
+      cell.current.snapshots = [cell.session()]
+      yield* cell.run(Cell.alarm())
+      expect(cell.events.at(-1)).toBe("close")
+      expect(yield* cell.harness.state).toEqual({ isOpen: false, holders: 0 })
+    }),
+)
+
+test.todo("REN-1486 two alarms that reconcile at once resend a queued prompt once and open one host", () =>
   Effect.gen(function* () {
     const cell = yield* setup
-    cell.current.snapshots = [cell.session({ active: true })]
-    const alarm = yield* Effect.forkChild(cell.run(Cell.alarm()))
-    yield* TestClock.adjust("1 second")
-    yield* Fiber.interrupt(alarm)
-    expect(yield* Ref.get(cell.activity.waitingSince)).toEqual(Option.none())
-    expect((yield* cell.harness.state).holders).toBe(0)
-    expect(cell.current.alarm).toBe(30_000)
+    const entered = yield* Queue.unbounded<void>()
+    const released = yield* Deferred.make<void>()
+    cell.current.snapshots = [cell.session({ inbox: [{ id: "first", type: "user" }] })]
+    cell.current.reading = Queue.offer(entered, undefined).pipe(Effect.andThen(Deferred.await(released)))
+    const alarms = yield* Effect.forkChild(
+      Effect.all([cell.run(Cell.alarm()), cell.run(Cell.alarm())], { concurrency: "unbounded" }),
+    )
+    yield* Queue.take(entered)
+    yield* Queue.take(entered)
+    yield* Deferred.succeed(released, undefined)
+    yield* Fiber.join(alarms)
+    expect(cell.events.filter((event) => event === "open")).toHaveLength(1)
+    expect(cell.events.filter((event) => event.startsWith("resend:"))).toEqual(["resend:first"])
+  }).pipe(Effect.scoped, Effect.provide(TestClock.layer()), Effect.runPromise),
+)
+
+const opencode = testEffect(BrainTest.layer)
+
+const question = {
+  name: "question",
+  input: { questions: [{ question: "Which one?", header: "Pick", options: [{ label: "A", description: "a" }] }] },
+}
+
+const closed = { isOpen: false, holders: 0, waitingSince: null, nextReconcileAt: null }
+
+opencode.effect("a running child session keeps the harness open while the root session is idle", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    const child = yield* brain.opencode.session.create({
+      id: SessionID.make(`${brain.id}_child`),
+      parentID: SessionID.make(brain.id),
+    })
+    const script = Shared.stub().script({ hold: true })
+    yield* brain.opencode.session.prompt({ sessionID: child.id, text: `child ${script.marker}` })
+    yield* Effect.promise(() => script.called())
+    const alarm = yield* Effect.forkChild(brain.alarm)
+    expect(yield* brain.waited).toBe(3000)
+    expect(yield* brain.state).toMatchObject({ isOpen: true, waitingSince: DateTime.makeUnsafe(0) })
+    expect(Object.keys(yield* brain.opencode.session.active())).toEqual([child.id])
+    script.release()
+    yield* Fiber.join(alarm)
+    expect(yield* brain.state).toMatchObject({ isOpen: true, waitingSince: null })
+    yield* brain.alarm
+    expect(yield* brain.state).toEqual(closed)
   }),
+)
+
+opencode.effect("a question unanswered for the park time is interrupted, and then the harness closes", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    const connected = yield* Deferred.make<void>()
+    const asked = yield* brain.opencode.event.subscribe().pipe(
+      Stream.tap((event) => (event.type === "server.connected" ? Deferred.succeed(connected, undefined) : Effect.void)),
+      Stream.filter((event) => event.type === "form.created"),
+      Stream.runHead,
+      Effect.forkChild,
+    )
+    yield* Deferred.await(connected)
+    const script = Shared.stub().script({ tool: question })
+    yield* brain.send(`ask ${script.marker}`)
+    yield* Fiber.join(asked)
+    const waiting = yield* Effect.forkChild(brain.alarm)
+    expect(yield* brain.waited).toBe(2000)
+    yield* TestClock.adjust(2000)
+    yield* Fiber.join(waiting)
+    yield* brain.alarm
+    const sessionID = SessionID.make(brain.id)
+    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.alarm
+    expect(yield* brain.state).toEqual(closed)
+    expect(
+      (yield* brain.opencode.message.list({ sessionID, order: "asc" })).data.map((message) =>
+        message.type === "idle" ? `idle:${message.outcome}` : message.type,
+      ),
+    ).toEqual(["user", "assistant", "idle:interrupted"])
+    expect(script.calls).toHaveLength(1)
+  }),
+)
+
+opencode.effect("a prompt queued behind a running turn runs after it, and the harness closes after both", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    const first = Shared.stub().script({ hold: true, reply: "first answer" })
+    const second = Shared.stub().script({ reply: "second answer" })
+    yield* brain.send(`first ${first.marker}`)
+    yield* Effect.promise(() => first.called())
+    yield* brain.send(`second ${second.marker}`, { delivery: "queue" })
+    const alarm = yield* Effect.forkChild(brain.alarm)
+    yield* brain.waited
+    first.release()
+    yield* Fiber.join(alarm)
+    expect((yield* brain.state).isOpen).toBe(true)
+    yield* Effect.promise(() => second.called())
+    const sessionID = SessionID.make(brain.id)
+    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.alarm
+    expect(yield* brain.state).toEqual(closed)
+    expect(
+      (yield* brain.opencode.message.list({ sessionID, order: "asc" })).data.flatMap((message) =>
+        message.type === "assistant"
+          ? message.content.flatMap((part) => (part.type === "text" ? [part.text] : []))
+          : [],
+      ),
+    ).toEqual(["first answer", "second answer"])
+    expect(second.calls).toHaveLength(1)
+  }),
+)
+
+opencode.effect(
+  "a finished turn more than a page of messages back still reads as finished, and the harness closes",
+  () =>
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.Service
+      yield* brain.start()
+      const sessionID = SessionID.make(brain.id)
+      yield* brain.send(`once ${Shared.stub().script().marker}`)
+      yield* brain.opencode.session.wait({ sessionID })
+      yield* Effect.forEach(
+        Array.from({ length: 60 }),
+        () => brain.opencode.session.switchAgent({ sessionID, agent: Agent.ID.make("build") }),
+        { discard: true },
+      )
+      const page = yield* brain.opencode.message.list({ sessionID, order: "desc", limit: 50 })
+      expect(page.data.every((message) => message.type === "agent-switched")).toBe(true)
+      yield* brain.alarm
+      expect(yield* brain.state).toEqual(closed)
+    }),
 )

@@ -11,4 +11,6 @@ export const testEffect = <R, E>(layer: Layer.Layer<R, E>) => ({
     ),
   live: <A, E2>(name: string, body: () => Effect.Effect<A, E2, R | Scope.Scope>, timeout?: number) =>
     test(name, () => body().pipe(Effect.scoped, Effect.provide(layer), Effect.runPromise), timeout),
+  todo: <A, E2>(name: string, body: () => Effect.Effect<A, E2, R | Scope.Scope>) =>
+    test.todo(name, () => body().pipe(Effect.scoped, Effect.provide(layer), Effect.runPromise)),
 })

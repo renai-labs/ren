@@ -2,26 +2,20 @@ import { expect, test } from "@playwright/test"
 import type { APIRequestContext } from "@playwright/test"
 import {
   appURL,
+  createOrganization,
   createUser,
   emailedCode,
+  emailedLink,
   inviteMember,
-  lastEmail,
   organizationName,
   password,
   uniqueEmail,
 } from "../lib/servers.js"
 
 async function invite(request: APIRequestContext, email: string) {
-  const company = `Northwind${crypto.randomUUID().slice(0, 8)}`
-  await createUser(request, {
-    name: "Grace Hopper",
-    email: `grace@${company.toLowerCase()}.com`,
-    password,
-  })
+  const organization = (await createOrganization(request, { name: "Grace Hopper" })).organization
   await inviteMember(request, email)
-  const link = /(http\S+signup\?invitationId=\S+)/.exec(await lastEmail(request, email, "invitationId="))?.[1]
-  if (link === undefined) throw new Error(`No invitation emailed to ${email}`)
-  return { link: new URL(link), organization: company }
+  return { link: await emailedLink(request, email, "signup?invitationId="), organization }
 }
 
 test("an invited person signs up and joins the organization", async ({ page, request }) => {
@@ -53,7 +47,7 @@ test("an invited person signs up and joins the organization", async ({ page, req
 
 test("a signed-in person declines an invitation", async ({ page, request }) => {
   const email = uniqueEmail("decliner")
-  await createUser(page.request, { name: "Alan Turing", email, password })
+  await createUser(page.request, { name: "Alan Turing", email })
   const invitation = await invite(request, email)
 
   await page.goto(`/app/invites/accept?id=${invitation.link.searchParams.get("invitationId") ?? ""}`)
@@ -69,7 +63,7 @@ test("a signed-in person declines an invitation", async ({ page, request }) => {
 test("an invitation for another address offers to switch accounts", async ({ page, request }) => {
   const link = (await invite(request, uniqueEmail("someone-else"))).link
   const email = uniqueEmail("wrong-account")
-  await createUser(page.request, { name: "Alan Turing", email, password })
+  await createUser(page.request, { name: "Alan Turing", email })
 
   await page.goto(`/app/invites/accept?id=${link.searchParams.get("invitationId") ?? ""}`)
   await page.getByRole("button", { name: "Continue to join" }).click()
@@ -91,7 +85,7 @@ test("an unknown invitation explains itself", async ({ page }) => {
 test("an account with only a pending invitation is sent to it", async ({ page, request }) => {
   const email = uniqueEmail("orgless")
   const invitation = await invite(request, email)
-  await createUser(page.request, { name: "Alan Turing", email, password })
+  await createUser(page.request, { name: "Alan Turing", email })
 
   await page.goto("/app/")
   await expect(page).toHaveURL(/\/invites\/accept\?id=.+&redirect=%2F$/)
