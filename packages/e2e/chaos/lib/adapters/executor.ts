@@ -46,6 +46,11 @@ export interface Instance {
   readonly observe: (command: ReadonlyArray<string>) => Promise<Observation>
 }
 
+export interface Container extends Instance {
+  readonly asRoot: (command: ReadonlyArray<string>) => Promise<Observation>
+  readonly memoryBytes: () => Promise<number>
+}
+
 const run = async (command: ReadonlyArray<string>, cwd?: string): Promise<Observation> => {
   const child = Bun.spawn([...command], { ...(cwd !== undefined && { cwd }), stdout: "pipe", stderr: "pipe" })
   const output = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
@@ -167,7 +172,7 @@ const build = () =>
 export const dockerContainer = async (options: {
   readonly label: string
   readonly environmentId?: Environment.ID
-}): Promise<Instance> => {
+}): Promise<Container> => {
   const environmentId = options.environmentId ?? Environment.ID.create()
   const tag = await build()
   const state = { container: "", url: "" }
@@ -234,5 +239,19 @@ export const dockerContainer = async (options: {
       await remove()
     },
     observe: (command) => run(["docker", "exec", "--workdir", "/workspace", state.container, ...command]),
+    asRoot: (command) => run(["docker", "exec", "--user", "root", state.container, ...command]),
+    memoryBytes: async () => {
+      const usage = await docker(["stats", "--no-stream", "--format", "{{.MemUsage}}", state.container])
+      const found = /^([\d.]+)\s*([KMG]i?B)/.exec(usage.trim())
+      const scale: Readonly<Record<string, number>> = {
+        KiB: 1024,
+        MiB: 1024 ** 2,
+        GiB: 1024 ** 3,
+        kB: 1e3,
+        MB: 1e6,
+        GB: 1e9,
+      }
+      return found ? Number(found[1]) * (scale[found[2] ?? ""] ?? 1) : Number.NaN
+    },
   }
 }

@@ -1,3 +1,13 @@
+import { EnvironmentAccess } from "@ren/brain/environment-access"
+import { Environments } from "@ren/brain/environments"
+import { Hand } from "@ren/brain/hand"
+import { Brain } from "@ren/schema/brain"
+import { Environment } from "@ren/schema/environment"
+import { Session } from "@ren/schema/session"
+import { Context, Effect, Layer, Stream } from "effect"
+import { FetchHttpClient } from "effect/http"
+import { ChildProcess } from "effect/process"
+import { ExecutorAdapter } from "../lib/adapters/executor.js"
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { SessionDriver } from "../lib/drivers/session.js"
 import { Platform } from "../lib/platform.js"
@@ -149,6 +159,116 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
   )
 
   test.skipIf(Platform.docker !== undefined)(
+    "a container that loses its network during a command ends the call in its time limit, and the next call works once it is back",
+    async () => {
+      const stack = current().stack
+      const hand = await stack.dockerHand("network")
+      const session = await stack.session({ hand })
+      const marker = `network-${crypto.randomUUID().slice(0, 8)}`
+      const turn = await session.turn([
+        ModelProvider.tool("shell", { command: `echo ${marker} > /dev/null; sleep 4; echo $((40 + 2))` }),
+        ModelProvider.text("ok"),
+      ])
+      await Wait.until("the command to start in the container", 60_000, async () =>
+        (await hand.instance.observe(["pgrep", "-f", marker])).exitCode === 0 ? true : undefined,
+      )
+      const cutAt = Date.now()
+      hand.proxy.partition(true)
+      hand.proxy.cutAll()
+      // ast-grep-ignore: no-test-sleep -- the container stays off the network for a real time
+      await Bun.sleep(5_000)
+      hand.proxy.partition(false)
+      const result = (await turn.script.called(2, 120_000)).toolResults
+      expect(Date.now() - cutAt).toBeLessThan(30_000)
+      expect(result === "42\n" || result.includes("environment disconnected")).toBe(true)
+      await session.settled(60_000)
+      const next = await session.turn([
+        ModelProvider.tool("shell", { command: "echo $((1 + 2))" }),
+        ModelProvider.text("ok"),
+      ])
+      expect((await next.script.called(2, 120_000)).toolResults).toBe("3\n")
+      await session.settled()
+    },
+    300_000,
+  )
+
+  test.skipIf(Platform.docker !== undefined)(
+    "the executor keeps its memory within the output limits while 40 commands of 2 MiB end and nobody reads them",
+    async () => {
+      const hand = await current().stack.dockerHand("memory")
+      const driver = await hand.driver()
+      const before = await hand.container.memoryBytes()
+      const spawned = await Promise.all(
+        Array.from({ length: 40 }, () =>
+          driver.ok(driver.client["process.spawn"]({ command: "head", arguments: ["-c", "2097152", "/dev/urandom"] })),
+        ),
+      )
+      await Wait.until("all commands to end", 60_000, async () =>
+        (await hand.instance.observe(["pgrep", "-x", "head"])).stdout.trim() === "" ? true : undefined,
+      )
+      const after = await hand.container.memoryBytes()
+      expect(spawned.length).toBe(40)
+      expect(after - before).toBeLessThan(64 * 1024 * 1024 + 64 * 1024 * 1024)
+      expect(await driver.ok(driver.client["executor.hello"]())).toMatchObject({ protocol: 1 })
+      await driver.dispose()
+    },
+    300_000,
+  )
+
+  test.skipIf(Platform.docker !== undefined)(
+    "grep on a container with no rg fails the tool call with a clear cause",
+    async () => {
+      const stack = current().stack
+      const hand = await stack.dockerHand("no-rg")
+      await hand.container.asRoot(["rm", "-f", "/usr/bin/rg"])
+      const session = await stack.session({ hand })
+      const turn = await session.turn([ModelProvider.tool("grep", { pattern: "needle" }), ModelProvider.text("ok")])
+      const result = (await turn.script.called(2, 120_000)).toolResults
+      expect(result).toContain("ripgrep execution failed")
+      await session.settled()
+    },
+    300_000,
+  )
+
+  test.skipIf(Platform.docker !== undefined)(
+    "a script for zsh runs in the default shell of a Debian container that has no zsh",
+    async () => {
+      const hand = await current().stack.dockerHand("no-zsh")
+      expect((await hand.instance.observe(["sh", "-c", "command -v zsh || echo none"])).stdout.trim()).toBe("none")
+      const sessionId = Session.ID.create()
+      const access = await ExecutorAdapter.access({
+        url: hand.proxy.url,
+        environmentId: hand.instance.environmentId,
+        brain: Brain.ofSession(sessionId),
+        directory: `/workspace/${sessionId}`,
+      })
+      const stdout = await Effect.runPromise(
+        Effect.gen(function* () {
+          const environments = Context.get(
+            yield* Layer.build(
+              Environments.layer.pipe(
+                Layer.provide(EnvironmentAccess.layerFixed(new Map([[sessionId, access]]))),
+                Layer.provide(FetchHttpClient.layer),
+              ),
+            ),
+            Environments.Service,
+          )
+          const hands = Hand.session(
+            environments,
+            sessionId,
+            Environment.sessionDirectory(sessionId),
+            (signal) => signal,
+          )
+          const handle = yield* hands.spawner.spawn(ChildProcess.make("/bin/zsh", ["-c", "echo $((6 * 7))"]))
+          return yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString)
+        }).pipe(Effect.scoped),
+      )
+      expect(stdout).toBe("42\n")
+    },
+    300_000,
+  )
+
+  test.skipIf(Platform.docker !== undefined)(
     "a replaced container runs new commands in its empty workspace, and old process IDs are unknown there",
     async () => {
       const stack = current().stack
@@ -160,13 +280,15 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
         await session.settled()
         return result
       }
-      expect(await shell("echo kept > before.txt && ls")).toContain("before.txt")
+      const before = await shell("echo kept > before.txt && ls")
+      expect([before.includes("Unable to execute"), before.includes("before.txt")]).toEqual([false, true])
       const driver = await hand.driver()
       const old = await driver.ok(driver.client["process.spawn"]({ command: "sleep", arguments: ["120"] }))
       await hand.instance.replace()
       hand.retarget()
       await hand.publish(hand.generation() + 1)
-      expect(await shell("ls -a; echo listed")).not.toContain("before.txt")
+      const after = await shell("ls -a; echo listed")
+      expect([after.includes("Unable to execute"), after.includes("before.txt")]).toEqual([false, false])
       expect((await driver.output(old.id, 10_000)).error).toBe("ProcessNotFoundError")
       await driver.dispose()
     },
