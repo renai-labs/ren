@@ -6,7 +6,8 @@ import { WorkspaceDriver } from "@opencode/core/workspace/driver"
 import { Workspace } from "@opencode/schema/workspace"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
 import type { LayerNode } from "@opencode/util/effect/layer-node"
-import { FileNotFoundError, FileTooLargeError, WrongKindError } from "@ren/brain-api/executor-api"
+import { FileNotFoundError, FileTooLargeError, maxFileBytes, WrongKindError } from "@ren/brain-api/executor-api"
+import type { Signal } from "@ren/brain-api/signal"
 import type { Environments } from "@ren/brain/environments"
 import { Hand } from "@ren/brain/hand"
 import { Environment } from "@ren/schema/environment"
@@ -18,7 +19,7 @@ export const provider = "ren"
 export const workspaceId = (sessionId: Session.ID) =>
   Workspace.ID.make(`wrk_${sessionId.slice(sessionId.indexOf("_") + 1)}`)
 
-const killedBySignal = (signal: string) => new CrossSpawnSpawner.KilledBySignal(signal)
+const killedBySignal = (signal: Signal.Name) => new CrossSpawnSpawner.KilledBySignal(signal)
 
 const files = (hand: Hand.SessionHand): EnvironmentFiles.FilesImpl => {
   const fileError = (path: string) => (cause: unknown) =>
@@ -51,9 +52,18 @@ const files = (hand: Hand.SessionHand): EnvironmentFiles.FilesImpl => {
           Effect.mapError(fileKindError(path)),
         ),
     write: (path, bytes) =>
-      hand
-        .files((connection, physical) => connection.client["files.write"]({ path: physical(path), bytes }))
-        .pipe(Effect.mapError(fileError(path))),
+      bytes.length > maxFileBytes
+        ? Effect.fail(
+            new EnvironmentFiles.Failed({
+              path,
+              cause: new Error(
+                `The file ${path} is too large to write in one call (${bytes.length} bytes, at most ${maxFileBytes}); write it in parts`,
+              ),
+            }),
+          )
+        : hand
+            .files((connection, physical) => connection.client["files.write"]({ path: physical(path), bytes }))
+            .pipe(Effect.mapError(fileError(path))),
     stat: (path) =>
       hand
         .files((connection, physical) => connection.client["files.stat"]({ path: physical(path) }))

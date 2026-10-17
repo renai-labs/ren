@@ -39,9 +39,13 @@ The message is submitted after applying the session configuration and instructio
 
 ## Environments
 
-The production cell has `Environments` whenever `REN_URL` is set. It asks Ren for a session's access through the Host API (`environments.access`, with the host token) at the first file or shell call; `start`, a wake and a continue contact neither Ren nor a sandbox. The cell keeps the answer in memory only: the binding is in Ren's database (`specs/environments/v1.md`).
+The production cell has `Environments` whenever `REN_URL` is set. It asks Ren for a session's access through the Host API (`environments.access`, with the host token) at the first file or shell call; `start`, a wake and a continue contact neither Ren nor a sandbox. The cell keeps the answer in memory only: the binding is in Ren's database, in `session_environment`.
 
 `start` accepts `environment` only for a new session, which then works in `/workspace/<session>` in a `ren` workspace. A later `start` without `environment` keeps it; an `environment` for a session that started without one answers "not supported yet". Ren refuses a change of environment before it calls the cell. A session without an environment has no read, write, edit, patch, glob, grep or shell; its other tools stay, and the `ren.environment` instruction tells the model why. A tool error names its cause (no access, Ren does not answer, the sandbox does not answer, token refused, not compatible) through the public `execute.after` hook.
+
+The environment's `capabilities` in `start` decide the session's tools: `files` gives read, write, edit, patch, glob and grep, and `processes` gives shell. Ren sends them on every start of a bound session. Without the field, a new session gets both and an existing one keeps what it had. The executor's `hello` only checks them: a call that needs a capability the executor lacks fails with "not compatible".
+
+OpenCode keeps a long command's full output in its data folder on the cell (`/tmp/opencode/data/shell/<project>/sh_<id>.out` in workerd) and names that path to the model. The Ren plugin copies the file to the same path on the sandbox (the last 8 MiB at most), so read, grep and the shell reach it. It copies a foreground command's file when the command ends and deletes the cell's copy; it copies a background job's file again before each model request while the job runs, and deletes the cell's copy once the job's notice says it finished.
 
 The cell renews its host token with `host.refresh` in its last five minutes. A missing or expiring host token makes `start` and `send` answer `ModelsNotConfiguredError`, so Ren configures the brain again with a fresh one.
 

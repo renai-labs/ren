@@ -42,7 +42,7 @@ import {
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { constants } from "node:fs"
-import { access, lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises"
+import { access, lstat, mkdir, open, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises"
 import { basename, dirname, join, resolve } from "node:path"
 import manifest from "../package.json"
 import { Executor } from "./executor.js"
@@ -232,6 +232,7 @@ export const layer = Layer.effect(
         .pipe(
           Scope.provide(entryScope),
           Effect.mapError((cause) => new OperationFailedError({ message: message(cause) })),
+          Effect.catchDefect((defect) => Effect.fail(new OperationFailedError({ message: message(defect) }))),
           Effect.onError(() => Scope.close(entryScope, Exit.void)),
         )
       const id = ProcessID.create()
@@ -380,17 +381,24 @@ export const layer = Layer.effect(
       read: Effect.fn("Executor.read")(function* (value: string, range?: Range) {
         const info = yield* describe(value, true)
         if (info.type !== "file") return yield* new WrongKindError({ path: value, actual: info.type })
-        if (!range && info.sizeBytes > maxFileBytes)
-          return yield* new FileTooLargeError({ path: value, sizeBytes: info.sizeBytes, maxBytes: maxFileBytes })
-        if (!range) return { info, bytes: new Uint8Array(yield* attemptFound(value, () => readFile(path(value)))) }
-        const bytes = yield* attemptFound(value, async () => {
-          const handle = await open(path(value), "r")
-          const buffer = new Uint8Array(range.length)
-          await using closing = handle
-          const result = await closing.read(buffer, 0, range.length, range.offset)
-          return buffer.subarray(0, result.bytesRead)
+        const found = yield* attemptFound(value, async () => {
+          await using handle = await open(path(value), "r")
+          const stats = await handle.stat()
+          if (!range && stats.size > maxFileBytes) return { stats }
+          const buffer = new Uint8Array(range ? Math.min(range.length, maxFileBytes) : stats.size)
+          const result = await handle.read(buffer, 0, buffer.length, range ? range.offset : 0)
+          return { stats, bytes: buffer.subarray(0, result.bytesRead) }
         })
-        return { info, bytes }
+        if (!found.bytes)
+          return yield* new FileTooLargeError({ path: value, sizeBytes: found.stats.size, maxBytes: maxFileBytes })
+        return {
+          info: {
+            type: info.type,
+            sizeBytes: range ? found.stats.size : found.bytes.length,
+            modifiedAtMs: found.stats.mtimeMs,
+          },
+          bytes: found.bytes,
+        }
       }),
       write: (value, bytes) =>
         bytes.length > maxFileBytes

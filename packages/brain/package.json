@@ -18,6 +18,7 @@
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@effect/platform-bun": "catalog:",
     "@ren/executor": "workspace:*",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:"

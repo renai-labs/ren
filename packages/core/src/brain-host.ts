@@ -222,10 +222,10 @@ export const layer = Layer.effect(
                 .bind(subject, requested.environmentId)
                 .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
             )
-          : Option.none<Environments.Binding>()
+          : Option.map(yield* environments.find(subject), (location) => ({ location, isNew: false }))
         const payload = Option.match(binding, {
           onNone: () => input,
-          onSome: (found) => Struct.evolve(input, { environment: () => found.location }),
+          onSome: (found) => Struct.assign(input, { environment: found.location }),
         })
         return yield* withModels(subject, call(input.sessionId, brain.brain["brain.start"]({ payload }))).pipe(
           Effect.tapErrorTag("BrainRejectedError", () =>

@@ -15,13 +15,14 @@ export const orphanAfter = Duration.seconds(30)
 
 export const exitedKeptFor = Duration.seconds(45)
 
-export const maxFileBytes = 32 * 1024 * 1024
+// oxlint-disable-next-line ren/no-comments -- Effect RPC frames one NDJSON message in at most 16 MiB and bytes travel as base64, so a message holds about 12 MiB of a file.
+export const maxFileBytes = 8 * 1024 * 1024
 
 export const ProcessID = Identifier.make("prc", "Executor.ProcessID")
 export type ProcessID = typeof ProcessID.Type
 
-export const Capability = Schema.Literals(["processes", "files"]).annotate({ identifier: "Executor.Capability" })
-export type Capability = typeof Capability.Type
+export const Capability = Environment.Capability
+export type Capability = Environment.Capability
 
 export interface Hello extends Schema.Schema.Type<typeof Hello> {}
 export const Hello = Schema.Struct({

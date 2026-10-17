@@ -104,22 +104,23 @@ export const layer = Layer.effect(
               if (accesses.get(sessionId) === current) accesses.delete(sessionId)
             }),
           )
-          const refused = yield* Ref.make(false)
+          const invalidateSelf = Effect.suspend(() =>
+            accesses.get(sessionId) === current ? RcMap.invalidate(connections, sessionId) : Effect.void,
+          )
+          const refusedToken = yield* Ref.make<string | undefined>(undefined)
           const held = SynchronizedRef.updateAndGetEffect(current, (latest) =>
             Effect.gen(function* () {
-              const isRefused = yield* Ref.getAndSet(refused, false)
+              const isRefused = (yield* Ref.get(refusedToken)) === latest.token
               const now = yield* Clock.currentTimeMillis
               if (!isRefused && DateTime.toEpochMillis(latest.expiresAt) - now > Duration.toMillis(window))
                 return latest
               return yield* ask(sessionId).pipe(
                 Effect.flatMap((fresh) =>
-                  isSameSandbox(latest, fresh)
-                    ? Effect.succeed(fresh)
-                    : RcMap.invalidate(connections, sessionId).pipe(Effect.as(latest)),
+                  isSameSandbox(latest, fresh) ? Effect.succeed(fresh) : invalidateSelf.pipe(Effect.as(latest)),
                 ),
                 Effect.catch((error) =>
                   error.reason === "no_access"
-                    ? RcMap.invalidate(connections, sessionId).pipe(Effect.as(latest))
+                    ? invalidateSelf.pipe(Effect.as(latest))
                     : Effect.logWarning(`Could not refresh the access of session ${sessionId}: ${error.message}`).pipe(
                         Effect.as(latest),
                       ),
@@ -130,9 +131,20 @@ export const layer = Layer.effect(
           const client = yield* ExecutorClient.make({
             url: access.url,
             token: Effect.map(held, (latest) => latest.token),
-            renew: Ref.set(refused, true),
-            onNoAnswer: RcMap.invalidate(connections, sessionId),
-          }).pipe(Effect.provideService(HttpClient.HttpClient, http))
+            renew: Effect.void,
+            onNoAnswer: invalidateSelf,
+          }).pipe(
+            Effect.provideService(
+              HttpClient.HttpClient,
+              HttpClient.transform(http, (response, request) =>
+                Effect.tap(response, (received) =>
+                  received.status === 401
+                    ? Ref.set(refusedToken, request.headers.authorization?.replace(/^Bearer /, ""))
+                    : Effect.void,
+                ),
+              ),
+            ),
+          )
           const noAnswer = (cause: { readonly _tag: string; readonly message: string }) =>
             cause._tag === "UnauthorizedError"
               ? new Unavailable({
@@ -173,7 +185,7 @@ export const layer = Layer.effect(
           const ready: Effect.Effect<void, Unavailable> = Effect.gen(function* () {
             const latest = yield* held
             if (DateTime.toEpochMillis(latest.expiresAt) > (yield* Clock.currentTimeMillis)) return
-            yield* RcMap.invalidate(connections, sessionId)
+            yield* invalidateSelf
             return yield* Option.match(Option.fromNullishOr(failures.get(sessionId)), {
               onNone: () =>
                 Effect.fail(

@@ -28,6 +28,9 @@ export const Sandbox = Schema.Struct({
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: Environment.ID,
+  capabilities: Schema.Array(Environment.Capability).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(Environment.capabilities)),
+  ),
   capacity: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
   sandboxes: Schema.Array(Sandbox).check(
     Schema.makeFilter(
@@ -70,6 +73,7 @@ export interface Binding {
 
 export interface Interface {
   readonly bind: (subject: Subject, environmentId: Environment.ID) => Effect.Effect<Binding, NotFound | Changed>
+  readonly find: (subject: Subject) => Effect.Effect<Option.Option<Environment.Location>>
   readonly unbind: (sessionId: Session.ID) => Effect.Effect<void>
   readonly access: (subject: Subject) => Effect.Effect<Environment.Access, NotFound | Unavailable>
 }
@@ -92,11 +96,17 @@ export const layer = Layer.effect(
       Option.fromNullishOr(config.environments.find((environment) => environment.id === id))
     const notConfigured = (id: Environment.ID) =>
       new NotFound({ message: `Environment ${id} is not in Ren’s configuration` })
+    const locationOf = (subject: Subject, environment: Info) => ({
+      environmentId: environment.id,
+      directory: Environment.sessionDirectory(subject.brainId),
+      capabilities: environment.capabilities,
+    })
 
     return Service.of({
       bind: Effect.fn("Environments.bind")(function* (subject: Subject, environmentId: Environment.ID) {
-        if (Option.isNone(configured(environmentId))) return yield* notConfigured(environmentId)
-        const location = { environmentId, directory: Environment.sessionDirectory(subject.brainId) }
+        const environment = configured(environmentId)
+        if (Option.isNone(environment)) return yield* notConfigured(environmentId)
+        const location = locationOf(subject, environment.value)
         const inserted = yield* database.db
           .insert(table)
           .values({
@@ -119,6 +129,16 @@ export const layer = Layer.effect(
         return yield* new Changed({
           message: `Session ${subject.brainId} cannot change its environment: not supported yet`,
         })
+      }),
+      find: Effect.fn("Environments.find")(function* (subject: Subject) {
+        const rows = yield* database.db
+          .select({ environment_id: table.environment_id })
+          .from(table)
+          .where(and(eq(table.session_id, subject.brainId), eq(table.organization_id, subject.organizationId)))
+          .pipe(Effect.orDie)
+        return Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) =>
+          Option.map(configured(row.environment_id), (environment) => locationOf(subject, environment)),
+        )
       }),
       unbind: Effect.fn("Environments.unbind")(function* (sessionId: Session.ID) {
         yield* database.db.delete(table).where(eq(table.session_id, sessionId)).pipe(Effect.orDie)
@@ -181,6 +201,7 @@ export const layerNone = Layer.succeed(
     bind: Effect.fn("Environments.bind")(function* (_subject: Subject, environmentId: Environment.ID) {
       return yield* new NotFound({ message: `Environment ${environmentId} is not in Ren’s configuration` })
     }),
+    find: () => Effect.succeedNone,
     unbind: Effect.fn("Environments.unbind")(function* () {}),
     access: Effect.fn("Environments.access")(function* (subject: Subject) {
       return yield* new NotFound({ message: `Session ${subject.brainId} has no environment` })
