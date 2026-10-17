@@ -1,6 +1,6 @@
 # @ren/brain
 
-Brain code that is the same on every host and every harness. A host (the cell in `packages/cell` today) supplies storage, alarms and an `EnvironmentAccess`; a harness adapter (the OpenCode `ren` workspace driver in `packages/cell/src/harness/opencode`) turns a `Hand` into its tools. See `specs/environments/v1.md`.
+Brain code that is the same on every host and every harness. A host (the cell in `packages/cell` today) supplies storage, alarms and an `EnvironmentAccess`; a harness adapter (the OpenCode `ren` workspace driver in `packages/cell/src/harness/opencode`) turns a `Hand` into its tools.
 
 ## What belongs here
 

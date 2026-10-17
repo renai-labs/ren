@@ -7,6 +7,7 @@ import type {
   FileTooLargeError,
   Hello,
   OperationFailedError,
+  OutputWindow,
   ProcessEvent,
   ProcessID,
   ProcessNotFoundError,
@@ -28,6 +29,7 @@ export interface Interface {
     brain: Brain.ID,
     id: ProcessID,
     cursor?: number,
+    window?: OutputWindow,
   ) => Effect.Effect<Stream.Stream<ProcessEvent>, ProcessNotFoundError>
   readonly writeStdin: (
     brain: Brain.ID,

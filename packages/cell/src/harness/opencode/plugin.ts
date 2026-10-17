@@ -3,7 +3,6 @@ export * as RenPlugin from "./plugin.js"
 import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
-import { SessionID } from "@opencode/schema/session-id"
 import { Tool } from "@opencode/schema/tool"
 import { ExecutorClient } from "@ren/brain-api/executor-client"
 import { Environments } from "@ren/brain/environments"
@@ -11,7 +10,6 @@ import type { Models } from "@ren/schema/models"
 import { Clock, DateTime, Deferred, Effect, Option, Predicate, Redacted, Ref, Schema, Struct } from "effect"
 import type { Harness } from "../harness.js"
 import { ModelProviders } from "./model-providers.js"
-import { ShellOutput } from "./shell-output.js"
 
 const unavailable = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
 
@@ -55,7 +53,7 @@ export const make = (
   reloads: Ref.Ref<ReadonlyArray<Effect.Effect<void>>>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
-  environments: Option.Option<Environments.Interface>,
+  hasEnvironments: boolean,
 ) =>
   Plugin.define({
     id: "ren",
@@ -64,30 +62,11 @@ export const make = (
         const tool = context.tool
         const integration = context.integration
         const provider = context.provider
-        if (Option.isNone(environments))
+        if (!hasEnvironments)
           yield* tool.transform((editor) => {
             for (const id of unavailable) editor.remove(id)
           })
-        if (Option.isSome(environments)) {
-          const shellOutput = ShellOutput.make(environments.value, {
-            parentOf: (sessionID) =>
-              context.session.get({ sessionID: SessionID.make(sessionID) }).pipe(
-                Effect.map((info) => Option.fromNullishOr(info.parentID)),
-                Effect.orElseSucceed(() => Option.none()),
-              ),
-          })
-          yield* tool.hook("execute.after", (event) =>
-            event.tool === "shell" && event.status === "completed"
-              ? shellOutput.afterCommand(
-                  event.sessionID,
-                  [event.result.content, event.result.output],
-                  event.result.metadata?.["status"] === "running",
-                )
-              : Effect.void,
-          )
-          yield* context.session.hook("context", (event) => shellOutput.beforeRequest(event.sessionID, event.messages))
-        }
-        if (Option.isSome(environments))
+        if (hasEnvironments)
           yield* tool.hook("execute.after", (event) =>
             Effect.sync(() => {
               if (event.status !== "error") return

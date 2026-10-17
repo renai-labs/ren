@@ -31,7 +31,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
 
     beforeAll(async () => {
       lane.stack = await RealStack.start({
-        environments: [{ label: "full" }, { label: "files", capabilities: ["files"] }],
+        environments: [{ label: "full" }, { label: "second" }, { label: "files", capabilities: ["files"] }],
         tokenLifetime: "20 seconds",
       })
     }, 600_000)
@@ -67,6 +67,21 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       expect(saved).toStartWith("/tmp/opencode/data/shell/")
       expect(await session.tool("shell", { command: `tail -n 1 ${saved}; grep -c . ${saved}` })).toBe("30000\n30000\n")
       expect(await session.tool("read", { path: saved, offset: 15000, limit: 1 })).toContain("15000")
+    }, 600_000)
+
+    test("the full output of a session's long command is only in its own container", async () => {
+      const one = await stack().session()
+      const two = await stack().session({ environment: stack().sandbox("second") })
+      const savedOne = savedTo(await one.tool("shell", { command: "seq 1 30000" }))
+      const savedTwo = savedTo(await two.tool("shell", { command: "seq 1 40000" }))
+      const has = async (label: string, file: string) =>
+        (await stack().sandbox(label).container.observe(["test", "-f", file])).exitCode === 0
+      expect([
+        await has("full", savedOne),
+        await has("second", savedOne),
+        await has("second", savedTwo),
+        await has("full", savedTwo),
+      ]).toEqual([true, false, true, false])
     }, 600_000)
 
     test("an environment with only files offers no shell, and a session with no environment has no tools", async () => {

@@ -1,6 +1,6 @@
 export * as Hand from "./hand.js"
 
-import { orphanAfter, pingEvery, type ProcessEvent, stallAfter } from "@ren/brain-api/executor-api"
+import { orphanAfter, type OutputWindow, pingEvery, type ProcessEvent, stallAfter } from "@ren/brain-api/executor-api"
 import type { Signal } from "@ren/brain-api/signal"
 import type { Session } from "@ren/schema/session"
 import {
@@ -19,6 +19,7 @@ import {
   Schema,
   Sink,
   Stream,
+  Struct,
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import type { Environments } from "./environments.js"
@@ -72,7 +73,17 @@ export const childProcessError = (method: string) => (cause: unknown) =>
 
 export type KilledBySignal = (signal: Signal.Name) => unknown
 
-export const spawner = (connection: Environments.Connection, killedBySignal: KilledBySignal) =>
+export interface SpawnOptions {
+  readonly outputFile?: string
+  readonly window?: OutputWindow
+  readonly onSkip?: (skipped: { readonly bytes: number; readonly newlines: number }) => void
+}
+
+export const spawner = (
+  connection: Environments.Connection,
+  killedBySignal: KilledBySignal,
+  options: SpawnOptions = {},
+) =>
   ChildProcessSpawner.make(
     Effect.fnUntraced(function* (command) {
       if (command._tag === "PipedCommand")
@@ -95,6 +106,7 @@ export const spawner = (connection: Environments.Connection, killedBySignal: Kil
         variables: Record.filter(command.options.env ?? {}, Predicate.isString),
         ...(command.options.cwd && { directory: command.options.cwd }),
         ...(Predicate.isNotUndefined(command.options.shell) && { shell: command.options.shell }),
+        ...Struct.pick(options, ["outputFile"]),
       }).pipe(Effect.mapError(childProcessError("spawn")))
       const writeStdin = (bytes: Uint8Array, isLastWrite: boolean) =>
         executor["process.write"]({ id: remoteProcess.id, data: bytes, end: isLastWrite }).pipe(
@@ -128,6 +140,15 @@ export const spawner = (connection: Environments.Connection, killedBySignal: Kil
       const receive = Effect.fnUntraced(function* (event: ProcessEvent) {
         yield* Ref.set(contactAt, yield* Clock.currentTimeMillis)
         if (event.type === "ping") return
+        if (event.type === "skip") {
+          const reached = yield* Ref.get(position)
+          if (event.offset > reached) yield* Queue.offer(stderrChunks, lostNotice(event.offset - reached))
+          const end = event.offset + event.bytes
+          if (end <= reached) return
+          yield* Ref.set(position, end)
+          options.onSkip?.({ bytes: end - Math.max(reached, event.offset), newlines: event.newlines })
+          return
+        }
         if (event.type === "exit") {
           yield* Deferred.succeed(exited, undefined)
           yield* event.signal
@@ -143,7 +164,13 @@ export const spawner = (connection: Environments.Connection, killedBySignal: Kil
         yield* Queue.offer(event.type === "stdout" ? stdoutChunks : stderrChunks, bytes)
       })
       yield* Stream.unwrap(
-        Effect.map(Ref.get(position), (cursor) => executor["process.output"]({ id: remoteProcess.id, cursor })),
+        Effect.map(Ref.get(position), (cursor) =>
+          executor["process.output"]({
+            id: remoteProcess.id,
+            cursor,
+            ...Struct.pick(options, ["window"]),
+          }),
+        ),
       ).pipe(
         Stream.timeoutOrElse({
           duration: stallAfter,
@@ -226,6 +253,7 @@ export const spawner = (connection: Environments.Connection, killedBySignal: Kil
 
 export interface SessionHand {
   readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]
+  readonly spawnerWith: (options: SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
   readonly files: <A, E>(
     use: (connection: Environments.Connection, physical: (path: string) => string) => Effect.Effect<A, E>,
   ) => Effect.Effect<A, E | Environments.Unavailable>
@@ -236,26 +264,34 @@ export const session = (
   sessionId: Session.ID,
   sessionDirectory: string,
   killedBySignal: KilledBySignal,
-): SessionHand => ({
-  spawner: ChildProcessSpawner.make((command) =>
-    environments.connect(sessionId, "processes").pipe(
-      Effect.mapError(childProcessError("spawn")),
-      Effect.flatMap((connection) => {
-        const physical = physicalPath(sessionDirectory, connection.directory)
-        return spawner(connection, killedBySignal).spawn(
-          command._tag === "StandardCommand"
-            ? ChildProcess.make(command.command, command.args, {
-                ...command.options,
-                ...(command.options.cwd && { cwd: physical(command.options.cwd) }),
-              })
-            : command,
-        )
-      }),
-    ),
-  ),
-  files: (use) =>
-    environments.connect(sessionId, "files").pipe(
-      Effect.flatMap((connection) => use(connection, physicalPath(sessionDirectory, connection.directory))),
-      Effect.scoped,
-    ),
-})
+): SessionHand => {
+  const sessionSpawner = (options: SpawnOptions = {}) =>
+    ChildProcessSpawner.make((command) =>
+      environments.connect(sessionId, "processes").pipe(
+        Effect.mapError(childProcessError("spawn")),
+        Effect.flatMap((connection) => {
+          const physical = physicalPath(sessionDirectory, connection.directory)
+          return spawner(connection, killedBySignal, {
+            ...options,
+            ...(options.outputFile && { outputFile: physical(options.outputFile) }),
+          }).spawn(
+            command._tag === "StandardCommand"
+              ? ChildProcess.make(command.command, command.args, {
+                  ...command.options,
+                  ...(command.options.cwd && { cwd: physical(command.options.cwd) }),
+                })
+              : command,
+          )
+        }),
+      ),
+    )
+  return {
+    spawner: sessionSpawner(),
+    spawnerWith: sessionSpawner,
+    files: (use) =>
+      environments.connect(sessionId, "files").pipe(
+        Effect.flatMap((connection) => use(connection, physicalPath(sessionDirectory, connection.directory))),
+        Effect.scoped,
+      ),
+  }
+}

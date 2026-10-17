@@ -279,6 +279,44 @@ it.live(
     }),
 )
 
+it.live(
+  "a spawner that writes to an output file in the session's folder writes it in the session's folder on the sandbox",
+  () =>
+    Effect.gen(function* () {
+      const environments = yield* environmentsWith(
+        EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(yield* Machine.url)]])),
+      )
+      const hand = Hand.session(environments, sessionId, Environment.sessionDirectory(sessionId), killed)
+      const name = `${crypto.randomUUID()}.out`
+      const handle = yield* hand
+        .spawnerWith({ outputFile: `${Environment.sessionDirectory(sessionId)}/${name}` })
+        .spawn(ChildProcess.make("sh", ["-c", "echo written"]))
+      expect(yield* text(handle.stdout)).toBe("written\n")
+      expect(yield* Effect.promise(() => Bun.file(join(workspace, sessionId, name)).text())).toBe("written\n")
+    }),
+)
+
+it.live("a spawner with a window gets only the last output and counts the bytes and newlines it skipped", () =>
+  Effect.gen(function* () {
+    const skipped = { bytes: 0, newlines: 0 }
+    const handle = yield* Hand.spawner(yield* connect, killed, {
+      window: { maxBytes: 1000, intervalMs: 100 },
+      onSkip: (skip) => {
+        skipped.bytes += skip.bytes
+        skipped.newlines += skip.newlines
+      },
+    }).spawn(ChildProcess.make("seq", ["1", "100000"]))
+    const shown = yield* text(handle.stdout)
+    expect({
+      bytes: skipped.bytes + shown.length,
+      newlines: skipped.newlines + shown.split("\n").length - 1,
+      ending: shown.endsWith("99999\n100000\n"),
+      stderr: yield* text(handle.stderr),
+    }).toEqual({ bytes: 588895, newlines: 100000, ending: true, stderr: "" })
+    expect(shown.length).toBeLessThan(100_000)
+  }),
+)
+
 it.live("stopping a command after a replacement still kills it on the old sandbox", () =>
   Effect.gen(function* () {
     const subject = yield* replaceable

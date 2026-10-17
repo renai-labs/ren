@@ -71,7 +71,7 @@ const make = Effect.gen(function* () {
     }).pipe(Layer.provide(HttpServer.layerServices)),
     [],
     Context.get(services, ModelRefresh.Service),
-    Option.none(),
+    false,
   )
   const harness = yield* OpenCodeHarness.make(host, [], AbsolutePath.make(directory))
   const waits = yield* Queue.unbounded<number>()
