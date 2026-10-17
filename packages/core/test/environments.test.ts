@@ -24,7 +24,10 @@ const sandboxes = [
 const configOf = (overrides: Readonly<Record<string, string>> = {}) => ({
   ENVIRONMENTS: JSON.stringify([{ id: environmentId, capacity: 2, sandboxes }]),
   ENVIRONMENT_KEYS: JSON.stringify(
-    keys.map((pair) => ({ id: pair.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(pair.privateKey.key) })),
+    keys.map((pair) => ({
+      id: pair.privateKey.id,
+      key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(pair.privateKey.key),
+    })),
   ),
   ...overrides,
 })
@@ -60,7 +63,9 @@ describe("Environments", () => {
       expect(Option.map(claims, (found) => [found.kid, found.env, found.brain])).toEqual(
         Option.some(["new", environmentId, Brain.ofSession(subject.brainId)]),
       )
-      expect(Option.map(claims, (found) => found.exp * 1000)).toEqual(Option.some(DateTime.toEpochMillis(access.expiresAt)))
+      expect(Option.map(claims, (found) => found.exp * 1000)).toEqual(
+        Option.some(DateTime.toEpochMillis(access.expiresAt)),
+      )
       expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(14 * 60_000)
       expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(15 * 60_000)
       expect(yield* EnvironmentToken.verify([keys[1].publicKey], access.token)).toEqual(Option.none())
@@ -122,27 +127,34 @@ describe("Environments", () => {
     }),
   )
 
-  it.live("puts up to N sessions on a sandbox, the next on the next sandbox, keeps them there, and refuses when all are full", () =>
-    Effect.gen(function* () {
-      const environments = yield* environmentsWith()
-      const subjects = yield* Effect.forEach(Array.from({ length: 4 }), () => subjectIn())
-      const last = yield* subjectIn()
-      yield* Effect.forEach([...subjects, last], (subject) => environments.bind(subject, environmentId), {
-        discard: true,
-      })
-      const urls = yield* Effect.forEach(subjects, (subject) => environments.access(subject), {
-        concurrency: "unbounded",
-      }).pipe(Effect.map((accesses) => accesses.map((access) => access.url).toSorted()))
-      expect(urls).toEqual(["http://127.0.0.1:7001", "http://127.0.0.1:7001", "http://127.0.0.1:7002", "http://127.0.0.1:7002"])
-      const full = yield* environments.access(last).pipe(Effect.flip)
-      expect([full._tag, full.message]).toEqual([
-        "Environments.Unavailable",
-        `Every sandbox of environment ${environmentId} is full; Ren makes no new sandbox yet`,
-      ])
-      const restarted = yield* environmentsWith()
-      const again = yield* Effect.forEach(subjects, (subject) => restarted.access(subject))
-      expect(again.map((access) => access.url).toSorted()).toEqual(urls)
-    }),
+  it.live(
+    "puts up to N sessions on a sandbox, the next on the next sandbox, keeps them there, and refuses when all are full",
+    () =>
+      Effect.gen(function* () {
+        const environments = yield* environmentsWith()
+        const subjects = yield* Effect.forEach(Array.from({ length: 4 }), () => subjectIn())
+        const last = yield* subjectIn()
+        yield* Effect.forEach([...subjects, last], (subject) => environments.bind(subject, environmentId), {
+          discard: true,
+        })
+        const urls = yield* Effect.forEach(subjects, (subject) => environments.access(subject), {
+          concurrency: "unbounded",
+        }).pipe(Effect.map((accesses) => accesses.map((access) => access.url).toSorted()))
+        expect(urls).toEqual([
+          "http://127.0.0.1:7001",
+          "http://127.0.0.1:7001",
+          "http://127.0.0.1:7002",
+          "http://127.0.0.1:7002",
+        ])
+        const full = yield* environments.access(last).pipe(Effect.flip)
+        expect([full._tag, full.message]).toEqual([
+          "Environments.Unavailable",
+          `Every sandbox of environment ${environmentId} is full; Ren makes no new sandbox yet`,
+        ])
+        const restarted = yield* environmentsWith()
+        const again = yield* Effect.forEach(subjects, (subject) => restarted.access(subject))
+        expect(again.map((access) => access.url).toSorted()).toEqual(urls)
+      }),
   )
 
   it.live("gives a replaced sandbox's new address and generation to the sessions on it", () =>
@@ -154,7 +166,11 @@ describe("Environments", () => {
       const replaced = yield* environmentsWith(
         configOf({
           ENVIRONMENTS: JSON.stringify([
-            { id: environmentId, capacity: 2, sandboxes: [{ ...sandboxes[0], url: "http://127.0.0.1:7009", generation: 2 }, sandboxes[1]] },
+            {
+              id: environmentId,
+              capacity: 2,
+              sandboxes: [{ ...sandboxes[0], url: "http://127.0.0.1:7009", generation: 2 }, sandboxes[1]],
+            },
           ]),
         }),
       )

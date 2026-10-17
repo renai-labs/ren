@@ -74,7 +74,9 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     expect(call.toolResults).toContain("Success")
     expect(await read(session.sessionId, `add-${stem}.txt`)).toBe("added\n")
     expect(await read(session.sessionId, `update-${stem}.txt`)).toBe("one\nthree\n")
-    expect((await current().hand.instance.observe(["test", "-e", `${session.sessionId}/delete-${stem}.txt`])).exitCode).not.toBe(0)
+    expect(
+      (await current().hand.instance.observe(["test", "-e", `${session.sessionId}/delete-${stem}.txt`])).exitCode,
+    ).not.toBe(0)
   })
 
   test("question is answered through the client and never touches the hand", async () => {

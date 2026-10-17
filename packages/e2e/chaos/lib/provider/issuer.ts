@@ -68,7 +68,12 @@ export const start = (): Instance => {
     if (endpoint === "environments.access") {
       const access = sessionId && (await state.environments(Session.ID.make(sessionId)))
       if (!access)
-        return answer(endpoint, 404, { _tag: "EnvironmentNotFoundError", message: "The session has no environment" }, presented)
+        return answer(
+          endpoint,
+          404,
+          { _tag: "EnvironmentNotFoundError", message: "The session has no environment" },
+          presented,
+        )
       return answer(endpoint, 200, encodeAccess(access), presented)
     }
     const next = state.rotate && sessionId ? await sign(sessionId) : presented

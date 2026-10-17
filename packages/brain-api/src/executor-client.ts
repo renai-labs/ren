@@ -7,7 +7,9 @@ import { Authentication, ExecutorApi, UnauthorizedError } from "./executor-api.j
 
 export const path = "/v1/rpc"
 
-export const answerWithin: Readonly<Record<Exclude<RpcGroup.Rpcs<typeof ExecutorApi>["_tag"], "process.output">, Duration.Duration>> = {
+export const answerWithin: Readonly<
+  Record<Exclude<RpcGroup.Rpcs<typeof ExecutorApi>["_tag"], "process.output">, Duration.Duration>
+> = {
   "executor.hello": Duration.seconds(10),
   "process.spawn": Duration.seconds(30),
   "process.write": Duration.seconds(30),

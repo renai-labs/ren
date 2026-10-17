@@ -26,7 +26,9 @@ const files = (hand: Hand.SessionHand): EnvironmentFiles.FilesImpl => {
       path,
       cause:
         cause instanceof FileTooLargeError
-          ? new Error(`The file ${path} is too large (${cause.sizeBytes} bytes, at most ${cause.maxBytes}); use a range`)
+          ? new Error(
+              `The file ${path} is too large (${cause.sizeBytes} bytes, at most ${cause.maxBytes}); use a range`,
+            )
           : cause,
     })
   const fileLookupError = (path: string) => (error: unknown) =>

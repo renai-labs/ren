@@ -40,7 +40,15 @@ const sessionId = Session.ID.create()
 const brain = Brain.ofSession(sessionId)
 const folder = (root = workspace) => join(root, sessionId)
 
-const accessAt = (url: string, options: { readonly issuedAt?: number; readonly lifetimeMs?: number; readonly root?: string; readonly generation?: number } = {}) =>
+const accessAt = (
+  url: string,
+  options: {
+    readonly issuedAt?: number
+    readonly lifetimeMs?: number
+    readonly root?: string
+    readonly generation?: number
+  } = {},
+) =>
   Machine.access({
     url,
     environmentId,
@@ -57,7 +65,10 @@ const environmentsWith = (access: Layer.Layer<EnvironmentAccess.Service>) =>
   )
 
 const opening = (open: EnvironmentAccess.Interface["open"]) =>
-  Layer.succeed(EnvironmentAccess.Service, EnvironmentAccess.Service.of({ subscribe: Effect.succeed(Stream.never), open }))
+  Layer.succeed(
+    EnvironmentAccess.Service,
+    EnvironmentAccess.Service.of({ subscribe: Effect.succeed(Stream.never), open }),
+  )
 
 const machine = (options: Parameters<typeof Machine.layer>[0]) =>
   Layer.build(Layer.fresh(Machine.layer(options))).pipe(
@@ -121,18 +132,20 @@ it.live("concurrent failing connects share one failure and one renewal", () =>
   }),
 )
 
-it.live("a failed lookup is not cached, the next connect retries, and the first contact makes the session's folder", () =>
-  Effect.gen(function* () {
-    const subject = yield* build({ failures: 4 })
-    expect((yield* Effect.flip(connect(subject.environments))).reason).toBe("token_refused")
-    expect((yield* Effect.flip(connect(subject.environments))).reason).toBe("token_refused")
-    const connection = yield* connect(subject.environments)
-    expect([connection.hello.environmentId, connection.directory]).toEqual([environmentId, folder()])
-    expect((yield* Effect.promise(() => stat(folder()))).isDirectory()).toBe(true)
-    expect(yield* Ref.get(subject.opens)).toBe(5)
-    expect(yield* connect(subject.environments)).toBe(connection)
-    expect(yield* Ref.get(subject.opens)).toBe(5)
-  }),
+it.live(
+  "a failed lookup is not cached, the next connect retries, and the first contact makes the session's folder",
+  () =>
+    Effect.gen(function* () {
+      const subject = yield* build({ failures: 4 })
+      expect((yield* Effect.flip(connect(subject.environments))).reason).toBe("token_refused")
+      expect((yield* Effect.flip(connect(subject.environments))).reason).toBe("token_refused")
+      const connection = yield* connect(subject.environments)
+      expect([connection.hello.environmentId, connection.directory]).toEqual([environmentId, folder()])
+      expect((yield* Effect.promise(() => stat(folder()))).isDirectory()).toBe(true)
+      expect(yield* Ref.get(subject.opens)).toBe(5)
+      expect(yield* connect(subject.environments)).toBe(connection)
+      expect(yield* Ref.get(subject.opens)).toBe(5)
+    }),
 )
 
 it.live("a session without access fails with no access", () =>
@@ -228,7 +241,9 @@ it.effect("keeps using a token it could not refresh while Ren does not answer, a
         Ref.getAndUpdate(opens, (count) => count + 1).pipe(
           Effect.flatMap((count) =>
             count === 0
-              ? Clock.currentTimeMillis.pipe(Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 600_000 })))
+              ? Clock.currentTimeMillis.pipe(
+                  Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 600_000 })),
+                )
               : Effect.fail(renDown(id)),
           ),
         ),
@@ -248,72 +263,80 @@ it.effect("keeps using a token it could not refresh while Ren does not answer, a
   }),
 )
 
-it.effect("fails clearly once a token expires while Ren is down, and works again on the first try after the backoff", () =>
-  Effect.gen(function* () {
-    const url = yield* Machine.url
-    const isDown = yield* Ref.make(false)
-    const environments = yield* environmentsWith(
-      opening((id) =>
-        Effect.gen(function* () {
-          if (yield* Ref.get(isDown)) return yield* renDown(id)
-          return yield* accessAt(url, { issuedAt: yield* Clock.currentTimeMillis, lifetimeMs: 600_000 })
-        }),
-      ),
-    )
-    yield* connect(environments)
-    yield* Ref.set(isDown, true)
-    yield* TestClock.adjust(Duration.minutes(11))
-    const error = yield* connect(environments).pipe(Effect.flip)
-    expect([error.reason, error.message]).toEqual(["ren_unavailable", "Ren does not answer: connection refused"])
-    yield* Ref.set(isDown, false)
-    expect((yield* connect(environments).pipe(Effect.flip)).reason).toBe("ren_unavailable")
-    yield* TestClock.adjust(Duration.seconds(31))
-    expect((yield* connect(environments)).hello.environmentId).toBe(environmentId)
-  }),
+it.effect(
+  "fails clearly once a token expires while Ren is down, and works again on the first try after the backoff",
+  () =>
+    Effect.gen(function* () {
+      const url = yield* Machine.url
+      const isDown = yield* Ref.make(false)
+      const environments = yield* environmentsWith(
+        opening((id) =>
+          Effect.gen(function* () {
+            if (yield* Ref.get(isDown)) return yield* renDown(id)
+            return yield* accessAt(url, { issuedAt: yield* Clock.currentTimeMillis, lifetimeMs: 600_000 })
+          }),
+        ),
+      )
+      yield* connect(environments)
+      yield* Ref.set(isDown, true)
+      yield* TestClock.adjust(Duration.minutes(11))
+      const error = yield* connect(environments).pipe(Effect.flip)
+      expect([error.reason, error.message]).toEqual(["ren_unavailable", "Ren does not answer: connection refused"])
+      yield* Ref.set(isDown, false)
+      expect((yield* connect(environments).pipe(Effect.flip)).reason).toBe("ren_unavailable")
+      yield* TestClock.adjust(Duration.seconds(31))
+      expect((yield* connect(environments)).hello.environmentId).toBe(environmentId)
+    }),
 )
 
-it.effect("a refresh that Ren answers with no access closes the connection at once, and the next call has no access", () =>
-  Effect.gen(function* () {
-    const url = yield* Machine.url
-    const opens = yield* Ref.make(0)
-    const environments = yield* environmentsWith(
-      opening((id) =>
-        Ref.getAndUpdate(opens, (count) => count + 1).pipe(
-          Effect.flatMap((count) =>
-            count === 0
-              ? Clock.currentTimeMillis.pipe(Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 600_000 })))
-              : Effect.fail(noAccess(id)),
+it.effect(
+  "a refresh that Ren answers with no access closes the connection at once, and the next call has no access",
+  () =>
+    Effect.gen(function* () {
+      const url = yield* Machine.url
+      const opens = yield* Ref.make(0)
+      const environments = yield* environmentsWith(
+        opening((id) =>
+          Ref.getAndUpdate(opens, (count) => count + 1).pipe(
+            Effect.flatMap((count) =>
+              count === 0
+                ? Clock.currentTimeMillis.pipe(
+                    Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 600_000 })),
+                  )
+                : Effect.fail(noAccess(id)),
+            ),
           ),
         ),
-      ),
-    )
-    const connection = yield* connect(environments)
-    yield* TestClock.adjust(Duration.minutes(7))
-    yield* connection.client["executor.hello"]()
-    const error = yield* connect(environments).pipe(Effect.flip)
-    expect([error.reason, error.message]).toEqual(["no_access", "No access to a sandbox: no binding"])
-  }),
+      )
+      const connection = yield* connect(environments)
+      yield* TestClock.adjust(Duration.minutes(7))
+      yield* connection.client["executor.hello"]()
+      const error = yield* connect(environments).pipe(Effect.flip)
+      expect([error.reason, error.message]).toEqual(["no_access", "No access to a sandbox: no binding"])
+    }),
 )
 
-it.live("a sandbox that does not answer fails the call once, and the next call asks Ren and reaches the new sandbox", () =>
-  Effect.gen(function* () {
-    const relay = yield* Relay.make(Relay.portOf(yield* Machine.url))
-    const second = yield* machine({ environmentId, workspace: elsewhere })
-    const current = yield* Ref.make(yield* accessAt(relay.url))
-    const opens = yield* Ref.make(0)
-    const environments = yield* environmentsWith(
-      opening(() => Ref.update(opens, (count) => count + 1).pipe(Effect.andThen(Ref.get(current)))),
-    )
-    const connection = yield* connect(environments)
-    yield* relay.refuse(true)
-    yield* relay.cut
-    yield* Ref.set(current, yield* accessAt(second, { root: elsewhere, generation: 2 }))
-    const failed = yield* connection.client["process.spawn"]({ command: "true", arguments: [] }).pipe(Effect.flip)
-    expect(ExecutorClient.isNoAnswer(failed)).toBe(true)
-    expect(yield* Ref.get(opens)).toBe(1)
-    const next = yield* connect(environments)
-    expect([next.directory, yield* Ref.get(opens)]).toEqual([folder(elsewhere), 2])
-  }),
+it.live(
+  "a sandbox that does not answer fails the call once, and the next call asks Ren and reaches the new sandbox",
+  () =>
+    Effect.gen(function* () {
+      const relay = yield* Relay.make(Relay.portOf(yield* Machine.url))
+      const second = yield* machine({ environmentId, workspace: elsewhere })
+      const current = yield* Ref.make(yield* accessAt(relay.url))
+      const opens = yield* Ref.make(0)
+      const environments = yield* environmentsWith(
+        opening(() => Ref.update(opens, (count) => count + 1).pipe(Effect.andThen(Ref.get(current)))),
+      )
+      const connection = yield* connect(environments)
+      yield* relay.refuse(true)
+      yield* relay.cut
+      yield* Ref.set(current, yield* accessAt(second, { root: elsewhere, generation: 2 }))
+      const failed = yield* connection.client["process.spawn"]({ command: "true", arguments: [] }).pipe(Effect.flip)
+      expect(ExecutorClient.isNoAnswer(failed)).toBe(true)
+      expect(yield* Ref.get(opens)).toBe(1)
+      const next = yield* connect(environments)
+      expect([next.directory, yield* Ref.get(opens)]).toEqual([folder(elsewhere), 2])
+    }),
 )
 
 const statArrived = Effect.runSync(Deferred.make<void>())
@@ -479,32 +502,39 @@ const reporting = (hello: Partial<Pick<Hello, "protocol" | "capabilities">>) =>
     ),
   ).pipe(Layer.provide(NodeCompatible.layer))
 
-it.live("refuses an executor that speaks another protocol, and gives each tool family only the capability it needs", () =>
-  Effect.gen(function* () {
-    const environmentsFor = Effect.fnUntraced(function* (hello: Partial<Pick<Hello, "protocol" | "capabilities">>) {
-      const url = yield* machine({ environmentId, workspace, executor: reporting(hello) })
-      return yield* environmentsWith(EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(url)]])))
-    })
-    const newer = yield* Effect.scoped(connect(yield* environmentsFor({ protocol: 2 }))).pipe(Effect.flip)
-    expect([newer.reason, newer.message]).toEqual([
-      "incompatible",
-      "The executor is not compatible: it speaks protocol 2, not 1",
-    ])
-    const filesOnly = yield* environmentsFor({ capabilities: ["files"] })
-    expect((yield* Effect.scoped(filesOnly.connect(sessionId, "files"))).hello.capabilities).toEqual(["files"])
-    const shell = yield* Effect.scoped(filesOnly.connect(sessionId, "processes")).pipe(Effect.flip)
-    expect([shell.reason, shell.message]).toEqual([
-      "incompatible",
-      "The executor is not compatible: the sandbox does not support shell commands",
-    ])
-  }),
+it.live(
+  "refuses an executor that speaks another protocol, and gives each tool family only the capability it needs",
+  () =>
+    Effect.gen(function* () {
+      const environmentsFor = Effect.fnUntraced(function* (hello: Partial<Pick<Hello, "protocol" | "capabilities">>) {
+        const url = yield* machine({ environmentId, workspace, executor: reporting(hello) })
+        return yield* environmentsWith(EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(url)]])))
+      })
+      const newer = yield* Effect.scoped(connect(yield* environmentsFor({ protocol: 2 }))).pipe(Effect.flip)
+      expect([newer.reason, newer.message]).toEqual([
+        "incompatible",
+        "The executor is not compatible: it speaks protocol 2, not 1",
+      ])
+      const filesOnly = yield* environmentsFor({ capabilities: ["files"] })
+      expect((yield* Effect.scoped(filesOnly.connect(sessionId, "files"))).hello.capabilities).toEqual(["files"])
+      const shell = yield* Effect.scoped(filesOnly.connect(sessionId, "processes")).pipe(Effect.flip)
+      expect([shell.reason, shell.message]).toEqual([
+        "incompatible",
+        "The executor is not compatible: the sandbox does not support shell commands",
+      ])
+    }),
 )
 
 it.live("gets a new access once when the executor refuses one the brain still thinks is valid, and does not loop", () =>
   Effect.gen(function* () {
     const url = yield* Machine.url
     const opens = yield* Ref.make(0)
-    const refusedToken = (yield* Machine.access({ url, environmentId: Environment.ID.create(), brain, directory: folder() })).token
+    const refusedToken = (yield* Machine.access({
+      url,
+      environmentId: Environment.ID.create(),
+      brain,
+      directory: folder(),
+    })).token
     const environments = yield* environmentsWith(
       opening(() =>
         Effect.gen(function* () {

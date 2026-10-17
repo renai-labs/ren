@@ -123,7 +123,8 @@ const begin = Effect.fnUntraced(function* (
 ) {
   const sessionId = Session.ID.create()
   const onEnvironment = options.onEnvironment ?? true
-  if (onEnvironment) yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* Machine.url), sessionId))
+  if (onEnvironment)
+    yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* Machine.url), sessionId))
   yield* restart(opened.harness, sessionId, onEnvironment ? locationOf(sessionId) : undefined, options.agent)
   const send = (script: StubModel.Script) => sendTo(opened.harness, sessionId, script)
   return {
@@ -147,9 +148,10 @@ const shell = (command: string) => ({ tool: { name: "shell", input: { command } 
 
 const text = (path: string) => Effect.promise(() => Bun.file(path).text())
 
-const refusedTurn = Effect.fnUntraced(function* (
-  session: { readonly sessionId: Session.ID; readonly turn: (script: StubModel.Script) => Effect.Effect<StubModel.Call, unknown> },
-) {
+const refusedTurn = Effect.fnUntraced(function* (session: {
+  readonly sessionId: Session.ID
+  readonly turn: (script: StubModel.Script) => Effect.Effect<StubModel.Call, unknown>
+}) {
   const marker = join(workspace, `${crypto.randomUUID()}.ran`)
   const result = lastToolResult(yield* session.turn(stub.script(shell(`touch ${marker}`))))
   return { result, ran: yield* Effect.promise(() => Bun.file(marker).exists()) }
@@ -166,7 +168,13 @@ test.each<
     Readonly<Record<string, string>>,
   ]
 >([
-  ["shell", { name: "shell", input: { command: `echo ${marker} > shell.txt && ls && pwd` } }, {}, ["shell.txt"], { "shell.txt": `${marker}\n` }],
+  [
+    "shell",
+    { name: "shell", input: { command: `echo ${marker} > shell.txt && ls && pwd` } },
+    {},
+    ["shell.txt"],
+    { "shell.txt": `${marker}\n` },
+  ],
   ["read", { name: "read", input: { path: "notes.md" } }, { "notes.md": `remote ${marker}\n` }, [marker], {}],
   [
     "grep",
@@ -206,28 +214,30 @@ test.each<
       )
       const result = toolOutput(yield* session.turn(stub.script({ tool })))
       expect(output.filter((part) => !result.includes(part))).toEqual([])
-      expect(
-        yield* Effect.forEach(Object.keys(after), (path) => text(join(folder(session.sessionId), path))),
-      ).toEqual(Object.values(after))
+      expect(yield* Effect.forEach(Object.keys(after), (path) => text(join(folder(session.sessionId), path)))).toEqual(
+        Object.values(after),
+      )
     }),
   ),
 )
 
-it.live("a start and a turn with no file or shell call contact neither Ren nor the sandbox; the first file call does", () =>
-  Effect.gen(function* () {
-    const opened = yield* open()
-    const session = yield* begin(opened)
-    yield* session.turn(stub.script(), 1)
-    expect(yield* opened.opens).toBe(0)
-    expect((yield* Effect.promise(() => stat(folder(session.sessionId)).catch(() => undefined))) === undefined).toBe(
-      true,
-    )
-    yield* session.turn(stub.script(shell("pwd")))
-    expect(yield* opened.opens).toBe(1)
-    expect((yield* Effect.promise(() => stat(folder(session.sessionId)))).isDirectory()).toBe(true)
-    yield* session.turn(stub.script(shell("pwd")))
-    expect(yield* opened.opens).toBe(1)
-  }),
+it.live(
+  "a start and a turn with no file or shell call contact neither Ren nor the sandbox; the first file call does",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const session = yield* begin(opened)
+      yield* session.turn(stub.script(), 1)
+      expect(yield* opened.opens).toBe(0)
+      expect((yield* Effect.promise(() => stat(folder(session.sessionId)).catch(() => undefined))) === undefined).toBe(
+        true,
+      )
+      yield* session.turn(stub.script(shell("pwd")))
+      expect(yield* opened.opens).toBe(1)
+      expect((yield* Effect.promise(() => stat(folder(session.sessionId)))).isDirectory()).toBe(true)
+      yield* session.turn(stub.script(shell("pwd")))
+      expect(yield* opened.opens).toBe(1)
+    }),
 )
 
 it.live("two sessions on one sandbox work in their own folders", () =>
@@ -334,9 +344,15 @@ it.live("the same start twice makes one session", () =>
     const opened = yield* open()
     const sessionId = Session.ID.create()
     yield* opened.memory.set(sessionId, yield* accessTo(yield* Machine.url, sessionId))
-    yield* Effect.all([restart(opened.harness, sessionId, locationOf(sessionId)), restart(opened.harness, sessionId, locationOf(sessionId))], {
-      concurrency: "unbounded",
-    })
+    yield* Effect.all(
+      [
+        restart(opened.harness, sessionId, locationOf(sessionId)),
+        restart(opened.harness, sessionId, locationOf(sessionId)),
+      ],
+      {
+        concurrency: "unbounded",
+      },
+    )
     const roots = yield* opened.harness.sessions
     expect(roots.filter((state) => String(state.id) === sessionId).length).toBe(1)
   }),
@@ -418,12 +434,14 @@ it.live(
       const refused = yield* refusedTurn(session)
       yield* opened.memory.set(session.sessionId, access)
       const back = lastToolResult(yield* session.turn(stub.script(shell("echo back"))))
-      expect({ finished, ran: refused.ran, noAccess: refused.result.includes("No access to a sandbox"), back }).toEqual({
-        finished: JSON.stringify("finished\n"),
-        ran: false,
-        noAccess: true,
-        back: JSON.stringify("back\n"),
-      })
+      expect({ finished, ran: refused.ran, noAccess: refused.result.includes("No access to a sandbox"), back }).toEqual(
+        {
+          finished: JSON.stringify("finished\n"),
+          ran: false,
+          noAccess: true,
+          back: JSON.stringify("back\n"),
+        },
+      )
     }),
 )
 

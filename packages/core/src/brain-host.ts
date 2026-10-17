@@ -267,7 +267,9 @@ export const layer = Layer.effect(
         return yield* body(host, access)
       }),
       refreshHostToken: Effect.fn("BrainHost.refreshHostToken")(function* (host: CurrentHost["Service"]) {
-        const exp = Math.floor(DateTime.toEpochMillis(DateTime.addDuration(yield* DateTime.now, hostTokenLifetime)) / 1000)
+        const exp = Math.floor(
+          DateTime.toEpochMillis(DateTime.addDuration(yield* DateTime.now, hostTokenLifetime)) / 1000,
+        )
         return { hostToken: yield* hostToken(host, exp) }
       }),
       accessEnvironment: Effect.fn("BrainHost.accessEnvironment")(function* (host: CurrentHost["Service"]) {

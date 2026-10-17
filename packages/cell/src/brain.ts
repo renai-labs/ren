@@ -29,11 +29,10 @@ const configured = Effect.gen(function* () {
   if (info.vars.REN_URL && !(yield* hostToken.isValid))
     return yield* new ModelsNotConfiguredError({ message: "The brain’s host token is missing or expires soon" })
   const now = yield* DateTime.now
-  const expired = stored.value.endpoints.find(
-    (endpoint) =>
-      Option.fromNullishOr(endpoint.apiKey.expiresAt).pipe(
-        Option.exists((expiresAt) => DateTime.isLessThanOrEqualTo(expiresAt, now)),
-      ),
+  const expired = stored.value.endpoints.find((endpoint) =>
+    Option.fromNullishOr(endpoint.apiKey.expiresAt).pipe(
+      Option.exists((expiresAt) => DateTime.isLessThanOrEqualTo(expiresAt, now)),
+    ),
   )
   if (expired?.apiKey.expiresAt)
     return yield* new ModelsNotConfiguredError({

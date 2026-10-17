@@ -160,7 +160,10 @@ it.live("keeps at most 64 MiB of exited output across brains and forgets the old
     })
     const all = yield* Effect.forEach(Array.from({ length: 33 }), () => finish())
     const found = yield* Effect.forEach(all, (entry) =>
-      executor.output(entry.owner, entry.id).pipe(Effect.as(true), Effect.catchTag("ProcessNotFoundError", () => Effect.succeed(false))),
+      executor.output(entry.owner, entry.id).pipe(
+        Effect.as(true),
+        Effect.catchTag("ProcessNotFoundError", () => Effect.succeed(false)),
+      ),
     )
     expect(found.indexOf(true)).toBe(1)
     expect(found.slice(1).every(Boolean)).toBe(true)

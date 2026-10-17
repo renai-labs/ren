@@ -194,12 +194,15 @@ export const layer = Layer.effect(
         return [{ ...chunk, offset: position, bytes: chunk.bytes.subarray(position - chunk.offset) }]
       })
 
-    const waitForChange: (entry: Entry, position: number, logChanges: PubSub.Subscription<void>) => Effect.Effect<void> =
-      Effect.fnUntraced(function* (entry, position, logChanges) {
-        if (entry.nextOffset > position || entry.exit || entry.failure) return
-        yield* PubSub.take(logChanges)
-        return yield* waitForChange(entry, position, logChanges)
-      })
+    const waitForChange: (
+      entry: Entry,
+      position: number,
+      logChanges: PubSub.Subscription<void>,
+    ) => Effect.Effect<void> = Effect.fnUntraced(function* (entry, position, logChanges) {
+      if (entry.nextOffset > position || entry.exit || entry.failure) return
+      yield* PubSub.take(logChanges)
+      return yield* waitForChange(entry, position, logChanges)
+    })
 
     yield* Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis

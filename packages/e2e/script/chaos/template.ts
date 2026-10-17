@@ -20,9 +20,5 @@ const build = Bun.spawn(["e2b", "template", "build", "--path", folder, "--config
   stdio: ["inherit", "inherit", "inherit"],
 })
 const exit = await build.exited
-process.stdout.write(
-  exit === 0
-    ? "Set CHAOS_E2B_TEMPLATE to the template ID.\n"
-    : "The E2B template build failed.\n",
-)
+process.stdout.write(exit === 0 ? "Set CHAOS_E2B_TEMPLATE to the template ID.\n" : "The E2B template build failed.\n")
 process.exit(exit)

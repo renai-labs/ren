@@ -43,10 +43,12 @@ const keys = (access: Option.Option<Models.Access>) =>
 
 const make = Effect.gen(function* () {
   const issuer = yield* ModelsTest.issuer
-  const services = yield* Layer.build(ModelRefresh.layer(issuer.url).pipe(
+  const services = yield* Layer.build(
+    ModelRefresh.layer(issuer.url).pipe(
       Layer.provideMerge(HostToken.layer(issuer.url, TestToken.keys)),
       Layer.provideMerge(ModelsTest.storage()),
-    ))
+    ),
+  )
   return {
     ...issuer,
     store: Context.get(services, ModelStore.Service),

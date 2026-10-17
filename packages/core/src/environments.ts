@@ -18,9 +18,7 @@ export interface Subject {
 export interface Sandbox extends Schema.Schema.Type<typeof Sandbox> {}
 export const Sandbox = Schema.Struct({
   id: Schema.NonEmptyString,
-  url: Schema.String.check(
-    Schema.makeFilter((url) => URL.canParse(url) || "a sandbox url must be an absolute URL"),
-  ),
+  url: Schema.String.check(Schema.makeFilter((url) => URL.canParse(url) || "a sandbox url must be an absolute URL")),
   generation: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
   workspace: Schema.String.check(Schema.isStartingWith("/")).pipe(
     Schema.withDecodingDefaultKey(Effect.succeed("/workspace")),
@@ -101,7 +99,11 @@ export const layer = Layer.effect(
         const location = { environmentId, directory: Environment.sessionDirectory(subject.brainId) }
         const inserted = yield* database.db
           .insert(table)
-          .values({ session_id: subject.brainId, organization_id: subject.organizationId, environment_id: environmentId })
+          .values({
+            session_id: subject.brainId,
+            organization_id: subject.organizationId,
+            environment_id: environmentId,
+          })
           .onConflictDoNothing()
           .returning({ session_id: table.session_id })
           .pipe(Effect.orDie)

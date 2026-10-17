@@ -504,10 +504,17 @@ describe("BrainHost", () => {
               ConfigProvider.layer(
                 ConfigProvider.fromUnknown({
                   ENVIRONMENTS: JSON.stringify([
-                    { id: environmentId, capacity: 1, sandboxes: [{ id: "a", url: "http://127.0.0.1:7001", generation: 1 }] },
+                    {
+                      id: environmentId,
+                      capacity: 1,
+                      sandboxes: [{ id: "a", url: "http://127.0.0.1:7001", generation: 1 }],
+                    },
                   ]),
                   ENVIRONMENT_KEYS: JSON.stringify([
-                    { id: keys.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(keys.privateKey.key) },
+                    {
+                      id: keys.privateKey.id,
+                      key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(keys.privateKey.key),
+                    },
                   ]),
                 }),
               ),
@@ -601,4 +608,3 @@ describe("BrainHost", () => {
     )
   })
 })
-

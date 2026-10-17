@@ -82,10 +82,7 @@ const startCore = (keys: ReadonlyArray<SessionToken.Key>) => {
             }
             return yield* effect
           }),
-    ).pipe(
-      Layer.provide(brainHost(cell.url, keys)),
-      Layer.provide(HttpServer.layerServices),
-    ),
+    ).pipe(Layer.provide(brainHost(cell.url, keys)), Layer.provide(HttpServer.layerServices)),
     { disableLogger: true },
   )
   const server = Bun.serve({ hostname: "127.0.0.1", port: corePort, fetch: (request) => api.handler(request) })

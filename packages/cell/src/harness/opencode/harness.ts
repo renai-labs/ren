@@ -103,7 +103,9 @@ const checkEnvironment = Effect.fn("OpenCodeHarness.checkEnvironment")(function*
 ) {
   const requested = input.environment
   if (Option.isSome(session)) {
-    const isOnEnvironment = Boolean((yield* host.sessions.get(session.value.id).pipe(Effect.orDie)).location.workspaceID)
+    const isOnEnvironment = Boolean(
+      (yield* host.sessions.get(session.value.id).pipe(Effect.orDie)).location.workspaceID,
+    )
     if (requested && !isOnEnvironment) return yield* notSupported(input.sessionId)
     return isOnEnvironment
   }
