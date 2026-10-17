@@ -59,11 +59,11 @@ export const make = async (url: string) => {
         headers: { authorization, "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
-    models: (access: Models.Access = Shared.access()) =>
+    models: (access: Models.Access = Shared.access(), hostToken?: string) =>
       fetch(`${url}/ren/models`, {
         method: "PUT",
         headers: { authorization: server, "content-type": "application/json" },
-        body: JSON.stringify(Schema.encodeSync(ModelsBody)({ access })),
+        body: JSON.stringify(Schema.encodeSync(ModelsBody)({ access, ...(hostToken && { hostToken }) })),
       }),
     removeModels: () => fetch(`${url}/ren/models`, { method: "DELETE", headers: { authorization: server } }),
     server,

@@ -1,11 +1,16 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { Shared, TestToken } from "@ren/cell/testing"
 import { SessionToken } from "@ren/brain-api/session-token"
+import { Signature } from "@ren/brain-api/signature"
+import { Testing } from "@ren/db/testing"
+import { Environment } from "@ren/schema/environment"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import {
   Cause,
   Clock,
+  ConfigProvider,
+  Context,
   Duration,
   Effect,
   Exit,
@@ -22,9 +27,11 @@ import {
 import { Base64Url } from "effect/encoding"
 import { TestClock } from "effect/testing"
 import { BrainHost } from "../src/brain-host.js"
+import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
+import { Seed } from "./lib/seed.js"
 
 const runtime = ManagedRuntime.make(Shared.layer)
 beforeAll(async () => {
@@ -470,4 +477,128 @@ describe("BrainHost", () => {
       }),
     )
   })
+
+  describe("environments", () => {
+    const environmentId = Environment.ID.create()
+    const recordingCell = Effect.fnUntraced(function* (status = 200) {
+      const starts: Array<Session.StartInput> = []
+      const server = yield* serve(async (request) => {
+        const url = new URL(request.url)
+        if (url.pathname === "/ren/models") return new Response(null, { status: 204 })
+        const payload = Schema.decodeUnknownSync(Session.StartInput)(await request.json())
+        starts.push(payload)
+        return status === 200
+          ? Response.json({ sessionId: payload.sessionId, harness: "opencode" })
+          : Response.json({ _tag: "BrainRejectedError", message: "the cell refused" }, { status })
+      })
+      return { starts, url: server.url.origin }
+    })
+    const hostWith = Effect.fnUntraced(function* (cellUrl: string) {
+      const keys = yield* Signature.generate("env")
+      const context = yield* Layer.build(
+        Host.layerWith(
+          { CELL_URL: cellUrl, CELL_KEYS: settings.CELL_KEYS },
+          fixed,
+          Layer.fresh(Environments.layer).pipe(
+            Layer.provide(
+              ConfigProvider.layer(
+                ConfigProvider.fromUnknown({
+                  ENVIRONMENTS: JSON.stringify([
+                    { id: environmentId, capacity: 1, sandboxes: [{ id: "a", url: "http://127.0.0.1:7001", generation: 1 }] },
+                  ]),
+                  ENVIRONMENT_KEYS: JSON.stringify([
+                    { id: keys.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(keys.privateKey.key) },
+                  ]),
+                }),
+              ),
+            ),
+          ),
+        ),
+      )
+      return Context.get(context, BrainHost.Service)
+    })
+    const environmentIt = testEffect(Testing.layer)
+    const startOn = (brain: BrainHost.Interface, sessionId: Session.ID, org: Auth.OrganizationID, id = environmentId) =>
+      brain.start(
+        {
+          sessionId,
+          harness: "opencode",
+          instructions: {},
+          interactive: true,
+          environment: { environmentId: id, directory: "/anywhere" },
+        },
+        org,
+      )
+
+    environmentIt.live("start binds a new session and gives the cell the session's own folder", () =>
+      Effect.gen(function* () {
+        const cell = yield* recordingCell()
+        const brain = yield* hostWith(cell.url)
+        const org = yield* Seed.organization()
+        const sessionId = Session.ID.create()
+        yield* startOn(brain, sessionId, org)
+        expect(cell.starts.map((input) => input.environment)).toEqual([
+          { environmentId, directory: `/workspace/${sessionId}` },
+        ])
+        const access = yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org })
+        expect([access.environmentId, access.url]).toEqual([environmentId, "http://127.0.0.1:7001"])
+      }),
+    )
+
+    environmentIt.live("Ren refuses an unknown environment, or a change of environment, before it calls the cell", () =>
+      Effect.gen(function* () {
+        const cell = yield* recordingCell()
+        const brain = yield* hostWith(cell.url)
+        const org = yield* Seed.organization()
+        const sessionId = Session.ID.create()
+        const unknown = yield* startOn(brain, sessionId, org, Environment.ID.create()).pipe(Effect.flip)
+        expect(unknown._tag).toBe("BrainRejectedError")
+        expect(cell.starts).toEqual([])
+        yield* startOn(brain, sessionId, org)
+        const changed = yield* startOn(brain, sessionId, org, Environment.ID.create()).pipe(Effect.flip)
+        expect(changed._tag).toBe("BrainRejectedError")
+        expect(cell.starts.length).toBe(1)
+      }),
+    )
+
+    environmentIt.live("a start that the cell refuses removes the binding that it made", () =>
+      Effect.gen(function* () {
+        const cell = yield* recordingCell(422)
+        const brain = yield* hostWith(cell.url)
+        const org = yield* Seed.organization()
+        const sessionId = Session.ID.create()
+        expect((yield* startOn(brain, sessionId, org).pipe(Effect.flip))._tag).toBe("BrainRejectedError")
+        expect(
+          (yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org }).pipe(Effect.flip))._tag,
+        ).toBe("EnvironmentNotFoundError")
+      }),
+    )
+
+    environmentIt.live("two starts at once naming different environments leave the session on one", () =>
+      Effect.gen(function* () {
+        const cell = yield* recordingCell()
+        const brain = yield* hostWith(cell.url)
+        const org = yield* Seed.organization()
+        const sessionId = Session.ID.create()
+        const exits = yield* Effect.all(
+          [startOn(brain, sessionId, org), startOn(brain, sessionId, org, Environment.ID.create())].map(Effect.exit),
+          { concurrency: "unbounded" },
+        )
+        expect(exits.map(Exit.isSuccess)).toEqual([true, false])
+        expect(cell.starts.map((input) => input.environment?.environmentId)).toEqual([environmentId])
+      }),
+    )
+
+    environmentIt.live("a refreshed host token comes from the host token alone and outlives now by two hours", () =>
+      Effect.gen(function* () {
+        const brain = yield* hostWith("http://127.0.0.1:9")
+        const host = { brainId: Session.ID.create(), organizationId }
+        const body = yield* brain.refreshHostToken(host)
+        const refreshed = claims(body.hostToken)
+        expect(refreshed).toMatchObject({ sid: host.brainId, scope: "host", org: organizationId })
+        expect(refreshed.exp * 1000 - Date.now()).toBeGreaterThan(Duration.toMillis(Duration.hours(2)) - 5_000)
+      }),
+    )
+  })
 })
+

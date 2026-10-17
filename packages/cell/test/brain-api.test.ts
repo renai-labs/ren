@@ -176,7 +176,7 @@ test.each<[string, Partial<Session.StartInput>]>([
   ["an unknown model", { model: { endpointId: "stub", modelId: "missing" } }],
   [
     "an environment in a brain that cannot use environments",
-    { environments: [{ environmentId: Environment.ID.create(), directory: "/workspace" }] },
+    { environment: { environmentId: Environment.ID.create(), directory: "/workspace" } },
   ],
 ])("start rejects %s, creates no session and submits no initial message", (_name, input) =>
   live(

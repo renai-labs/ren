@@ -1,14 +1,13 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test"
-import { CurrentHost, ModelsApi } from "@ren/brain-api/models-api"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer, ManagedRuntime, Ref } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
-import { HttpApiBuilder } from "effect/http-api"
 import { BrainHost } from "../src/brain-host.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
+import { HostApiTest } from "./lib/host-api.js"
 import { Host } from "./lib/host.js"
 
 const stub = Shared.stub()
@@ -33,21 +32,7 @@ const models = Layer.succeed(
 const settings = { CELL_URL: "", CELL_KEYS: TestToken.vars.CELL_KEYS }
 
 const api = HttpRouter.toWebHandler(
-  HttpApiBuilder.layer(ModelsApi).pipe(
-    Layer.provide(
-      HttpApiBuilder.group(ModelsApi, "models", (handlers) =>
-        Effect.gen(function* () {
-          const brain = yield* BrainHost.Service
-          return handlers.handle("models.refresh", () =>
-            Effect.gen(function* () {
-              const host = yield* CurrentHost
-              return yield* brain.refreshModels(host)
-            }),
-          )
-        }),
-      ),
-    ),
-    Layer.provide(BrainHost.hostAuthentication),
+  HostApiTest.layer().pipe(
     Layer.provide(Host.layer({ CELL_URL: "http://127.0.0.1:9", CELL_KEYS: settings.CELL_KEYS }, models)),
     Layer.provide(HttpServer.layerServices),
   ),

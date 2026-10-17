@@ -1,0 +1,93 @@
+import type { Auth } from "@ren/schema/auth"
+import { Environment } from "@ren/schema/environment"
+import type { Session } from "@ren/schema/session"
+import { Context, Schema } from "effect"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
+import { ModelsBody } from "./brain-api.js"
+import {
+  EnvironmentNotFoundError,
+  EnvironmentUnavailableError,
+  ForbiddenError,
+  ModelsUnavailableError,
+} from "./errors.js"
+
+export class CurrentHost extends Context.Service<
+  CurrentHost,
+  { readonly brainId: Session.ID; readonly organizationId: Auth.OrganizationID }
+>()("@ren/brain-api/CurrentHost") {}
+
+export class HostAuthentication extends HttpApiMiddleware.Service<HostAuthentication, { provides: CurrentHost }>()(
+  "@ren/brain-api/HostAuthentication",
+  {
+    error: ForbiddenError,
+    security: {
+      bearer: HttpApiSecurity.bearer.pipe(
+        HttpApiSecurity.annotate(OpenApi.Description, "The host token that came with the brain's model access."),
+      ),
+    },
+  },
+) {}
+
+export const HostTokenBody = Schema.Struct({ hostToken: Schema.NonEmptyString }).annotate({
+  identifier: "Host.HostTokenBody",
+})
+export type HostTokenBody = typeof HostTokenBody.Type
+
+const ModelsGroup = HttpApiGroup.make("models")
+  .add(
+    HttpApiEndpoint.post("models.refresh", "/brain/models/refresh", {
+      success: ModelsBody,
+      error: ModelsUnavailableError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "models.refresh",
+        summary: "Refresh a brain’s models",
+        description: "Grant fresh model access for the brain named by a host token, with a fresh host token.",
+      }),
+    ),
+  )
+  .middleware(HostAuthentication)
+  .annotateMerge(OpenApi.annotations({ title: "models" }))
+
+const EnvironmentsGroup = HttpApiGroup.make("environments")
+  .add(
+    HttpApiEndpoint.post("environments.access", "/brain/environment/access", {
+      success: Environment.Access,
+      error: [EnvironmentNotFoundError, EnvironmentUnavailableError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "environments.access",
+        summary: "Get access to a session’s sandbox",
+        description:
+          "Name the sandbox and folder of the session named by a host token, with a fresh environment token. The request has no session field: the session comes only from the host token.",
+      }),
+    ),
+  )
+  .middleware(HostAuthentication)
+  .annotateMerge(OpenApi.annotations({ title: "environments" }))
+
+const HostGroup = HttpApiGroup.make("host")
+  .add(
+    HttpApiEndpoint.post("host.refresh", "/brain/host/refresh", { success: HostTokenBody }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "host.refresh",
+        summary: "Refresh a host token",
+        description: "Sign a fresh host token for the brain named by a valid host token, without the model flow.",
+      }),
+    ),
+  )
+  .middleware(HostAuthentication)
+  .annotateMerge(OpenApi.annotations({ title: "host" }))
+
+export const HostApi = HttpApi.make("host")
+  .add(ModelsGroup)
+  .add(EnvironmentsGroup)
+  .add(HostGroup)
+  .annotateMerge(
+    OpenApi.annotations({
+      title: "Ren Host API",
+      version: "0.0.0",
+      description:
+        "Internal API a session host calls with its host token: to refresh its brain’s models, to get access to its session’s sandbox and to refresh the host token.",
+    }),
+  )

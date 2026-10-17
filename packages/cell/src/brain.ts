@@ -7,9 +7,10 @@ import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
 import { Harness } from "./harness/harness.js"
+import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
 
-type Services = Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service
+type Services = Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service | HostToken.Service
 
 const prefix = "/ren"
 
@@ -21,8 +22,12 @@ const notConfigured = new ModelsNotConfiguredError({ message: "The brain has no 
 
 const configured = Effect.gen(function* () {
   const store = yield* ModelStore.Service
+  const info = yield* Cell.Info
+  const hostToken = yield* HostToken.Service
   const stored = yield* store.read
   if (Option.isNone(stored)) return yield* Effect.fail(notConfigured)
+  if (info.vars.REN_URL && !(yield* hostToken.isValid))
+    return yield* new ModelsNotConfiguredError({ message: "The brain’s host token is missing or expires soon" })
   const now = yield* DateTime.now
   const expired = stored.value.endpoints.find(
     (endpoint) =>

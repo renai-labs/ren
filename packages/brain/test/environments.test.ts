@@ -2,9 +2,11 @@ import { expect } from "bun:test"
 import type { Hello } from "@ren/brain-api/executor-api"
 import { Executor } from "@ren/executor/executor"
 import { NodeCompatible } from "@ren/executor/node-compatible"
-import { Machine, testEffect } from "@ren/executor/testing"
+import { ExecutorClient } from "@ren/brain-api/executor-client"
+import { Machine, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
+import { Session } from "@ren/schema/session"
 import {
   Cause,
   Clock,
@@ -23,7 +25,7 @@ import {
 } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
-import { mkdtemp, realpath } from "node:fs/promises"
+import { mkdtemp, realpath, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Environments } from "../src/environments.js"
@@ -34,10 +36,28 @@ const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environments-
 const elsewhere = await realpath(await mkdtemp(join(tmpdir(), "ren-environments-elsewhere-")))
 const it = testEffect(Machine.layer({ environmentId, workspace }))
 
+const sessionId = Session.ID.create()
+const brain = Brain.ofSession(sessionId)
+const folder = (root = workspace) => join(root, sessionId)
+
+const accessAt = (url: string, options: { readonly issuedAt?: number; readonly lifetimeMs?: number; readonly root?: string; readonly generation?: number } = {}) =>
+  Machine.access({
+    url,
+    environmentId,
+    brain,
+    directory: folder(options.root),
+    ...(options.issuedAt !== undefined && { issuedAt: options.issuedAt }),
+    ...(options.lifetimeMs !== undefined && { lifetimeMs: options.lifetimeMs }),
+    ...(options.generation !== undefined && { generation: options.generation }),
+  })
+
 const environmentsWith = (access: Layer.Layer<EnvironmentAccess.Service>) =>
   Layer.build(Environments.layer.pipe(Layer.provide(access), Layer.provide(FetchHttpClient.layer))).pipe(
     Effect.map((context) => Context.get(context, Environments.Service)),
   )
+
+const opening = (open: EnvironmentAccess.Interface["open"]) =>
+  Layer.succeed(EnvironmentAccess.Service, EnvironmentAccess.Service.of({ subscribe: Effect.succeed(Stream.never), open }))
 
 const machine = (options: Parameters<typeof Machine.layer>[0]) =>
   Layer.build(Layer.fresh(Machine.layer(options))).pipe(
@@ -47,23 +67,17 @@ const machine = (options: Parameters<typeof Machine.layer>[0]) =>
 const eventually = <A, E, R>(attempt: Effect.Effect<A, E, R>, isDone: (value: A) => boolean) =>
   attempt.pipe(Effect.repeat({ until: isDone, schedule: Schedule.spaced(10) }), Effect.timeout(5_000))
 
+const renDown = (id: Session.ID) => new EnvironmentAccess.Unavailable({ sessionId: id, message: "connection refused" })
+
+const noAccess = (id: Session.ID) => new EnvironmentAccess.NotFound({ sessionId: id, message: "no binding" })
+
+const connect = (environments: Environments.Interface) => environments.connect(sessionId, "files")
+
 const build = (options: { readonly failures: number; readonly gate?: Deferred.Deferred<void> }) =>
   Effect.gen(function* () {
-    const access = yield* Machine.access({ url: yield* Machine.url, environmentId, brain: Brain.ID.create() })
+    const access = yield* accessAt(yield* Machine.url)
     const opens = yield* Ref.make(0)
     const requests = yield* Ref.make(0)
-    const host = Layer.succeed(
-      EnvironmentAccess.Service,
-      EnvironmentAccess.Service.of({
-        subscribe: Effect.succeed(Stream.never),
-        open: () =>
-          Effect.gen(function* () {
-            if (options.gate) yield* Deferred.await(options.gate)
-            const count = yield* Ref.getAndUpdate(opens, (value) => value + 1)
-            return count < options.failures ? { ...access, token: "invalid" } : access
-          }),
-      }),
-    )
     const http = Layer.effect(
       HttpClient.HttpClient,
       Effect.map(HttpClient.HttpClient, (client) =>
@@ -72,6 +86,13 @@ const build = (options: { readonly failures: number; readonly gate?: Deferred.De
         ),
       ),
     ).pipe(Layer.provide(FetchHttpClient.layer))
+    const host = opening(() =>
+      Effect.gen(function* () {
+        if (options.gate) yield* Deferred.await(options.gate)
+        const count = yield* Ref.getAndUpdate(opens, (value) => value + 1)
+        return count < options.failures ? { ...access, token: "invalid" } : access
+      }),
+    )
     const environments = yield* Layer.build(Environments.layer.pipe(Layer.provide(host), Layer.provide(http))).pipe(
       Effect.map((context) => Context.get(context, Environments.Service)),
     )
@@ -85,7 +106,7 @@ it.live("concurrent failing connects share one failure and one renewal", () =>
     const [exits] = yield* Effect.all(
       [
         Effect.all(
-          Array.from({ length: 10 }, () => Effect.exit(subject.environments.connect(environmentId))),
+          Array.from({ length: 10 }, () => Effect.exit(connect(subject.environments))),
           { concurrency: "unbounded" },
         ),
         Deferred.succeed(gate, undefined),
@@ -100,66 +121,72 @@ it.live("concurrent failing connects share one failure and one renewal", () =>
   }),
 )
 
-it.live("a failed lookup is not cached and the next connect retries", () =>
+it.live("a failed lookup is not cached, the next connect retries, and the first contact makes the session's folder", () =>
   Effect.gen(function* () {
     const subject = yield* build({ failures: 4 })
-    const first = yield* Effect.flip(subject.environments.connect(environmentId))
-    expect(first.reason).toBe("unreachable")
-    const second = yield* Effect.flip(subject.environments.connect(environmentId))
-    expect(second.reason).toBe("unreachable")
-    const connection = yield* subject.environments.connect(environmentId)
-    expect(connection.hello.environmentId).toBe(environmentId)
+    expect((yield* Effect.flip(connect(subject.environments))).reason).toBe("token_refused")
+    expect((yield* Effect.flip(connect(subject.environments))).reason).toBe("token_refused")
+    const connection = yield* connect(subject.environments)
+    expect([connection.hello.environmentId, connection.directory]).toEqual([environmentId, folder()])
+    expect((yield* Effect.promise(() => stat(folder()))).isDirectory()).toBe(true)
     expect(yield* Ref.get(subject.opens)).toBe(5)
-    expect(yield* Ref.get(subject.requests)).toBe(5)
-    expect(yield* subject.environments.connect(environmentId)).toBe(connection)
+    expect(yield* connect(subject.environments)).toBe(connection)
     expect(yield* Ref.get(subject.opens)).toBe(5)
   }),
 )
 
-it.live("an environment the brain has no access to is not found", () =>
+it.live("a session without access fails with no access", () =>
   Effect.gen(function* () {
-    const environments = yield* environmentsWith(EnvironmentAccess.layerFixed([]))
-    expect((yield* environments.connect(environmentId).pipe(Effect.flip)).reason).toBe("not_found")
+    const environments = yield* environmentsWith(EnvironmentAccess.layerFixed(new Map()))
+    const error = yield* connect(environments).pipe(Effect.flip)
+    expect([error.reason, error.message]).toEqual([
+      "no_access",
+      `No access to a sandbox: Session ${sessionId} has no access to an environment`,
+    ])
   }),
 )
 
-it.todo("REN-1486 refuses an authenticated executor whose identity differs from the requested environment", () =>
+it.live("refuses an executor that serves another environment than the access names", () =>
   Effect.gen(function* () {
-    const requested = Environment.ID.create()
-    const access = yield* Machine.access({ url: yield* Machine.url, environmentId, brain: Brain.ID.create() })
+    const access = yield* accessAt(yield* Machine.url)
     const environments = yield* environmentsWith(
-      EnvironmentAccess.layerFixed([{ ...access, environmentId: requested }]),
+      EnvironmentAccess.layerFixed(new Map([[sessionId, { ...access, environmentId: Environment.ID.create() }]])),
     )
-    const exit = yield* Effect.exit(environments.connect(requested))
-    expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toMatchObject({
-      _tag: "Environments.Unavailable",
-      environmentId: requested,
-      reason: "incompatible",
-    })
+    expect((yield* connect(environments).pipe(Effect.flip)).reason).toBe("incompatible")
+  }),
+)
+
+it.live("a session folder that is a file on the sandbox fails the first contact with its cause", () =>
+  Effect.gen(function* () {
+    const root = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-folder-file-"))))
+    yield* Effect.promise(() => writeFile(join(root, sessionId), "not a folder"))
+    const url = yield* machine({ environmentId, workspace: root })
+    const environments = yield* environmentsWith(
+      EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(url, { root })]])),
+    )
+    const error = yield* connect(environments).pipe(Effect.flip)
+    expect(error.reason).toBe("unusable")
+    expect(error.message).toContain(`Could not make the folder ${join(root, sessionId)} on the sandbox`)
   }),
 )
 
 it.effect("refreshes a token in its last five minutes, once for many concurrent calls, and keeps the connection", () =>
   Effect.gen(function* () {
     const url = yield* Machine.url
-    const brain = Brain.ID.create()
     const opens = yield* Ref.make(0)
     const environments = yield* environmentsWith(
-      Layer.succeed(
-        EnvironmentAccess.Service,
-        EnvironmentAccess.Service.of({
-          subscribe: Effect.succeed(Stream.never),
-          open: (id) =>
-            Ref.update(opens, (count) => count + 1).pipe(
-              Effect.andThen(Clock.currentTimeMillis),
-              Effect.flatMap((issuedAt) => Machine.access({ url, environmentId: id, brain, issuedAt })),
-            ),
-        }),
+      opening(() =>
+        Ref.update(opens, (count) => count + 1).pipe(
+          Effect.andThen(Clock.currentTimeMillis),
+          Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 900_000 })),
+        ),
       ),
     )
-    const connection = yield* environments.connect(environmentId)
+    const connection = yield* connect(environments)
+    yield* TestClock.adjust(Duration.seconds(9 * 60 + 59))
+    yield* connection.client["executor.hello"]()
     expect(yield* Ref.get(opens)).toBe(1)
-    yield* TestClock.adjust(Duration.minutes(6))
+    yield* TestClock.adjust(Duration.seconds(2))
     yield* Effect.all(
       Array.from({ length: 10 }, () => connection.client["executor.hello"]()),
       { concurrency: "unbounded" },
@@ -167,85 +194,185 @@ it.effect("refreshes a token in its last five minutes, once for many concurrent 
     expect(yield* Ref.get(opens)).toBe(2)
     yield* connection.client["executor.hello"]()
     expect(yield* Ref.get(opens)).toBe(2)
-    expect(yield* environments.connect(environmentId)).toBe(connection)
+    expect(yield* connect(environments)).toBe(connection)
   }),
 )
 
-it.live("keeps using a token it could not refresh until the token expires", () =>
+it.effect("a 20-second token refreshes in its last third, not on every call", () =>
   Effect.gen(function* () {
     const url = yield* Machine.url
-    const brain = Brain.ID.create()
     const opens = yield* Ref.make(0)
     const environments = yield* environmentsWith(
-      Layer.succeed(
-        EnvironmentAccess.Service,
-        EnvironmentAccess.Service.of({
-          subscribe: Effect.succeed(Stream.never),
-          open: (id) =>
-            Ref.getAndUpdate(opens, (count) => count + 1).pipe(
-              Effect.flatMap((count) =>
-                count === 0
-                  ? Machine.access({ url, environmentId: id, brain, lifetimeMs: 60_000 })
-                  : Effect.fail(new EnvironmentAccess.NotFound({ environmentId: id })),
-              ),
-            ),
+      opening(() =>
+        Ref.update(opens, (count) => count + 1).pipe(
+          Effect.andThen(Clock.currentTimeMillis),
+          Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 20_000 })),
+        ),
+      ),
+    )
+    const connection = yield* connect(environments)
+    yield* Effect.forEach([1, 2, 3], () => connection.client["executor.hello"](), { discard: true })
+    expect(yield* Ref.get(opens)).toBe(1)
+    yield* TestClock.adjust(Duration.seconds(14))
+    yield* connection.client["executor.hello"]()
+    expect(yield* Ref.get(opens)).toBe(2)
+  }),
+)
+
+it.effect("keeps using a token it could not refresh while Ren does not answer, and asks Ren once in 30 seconds", () =>
+  Effect.gen(function* () {
+    const url = yield* Machine.url
+    const opens = yield* Ref.make(0)
+    const environments = yield* environmentsWith(
+      opening((id) =>
+        Ref.getAndUpdate(opens, (count) => count + 1).pipe(
+          Effect.flatMap((count) =>
+            count === 0
+              ? Clock.currentTimeMillis.pipe(Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 600_000 })))
+              : Effect.fail(renDown(id)),
+          ),
+        ),
+      ),
+    )
+    const connection = yield* connect(environments)
+    yield* TestClock.adjust(Duration.minutes(7))
+    yield* Effect.forEach(Array.from({ length: 100 }), () => connection.client["executor.hello"](), { discard: true })
+    expect(yield* Ref.get(opens)).toBe(2)
+    yield* TestClock.adjust(Duration.seconds(29))
+    yield* connection.client["executor.hello"]()
+    expect(yield* Ref.get(opens)).toBe(2)
+    yield* TestClock.adjust(Duration.seconds(2))
+    yield* connection.client["executor.hello"]()
+    expect(yield* Ref.get(opens)).toBe(3)
+    expect(yield* connect(environments)).toBe(connection)
+  }),
+)
+
+it.effect("fails clearly once a token expires while Ren is down, and works again on the first try after the backoff", () =>
+  Effect.gen(function* () {
+    const url = yield* Machine.url
+    const isDown = yield* Ref.make(false)
+    const environments = yield* environmentsWith(
+      opening((id) =>
+        Effect.gen(function* () {
+          if (yield* Ref.get(isDown)) return yield* renDown(id)
+          return yield* accessAt(url, { issuedAt: yield* Clock.currentTimeMillis, lifetimeMs: 600_000 })
         }),
       ),
     )
-    const connection = yield* environments.connect(environmentId)
-    expect((yield* connection.client["executor.hello"]()).environmentId).toBe(environmentId)
-    expect(yield* Ref.get(opens)).toBe(3)
+    yield* connect(environments)
+    yield* Ref.set(isDown, true)
+    yield* TestClock.adjust(Duration.minutes(11))
+    const error = yield* connect(environments).pipe(Effect.flip)
+    expect([error.reason, error.message]).toEqual(["ren_unavailable", "Ren does not answer: connection refused"])
+    yield* Ref.set(isDown, false)
+    expect((yield* connect(environments).pipe(Effect.flip)).reason).toBe("ren_unavailable")
+    yield* TestClock.adjust(Duration.seconds(31))
+    expect((yield* connect(environments)).hello.environmentId).toBe(environmentId)
   }),
 )
 
-it.live("keeps a connection when only its token changes, or when another environment's machine is replaced", () =>
+it.effect("a refresh that Ren answers with no access closes the connection at once, and the next call has no access", () =>
   Effect.gen(function* () {
-    const brain = Brain.ID.create()
-    const secondId = Environment.ID.create()
     const url = yield* Machine.url
-    const firstAccess = yield* Machine.access({ url, environmentId, brain })
-    const secondAccess = yield* Machine.access({
-      url: yield* machine({ environmentId: secondId, workspace }),
-      environmentId: secondId,
-      brain,
-    })
-    const context = yield* Layer.build(EnvironmentAccess.layerMemory([firstAccess, secondAccess]))
+    const opens = yield* Ref.make(0)
+    const environments = yield* environmentsWith(
+      opening((id) =>
+        Ref.getAndUpdate(opens, (count) => count + 1).pipe(
+          Effect.flatMap((count) =>
+            count === 0
+              ? Clock.currentTimeMillis.pipe(Effect.flatMap((issuedAt) => accessAt(url, { issuedAt, lifetimeMs: 600_000 })))
+              : Effect.fail(noAccess(id)),
+          ),
+        ),
+      ),
+    )
+    const connection = yield* connect(environments)
+    yield* TestClock.adjust(Duration.minutes(7))
+    yield* connection.client["executor.hello"]()
+    const error = yield* connect(environments).pipe(Effect.flip)
+    expect([error.reason, error.message]).toEqual(["no_access", "No access to a sandbox: no binding"])
+  }),
+)
+
+it.live("a sandbox that does not answer fails the call once, and the next call asks Ren and reaches the new sandbox", () =>
+  Effect.gen(function* () {
+    const relay = yield* Relay.make(Relay.portOf(yield* Machine.url))
+    const second = yield* machine({ environmentId, workspace: elsewhere })
+    const current = yield* Ref.make(yield* accessAt(relay.url))
+    const opens = yield* Ref.make(0)
+    const environments = yield* environmentsWith(
+      opening(() => Ref.update(opens, (count) => count + 1).pipe(Effect.andThen(Ref.get(current)))),
+    )
+    const connection = yield* connect(environments)
+    yield* relay.refuse(true)
+    yield* relay.cut
+    yield* Ref.set(current, yield* accessAt(second, { root: elsewhere, generation: 2 }))
+    const failed = yield* connection.client["process.spawn"]({ command: "true", arguments: [] }).pipe(Effect.flip)
+    expect(ExecutorClient.isNoAnswer(failed)).toBe(true)
+    expect(yield* Ref.get(opens)).toBe(1)
+    const next = yield* connect(environments)
+    expect([next.directory, yield* Ref.get(opens)]).toEqual([folder(elsewhere), 2])
+  }),
+)
+
+const statArrived = Effect.runSync(Deferred.make<void>())
+
+const frozen = Layer.effect(
+  Executor.Service,
+  Effect.map(Executor.Service, (executor) =>
+    Executor.Service.of({
+      ...executor,
+      stat: () => Deferred.succeed(statArrived, undefined).pipe(Effect.andThen(Effect.never)),
+    }),
+  ),
+).pipe(Layer.provide(NodeCompatible.layer))
+
+it.effect("a call to a sandbox that accepts the request and never answers ends in its time limit", () =>
+  Effect.gen(function* () {
+    const url = yield* machine({ environmentId, workspace, executor: frozen })
+    const opens = yield* Ref.make(0)
+    const access = yield* accessAt(url, { lifetimeMs: 3_600_000 })
+    const environments = yield* environmentsWith(
+      opening(() => Ref.update(opens, (count) => count + 1).pipe(Effect.as(access))),
+    )
+    const connection = yield* connect(environments)
+    const call = yield* connection.client["files.stat"]({ path: folder() }).pipe(Effect.flip, Effect.forkScoped)
+    yield* Deferred.await(statArrived)
+    yield* TestClock.adjust(ExecutorClient.answerWithin["files.stat"])
+    const error = yield* Fiber.join(call)
+    expect(error.message).toContain("The sandbox did not answer files.stat within 30s")
+    yield* connect(environments)
+    expect(yield* Ref.get(opens)).toBe(2)
+  }),
+)
+
+it.live("keeps a connection when only its token changes", () =>
+  Effect.gen(function* () {
+    const url = yield* Machine.url
+    const first = yield* accessAt(url)
+    const context = yield* Layer.build(EnvironmentAccess.layerMemory(new Map([[sessionId, first]])))
     const memory = Context.get(context, EnvironmentAccess.Memory)
     const environments = yield* environmentsWith(Layer.succeedContext(context))
-    const kept = yield* Effect.scoped(environments.connect(environmentId))
-    const moved = yield* Effect.scoped(environments.connect(secondId))
-    yield* memory.set(yield* Machine.access({ url, environmentId, brain, lifetimeMs: 900_000 }))
-    yield* memory.set({ ...secondAccess, generation: 2 })
-    yield* eventually(Effect.scoped(environments.connect(secondId)), (next) => next !== moved)
-    expect(yield* Effect.scoped(environments.connect(environmentId))).toBe(kept)
+    const kept = yield* Effect.scoped(connect(environments))
+    yield* memory.set(sessionId, yield* accessAt(url, { lifetimeMs: 900_000 }))
+    expect(yield* Effect.scoped(connect(environments))).toBe(kept)
   }),
 )
 
 it.live(
-  "connects again when the environment's machine is replaced, and the old connection still serves its holders",
+  "connects again when a change notice names a replaced sandbox, and the old connection still serves its holders",
   () =>
     Effect.gen(function* () {
-      const access = yield* Machine.access({ url: yield* Machine.url, environmentId, brain: Brain.ID.create() })
-      const context = yield* Layer.build(EnvironmentAccess.layerMemory([access]))
+      const access = yield* accessAt(yield* Machine.url)
+      const context = yield* Layer.build(EnvironmentAccess.layerMemory(new Map([[sessionId, access]])))
       const environments = yield* environmentsWith(Layer.succeedContext(context))
-      const connection = yield* environments.connect(environmentId)
-      yield* Context.get(context, EnvironmentAccess.Memory).set({ ...access, generation: 2 })
-      const replaced = yield* eventually(environments.connect(environmentId), (next) => next !== connection)
+      const connection = yield* connect(environments)
+      yield* Context.get(context, EnvironmentAccess.Memory).set(sessionId, { ...access, generation: 2 })
+      const replaced = yield* eventually(connect(environments), (next) => next !== connection)
       expect((yield* connection.client["executor.hello"]()).environmentId).toBe(environmentId)
       expect((yield* replaced.client["executor.hello"]()).environmentId).toBe(environmentId)
     }),
-)
-
-it.live("stops connecting to an environment once its access is removed", () =>
-  Effect.gen(function* () {
-    const access = yield* Machine.access({ url: yield* Machine.url, environmentId, brain: Brain.ID.create() })
-    const context = yield* Layer.build(EnvironmentAccess.layerMemory([access]))
-    const environments = yield* environmentsWith(Layer.succeedContext(context))
-    yield* environments.connect(environmentId)
-    yield* Context.get(context, EnvironmentAccess.Memory).remove(environmentId)
-    const exit = yield* eventually(Effect.exit(environments.connect(environmentId)), Exit.isFailure)
-    expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toMatchObject({ reason: "not_found" })
-  }),
 )
 
 const controlled = Effect.fnUntraced(function* (initial: Environment.Access) {
@@ -275,7 +402,7 @@ const controlled = Effect.fnUntraced(function* (initial: Environment.Access) {
               const previous = yield* Ref.get(applied)
               if (Option.isSome(previous)) yield* Deferred.succeed(previous.value, undefined)
               yield* Ref.set(applied, Option.some(yield* Queue.take(changes)))
-              return initial.environmentId
+              return sessionId
             }),
           ),
         ),
@@ -299,42 +426,33 @@ const controlled = Effect.fnUntraced(function* (initial: Environment.Access) {
 })
 
 const where = (environments: Environments.Interface) =>
-  Effect.scoped(
-    Effect.flatMap(environments.connect(environmentId), (connection) => connection.client["executor.hello"]()),
-  ).pipe(Effect.map((hello) => hello.workspaceDirectory))
+  Effect.scoped(Effect.flatMap(connect(environments), (connection) => connection.client["executor.hello"]())).pipe(
+    Effect.map((hello) => hello.workspaceDirectory),
+  )
 
-it.effect("moves to the new machine when a renewed pass names a new address, with no change message", () =>
+it.effect("moves to the new sandbox when a renewed access names a new address, with no change notice", () =>
   Effect.gen(function* () {
-    const brain = Brain.ID.create()
     const second = yield* machine({ environmentId, workspace: elsewhere })
-    const subject = yield* controlled(
-      yield* Machine.access({
-        url: yield* Machine.url,
-        environmentId,
-        brain,
-        issuedAt: yield* Clock.currentTimeMillis,
-      }),
-    )
+    const subject = yield* controlled(yield* accessAt(yield* Machine.url, { issuedAt: yield* Clock.currentTimeMillis }))
     expect(yield* where(subject.environments)).toBe(workspace)
-    yield* TestClock.adjust(Duration.minutes(6))
+    yield* TestClock.adjust(Duration.minutes(7))
     yield* Ref.set(
       subject.current,
-      yield* Machine.access({ url: second, environmentId, brain, issuedAt: yield* Clock.currentTimeMillis }),
+      yield* accessAt(second, { root: elsewhere, issuedAt: yield* Clock.currentTimeMillis }),
     )
     yield* where(subject.environments)
     expect(yield* where(subject.environments)).toBe(elsewhere)
   }),
 )
 
-it.live("a change during the first connect leaves the next call on the new machine", () =>
+it.live("a change notice during the first connect leaves the next call on the new sandbox", () =>
   Effect.gen(function* () {
-    const brain = Brain.ID.create()
     const second = yield* machine({ environmentId, workspace: elsewhere })
-    const subject = yield* controlled(yield* Machine.access({ url: yield* Machine.url, environmentId, brain }))
+    const subject = yield* controlled(yield* accessAt(yield* Machine.url))
     const gate = yield* subject.holdNextOpen
     const first = yield* Effect.forkScoped(where(subject.environments))
     yield* Deferred.await(gate.entered)
-    yield* Ref.set(subject.current, yield* Machine.access({ url: second, environmentId, brain }))
+    yield* Ref.set(subject.current, yield* accessAt(second, { root: elsewhere }))
     yield* subject.notifyAndWait
     yield* Deferred.succeed(gate.release, undefined)
     expect(yield* Fiber.join(first)).toBe(workspace)
@@ -361,72 +479,54 @@ const reporting = (hello: Partial<Pick<Hello, "protocol" | "capabilities">>) =>
     ),
   ).pipe(Layer.provide(NodeCompatible.layer))
 
-it.live("refuses an executor that speaks another protocol or lacks a capability", () =>
+it.live("refuses an executor that speaks another protocol, and gives each tool family only the capability it needs", () =>
   Effect.gen(function* () {
-    const brain = Brain.ID.create()
-    const refusal = Effect.fnUntraced(function* (hello: Partial<Pick<Hello, "protocol" | "capabilities">>) {
+    const environmentsFor = Effect.fnUntraced(function* (hello: Partial<Pick<Hello, "protocol" | "capabilities">>) {
       const url = yield* machine({ environmentId, workspace, executor: reporting(hello) })
-      const environments = yield* environmentsWith(
-        EnvironmentAccess.layerFixed([yield* Machine.access({ url, environmentId, brain })]),
-      )
-      return yield* Effect.scoped(environments.connect(environmentId)).pipe(Effect.flip)
+      return yield* environmentsWith(EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(url)]])))
     })
-    const newer = yield* refusal({ protocol: 2 })
-    expect([newer.reason, newer.message]).toEqual(["incompatible", "The executor speaks protocol 2, not 1"])
-    const partial = yield* refusal({ capabilities: ["files"] })
-    expect([partial.reason, partial.message]).toEqual(["incompatible", "The executor lacks the capabilities processes"])
+    const newer = yield* Effect.scoped(connect(yield* environmentsFor({ protocol: 2 }))).pipe(Effect.flip)
+    expect([newer.reason, newer.message]).toEqual([
+      "incompatible",
+      "The executor is not compatible: it speaks protocol 2, not 1",
+    ])
+    const filesOnly = yield* environmentsFor({ capabilities: ["files"] })
+    expect((yield* Effect.scoped(filesOnly.connect(sessionId, "files"))).hello.capabilities).toEqual(["files"])
+    const shell = yield* Effect.scoped(filesOnly.connect(sessionId, "processes")).pipe(Effect.flip)
+    expect([shell.reason, shell.message]).toEqual([
+      "incompatible",
+      "The executor is not compatible: the sandbox does not support shell commands",
+    ])
   }),
 )
 
-it.live("gets a new pass when the executor refuses one the brain still thinks is valid", () =>
+it.live("gets a new access once when the executor refuses one the brain still thinks is valid, and does not loop", () =>
   Effect.gen(function* () {
-    const brain = Brain.ID.create()
     const url = yield* Machine.url
     const opens = yield* Ref.make(0)
+    const refusedToken = (yield* Machine.access({ url, environmentId: Environment.ID.create(), brain, directory: folder() })).token
     const environments = yield* environmentsWith(
-      Layer.succeed(
-        EnvironmentAccess.Service,
-        EnvironmentAccess.Service.of({
-          subscribe: Effect.succeed(Stream.never),
-          open: (id) =>
-            Effect.gen(function* () {
-              const access = yield* Machine.access({ url, environmentId: id, brain })
-              if ((yield* Ref.getAndUpdate(opens, (count) => count + 1)) > 0) return access
-              const refused = yield* Machine.access({ url, environmentId: Environment.ID.create(), brain })
-              return { ...access, token: refused.token }
-            }),
+      opening(() =>
+        Effect.gen(function* () {
+          const access = yield* accessAt(url)
+          const count = yield* Ref.getAndUpdate(opens, (value) => value + 1)
+          return count === 1 ? access : { ...access, token: refusedToken }
         }),
       ),
     )
-    const connection = yield* Effect.scoped(environments.connect(environmentId))
+    const connection = yield* Effect.scoped(connect(environments))
     expect(connection.hello.environmentId).toBe(environmentId)
     expect(yield* Ref.get(opens)).toBe(2)
-  }),
-)
-
-it.effect("fails clearly once a pass expires while Ren is down, and works again once Ren is back", () =>
-  Effect.gen(function* () {
-    const brain = Brain.ID.create()
-    const url = yield* Machine.url
-    const isDown = yield* Ref.make(false)
-    const environments = yield* environmentsWith(
-      Layer.succeed(
-        EnvironmentAccess.Service,
-        EnvironmentAccess.Service.of({
-          subscribe: Effect.succeed(Stream.never),
-          open: (id) =>
-            Effect.gen(function* () {
-              if (yield* Ref.get(isDown)) return yield* new EnvironmentAccess.NotFound({ environmentId: id })
-              return yield* Machine.access({ url, environmentId: id, brain, issuedAt: yield* Clock.currentTimeMillis })
-            }),
-        }),
+    const always = yield* Ref.make(0)
+    const refusing = yield* environmentsWith(
+      opening(() =>
+        Ref.update(always, (count) => count + 1).pipe(
+          Effect.andThen(accessAt(url)),
+          Effect.map((access) => ({ ...access, token: refusedToken })),
+        ),
       ),
     )
-    const connection = yield* Effect.scoped(environments.connect(environmentId))
-    yield* Ref.set(isDown, true)
-    yield* TestClock.adjust(Duration.minutes(11))
-    expect((yield* connection.client["executor.hello"]().pipe(Effect.flip))._tag).toBe("UnauthorizedError")
-    yield* Ref.set(isDown, false)
-    expect((yield* connection.client["executor.hello"]()).environmentId).toBe(environmentId)
+    const refused = yield* Effect.scoped(connect(refusing)).pipe(Effect.flip)
+    expect([refused.reason, yield* Ref.get(always)]).toEqual(["token_refused", 2])
   }),
 )

@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
 import { ModelsBody } from "@ren/brain-api/brain-api"
-import { CurrentHost, ModelsApi } from "@ren/brain-api/models-api"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Shared, TestCell, TestToken, Wrangler } from "@ren/cell/testing"
 import type { Celld } from "@ren/cell/testing"
@@ -8,10 +7,11 @@ import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { ConfigProvider, Effect, Layer, Schedule, Schema } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
-import { HttpApiBuilder } from "effect/http-api"
 import { BrainHost } from "../src/brain-host.js"
+import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
+import { HostApiTest } from "./lib/host-api.js"
 
 setDefaultTimeout(180_000)
 
@@ -49,6 +49,7 @@ const keysOf = (keys: ReadonlyArray<SessionToken.Key>) => JSON.stringify(keys)
 const brainHost = (cellUrl: string, keys: ReadonlyArray<SessionToken.Key>) =>
   Layer.fresh(BrainHost.layer).pipe(
     Layer.provide(models),
+    Layer.provide(Environments.layerNone),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ CELL_URL: cellUrl, CELL_KEYS: keysOf(keys) }))),
   )
@@ -69,26 +70,19 @@ const core: {
 
 const startCore = (keys: ReadonlyArray<SessionToken.Key>) => {
   const api = HttpRouter.toWebHandler(
-    HttpApiBuilder.layer(ModelsApi).pipe(
-      Layer.provide(
-        HttpApiBuilder.group(ModelsApi, "models", (handlers) =>
-          Effect.gen(function* () {
-            const brain = yield* BrainHost.Service
-            return handlers.handle("models.refresh", () =>
-              Effect.gen(function* () {
-                core.refreshes += 1
-                const gate = core.gate
-                if (gate) {
-                  gate.arrived.resolve()
-                  yield* Effect.promise(() => gate.release.promise)
-                }
-                return yield* brain.refreshModels(yield* CurrentHost)
-              }),
-            )
+    HostApiTest.layer((endpoint, effect) =>
+      endpoint !== "models.refresh"
+        ? effect
+        : Effect.gen(function* () {
+            core.refreshes += 1
+            const gate = core.gate
+            if (gate) {
+              gate.arrived.resolve()
+              yield* Effect.promise(() => gate.release.promise)
+            }
+            return yield* effect
           }),
-        ),
-      ),
-      Layer.provide(BrainHost.hostAuthentication),
+    ).pipe(
       Layer.provide(brainHost(cell.url, keys)),
       Layer.provide(HttpServer.layerServices),
     ),
@@ -160,9 +154,10 @@ const send = (sessionId: Session.ID, text: string, keys: ReadonlyArray<SessionTo
 const authorization = (sessionId: Session.ID, scope: "server" | "client") =>
   Effect.promise(() => TestCell.sign({ sid: sessionId, scope }).then((token) => TestToken.basic(token)))
 
-const put = (sessionId: Session.ID, granted: Models.Access, hostToken?: string) =>
+const put = (sessionId: Session.ID, granted: Models.Access, presented?: string) =>
   Effect.gen(function* () {
     const header = yield* authorization(sessionId, "server")
+    const hostToken = presented ?? (yield* signHost(sessionId, Date.now() + hourMs))
     const response = yield* Effect.promise(() =>
       fetch(`${cell.url}/ren/models`, {
         method: "PUT",
@@ -173,7 +168,7 @@ const put = (sessionId: Session.ID, granted: Models.Access, hostToken?: string) 
     expect(response.status).toBe(204)
   })
 
-const hostToken = (sessionId: Session.ID, expMs: number, key: SessionToken.Key = active) =>
+const signHost = (sessionId: Session.ID, expMs: number, key: SessionToken.Key = active) =>
   SessionToken.sign(key, {
     sid: sessionId,
     scope: "host",
@@ -373,7 +368,7 @@ describe("F. keys and host tokens across sleep, restart and outages", () => {
       const short = access({ stub: Shared.apiKey("sk-f3-short", expiresAt) })
       source.access = short
       yield* start(sessionId)
-      yield* put(sessionId, short, yield* hostToken(sessionId, Date.now() - minuteMs))
+      yield* put(sessionId, short, yield* signHost(sessionId, Date.now() - minuteMs))
       const first = stub.script()
       yield* send(sessionId, `kept ${first.marker}`)
       expect((yield* Effect.promise(() => first.called())).authorization).toBe("Bearer sk-f3-short")

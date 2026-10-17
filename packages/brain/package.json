@@ -13,9 +13,6 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@opencode/core": "catalog:",
-    "@opencode/schema": "catalog:",
-    "@opencode/util": "catalog:",
     "@ren/brain-api": "workspace:*",
     "@ren/schema": "workspace:*",
     "effect": "catalog:"

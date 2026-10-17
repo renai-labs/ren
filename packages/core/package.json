@@ -12,7 +12,7 @@
   "scripts": {
     "print-policies": "bun run script/print-policies.ts",
     "test": "bun ../../script/test.ts",
-    "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/brain-host.test.ts",
+    "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/brain-host.test.ts test/environment-lifecycle.test.ts",
     "typecheck": "tsgo -b tsconfig.json tsconfig.tests.json"
   },
   "dependencies": {
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@ren/cell": "workspace:*",
+    "@ren/executor": "workspace:*",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:"
   }

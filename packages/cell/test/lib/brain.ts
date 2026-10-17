@@ -17,10 +17,12 @@ import { Env } from "../../src/env.js"
 import { Harness } from "../../src/harness/harness.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
 import { Host } from "../../src/harness/opencode/host.js"
+import { HostToken } from "../../src/host-token.js"
 import { ModelRefresh } from "../../src/model-refresh.js"
 import { ModelStore } from "../../src/model-store.js"
 import { ModelsTest } from "./models.js"
 import { Shared } from "./shared.js"
+import { TestToken } from "./token.js"
 
 const make = Effect.gen(function* () {
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(Shared.stub().url))
@@ -33,7 +35,7 @@ const make = Effect.gen(function* () {
   const alarm: { at: number | null } = { at: null }
   const services = yield* Layer.build(
     Layer.mergeAll(
-      ModelRefresh.layer(issuer.url),
+      ModelRefresh.layer(issuer.url).pipe(Layer.provideMerge(HostToken.layer(issuer.url, TestToken.keys))),
       Layer.succeed(
         Cell.Info,
         Cell.Info.of({
@@ -69,7 +71,7 @@ const make = Effect.gen(function* () {
     }).pipe(Layer.provide(HttpServer.layerServices)),
     [],
     Context.get(services, ModelRefresh.Service),
-    Option.none(),
+    false,
   )
   const harness = yield* OpenCodeHarness.make(host, [], AbsolutePath.make(directory))
   const waits = yield* Queue.unbounded<number>()

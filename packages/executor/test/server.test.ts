@@ -15,8 +15,9 @@ import { Processes } from "./lib/process.js"
 
 const environmentId = Environment.ID.create()
 const brain = Brain.ID.create()
+const workspace = await mkdtemp(join(tmpdir(), "ren-executor-"))
 const it = testEffect(
-  Machine.layer({ environmentId, workspace: await mkdtemp(join(tmpdir(), "ren-executor-")) }).pipe(
+  Machine.layer({ environmentId, workspace }).pipe(
     Layer.provideMerge(FetchHttpClient.layer),
   ),
 )
@@ -24,7 +25,7 @@ const it = testEffect(
 const token = Effect.fnUntraced(function* (
   claims: { readonly environmentId?: Environment.ID; readonly brain?: Brain.ID } = {},
 ) {
-  return (yield* Machine.access({ url: yield* Machine.url, environmentId, brain, ...claims })).token
+  return (yield* Machine.access({ url: yield* Machine.url, environmentId, brain, directory: workspace, ...claims })).token
 })
 
 const connect = Effect.fnUntraced(function* (bearer: string) {

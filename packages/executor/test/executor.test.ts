@@ -5,7 +5,7 @@ import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
-import { mkdtemp, realpath, symlink } from "node:fs/promises"
+import { mkdtemp, realpath, symlink, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Executor } from "../src/executor.js"
@@ -130,21 +130,40 @@ it.live("keeps an exited process, so a reader that comes back after the exit sti
   }),
 )
 
-it.live("forgets a brain's oldest exited process once 25 newer ones have exited", () =>
+it.effect("forgets an exited process 45 seconds after its last read, and not while it is read again", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
-    const own = Brain.ID.create()
-    const finish = Effect.fnUntraced(function* () {
-      const spawned = yield* executor.spawn(own, { command: "true", arguments: [] })
-      yield* Stream.runDrain(yield* executor.output(own, spawned.id))
-      return spawned.id
+    const spawned = yield* executor.spawn(brain, { command: "true", arguments: [] })
+    yield* Stream.runDrain(yield* executor.output(brain, spawned.id))
+    yield* TestClock.adjust(Duration.seconds(44))
+    yield* Stream.runDrain(yield* executor.output(brain, spawned.id))
+    yield* TestClock.adjust(Duration.seconds(44))
+    expect((yield* collect(yield* executor.output(brain, spawned.id))).exit).toEqual({
+      type: "exit",
+      exitCode: 0,
+      signal: null,
     })
-    const oldest = yield* finish()
-    const newer = yield* Effect.forEach(Array.from({ length: 24 }), () => finish())
-    yield* Stream.runDrain(yield* executor.output(own, oldest))
-    yield* finish()
-    expect((yield* executor.output(own, oldest).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
-    yield* Effect.forEach(newer, (id) => executor.output(own, id), { discard: true })
+    yield* TestClock.adjust(Duration.seconds(46))
+    expect((yield* executor.output(brain, spawned.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
+  }),
+)
+
+it.live("keeps at most 64 MiB of exited output across brains and forgets the oldest first", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const finish = Effect.fnUntraced(function* () {
+      const owner = Brain.ID.create()
+      const spawned = yield* executor.spawn(owner, { command: "head", arguments: ["-c", "2097152", "/dev/zero"] })
+      yield* Processes.exits(spawned.pid)
+      yield* Stream.runDrain(Stream.take(yield* executor.output(owner, spawned.id, 2_097_152), 1))
+      return { owner, id: spawned.id }
+    })
+    const all = yield* Effect.forEach(Array.from({ length: 33 }), () => finish())
+    const found = yield* Effect.forEach(all, (entry) =>
+      executor.output(entry.owner, entry.id).pipe(Effect.as(true), Effect.catchTag("ProcessNotFoundError", () => Effect.succeed(false))),
+    )
+    expect(found.indexOf(true)).toBe(1)
+    expect(found.slice(1).every(Boolean)).toBe(true)
   }),
 )
 
@@ -267,6 +286,21 @@ it.live("reads, writes and lists files with OpenCode's semantics", () =>
   }),
 )
 
+it.live("refuses to read a file larger than 32 MiB without a range, or to write one, and reads a range of it", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    yield* Effect.promise(() =>
+      writeFile(join(workspace, "large.bin"), "").then(() => truncate(join(workspace, "large.bin"), 33 * 1024 * 1024)),
+    )
+    expect((yield* executor.read("large.bin").pipe(Effect.flip))._tag).toBe("FileTooLargeError")
+    expect((yield* executor.read("large.bin", { offset: 0, length: 4 })).bytes).toEqual(new Uint8Array(4))
+    expect((yield* executor.write("copy.bin", new Uint8Array(33 * 1024 * 1024)).pipe(Effect.flip))._tag).toBe(
+      "FileTooLargeError",
+    )
+    expect((yield* executor.stat("copy.bin").pipe(Effect.flip))._tag).toBe("FileNotFoundError")
+  }),
+)
+
 it.effect("kills the whole group of a process that nobody reads or names for 30 seconds", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
@@ -305,6 +339,21 @@ it.live("takes a megabyte of stdin in writes larger than its buffer", () =>
     )
     yield* process.executor.writeStdin(brain, process.id, new Uint8Array(), true)
     expect((yield* collect(process.events)).stdout.trim()).toBe(String(16 * 64 * 1024))
+  }),
+)
+
+it.live("refuses stdin at once while the process's stdin queue is full, and takes it again once it drains", () =>
+  Effect.gen(function* () {
+    const process = yield* run({ command: "sh", arguments: ["-c", "read -r go; cat >/dev/null"], hasStdin: true })
+    yield* Effect.forEach(
+      Array.from({ length: 16 }, () => encoder.encode("x")),
+      (bytes) => process.executor.writeStdin(brain, process.id, bytes, false),
+      { discard: true },
+    )
+    const full = yield* process.executor.writeStdin(brain, process.id, encoder.encode("y"), false).pipe(Effect.flip)
+    expect(full._tag).toBe("StdinFullError")
+    yield* process.executor.kill(brain, process.id, "SIGKILL")
+    expect((yield* collect(process.events)).exit).toEqual({ type: "exit", exitCode: null, signal: "SIGKILL" })
   }),
 )
 

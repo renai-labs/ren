@@ -2,7 +2,7 @@ import { Environment } from "@ren/schema/environment"
 import { Identifier } from "@ren/schema/identifier"
 import { Brain } from "@ren/schema/brain"
 import { Context, Duration, Schema } from "effect"
-import { Rpc, RpcGroup, RpcMiddleware } from "effect/rpc"
+import { Rpc, type RpcClientError, RpcGroup, RpcMiddleware } from "effect/rpc"
 import { Signal } from "./signal.js"
 
 export const protocol = 1
@@ -12,6 +12,10 @@ export const pingEvery = Duration.seconds(5)
 export const stallAfter = Duration.seconds(15)
 
 export const orphanAfter = Duration.seconds(30)
+
+export const exitedKeptFor = Duration.seconds(45)
+
+export const maxFileBytes = 32 * 1024 * 1024
 
 export const ProcessID = Identifier.make("prc", "Executor.ProcessID")
 export type ProcessID = typeof ProcessID.Type
@@ -107,6 +111,16 @@ export class OperationFailedError extends Schema.TaggedError<OperationFailedErro
   message: Schema.String,
 }) {}
 
+export class StdinFullError extends Schema.TaggedError<StdinFullError>()("StdinFullError", {
+  id: ProcessID,
+}) {}
+
+export class FileTooLargeError extends Schema.TaggedError<FileTooLargeError>()("FileTooLargeError", {
+  path: Schema.String,
+  sizeBytes: Schema.Int,
+  maxBytes: Schema.Int,
+}) {}
+
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {
   id: ProcessID,
 }) {}
@@ -115,7 +129,10 @@ export class Caller extends Context.Service<Caller, { readonly brain: Brain.ID }
   "@ren/brain-api/ExecutorApi.Caller",
 ) {}
 
-export class Authentication extends RpcMiddleware.Service<Authentication, { provides: Caller }>()(
+export class Authentication extends RpcMiddleware.Service<
+  Authentication,
+  { provides: Caller; clientError: RpcClientError.RpcClientError }
+>()(
   "@ren/brain-api/ExecutorApi.Authentication",
   { error: UnauthorizedError, requiredForClient: true },
 ) {}
@@ -139,7 +156,7 @@ export const ExecutorApi = RpcGroup.make(
       data: Schema.Uint8ArrayFromBase64,
       end: Schema.optionalKey(Schema.Boolean),
     },
-    error: Schema.Union([ProcessNotFoundError, OperationFailedError]),
+    error: Schema.Union([ProcessNotFoundError, StdinFullError, OperationFailedError]),
   }),
   Rpc.make("process.heartbeat", { payload: ProcessRef, error: ProcessNotFoundError }),
   Rpc.make("process.kill", {
@@ -153,11 +170,11 @@ export const ExecutorApi = RpcGroup.make(
   Rpc.make("files.read", {
     payload: { path: Schema.String, range: Schema.optionalKey(Range) },
     success: ReadResult,
-    error: Schema.Union([FileNotFoundError, WrongKindError, OperationFailedError]),
+    error: Schema.Union([FileNotFoundError, WrongKindError, FileTooLargeError, OperationFailedError]),
   }),
   Rpc.make("files.write", {
     payload: { path: Schema.String, bytes: Schema.Uint8ArrayFromBase64 },
-    error: OperationFailedError,
+    error: Schema.Union([FileTooLargeError, OperationFailedError]),
   }),
   Rpc.make("files.stat", {
     payload: Path,

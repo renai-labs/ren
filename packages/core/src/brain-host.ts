@@ -3,6 +3,8 @@ export * as BrainHost from "./brain-host.js"
 import { BrainApi, type ModelsBody } from "@ren/brain-api/brain-api"
 import {
   BrainRejectedError,
+  EnvironmentNotFoundError,
+  EnvironmentUnavailableError,
   ForbiddenError,
   type ModelsNotConfiguredError,
   ModelsUnavailableError,
@@ -10,6 +12,7 @@ import {
 } from "@ren/brain-api/errors"
 import { SessionToken } from "@ren/brain-api/session-token"
 import type { Auth } from "@ren/schema/auth"
+import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import {
   Array,
@@ -30,11 +33,14 @@ import {
 } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
-import { CurrentHost, HostAuthentication } from "@ren/brain-api/models-api"
+import { CurrentHost, HostAuthentication, type HostTokenBody } from "@ren/brain-api/host-api"
+import { Environments } from "./environments.js"
 import { Models } from "./models.js"
 
 export {
   BrainRejectedError,
+  EnvironmentNotFoundError,
+  EnvironmentUnavailableError,
   ForbiddenError,
   ModelsUnavailableError,
   SessionNotStartedError,
@@ -60,6 +66,10 @@ export interface Interface {
   ) => Effect.Effect<void, BrainUnavailable | BrainRejectedError>
   readonly authenticateHost: (hostToken: Redacted.Redacted) => Effect.Effect<CurrentHost["Service"], ForbiddenError>
   readonly refreshModels: (host: CurrentHost["Service"]) => Effect.Effect<ModelsBody, ModelsUnavailableError>
+  readonly refreshHostToken: (host: CurrentHost["Service"]) => Effect.Effect<HostTokenBody>
+  readonly accessEnvironment: (
+    host: CurrentHost["Service"],
+  ) => Effect.Effect<Environment.Access, EnvironmentNotFoundError | EnvironmentUnavailableError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
@@ -89,6 +99,7 @@ export const layer = Layer.effect(
     const key = Array.headNonEmpty(Redacted.value(config.keys))
     const http = yield* HttpClient.HttpClient
     const models = yield* Models.Service
+    const environments = yield* Environments.Service
     const brain = yield* HttpApiClient.makeWith(BrainApi, {
       baseUrl: url,
       httpClient: HttpClient.mapRequestEffect(http, (request) =>
@@ -138,22 +149,23 @@ export const layer = Layer.effect(
         ),
       )
 
+    const hostToken = Effect.fnUntraced(function* (subject: Models.Subject, exp: number) {
+      return yield* SessionToken.sign(key, {
+        sid: subject.brainId,
+        scope: "host",
+        org: subject.organizationId,
+        iat: Math.floor((yield* Clock.currentTimeMillis) / 1000),
+        exp,
+      })
+    })
+
     const body = Effect.fnUntraced(function* (subject: Models.Subject, access: Models.Access) {
       const lastExpiry = access.endpoints.reduce(
         (latest, endpoint) => (endpoint.apiKey.expiresAt ? DateTime.max(latest, endpoint.apiKey.expiresAt) : latest),
         yield* DateTime.now,
       )
       const exp = Math.floor(DateTime.toEpochMillis(DateTime.addDuration(lastExpiry, hostTokenLifetime)) / 1000)
-      return {
-        access,
-        hostToken: yield* SessionToken.sign(key, {
-          sid: subject.brainId,
-          scope: "host",
-          org: subject.organizationId,
-          iat: Math.floor((yield* Clock.currentTimeMillis) / 1000),
-          exp,
-        }),
-      } satisfies ModelsBody
+      return { access, hostToken: yield* hostToken(subject, exp) } satisfies ModelsBody
     })
 
     const configure = (subject: Models.Subject, access: Models.Access) =>
@@ -202,9 +214,23 @@ export const layer = Layer.effect(
     return Service.of({
       start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, organizationId: Auth.OrganizationID) {
         if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
-        return yield* withModels(
-          { brainId: input.sessionId, organizationId },
-          call(input.sessionId, brain.brain["brain.start"]({ payload: input })),
+        const subject = { brainId: input.sessionId, organizationId }
+        const requested = input.environment
+        const binding = requested
+          ? Option.some(
+              yield* environments
+                .bind(subject, requested.environmentId)
+                .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
+            )
+          : Option.none<Environments.Binding>()
+        const payload = Option.match(binding, {
+          onNone: () => input,
+          onSome: (found) => Struct.evolve(input, { environment: () => found.location }),
+        })
+        return yield* withModels(subject, call(input.sessionId, brain.brain["brain.start"]({ payload }))).pipe(
+          Effect.tapErrorTag("BrainRejectedError", () =>
+            Option.exists(binding, (found) => found.isNew) ? environments.unbind(input.sessionId) : Effect.void,
+          ),
         )
       }),
       send: Effect.fn("BrainHost.send")(function* (input: Session.SendInput, organizationId: Auth.OrganizationID) {
@@ -239,6 +265,19 @@ export const layer = Layer.effect(
           Effect.mapError(() => new ModelsUnavailableError({ message: "Model access is unavailable" })),
         )
         return yield* body(host, access)
+      }),
+      refreshHostToken: Effect.fn("BrainHost.refreshHostToken")(function* (host: CurrentHost["Service"]) {
+        const exp = Math.floor(DateTime.toEpochMillis(DateTime.addDuration(yield* DateTime.now, hostTokenLifetime)) / 1000)
+        return { hostToken: yield* hostToken(host, exp) }
+      }),
+      accessEnvironment: Effect.fn("BrainHost.accessEnvironment")(function* (host: CurrentHost["Service"]) {
+        return yield* environments.access(host).pipe(
+          Effect.catchTags({
+            "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
+            "Environments.Unavailable": (error) =>
+              Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
+          }),
+        )
       }),
       access: Effect.fn("BrainHost.access")(function* (sessionId: Session.ID) {
         const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + clientLifetime

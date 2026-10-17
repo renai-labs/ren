@@ -1,9 +1,12 @@
 export * as NodeCompatible from "./node-compatible.js"
 
 import {
+  exitedKeptFor,
   type FileInfo,
   FileNotFoundError,
+  FileTooLargeError,
   type FileType,
+  maxFileBytes,
   OperationFailedError,
   orphanAfter,
   pingEvery,
@@ -14,6 +17,7 @@ import {
   type Range,
   type SpawnInput,
   stallAfter,
+  StdinFullError,
   WrongKindError,
 } from "@ren/brain-api/executor-api"
 import { Signal } from "@ren/brain-api/signal"
@@ -43,11 +47,11 @@ import { basename, dirname, join, resolve } from "node:path"
 import manifest from "../package.json"
 import { Executor } from "./executor.js"
 
-export const logLimit = 2 * 1024 * 1024
+export const logLimitBytes = 2 * 1024 * 1024
 
-export const exitedLimit = 25
+export const exitedLimitBytes = 64 * 1024 * 1024
 
-type Chunk = Extract<ProcessEvent, { readonly type: "stdout" | "stderr" }>
+type OutputEvent = Extract<ProcessEvent, { readonly type: "stdout" | "stderr" }>
 
 type ExitEvent = Extract<ProcessEvent, { readonly type: "exit" }>
 
@@ -57,15 +61,15 @@ interface Entry {
   readonly scope: Scope.Closeable
   readonly handle: ChildProcessSpawner.ChildProcessHandle
   readonly stdin: Queue.Queue<Uint8Array, Cause.Done> | undefined
-  readonly chunks: Array<Chunk>
-  readonly positions: Map<object, number>
-  readonly appended: PubSub.PubSub<void>
-  readonly advanced: PubSub.Subscription<void>
-  readonly advance: PubSub.PubSub<void>
-  size: number
+  readonly chunks: Array<OutputEvent>
+  readonly readerPositions: Map<object, number>
+  readonly logChanged: PubSub.PubSub<void>
+  readonly readerMoves: PubSub.Subscription<void>
+  readonly readerMoved: PubSub.PubSub<void>
+  nextOffset: number
   exit: ExitEvent | undefined
   failure: Cause.Cause<never> | undefined
-  seenAt: number
+  seenAtMs: number
   isHeartbeating: boolean
 }
 
@@ -131,68 +135,79 @@ export const layer = Layer.effect(
         })),
       )
     const processes = new Map<ProcessID, Entry>()
-    const exited: Array<ProcessID> = []
+    const exitOrder: Array<ProcessID> = []
     const scope = yield* Effect.scope
 
     const find = Effect.fnUntraced(function* (brain: Brain.ID, id: ProcessID) {
       const entry = processes.get(id)
       if (!entry || entry.brain !== brain) return yield* new ProcessNotFoundError({ id })
-      entry.seenAt = yield* Clock.currentTimeMillis
+      entry.seenAtMs = yield* Clock.currentTimeMillis
       return entry
     })
 
     const release = (entry: Entry) =>
       Effect.sync(() => {
         processes.delete(entry.id)
-        if (exited.includes(entry.id)) exited.splice(exited.indexOf(entry.id), 1)
+        if (exitOrder.includes(entry.id)) exitOrder.splice(exitOrder.indexOf(entry.id), 1)
       }).pipe(Effect.andThen(Scope.close(entry.scope, Exit.void)))
 
     const trim: (entry: Entry) => Effect.Effect<void> = Effect.fnUntraced(function* (entry: Entry) {
       const first = entry.chunks.at(0)
-      if (!first || entry.chunks.length === 1 || entry.size - first.offset <= logLimit) return
+      if (!first || entry.chunks.length === 1 || entry.nextOffset - first.offset <= logLimitBytes) return
       const end = first.offset + first.bytes.length
-      if ([...entry.positions.values()].some((position) => position < end)) {
-        const advanced = yield* PubSub.take(entry.advanced).pipe(Effect.timeoutOption(stallAfter))
-        if (Option.isSome(advanced)) return yield* trim(entry)
-        for (const reader of entry.positions.keys())
-          if ((entry.positions.get(reader) ?? end) < end) entry.positions.delete(reader)
+      if ([...entry.readerPositions.values()].some((position) => position < end)) {
+        const moved = yield* PubSub.take(entry.readerMoves).pipe(Effect.timeoutOption(stallAfter))
+        if (Option.isSome(moved)) return yield* trim(entry)
+        for (const reader of entry.readerPositions.keys())
+          if ((entry.readerPositions.get(reader) ?? end) < end) entry.readerPositions.delete(reader)
       }
       entry.chunks.shift()
       return yield* trim(entry)
     })
 
-    const finish = Effect.fnUntraced(function* (entry: Entry, event: ExitEvent) {
+    const keptBytes = (entry: Entry) => entry.chunks.reduce((bytes, chunk) => bytes + chunk.bytes.length, 0)
+
+    const recordExit = Effect.fnUntraced(function* (entry: Entry, event: ExitEvent) {
       entry.exit = event
-      yield* PubSub.publish(entry.appended, undefined)
-      exited.push(entry.id)
-      const own = exited.flatMap((id) => {
+      entry.seenAtMs = yield* Clock.currentTimeMillis
+      yield* PubSub.publish(entry.logChanged, undefined)
+      exitOrder.push(entry.id)
+      const exited = exitOrder.flatMap((id) => {
         const found = processes.get(id)
-        return found && found.brain === entry.brain ? [found] : []
+        return found ? [found] : []
       })
-      yield* Effect.forEach(own.slice(0, Math.max(0, own.length - exitedLimit)), release, { discard: true })
+      const total = exited.reduce((bytes, found) => bytes + keptBytes(found), 0)
+      const oldest = exited.reduce<{ readonly bytes: number; readonly entries: ReadonlyArray<Entry> }>(
+        (dropped, found) =>
+          total - dropped.bytes > exitedLimitBytes
+            ? { bytes: dropped.bytes + keptBytes(found), entries: [...dropped.entries, found] }
+            : dropped,
+        { bytes: 0, entries: [] },
+      )
+      yield* Effect.forEach(oldest.entries, release, { discard: true })
     })
 
-    const since = (entry: Entry, position: number) =>
-      entry.chunks.flatMap((chunk): ReadonlyArray<Chunk> => {
+    const outputFrom = (entry: Entry, position: number) =>
+      entry.chunks.flatMap((chunk): ReadonlyArray<OutputEvent> => {
         if (chunk.offset + chunk.bytes.length <= position) return []
         if (chunk.offset >= position) return [chunk]
         return [{ ...chunk, offset: position, bytes: chunk.bytes.subarray(position - chunk.offset) }]
       })
 
-    const appendedAfter: (entry: Entry, position: number, appended: PubSub.Subscription<void>) => Effect.Effect<void> =
-      Effect.fnUntraced(function* (entry, position, appended) {
-        if (entry.size > position || entry.exit || entry.failure) return
-        yield* PubSub.take(appended)
-        return yield* appendedAfter(entry, position, appended)
+    const waitForChange: (entry: Entry, position: number, logChanges: PubSub.Subscription<void>) => Effect.Effect<void> =
+      Effect.fnUntraced(function* (entry, position, logChanges) {
+        if (entry.nextOffset > position || entry.exit || entry.failure) return
+        yield* PubSub.take(logChanges)
+        return yield* waitForChange(entry, position, logChanges)
       })
 
     yield* Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
-      const orphans = [...processes.values()].filter(
-        (entry) =>
-          !entry.exit &&
-          (entry.positions.size === 0 || entry.isHeartbeating) &&
-          now - entry.seenAt >= Duration.toMillis(orphanAfter),
+      const orphans = [...processes.values()].filter((entry) =>
+        entry.exit
+          ? entry.readerPositions.size === 0 && now - entry.seenAtMs >= Duration.toMillis(exitedKeptFor)
+          : (entry.readerPositions.size === 0 || entry.isHeartbeating) &&
+            now - entry.seenAtMs >= Duration.toMillis(orphanAfter),
       )
       yield* Effect.forEach(orphans, release, { discard: true })
     }).pipe(Effect.repeat(Schedule.spaced(Duration.seconds(1))), Effect.forkIn(scope))
@@ -217,7 +232,7 @@ export const layer = Layer.effect(
           Effect.onError(() => Scope.close(entryScope, Exit.void)),
         )
       const id = ProcessID.create()
-      const advance = yield* PubSub.sliding<void>(1)
+      const readerMoved = yield* PubSub.sliding<void>(1)
       const entry: Entry = {
         id,
         brain,
@@ -225,28 +240,28 @@ export const layer = Layer.effect(
         handle,
         stdin,
         chunks: [],
-        positions: new Map(),
-        appended: yield* PubSub.sliding<void>(1),
-        advanced: yield* PubSub.subscribe(advance).pipe(Scope.provide(entryScope)),
-        advance,
-        size: 0,
+        readerPositions: new Map(),
+        logChanged: yield* PubSub.sliding<void>(1),
+        readerMoves: yield* PubSub.subscribe(readerMoved).pipe(Scope.provide(entryScope)),
+        readerMoved,
+        nextOffset: 0,
         exit: undefined,
         failure: undefined,
-        seenAt: yield* Clock.currentTimeMillis,
+        seenAtMs: yield* Clock.currentTimeMillis,
         isHeartbeating: false,
       }
       processes.set(id, entry)
-      const tagged = (stream: Stream.Stream<Uint8Array, PlatformError.PlatformError>, type: Chunk["type"]) =>
+      const tagged = (stream: Stream.Stream<Uint8Array, PlatformError.PlatformError>, type: OutputEvent["type"]) =>
         stream.pipe(
           Stream.map((bytes) => ({ type, bytes })),
           Stream.ignore,
         )
       yield* Stream.merge(tagged(handle.stdout, "stdout"), tagged(handle.stderr, "stderr")).pipe(
-        Stream.runForEach((output) =>
+        Stream.runForEach((written) =>
           Effect.gen(function* () {
-            entry.chunks.push({ ...output, offset: entry.size })
-            entry.size += output.bytes.length
-            yield* PubSub.publish(entry.appended, undefined)
+            entry.chunks.push({ ...written, offset: entry.nextOffset })
+            entry.nextOffset += written.bytes.length
+            yield* PubSub.publish(entry.logChanged, undefined)
             yield* trim(entry)
           }),
         ),
@@ -261,12 +276,12 @@ export const layer = Layer.effect(
             ),
           ),
         ),
-        Effect.flatMap((event) => finish(entry, event)),
+        Effect.flatMap((event) => recordExit(entry, event)),
         Effect.andThen(stdin ? Queue.shutdown(stdin) : Effect.void),
         Effect.onError((cause) =>
           Effect.sync(() => {
             entry.failure = cause
-          }).pipe(Effect.andThen(PubSub.publish(entry.appended, undefined))),
+          }).pipe(Effect.andThen(PubSub.publish(entry.logChanged, undefined))),
         ),
         Effect.forkIn(entryScope),
       )
@@ -278,22 +293,22 @@ export const layer = Layer.effect(
       const reader = {}
       const leave = Clock.currentTimeMillis.pipe(
         Effect.flatMap((now) => {
-          entry.positions.delete(reader)
-          entry.seenAt = now
-          return PubSub.publish(entry.advance, undefined)
+          entry.readerPositions.delete(reader)
+          entry.seenAtMs = now
+          return PubSub.publish(entry.readerMoved, undefined)
         }),
       )
       const events = Stream.unwrap(
-        Effect.map(PubSub.subscribe(entry.appended), (appended) =>
+        Effect.map(PubSub.subscribe(entry.logChanged), (logChanges) =>
           Stream.paginate(cursor ?? 0, (position: number) =>
             Effect.gen(function* () {
-              entry.positions.set(reader, position)
-              yield* PubSub.publish(entry.advance, undefined)
-              yield* appendedAfter(entry, position, appended)
+              entry.readerPositions.set(reader, position)
+              yield* PubSub.publish(entry.readerMoved, undefined)
+              yield* waitForChange(entry, position, logChanges)
               if (entry.failure) return yield* Effect.failCause(entry.failure)
-              const chunks = since(entry, position)
+              const chunks = outputFrom(entry, position)
               if (entry.exit) return [[...chunks, entry.exit], Option.none<number>()] as const
-              return [chunks, Option.some(entry.size)] as const
+              return [chunks, Option.some(entry.nextOffset)] as const
             }),
           ),
         ),
@@ -314,6 +329,7 @@ export const layer = Layer.effect(
     ) {
       const stdin = (yield* find(brain, id)).stdin
       if (!stdin) return yield* new OperationFailedError({ message: "The process has no stdin" })
+      if (data.length > 0 && (yield* Queue.isFull(stdin))) return yield* new StdinFullError({ id })
       const accepted = data.length === 0 || (yield* Queue.offer(stdin, data))
       if (!accepted) return yield* new OperationFailedError({ message: "The process’s stdin is closed" })
       if (end) yield* Queue.end(stdin)
@@ -361,6 +377,8 @@ export const layer = Layer.effect(
       read: Effect.fn("Executor.read")(function* (value: string, range?: Range) {
         const info = yield* describe(value, true)
         if (info.type !== "file") return yield* new WrongKindError({ path: value, actual: info.type })
+        if (!range && info.sizeBytes > maxFileBytes)
+          return yield* new FileTooLargeError({ path: value, sizeBytes: info.sizeBytes, maxBytes: maxFileBytes })
         if (!range) return { info, bytes: new Uint8Array(yield* attemptFound(value, () => readFile(path(value)))) }
         const bytes = yield* attemptFound(value, async () => {
           const handle = await open(path(value), "r")
@@ -372,10 +390,12 @@ export const layer = Layer.effect(
         return { info, bytes }
       }),
       write: (value, bytes) =>
-        attempt(value, async () => {
-          await mkdir(dirname(path(value)), { recursive: true })
-          await writeFile(path(value), bytes)
-        }),
+        bytes.length > maxFileBytes
+          ? Effect.fail(new FileTooLargeError({ path: value, sizeBytes: bytes.length, maxBytes: maxFileBytes }))
+          : attempt(value, async () => {
+              await mkdir(dirname(path(value)), { recursive: true })
+              await writeFile(path(value), bytes)
+            }),
       stat: (value) => describe(value, false),
       list: Effect.fn("Executor.list")(function* (value: string) {
         const info = yield* describe(value, true)

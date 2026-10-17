@@ -25,6 +25,7 @@ export interface Interface {
     access: Models.Access,
     hostToken: string | undefined,
   ) => Effect.Effect<boolean>
+  readonly writeHostTokenIfUnchanged: (sent: string, hostToken: string) => Effect.Effect<boolean>
   readonly removeHostTokenIfUnchanged: (sent: string) => Effect.Effect<void>
   readonly remove: Effect.Effect<void>
 }
@@ -71,6 +72,16 @@ export const layer = Layer.effect(
         return yield* SynchronizedRef.modifyEffect(storedHostToken, (stored) =>
           Option.contains(stored, sent)
             ? put(next, hostToken).pipe(Effect.map((saved) => [true, saved] as const))
+            : Effect.succeed([false, stored] as const),
+        )
+      }),
+      writeHostTokenIfUnchanged: Effect.fn("ModelStore.writeHostTokenIfUnchanged")(function* (
+        sent: string,
+        hostToken: string,
+      ) {
+        return yield* SynchronizedRef.modifyEffect(storedHostToken, (stored) =>
+          Option.contains(stored, sent)
+            ? store.set(hostTokenKey, hostToken).pipe(Effect.orDie, Effect.as([true, Option.some(hostToken)] as const))
             : Effect.succeed([false, stored] as const),
         )
       }),

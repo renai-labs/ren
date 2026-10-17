@@ -1,9 +1,9 @@
-import { CurrentHost, ModelsApi } from "@ren/brain-api/models-api"
+import { CurrentHost, HostApi } from "@ren/brain-api/host-api"
 import { BrainHost } from "@ren/core/brain-host"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
-export const ModelsHandler = HttpApiBuilder.group(ModelsApi, "models", (handlers) =>
+export const ModelsHandler = HttpApiBuilder.group(HostApi, "models", (handlers) =>
   Effect.gen(function* () {
     const brain = yield* BrainHost.Service
     return handlers.handle("models.refresh", () =>
