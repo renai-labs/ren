@@ -54,8 +54,7 @@ const run = <A, E>(body: Effect.Effect<A, E, Scope.Scope>) =>
 
 const todo = <A, E>(name: string, body: Effect.Effect<A, E, Scope.Scope>) => test.todo(name, () => run(body))
 
-todo(
-  "REN-1486 a delayed forbidden refresh cannot remove a newer host token",
+it.effect("a delayed forbidden refresh cannot remove a newer host token", () =>
   Effect.gen(function* () {
     const subject = yield* make
     yield* subject.store.write(grant({ stub: Shared.apiKey("old-key", expiring) }), "old-host")
@@ -201,8 +200,7 @@ it.effect("a renewed key that expires earlier is the issuer's answer: it is stor
   }),
 )
 
-todo(
-  "REN-1486 a stored key that never expires is served without a renewal request",
+it.effect("a stored key that never expires is served without a renewal request", () =>
   Effect.gen(function* () {
     const subject = yield* make
     yield* subject.store.write(grant({ stub: Shared.apiKey("forever") }), "host")

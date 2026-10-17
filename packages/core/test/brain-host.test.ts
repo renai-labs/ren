@@ -356,7 +356,7 @@ describe("BrainHost", () => {
         const server = yield* SessionToken.sign(key, { sid, scope: "server", exp })
         expect((yield* brain.authenticateHost(Redacted.make(server)).pipe(Effect.flip))._tag).toBe("ForbiddenError")
         const host = yield* brain.authenticateHost(
-          Redacted.make(yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp })),
+          Redacted.make(yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, iat: 0, exp })),
         )
         expect(host).toEqual({ brainId: sid, organizationId })
         const refreshed = yield* brain.refreshModels(host)
