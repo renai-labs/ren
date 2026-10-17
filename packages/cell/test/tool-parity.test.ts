@@ -1,4 +1,5 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
+import { TestAccess } from "@ren/brain/testing"
 import { AbsolutePath } from "@opencode/client/effect"
 import { Credential } from "@opencode/core/credential"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
@@ -73,8 +74,8 @@ const embedded = (replacements: Parameters<typeof createEmbeddedRoutes>[1]) =>
   ).pipe(Layer.provide(HttpServer.layerServices))
 
 const open = Effect.fnUntraced(function* () {
-  const context = yield* Layer.build(EnvironmentAccess.layerMemory(new Map()))
-  const memory = Context.get(context, EnvironmentAccess.Memory)
+  const context = yield* Layer.build(TestAccess.memory(new Map()))
+  const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
   const counted = Layer.succeed(
     EnvironmentAccess.Service,
@@ -83,7 +84,6 @@ const open = Effect.fnUntraced(function* () {
         Ref.update(opens, (count) => count + 1).pipe(
           Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
         ),
-      subscribe: Context.get(context, EnvironmentAccess.Service).subscribe,
     }),
   )
   const environments = Context.get(

@@ -6,7 +6,7 @@ import { Machine, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Effect, Fiber, Layer, Option, Schema, Stream } from "effect"
+import { Context, DateTime, Effect, Fiber, Layer, Option, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { Cell } from "../src/cell.js"
@@ -167,16 +167,6 @@ it.live("a host token in its last five minutes is renewed through host.refresh, 
       ["environments.access", false],
     ])
     expect(Option.getOrUndefined(yield* subject.store.readHostToken)).toBe(calls.at(1)?.hostToken)
-  }),
-)
-
-it.effect("the change notices give nothing and do not fail", () =>
-  Effect.gen(function* () {
-    const subject = yield* build()
-    const notices = yield* subject.access.subscribe
-    const waiting = yield* Stream.runCollect(notices).pipe(Effect.timeoutOption("1 hour"), Effect.forkScoped)
-    yield* TestClock.adjust("1 hour")
-    expect(yield* Fiber.join(waiting)).toEqual(Option.none())
   }),
 )
 

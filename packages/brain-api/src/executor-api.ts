@@ -21,14 +21,10 @@ export const maxFileBytes = 8 * 1024 * 1024
 export const ProcessID = Identifier.make("prc", "Executor.ProcessID")
 export type ProcessID = typeof ProcessID.Type
 
-export const Capability = Environment.Capability
-export type Capability = Environment.Capability
-
 export interface Hello extends Schema.Schema.Type<typeof Hello> {}
 export const Hello = Schema.Struct({
   protocol: Schema.Int,
   version: Schema.String,
-  capabilities: Schema.Array(Capability),
   environmentId: Environment.ID,
   workspaceDirectory: Schema.String,
   os: Schema.String,

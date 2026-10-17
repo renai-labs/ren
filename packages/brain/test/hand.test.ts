@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { TestAccess } from "./lib/access.js"
 import { BunServices } from "@effect/platform-bun"
 import type { SpawnResult } from "@ren/brain-api/executor-api"
 import { Machine, Processes, Relay, testEffect } from "@ren/executor/testing"
@@ -57,11 +58,8 @@ const environmentsWith = (
   )
 
 const connectTo = Effect.fnUntraced(function* (url: string, http?: Layer.Layer<HttpClient.HttpClient>) {
-  const environments = yield* environmentsWith(
-    EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(url)]])),
-    http,
-  )
-  return yield* environments.connect(sessionId, "processes")
+  const environments = yield* environmentsWith(TestAccess.fixed(new Map([[sessionId, yield* accessAt(url)]])), http)
+  return yield* environments.connect(sessionId)
 })
 
 const connect = Effect.flatMap(Machine.url, connectTo)
@@ -237,24 +235,31 @@ test.each([
   expect(Hand.physicalPath(row.from, row.to)(row.path)).toBe(row.expected)
 })
 
+// oxlint-disable-next-line ren/no-comments -- Ren sends no change notices, so the brain finds the replacement when it refreshes a short token.
 const replaceable = Effect.gen(function* () {
-  const access = yield* accessAt(yield* Machine.url)
-  const context = yield* Layer.build(EnvironmentAccess.layerMemory(new Map([[sessionId, access]])))
+  const access = yield* Machine.access({
+    url: yield* Machine.url,
+    environmentId,
+    brain: Brain.ofSession(sessionId),
+    directory: join(workspace, sessionId),
+    lifetimeMs: 6_000,
+  })
+  const context = yield* Layer.build(TestAccess.memory(new Map([[sessionId, access]])))
   const environments = yield* environmentsWith(Layer.succeedContext(context))
-  const original = yield* Effect.scoped(environments.connect(sessionId, "processes"))
+  const original = yield* Effect.scoped(environments.connect(sessionId))
   const replacement = yield* Scope.make()
   const next = yield* Layer.buildWithScope(Layer.fresh(Machine.layer({ environmentId, workspace })), replacement).pipe(
     Effect.flatMap((built) => Effect.provide(Machine.url, built)),
   )
   return {
     hand: Hand.session(environments, sessionId, Environment.sessionDirectory(sessionId), killed),
-    replace: Context.get(context, EnvironmentAccess.Memory)
+    replace: Context.get(context, TestAccess.Memory)
       .set(sessionId, { ...access, url: next, generation: 2 })
       .pipe(
         Effect.andThen(
-          Effect.scoped(environments.connect(sessionId, "processes")).pipe(
-            Effect.repeat({ until: (current) => current !== original, schedule: Schedule.spaced(10) }),
-            Effect.timeout(5_000),
+          Effect.scoped(environments.connect(sessionId)).pipe(
+            Effect.repeat({ until: (current) => current !== original, schedule: Schedule.spaced(50) }),
+            Effect.timeout(10_000),
           ),
         ),
       ),
@@ -284,7 +289,7 @@ it.live(
   () =>
     Effect.gen(function* () {
       const environments = yield* environmentsWith(
-        EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(yield* Machine.url)]])),
+        TestAccess.fixed(new Map([[sessionId, yield* accessAt(yield* Machine.url)]])),
       )
       const hand = Hand.session(environments, sessionId, Environment.sessionDirectory(sessionId), killed)
       const name = `${crypto.randomUUID()}.out`
@@ -479,10 +484,7 @@ it.live("stops with SIGKILL a command that ignores SIGTERM when its scope closes
 )
 
 const opening = (open: EnvironmentAccess.Interface["open"]) =>
-  Layer.succeed(
-    EnvironmentAccess.Service,
-    EnvironmentAccess.Service.of({ subscribe: Effect.succeed(Stream.never), open }),
-  )
+  Layer.succeed(EnvironmentAccess.Service, EnvironmentAccess.Service.of({ open }))
 
 const isStopped = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   handle.isRunning.pipe(Effect.map((isRunning) => !isRunning))
@@ -528,7 +530,7 @@ it.effect("a heartbeat that the executor refuses as expired gets a new token, an
         ),
       ),
     )
-    const connection = yield* environments.connect(sessionId, "processes")
+    const connection = yield* environments.connect(sessionId)
     const handle = yield* Hand.spawner(connection, killed).spawn(ChildProcess.make("cat", []))
     yield* Sandbox.advance(Duration.seconds(55))
     expect(yield* Ref.get(opens)).toBe(1)

@@ -1,4 +1,5 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
+import { TestAccess } from "@ren/brain/testing"
 import { AbsolutePath, OpenCode, SessionMessage } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
@@ -44,8 +45,8 @@ const accessTo = (url: string, sessionId: Session.ID) =>
   Machine.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
 const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effect.void) {
-  const context = yield* Layer.build(EnvironmentAccess.layerMemory(new Map()))
-  const memory = Context.get(context, EnvironmentAccess.Memory)
+  const context = yield* Layer.build(TestAccess.memory(new Map()))
+  const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
   const counted = Layer.succeed(
     EnvironmentAccess.Service,
@@ -55,7 +56,6 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
           Effect.andThen(beforeOpen),
           Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
         ),
-      subscribe: Context.get(context, EnvironmentAccess.Service).subscribe,
     }),
   )
   const environments = Context.get(
@@ -574,19 +574,35 @@ it.live("a helper of a session with no environment has no file or shell tools", 
 )
 
 it.live(
-  "removing a session's access lets a running command finish, fails the next call with no access, and access back restores tools",
+  "removing a session's access lets a running command finish, fails a call with no access once the token is due for refresh, and access back restores tools",
   () =>
     Effect.gen(function* () {
       const opened = yield* open()
       const session = yield* begin(opened)
       const access = yield* accessTo(yield* Machine.url, session.sessionId)
+      yield* opened.memory.set(
+        session.sessionId,
+        yield* Machine.access({
+          url: yield* Machine.url,
+          environmentId,
+          brain: Brain.ofSession(session.sessionId),
+          directory: folder(session.sessionId),
+          lifetimeMs: 6_000,
+        }),
+      )
       const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
       const running = stub.script(shell(`echo $$ > ${pidFile}; sleep 2; echo finished`))
       yield* session.send(running)
       yield* Pid.read(pidFile)
       yield* opened.memory.remove(session.sessionId)
       const finished = lastToolResult(yield* Effect.promise(() => running.called(2)))
-      const refused = yield* refusedTurn(session)
+      const refused = yield* refusedTurn(session).pipe(
+        Effect.repeat({
+          until: (attempt) => attempt.result.includes("No access to a sandbox"),
+          schedule: Schedule.spaced(500),
+        }),
+        Effect.timeout("15 seconds"),
+      )
       yield* opened.memory.set(session.sessionId, access)
       const back = lastToolResult(yield* session.turn(stub.script(shell("echo back"))))
       expect({ finished, ran: refused.ran, noAccess: refused.result.includes("No access to a sandbox"), back }).toEqual(

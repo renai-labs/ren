@@ -7,21 +7,12 @@ import { Authentication, ExecutorApi, UnauthorizedError } from "./executor-api.j
 
 export const path = "/v1/rpc"
 
-export const answerWithin: Readonly<
-  Record<Exclude<RpcGroup.Rpcs<typeof ExecutorApi>["_tag"], "process.output">, Duration.Duration>
-> = {
+export const answerWithin = Duration.seconds(30)
+
+const answerWithinFor: Readonly<Record<string, Duration.Duration>> = {
   "executor.hello": Duration.seconds(10),
-  "process.spawn": Duration.seconds(30),
-  "process.write": Duration.seconds(30),
   "process.heartbeat": Duration.seconds(5),
   "process.kill": Duration.seconds(5),
-  "files.read": Duration.seconds(30),
-  "files.write": Duration.seconds(30),
-  "files.stat": Duration.seconds(30),
-  "files.list": Duration.seconds(30),
-  "files.remove": Duration.seconds(30),
-  "files.move": Duration.seconds(30),
-  "files.mkdir": Duration.seconds(30),
 }
 
 const isUnauthorizedResponse = (error: unknown) =>
@@ -39,15 +30,15 @@ export type Client = RpcClient.RpcClient<RpcGroup.Rpcs<typeof ExecutorApi>, RpcC
 export interface Options {
   readonly url: string
   readonly token: Effect.Effect<string>
-  readonly renew?: Effect.Effect<void>
   readonly onNoAnswer?: Effect.Effect<void>
 }
 
 const unauthorized = () => Effect.fail(new UnauthorizedError({ message: "Authentication required" }))
 
-const limits: Readonly<Record<string, Duration.Duration>> = answerWithin
-
-const limit = (tag: string) => Record.get(limits, tag)
+const limit = (tag: string) =>
+  tag === "process.output"
+    ? Option.none()
+    : Option.some(Record.get(answerWithinFor, tag).pipe(Option.getOrElse(() => answerWithin)))
 
 const layer = (options: Options) =>
   Layer.mergeAll(
@@ -71,13 +62,10 @@ const layer = (options: Options) =>
           ),
       })
       return answered(call.request).pipe(
-        Effect.catchIf(isUnauthorizedResponse, () => {
-          if (!options.renew) return unauthorized()
-          return options.renew.pipe(
-            Effect.andThen(answered(call.request)),
-            Effect.catchIf(isUnauthorizedResponse, unauthorized),
-          )
-        }),
+        // oxlint-disable-next-line ren/no-comments -- A refused call is sent once more: the token is read again, so a caller that renews a refused token gets one retry with the new one.
+        Effect.catchIf(isUnauthorizedResponse, () =>
+          answered(call.request).pipe(Effect.catchIf(isUnauthorizedResponse, unauthorized)),
+        ),
         Effect.tapError((error) => (isNoAnswer(error) && options.onNoAnswer) || Effect.void),
       )
     }),

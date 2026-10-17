@@ -1,7 +1,7 @@
 export * as HostAccess from "./host-access.js"
 
 import { EnvironmentAccess } from "@ren/brain/environment-access"
-import { Effect, Layer, Option, Stream } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { Cell } from "./cell.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
@@ -15,7 +15,6 @@ export const layer = (url: string) =>
       const store = yield* ModelStore.Service
       const host = yield* HostToken.client(url)
       return EnvironmentAccess.Service.of({
-        subscribe: Effect.succeed(Stream.never),
         open: Effect.fn("HostAccess.open")(function* (sessionId) {
           if (sessionId !== info.sessionId)
             return yield* new EnvironmentAccess.NotFound({

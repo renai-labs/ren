@@ -47,7 +47,6 @@ describe.skipIf(Platform.e2b !== undefined)("an executor in an E2B sandbox", () 
     const driver = await hand.connect()
     const greeting = await driver.ok(driver.client["executor.hello"]())
     expect(greeting.environmentId).toBe(hand.created.environmentId)
-    expect([...greeting.capabilities].toSorted()).toEqual(["files", "processes"])
     expect(await hello(hand.created.url)).toBe(401)
   }, 600_000)
 

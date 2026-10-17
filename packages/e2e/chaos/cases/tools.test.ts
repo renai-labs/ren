@@ -1,4 +1,4 @@
-import { EnvironmentAccess } from "@ren/brain/environment-access"
+import { TestAccess } from "@ren/brain/testing"
 import { Environments } from "@ren/brain/environments"
 import { Hand } from "@ren/brain/hand"
 import { Brain } from "@ren/schema/brain"
@@ -247,7 +247,7 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
           const environments = Context.get(
             yield* Layer.build(
               Environments.layer.pipe(
-                Layer.provide(EnvironmentAccess.layerFixed(new Map([[sessionId, access]]))),
+                Layer.provide(TestAccess.fixed(new Map([[sessionId, access]]))),
                 Layer.provide(FetchHttpClient.layer),
               ),
             ),

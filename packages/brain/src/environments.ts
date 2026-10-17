@@ -1,6 +1,6 @@
 export * as Environments from "./environments.js"
 
-import { type Capability, type Hello, protocol } from "@ren/brain-api/executor-api"
+import { type Hello, protocol } from "@ren/brain-api/executor-api"
 import { ExecutorClient } from "@ren/brain-api/executor-client"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -17,7 +17,6 @@ import {
   Ref,
   Schema,
   Scope,
-  Stream,
   SynchronizedRef,
 } from "effect"
 import { HttpClient } from "effect/http"
@@ -43,10 +42,7 @@ export interface Connection {
 }
 
 export interface Interface {
-  readonly connect: (
-    sessionId: Session.ID,
-    capability: Capability,
-  ) => Effect.Effect<Connection, Unavailable, Scope.Scope>
+  readonly connect: (sessionId: Session.ID) => Effect.Effect<Connection, Unavailable, Scope.Scope>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/brain/Environments") {}
@@ -131,7 +127,6 @@ export const layer = Layer.effect(
           const client = yield* ExecutorClient.make({
             url: access.url,
             token: Effect.map(held, (latest) => latest.token),
-            renew: Effect.void,
             onNoAnswer: invalidateSelf,
           }).pipe(
             Effect.provideService(
@@ -170,18 +165,17 @@ export const layer = Layer.effect(
               reason: "incompatible",
               message: `The executor is not compatible: it serves environment ${hello.environmentId}, not ${access.environmentId}`,
             })
-          if (hello.capabilities.includes("files"))
-            yield* client["files.mkdir"]({ path: access.directory }).pipe(
-              Effect.mapError((error) =>
-                error._tag === "OperationFailedError"
-                  ? new Unavailable({
-                      sessionId,
-                      reason: "unusable",
-                      message: `Could not make the folder ${access.directory} on the sandbox: ${error.message}`,
-                    })
-                  : noAnswer(error),
-              ),
-            )
+          yield* client["files.mkdir"]({ path: access.directory }).pipe(
+            Effect.mapError((error) =>
+              error._tag === "OperationFailedError"
+                ? new Unavailable({
+                    sessionId,
+                    reason: "unusable",
+                    message: `Could not make the folder ${access.directory} on the sandbox: ${error.message}`,
+                  })
+                : noAnswer(error),
+            ),
+          )
           const ready: Effect.Effect<void, Unavailable> = Effect.gen(function* () {
             const latest = yield* held
             if (DateTime.toEpochMillis(latest.expiresAt) > (yield* Clock.currentTimeMillis)) return
@@ -205,31 +199,12 @@ export const layer = Layer.effect(
         )
       }),
     })
-    const apply = Effect.fn("Environments.apply")(function* (sessionId: Session.ID) {
-      const current = accesses.get(sessionId)
-      if (!current) return yield* RcMap.invalidate(connections, sessionId)
-      const next = yield* environmentAccess.open(sessionId).pipe(Effect.option)
-      const isReplaced = yield* SynchronizedRef.modify(current, (held): [boolean, Environment.Access] =>
-        Option.match(next, {
-          onNone: () => [true, held],
-          onSome: (fresh) => (isSameSandbox(held, fresh) ? [false, fresh] : [true, held]),
-        }),
-      )
-      if (isReplaced) yield* RcMap.invalidate(connections, sessionId)
-    })
-    yield* (yield* environmentAccess.subscribe).pipe(Stream.runForEach(apply), Effect.forkScoped)
     return Service.of({
-      connect: Effect.fn("Environments.connect")(function* (sessionId: Session.ID, capability: Capability) {
+      connect: Effect.fn("Environments.connect")(function* (sessionId: Session.ID) {
         const entry = yield* RcMap.get(connections, sessionId).pipe(
           Effect.tapError(() => RcMap.invalidate(connections, sessionId)),
         )
         yield* entry.ready
-        if (!entry.connection.hello.capabilities.includes(capability))
-          return yield* new Unavailable({
-            sessionId,
-            reason: "incompatible",
-            message: `The executor is not compatible: the sandbox does not support ${capability === "files" ? "file tools" : "shell commands"}`,
-          })
         return entry.connection
       }),
     })
