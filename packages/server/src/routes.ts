@@ -1,11 +1,13 @@
 export * as Routes from "./routes.js"
 
 import { RenHostApi } from "@ren/host-api/ren-host-api"
+import { maxBodyBytes, SyncApi } from "@ren/host-api/sync-api"
 import { Access } from "@ren/core/access"
 import { BrainHost } from "@ren/core/brain-host"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
+import { SessionSync } from "@ren/core/session-sync"
 import { Space } from "@ren/core/space"
 import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
@@ -24,8 +26,10 @@ import { HostTokenHandler } from "./handlers/ren-host/token.js"
 import { SpaceHandler } from "./handlers/api/space.js"
 import { SpaceEnvironmentTemplateHandler } from "./handlers/api/space-environment-template.js"
 import { SpaceMemberHandler } from "./handlers/api/space-member.js"
+import { SyncHandler } from "./handlers/sync.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
+import { bodyLimit } from "./middleware/body-limit.js"
 
 // oxlint-disable-next-line react-hooks/rules-of-hooks -- Effect's HttpRouter.use, not a React hook
 const AuthRoute = HttpRouter.use((router) =>
@@ -72,6 +76,10 @@ export const layer = Layer.mergeAll(
   HttpApiBuilder.layer(RenHostApi).pipe(
     Layer.provide([HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
     Layer.provide(BrainHost.hostAuthentication),
+  ),
+  HttpApiBuilder.layer(SyncApi).pipe(
+    Layer.provide(SyncHandler),
+    Layer.provide([BrainHost.hostAuthentication, bodyLimit(maxBodyBytes), SessionSync.layer]),
   ),
   AuthRoute,
   Cors,

@@ -77,7 +77,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
 
-class Target extends Context.Service<Target, Session.ID>()("@ren/core/BrainHost/Target") {}
+class Target extends Context.Service<Target, Models.Subject>()("@ren/core/BrainHost/Target") {}
 
 const limit = "30 seconds"
 const serverLifetime = 5 * 60
@@ -107,23 +107,34 @@ export const layer = Layer.effect(
       baseUrl: url,
       httpClient: HttpClient.mapRequestEffect(http, (request) =>
         Effect.gen(function* () {
-          const sid = yield* Target
-          const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + serverLifetime
-          return HttpClientRequest.basicAuth(
-            request,
-            "ren",
-            yield* SessionToken.sign(key, { sid, scope: "server", exp }),
+          const target = yield* Target
+          const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)
+          return request.pipe(
+            HttpClientRequest.basicAuth(
+              "ren",
+              yield* SessionToken.sign(key, { sid: target.sessionId, scope: "server", exp: now + serverLifetime }),
+            ),
+            HttpClientRequest.setHeader(
+              "ren-host-token",
+              yield* SessionToken.sign(key, {
+                sid: target.sessionId,
+                scope: "host",
+                org: target.organizationId,
+                iat: now,
+                exp: now + Duration.toSeconds(hostTokenLifetime),
+              }),
+            ),
           )
         }),
       ),
     })
 
     const call = <A, E>(
-      sessionId: Session.ID,
+      target: Models.Subject,
       effect: Effect.Effect<A, E | HttpClientError.HttpClientError | Schema.SchemaError | ForbiddenError, Target>,
     ) =>
       effect.pipe(
-        Effect.provideService(Target, sessionId),
+        Effect.provideService(Target, target),
         Effect.retry({
           while: (error) => HttpClientError.isHttpClientError(error) && unavailable(error),
           schedule: Schedule.exponential("200 millis"),
@@ -173,7 +184,7 @@ export const layer = Layer.effect(
 
     const configure = (subject: Models.Subject, access: Models.Access) =>
       body(subject, access).pipe(
-        Effect.flatMap((payload) => call(subject.sessionId, brain.brain["brain.configureModels"]({ payload }))),
+        Effect.flatMap((payload) => call(subject, brain.brain["brain.configureModels"]({ payload }))),
       )
 
     const withModels = Effect.fnUntraced(function* <A, E>(
@@ -230,7 +241,7 @@ export const layer = Layer.effect(
           ...Struct.omit(input, ["environmentTemplateId"]),
           ...Option.match(binding, { onNone: () => ({}), onSome: (found) => ({ directory: found.directory }) }),
         } satisfies StartBody
-        return yield* withModels(subject, call(input.sessionId, brain.brain["brain.start"]({ payload }))).pipe(
+        return yield* withModels(subject, call(subject, brain.brain["brain.start"]({ payload }))).pipe(
           Effect.tapErrorTag("BrainRejectedError", () =>
             Option.exists(binding, (found) => found.isNew) ? environments.unbind(subject) : Effect.void,
           ),
@@ -238,10 +249,11 @@ export const layer = Layer.effect(
       }),
       send: Effect.fn("BrainHost.send")(function* (input: Session.SendInput, organizationId: Auth.OrganizationID) {
         yield* validatePrompt(input.prompt)
+        const subject = { sessionId: input.sessionId, organizationId }
         return yield* withModels(
-          { sessionId: input.sessionId, organizationId },
+          subject,
           call(
-            input.sessionId,
+            subject,
             brain.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
           ),
         )
@@ -250,10 +262,9 @@ export const layer = Layer.effect(
         sessionId: Session.ID,
         organizationId: Auth.OrganizationID,
       ) {
-        const cleared = yield* Effect.exit(call(sessionId, brain.brain["brain.removeModels"]()))
-        yield* models
-          .revoke({ sessionId, organizationId })
-          .pipe(Effect.mapError((cause) => new BrainUnavailable({ cause })))
+        const subject = { sessionId, organizationId }
+        const cleared = yield* Effect.exit(call(subject, brain.brain["brain.removeModels"]()))
+        yield* models.revoke(subject).pipe(Effect.mapError((cause) => new BrainUnavailable({ cause })))
         return yield* cleared
       }),
       authenticateHost: Effect.fn("BrainHost.authenticateHost")(function* (hostToken: Redacted.Redacted) {
