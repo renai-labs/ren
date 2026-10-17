@@ -7,12 +7,14 @@ import { Context, Effect, Layer } from "effect"
 import { SqlError } from "effect/sql/SqlError"
 import { authRelations } from "./auth.sql.js"
 import { environmentTemplateRelations } from "./environment.sql.js"
+import { sessionRelations } from "./session.sql.js"
 import { spaceRelations } from "./space.sql.js"
 import { spaceEnvironmentTemplateRelations } from "./space-environment-template.sql.js"
 
 const make = makeWithDefaults({
   relations: {
     ...spaceRelations,
+    ...sessionRelations,
     ...authRelations,
     ...environmentTemplateRelations,
     ...spaceEnvironmentTemplateRelations,
