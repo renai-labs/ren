@@ -531,3 +531,460 @@ it.skip(
     }),
   60_000,
 )
+
+const noteOf = (call: StubModel.Call) =>
+  call.body.messages
+    .map((message) => JSON.stringify(message.content ?? ""))
+    .reduce<RegExpMatchArray | null>((current, content) => {
+      if (content.includes('ren.environment\\\" no longer applies')) return null
+      return content.match(/Your file and shell tools run on environment (env_\w+), in ([^.]+)\./) ?? current
+    }, null)
+
+const sendTo = (
+  harness: Harness.Instance,
+  sessionId: Session.ID,
+  script: StubModel.Script,
+  delivery: Session.Delivery = "steer",
+) =>
+  harness.send({
+    sessionId,
+    messageId: Session.MessageID.create(),
+    prompt: { text: `${script.marker} use the tool` },
+    delivery,
+    sender: { userId: "user_1" },
+  })
+
+const lastToolResult = (call: StubModel.Call) =>
+  JSON.stringify(call.body.messages.findLast((message) => message.role === "tool")?.content ?? "")
+
+const refusedTurn = Effect.fnUntraced(function* (session: {
+  readonly turn: (script: StubModel.Script) => Effect.Effect<StubModel.Call, unknown>
+}) {
+  const marker = join(workspace, `${crypto.randomUUID()}.ran`)
+  const result = lastToolResult(yield* session.turn(stub.script(shell(`touch ${marker}`))))
+  return { result, ran: yield* Effect.promise(() => Bun.file(marker).exists()) }
+})
+
+const withSecondMachine = Effect.gen(function* () {
+  const brain = Brain.ID.create()
+  const otherId = Environment.ID.create()
+  const other = yield* machine(otherId)
+  const harness = yield* open(
+    EnvironmentAccess.layerFixed([
+      yield* accessTo(yield* served, { brain, lifetimeMs: 600_000 }),
+      yield* accessTo(other.url, { brain, lifetimeMs: 600_000, environmentId: otherId }),
+    ]),
+  )
+  return {
+    harness,
+    otherId,
+    other,
+    here: { environmentId, directory: workspace },
+    there: { environmentId: otherId, directory: other.directory },
+  }
+})
+
+it.live("a new session started on a machine with a first message runs that first turn on the machine", () =>
+  Effect.gen(function* () {
+    const harness = yield* openServed
+    const sessionId = Session.ID.create()
+    const file = `${crypto.randomUUID()}.txt`
+    const script = stub.script(shell(`echo first > ${file}`))
+    yield* harness.start({
+      sessionId,
+      harness: "opencode",
+      instructions: {},
+      interactive: false,
+      environments: [{ environmentId, directory: workspace }],
+      initialMessage: {
+        messageId: Session.MessageID.create(),
+        prompt: { text: `${script.marker} use the tool` },
+        sender: { userId: "user_1" },
+      },
+    })
+    yield* Effect.promise(() => script.called(2))
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, file)).text())).toBe("first\n")
+  }),
+)
+
+it.live("refuses to start a new session on a machine it cannot use, and creates no session", () =>
+  Effect.gen(function* () {
+    const brain = Brain.ID.create()
+    const dead = yield* machine(environmentId)
+    yield* dead.stop
+    const deadId = Environment.ID.create()
+    const harness = yield* open(
+      EnvironmentAccess.layerFixed([
+        yield* accessTo(yield* served, { brain, lifetimeMs: 600_000 }),
+        yield* accessTo(dead.url, { brain, lifetimeMs: 600_000, environmentId: deadId }),
+      ]),
+    )
+    const file = join(workspace, `${crypto.randomUUID()}.txt`)
+    yield* Effect.promise(() => Bun.write(file, "a file"))
+    const attempts = [
+      { environmentId: Environment.ID.create(), directory: workspace },
+      { environmentId: deadId, directory: workspace },
+      { environmentId, directory: file },
+    ]
+    const outcomes = yield* Effect.forEach(attempts, (location) =>
+      Effect.gen(function* () {
+        const sessionId = Session.ID.create()
+        const error = yield* harness
+          .start({ sessionId, harness: "opencode", instructions: {}, interactive: false, environments: [location] })
+          .pipe(Effect.flip)
+        const send = yield* sendTo(harness, sessionId, stub.script()).pipe(Effect.flip)
+        return [error._tag, send._tag]
+      }),
+    )
+    expect(outcomes).toEqual(Array(3).fill(["BrainRejectedError", "SessionNotStartedError"]))
+  }),
+)
+
+it.live("a move waits for a running turn that ends within 10 seconds, then the next turn runs on the new machine", () =>
+  Effect.gen(function* () {
+    const setup = yield* withSecondMachine
+    const session = yield* begin(setup.harness)
+    const running = stub.script(shell("sleep 2; echo slept"))
+    yield* session.send(running)
+    yield* Effect.sleep(500)
+    yield* restart(setup.harness, session.sessionId, [setup.there])
+    expect(toolOutput(yield* Effect.promise(() => running.called(2)))).toContain("slept")
+    expect(toolOutput(yield* session.turn(stub.script(shell("pwd"))))).toContain(setup.other.directory)
+  }),
+)
+
+it.live("a background helper's command finishes where it started, and the helper's next step follows the move", () =>
+  Effect.gen(function* () {
+    const setup = yield* withSecondMachine
+    const session = yield* begin(setup.harness)
+    const childFile = `${crypto.randomUUID()}.txt`
+    const child = stub.script(shell(`sleep 2; pwd > ${childFile}`))
+    const launched = yield* session.turn(
+      stub.script({
+        tool: {
+          name: "subagent",
+          input: { agent: "general", description: "Work", prompt: `${child.marker} work`, background: true },
+        },
+      }),
+    )
+    const childId = toolOutput(launched).match(/sessionID: (ses_\w+)/)?.[1]
+    expect(childId).toBeDefined()
+    if (!childId) return
+    yield* Effect.promise(() => child.called(1))
+    yield* Effect.sleep(300)
+    yield* restart(setup.harness, session.sessionId, [setup.there])
+    yield* Effect.promise(() => child.called(2))
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, childFile)).text())).toBe(`${workspace}\n`)
+    const next = stub.script(shell("pwd"))
+    yield* sendTo(setup.harness, Session.ID.make(childId), next)
+    expect(toolOutput(yield* Effect.promise(() => next.called(2)))).toContain(setup.other.directory)
+  }),
+)
+
+it.live("a queued turn that starts while a move lands runs its command where the model is told it runs", () =>
+  Effect.gen(function* () {
+    const setup = yield* withSecondMachine
+    const session = yield* begin(setup.harness)
+    const running = stub.script(shell("sleep 1"))
+    const queued = stub.script(shell("pwd"))
+    yield* session.send(running)
+    yield* sendTo(setup.harness, Session.ID.make(session.sessionId), queued, "queue")
+    yield* Effect.sleep(300)
+    yield* Effect.exit(restart(setup.harness, session.sessionId, [setup.there]))
+    const call = yield* Effect.promise(() => queued.called(2))
+    const told = noteOf(queued.calls.at(0) ?? call)
+    expect(told).not.toBeNull()
+    expect(toolOutput(call)).toContain(told?.[2] ?? "missing note")
+  }),
+)
+
+it.live("two starts at once naming different machines leave the session on one, and the model is told that one", () =>
+  Effect.gen(function* () {
+    const setup = yield* withSecondMachine
+    const session = yield* begin(setup.harness)
+    yield* Effect.all(
+      [
+        restart(setup.harness, session.sessionId, [setup.there]),
+        restart(setup.harness, session.sessionId, [setup.here]),
+      ],
+      { concurrency: "unbounded" },
+    )
+    const call = yield* session.turn(stub.script(shell("pwd")))
+    const told = noteOf(call)
+    expect(told).not.toBeNull()
+    expect(toolOutput(call)).toContain(told?.[2] ?? "missing note")
+  }),
+)
+
+it.live(
+  "detaching drops the note and keeps the no-questions rule; reattaching brings the tools back and keeps it",
+  () =>
+    Effect.gen(function* () {
+      const harness = yield* openServed
+      const session = yield* begin(harness)
+      yield* restart(harness, session.sessionId, [])
+      const detached = yield* session.turn(stub.script(), 1)
+      expect(noteOf(detached)).toBeNull()
+      expect(detached.tools).not.toContain("question")
+      yield* restart(harness, session.sessionId, [{ environmentId, directory: workspace }])
+      const attached = yield* session.turn(stub.script(), 1)
+      expect(fileTools.filter((tool) => !attached.tools.includes(tool))).toEqual([])
+      expect(attached.tools).not.toContain("question")
+      expect(noteOf(attached)?.[1]).toBe(environmentId)
+    }),
+)
+
+it.live("an agent that allows the shell still cannot run it in a session with no machine", () =>
+  Effect.gen(function* () {
+    const access = yield* accessTo(yield* served, { brain: Brain.ID.create(), lifetimeMs: 600_000 })
+    const harness = yield* open(EnvironmentAccess.layerFixed([access]), local)
+    const sessionId = Session.ID.create()
+    yield* harness.start({
+      sessionId,
+      harness: "opencode",
+      instructions: {},
+      interactive: false,
+      agent: "explore",
+      environments: [],
+    })
+    const script = stub.script()
+    yield* sendTo(harness, sessionId, script)
+    const call = yield* Effect.promise(() => script.called(1))
+    expect(call.tools.filter((tool) => fileTools.includes(tool))).toEqual([])
+  }),
+)
+
+it.live("a helper of a session with no machine has no file or shell tools", () =>
+  Effect.gen(function* () {
+    const access = yield* accessTo(yield* served, { brain: Brain.ID.create(), lifetimeMs: 600_000 })
+    const harness = yield* open(EnvironmentAccess.layerFixed([access]), local)
+    const session = yield* begin(harness, [])
+    const child = stub.script()
+    yield* session.turn(
+      stub.script({
+        tool: { name: "subagent", input: { agent: "general", description: "Look", prompt: `${child.marker} look` } },
+      }),
+    )
+    const call = yield* Effect.promise(() => child.called(1))
+    expect(call.tools.filter((tool) => fileTools.includes(tool))).toEqual([])
+  }),
+)
+
+it.live("after a move to another folder, reading a path that search returned works", () =>
+  Effect.gen(function* () {
+    const setup = yield* withSecondMachine
+    const session = yield* begin(setup.harness)
+    yield* restart(setup.harness, session.sessionId, [setup.there])
+    const name = `found-${crypto.randomUUID().slice(0, 8)}.md`
+    yield* Effect.promise(() => Bun.write(join(setup.other.directory, "docs", name), "found on the other machine\n"))
+    const globbed = toolOutput(
+      yield* session.turn(stub.script({ tool: { name: "glob", input: { pattern: "**/found-*.md" } } })),
+    )
+    const path = globbed.match(new RegExp(`[^"\\\\\\s]*${name}`))?.[0]
+    expect(path).toBeDefined()
+    const read = yield* session
+      .turn(stub.script({ tool: { name: "read", input: { path } } }))
+      .pipe(Effect.timeout(15_000))
+    expect(toolOutput(read)).toContain("found on the other machine")
+  }),
+)
+
+it.live("moving one session leaves other sessions on the same and on another machine where they were", () =>
+  Effect.gen(function* () {
+    const setup = yield* withSecondMachine
+    const moving = yield* begin(setup.harness)
+    const staying = yield* begin(setup.harness)
+    const elsewhere = yield* begin(setup.harness, [setup.there])
+    yield* restart(setup.harness, moving.sessionId, [setup.there])
+    expect(toolOutput(yield* moving.turn(stub.script(shell("pwd"))))).toContain(setup.other.directory)
+    expect(toolOutput(yield* staying.turn(stub.script(shell("pwd"))))).toContain(workspace)
+    expect(toolOutput(yield* elsewhere.turn(stub.script(shell("pwd"))))).toContain(setup.other.directory)
+  }),
+)
+
+it.live("the model is told the right machine after each move, folder change, detach and reattach", () =>
+  Effect.gen(function* () {
+    const setup = yield* withSecondMachine
+    const session = yield* begin(setup.harness)
+    const sub = join(setup.other.directory, "sub")
+    yield* Effect.promise(() => Bun.write(join(sub, ".keep"), ""))
+    const steps: ReadonlyArray<ReadonlyArray<Environment.Location>> = [
+      [setup.there],
+      [{ environmentId: setup.otherId, directory: sub }],
+      [],
+      [setup.here],
+    ]
+    const told = yield* Effect.forEach(steps, (step) =>
+      restart(setup.harness, session.sessionId, step).pipe(
+        Effect.andThen(session.turn(stub.script(), 1)),
+        Effect.map((call) => noteOf(call)?.slice(1, 3) ?? null),
+      ),
+    )
+    expect(told).toEqual([
+      [setup.otherId, setup.other.directory],
+      [setup.otherId, sub],
+      null,
+      [environmentId, workspace],
+    ])
+  }),
+)
+
+it.live(
+  "removing a machine's access lets a running command finish, refuses the next one, and access back restores tools",
+  () =>
+    Effect.gen(function* () {
+      const brain = Brain.ID.create()
+      const access = yield* accessTo(yield* served, { brain, lifetimeMs: 600_000 })
+      const context = yield* Layer.build(EnvironmentAccess.layerMemory([access]))
+      const memory = Context.get(context, EnvironmentAccess.Memory)
+      const harness = yield* open(Layer.succeedContext(context))
+      const session = yield* begin(harness)
+      const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+      const running = stub.script(shell(`echo $$ > ${pidFile}; sleep 2; echo finished`))
+      yield* session.send(running)
+      yield* pidIn(pidFile)
+      yield* memory.remove(environmentId)
+      const finished = lastToolResult(yield* Effect.promise(() => running.called(2)))
+      const refused = yield* refusedTurn(session)
+      yield* memory.set(access)
+      const back = lastToolResult(yield* session.turn(stub.script(shell("echo back"))))
+      expect({ finished, ran: refused.ran, failed: refused.result.includes("tool.execution"), back }).toEqual({
+        finished: JSON.stringify("finished\n"),
+        ran: false,
+        failed: true,
+        back: JSON.stringify("back\n"),
+      })
+    }),
+)
+
+it.live("a tool call fails clearly while the executor is down, and the next one works once it is back", () =>
+  Effect.gen(function* () {
+    const relay = yield* Relay.make(Relay.portOf(yield* served))
+    const access = yield* accessTo(relay.url, { brain: Brain.ID.create(), lifetimeMs: 600_000 })
+    const session = yield* begin(yield* open(EnvironmentAccess.layerFixed([access])))
+    yield* session.turn(stub.script(shell("echo warm")))
+    yield* relay.refuse(true)
+    yield* relay.cut
+    const down = yield* refusedTurn(session)
+    yield* relay.refuse(false)
+    const back = lastToolResult(yield* session.turn(stub.script(shell("echo back"))))
+    expect({ ran: down.ran, failed: down.result.includes("tool.execution"), back }).toEqual({
+      ran: false,
+      failed: true,
+      back: JSON.stringify("back\n"),
+    })
+  }),
+)
+
+const seeded = (seed: number) => {
+  const state = { value: seed >>> 0 }
+  return (limit: number) => {
+    state.value = (state.value + 0x6d2b79f5) >>> 0
+    const mixed = Math.imul(state.value ^ (state.value >>> 15), 1 | state.value)
+    const next = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed
+    return ((next ^ (next >>> 14)) >>> 0) % limit
+  }
+}
+
+type Target = "first" | "second"
+
+const sequence = (seed: number) =>
+  Effect.gen(function* () {
+    const pick = seeded(seed)
+    const brain = Brain.ID.create()
+    const otherId = Environment.ID.create()
+    const original = yield* machine(environmentId)
+    const replacement = yield* machine(environmentId)
+    const other = yield* machine(otherId)
+    const context = yield* Layer.build(
+      EnvironmentAccess.layerMemory([
+        yield* accessTo(original.url, { brain, lifetimeMs: 600_000 }),
+        yield* accessTo(other.url, { brain, lifetimeMs: 600_000, environmentId: otherId }),
+      ]),
+    )
+    const memory = Context.get(context, EnvironmentAccess.Memory)
+    const harness = yield* open(Layer.succeedContext(context), local)
+    const session = yield* begin(harness, [])
+    const locations = {
+      first: { environmentId, directory: original.directory },
+      second: { environmentId: otherId, directory: other.directory },
+    }
+    const model = { bound: "none" as "none" | Target, granted: { first: true, second: true }, replaced: false }
+    const log: Array<string> = []
+    const violations: Array<string> = []
+    const check = (index: number, isHeld: boolean, message: string) => {
+      if (!isHeld) violations.push(`${index}: ${message}`)
+    }
+    const move = Effect.fnUntraced(function* (index: number, target: "none" | Target) {
+      const exit = yield* Effect.exit(restart(harness, session.sessionId, target === "none" ? [] : [locations[target]]))
+      const expected = target === "none" || model.granted[target]
+      log.push(`${index}:start ${target} -> ${Exit.isSuccess(exit) ? "ok" : "refused"}`)
+      check(index, Exit.isSuccess(exit) === expected, `start ${target} expected ${expected ? "ok" : "refused"}`)
+      if (Exit.isSuccess(exit)) model.bound = target
+    })
+    const replace = Effect.fnUntraced(function* (index: number) {
+      yield* original.stop
+      yield* memory.set(yield* accessTo(replacement.url, { brain, lifetimeMs: 600_000, generation: 2 }))
+      model.replaced = true
+      log.push(`${index}:replace first`)
+    })
+    const accessFor = (target: Target) => {
+      if (target === "second") return accessTo(other.url, { brain, lifetimeMs: 600_000, environmentId: otherId })
+      if (model.replaced) return accessTo(replacement.url, { brain, lifetimeMs: 600_000, generation: 2 })
+      return accessTo(original.url, { brain, lifetimeMs: 600_000 })
+    }
+    const toggle = Effect.fnUntraced(function* (index: number, target: Target) {
+      if (model.granted[target]) yield* memory.remove(locations[target].environmentId)
+      if (!model.granted[target]) yield* memory.set(yield* accessFor(target))
+      model.granted[target] = !model.granted[target]
+      log.push(`${index}:${model.granted[target] ? "grant" : "revoke"} ${target}`)
+      yield* Effect.sleep(50)
+    })
+    const turn = Effect.fnUntraced(function* (index: number) {
+      const marker = `${crypto.randomUUID()}.ran`
+      const call = yield* session.turn(stub.script(shell(`touch ${marker} && pwd`)))
+      const found = yield* Effect.promise(() =>
+        Promise.all(
+          [original.directory, other.directory].map((directory) => Bun.file(join(directory, marker)).exists()),
+        ),
+      )
+      const ran = (["first", "second"] as const).filter((_, position) => found[position])
+      const expected = model.bound !== "none" && model.granted[model.bound] ? [model.bound] : []
+      const told = noteOf(call)?.[1]
+      log.push(`${index}:turn bound=${model.bound} ran=${ran.join(",") || "nowhere"}`)
+      check(
+        index,
+        Bun.deepEquals(ran, expected),
+        `bound to ${model.bound}, expected ${expected.join(",") || "nowhere"}, ran ${ran.join(",") || "nowhere"}`,
+      )
+      check(
+        index,
+        told === (model.bound === "none" ? undefined : locations[model.bound].environmentId),
+        `told ${told ?? "nothing"}, bound to ${model.bound}`,
+      )
+      check(index, model.bound !== "none" || !call.tools.includes("shell"), "shell offered with no machine")
+    })
+    const step = (index: number) => {
+      const choice = pick(7)
+      if (choice <= 2) return move(index, (["none", "first", "second"] as const)[choice] ?? "none")
+      if (choice === 3 && !model.replaced) return replace(index)
+      if (choice === 4) return toggle(index, pick(2) === 0 ? "first" : "second")
+      return turn(index)
+    }
+    yield* Effect.forEach(
+      Array.from({ length: 24 }, (_, index) => index),
+      step,
+      { discard: true },
+    )
+    return { seed, violations, log }
+  })
+
+it.live(
+  "random sequences of moves, turns, replacements and access changes keep every invariant",
+  () =>
+    Effect.gen(function* () {
+      const results = yield* Effect.forEach([7, 42, 1234, 2026, 98765], (seed) => Effect.scoped(sequence(seed)))
+      expect(results.filter((result) => result.violations.length > 0)).toEqual([])
+    }),
+  240_000,
+)

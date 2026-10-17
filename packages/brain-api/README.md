@@ -20,7 +20,7 @@ The Brain API: the internal HTTP contract between the Ren server and whatever ho
 
 ## Notes
 
-- The Executor API is RPC, not `HttpApi`: it is not in OpenAPI and has no HTTP statuses. Its one path is `/v1/rpc`. An executor checks the environment token on the HTTP request before the RPC server decodes a payload; every RPC declares `UnauthorizedError` through the `Authentication` middleware. `ExecutorClient.make` maps an HTTP 401 to that typed error.
+- The Executor API is RPC, not `HttpApi`: it is not in OpenAPI and has no HTTP statuses. Its one path is `/v1/rpc`. An executor checks the environment token on the HTTP request before the RPC server decodes a payload; every RPC declares `UnauthorizedError` through the `Authentication` middleware. `ExecutorClient.make` maps an HTTP 401 to that typed error; given `renew`, it runs it and retries the call once first. A 401 comes before the executor runs anything, so the retry is safe.
 - Brain API paths sit under `/ren/`, because the harness's own API shares the origin and owns `/api/*` (OpenCode).
 - Both sides build on the same value: for `BrainApi`, the host with `HttpApiBuilder` and core with `HttpApiClient`; for `ExecutorApi`, the executor with `RpcServer` and a brain with `ExecutorClient.make`. A change here changes both.
 - The Ren server and a host deploy separately, so a change must work with the previous version on the other side.

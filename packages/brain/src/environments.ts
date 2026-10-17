@@ -13,6 +13,7 @@ import {
   Layer,
   Option,
   RcMap,
+  Ref,
   Schema,
   Scope,
   Stream,
@@ -31,6 +32,9 @@ const capabilities = ["processes", "files"] as const satisfies ReadonlyArray<Cap
 
 export const refreshBefore = Duration.minutes(5)
 
+const isSameMachine = (held: Environment.Access, fresh: Environment.Access) =>
+  fresh.url === held.url && fresh.generation === held.generation
+
 export interface Connection {
   readonly hello: Hello
   readonly client: ExecutorClient.Client
@@ -48,7 +52,7 @@ export const layer = Layer.effect(
     const environmentAccess = yield* EnvironmentAccess.Service
     const http = yield* HttpClient.HttpClient
     const accesses = new Map<Environment.ID, SynchronizedRef.SynchronizedRef<Environment.Access>>()
-    const connections = yield* RcMap.make({
+    const connections: RcMap.RcMap<Environment.ID, Connection, Unavailable> = yield* RcMap.make({
       idleTimeToLive: Duration.infinity,
       lookup: Effect.fn("Environments.lookup")(function* (id: Environment.ID) {
         const entryScope = yield* Effect.scope
@@ -71,24 +75,28 @@ export const layer = Layer.effect(
               if (accesses.get(id) === current) accesses.delete(id)
             }),
           )
+          const refused = yield* Ref.make(false)
           const token = SynchronizedRef.updateAndGetEffect(current, (held) =>
-            Clock.currentTimeMillis.pipe(
-              Effect.flatMap((now) =>
-                DateTime.toEpochMillis(held.expiresAt) - now > Duration.toMillis(refreshBefore)
-                  ? Effect.succeed(held)
-                  : environmentAccess
-                      .open(id)
-                      .pipe(
-                        Effect.catch((error) =>
-                          Effect.logWarning(`Could not refresh access to environment ${id}: ${error._tag}`).pipe(
-                            Effect.as(held),
-                          ),
-                        ),
-                      ),
-              ),
-            ),
+            Effect.gen(function* () {
+              const isRefused = yield* Ref.getAndSet(refused, false)
+              const now = yield* Clock.currentTimeMillis
+              if (!isRefused && DateTime.toEpochMillis(held.expiresAt) - now > Duration.toMillis(refreshBefore))
+                return held
+              return yield* environmentAccess.open(id).pipe(
+                Effect.flatMap((fresh) =>
+                  isSameMachine(held, fresh)
+                    ? Effect.succeed(fresh)
+                    : RcMap.invalidate(connections, id).pipe(Effect.as(held)),
+                ),
+                Effect.catch((error) =>
+                  Effect.logWarning(`Could not refresh access to environment ${id}: ${error._tag}`).pipe(
+                    Effect.as(held),
+                  ),
+                ),
+              )
+            }),
           ).pipe(Effect.map((held) => held.token))
-          const client = yield* ExecutorClient.make({ url: access.url, token }).pipe(
+          const client = yield* ExecutorClient.make({ url: access.url, token, renew: Ref.set(refused, true) }).pipe(
             Effect.provideService(HttpClient.HttpClient, http),
           )
           const hello = yield* client["executor.hello"]().pipe(
@@ -128,8 +136,7 @@ export const layer = Layer.effect(
       const isReplaced = yield* SynchronizedRef.modify(current, (held): [boolean, Environment.Access] =>
         Option.match(next, {
           onNone: () => [true, held],
-          onSome: (fresh) =>
-            fresh.url === held.url && fresh.generation === held.generation ? [false, fresh] : [true, held],
+          onSome: (fresh) => (isSameMachine(held, fresh) ? [false, fresh] : [true, held]),
         }),
       )
       if (isReplaced) yield* RcMap.invalidate(connections, id)
