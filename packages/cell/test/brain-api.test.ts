@@ -7,13 +7,17 @@ import {
   ModelsNotConfiguredError,
   SessionNotStartedError,
 } from "@ren/host-api/errors"
+import { SessionToken } from "@ren/host-api/session-token"
 import { testEffect } from "@ren/executor/testing"
+import { Auth } from "@ren/schema/auth"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Cause, Effect, Redacted, type Scope } from "effect"
+import { Cause, Effect, Option, type Scope } from "effect"
+import { Brain } from "../src/brain.js"
 import { BrainTest } from "./lib/brain.js"
 import { ModelsTest } from "./lib/models.js"
 import { Shared } from "./lib/shared.js"
+import { TestToken } from "./lib/token.js"
 
 const it = testEffect(BrainTest.layer)
 
@@ -581,27 +585,39 @@ test.todo("REN-1486 an endpoint's base URL and key changed during a turn reach t
   ),
 )
 
-it.live("a key inside OpenCode's refresh window is renewed through the host before the model request", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    yield* brain.start()
-    yield* brain.configureModels({ stub: Shared.apiKey("expiring", Date.now() + 60_000) }, "host-token")
-    const script = Shared.stub().script()
-    yield* brain.send(`renew ${script.marker}`)
-    yield* brain.issuer.reply(
-      yield* brain.issuer.next,
-      ModelsTest.granted({
-        access: Shared.access({ stub: Shared.apiKey("renewed", Date.now() + 3_600_000) }, Shared.stub().url),
-        hostToken: Redacted.make("next-token"),
-      }),
-    )
-    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
-    expect(script.calls.map((call) => call.authorization)).toEqual(["Bearer renewed"])
-    expect(brain.issuer.requests).toEqual(["Bearer host-token"])
-  }),
-)
-
-test.todo(
-  "the cell keeps a ren-host-token only when its expiry is later than the stored token, and the plugin refresh uses the stored token",
-  () => {},
+it.live(
+  "the cell keeps a ren-host-token only when it expires later than the stored token, and model refresh sends the kept token",
+  () =>
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.Service
+      const organizationId = Auth.OrganizationID.create()
+      const token = (minutes: number) =>
+        SessionToken.sign(TestToken.keys[0], {
+          sid: brain.id,
+          scope: "host",
+          org: organizationId,
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + minutes * 60,
+        })
+      const configured = yield* token(60)
+      const earlier = yield* token(30)
+      const later = yield* token(180)
+      const state = (hostToken: string) =>
+        brain.fetch("/ren/state", { headers: { [Brain.hostTokenHeader]: hostToken } })
+      yield* brain.start()
+      yield* brain.configureModels({ stub: Shared.apiKey("expiring", Date.now() + 60_000) }, configured)
+      expect((yield* state(earlier)).status).toBe(200)
+      expect(yield* brain.store.readHostToken).toEqual(Option.some(configured))
+      expect((yield* state(later)).status).toBe(200)
+      expect(yield* brain.store.readHostToken).toEqual(Option.some(later))
+      yield* brain.send(`renew ${Shared.stub().script().marker}`)
+      yield* brain.issuer.reply(
+        yield* brain.issuer.next,
+        ModelsTest.granted({
+          access: Shared.access({ stub: Shared.apiKey("renewed", Date.now() + 3_600_000) }, Shared.stub().url),
+        }),
+      )
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      expect(brain.issuer.requests).toEqual([`Bearer ${later}`])
+    }),
 )

@@ -20,6 +20,12 @@ Access comes with a host token. When OpenCode finds an API key within five minut
 
 `app.version` identifies **Ren's cell package**, derived from this package's `package.json`. OpenCode dependency versions are pinned in the workspace catalog.
 
+## Sync
+
+With `REN_URL`, each alarm first uploads the sessions that changed in the OpenCode tables to Ren, then reconciles. It reads `ctx.storage.sql` directly and never opens OpenCode for this. A step that is not drained sets the next alarm at 250 ms, or when the five-minute limit for a busy session ends. A step that fails, or that has a failed upload, backs off from 1 s to 5 min with jitter. The alarm stays set until sync is drained, also after reconcile closed OpenCode. `POST /ren/sync` (`BrainHost.flush`) runs steps for up to 20 s and answers `drained`. Without `REN_URL` the alarm does not sync, and `/ren/sync` answers `drained: false`.
+
+Sync uses the host token, and renews it as model refresh does. Each call from Ren carries a fresh one in `ren-host-token`; the cell keeps the token from that header only when it does not expire earlier than the stored one.
+
 ## Starting with a message
 
 `BrainHost.start` and `POST /ren/sessions` accept an optional `initialMessage`:
@@ -70,7 +76,7 @@ bun typecheck
 - `remote-tools.test.ts`: the in-process OpenCode harness with tools on real executors.
 - `host-access.test.ts`: `HostAccess`, the cell's Ren Host API `EnvironmentAccess`, against a fake Ren (`test/lib/ren.ts`).
 - `workspace-driver.test.ts`: the OpenCode `ren` driver's file and error mapping.
-- `lease.test.ts`, `reconcile.test.ts`, `credentials.test.ts`, `model-refresh.test.ts`: Ren's ownership, decisions and transformations.
+- `lease.test.ts`, `reconcile.test.ts`, `credentials.test.ts`, `model-refresh.test.ts`, `sync.test.ts`: Ren's ownership, decisions and transformations.
 - `cell.test.ts`: a smoke set of authentication, routing, body limits, streams and the idle close against celld; the same suite runs under Wrangler.
 - `crash.test.ts`: durable recovery against celld killed at the critical lifecycle boundaries.
 - `environment-lifecycle-cell.test.ts`: the production Worker with a fake Ren, across workerd sleep, crash and restart; it runs only under Wrangler.

@@ -187,13 +187,15 @@ describe("cell contract", () => {
     expect((await opened.until((state) => state.holders === 0, 45_000)).holders).toBe(0)
   }, 60_000)
 
-  test("the idle alarm closes the harness with no alarm left, and a request after it sees the same sessions and messages", async () => {
+  test("with no Ren URL, the idle alarm closes the harness with no alarm left, sync is not drained, and a request after it sees the same sessions and messages", async () => {
     const opened = await cell()
     await opened.start()
     await opened.prompt(`remember ${stub.script().marker}`)
     await opened.opencode.session.wait({ sessionID: opened.id })
     const messages = await opened.messages()
     expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
+    expect(await (await opened.brain("/ren/sync", {})).json()).toEqual({ drained: false })
+    expect(await opened.state()).toEqual(closed)
     expect(await opened.messages()).toEqual(messages)
     expect((await opened.opencode.session.list()).data.map((session) => session.id)).toEqual([opened.id])
     expect((await opened.state()).isOpen).toBe(true)

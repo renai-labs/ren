@@ -1,7 +1,8 @@
 export * as ModelStore from "./model-store.js"
 
 import { Models } from "@ren/schema/models"
-import { Context, Effect, Layer, Option, SynchronizedRef } from "effect"
+import { Context, Effect, Layer, Option, Result, Schema, SynchronizedRef } from "effect"
+import { Base64Url } from "effect/encoding"
 import { KeyValueStore } from "effect/persistence"
 
 const accessKey = "ren:models"
@@ -26,11 +27,21 @@ export interface Interface {
     hostToken: string | undefined,
   ) => Effect.Effect<boolean>
   readonly writeHostTokenIfUnchanged: (sent: string, hostToken: string) => Effect.Effect<boolean>
+  readonly keepHostToken: (hostToken: string) => Effect.Effect<void>
   readonly removeHostTokenIfUnchanged: (sent: string) => Effect.Effect<void>
   readonly remove: Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/cell/ModelStore") {}
+
+const Expiry = Schema.fromJsonString(Schema.Struct({ exp: Schema.Int }))
+
+const expiry = (token: string) =>
+  Option.fromNullishOr(token.split(".").at(0)).pipe(
+    Option.flatMap((part) => Result.getSuccess(Base64Url.decodeString(part))),
+    Option.flatMap(Schema.decodeUnknownOption(Expiry)),
+    Option.match({ onNone: () => Number.NEGATIVE_INFINITY, onSome: (claims) => claims.exp }),
+  )
 
 export const layer = Layer.effect(
   Service,
@@ -83,6 +94,13 @@ export const layer = Layer.effect(
           Option.contains(stored, sent)
             ? store.set(hostTokenKey, hostToken).pipe(Effect.orDie, Effect.as([true, Option.some(hostToken)] as const))
             : Effect.succeed([false, stored] as const),
+        )
+      }),
+      keepHostToken: Effect.fn("ModelStore.keepHostToken")(function* (hostToken: string) {
+        yield* SynchronizedRef.updateEffect(storedHostToken, (stored) =>
+          Option.exists(stored, (current) => expiry(current) >= expiry(hostToken))
+            ? Effect.succeed(stored)
+            : store.set(hostTokenKey, hostToken).pipe(Effect.orDie, Effect.as(Option.some(hostToken))),
         )
       }),
       removeHostTokenIfUnchanged: Effect.fn("ModelStore.removeHostTokenIfUnchanged")(function* (sent: string) {
