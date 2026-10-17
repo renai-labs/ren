@@ -2,17 +2,20 @@ export * as Brain from "./brain.js"
 
 import { BrainApi } from "@ren/host-api/brain-api"
 import { ForbiddenError, ModelsNotConfiguredError } from "@ren/host-api/errors"
-import { DateTime, Effect, Layer, Option, Redacted } from "effect"
-import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
+import { DateTime, Effect, Layer, Option, Redacted, type Scope } from "effect"
+import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
+import { Sync } from "./sync.js"
 
-type Services = Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service | HostToken.Service
+type Services = Cell.Info | Cell.Activity | Harness.Service | ModelStore.Service | HostToken.Service | Sync.Service
 
 const prefix = "/ren"
+
+export const hostTokenHeader = "ren-host-token"
 
 export const owns = (pathname: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
 
@@ -40,65 +43,91 @@ const configured = Effect.gen(function* () {
     })
 })
 
+const keepHostToken = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest
+  const token = request.headers[hostTokenHeader]
+  if (!token) return
+  const store = yield* ModelStore.Service
+  yield* store.keepHostToken(token)
+})
+
 export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
   Effect.gen(function* () {
     const context = yield* Effect.context<Services>()
+    const handle = <A, E>(effect: Effect.Effect<A, E, Services | Scope.Scope>) =>
+      keepHostToken.pipe(Effect.andThen(effect), Effect.scoped, Effect.provide(context))
     return group
       .handle("brain.start", (request) =>
-        Effect.gen(function* () {
-          const info = yield* Cell.Info
-          if (request.payload.sessionId !== info.sessionId) return yield* Effect.fail(forbidden)
-          yield* configured
-          const harness = yield* Cell.acquire
-          return yield* harness.start(request.payload)
-        }).pipe(Effect.scoped, Effect.provide(context)),
+        handle(
+          Effect.gen(function* () {
+            const info = yield* Cell.Info
+            if (request.payload.sessionId !== info.sessionId) return yield* Effect.fail(forbidden)
+            yield* configured
+            const harness = yield* Cell.acquire
+            return yield* harness.start(request.payload)
+          }),
+        ),
       )
       .handle("brain.send", (request) =>
-        Effect.gen(function* () {
-          const info = yield* Cell.Info
-          if (request.params.id !== info.sessionId) return yield* Effect.fail(forbidden)
-          yield* configured
-          const harness = yield* Cell.acquire
-          return yield* harness.send({ ...request.payload, sessionId: request.params.id })
-        }).pipe(Effect.scoped, Effect.provide(context)),
+        handle(
+          Effect.gen(function* () {
+            const info = yield* Cell.Info
+            if (request.params.id !== info.sessionId) return yield* Effect.fail(forbidden)
+            yield* configured
+            const harness = yield* Cell.acquire
+            return yield* harness.send({ ...request.payload, sessionId: request.params.id })
+          }),
+        ),
       )
       .handle("brain.configureModels", (request) =>
-        Effect.gen(function* () {
-          const store = yield* ModelStore.Service
-          const activity = yield* Cell.Activity
-          const host = yield* Harness.Service
-          return yield* activity.configuring.withPermit(
-            Effect.gen(function* () {
-              // oxlint-disable-next-line ren/no-comments -- Writing before checking whether the harness is open guarantees that either a later open reads this configuration or this request applies it to the open instance.
-              yield* store.write(
-                request.payload.access,
-                request.payload.hostToken && Redacted.value(request.payload.hostToken),
-              )
-              if ((yield* host.state).isOpen) {
-                const harness = yield* Cell.acquire
-                yield* harness.configure(request.payload.access.endpoints)
-              }
-            }),
-          )
-        }).pipe(Effect.scoped, Effect.provide(context)),
+        handle(
+          Effect.gen(function* () {
+            const store = yield* ModelStore.Service
+            const activity = yield* Cell.Activity
+            const host = yield* Harness.Service
+            return yield* activity.configuring.withPermit(
+              Effect.gen(function* () {
+                // oxlint-disable-next-line ren/no-comments -- Writing before checking whether the harness is open guarantees that either a later open reads this configuration or this request applies it to the open instance.
+                yield* store.write(
+                  request.payload.access,
+                  request.payload.hostToken && Redacted.value(request.payload.hostToken),
+                )
+                if ((yield* host.state).isOpen) {
+                  const harness = yield* Cell.acquire
+                  yield* harness.configure(request.payload.access.endpoints)
+                }
+              }),
+            )
+          }),
+        ),
       )
       .handle("brain.removeModels", () =>
-        Effect.gen(function* () {
-          const store = yield* ModelStore.Service
-          const activity = yield* Cell.Activity
-          const host = yield* Harness.Service
-          yield* activity.configuring.withPermit(
-            Effect.gen(function* () {
-              yield* store.remove
-              if ((yield* host.state).isOpen) {
-                const harness = yield* Cell.acquire
-                yield* harness.configure([])
-              }
-            }),
-          )
-        }).pipe(Effect.scoped, Effect.provide(context)),
+        handle(
+          Effect.gen(function* () {
+            const store = yield* ModelStore.Service
+            const activity = yield* Cell.Activity
+            const host = yield* Harness.Service
+            yield* activity.configuring.withPermit(
+              Effect.gen(function* () {
+                yield* store.remove
+                if ((yield* host.state).isOpen) {
+                  const harness = yield* Cell.acquire
+                  yield* harness.configure([])
+                }
+              }),
+            )
+          }),
+        ),
       )
-      .handle("brain.state", () => Cell.state.pipe(Effect.provide(context)))
+      .handle("brain.sync", () =>
+        handle(
+          Effect.gen(function* () {
+            const sync = yield* Sync.Service
+            return { drained: yield* sync.flush }
+          }),
+        ),
+      )
+      .handle("brain.state", () => handle(Cell.state))
   }),
 )
 

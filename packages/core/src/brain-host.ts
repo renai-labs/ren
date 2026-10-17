@@ -1,6 +1,6 @@
 export * as BrainHost from "./brain-host.js"
 
-import { BrainApi, type StartBody } from "@ren/host-api/brain-api"
+import { BrainApi, type StartBody, type Synced } from "@ren/host-api/brain-api"
 import {
   BrainRejectedError,
   EnvironmentNotFoundError,
@@ -66,6 +66,10 @@ export interface Interface {
     sessionId: Session.ID,
     organizationId: Auth.OrganizationID,
   ) => Effect.Effect<void, BrainUnavailable | BrainRejectedError>
+  readonly flush: (
+    sessionId: Session.ID,
+    organizationId: Auth.OrganizationID,
+  ) => Effect.Effect<Synced, BrainUnavailable | BrainRejectedError>
   readonly authenticateHost: (hostToken: Redacted.Redacted) => Effect.Effect<CurrentHost["Service"], ForbiddenError>
   readonly refreshModels: (host: CurrentHost["Service"]) => Effect.Effect<Brain.ModelGrant, ModelsUnavailableError>
   readonly refreshHostToken: (host: CurrentHost["Service"]) => Effect.Effect<Host.Refreshed>
@@ -266,6 +270,9 @@ export const layer = Layer.effect(
         const cleared = yield* Effect.exit(call(subject, brain.brain["brain.removeModels"]()))
         yield* models.revoke(subject).pipe(Effect.mapError((cause) => new BrainUnavailable({ cause })))
         return yield* cleared
+      }),
+      flush: Effect.fn("BrainHost.flush")(function* (sessionId: Session.ID, organizationId: Auth.OrganizationID) {
+        return yield* call({ sessionId, organizationId }, brain.brain["brain.sync"]())
       }),
       authenticateHost: Effect.fn("BrainHost.authenticateHost")(function* (hostToken: Redacted.Redacted) {
         const claims = yield* SessionToken.verify(Redacted.value(config.keys), Redacted.value(hostToken))

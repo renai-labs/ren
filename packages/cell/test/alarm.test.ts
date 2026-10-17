@@ -18,8 +18,10 @@ import {
   Stream,
 } from "effect"
 import { TestClock } from "effect/testing"
+import { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { Cell } from "../src/cell.js"
 import { Harness } from "../src/harness/harness.js"
+import { Sync } from "../src/sync.js"
 import { BrainTest } from "./lib/brain.js"
 import { Shared } from "./lib/shared.js"
 
@@ -32,13 +34,21 @@ const setup = Effect.gen(function* () {
     alarm: number | null
     reading: Effect.Effect<void>
     closing: Effect.Effect<void>
-  } = { snapshots: [], alarm: null, reading: Effect.void, closing: Effect.void }
+    steps: Array<Effect.Effect<OpenCodeSync.Step, OpenCodeSync.SyncError>>
+  } = { snapshots: [], alarm: null, reading: Effect.void, closing: Effect.void, steps: [] }
   const activity = Cell.Activity.of({
     requests: yield* Ref.make(0),
     wait: yield* FiberHandle.make<void>(),
     waitingSince: yield* Ref.make(Option.none<DateTime.Utc>()),
     configuring: yield* Semaphore.make(1),
+    closedIdle: yield* Ref.make(false),
   })
+  const sync = yield* Sync.make(
+    Option.some({
+      step: () => Effect.suspend(() => current.steps.shift() ?? Effect.succeed({ drained: true })),
+      exclusive: (effect) => effect,
+    }),
+  )
   const info = Cell.Info.of({
     sessionId: Session.ID.create(),
     vars: {
@@ -89,11 +99,12 @@ const setup = Effect.gen(function* () {
     current,
     activity,
     harness,
-    run: <A, E, R>(effect: Effect.Effect<A, E, R | Cell.Info | Cell.Activity | Harness.Service>) =>
+    run: <A, E, R>(effect: Effect.Effect<A, E, R | Cell.Info | Cell.Activity | Harness.Service | Sync.Service>) =>
       effect.pipe(
         Effect.provideService(Cell.Info, info),
         Effect.provideService(Cell.Activity, activity),
         Effect.provideService(Harness.Service, harness),
+        Effect.provideService(Sync.Service, sync),
       ),
     session: (fields: Partial<Effect.Success<Harness.Instance["sessions"]>[number]> = {}) => ({
       id: "root",
@@ -391,14 +402,39 @@ opencode.effect(
     }),
 )
 
-test.todo(
-  "a sync step that is not drained sets the next alarm at 250 ms, or at the O4 limit of the first busy session",
-  () => {},
+const unavailable = new OpenCodeSync.SyncError({ reason: "unavailable", message: "Ren is down" })
+
+test.each<[string, boolean, OpenCodeSync.Step, number | null]>([
+  ["an idle host after a step that is not drained", false, { drained: false }, 250],
+  ["an idle host after the O4 limit held a busy session", false, { drained: false, throttledUntil: 120_000 }, 120_000],
+  ["an idle host after a drained step", false, { drained: true }, null],
+  ["unfinished work after a step that is not drained", true, { drained: false }, 250],
+  ["unfinished work after the O4 limit held a busy session", true, { drained: false, throttledUntil: 120_000 }, 30_000],
+])(
+  "a sync step that is not drained sets the next alarm at 250 ms, or at the O4 limit of the first busy session: %s",
+  (_name, unfinished, step, alarm) =>
+    Effect.gen(function* () {
+      const cell = yield* setup
+      cell.current.snapshots = [cell.session({ unfinished })]
+      cell.current.steps = [Effect.succeed(step)]
+      yield* cell.run(Cell.alarm())
+      expect(cell.current.alarm).toBe(alarm)
+    }).pipe(Effect.scoped, Effect.provide(TestClock.layer()), Effect.runPromise),
 )
 
-test.todo(
-  "sync steps that fail set the next alarm with exponential backoff and jitter from 1 s to 5 min, and a step that succeeds resets the backoff",
-  () => {},
+it.effect("the alarm stays set while sync is not drained, also after reconcile closed OpenCode", () =>
+  Effect.gen(function* () {
+    const cell = yield* setup
+    cell.current.snapshots = [cell.session()]
+    cell.current.steps = [Effect.succeed({ drained: false }), Effect.fail(unavailable), Effect.succeed({ drained: true })]
+    const fire = Effect.sync(() => {
+      cell.current.alarm = null
+    }).pipe(Effect.andThen(cell.run(Cell.alarm())), Effect.andThen(Effect.sync(() => cell.current.alarm)))
+    expect(yield* fire).toBe(250)
+    expect(cell.events).toEqual(["open", "close", "rearm"])
+    expect(yield* fire).toBeGreaterThanOrEqual(1000)
+    expect(yield* fire).toBeNull()
+    expect(cell.events).toEqual(["open", "close", "rearm", "rearm"])
+    expect(yield* cell.harness.state).toEqual({ isOpen: false, holders: 0 })
+  }),
 )
-
-test.todo("the alarm stays set while sync is not drained, also after reconcile closed OpenCode", () => {})
