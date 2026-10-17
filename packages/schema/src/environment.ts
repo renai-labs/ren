@@ -9,10 +9,20 @@ export type ID = typeof ID.Type
 
 export const sessionDirectory = (sessionId: Session.ID) => `/workspace/${sessionId}`
 
+export const Capability = Schema.Literals(["processes", "files"]).annotate({ identifier: "Environment.Capability" })
+export type Capability = typeof Capability.Type
+
+export const capabilities: ReadonlyArray<Capability> = ["files", "processes"]
+
 export interface Location extends Schema.Schema.Type<typeof Location> {}
 export const Location = Schema.Struct({
   environmentId: ID,
   directory: Schema.String.check(Schema.isStartingWith("/")),
+  capabilities: Schema.optionalKey(
+    Schema.Array(Capability).annotate({
+      description: "What the environment’s executors can do. Without it, they can do everything.",
+    }),
+  ),
 }).annotate({ identifier: "Environment.Location" })
 
 export interface Access extends Schema.Schema.Type<typeof Access> {}

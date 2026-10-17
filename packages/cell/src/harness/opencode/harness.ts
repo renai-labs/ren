@@ -21,17 +21,37 @@ import { InstructionEntries } from "./instruction-entries.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { RenWorkspaceDriver } from "./ren-workspace-driver.js"
 
-const environmentActions = ["read", "edit", "glob", "grep", "shell"]
+const toolsByCapability: Readonly<Record<Environment.Capability, ReadonlyArray<string>>> = {
+  files: ["read", "edit", "glob", "grep"],
+  processes: ["shell"],
+}
+
+const environmentActions = Environment.capabilities.flatMap((capability) => toolsByCapability[capability])
+
+interface Placement {
+  readonly isOnEnvironment: boolean
+  readonly capabilities: ReadonlyArray<Environment.Capability>
+}
+
+const missingNotes: Readonly<Record<Environment.Capability, string>> = {
+  files: "The sandbox gives no file access, so the read, write, edit, patch, glob and grep tools are off.",
+  processes: "The sandbox runs no commands, so the shell tool is off.",
+}
 
 const environmentInstruction = "ren.environment"
 
 const notSupported = (sessionId: string) =>
   new BrainRejectedError({ message: `Session ${sessionId} cannot change its environment: not supported yet` })
 
-const environmentInstructions = (host: Host.Instance, sessionId: StartInput["sessionId"], isOnEnvironment: boolean) => {
-  if (isOnEnvironment)
+const environmentInstructions = (host: Host.Instance, sessionId: StartInput["sessionId"], placement: Placement) => {
+  if (placement.isOnEnvironment)
     return {
-      [environmentInstruction]: `Your file and shell tools run on a sandbox, in ${Environment.sessionDirectory(sessionId)}. You have full access to the sandbox.`,
+      [environmentInstruction]: [
+        `Your file and shell tools run on a sandbox, in ${Environment.sessionDirectory(sessionId)}. You have full access to the sandbox.`,
+        ...Environment.capabilities
+          .filter((capability) => !placement.capabilities.includes(capability))
+          .map((capability) => missingNotes[capability]),
+      ].join(" "),
     }
   if (!host.hasEnvironments) return {}
   return {
@@ -40,10 +60,23 @@ const environmentInstructions = (host: Host.Instance, sessionId: StartInput["ses
   }
 }
 
-const deniedActions = (host: Host.Instance, input: StartInput, isOnEnvironment: boolean) => [
+const deniedActions = (host: Host.Instance, input: StartInput, placement: Placement) => [
   ...(input.interactive ? [] : ["question"]),
-  ...(host.hasEnvironments && !isOnEnvironment ? environmentActions : []),
+  ...(host.hasEnvironments && !placement.isOnEnvironment ? environmentActions : []),
+  ...(placement.isOnEnvironment
+    ? Environment.capabilities
+        .filter((capability) => !placement.capabilities.includes(capability))
+        .flatMap((capability) => toolsByCapability[capability])
+    : []),
 ]
+
+const keptCapabilities = (session: Session.Info) =>
+  Environment.capabilities.filter(
+    (capability) =>
+      !toolsByCapability[capability].every((action) =>
+        (session.permissions ?? []).some((rule) => rule.action === action && rule.effect === "deny"),
+      ),
+  )
 
 const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
   client.session.get({ sessionID }).pipe(
@@ -135,7 +168,13 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   const sessionID = Session.ID.make(input.sessionId)
   const session = yield* findSession(client, sessionID)
   const isOnEnvironment = yield* checkEnvironment(host, input, session)
-  const permissions = deniedActions(host, input, isOnEnvironment).map((action) => ({
+  const placement = {
+    isOnEnvironment,
+    capabilities:
+      input.environment?.capabilities ??
+      Option.match(session, { onNone: () => Environment.capabilities, onSome: keptCapabilities }),
+  }
+  const permissions = deniedActions(host, input, placement).map((action) => ({
     action,
     resource: "*",
     effect: "deny" as const,
@@ -156,7 +195,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    { ...input.instructions, ...environmentInstructions(host, input.sessionId, isOnEnvironment) },
+    { ...input.instructions, ...environmentInstructions(host, input.sessionId, placement) },
   )
   yield* Effect.forEach(
     changes.put,

@@ -1,6 +1,6 @@
 # @ren/executor
 
-The executor: a small server on an environment's machine. A brain calls it to run processes and change files, so a session's tools run on the environment and not where the brain runs. It serves the `ExecutorApi` from `@ren/brain-api/executor-api`, an Effect RPC group, at `POST /v1/rpc` (NDJSON). See `specs/environments/v1.md`.
+The executor: a small server on an environment's machine. A brain calls it to run processes and change files, so a session's tools run on the environment and not where the brain runs. It serves the `ExecutorApi` from `@ren/brain-api/executor-api`, an Effect RPC group, at `POST /v1/rpc` (NDJSON).
 
 ## What belongs here
 
@@ -19,7 +19,7 @@ The executor: a small server on an environment's machine. A brain calls it to ru
   - `process.output` takes a `cursor` and replays the log from there, so a reader that lost its connection asks again from the last byte it got. Every reader reads on its own.
   - The executor keeps the last 2 MiB. While a reader is behind, the process waits for it, for at most 15 seconds (three missed pings). Then the executor stops waiting for that reader, the oldest output is dropped, and a reader that asks for it gets the first byte that is still kept, at a higher offset than its cursor.
   - An exited process keeps its log and its exit for 45 seconds after its last read (or its exit, if nobody reads it), longer than a brain's 30-second reconnect window. Across all brains the executor keeps at most 64 MiB of exited output and forgets the oldest first.
-- `process.write` refuses stdin at once with `StdinFullError` while the process's 16-write queue is full; the brain retries. `files.read` without a range and `files.write` refuse more than 32 MiB with `FileTooLargeError`.
+- `process.write` refuses stdin at once with `StdinFullError` while the process's 16-write queue is full; the brain retries. `files.read` without a range and `files.write` refuse more than 8 MiB with `FileTooLargeError`: Effect RPC frames a message in 16 MiB, and bytes travel as base64.
 - A process gets the executor's own environment variables with the request's `env` on top. OpenCode sends a workspace session no base environment.
 - File operations follow OpenCode's local environment: `read` and `list` follow a final symlink, `stat` does not. Errors name the path the caller gave.
 - File paths are not confined to `EXECUTOR_WORKSPACE`: an absolute path, or one with `..`, reaches anywhere the executor's user can. A process can already do so, so the workspace is where relative paths start, not a boundary.
