@@ -18,6 +18,12 @@ export class SessionNotStartedError extends Schema.TaggedError<SessionNotStarted
   { httpApiStatus: 409 },
 ) {}
 
+export class StaleUploadError extends Schema.TaggedError<StaleUploadError>()(
+  "StaleUploadError",
+  { message: Schema.String },
+  { httpApiStatus: 409 },
+) {}
+
 export class ModelsNotConfiguredError extends Schema.TaggedError<ModelsNotConfiguredError>()(
   "ModelsNotConfiguredError",
   { message: Schema.String },

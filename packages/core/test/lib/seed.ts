@@ -4,6 +4,7 @@ import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { EnvironmentProvider } from "@ren/schema/environment-provider"
+import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { and, eq } from "drizzle-orm"
@@ -42,6 +43,41 @@ export const member = Effect.fnUntraced(function* (
   yield* database.db
     .insert(Database.Schema.member)
     .values({ id: Auth.MemberID.create(), organizationId, userId, role, createdAt: new Date() })
+})
+
+const space = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
+  const database = yield* Database.Service
+  const id = Space.ID.create()
+  yield* database.db.insert(Database.Schema.space).values({ id, organization_id: organizationId, name: "Team" })
+  return id
+})
+
+export const owner = Effect.fnUntraced(function* () {
+  const organizationId = yield* organization()
+  const creator = yield* user()
+  return { organizationId, spaceId: yield* space(organizationId), createdBy: creator.id }
+})
+
+export const session = Effect.fnUntraced(function* (
+  owner: {
+    readonly organizationId: Auth.OrganizationID
+    readonly spaceId: Space.ID
+    readonly createdBy: Auth.UserID
+  },
+  start: Omit<Partial<Session.StartInput>, "initialMessage"> = {},
+) {
+  const database = yield* Database.Service
+  const id = start.sessionId ?? Session.ID.create()
+  yield* database.db.insert(Database.Schema.agent_session).values({
+    id,
+    organization_id: owner.organizationId,
+    space_id: owner.spaceId,
+    created_by: owner.createdBy,
+    root_id: id,
+    harness: "opencode",
+    start_input: { sessionId: id, harness: "opencode", ...start },
+  })
+  return id
 })
 
 export const invitation = Effect.fnUntraced(function* (input: {
