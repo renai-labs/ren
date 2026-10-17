@@ -9,6 +9,7 @@ import type { LayerNode } from "@opencode/util/effect/layer-node"
 import {
   FileNotFoundError,
   orphanAfter,
+  pingEvery,
   type ProcessEvent,
   stallAfter,
   WrongKindError,
@@ -47,12 +48,16 @@ export class NoEnvironment extends Schema.TaggedError<NoEnvironment>()("OpenCode
   message: Schema.String,
 }) {}
 
+const withoutTrailingSlash = (path: string) => path.replace(/(?<=.)\/+$/, "")
+
 export const physicalPath = (sessionDirectory: string, directory: string) => {
-  const prefix = sessionDirectory.endsWith("/") ? sessionDirectory : `${sessionDirectory}/`
-  const root = directory.endsWith("/") ? directory : `${directory}/`
+  const from = withoutTrailingSlash(sessionDirectory)
+  const to = withoutTrailingSlash(directory)
+  const prefix = from === "/" ? from : `${from}/`
+  const root = to === "/" ? to : `${to}/`
   return (path: string) => {
-    if (sessionDirectory === directory) return path
-    if (path === sessionDirectory) return directory
+    if (from === to) return path
+    if (withoutTrailingSlash(path) === from) return to
     if (!path.startsWith(prefix)) return path
     return `${root}${path.slice(prefix.length)}`
   }
@@ -64,6 +69,16 @@ const lostNotice = (bytes: number) =>
   new TextEncoder().encode(`\n[environment reconnected: ${bytes} bytes of output were lost]\n`)
 
 export const reconnectAfter = Duration.seconds(1)
+
+const posixShells = new Set(["sh", "bash", "zsh", "dash", "ksh"])
+
+const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1)
+
+const runnable = (shells: ReadonlyArray<string> = [], command: string, args: ReadonlyArray<string>) => {
+  const isShellScript = args.at(0) === "-c" && posixShells.has(baseName(command))
+  if (!isShellScript || shells.some((shell) => baseName(shell) === baseName(command))) return command
+  return shells.at(0) ?? command
+}
 
 class OutputInterrupted extends Schema.TaggedError<OutputInterrupted>()("OpenCodeWorkspaceDriver.OutputInterrupted", {
   message: Schema.String,
@@ -95,7 +110,7 @@ export const spawner = (connection: Environments.Connection) =>
       const hasStdin = Boolean(stdinStream) || !stdinConfig.stream || stdinConfig.stream === "pipe"
       const shouldEndStdin = stdinConfig.endOnDone !== false
       const remoteProcess = yield* executor["process.spawn"]({
-        command: command.command,
+        command: runnable(connection.hello.shells, command.command, command.args),
         arguments: command.args,
         hasStdin,
         variables: Record.filter(command.options.env ?? {}, Predicate.isString),
@@ -118,6 +133,12 @@ export const spawner = (connection: Environments.Connection) =>
               : executor["process.kill"]({ id: remoteProcess.id, signal: "SIGKILL" }).pipe(Effect.ignore),
           ),
         ),
+      )
+      yield* executor["process.heartbeat"]({ id: remoteProcess.id }).pipe(
+        Effect.ignore,
+        Effect.repeat(Schedule.spaced(pingEvery)),
+        Effect.raceFirst(Deferred.await(exited)),
+        Effect.forkScoped,
       )
       const position = yield* Ref.make(0)
       const contactAt = yield* Ref.make(yield* Clock.currentTimeMillis)

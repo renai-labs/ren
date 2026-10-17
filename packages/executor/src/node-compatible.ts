@@ -37,7 +37,8 @@ import {
   Stream,
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises"
+import { constants } from "node:fs"
+import { access, lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises"
 import { basename, dirname, join, resolve } from "node:path"
 import manifest from "../package.json"
 import { Executor } from "./executor.js"
@@ -65,6 +66,7 @@ interface Entry {
   exit: ExitEvent | undefined
   failure: Cause.Cause<never> | undefined
   seenAt: number
+  isHeartbeating: boolean
 }
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
@@ -103,6 +105,22 @@ export const layer = Layer.effect(
       workspaceDirectory: Config.String("EXECUTOR_WORKSPACE").pipe(Config.withDefault(process.cwd())),
     })
     const workspace = yield* Effect.promise(() => realpath(resolve(config.workspaceDirectory)))
+    const shells = yield* Effect.filter(
+      [
+        ...new Set(
+          [process.env.SHELL, "/bin/bash", "/usr/bin/bash", "/bin/zsh", "/usr/bin/zsh", "/bin/dash", "/bin/sh"].filter(
+            (candidate): candidate is string => Boolean(candidate),
+          ),
+        ),
+      ],
+      (candidate) =>
+        Effect.promise(() =>
+          access(candidate, constants.X_OK).then(
+            () => true,
+            () => false,
+          ),
+        ),
+    )
     const path = (value: string) => resolve(workspace, value)
     const describe = (value: string, followLink: boolean) =>
       attemptFound(value, () => (followLink ? stat(path(value)) : lstat(path(value)))).pipe(
@@ -136,6 +154,8 @@ export const layer = Layer.effect(
       if ([...entry.positions.values()].some((position) => position < end)) {
         const advanced = yield* PubSub.take(entry.advanced).pipe(Effect.timeoutOption(stallAfter))
         if (Option.isSome(advanced)) return yield* trim(entry)
+        for (const reader of entry.positions.keys())
+          if ((entry.positions.get(reader) ?? end) < end) entry.positions.delete(reader)
       }
       entry.chunks.shift()
       return yield* trim(entry)
@@ -169,7 +189,10 @@ export const layer = Layer.effect(
     yield* Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const orphans = [...processes.values()].filter(
-        (entry) => !entry.exit && entry.positions.size === 0 && now - entry.seenAt >= Duration.toMillis(orphanAfter),
+        (entry) =>
+          !entry.exit &&
+          (entry.positions.size === 0 || entry.isHeartbeating) &&
+          now - entry.seenAt >= Duration.toMillis(orphanAfter),
       )
       yield* Effect.forEach(orphans, release, { discard: true })
     }).pipe(Effect.repeat(Schedule.spaced(Duration.seconds(1))), Effect.forkIn(scope))
@@ -210,6 +233,7 @@ export const layer = Layer.effect(
         exit: undefined,
         failure: undefined,
         seenAt: yield* Clock.currentTimeMillis,
+        isHeartbeating: false,
       }
       processes.set(id, entry)
       const tagged = (stream: Stream.Stream<Uint8Array, PlatformError.PlatformError>, type: Chunk["type"]) =>
@@ -295,6 +319,11 @@ export const layer = Layer.effect(
       if (end) yield* Queue.end(stdin)
     })
 
+    const heartbeat = Effect.fn("Executor.heartbeat")(function* (brain: Brain.ID, id: ProcessID) {
+      const entry = yield* find(brain, id)
+      entry.isHeartbeating = true
+    })
+
     const kill = Effect.fn("Executor.kill")(function* (
       brain: Brain.ID,
       id: ProcessID,
@@ -322,10 +351,12 @@ export const layer = Layer.effect(
         workspaceDirectory: workspace,
         os: process.platform,
         arch: process.arch,
+        shells,
       },
       spawn,
       output,
       writeStdin,
+      heartbeat,
       kill,
       read: Effect.fn("Executor.read")(function* (value: string, range?: Range) {
         const info = yield* describe(value, true)

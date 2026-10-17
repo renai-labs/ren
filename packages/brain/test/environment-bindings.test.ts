@@ -7,8 +7,9 @@ import { Server } from "@ren/executor/server"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
+import { ConfigProvider, Context, DateTime, Effect, Exit, Layer, Option, Schedule, Schema, Scope, Stream } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
+import { ChildProcess } from "effect/process"
 import { KeyValueStore } from "effect/persistence"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -24,7 +25,7 @@ const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-bindings-")))
 await mkdir(join(workspace, "project"))
 await Bun.write(join(workspace, "project/notes.md"), "on the environment\n")
-const it = testEffect(
+const executor = () =>
   HttpRouter.serve(Server.layer, { disableLogger: true }).pipe(
     Layer.provide(HttpServer.layerServices),
     Layer.provide(NodeCompatible.layer),
@@ -39,8 +40,8 @@ const it = testEffect(
       ),
     ),
     Layer.provideMerge(BunHttpServer.layer({ port: 0, hostname: "127.0.0.1" })),
-  ),
-)
+  )
+const it = testEffect(executor())
 
 const build = Effect.fnUntraced(function* (store: Layer.Layer<KeyValueStore.KeyValueStore>) {
   const server = yield* HttpServer.HttpServer
@@ -138,4 +139,106 @@ test("maps paths under the session's directory onto the environment's directory"
   expect(physical("/workspaces/other")).toBe("/workspaces/other")
   expect(physical("/tmp/out")).toBe("/tmp/out")
   expect(physical("relative/a.ts")).toBe("relative/a.ts")
+})
+
+const replaceable = Effect.gen(function* () {
+  const server = yield* HttpServer.HttpServer
+  const brain = Brain.ID.create()
+  const expiresAt = DateTime.makeUnsafe(Date.now() + 600_000)
+  const access = {
+    environmentId,
+    url: HttpServer.formatAddress(server.address),
+    token: yield* EnvironmentToken.sign(pair.privateKey, {
+      env: environmentId,
+      brain,
+      exp: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000),
+    }),
+    expiresAt,
+    generation: 1,
+  }
+  const context = yield* Layer.build(
+    EnvironmentBindings.layer.pipe(
+      Layer.provideMerge(Environments.layer),
+      Layer.provideMerge(EnvironmentAccess.layerMemory([access])),
+      Layer.provide(FetchHttpClient.layer),
+      Layer.provide(KeyValueStore.layerMemory),
+    ),
+  )
+  const sessionId = Session.ID.create()
+  const bindings = Context.get(context, EnvironmentBindings.Service)
+  yield* bindings.set(sessionId, { sessionDirectory: "/workspace", location: { environmentId, directory: project } })
+  const replacement = yield* Scope.make()
+  const next = Context.get(yield* Layer.buildWithScope(Layer.fresh(executor()), replacement), HttpServer.HttpServer)
+  return {
+    connection: OpenCodeWorkspaceDriver.sessionConnection(
+      Context.get(context, Environments.Service),
+      bindings,
+      sessionId,
+    ),
+    replace: Context.get(context, EnvironmentAccess.Memory).set({
+      ...access,
+      url: HttpServer.formatAddress(next.address),
+      generation: 2,
+    }),
+    stopReplacement: Scope.close(replacement, Exit.void),
+  }
+})
+
+const text = (stream: Stream.Stream<Uint8Array, unknown>) => Stream.decodeText(stream).pipe(Stream.mkString)
+
+const isGone = (pid: number) =>
+  Effect.sync(() => {
+    try {
+      process.kill(pid, 0)
+      return false
+    } catch {
+      return true
+    }
+  }).pipe(Effect.repeat({ until: (gone) => gone, schedule: Schedule.spaced(50) }), Effect.timeout(5_000))
+
+it.live(
+  "a command started before a replacement finishes there and returns its result, and the next goes to the new machine",
+  () =>
+    Effect.gen(function* () {
+      const subject = yield* replaceable
+      const old = yield* subject.connection.spawner.spawn(
+        ChildProcess.make("sh", ["-c", "sleep 0.5; echo old; exit 6"]),
+      )
+      yield* subject.replace
+      yield* Effect.sleep(100)
+      const next = yield* subject.connection.spawner.spawn(ChildProcess.make("sh", ["-c", "echo new"]))
+      expect(yield* text(next.stdout)).toBe("new\n")
+      expect(yield* text(old.stdout)).toBe("old\n")
+      expect(Number(yield* old.exitCode)).toBe(6)
+      yield* subject.stopReplacement
+      const after = yield* subject.connection.spawner.spawn(ChildProcess.make("true", [])).pipe(Effect.flip)
+      expect(after.reason._tag).toBe("Unknown")
+    }),
+)
+
+it.live("stopping a command after a replacement still kills it on the old machine", () =>
+  Effect.gen(function* () {
+    const subject = yield* replaceable
+    const scope = yield* Scope.make()
+    const old = yield* subject.connection.spawner.spawn(ChildProcess.make("sleep", ["30"])).pipe(Scope.provide(scope))
+    yield* subject.replace
+    yield* Effect.sleep(100)
+    yield* Scope.close(scope, Exit.void)
+    expect(yield* isGone(old.pid)).toBe(true)
+  }),
+)
+
+test("maps a session directory saved with a trailing slash, and the root directory", () => {
+  const trailing = OpenCodeWorkspaceDriver.physicalPath("/workspace/", "/home/ren/project")
+  expect(trailing("/workspace")).toBe("/home/ren/project")
+  expect(trailing("/workspace/src/a.ts")).toBe("/home/ren/project/src/a.ts")
+  const toTrailing = OpenCodeWorkspaceDriver.physicalPath("/workspace", "/home/ren/project/")
+  expect(toTrailing("/workspace")).toBe("/home/ren/project")
+  expect(toTrailing("/workspace/a.ts")).toBe("/home/ren/project/a.ts")
+  const root = OpenCodeWorkspaceDriver.physicalPath("/", "/home/ren/project")
+  expect(root("/")).toBe("/home/ren/project")
+  expect(root("/a.ts")).toBe("/home/ren/project/a.ts")
+  const toRoot = OpenCodeWorkspaceDriver.physicalPath("/workspace", "/")
+  expect(toRoot("/workspace")).toBe("/")
+  expect(toRoot("/workspace/a.ts")).toBe("/a.ts")
 })

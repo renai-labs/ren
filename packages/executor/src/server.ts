@@ -63,6 +63,7 @@ const operations = ExecutorApi.toLayer(
         Stream.unwrap(Effect.flatMap(Caller, (caller) => executor.output(caller.brain, input.id, input.cursor))),
       "process.write": (input) =>
         Effect.flatMap(Caller, (caller) => executor.writeStdin(caller.brain, input.id, input.data, input.end ?? false)),
+      "process.heartbeat": (input) => Effect.flatMap(Caller, (caller) => executor.heartbeat(caller.brain, input.id)),
       "process.kill": (input) =>
         Effect.flatMap(Caller, (caller) =>
           executor.kill(caller.brain, input.id, input.signal ?? "SIGTERM", input.forceKillAfterMs),

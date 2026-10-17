@@ -19,18 +19,23 @@ export type Client = RpcClient.RpcClient<RpcGroup.Rpcs<typeof ExecutorApi>, RpcC
 export interface Options {
   readonly url: string
   readonly token: Effect.Effect<string>
+  readonly renew?: Effect.Effect<void>
 }
+
+const unauthorized = () => Effect.fail(new UnauthorizedError({ message: "Authentication required" }))
 
 const layer = (options: Options) =>
   Layer.mergeAll(
     RpcMiddleware.layerClient(Authentication, (call) =>
-      call
-        .next(call.request)
-        .pipe(
-          Effect.catchIf(isUnauthorizedResponse, () =>
-            Effect.fail(new UnauthorizedError({ message: "Authentication required" })),
-          ),
-        ),
+      call.next(call.request).pipe(
+        Effect.catchIf(isUnauthorizedResponse, () => {
+          if (!options.renew) return unauthorized()
+          return options.renew.pipe(
+            Effect.andThen(call.next(call.request)),
+            Effect.catchIf(isUnauthorizedResponse, unauthorized),
+          )
+        }),
+      ),
     ),
     Layer.effect(
       RpcClient.Protocol,

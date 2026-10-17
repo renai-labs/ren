@@ -33,6 +33,7 @@ export interface Interface {
     data: Uint8Array,
     end: boolean,
   ) => Effect.Effect<void, ProcessNotFoundError | OperationFailedError>
+  readonly heartbeat: (brain: Brain.ID, id: ProcessID) => Effect.Effect<void, ProcessNotFoundError>
   readonly kill: (
     brain: Brain.ID,
     id: ProcessID,
