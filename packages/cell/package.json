@@ -6,7 +6,8 @@
   "type": "module",
   "license": "UNLICENSED",
   "exports": {
-    "./testing": "./test/lib/testing.ts"
+    "./testing": "./test/lib/testing.ts",
+    "./testing/brain": "./test/lib/brain.ts"
   },
   "scripts": {
     "deploy:celld": "celld deploy",
