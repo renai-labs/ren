@@ -2,7 +2,13 @@ import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Schema, Struct } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
-import { BrainRejectedError, ForbiddenError, ModelsNotConfiguredError, SessionNotStartedError } from "./errors.js"
+import {
+  BrainRejectedError,
+  ForbiddenError,
+  ModelsNotConfiguredError,
+  SessionNotStartedError,
+  SyncUnavailableError,
+} from "./errors.js"
 
 export const ModelsBody = Schema.Struct({
   access: Models.Access,
@@ -20,7 +26,7 @@ const BrainGroup = HttpApiGroup.make("brain")
     HttpApiEndpoint.post("brain.start", "/ren/sessions", {
       payload: Session.StartInput,
       success: Session.Started,
-      error: [ForbiddenError, BrainRejectedError, ModelsNotConfiguredError],
+      error: [ForbiddenError, BrainRejectedError, ModelsNotConfiguredError, SyncUnavailableError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.start",

@@ -7,6 +7,6 @@
     "incremental": true,
     "tsBuildInfoFile": "node_modules/.ts-dist/test-worker.tsbuildinfo"
   },
-  "include": ["test/lib/sync-storage-worker.ts", "test/lib/opencode-rows.ts"],
+  "include": ["test/lib/sync-storage-worker.ts"],
   "references": [{ "path": "./tsconfig.worker.json" }]
 }

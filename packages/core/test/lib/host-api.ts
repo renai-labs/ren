@@ -1,6 +1,7 @@
 export * as HostApiTest from "./host-api.js"
 
 import { CurrentHost, HostApi } from "@ren/brain-api/host-api"
+import { SyncApi } from "@ren/brain-api/sync-api"
 import { Effect, Layer } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { BrainHost } from "../../src/brain-host.js"
@@ -30,5 +31,20 @@ const handlers = (around: Around) =>
     ),
   )
 
+const forgetful = HttpApiBuilder.group(SyncApi, "sync", (group) =>
+  Effect.succeed(
+    group
+      .handle("sync.checkpoints", () => Effect.succeed({ sessions: [] }))
+      .handle("sync.startUpload", () => Effect.succeed({ upload: 1 }))
+      .handle("sync.uploadMessages", () => Effect.void)
+      .handle("sync.commit", () => Effect.void)
+      .handle("sync.restore", () => Effect.succeed({ sessions: [] }))
+      .handle("sync.messages", () => Effect.succeed({ messages: [], next: null })),
+  ),
+)
+
 export const layer = (around: Around = (_endpoint, effect) => effect) =>
-  HttpApiBuilder.layer(HostApi).pipe(Layer.provide(handlers(around)), Layer.provide(BrainHost.hostAuthentication))
+  Layer.mergeAll(
+    HttpApiBuilder.layer(HostApi).pipe(Layer.provide(handlers(around))),
+    HttpApiBuilder.layer(SyncApi).pipe(Layer.provide(forgetful)),
+  ).pipe(Layer.provide(BrainHost.hostAuthentication))

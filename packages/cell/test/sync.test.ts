@@ -15,6 +15,7 @@ const scripted = Effect.fnUntraced(function* () {
     Option.some({
       step: () => Effect.suspend(() => steps.shift() ?? Effect.succeed({ drained: true })),
       exclusive: (effect) => effect,
+      restore: () => Effect.void,
     }),
   )
   const next = (step: Effect.Effect<OpenCodeSync.Step, OpenCodeSync.SyncError>) =>
@@ -60,17 +61,21 @@ it.effect("a step that is not drained retries in 250 ms, or when the O4 limit le
   }),
 )
 
-it.effect("a flush retries until it drains, and stops at a failed pass or at a busy session held past its deadline", () =>
-  Effect.gen(function* () {
-    const subject = yield* scripted()
-    subject.steps.push(Effect.succeed({ drained: false, failed: true }))
-    expect(yield* subject.sync.flush).toBe(false)
-    subject.steps.push(Effect.succeed({ drained: false, throttledUntil: Duration.toMillis(OpenCodeSync.busyInterval) }))
-    expect(yield* subject.sync.flush).toBe(false)
-    subject.steps.push(Effect.succeed({ drained: false }))
-    const flushing = yield* Effect.forkChild(subject.sync.flush)
-    yield* TestClock.adjust(250)
-    expect(yield* Fiber.join(flushing)).toBe(true)
-    expect(subject.steps).toEqual([])
-  }),
+it.effect(
+  "a flush retries until it drains, and stops at a failed pass or at a busy session held past its deadline",
+  () =>
+    Effect.gen(function* () {
+      const subject = yield* scripted()
+      subject.steps.push(Effect.succeed({ drained: false, failed: true }))
+      expect(yield* subject.sync.flush).toBe(false)
+      subject.steps.push(
+        Effect.succeed({ drained: false, throttledUntil: Duration.toMillis(OpenCodeSync.busyInterval) }),
+      )
+      expect(yield* subject.sync.flush).toBe(false)
+      subject.steps.push(Effect.succeed({ drained: false }))
+      const flushing = yield* Effect.forkChild(subject.sync.flush)
+      yield* TestClock.adjust(250)
+      expect(yield* Fiber.join(flushing)).toBe(true)
+      expect(subject.steps).toEqual([])
+    }),
 )

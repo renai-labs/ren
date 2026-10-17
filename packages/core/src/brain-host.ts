@@ -9,6 +9,7 @@ import {
   type ModelsNotConfiguredError,
   ModelsUnavailableError,
   type SessionNotStartedError,
+  SyncUnavailableError,
 } from "@ren/brain-api/errors"
 import { SessionToken } from "@ren/brain-api/session-token"
 import type { Auth } from "@ren/schema/auth"
@@ -137,7 +138,8 @@ export const layer = Layer.effect(
       effect.pipe(
         Effect.provideService(Target, target),
         Effect.retry({
-          while: (error) => HttpClientError.isHttpClientError(error) && unavailable(error),
+          while: (error) =>
+            error instanceof SyncUnavailableError || (HttpClientError.isHttpClientError(error) && unavailable(error)),
           schedule: Schedule.exponential("200 millis"),
           times: 3,
         }),
@@ -243,6 +245,7 @@ export const layer = Layer.effect(
           onSome: (found) => Struct.assign(input, { environment: found.location }),
         })
         return yield* withModels(subject, call(subject, brain.brain["brain.start"]({ payload }))).pipe(
+          Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainUnavailable({ cause }))),
           Effect.tapErrorTag("BrainRejectedError", () =>
             Option.exists(binding, (found) => found.isNew) ? environments.unbind(input.sessionId) : Effect.void,
           ),
