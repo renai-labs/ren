@@ -1,4 +1,6 @@
 export { Celld } from "./celld.js"
 export { Shared } from "./shared.js"
 export { StubModel } from "./stub-model.js"
+export { TestCell } from "./test-cell.js"
 export { TestToken } from "./token.js"
+export { Wrangler } from "./wrangler.js"
