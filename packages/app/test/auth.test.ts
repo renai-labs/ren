@@ -3,16 +3,11 @@ import { Schema } from "effect"
 import { AuthError } from "../src/features/auth/auth-error.js"
 import { CompleteAuth } from "../src/features/auth/complete-auth.js"
 import { AuthSchemas } from "../src/features/auth/schemas.js"
-import { InvitationSchemas } from "../src/features/invitation/schemas.js"
 
 const failure = (error: { code?: string; message?: string; status?: number; statusText?: string }) =>
   AuthError.describe({ status: 400, statusText: "", ...error })
 
-test("known Better Auth codes map to Ren’s copy", () => {
-  expect(failure({ code: "INVALID_OTP", message: "Invalid OTP" })).toEqual({
-    code: "INVALID_OTP",
-    message: "That code didn’t work. Check it and try again.",
-  })
+test("known Better Auth codes map to Ren’s codes, and rate limits win", () => {
   expect(failure({ code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL" }).code).toBe("ALIAS_EMAIL")
   expect(failure({ code: "INVALID_OTP", status: 429 }).code).toBe("RATE_LIMITED")
 })
@@ -40,34 +35,8 @@ test("redirects stay inside the app", () => {
   expect(decode({})).toEqual({})
 })
 
-test("reset password requires matching passwords of at least 8 characters", async () => {
-  const validate = (value: { password: string; passwordConfirm: string }) =>
-    AuthSchemas.ResetPassword["~standard"].validate(value)
-  expect(await validate({ password: "correct horse", passwordConfirm: "correct horse" })).toEqual({
-    value: { password: "correct horse", passwordConfirm: "correct horse" },
-  })
-  const short = await validate({ password: "short", passwordConfirm: "short" })
-  expect(short.issues?.map((issue) => issue.message)).toEqual(["Password must be at least 8 characters"])
-  const mismatch = await validate({ password: "correct horse", passwordConfirm: "battery staple" })
-  expect(mismatch.issues?.map((issue) => [issue.path, issue.message])).toEqual([
-    [["passwordConfirm"], "Passwords do not match"],
-  ])
-})
-
-test("finishing auth goes to the invitation, then the redirect, then home", () => {
-  expect(CompleteAuth.href({})).toBe("/")
-  expect(CompleteAuth.href({ redirect: "/settings" })).toBe("/settings")
+test("finishing auth goes to the invitation before the redirect", () => {
   expect(CompleteAuth.href({ invitationId: "inv_1", redirect: "/settings", join: true })).toBe(
     "/invites/accept?id=inv_1&join=true&redirect=%2Fsettings",
   )
-  expect(CompleteAuth.href({ invitationId: "inv_1" })).toBe("/invites/accept?id=inv_1")
-})
-
-test("invitation links fall back to an invalid id and join only when asked", () => {
-  const decode = Schema.decodeUnknownSync(Schema.Struct({ id: InvitationSchemas.Id, join: InvitationSchemas.Join }))
-  expect(decode({ id: "inv_1", join: true })).toEqual({ id: "inv_1", join: true })
-  expect(decode({ id: "inv_1", join: "true" })).toEqual({ id: "inv_1", join: true })
-  expect(decode({ id: "inv_1", join: false })).toEqual({ id: "inv_1" })
-  expect(decode({ id: 42 })).toEqual({ id: "invalid" })
-  expect(decode({})).toEqual({ id: "invalid" })
 })

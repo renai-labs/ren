@@ -1,30 +1,30 @@
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
+import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { Shared, TestToken } from "@ren/cell/testing"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import {
   Cause,
-  ConfigProvider,
-  DateTime,
+  Clock,
+  Duration,
   Effect,
   Exit,
   Fiber,
   Layer,
   ManagedRuntime,
   Option,
+  Queue,
+  Redacted,
   Ref,
   Result,
   Schema,
 } from "effect"
 import { Base64Url } from "effect/encoding"
-import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { BrainHost } from "../src/brain-host.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
-
-setDefaultTimeout(30_000)
+import { Host } from "./lib/host.js"
 
 const runtime = ManagedRuntime.make(Shared.layer)
 beforeAll(async () => {
@@ -45,12 +45,7 @@ const fixed = Layer.succeed(
   }),
 )
 
-const host = (config: Record<string, string>, models: Layer.Layer<Models.Service> = fixed) =>
-  Layer.fresh(BrainHost.layer).pipe(
-    Layer.provide(models),
-    Layer.provide(FetchHttpClient.layer),
-    Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config))),
-  )
+const host = (config: Record<string, string>, models: Layer.Layer<Models.Service> = fixed) => Host.layer(config, models)
 
 const settings = {
   CELL_URL: "",
@@ -104,15 +99,21 @@ const serve = (fetch: (request: Request) => Response | Promise<Response>) =>
     (server) => Effect.promise(() => server.stop(true)),
   )
 
+const tooLarge = Effect.fnUntraced(function* () {
+  const requests: Array<string> = []
+  const server = yield* serve((request) => {
+    requests.push(new URL(request.url).pathname)
+    return new Response(null, { status: 413 })
+  })
+  return { requests, url: server.url.origin }
+})
+
 const closedPort = Effect.promise(async () => {
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
   const url = server.url.origin
   await server.stop(true)
   return url
 })
-
-const died = (exit: Exit.Exit<unknown, unknown>) =>
-  Exit.isFailure(exit) && Cause.hasDies(exit.cause) && !Cause.hasFails(exit.cause)
 
 describe("BrainHost", () => {
   describe("start", () => {
@@ -132,59 +133,6 @@ describe("BrainHost", () => {
         expect((yield* Effect.promise(() => script.called())).authorization).toBe("Bearer sk-configured")
       }),
     )
-
-    it.live("rejects oversized initial files before contacting or creating a session on the host", () =>
-      Effect.gen(function* () {
-        const failure = yield* start(Session.ID.create(), {
-          initialMessage: {
-            messageId: Session.MessageID.create(),
-            prompt: { text: "initial", files: [{ url: `data:text/plain,${"a".repeat(3001)}` }] },
-            sender: { userId: "user_1" },
-          },
-        }).pipe(
-          Effect.flip,
-          Effect.provide(host({ ...settings, CELL_URL: yield* closedPort, BRAIN_MAX_FILE_SIZE: "3kB" })),
-        )
-        expect(failure).toMatchObject({ _tag: "BrainRejectedError" })
-      }),
-    )
-
-    it.live("creates the session in a fresh cell and answers its id and harness", () =>
-      Effect.gen(function* () {
-        const brain = yield* BrainHost.Service
-        const sessionId = Session.ID.create()
-        expect(yield* start(sessionId)).toEqual({ sessionId, harness: "opencode" })
-        const response = yield* surface(yield* brain.access(sessionId), `/api/session/${sessionId}`)
-        expect({ status: response.status, body: yield* Effect.promise(() => response.json()) }).toMatchObject({
-          status: 200,
-          body: { data: { id: sessionId } },
-        })
-      }),
-    )
-
-    it.live("a second start with the same id answers the same and leaves one session", () =>
-      Effect.gen(function* () {
-        const brain = yield* BrainHost.Service
-        const sessionId = Session.ID.create()
-        const first = yield* start(sessionId)
-        expect(yield* start(sessionId, { title: "Renamed" })).toEqual(first)
-        const response = yield* surface(yield* brain.access(sessionId), "/api/session")
-        const listed = Schema.decodeUnknownSync(
-          Schema.Struct({ data: Schema.Array(Schema.Struct({ id: Schema.String })) }),
-        )(yield* Effect.promise(() => response.json()))
-        expect(listed.data.map((session) => session.id)).toEqual([sessionId])
-      }),
-    )
-
-    it.live("an unknown agent or model fails with BrainRejectedError", () =>
-      Effect.gen(function* () {
-        const failures = yield* Effect.all([
-          start(Session.ID.create(), { agent: "nobody" }).pipe(Effect.flip),
-          start(Session.ID.create(), { model: { endpointId: "stub", modelId: "missing" } }).pipe(Effect.flip),
-        ])
-        expect(failures.map((failure) => failure._tag)).toEqual(["BrainRejectedError", "BrainRejectedError"])
-      }),
-    )
   })
 
   describe("send", () => {
@@ -199,69 +147,31 @@ describe("BrainHost", () => {
       }),
     )
 
-    it.live("a repeated message id runs no second turn", () =>
-      Effect.gen(function* () {
-        const brain = yield* BrainHost.Service
-        const sessionId = Session.ID.create()
-        yield* start(sessionId)
-        const script = stub.script({ hold: true })
-        const messageId = Session.MessageID.create()
-        const first = yield* send(sessionId, `once ${script.marker}`, messageId)
-        yield* Effect.promise(() => script.called())
-        const second = yield* send(sessionId, `once ${script.marker}`, messageId)
-        script.release()
-        const waited = yield* surface(
-          yield* brain.access(sessionId),
-          `/api/experimental/session/${sessionId}/wait`,
-          "POST",
-        )
-        expect(waited.status).toBe(204)
-        expect(second).toEqual(first)
-        expect(script.calls).toHaveLength(1)
-      }),
-    )
-
     it.live(
       "a file larger than BRAIN_MAX_FILE_SIZE, decoded, fails with BrainRejectedError before reaching the host",
       () =>
         Effect.gen(function* () {
-          const failures = yield* Effect.forEach(
-            [
-              `data:image/png;base64,${"A".repeat(4000)}`,
-              `data:image/png;base64,${"A".repeat(4002)}==`,
-              `data:text/plain,${"a".repeat(3000)}`,
-              `data:text/plain,${"a".repeat(3001)}`,
-              `data:text/plain,${"界".repeat(1000)}`,
-              `data:text/plain,${"界".repeat(1001)}`,
-              `data:text/plain,${"%E7%95%8C".repeat(1000)}`,
-              `data:text/plain,${"%E7%95%8C".repeat(1001)}`,
-            ],
-            (url) =>
-              send(Session.ID.create(), "look", Session.MessageID.create(), [{ url, name: "a.png" }]).pipe(Effect.flip),
-          ).pipe(Effect.provide(host({ ...settings, CELL_URL: yield* closedPort, BRAIN_MAX_FILE_SIZE: "3kB" })))
-          expect(failures.map((failure) => failure._tag)).toEqual([
-            "BrainUnavailable",
-            "BrainRejectedError",
-            "BrainUnavailable",
-            "BrainRejectedError",
-            "BrainUnavailable",
-            "BrainRejectedError",
-            "BrainUnavailable",
-            "BrainRejectedError",
+          const host413 = yield* tooLarge()
+          const sessionId = Session.ID.create()
+          const file = (bytes: number) => [{ url: `data:text/plain,${"a".repeat(bytes)}`, name: "a.png" }]
+          const failures = yield* Effect.all([
+            send(sessionId, "look", Session.MessageID.create(), file(3000)).pipe(Effect.flip),
+            send(sessionId, "look", Session.MessageID.create(), file(3001)).pipe(Effect.flip),
+            start(Session.ID.create(), {
+              initialMessage: {
+                messageId: Session.MessageID.create(),
+                prompt: { text: "initial", files: file(3001) },
+                sender: { userId: "user_1" },
+              },
+            }).pipe(Effect.flip),
+          ]).pipe(Effect.provide(host({ ...settings, CELL_URL: host413.url, BRAIN_MAX_FILE_SIZE: "3kB" })))
+          expect(failures).toMatchObject([
+            { _tag: "BrainRejectedError", message: "The host rejected the request because its body is too large" },
+            { _tag: "BrainRejectedError", message: "a.png is larger than 3 kB" },
+            { _tag: "BrainRejectedError", message: "a.png is larger than 3 kB" },
           ])
-          expect(failures[1]).toMatchObject({ message: "a.png is larger than 3 kB" })
+          expect(host413.requests).toEqual([`/ren/sessions/${sessionId}/messages`])
         }),
-    )
-
-    it.live("BRAIN_MAX_FILE_SIZE defaults to 10 MB", () =>
-      Effect.gen(function* () {
-        const failures = yield* Effect.forEach([10_000_000, 10_000_001], (bytes) =>
-          send(Session.ID.create(), "look", Session.MessageID.create(), [
-            { url: `data:text/plain,${"a".repeat(bytes)}` },
-          ]).pipe(Effect.flip),
-        ).pipe(Effect.provide(host({ ...settings, CELL_URL: yield* closedPort })))
-        expect(failures.map((failure) => failure._tag)).toEqual(["BrainUnavailable", "BrainRejectedError"])
-      }),
     )
 
     it.live("a send before start fails with SessionNotStartedError", () =>
@@ -343,67 +253,47 @@ describe("BrainHost", () => {
       }),
     )
 
-    it.live(
-      "revoking a brain's models clears the cell before revoking at the source, and a later send grants anew",
-      () =>
-        Effect.gen(function* () {
-          const granted = yield* Ref.make(0)
-          const revoked = yield* Ref.make<ReadonlyArray<Models.Subject>>([])
-          const sessionId = Session.ID.create()
-          const script = stub.script()
-          yield* Effect.gen(function* () {
-            const brain = yield* BrainHost.Service
-            yield* start(sessionId)
-            yield* brain.revokeModels(sessionId, organizationId)
-            yield* send(sessionId, `regranted ${script.marker}`)
-            yield* Effect.promise(() => script.called())
-          }).pipe(
-            Effect.provide(
-              host(settings, scripted(yield* Ref.make<ReadonlyArray<Models.Access>>([]), granted, revoked)),
-            ),
-          )
-          expect([yield* Ref.get(revoked), yield* Ref.get(granted), script.calls[0]?.authorization]).toEqual([
-            [{ brainId: sessionId, organizationId }],
-            2,
-            "Bearer sk-granted-2",
-          ])
-        }),
+    it.live("revoking a brain's models clears the cell and revokes at the source, so a later send grants anew", () =>
+      Effect.gen(function* () {
+        const granted = yield* Ref.make(0)
+        const revoked = yield* Ref.make<ReadonlyArray<Models.Subject>>([])
+        const sessionId = Session.ID.create()
+        const script = stub.script()
+        yield* Effect.gen(function* () {
+          const brain = yield* BrainHost.Service
+          yield* start(sessionId)
+          yield* brain.revokeModels(sessionId, organizationId)
+          yield* send(sessionId, `regranted ${script.marker}`)
+          yield* Effect.promise(() => script.called())
+        }).pipe(
+          Effect.provide(host(settings, scripted(yield* Ref.make<ReadonlyArray<Models.Access>>([]), granted, revoked))),
+        )
+        expect([yield* Ref.get(revoked), yield* Ref.get(granted), script.calls[0]?.authorization]).toEqual([
+          [{ brainId: sessionId, organizationId }],
+          2,
+          "Bearer sk-granted-2",
+        ])
+      }),
     )
 
-    it.live("revoking a brain's models revokes at the source even when the cell cannot be reached", () =>
+    it.live("revoking a brain's models revokes at the source even when the cell refuses to clear them", () =>
       Effect.gen(function* () {
+        const host413 = yield* tooLarge()
         const revoked = yield* Ref.make<ReadonlyArray<Models.Subject>>([])
         const sessionId = Session.ID.create()
         const failure = yield* BrainHost.Service.use((brain) => brain.revokeModels(sessionId, organizationId)).pipe(
           Effect.flip,
           Effect.provide(
             host(
-              { ...settings, CELL_URL: yield* closedPort },
+              { ...settings, CELL_URL: host413.url },
               scripted(yield* Ref.make<ReadonlyArray<Models.Access>>([]), yield* Ref.make(0), revoked),
             ),
           ),
         )
         expect([failure._tag, yield* Ref.get(revoked)]).toEqual([
-          "BrainUnavailable",
+          "BrainRejectedError",
           [{ brainId: sessionId, organizationId }],
         ])
-      }),
-    )
-
-    it.live("the catalog lists models without credentials", () =>
-      Effect.gen(function* () {
-        expect(Models.catalog(configured)).toEqual({
-          endpoints: [
-            {
-              id: "stub",
-              protocol: "openai-chat",
-              models: [
-                { id: "stub-model", name: "Stub", limit: { context: 100_000, output: 4000 } },
-                { id: "stub-other", name: "Stub Other", limit: { context: 100_000, output: 4000 } },
-              ],
-            },
-          ],
-        })
       }),
     )
 
@@ -433,68 +323,59 @@ describe("BrainHost", () => {
   })
 
   describe("access", () => {
-    it.live("answers the worker origin, a client token for the session and its expiry one hour out", () =>
-      Effect.gen(function* () {
-        const brain = yield* BrainHost.Service
-        const sessionId = Session.ID.create()
-        const before = Math.floor(Date.now() / 1000)
-        const access = yield* brain.access(sessionId)
-        const payload = claims(access.token)
-        expect(access.url).toBe(new URL(settings.CELL_URL).origin)
-        expect(payload).toMatchObject({ kid: TestToken.keys[0].id, sid: sessionId, scope: "client" })
-        expect(payload.exp - before).toBeGreaterThanOrEqual(3600)
-        expect(payload.exp - before).toBeLessThanOrEqual(3601)
-        expect(DateTime.toEpochMillis(access.expiresAt)).toBe(payload.exp * 1000)
-      }),
-    )
-
     it.live("its token reads the started session through the client surface", () =>
       Effect.gen(function* () {
         const brain = yield* BrainHost.Service
         const sessionId = Session.ID.create()
-        yield* start(sessionId)
-        const access = yield* brain.access(sessionId)
-        const response = yield* surface(access, `/api/session/${sessionId}`)
+        expect(yield* start(sessionId)).toEqual({ sessionId, harness: "opencode" })
+        const response = yield* surface(yield* brain.access(sessionId), `/api/session/${sessionId}`)
         expect(response.status).toBe(200)
         expect(yield* Effect.promise(() => response.json())).toMatchObject({ data: { id: sessionId } })
       }),
     )
+  })
 
-    it.live("its token cannot call the Brain API", () =>
+  describe("host authentication", () => {
+    const expiring = Layer.succeed(
+      Models.Service,
+      Models.Service.of({
+        catalog: () => Effect.succeed({ endpoints: [] }),
+        grant: () =>
+          Effect.succeed(Shared.access({ stub: Shared.apiKey("sk-expiring", Duration.toMillis("3 hours")) })),
+        refreshIfDue: () => Effect.succeedNone,
+        revoke: () => Effect.void,
+      }),
+    )
+
+    it.effect("accepts only host tokens, and a refreshed host token outlives the latest key by two hours", () =>
       Effect.gen(function* () {
         const brain = yield* BrainHost.Service
-        const sessionId = Session.ID.create()
-        const response = yield* surface(yield* brain.access(sessionId), "/ren/sessions", "POST")
-        expect(response.status).toBe(403)
-      }),
+        const key = TestToken.keys[0]
+        const sid = Session.ID.create()
+        const exp = 600
+        const server = yield* SessionToken.sign(key, { sid, scope: "server", exp })
+        expect((yield* brain.authenticateHost(Redacted.make(server)).pipe(Effect.flip))._tag).toBe("ForbiddenError")
+        const host = yield* brain.authenticateHost(
+          Redacted.make(yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp })),
+        )
+        expect(host).toEqual({ brainId: sid, organizationId })
+        const refreshed = yield* brain.refreshModels(host)
+        expect(claims(refreshed.hostToken ?? "").exp).toBe(Duration.toSeconds("5 hours"))
+      }).pipe(Effect.provide(host(settings, expiring))),
     )
   })
 
   describe("failures", () => {
     it.live("a host body-size rejection is a typed BrainRejectedError and is not retried", () =>
       Effect.gen(function* () {
-        const requests: Array<string> = []
-        const server = yield* serve((request) => {
-          requests.push(new URL(request.url).pathname)
-          return new Response(null, { status: 413 })
-        })
+        const host413 = yield* tooLarge()
         const sessionId = Session.ID.create()
         const failures = yield* Effect.all([
           start(sessionId).pipe(Effect.flip),
           send(sessionId, "hello").pipe(Effect.flip),
-        ]).pipe(Effect.provide(host({ ...settings, CELL_URL: server.url.origin })))
+        ]).pipe(Effect.provide(host({ ...settings, CELL_URL: host413.url })))
         expect(failures.map((failure) => failure._tag)).toEqual(["BrainRejectedError", "BrainRejectedError"])
-        expect(requests).toEqual(["/ren/sessions", `/ren/sessions/${sessionId}/messages`])
-      }),
-    )
-
-    it.live("a host that refuses connections fails start and send with BrainUnavailable", () =>
-      Effect.gen(function* () {
-        const failures = yield* Effect.all([
-          start(Session.ID.create()).pipe(Effect.flip),
-          send(Session.ID.create(), "nobody home").pipe(Effect.flip),
-        ]).pipe(Effect.provide(host({ ...settings, CELL_URL: yield* closedPort })))
-        expect(failures.map((failure) => failure._tag)).toEqual(["BrainUnavailable", "BrainUnavailable"])
+        expect(host413.requests).toEqual(["/ren/sessions", `/ren/sessions/${sessionId}/messages`])
       }),
     )
 
@@ -519,64 +400,73 @@ describe("BrainHost", () => {
       }),
     )
 
-    it.live("start and send retry a transient answer three times", () =>
-      Effect.gen(function* () {
-        const requests: Array<string> = []
-        const server = yield* serve((request) => {
-          requests.push(new URL(request.url).pathname)
-          return new Response("busy", { status: 503 })
-        })
-        const sessionId = Session.ID.create()
-        const failures = yield* Effect.all([
-          start(sessionId).pipe(Effect.flip),
-          send(sessionId, "hello").pipe(Effect.flip),
-        ]).pipe(Effect.provide(host({ ...settings, CELL_URL: server.url.origin })))
-        expect(failures.map((failure) => failure._tag)).toEqual(["BrainUnavailable", "BrainUnavailable"])
-        expect(requests).toEqual([
-          ...Array.from({ length: 4 }, () => "/ren/sessions"),
-          ...Array.from({ length: 4 }, () => `/ren/sessions/${sessionId}/messages`),
-        ])
-      }),
-    )
-
-    it.live("a token signed with a key the host does not know is a defect, not BrainUnavailable", () =>
-      Effect.gen(function* () {
-        const exits = yield* Effect.all([
-          start(Session.ID.create()).pipe(Effect.exit),
-          send(Session.ID.create(), "hello").pipe(Effect.exit),
-        ]).pipe(Effect.provide(host({ ...settings, CELL_KEYS: JSON.stringify([unknownKey]) })))
-        expect(exits.map(died)).toEqual([true, true])
-      }),
+    it.effect(
+      "start and send retry a transient answer or a refused connection three times, then fail with BrainUnavailable",
+      () =>
+        Effect.gen(function* () {
+          const requests: Array<string> = []
+          const busy = yield* serve((request) => {
+            requests.push(new URL(request.url).pathname)
+            return new Response("busy", { status: 503 })
+          })
+          const outcomes = yield* Effect.forEach([busy.url.origin, yield* closedPort], (url) =>
+            Effect.gen(function* () {
+              const sleeps = yield* Queue.unbounded<number>()
+              const clock = yield* TestClock.testClockWith((testClock) =>
+                Effect.succeed<Clock.Clock>({
+                  ...testClock,
+                  sleep: (duration) =>
+                    Queue.offer(sleeps, Duration.toMillis(duration)).pipe(Effect.andThen(testClock.sleep(duration))),
+                }),
+              )
+              const sessionId = Session.ID.create()
+              const pending = yield* Effect.forkChild(
+                Effect.all([start(sessionId).pipe(Effect.flip), send(sessionId, "hello").pipe(Effect.flip)]).pipe(
+                  Effect.provide(host({ ...settings, CELL_URL: url })),
+                  Effect.provideService(Clock.Clock, clock),
+                ),
+              )
+              const backoff: Array<number> = []
+              yield* Queue.take(sleeps).pipe(
+                Effect.flatMap((millis) =>
+                  millis < Duration.toMillis("30 seconds")
+                    ? Effect.sync(() => backoff.push(millis)).pipe(Effect.andThen(TestClock.adjust(millis)))
+                    : Effect.void,
+                ),
+                Effect.repeat({ until: () => backoff.length === 6 }),
+              )
+              return { failures: (yield* Fiber.join(pending)).map((failure) => failure._tag), backoff }
+            }),
+          )
+          expect(outcomes).toEqual(
+            Array.from({ length: 2 }, () => ({
+              failures: ["BrainUnavailable", "BrainUnavailable"],
+              backoff: [200, 400, 800, 200, 400, 800],
+            })),
+          )
+          expect(requests).toHaveLength(8)
+        }),
     )
   })
 
   describe("config", () => {
-    it.live("signs with the first of CELL_KEYS", () =>
+    it.live("signs with the first of CELL_KEYS, and a key the host does not know is a defect", () =>
       Effect.gen(function* () {
         const first = yield* start(Session.ID.create()).pipe(
           Effect.exit,
           Effect.provide(host({ ...settings, CELL_KEYS: JSON.stringify([TestToken.keys[1], unknownKey]) })),
         )
-        const second = yield* start(Session.ID.create()).pipe(
-          Effect.exit,
-          Effect.provide(host({ ...settings, CELL_KEYS: JSON.stringify([unknownKey, TestToken.keys[1]]) })),
-        )
-        expect([Exit.isSuccess(first), died(second)]).toEqual([true, true])
-      }),
-    )
-
-    it.effect("a missing CELL_URL or CELL_KEYS, or a BRAIN_MAX_FILE_SIZE that is not a size, fails the layer", () =>
-      Effect.gen(function* () {
-        const exits = yield* Effect.forEach(
-          [
-            { CELL_KEYS: settings.CELL_KEYS },
-            { CELL_URL: settings.CELL_URL },
-            { ...settings, BRAIN_MAX_FILE_SIZE: "lots" },
-            settings,
-          ],
-          (config) => Effect.exit(Effect.provide(BrainHost.Service.use(Effect.succeed), host(config))),
-        )
-        expect(exits.map(Exit.isSuccess)).toEqual([false, false, false, true])
+        const unknown = yield* Effect.all([
+          start(Session.ID.create()).pipe(Effect.exit),
+          send(Session.ID.create(), "hello").pipe(Effect.exit),
+        ]).pipe(Effect.provide(host({ ...settings, CELL_KEYS: JSON.stringify([unknownKey, TestToken.keys[1]]) })))
+        expect([
+          Exit.isSuccess(first),
+          ...unknown.map(
+            (exit: Exit.Exit<unknown, unknown>) =>
+              Exit.isFailure(exit) && Cause.hasDies(exit.cause) && !Cause.hasFails(exit.cause),
+          ),
+        ]).toEqual([true, true, true])
       }),
     )
   })

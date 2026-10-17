@@ -5,7 +5,7 @@ import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/brain-api/brain-api"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Effect, FiberHandle, Layer, Option, Ref, Schema, Semaphore } from "effect"
+import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Ref, Schema, Semaphore } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -17,7 +17,9 @@ import { Env } from "../../src/env.js"
 import { Harness } from "../../src/harness/harness.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
 import { Host } from "../../src/harness/opencode/host.js"
+import { ModelRefresh } from "../../src/model-refresh.js"
 import { ModelStore } from "../../src/model-store.js"
+import { ModelsTest } from "./models.js"
 import { Shared } from "./shared.js"
 
 const make = Effect.gen(function* () {
@@ -26,6 +28,38 @@ const make = Effect.gen(function* () {
     Effect.promise(() => mkdtemp(join(tmpdir(), "ren-brain-"))),
     (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
   )
+  const issuer = yield* ModelsTest.issuer
+  const id = Session.ID.create()
+  const alarm: { at: number | null } = { at: null }
+  const services = yield* Layer.build(
+    Layer.mergeAll(
+      ModelRefresh.layer(issuer.url),
+      Layer.succeed(
+        Cell.Info,
+        Cell.Info.of({
+          sessionId: id,
+          vars,
+          storage: {
+            getAlarm: () => Promise.resolve(alarm.at),
+            setAlarm: (at: number | Date) => {
+              alarm.at = Number(at)
+              return Promise.resolve()
+            },
+          },
+        }),
+      ),
+      Layer.effect(
+        Cell.Activity,
+        Effect.all({
+          requests: Ref.make(0),
+          wait: FiberHandle.make<void>(),
+          waitingSince: Ref.make(Option.none<DateTime.Utc>()),
+          configuring: Semaphore.make(1),
+        }),
+      ),
+    ).pipe(Layer.provideMerge(ModelsTest.storage())),
+  )
+  yield* Context.get(services, ModelStore.Service).write(Shared.access(undefined, Shared.stub().url), undefined)
   const host = yield* Host.make(
     createEmbeddedRoutes({
       database: { path: ":memory:" },
@@ -34,79 +68,31 @@ const make = Effect.gen(function* () {
       fs: { filewatcher: false, fff: false },
     }).pipe(Layer.provide(HttpServer.layerServices)),
     [],
-    () => Effect.succeedNone,
+    Context.get(services, ModelRefresh.Service),
     Option.none(),
   )
-  const requests: Array<string> = []
-  const transport: { before: (request: Request) => Effect.Effect<void>; sending: Effect.Effect<void> } = {
-    before: () => Effect.void,
-    sending: Effect.void,
-  }
-  const harness = yield* OpenCodeHarness.make(
-    {
-      ...host,
-      fetch: (request) => {
-        requests.push(new URL(request.url).pathname)
-        return Effect.runPromise(transport.before(request)).then(() => host.fetch(request))
-      },
-    },
-    [],
-    AbsolutePath.make(directory),
-  )
-  const id = Session.ID.create()
-  const alarm: { at: number | null } = { at: null }
-  const stored = new Map<string, string>()
-  const storage = {
-    get: (key: string) => Promise.resolve(stored.get(key)),
-    put: (key: string, value: string) => Promise.resolve(void stored.set(key, value)),
-    delete: (key: string) => Promise.resolve(stored.delete(key)),
-  }
-  const modelStore = ModelStore.layer.pipe(Layer.provideMerge(Layer.succeed(ModelStore.Storage, storage)))
-  yield* ModelStore.Service.pipe(
-    Effect.flatMap((store) => store.write(Shared.access(undefined, Shared.stub().url), undefined)),
-    Effect.provide(modelStore),
-  )
-  const info = Layer.succeed(
-    Cell.Info,
-    Cell.Info.of({
-      sessionId: id,
-      vars,
-      storage: {
-        getAlarm: () => Promise.resolve(alarm.at),
-        setAlarm: (at: number | Date) => {
-          alarm.at = Number(at)
-          return Promise.resolve()
-        },
-      },
-    }),
-  )
-  const activity = Layer.effect(
-    Cell.Activity,
-    Effect.all({
-      requests: Ref.make(0),
-      wait: FiberHandle.make<void>(),
-      waitingSince: Ref.make(Option.none<DateTime.Utc>()),
-      configuring: Semaphore.make(1),
-    }),
-  )
-  const client = yield* HttpApiTest.groups(BrainApi, ["brain"]).pipe(
-    Effect.provide(
-      Brain.handlers.pipe(
-        Layer.provide(
-          Layer.mergeAll(
-            info,
-            activity,
-            modelStore,
-            Harness.layer(
-              Effect.succeed({
-                ...harness,
-                send: (input) => transport.sending.pipe(Effect.andThen(harness.send(input))),
-              }),
+  const harness = yield* OpenCodeHarness.make(host, [], AbsolutePath.make(directory))
+  const waits = yield* Queue.unbounded<number>()
+  const cell = Context.merge(
+    services,
+    yield* Layer.build(
+      Harness.layer(
+        Effect.succeed({
+          ...harness,
+          sessions: harness.sessions.pipe(
+            Effect.map((sessions) =>
+              sessions.map((session) => ({
+                ...session,
+                wait: (ms: number) => Queue.offer(waits, ms).pipe(Effect.andThen(session.wait(ms))),
+              })),
             ),
           ),
-        ),
+        }),
       ),
     ),
+  )
+  const client = yield* HttpApiTest.groups(BrainApi, ["brain"]).pipe(
+    Effect.provide(Brain.handlers.pipe(Layer.provide(Layer.succeedContext(cell)))),
     Effect.provide(HttpServer.layerServices),
   )
   const opencode = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
@@ -120,16 +106,20 @@ const make = Effect.gen(function* () {
       ),
     ),
   )
-  const configureModels = (apiKeys?: Readonly<Record<string, Models.ApiKey>>) =>
-    client.brain["brain.configureModels"]({ payload: { access: Shared.access(apiKeys, Shared.stub().url) } })
   return {
     id,
     directory,
-    stored,
-    configureModels,
+    issuer,
+    configureModels: (apiKeys?: Readonly<Record<string, Models.ApiKey>>, hostToken?: string) =>
+      client.brain["brain.configureModels"]({
+        payload: { access: Shared.access(apiKeys, Shared.stub().url), ...(hostToken && { hostToken }) },
+      }),
     removeModels: client.brain["brain.removeModels"](),
-    requests,
-    transport,
+    state: client.brain["brain.state"](),
+    alarm: Effect.sync(() => {
+      alarm.at = null
+    }).pipe(Effect.andThen(Cell.alarm()), Effect.provide(cell)),
+    waited: Queue.take(waits),
     client,
     opencode,
     credentials: host.credentials,

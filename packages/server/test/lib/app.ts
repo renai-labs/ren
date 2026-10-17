@@ -10,6 +10,15 @@ import { Routes } from "../../src/routes.js"
 
 export const origin = "http://localhost:5173"
 
+export const config = {
+  BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
+  BETTER_AUTH_URL: "http://localhost:4000",
+  TRUSTED_ORIGINS: origin,
+  GOOGLE_CLIENT_ID: "google-client-id",
+  GOOGLE_CLIENT_SECRET: "google-client-secret",
+  APP_URL: `${origin}/app`,
+}
+
 export const makeApp = (routes: typeof Routes.layer = Routes.layer, options?: { readonly baseURL?: string }) =>
   HttpRouter.toWebHandler(
     routes.pipe(
@@ -21,12 +30,8 @@ export const makeApp = (routes: typeof Routes.layer = Routes.layer, options?: { 
       Layer.provide(
         ConfigProvider.layerAdd(
           ConfigProvider.fromUnknown({
-            BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
-            BETTER_AUTH_URL: options?.baseURL ?? "http://localhost:4000",
-            TRUSTED_ORIGINS: origin,
-            GOOGLE_CLIENT_ID: "google-client-id",
-            GOOGLE_CLIENT_SECRET: "google-client-secret",
-            APP_URL: `${origin}/app`,
+            ...config,
+            BETTER_AUTH_URL: options?.baseURL ?? config.BETTER_AUTH_URL,
             SKIP_EMAIL_VERIFICATION: "true",
             SIGNUP_MX_CHECK: "false",
             CELL_URL: "http://127.0.0.1:9",
@@ -39,15 +44,19 @@ export const makeApp = (routes: typeof Routes.layer = Routes.layer, options?: { 
     { disableLogger: true },
   )
 
-export const authRequest = (path: string, body: unknown, cookie = "") =>
-  new Request(`http://localhost:4000/auth${path}`, {
+export const authRequest = (path: string, body: unknown, cookie = "", baseURL = "http://localhost:4000") =>
+  new Request(`${baseURL}/auth${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", origin: "http://localhost:4000", cookie },
+    headers: { "content-type": "application/json", origin: baseURL, cookie },
     body: JSON.stringify(body),
   })
 
-export const signUp = (app: ReturnType<typeof makeApp>, email: string, name = "Ada") =>
-  app.handler(authRequest("/sign-up/email", { email, password: "correct horse battery staple", name }))
+export const signUp = (
+  app: { readonly handler: (request: Request) => Promise<Response> },
+  email: string,
+  name = "Ada",
+  baseURL?: string,
+) => app.handler(authRequest("/sign-up/email", { email, password: "correct horse battery staple", name }, "", baseURL))
 
 export const sessionCookie = (response: Response) =>
   response.headers

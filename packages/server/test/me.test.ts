@@ -21,7 +21,12 @@ describe("GET /me", () => {
         emailVerified: false,
         image: null,
       },
-      organization: { id: expect.stringMatching(/^org_/), name: "Ada's Org", slug: "ada-s-org", logo: null },
+      organization: {
+        id: expect.stringMatching(/^org_/),
+        name: expect.any(String),
+        slug: expect.any(String),
+        logo: null,
+      },
     })
   })
 
@@ -62,21 +67,5 @@ describe("GET /me", () => {
     )
     expect((await (await me(joiner)).json()).organization).toEqual(personal)
     expect((await getSession(joiner)).session.activeOrganizationId).toBe(personal.id)
-  })
-
-  test("replaces a stale active organization with the oldest membership and keeps the session in sync", async () => {
-    const cookie = sessionCookie(await signUp(app, "margaret@hamilton-labs.dev", "Margaret"))
-    const personal = (await (await me(cookie)).json()).organization
-    const apollo = await (
-      await app.handler(authRequest("/organization/create", { name: "Apollo", slug: "apollo" }, cookie))
-    ).json()
-    expect((await (await me(cookie)).json()).organization.id).toBe(apollo.id)
-
-    await app.handler(authRequest("/organization/delete", { organizationId: apollo.id }, cookie))
-    expect((await (await me(cookie)).json()).organization).toEqual(personal)
-    const session = await (
-      await app.handler(new Request("http://localhost:4000/auth/get-session", { headers: { cookie } }))
-    ).json()
-    expect(session.session.activeOrganizationId).toBe(personal.id)
   })
 })

@@ -3,13 +3,9 @@ export * as Names from "./names.js"
 import { Errors } from "./errors.js"
 import type { Types } from "./types.js"
 
-export const leadingIdentifier = /^[A-Za-z_$][A-Za-z0-9_$]*/
+const leadingIdentifier = /^[A-Za-z_$][A-Za-z0-9_$]*/
 
 export const clientNamespaceExport = 'export * as Ren from "./client.js"\n'
-
-export function isIdentifier(value: string) {
-  return leadingIdentifier.exec(value)?.[0] === value
-}
 
 export function withoutNumericSuffix(value: string) {
   return value.replace(/_\d+$/, "")
@@ -24,10 +20,6 @@ export function identifierPart(value: string) {
   return leadingIdentifier.test(identifier) ? identifier : `_${identifier}`
 }
 
-export function groupShapeName(group: Types.Group) {
-  return `${identifierPart(group.identifier)}Api`
-}
-
 export function groupTypeName(group: Types.Group) {
   return identifierPart(group.identifier)
 }
@@ -40,16 +32,8 @@ export function endpointAdapterName(group: Types.Group, endpoint: Types.Endpoint
   return `Endpoint${endpointTypeName(group, endpoint)}`
 }
 
-export function groupShapeTypeName(group: Types.Group, endpoint: Types.Endpoint) {
-  return `${endpointTypeName(group, endpoint)}Operation`
-}
-
 export function promiseTypePrefix(group: string, path: ReadonlyArray<string>) {
   return `${identifierPart(group)}${path.map(identifierPart).join("")}`
-}
-
-export function clientOperationKey(group: Types.Group, endpoint: Types.Endpoint) {
-  return [group.identifier, ...endpoint.clientPath].join(".")
 }
 
 export function clientEndpointPath(group: string, name: string) {

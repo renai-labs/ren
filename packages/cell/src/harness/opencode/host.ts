@@ -17,8 +17,6 @@ import manifest from "../../../package.json"
 import type { Harness } from "../harness.js"
 import { RenPlugin } from "./plugin.js"
 
-export const version = manifest.version
-
 export const open = Effect.fn("Host.open")(function* (
   storage: DurableObjectStorage,
   config: string,
@@ -31,7 +29,7 @@ export const open = Effect.fn("Host.open")(function* (
 ) {
   const options = {
     storage,
-    app: { name: "ren-cell", version },
+    app: { name: "ren-cell", version: manifest.version },
     config: { content: config },
     models: { fetch: false },
   }

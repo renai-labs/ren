@@ -34,20 +34,8 @@ export type Contract = {
   readonly groups: ReadonlyArray<Group>
 }
 
-export type EffectTypeReference = {
-  readonly schema: Schema.Top
-  readonly name: string
-  readonly import: string
-}
-
-export type EffectOutputType = {
-  readonly name: string
-  readonly import: string
-}
-
 export type Endpoint = {
   readonly group: string
-  readonly sourceGroup: string
   readonly topLevel: boolean
   readonly endpoint: HttpApiEndpoint.Top
   readonly params: Schema.Top | undefined
@@ -60,13 +48,10 @@ export type Endpoint = {
   readonly unwrapData: boolean
   readonly errors: ReadonlyArray<{ readonly status: number; readonly schema: Schema.Top }>
   readonly successes: readonly [Schema.Top]
-  readonly effectPortable: boolean
 }
 
 export type Group = {
   readonly identifier: string
-  readonly sourceIdentifier: string
-  readonly module: string
   readonly endpoints: ReadonlyArray<Endpoint>
 }
 

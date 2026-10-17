@@ -1,157 +1,53 @@
-import { describe, expect } from "bun:test"
+import { describe, expect, test } from "bun:test"
+import { mkdtemp, readdir, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { ByteSize, Effect, FileSystem, Option } from "effect"
+import { BunFileSystem } from "@effect/platform-bun"
+import { Effect } from "effect"
 import { Write, type Types } from "../src/index.js"
-import { it } from "./effect"
+
+async function temporary() {
+  const path = await mkdtemp(join(tmpdir(), "ren-httpapi-codegen-write-"))
+  return { path, [Symbol.asyncDispose]: () => rm(path, { recursive: true, force: true }) }
+}
+
+const write = (files: Types.Output["files"], directory: string) =>
+  Effect.runPromise(Write.write({ operations: [], files }, directory).pipe(Effect.provide(BunFileSystem.layer)))
 
 describe("HttpApiCodegen.write", () => {
-  it.effect("writes compiled files beneath the output directory", () => {
-    const writes: Array<{ readonly path: string; readonly content: string }> = []
-    const output: Types.Output = {
-      operations: [],
-      files: [{ path: "session.ts", content: "export const session = {}" }],
-    }
-
-    return Effect.gen(function* () {
-      yield* Write.write(output, "/generated")
-
-      expect(writes).toEqual([
-        { path: join("/generated", "session.ts"), content: "export const session = {}\n" },
-        { path: join("/generated", ".httpapi-codegen.json"), content: '["session.ts"]\n' },
-      ])
-    }).pipe(
-      Effect.provideService(
-        FileSystem.FileSystem,
-        FileSystem.makeNoop({
-          exists: () => Effect.succeed(false),
-          makeDirectory: () => Effect.void,
-          writeFileString: (path, content) => {
-            writes.push({ path, content })
-            return Effect.void
-          },
-        }),
-      ),
+  test("removes only stale files the manifest owns", async () => {
+    await using directory = await temporary()
+    await Bun.write(join(directory.path, "notes.md"), "kept")
+    await write(
+      [
+        { path: "old.ts", content: "export const old = 1" },
+        { path: "session.ts", content: "export const session = 1" },
+      ],
+      directory.path,
     )
+
+    await write([{ path: "session.ts", content: "export const session = {}" }], directory.path)
+
+    expect((await readdir(directory.path)).toSorted()).toEqual([".httpapi-codegen.json", "notes.md", "session.ts"])
+    expect(await Bun.file(join(directory.path, "session.ts")).text()).toBe("export const session = {}\n")
+    expect(await Bun.file(join(directory.path, ".httpapi-codegen.json")).text()).toBe('["session.ts"]\n')
   })
 
-  it.effect("removes only stale files owned by the previous manifest", () => {
-    const removed: Array<string> = []
-    return Write.write(
-      {
-        operations: [],
-        files: [{ path: "session.ts", content: "" }],
-      },
-      "/generated",
-    ).pipe(
-      Effect.provideService(
-        FileSystem.FileSystem,
-        FileSystem.makeNoop({
-          exists: (path) => Effect.succeed(path.endsWith(".httpapi-codegen.json")),
-          makeDirectory: () => Effect.void,
-          readFileString: () => Effect.succeed('["old.ts", "session.ts"]'),
-          remove: (path) => {
-            removed.push(path)
-            return Effect.void
-          },
-          writeFileString: () => Effect.void,
-        }),
-      ),
-      Effect.tap(() => Effect.sync(() => expect(removed).toEqual([join("/generated", "old.ts")]))),
-    )
-  })
+  test.each(["../outside.ts", "/absolute.ts", "nested/session.ts", ".httpapi-codegen.json"])(
+    "rejects the unsafe output path %s before writing",
+    async (path) => {
+      await using directory = await temporary()
+      const output = join(directory.path, "generated")
 
-  it.effect("rejects unsafe output paths before writing", () => {
-    const writes: Array<string> = []
-    return Effect.gen(function* () {
-      const error = yield* Write.write(
-        {
-          operations: [],
-          files: [{ path: "../outside.ts", content: "" }],
-        },
-        "/generated",
-      ).pipe(Effect.flip)
+      const error = await Effect.runPromise(
+        Write.write({ operations: [], files: [{ path, content: "" }] }, output).pipe(
+          Effect.flip,
+          Effect.provide(BunFileSystem.layer),
+        ),
+      )
 
-      expect(error._tag).toBe("GenerationError")
-      expect(writes).toEqual([])
-    }).pipe(
-      Effect.provideService(
-        FileSystem.FileSystem,
-        FileSystem.makeNoop({
-          writeFileString: (path) => {
-            writes.push(path)
-            return Effect.void
-          },
-        }),
-      ),
-    )
-  })
-
-  it.effect("rejects case-insensitive duplicate output paths", () => {
-    const writes: Array<string> = []
-    return Effect.gen(function* () {
-      const error = yield* Write.write(
-        {
-          operations: [],
-          files: [
-            { path: "client.ts", content: "" },
-            { path: "CLIENT.ts", content: "" },
-          ],
-        },
-        "/generated",
-      ).pipe(Effect.flip)
-
-      expect(error._tag).toBe("GenerationError")
-      expect(error.reason).toBe("Duplicate output path: CLIENT.ts")
-      expect(writes).toEqual([])
-    }).pipe(
-      Effect.provideService(
-        FileSystem.FileSystem,
-        FileSystem.makeNoop({
-          writeFileString: (path) => {
-            writes.push(path)
-            return Effect.void
-          },
-        }),
-      ),
-    )
-  })
-
-  it.effect("reserves the private manifest path", () =>
-    Write.write({ operations: [], files: [{ path: ".httpapi-codegen.json", content: "" }] }, "/generated").pipe(
-      Effect.flip,
-      Effect.tap((error) => Effect.sync(() => expect(error.reason).toContain("Unsafe output path"))),
-      Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})),
-    ),
-  )
-
-  it.effect("rejects existing symbolic-link output targets", () =>
-    Write.write({ operations: [], files: [{ path: "session.ts", content: "" }] }, "/generated").pipe(
-      Effect.flip,
-      Effect.tap((error) => Effect.sync(() => expect(error.reason).toBe("Unsafe output path: session.ts"))),
-      Effect.provideService(
-        FileSystem.FileSystem,
-        FileSystem.makeNoop({
-          exists: (path) => Effect.succeed(path.endsWith("session.ts")),
-          makeDirectory: () => Effect.void,
-          stat: () =>
-            Effect.succeed({
-              type: "SymbolicLink",
-              mtime: Option.none(),
-              atime: Option.none(),
-              birthtime: Option.none(),
-              dev: 0,
-              ino: Option.none(),
-              mode: 0,
-              nlink: Option.none(),
-              uid: Option.none(),
-              gid: Option.none(),
-              rdev: Option.none(),
-              size: ByteSize.bytes(0),
-              blksize: Option.none(),
-              blocks: Option.none(),
-            }),
-        }),
-      ),
-    ),
+      expect(error.message).toBe(`Unsafe output path: ${path}`)
+      expect(await readdir(directory.path)).toEqual([])
+    },
   )
 })

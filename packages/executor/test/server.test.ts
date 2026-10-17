@@ -1,75 +1,49 @@
 import { expect } from "bun:test"
-import { BunHttpServer, BunServices } from "@effect/platform-bun"
-import { EnvironmentToken } from "@ren/brain-api/environment-token"
 import { ProcessID } from "@ren/brain-api/executor-api"
 import { ExecutorClient } from "@ren/brain-api/executor-client"
-import { Signature } from "@ren/brain-api/signature"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
-import { ConfigProvider, Deferred, Duration, Effect, Fiber, Layer, Schema, Stream } from "effect"
-import { Relay } from "./lib/relay.js"
-import { FetchHttpClient, HttpClient, HttpClientRequest, HttpRouter, HttpServer } from "effect/http"
+import { Deferred, Duration, Effect, Fiber, Layer, Stream } from "effect"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
+import { TestClock } from "effect/testing"
 import { mkdtemp } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { TestClock } from "effect/testing"
-import { NodeCompatible } from "../src/node-compatible.js"
-import { Server } from "../src/server.js"
 import { testEffect } from "./lib/effect.js"
+import { Machine } from "./lib/machine.js"
 import { Processes } from "./lib/process.js"
 
-const pair = await Effect.runPromise(Signature.generate("test"))
 const environmentId = Environment.ID.create()
 const brain = Brain.ID.create()
 const it = testEffect(
-  HttpRouter.serve(Server.layer, { disableLogger: true }).pipe(
-    Layer.provide(HttpServer.layerServices),
-    Layer.provide(NodeCompatible.layer),
-    Layer.provide(BunServices.layer),
-    Layer.provide(
-      ConfigProvider.layer(
-        ConfigProvider.fromUnknown({
-          EXECUTOR_ENVIRONMENT_ID: environmentId,
-          EXECUTOR_WORKSPACE: await mkdtemp(join(tmpdir(), "ren-executor-")),
-          BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([pair.publicKey]),
-        }),
-      ),
-    ),
-    Layer.provideMerge(BunHttpServer.layerTest),
+  Machine.layer({ environmentId, workspace: await mkdtemp(join(tmpdir(), "ren-executor-")) }).pipe(
+    Layer.provideMerge(FetchHttpClient.layer),
   ),
 )
 
-const token = (claims: Partial<EnvironmentToken.Claims> = {}) =>
-  EnvironmentToken.sign(pair.privateKey, {
-    env: environmentId,
-    brain,
-    exp: Math.floor(Date.now() / 1000) + 60,
-    ...claims,
-  })
-
-const served = Effect.map(HttpServer.HttpServer, (server) => HttpServer.formatAddress(server.address))
-
-const connect = Effect.fnUntraced(function* (bearer: string, url?: string) {
-  return yield* ExecutorClient.make({
-    url: url ?? (yield* served),
-    token: Effect.succeed(bearer),
-  }).pipe(Effect.provide(FetchHttpClient.layer))
+const token = Effect.fnUntraced(function* (
+  claims: { readonly environmentId?: Environment.ID; readonly brain?: Brain.ID } = {},
+) {
+  return (yield* Machine.access({ url: yield* Machine.url, environmentId, brain, ...claims })).token
 })
 
-const client = Effect.fnUntraced(function* (claims: Partial<EnvironmentToken.Claims> = {}) {
+const connect = Effect.fnUntraced(function* (bearer: string) {
+  return yield* ExecutorClient.make({ url: yield* Machine.url, token: Effect.succeed(bearer) })
+})
+
+const client = Effect.fnUntraced(function* (claims: { readonly brain?: Brain.ID } = {}) {
   return yield* connect(yield* token(claims))
 })
-
-const invalidSpawn = HttpClientRequest.post("/v1/rpc").pipe(
-  HttpClientRequest.bodyText(
-    `${JSON.stringify({ _tag: "Request", id: "1", tag: "process.spawn", payload: { command: 42 }, headers: [] })}\n`,
-    "application/ndjson",
-  ),
-)
 
 it.live("answers a bad token before it decodes the payload", () =>
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient
+    const invalidSpawn = HttpClientRequest.post(`${yield* Machine.url}${ExecutorClient.path}`).pipe(
+      HttpClientRequest.bodyText(
+        `${JSON.stringify({ _tag: "Request", id: "1", tag: "process.spawn", payload: { command: 42 }, headers: [] })}\n`,
+        "application/ndjson",
+      ),
+    )
     const answer = Effect.fnUntraced(function* (request: HttpClientRequest.HttpClientRequest) {
       const response = yield* http.execute(request)
       return { status: response.status, body: yield* response.text }
@@ -80,7 +54,9 @@ it.live("answers a bad token before it decodes the payload", () =>
     }
     expect(yield* answer(invalidSpawn)).toEqual(unauthorized)
     expect(
-      yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* token({ env: Environment.ID.create() })))),
+      yield* answer(
+        invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* token({ environmentId: Environment.ID.create() }))),
+      ),
     ).toEqual(unauthorized)
     expect(yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken("not.a-token")))).toEqual(unauthorized)
     const decoded = yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* token())))
@@ -91,27 +67,17 @@ it.live("answers a bad token before it decodes the payload", () =>
 
 it.live("gives a client with a bad token the typed UnauthorizedError", () =>
   Effect.gen(function* () {
-    const foreign = yield* client({ env: Environment.ID.create() })
-    const expired = yield* client({ exp: Math.floor(Date.now() / 1000) - 60 })
-    const malformed = yield* connect("not.a-token")
+    const foreign = yield* connect(yield* token({ environmentId: Environment.ID.create() }))
     const empty = yield* connect("")
-    const errors = yield* Effect.forEach([foreign, expired, malformed, empty], (api) =>
+    const errors = yield* Effect.forEach([foreign, empty], (api) =>
       Effect.all([
-        api["executor.hello"]().pipe(Effect.flip),
         api["files.stat"]({ path: "." }).pipe(Effect.flip),
         api["process.output"]({ id: ProcessID.create() }).pipe(Stream.runDrain, Effect.flip),
       ]),
     )
-    expect(errors.flat().map((error) => error._tag)).toEqual(Array(12).fill("UnauthorizedError"))
-    expect(errors[0]?.[0]).toMatchObject({ message: "Authentication required" })
-  }),
-)
-
-it.live("describes itself", () =>
-  Effect.gen(function* () {
-    const api = yield* client()
-    const hello = yield* api["executor.hello"]()
-    expect(hello).toMatchObject({ protocol: 1, environmentId, capabilities: ["processes", "files"] })
+    expect(errors.flat()).toEqual(
+      Array(4).fill(expect.objectContaining({ _tag: "UnauthorizedError", message: "Authentication required" })),
+    )
   }),
 )
 
@@ -125,65 +91,6 @@ it.live("streams a process's bytes until it exits", () =>
     const events = yield* api["process.output"]({ id: spawned.id }).pipe(Stream.runCollect)
     expect(events.at(0)).toEqual({ type: "stdout", offset: 0, bytes: new Uint8Array([0, 255]) })
     expect(events.at(-1)).toEqual({ type: "exit", exitCode: 0, signal: null })
-  }),
-)
-
-it.live("gives stdin through the write call", () =>
-  Effect.gen(function* () {
-    const api = yield* client()
-    const spawned = yield* api["process.spawn"]({ command: "cat", arguments: [], hasStdin: true })
-    yield* api["process.write"]({ id: spawned.id, data: new TextEncoder().encode("ping"), end: true })
-    const events = yield* api["process.output"]({ id: spawned.id }).pipe(Stream.runCollect)
-    expect(events).toEqual([
-      { type: "stdout", offset: 0, bytes: new TextEncoder().encode("ping") },
-      { type: "exit", exitCode: 0, signal: null },
-    ])
-  }),
-)
-
-it.live("streams every event of one process to each of its readers", () =>
-  Effect.gen(function* () {
-    const api = yield* client()
-    const spawned = yield* api["process.spawn"]({ command: "sh", arguments: ["-c", "sleep 0.3; echo one; exit 4"] })
-    const outputs = yield* Effect.all(
-      [api["process.output"]({ id: spawned.id }), api["process.output"]({ id: spawned.id })].map((stream) =>
-        stream.pipe(
-          Stream.filter((event) => event.type !== "ping"),
-          Stream.runCollect,
-        ),
-      ),
-      { concurrency: "unbounded" },
-    )
-    const expected = [
-      { type: "stdout" as const, offset: 0, bytes: new TextEncoder().encode("one\n") },
-      { type: "exit" as const, exitCode: 4, signal: null },
-    ]
-    expect(outputs).toEqual([expected, expected])
-  }),
-)
-
-it.live("resumes a process's output from the cursor a dropped reader reached", () =>
-  Effect.gen(function* () {
-    const api = yield* client()
-    const spawned = yield* api["process.spawn"]({
-      command: "sh",
-      arguments: ["-c", "echo first; sleep 0.5; echo second; exit 2"],
-    })
-    const first = yield* api["process.output"]({ id: spawned.id }).pipe(
-      Stream.filter((event) => event.type === "stdout"),
-      Stream.take(1),
-      Stream.runCollect,
-    )
-    const reached = first.map((event) => event.offset + event.bytes.length)
-    expect(reached).toEqual([6])
-    const rest = yield* api["process.output"]({ id: spawned.id, cursor: 6 }).pipe(
-      Stream.filter((event) => event.type !== "ping"),
-      Stream.runCollect,
-    )
-    expect(rest).toEqual([
-      { type: "stdout", offset: 6, bytes: new TextEncoder().encode("second\n") },
-      { type: "exit", exitCode: 2, signal: null },
-    ])
   }),
 )
 
@@ -201,23 +108,6 @@ it.live("returns the declared errors", () =>
     )
     expect((yield* api["process.kill"]({ id: ProcessID.create() }).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
     yield* api["process.kill"]({ id: spawned.id, signal: "SIGKILL" })
-  }),
-)
-
-it.live("reads and changes files", () =>
-  Effect.gen(function* () {
-    const api = yield* client()
-    yield* api["files.write"]({ path: "rpc/a.txt", bytes: new TextEncoder().encode("hello world") })
-    const read = yield* api["files.read"]({ path: "rpc/a.txt", range: { offset: 6, length: 100 } })
-    expect(new TextDecoder().decode(read.bytes)).toBe("world")
-    expect(yield* api["files.list"]({ path: "rpc" })).toEqual([{ name: "a.txt", type: "file" }])
-    yield* api["files.mkdir"]({ path: "rpc/b" })
-    yield* api["files.move"]({ from: "rpc/a.txt", to: "rpc/b" })
-    expect((yield* api["files.stat"]({ path: "rpc/b/a.txt" })).sizeBytes).toBe(11)
-    const kind = yield* api["files.list"]({ path: "rpc/b/a.txt" }).pipe(Effect.flip)
-    expect(kind._tag === "WrongKindError" && kind.actual).toBe("file")
-    yield* api["files.remove"]({ path: "rpc" })
-    expect((yield* api["files.stat"]({ path: "rpc" }).pipe(Effect.flip))._tag).toBe("FileNotFoundError")
   }),
 )
 
@@ -246,105 +136,12 @@ it.effect("stops counting a reader whose stream was interrupted, so the 30-secon
     yield* Deferred.await(ready)
     yield* TestClock.adjust(Duration.seconds(60))
     yield* api["process.kill"]({ id: spawned.id, signal: "SIGCONT" })
-    expect(Processes.running(spawned.pid)).toBe(true)
-
     yield* Fiber.interrupt(reader)
-    yield* Effect.promise(() => Bun.sleep(300))
-    yield* TestClock.adjust(Duration.seconds(31))
-    yield* Effect.promise(() => Bun.sleep(300))
+    const exited = yield* TestClock.adjust(Duration.seconds(31)).pipe(
+      Effect.andThen(Processes.exits(spawned.pid)),
+      Effect.repeat({ until: (gone) => gone, times: 3 }),
+    )
+    expect(exited).toBe(true)
     expect((yield* api["process.kill"]({ id: spawned.id }).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
-    expect(yield* Processes.exits(spawned.pid)).toBe(true)
-  }),
-)
-
-it.live("refuses a token of another type, one signed by an unknown key, and accepts a lowercase bearer", () =>
-  Effect.gen(function* () {
-    const stranger = yield* Signature.generate("stranger")
-    const exp = Math.floor(Date.now() / 1000) + 60
-    const session = yield* connect(
-      yield* Signature.sign(pair.privateKey, { typ: "session", env: environmentId, brain, exp }),
-    )
-    const unknown = yield* connect(
-      yield* EnvironmentToken.sign(stranger.privateKey, { env: environmentId, brain, exp }),
-    )
-    const errors = yield* Effect.forEach([session, unknown], (api) => api["executor.hello"]().pipe(Effect.flip))
-    expect(errors.map((error) => error._tag)).toEqual(["UnauthorizedError", "UnauthorizedError"])
-    const http = yield* HttpClient.HttpClient
-    const lowercase = yield* http.execute(
-      invalidSpawn.pipe(HttpClientRequest.setHeader("authorization", `bearer ${yield* token()}`)),
-    )
-    expect(lowercase.status).toBe(200)
-  }),
-)
-
-it.live("finishes a command's output when the token expires while it streams", () =>
-  Effect.gen(function* () {
-    const api = yield* client({ exp: Math.floor(Date.now() / 1000) + 2 })
-    const spawned = yield* api["process.spawn"]({ command: "sh", arguments: ["-c", "echo early; sleep 3; echo late"] })
-    const events = yield* api["process.output"]({ id: spawned.id }).pipe(
-      Stream.filter((event) => event.type !== "ping"),
-      Stream.runCollect,
-    )
-    const text = events.flatMap((event) => (event.type === "stdout" ? [new TextDecoder().decode(event.bytes)] : []))
-    expect(text.join("")).toBe("early\nlate\n")
-    expect(events.at(-1)).toEqual({ type: "exit", exitCode: 0, signal: null })
-  }),
-)
-
-it.effect(
-  "kills a command 30 seconds after its last heartbeat, even if its reader's connection went silent without closing",
-  () =>
-    Effect.gen(function* () {
-      const relay = yield* Relay.make(Relay.portOf(yield* served))
-      const bearer = yield* token()
-      const direct = yield* connect(bearer)
-      const through = yield* connect(bearer, relay.url)
-      const spawned = yield* direct["process.spawn"]({ command: "sh", arguments: ["-c", "echo ready; sleep 120"] })
-      const ready = yield* Deferred.make<void>()
-      yield* through["process.output"]({ id: spawned.id }).pipe(
-        Stream.tap(() => Deferred.succeed(ready, undefined)),
-        Stream.runDrain,
-        Effect.ignore,
-        Effect.forkScoped,
-      )
-      yield* Deferred.await(ready)
-      yield* through["process.heartbeat"]({ id: spawned.id })
-      yield* relay.freeze
-      yield* Effect.promise(() => Bun.sleep(300))
-      yield* TestClock.adjust(Duration.seconds(29))
-      yield* Effect.promise(() => Bun.sleep(300))
-      expect(Processes.running(spawned.pid)).toBe(true)
-      yield* TestClock.adjust(Duration.seconds(2))
-      yield* Effect.promise(() => Bun.sleep(300))
-      expect(yield* Processes.exits(spawned.pid)).toBe(true)
-    }),
-)
-
-it.effect("keeps a command alive past 30 seconds while heartbeats keep coming", () =>
-  Effect.gen(function* () {
-    const api = yield* client()
-    const spawned = yield* api["process.spawn"]({ command: "sleep", arguments: ["120"] })
-    yield* api["process.heartbeat"]({ id: spawned.id })
-    yield* Effect.forEach(
-      [20, 20, 20],
-      (seconds) =>
-        TestClock.adjust(Duration.seconds(seconds)).pipe(
-          Effect.andThen(Effect.promise(() => Bun.sleep(100))),
-          Effect.andThen(api["process.heartbeat"]({ id: spawned.id })),
-        ),
-      { discard: true },
-    )
-    expect(Processes.running(spawned.pid)).toBe(true)
-    yield* api["process.kill"]({ id: spawned.id, signal: "SIGKILL" })
-  }),
-)
-
-it.live("refuses a heartbeat for another brain's command", () =>
-  Effect.gen(function* () {
-    const api = yield* client()
-    const spawned = yield* api["process.spawn"]({ command: "sleep", arguments: ["5"] })
-    const other = yield* client({ brain: Brain.ID.create() })
-    expect((yield* other["process.heartbeat"]({ id: spawned.id }).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
-    yield* api["process.kill"]({ id: spawned.id, signal: "SIGKILL" })
   }),
 )

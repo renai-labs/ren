@@ -87,7 +87,7 @@ function assertUniqueInputs(input: Input, payload: Normalized | undefined, name:
   }
 }
 
-function isEffectPortable(transports: Transports, name: string, portable: Map<SchemaAST.AST, boolean>): boolean {
+function assertPortable(transports: Transports, name: string, portable: Map<SchemaAST.AST, boolean>) {
   const effectPortable =
     [
       transports.params,
@@ -97,7 +97,7 @@ function isEffectPortable(transports: Transports, name: string, portable: Map<Sc
       transports.success,
       ...transports.errors,
     ].every((item) => item?.effectPortable !== false) && SchemaShape.streamEffectPortable(transports.success.schema)
-  if (!effectPortable) return false
+  if (!effectPortable) return
   const schemaPaths: Array<readonly [string, Schema.Top]> = [
     ...(transports.params === undefined ? [] : [[`${name}.params`, transports.params.schema] as const]),
     ...(transports.query === undefined ? [] : [[`${name}.query`, transports.query.schema] as const]),
@@ -107,7 +107,6 @@ function isEffectPortable(transports: Transports, name: string, portable: Map<Sc
     ...transports.errors.map((item) => [`${name}.error.${item.status}`, item.schema] as const),
   ]
   for (const [path, schema] of schemaPaths) Portable.assertPortable(schema, path, portable)
-  return true
 }
 
 function buildOperation(
@@ -134,14 +133,10 @@ function buildOperation(
   }
 }
 
-export function buildEndpoint(
-  source: Source,
-  groupName: string,
-  portable: Map<SchemaAST.AST, boolean>,
-): Types.Endpoint {
+export function buildEndpoint(source: Source, portable: Map<SchemaAST.AST, boolean>): Types.Endpoint {
   const endpoint = source.endpoint
   const group = source.group
-  const name = `${groupName}.${endpoint.identifier}`
+  const name = `${group.identifier}.${endpoint.identifier}`
   const required = [...source.middleware].find((item) => item.requiredForClient)
   if (required !== undefined) {
     throw new Errors.GenerationError({ reason: `Client middleware requires adapter: ${required.key}` })
@@ -154,7 +149,7 @@ export function buildEndpoint(
     ...transports.payloads.flatMap((item) => inputFields(item.schema, "payload", name)),
   ]
   assertUniqueInputs(input, transports.payloads[0], name)
-  const effectPortable = isEffectPortable(transports, name, portable)
+  assertPortable(transports, name, portable)
   const clientPath = Names.clientEndpointPath(
     group.identifier,
     Context.getOrElse(endpoint.annotations, OpenApi.Identifier, () =>
@@ -162,8 +157,7 @@ export function buildEndpoint(
     ),
   )
   return {
-    group: groupName,
-    sourceGroup: group.identifier,
+    group: group.identifier,
     topLevel: group.topLevel,
     endpoint,
     params: transports.params?.schema,
@@ -175,7 +169,6 @@ export function buildEndpoint(
     unwrapData: SchemaShape.isDataEnvelope(transports.success.schema),
     successes: [transports.success.schema],
     errors: transports.errors.map((item) => ({ status: item.status, schema: item.schema })),
-    effectPortable,
-    operation: buildOperation(groupName, clientPath, input, transports),
+    operation: buildOperation(group.identifier, clientPath, input, transports),
   }
 }

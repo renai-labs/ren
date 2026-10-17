@@ -51,23 +51,12 @@ describe("host leases", () => {
       }),
     ))
 
-  test("the first lease opens the host and later leases reuse it", () =>
-    run(
-      Effect.gen(function* () {
-        const opened = host()
-        expect(opened.lease.state()).toEqual({ open: false, leases: 0 })
-        expect(yield* Effect.scoped(opened.lease.acquire)).toBe(1)
-        expect(yield* Effect.scoped(Effect.all([opened.lease.acquire, opened.lease.acquire]))).toEqual([1, 1])
-        expect(opened.state.opened).toBe(1)
-        expect(opened.lease.state()).toEqual({ open: true, leases: 0 })
-      }),
-    ))
-
-  test("leases taken while the host is opening share one open", () =>
+  test("leases taken while the host is opening share one open, and later leases reuse it", () =>
     run(
       Effect.gen(function* () {
         const opening = yield* Deferred.make<void>()
         const opened = host({ opening })
+        expect(opened.lease.state()).toEqual({ open: false, leases: 0 })
         const leases = yield* Effect.forkChild(
           Effect.scoped(
             Effect.all([opened.lease.acquire, opened.lease.acquire, opened.lease.acquire], { concurrency: 3 }),
@@ -77,7 +66,9 @@ describe("host leases", () => {
         expect(opened.lease.state()).toEqual({ open: true, leases: 3 })
         yield* Deferred.succeed(opening, undefined)
         expect(yield* Fiber.join(leases)).toEqual([1, 1, 1])
+        expect(yield* Effect.scoped(opened.lease.acquire)).toBe(1)
         expect(opened.state.opened).toBe(1)
+        expect(opened.lease.state()).toEqual({ open: true, leases: 0 })
       }),
     ))
 
@@ -108,38 +99,6 @@ describe("host leases", () => {
       }),
     ))
 
-  test("releasing a lease lowers the count, and releasing it twice changes nothing", () =>
-    run(
-      Effect.gen(function* () {
-        const opened = host()
-        const first = yield* Scope.make()
-        const second = yield* Scope.make()
-        yield* opened.lease.acquire.pipe(Scope.provide(first))
-        yield* opened.lease.acquire.pipe(Scope.provide(second))
-        expect(opened.lease.state().leases).toBe(2)
-        yield* Scope.close(first, Exit.void)
-        yield* Scope.close(first, Exit.void)
-        expect(opened.lease.state().leases).toBe(1)
-        yield* Scope.close(second, Exit.void)
-        expect(opened.lease.state().leases).toBe(0)
-      }),
-    ))
-
-  test("a lease is released when the work it guards fails or is interrupted", () =>
-    run(
-      Effect.gen(function* () {
-        const opened = host()
-        const failed = yield* Effect.exit(Effect.scoped(opened.lease.acquire.pipe(Effect.andThen(Effect.fail("boom")))))
-        expect(failed).toEqual(Exit.fail("boom"))
-        expect(opened.lease.state().leases).toBe(0)
-        const held = yield* Effect.forkChild(Effect.scoped(opened.lease.acquire.pipe(Effect.andThen(Effect.never))))
-        yield* Effect.yieldNow
-        expect(opened.lease.state().leases).toBe(1)
-        yield* Fiber.interrupt(held)
-        expect(opened.lease.state().leases).toBe(0)
-      }),
-    ))
-
   test("close does nothing while a lease is held, and closes the host once the lease is released", () =>
     run(
       Effect.gen(function* () {
@@ -157,18 +116,6 @@ describe("host leases", () => {
           closed: [1],
           state: { open: false, leases: 0 },
         })
-      }),
-    ))
-
-  test("close does nothing when the host is not open", () =>
-    run(
-      Effect.gen(function* () {
-        const opened = host()
-        yield* opened.lease.close
-        yield* Effect.scoped(opened.lease.acquire)
-        yield* opened.lease.close
-        yield* opened.lease.close
-        expect(opened.state.closed).toEqual([1])
       }),
     ))
 

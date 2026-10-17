@@ -1,0 +1,54 @@
+export * as ModelsTest from "./models.js"
+
+import { ModelsBody } from "@ren/brain-api/brain-api"
+import { Deferred, Effect, Layer, Queue, Schema } from "effect"
+import { ModelStore } from "../../src/model-store.js"
+
+export interface Exchange {
+  readonly authorization: string | null
+  readonly response: Deferred.Deferred<Response>
+}
+
+export const storage = () => {
+  const stored = new Map<string, string>()
+  return ModelStore.layer.pipe(
+    Layer.provideMerge(
+      Layer.succeed(
+        ModelStore.Storage,
+        ModelStore.Storage.of({
+          get: (key) => Promise.resolve(stored.get(key)),
+          put: (key, value) => Promise.resolve(void stored.set(key, value)),
+          delete: (key) => Promise.resolve(stored.delete(key)),
+        }),
+      ),
+    ),
+  )
+}
+
+export const granted = (body: ModelsBody) => Response.json(Schema.encodeSync(ModelsBody)(body))
+
+export const issuer = Effect.gen(function* () {
+  const exchanges = yield* Queue.unbounded<Exchange>()
+  const requests: Array<string | null> = []
+  const server = yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: (request) => {
+          const response = Deferred.makeUnsafe<Response>()
+          requests.push(request.headers.get("authorization"))
+          Queue.offerUnsafe(exchanges, { authorization: request.headers.get("authorization"), response })
+          return Effect.runPromise(Deferred.await(response))
+        },
+      }),
+    ),
+    (server) => Effect.promise(() => server.stop(true)),
+  )
+  return {
+    url: server.url.origin,
+    requests,
+    next: Queue.take(exchanges),
+    reply: (exchange: Exchange, response: Response) => Deferred.succeed(exchange.response, response),
+  }
+})

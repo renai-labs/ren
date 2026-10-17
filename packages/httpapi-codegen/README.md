@@ -17,9 +17,10 @@ The package is private. Its tests are the executable specification for the gener
 ## Settled rules
 
 - Reflect one authoritative `HttpApi` into a shared contract with `compile(Api)`.
-- Emit clients independently with `emitPromise(contract)` and `emitEffect(contract)`.
+- Emit clients independently with `emitPromise(contract)`, `emitEffectImported(contract, { module, api })` and `emitReactQuery(contract, { client })`.
 - Give each emitter its own public type projection; the shared contract, not a generated type package, is the common source.
-- Generate a rich Effect client with decoded Effect-native values, runtime schemas, preserved transformations, and `HttpApiClient`.
+- Generate the Effect client over the authoritative `HttpApi` it imports, so it keeps decoded Effect-native values and transformations through `HttpApiClient`.
+- Generate TanStack Query option factories over the Promise client for every non-streaming operation.
 - Generate a zero-Effect Promise client with structural wire-oriented values, direct `fetch`, and syntax parsing without runtime structural validation.
 - Keep the Promise surface domain-oriented: methods return unwrapped values and reject with tagged declared errors or `ClientError`.
 - Return Promise streams as lazy `AsyncIterable` values and Effect streams as `Stream` values. Neither runtime reconnects automatically.

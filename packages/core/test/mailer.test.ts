@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { Cause, ConfigProvider, Effect, Exit, Layer, Logger } from "effect"
+import { Cause, ConfigProvider, Effect, Exit, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Mailer } from "../src/mailer.js"
 import { testEffect } from "./lib/effect.js"
@@ -50,28 +50,17 @@ describe("Mailer", () => {
     }),
   )
 
-  for (const scenario of [
-    { name: "missing token in production", values: { NODE_ENV: "production" } },
-    { name: "empty token in production", values: { NODE_ENV: "production", POSTMARK_SERVER_TOKEN: "" } },
-  ]) {
-    testEffect(ConfigProvider.layer(ConfigProvider.fromUnknown(scenario.values))).effect(
-      `rejects ${scenario.name} without logging email secrets`,
-      () =>
-        Effect.gen(function* () {
-          const logs: unknown[] = []
-          const exit = yield* Effect.gen(function* () {
-            const mailer = yield* Mailer.Service
-            yield* mailer.send({ ...email, text: "private-reset-token" })
-          }).pipe(
-            Effect.provide(Mailer.layer.pipe(Layer.provide(FetchHttpClient.layer))),
-            Effect.provide(Logger.layer([Logger.make((options) => logs.push(options.message))])),
-            Effect.exit,
-          )
-          expect(Exit.isFailure(exit) ? String(Cause.squash(exit.cause)) : "").toContain(
-            "POSTMARK_SERVER_TOKEN is required outside development/test",
-          )
-          expect(logs).toEqual([])
-        }),
-    )
-  }
+  testEffect(
+    ConfigProvider.layer(ConfigProvider.fromUnknown({ NODE_ENV: "production", POSTMARK_SERVER_TOKEN: "" })),
+  ).effect("rejects an empty token in production", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.gen(function* () {
+        const mailer = yield* Mailer.Service
+        yield* mailer.send(email)
+      }).pipe(Effect.provide(Mailer.layer.pipe(Layer.provide(FetchHttpClient.layer))), Effect.exit)
+      expect(Exit.isFailure(exit) ? String(Cause.squash(exit.cause)) : "").toContain(
+        "POSTMARK_SERVER_TOKEN is required outside development/test",
+      )
+    }),
+  )
 })

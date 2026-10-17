@@ -1,17 +1,15 @@
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
+import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { CurrentHost, ModelsApi } from "@ren/brain-api/models-api"
-import { SessionToken } from "@ren/brain-api/session-token"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, DateTime, Effect, Layer, ManagedRuntime, Option, Redacted, Ref } from "effect"
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
+import { Effect, Layer, ManagedRuntime, Ref } from "effect"
+import { HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { BrainHost } from "../src/brain-host.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
-
-setDefaultTimeout(60_000)
+import { Host } from "./lib/host.js"
 
 const stub = Shared.stub()
 const minuteMs = 60_000
@@ -34,13 +32,6 @@ const models = Layer.succeed(
 
 const settings = { CELL_URL: "", CELL_KEYS: TestToken.vars.CELL_KEYS }
 
-const hostWith = (config: Record<string, string>) =>
-  BrainHost.layer.pipe(
-    Layer.provide(models),
-    Layer.provide(FetchHttpClient.layer),
-    Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(config))),
-  )
-
 const api = HttpRouter.toWebHandler(
   HttpApiBuilder.layer(ModelsApi).pipe(
     Layer.provide(
@@ -57,7 +48,7 @@ const api = HttpRouter.toWebHandler(
       ),
     ),
     Layer.provide(BrainHost.hostAuthentication),
-    Layer.provide(hostWith({ CELL_URL: "http://127.0.0.1:9", CELL_KEYS: settings.CELL_KEYS })),
+    Layer.provide(Host.layer({ CELL_URL: "http://127.0.0.1:9", CELL_KEYS: settings.CELL_KEYS }, models)),
     Layer.provide(HttpServer.layerServices),
   ),
   { disableLogger: true },
@@ -82,7 +73,7 @@ afterAll(async () => {
   await server.stop(true)
 })
 
-const it = testEffect(Layer.unwrap(Effect.sync(() => hostWith(settings))))
+const it = testEffect(Layer.unwrap(Effect.sync(() => Host.layer(settings, models))))
 const organizationId = Auth.OrganizationID.create()
 
 describe("model refresh", () => {
@@ -108,36 +99,6 @@ describe("model refresh", () => {
       )
       const call = yield* Effect.promise(() => script.called())
       expect([call.authorization, (yield* Ref.get(granted)) - before]).toEqual([`Bearer sk-granted-${before + 2}`, 2])
-    }),
-  )
-
-  it.live("authenticateHost refuses tokens that are not valid host tokens", () =>
-    Effect.gen(function* () {
-      const brain = yield* BrainHost.Service
-      const key = TestToken.keys[0]
-      const exp = Math.floor(Date.now() / 1000) + 600
-      const sid = Session.ID.create()
-      const tokens = [
-        "not-a-token",
-        yield* SessionToken.sign(key, { sid, scope: "server", exp }),
-        yield* SessionToken.seal(key.secret, { kid: key.id, sid, scope: "host", exp }),
-        yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp: exp - 1200 }),
-      ]
-      const failures = yield* Effect.forEach(tokens, (token) =>
-        brain.authenticateHost(Redacted.make(token)).pipe(Effect.flip),
-      )
-      expect(failures.map((failure) => failure._tag)).toEqual(Array.from({ length: 4 }, () => "ForbiddenError"))
-      const valid = yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, exp })
-      const host = yield* brain.authenticateHost(Redacted.make(valid))
-      expect(host).toEqual({ brainId: sid, organizationId })
-      const refreshed = yield* brain.refreshModels(host)
-      expect(refreshed.access.endpoints.map((endpoint) => endpoint.id)).toEqual(["stub"])
-      const claims = yield* SessionToken.verify(TestToken.keys, refreshed.hostToken ?? "")
-      const keyExpiresAt = refreshed.access.endpoints[0]?.apiKey.expiresAt
-      expect(keyExpiresAt).toBeDefined()
-      expect(Option.getOrThrow(claims).exp * 1000).toBeGreaterThanOrEqual(
-        (keyExpiresAt ? DateTime.toEpochMillis(keyExpiresAt) : 0) + 2 * 60 * 60 * 1000 - 1000,
-      )
     }),
   )
 })

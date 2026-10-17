@@ -14,27 +14,12 @@ function claimClientPath(claimed: Set<string>, path: ReadonlyArray<string>, reas
 }
 
 export function buildGroups(endpoints: ReadonlyArray<Types.Endpoint>): Array<Types.Group> {
-  const modules = new Set(["client", "client-error", "index"])
   return Array.from(
     Map.groupBy(endpoints, (endpoint) => endpoint.group),
-    ([identifier, groupEndpoints]) => {
-      if (new Set(groupEndpoints.map((endpoint) => endpoint.sourceGroup)).size > 1) {
-        throw new Errors.GenerationError({ reason: `Client group name collision: ${identifier}` })
-      }
-      const sanitized = identifier.replaceAll(/[^A-Za-z0-9_-]+/g, "-").replaceAll(/^-+|-+$/g, "")
-      const reserved = /^(aux|client|client-error|con|index|nul|prn|com[1-9]|lpt[1-9])$/i.test(sanitized)
-      const module = sanitized === "" || reserved ? `group-${sanitized}` : sanitized
-      if (modules.has(module.toLowerCase())) {
-        throw new Errors.GenerationError({ reason: `Client module name collision: ${module}` })
-      }
-      modules.add(module.toLowerCase())
-      return {
-        identifier,
-        sourceIdentifier: groupEndpoints[0]?.sourceGroup ?? identifier,
-        module,
-        endpoints: groupEndpoints,
-      }
-    },
+    ([identifier, groupEndpoints]) => ({
+      identifier,
+      endpoints: groupEndpoints,
+    }),
   )
 }
 
@@ -42,18 +27,12 @@ type Claims = {
   readonly publicNames: Set<string>
   readonly groupTypeNames: Set<string>
   readonly endpointTypeNames: Set<string>
-  readonly operationKeys: Set<string>
 }
 
 function assertEndpointNames(group: Types.Group, claims: Claims) {
   const typeNames = new Set<string>()
   const groupTypeName = Names.groupTypeName(group)
   for (const endpoint of group.endpoints) {
-    const operationKey = Names.clientOperationKey(group, endpoint)
-    if (claims.operationKeys.has(operationKey)) {
-      throw new Errors.GenerationError({ reason: `Client operation key collision: ${operationKey}` })
-    }
-    claims.operationKeys.add(operationKey)
     const name = endpoint.clientPath.map(Names.identifierPart).join("")
     const endpointTypeName = `${groupTypeName}${name}`
     if (claims.endpointTypeNames.has(endpointTypeName)) {
@@ -98,7 +77,6 @@ export function assertClientNames(groups: ReadonlyArray<Types.Group>) {
     publicNames: new Set<string>(),
     groupTypeNames: new Set<string>(),
     endpointTypeNames: new Set<string>(),
-    operationKeys: new Set<string>(),
   }
   for (const group of groups) assertGroupNames(group, claims)
 }
