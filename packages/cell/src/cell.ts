@@ -203,7 +203,7 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
   const sync = Layer.unwrap(
     Effect.gen(function* () {
       const cell = yield* Info
-      return Sync.layer(storage.sql, cell.vars.REN_URL)
+      return Sync.layer(storage, cell.vars.REN_URL)
     }),
   )
   const models = ModelStore.layer.pipe(Layer.provideMerge(Layer.succeed(ModelStore.Storage, storage)))

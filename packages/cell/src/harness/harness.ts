@@ -1,7 +1,7 @@
 export * as Harness from "./harness.js"
 
 import type { StartBody } from "@ren/host-api/brain-api"
-import type { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
+import type { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from "@ren/host-api/errors"
 import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
 import { Context, Effect, Exit, Layer, type Option, Scope } from "effect"
@@ -20,7 +20,7 @@ export type Refresh = (endpointId: string) => Effect.Effect<Option.Option<Models
 export interface Instance {
   readonly fetch: (request: Request) => Promise<Response>
   readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>
-  readonly start: (input: StartBody) => Effect.Effect<Session.Started, BrainRejectedError>
+  readonly start: (input: StartBody) => Effect.Effect<Session.Started, BrainRejectedError | SyncUnavailableError>
   readonly send: (
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, BrainRejectedError | SessionNotStartedError>

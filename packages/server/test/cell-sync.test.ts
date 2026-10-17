@@ -274,6 +274,7 @@ describe("cell sync", () => {
           if (!response.ok) throw new Error(`${path} answered ${response.status}: ${await response.text()}`)
         })
       yield* call("PUT", "/ren/models", Schema.encodeSync(ModelsBody)({ access: Shared.access() }))
+      yield* Effect.promise(() => cell.opencode.session.create({ id: cell.id, location: { directory: "/workspace" } }))
       yield* call("POST", "/ren/sessions", {
         sessionId: cell.id,
         harness: "opencode",

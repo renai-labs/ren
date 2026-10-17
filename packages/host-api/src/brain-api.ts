@@ -3,7 +3,13 @@ import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Schema, Struct } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
-import { BrainRejectedError, ForbiddenError, ModelsNotConfiguredError, SessionNotStartedError } from "./errors.js"
+import {
+  BrainRejectedError,
+  ForbiddenError,
+  ModelsNotConfiguredError,
+  SessionNotStartedError,
+  SyncUnavailableError,
+} from "./errors.js"
 
 export const StartBody = Session.StartInput.mapFields((fields) => ({
   ...Struct.omit(fields, ["environmentTemplateId"]),
@@ -25,7 +31,7 @@ const BrainGroup = HttpApiGroup.make("brain")
     HttpApiEndpoint.post("brain.start", "/ren/sessions", {
       payload: StartBody,
       success: Session.Started,
-      error: [ForbiddenError, BrainRejectedError, ModelsNotConfiguredError],
+      error: [ForbiddenError, BrainRejectedError, ModelsNotConfiguredError, SyncUnavailableError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.start",

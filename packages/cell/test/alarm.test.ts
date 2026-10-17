@@ -47,6 +47,7 @@ const setup = Effect.gen(function* () {
     Option.some({
       step: () => Effect.suspend(() => current.steps.shift() ?? Effect.succeed({ drained: true })),
       exclusive: (effect) => effect,
+      restore: () => Effect.void,
     }),
   )
   const info = Cell.Info.of({
@@ -426,7 +427,11 @@ it.effect("the alarm stays set while sync is not drained, also after reconcile c
   Effect.gen(function* () {
     const cell = yield* setup
     cell.current.snapshots = [cell.session()]
-    cell.current.steps = [Effect.succeed({ drained: false }), Effect.fail(unavailable), Effect.succeed({ drained: true })]
+    cell.current.steps = [
+      Effect.succeed({ drained: false }),
+      Effect.fail(unavailable),
+      Effect.succeed({ drained: true }),
+    ]
     const fire = Effect.sync(() => {
       cell.current.alarm = null
     }).pipe(Effect.andThen(cell.run(Cell.alarm())), Effect.andThen(Effect.sync(() => cell.current.alarm)))
