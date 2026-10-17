@@ -1,0 +1,14 @@
+id: no-test-sleep
+language: Tsx
+message: "Do not wait for real time in a test. Use TestClock, a latch or an event that the test can see. When the real wait is the point of the test, add `// ast-grep-ignore: no-test-sleep -- <reason>`."
+severity: error
+files:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+rule:
+  any:
+    - pattern: Bun.sleep($$$ARGS)
+    - pattern: setTimeout($$$ARGS)
+    - pattern: $PAGE.waitForTimeout($$$ARGS)
