@@ -39,7 +39,11 @@ The message is submitted after applying the session configuration and instructio
 
 ## Environments
 
-When the cell has `Environments`, every session gets a `ren` workspace, and `start` sets which environment its file and shell tools run on. `environments: [location]` attaches or moves the session, `environments: []` detaches it, and no `environments` keeps the current one. The cell checks that the directory exists on the environment, then stores the binding in Durable Object storage under `ren:environment-binding:`. The next tool call uses the new binding; the conversation stays. A change waits up to 10 seconds for a running turn to end, and then answers `BrainRejectedError`. The session's directory stays the one it started with: paths under it map onto the environment's directory, and the `ren.environment` instruction tells the model where its tools run. A session without an environment has no file or shell tools.
+The production cell has `Environments` whenever `REN_URL` is set. It asks Ren for a session's access through the Host API (`environments.access`, with the host token) at the first file or shell call; `start`, a wake and a continue contact neither Ren nor a sandbox. The cell keeps the answer in memory only: the binding is in Ren's database (`specs/environments/v1.md`).
+
+`start` accepts `environment` only for a new session, which then works in `/workspace/<session>` in a `ren` workspace. A later `start` without `environment` keeps it; an `environment` for a session that started without one answers "not supported yet". Ren refuses a change of environment before it calls the cell. A session without an environment has no read, write, edit, patch, glob, grep or shell; its other tools stay, and the `ren.environment` instruction tells the model why. A tool error names its cause (no access, Ren does not answer, the sandbox does not answer, token refused, not compatible) through the public `execute.after` hook.
+
+The cell renews its host token with `host.refresh` in its last five minutes. A missing or expiring host token makes `start` and `send` answer `ModelsNotConfiguredError`, so Ren configures the brain again with a fresh one.
 
 ## Limits
 
@@ -60,11 +64,11 @@ bun typecheck
 - `brain-api.test.ts`: `HttpApiTest.groups` with the real Brain handlers, OpenCode adapter, in-memory SQLite and a loopback model fixture. No cell process is needed.
 - `alarm.test.ts`: the actual `Cell.alarm` under `TestClock`, first with scripted snapshots, then with the in-process OpenCode harness.
 - `remote-tools.test.ts`: the in-process OpenCode harness with tools on real executors.
+- `environment-access.test.ts`: the Host API `EnvironmentAccess` against a fake Ren (`test/lib/ren.ts`).
+- `ren-workspace-driver.test.ts`: the OpenCode `ren` driver's file and error mapping.
 - `lease.test.ts`, `reconcile.test.ts`, `credentials.test.ts`, `model-refresh.test.ts`: Ren's ownership, decisions and transformations.
 - `cell.test.ts`: a smoke set of authentication, routing, body limits, streams and the idle close against celld; the same suite runs under Wrangler.
 - `crash.test.ts`: durable recovery against celld killed at the critical lifecycle boundaries.
-- `environment-lifecycle-cell.test.ts`: environments across workerd sleep, crash and restart; it runs only under Wrangler.
-
-`test/lib/environment-worker.ts` is the cell Worker with environment access. It takes either `TEST_ENVIRONMENT_ACCESS`, a JSON array of `Environment.Access`, or `CHAOS_CONTROL_URL`, a server that answers `GET /environments/:id` with an access or 404 and long-polls `GET /environments/changes?after=:version` with `{ version, ids }`.
+- `environment-lifecycle-cell.test.ts`: the production Worker with a fake Ren, across workerd sleep, crash and restart; it runs only under Wrangler.
 
 Integration processes are acquired and released by scoped layers. Cloudflare deployment measurements and the next host-contract steps remain in [`brain-host-roadmap.md`](../../specs/brain-host-roadmap.md).

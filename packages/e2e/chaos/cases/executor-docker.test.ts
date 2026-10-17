@@ -9,7 +9,7 @@ import { Wait } from "../lib/wait.js"
 
 describe.skipIf(Platform.docker !== undefined)("an executor in a container", () => {
   const brain = Brain.ID.create()
-  const lane: { container?: ExecutorAdapter.Container; driver?: ExecutorDriver.Driver } = {}
+  const lane: { container?: ExecutorAdapter.Instance; driver?: ExecutorDriver.Driver } = {}
 
   const current = () => {
     if (!lane.container || !lane.driver) throw new Error("the container did not start")

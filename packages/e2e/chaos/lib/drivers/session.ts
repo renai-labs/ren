@@ -11,7 +11,7 @@ import type { ModelProvider } from "../provider/model.js"
 import { Wait } from "../wait.js"
 
 export interface StartOptions {
-  readonly environments?: ReadonlyArray<Environment.Location>
+  readonly environment?: Environment.Location
   readonly interactive?: boolean
   readonly model?: Session.Model
   readonly instructions?: Readonly<Record<string, string>>
@@ -46,10 +46,11 @@ export const toolNames = (read: ReadonlyArray<SessionMessageInfo>) =>
 
 export const lastIdle = (read: ReadonlyArray<SessionMessageInfo>) => read.findLast((message) => message.type === "idle")
 
-export const make = async (url: string, provider?: ModelProvider.Instance) => {
+export type Repair = (sessionId: Session.ID) => Promise<{ readonly access: Models.Access; readonly hostToken: string }>
+
+export const make = async (url: string, provider?: ModelProvider.Instance, repair?: Repair) => {
   const cell = await TestCell.make(url)
-  const send = async (text: string, options: SendOptions = {}) => {
-    const messageId = options.messageId ?? Session.MessageID.create()
+  const post = async (text: string, messageId: Session.MessageID, options: SendOptions) => {
     const response = await cell.brain(`/ren/sessions/${cell.id}/messages`, {
       messageId,
       prompt: { text },
@@ -58,15 +59,30 @@ export const make = async (url: string, provider?: ModelProvider.Instance) => {
     })
     return { messageId, status: response.status, body: await response.text() }
   }
+  const configureModels = (access: Models.Access, hostToken?: string) =>
+    fetch(`${url}/ren/models`, {
+      method: "PUT",
+      headers: { authorization: cell.server, "content-type": "application/json" },
+      body: JSON.stringify(encodeModels({ access, ...(hostToken !== undefined && { hostToken }) })),
+    })
+  const send = async (text: string, options: SendOptions = {}) => {
+    const messageId = options.messageId ?? Session.MessageID.create()
+    const sent = await post(text, messageId, options)
+    if (sent.status !== 409 || !repair || !sent.body.includes("ModelsNotConfiguredError")) return sent
+    const repaired = await repair(Session.ID.make(cell.id))
+    await configureModels(repaired.access, repaired.hostToken)
+    return post(text, messageId, options)
+  }
   const read = () => messages(cell.opencode, cell.id)
   return {
     ...cell,
+    sessionId: Session.ID.make(cell.id),
     start: (options: StartOptions = {}) =>
       cell.brain("/ren/sessions", {
         sessionId: cell.id,
         harness: "opencode",
         interactive: options.interactive ?? false,
-        ...(options.environments && { environments: options.environments }),
+        ...(options.environment && { environment: options.environment }),
         ...(options.model && { model: options.model }),
         ...(options.instructions && { instructions: options.instructions }),
         ...(options.initialMessage && {
@@ -78,12 +94,7 @@ export const make = async (url: string, provider?: ModelProvider.Instance) => {
         }),
       }),
     send,
-    configureModels: (access: Models.Access, hostToken?: string) =>
-      fetch(`${url}/ren/models`, {
-        method: "PUT",
-        headers: { authorization: cell.server, "content-type": "application/json" },
-        body: JSON.stringify(encodeModels({ access, ...(hostToken !== undefined && { hostToken }) })),
-      }),
+    configureModels,
     messages: read,
     settled: async (ms = 30_000) => {
       await Wait.deadline(`session ${cell.id} to settle`, ms, cell.opencode.session.wait({ sessionID: cell.id }))

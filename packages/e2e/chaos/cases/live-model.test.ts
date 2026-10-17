@@ -37,9 +37,9 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.live !== undefined)(
   const session = () =>
     current().stack.session({
       models: LiveModel.access(current().selected),
+      hand: current().hand,
       start: {
         model: { endpointId: current().selected.providerId, modelId: current().selected.modelId },
-        environments: [current().hand.location()],
         instructions,
       },
     })
@@ -68,7 +68,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.live !== undefined)(
       opened,
       `Use your tools: create ${name} containing exactly ${first}, read it back, then replace ${first} with ${second}. Reply DONE.`,
     )
-    expect((await current().hand.instance.observe(["cat", name])).stdout.trim()).toBe(second)
+    expect((await current().hand.instance.observe(["cat", `${opened.sessionId}/${name}`])).stdout.trim()).toBe(second)
     expect(SessionDriver.toolNames(read).length).toBeGreaterThanOrEqual(2)
   }, 300_000)
 
@@ -92,6 +92,33 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.live !== undefined)(
     expect(lastAnswer(read).toUpperCase()).toContain("READY")
     expect(read.some((message) => message.type === "idle" && message.outcome === "interrupted")).toBe(true)
   }, 300_000)
+
+  test.skipIf(!process.env.CHAOS_LIVE_MODEL_ALT)(
+    "the alternate model changes a file on the sandbox with the patch tool",
+    async () => {
+      const alternate = await select(process.env.CHAOS_LIVE_MODEL_ALT)
+      const opened = await current().stack.session({
+        models: LiveModel.access(alternate),
+        hand: current().hand,
+        start: { model: { endpointId: alternate.providerId, modelId: alternate.modelId }, instructions },
+      })
+      const name = `patched-${crypto.randomUUID().slice(0, 6)}.txt`
+      const before = `before-${crypto.randomUUID().slice(0, 6)}`
+      const after = `after-${crypto.randomUUID().slice(0, 6)}`
+      await current().hand.instance.observe([
+        "sh",
+        "-c",
+        `mkdir -p ${opened.sessionId} && printf '%s\\n' ${before} > ${opened.sessionId}/${name}`,
+      ])
+      const read = await ask(
+        opened,
+        `Use the patch tool to change the line ${before} to ${after} in ${name}. Do not use the shell. Reply DONE.`,
+      )
+      expect((await current().hand.instance.observe(["cat", `${opened.sessionId}/${name}`])).stdout.trim()).toBe(after)
+      expect(SessionDriver.toolNames(read)).toContain("patch")
+    },
+    300_000,
+  )
 
   test.skipIf(!process.env.CHAOS_LIVE_MODEL_ALT)(
     "switching between two small models in one session changes the model that answers",

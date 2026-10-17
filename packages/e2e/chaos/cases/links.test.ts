@@ -29,7 +29,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
 
   afterAll(() => lane.stack?.dispose())
 
-  const attached = () => current().stack.session({ start: { environments: [current().hand.location()] } })
+  const attached = () => current().stack.session({ hand: current().hand })
 
   const ledgerTurn = async (session: SessionDriver.Driver, label: string) => {
     const marker = Ledger.marker(label)
@@ -75,9 +75,10 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       const session = await stack.session()
       const key = Stack.freshKey("lost-reply")
       const fault = stack.cellProxy.inject({ operation: "PUT /ren/models" }, { type: "drop-response" }, 2)
-      expect(await failed(session.configureModels(stack.access(key)))).toBe(true)
+      const hostToken = await stack.issuer.issue(session.sessionId)
+      expect(await failed(session.configureModels(stack.access(key), hostToken))).toBe(true)
       fault.expectApplied()
-      expect((await session.configureModels(stack.access(key))).status).toBe(204)
+      expect((await session.configureModels(stack.access(key), hostToken)).status).toBe(204)
       const turn = await session.turn([ModelProvider.text("configured")])
       expect((await turn.script.called(1)).key).toBe(key)
     })
@@ -152,7 +153,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
     test("a refresh refused before delivery leaves the valid key in use", async () => {
       const stack = current().stack
       const key = Stack.freshKey("refuse")
-      const session = await stack.session({ models: stack.access(key, inWindow()), hostToken: stack.issuer.issue() })
+      const session = await stack.session({ models: stack.access(key, inWindow()) })
       const fault = stack.issuerProxy.inject({ operation: "POST /brain/models/refresh" }, { type: "refuse" })
       const turn = await session.turn([ModelProvider.text("fallback")])
       expect((await turn.script.called(1)).key).toBe(key)
@@ -169,7 +170,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
         granted.count += 1
         return { type: "grant", access: stack.access(granted.count === 1 ? lostKey : later, Date.now() + 3_600_000) }
       })
-      const session = await stack.session({ models: stack.access(key, inWindow()), hostToken: stack.issuer.issue() })
+      const session = await stack.session({ models: stack.access(key, inWindow()) })
       const from = stack.provider.calls.length
       const fault = stack.issuerProxy.inject({ operation: "POST /brain/models/refresh" }, { type: "drop-response" })
       const first = await session.turn([ModelProvider.text("first")])
@@ -182,14 +183,14 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       expect(used.filter((used) => used !== key && used !== later)).toEqual([])
     })
 
-    test("a rotating grant whose reply is lost is not retried blindly, across a restart, and work continues on the valid key", async () => {
+    test("a rotating grant whose reply is lost is not retried blindly, across a restart, and the next send gets a fresh configuration", async () => {
       const stack = current().stack
       stack.issuer.rotate(true)
       stack.issuer.next(() => ({ type: "grant", access: stack.access(Stack.freshKey("rotated"), inWindow()) }))
       const key = Stack.freshKey("current")
-      const session = await stack.session({ models: stack.access(key, inWindow()), hostToken: stack.issuer.issue() })
+      const session = await stack.session({ models: stack.access(key, inWindow()) })
       const lost = stack.issuerProxy.inject({ operation: "POST /brain/models/refresh" }, { type: "drop-response" })
-      const from = stack.issuer.calls.length
+      const from = stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").length
       const keyOfTurn = async (text: string) => {
         const turn = await session.turn([ModelProvider.text(text)])
         const call = await turn.script.called(1)
@@ -201,9 +202,10 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       const keys = [first, await keyOfTurn("after the restart"), await keyOfTurn("again")]
       stack.issuer.rotate(false)
       expect(lost.expectApplied().boundary).toBe("after-commit-before-reply")
-      expect(keys).toEqual([key, key, key])
-      expect(stack.issuer.calls.length - from).toBeLessThanOrEqual(2)
-      expect(stack.issuer.calls.slice(from).at(-1)?.status).not.toBe(200)
+      expect(keys[0]).toBe(key)
+      expect(keys[2]).toBe(keys[1])
+      expect(stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").length - from).toBeLessThanOrEqual(2)
+      expect(stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").slice(from).at(-1)?.status).not.toBe(200)
     }, 240_000)
   })
 
@@ -248,7 +250,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
   test("a hand outage and an issuer outage together end the tool cleanly and keep credentials intact", async () => {
     const lanes = current()
     const session = await attached()
-    const host = lanes.stack.issuer.issue()
+    const host = await lanes.stack.issuer.issue(session.sessionId)
     expect((await session.configureModels(lanes.stack.access(Stack.freshKey("both"), inWindow()), host)).status).toBe(
       204,
     )
@@ -262,11 +264,11 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       type: "grant",
       access: lanes.stack.access(Stack.freshKey("renewed"), Date.now() + 3_600_000),
     }))
-    const from = lanes.stack.issuer.calls.length
+    const from = lanes.stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").length
     const healthy = await ledgerTurn(session, "both-up")
     await healthy.turn.script.called(2, 60_000)
     expect(await Ledger.count(lanes.hand.instance, healthy.marker)).toBe(1)
-    expect(lanes.stack.issuer.calls.slice(from).some((call) => call.hostToken === host && call.status === 200)).toBe(
+    expect(lanes.stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").slice(from).some((call) => call.hostToken === host && call.status === 200)).toBe(
       true,
     )
   })
