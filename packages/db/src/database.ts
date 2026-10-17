@@ -7,9 +7,12 @@ import { Context, Effect, Layer } from "effect"
 import { SqlError } from "effect/sql/SqlError"
 import { authRelations } from "./auth.sql.js"
 import { environmentRelations } from "./environment.sql.js"
+import { sessionRelations } from "./session.sql.js"
 import { spaceRelations } from "./space.sql.js"
 
-const make = makeWithDefaults({ relations: { ...spaceRelations, ...authRelations, ...environmentRelations } })
+const make = makeWithDefaults({
+  relations: { ...spaceRelations, ...sessionRelations, ...authRelations, ...environmentRelations },
+})
 
 type Client = Effect.Success<typeof make>
 
