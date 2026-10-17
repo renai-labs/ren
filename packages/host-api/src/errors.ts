@@ -47,3 +47,9 @@ export class EnvironmentUnavailableError extends Schema.TaggedError<EnvironmentU
   { message: Schema.String },
   { httpApiStatus: 503 },
 ) {}
+
+export class SyncUnavailableError extends Schema.TaggedError<SyncUnavailableError>()(
+  "SyncUnavailableError",
+  { message: Schema.String },
+  { httpApiStatus: 503 },
+) {}

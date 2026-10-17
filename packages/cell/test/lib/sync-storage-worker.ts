@@ -3,7 +3,7 @@ import { Effect, Exit, Result, Schema } from "effect"
 import { Harness } from "../../src/harness/harness.js"
 import { SessionCell } from "../../src/session-cell.js"
 import worker from "../../src/worker.js"
-import { OpenCodeRows } from "./opencode-rows.js"
+import { OpenCodeRows } from "../../src/harness/opencode/opencode-rows.js"
 
 const tables = ["event_sequence", "session_message", "session_v2"]
 
@@ -98,13 +98,23 @@ class SyncStorageCell extends SessionCell {
   override async fetch(request: Request) {
     const url = new URL(request.url)
     const sessionId = this.ctx.id.name ?? ""
+    if (url.pathname === "/test/lose-storage") {
+      await this.runtime.runPromise(Effect.flatMap(Harness.Service, (harness) => harness.close))
+      await this.ctx.storage.deleteAlarm()
+      await this.ctx.storage.deleteAll()
+      return new Response(null, { status: 204 })
+    }
     if (url.pathname === "/test/read") return Response.json(read(this.ctx.storage.sql, sessionId))
     if (url.pathname === "/test/sizes") return Response.json(sizes(this.ctx.storage.sql, sessionId))
     if (url.pathname === "/test/rows")
       return Response.json({
-        sessions: [...this.ctx.storage.sql.exec(`select ${Object.keys(OpenCodeSessionRow.fields).join(", ")} from session_v2`)],
+        sessions: [
+          ...this.ctx.storage.sql.exec(`select ${Object.keys(OpenCodeSessionRow.fields).join(", ")} from session_v2`),
+        ],
         messages: [
-          ...this.ctx.storage.sql.exec(`select ${Object.keys(OpenCodeMessageRow.fields).join(", ")} from session_message`),
+          ...this.ctx.storage.sql.exec(
+            `select ${Object.keys(OpenCodeMessageRow.fields).join(", ")} from session_message`,
+          ),
         ],
       })
     if (url.pathname === "/test/bind") {

@@ -5,17 +5,19 @@ import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import type { SessionCreateInput, SessionListInput } from "@opencode/client/effect/api"
-import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
+import { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from "@ren/host-api/errors"
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { SendInput } from "@ren/schema/session"
-import { Clock, Effect, Layer, Option, Semaphore, Stream } from "effect"
+import { Clock, Effect, Layer, Option, Semaphore, Stream, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Cell } from "../../cell.js"
 import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
+import { Sync } from "../../sync.js"
 import { Harness } from "../harness.js"
 import { Credentials } from "./credentials.js"
+import { OpenCodeRows } from "./opencode-rows.js"
 import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
 import { ModelCredentials } from "./model-credentials.js"
@@ -235,6 +237,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     Effect.provideService(FetchHttpClient.Fetch, (input, init) => server.fetch(new Request(input, init))),
   )
   const state = { firstAskedAt: new Map<string, number>() }
+  const sync = yield* Effect.serviceOption(Sync.Service)
   const mutations = yield* Semaphore.make(1)
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (next: ReadonlyArray<Models.Endpoint>) {
     yield* server.configure(next)
@@ -245,7 +248,38 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   return {
     fetch: server.fetch,
     configure: (next: ReadonlyArray<Models.Endpoint>) => mutations.withPermit(configure(next)),
-    start: (input: StartBody) => mutations.withPermit(start(client, server, input, directory)),
+    start: (input: StartBody) =>
+      mutations.withPermit(
+        Effect.gen(function* () {
+          if (Option.isSome(sync))
+            yield* sync.value
+              .restore({
+                sessionId: input.sessionId,
+                exists: (id) => findSession(client, Session.ID.make(id)).pipe(Effect.map(Option.isSome)),
+                create: start(client, server, Struct.omit(input, ["initialMessage"]), directory),
+                import: (data) =>
+                  Effect.gen(function* () {
+                    const info = OpenCodeRows.session(data.session)
+                    const messages = yield* Effect.forEach(data.messages, OpenCodeRows.message)
+                    return yield* client.session.import({
+                      info,
+                      messages,
+                      location: { directory: info.location.directory },
+                    })
+                  }).pipe(Effect.orDie),
+              })
+              .pipe(
+                Effect.catchTag("OpenCodeSync.SyncError", (error) =>
+                  Effect.fail(
+                    new SyncUnavailableError({ message: `Ren could not restore the session: ${error.message}` }),
+                  ),
+                ),
+              )
+          // oxlint-disable-next-line ren/no-comments -- Phase 5 explicitly defers workspace restoration until OpenCode's import API accepts it.
+          // TODO: Restore the ren workspace for sessions with an environment when the import API supports workspace locations.
+          return yield* start(client, server, input, directory)
+        }),
+      ),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
     sessions: Effect.gen(function* () {
       const roots = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>

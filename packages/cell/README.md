@@ -24,6 +24,8 @@ Access comes with a host token. When OpenCode finds an API key within five minut
 
 With `REN_URL`, each alarm first uploads the sessions that changed in the OpenCode tables to Ren, then reconciles. It reads `ctx.storage.sql` directly and never opens OpenCode for this. A step that is not drained sets the next alarm at 250 ms, or when the five-minute limit for a busy session ends. A step that fails, or that has a failed upload, backs off from 1 s to 5 min with jitter. The alarm stays set until sync is drained, also after reconcile closed OpenCode. `POST /ren/sync` (`BrainHost.flush`) runs steps for up to 20 s and answers `drained`. Without `REN_URL` the alarm does not sync, and `/ren/sync` answers `drained: false`.
 
+`start` restores a session that the cell does not have from Ren's copy first. When Ren does not answer, `start` answers `SyncUnavailableError` (503) and makes no session, because an empty session would replace Ren's copy at the next sync; `BrainHost` retries it and then fails with `BrainUnavailable`.
+
 Sync uses the host token, and renews it as model refresh does. Each call from Ren carries a fresh one in `ren-host-token`; the cell keeps the token from that header only when it does not expire earlier than the stored one.
 
 ## Starting with a message

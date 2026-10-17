@@ -35,6 +35,18 @@ export interface Step {
 export interface Interface {
   readonly step: (options?: { readonly deadline?: number }) => Effect.Effect<Step, SyncError>
   readonly exclusive: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
+  readonly restore: <E, R>(input: Restore<E, R>) => Effect.Effect<void, SyncError | E, R>
+}
+
+export interface Restore<E = never, R = never> {
+  readonly sessionId: Session.ID
+  readonly exists: (id: Session.ID) => Effect.Effect<boolean, E, R>
+  readonly create: Effect.Effect<unknown, E, R>
+  readonly setRestoring: (value: boolean) => Effect.Effect<void, E, R>
+  readonly import: (data: {
+    readonly session: OpenCodeSessionRow
+    readonly messages: ReadonlyArray<OpenCodeMessageRow>
+  }) => Effect.Effect<unknown, E, R>
 }
 
 export const busyInterval = Duration.minutes(5)
@@ -281,6 +293,44 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
   const opened: Interface = {
     step: (input) => running.withPermit(step(input)),
     exclusive: (effect) => running.withPermit(effect),
+    restore: (input) =>
+      running.withPermit(
+        Effect.gen(function* () {
+          if (!(yield* options.restoring) && (yield* input.exists(input.sessionId))) return
+          const tree = yield* sync["sync.restore"]({ payload: { sessionId: input.sessionId } }).pipe(
+            Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })),
+          )
+          yield* input.setRestoring(true)
+          if (!tree.sessions.some((row) => row.id === input.sessionId) && !(yield* input.exists(input.sessionId)))
+            yield* input.create
+          yield* Effect.forEach(
+            tree.sessions,
+            (row) =>
+              Effect.gen(function* () {
+                if (yield* input.exists(row.id)) return
+                if (row.parent_id && !(yield* input.exists(row.parent_id))) {
+                  yield* Effect.logError(`Cannot restore session ${row.id}: parent ${row.parent_id} is missing`)
+                  return
+                }
+                const messages: Array<OpenCodeMessageRow> = []
+                let cursor: { readonly seq: number; readonly id: string } | null = null
+                do {
+                  const page: Effect.Success<ReturnType<(typeof sync)["sync.messages"]>> = yield* sync["sync.messages"](
+                    {
+                      params: { id: row.id },
+                      query: { limit: batchRows, ...(cursor ? { afterSeq: cursor.seq, afterId: cursor.id } : {}) },
+                    },
+                  ).pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
+                  messages.push(...page.messages)
+                  cursor = page.next
+                } while (cursor)
+                yield* input.import({ session: row, messages })
+              }),
+            { discard: true },
+          )
+          yield* input.setRestoring(false)
+        }),
+      ),
   }
   return opened
 })
