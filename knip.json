@@ -25,11 +25,17 @@
       "ignoreDependencies": ["@ren/schema"]
     },
     "packages/e2e": {
-      "entry": ["test/**/*.test.ts", "script/**/*.ts"],
+      "entry": [
+        "tests/**/*.spec.ts",
+        "chaos/cases/*.test.ts",
+        "chaos/lib/preload.ts",
+        "script/**/*.ts",
+        "playwright.config.ts"
+      ],
       "ignoreDependencies": ["@ren/server"]
     },
     "packages/httpapi-codegen": {
-      "entry": ["test/**/*.test.ts", "test/generated-consumer.ts", "script/**/*.ts"]
+      "entry": ["test/**/*.test.ts", "script/**/*.ts"]
     }
   },
   "ignoreDependencies": [
@@ -41,7 +47,6 @@
     "@typescript/native-preview"
   ],
   "ignoreIssues": {
-    "packages/server/src/primitive.ts": ["duplicates"],
-    "packages/httpapi-codegen/test/generated-consumer.ts": ["duplicates"]
+    "packages/server/src/primitive.ts": ["duplicates"]
   }
 }

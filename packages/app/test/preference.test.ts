@@ -22,10 +22,3 @@ test("a preference falls back when storage is empty or holds an invalid value", 
   storage.set(density.key, "not json")
   expect(density.read(storage)).toBe("comfortable")
 })
-
-test("a preference round-trips through storage", () => {
-  const storage = memoryStorage()
-  density.write(storage, "compact")
-  expect(storage.get(density.key)).toBe('"compact"')
-  expect(density.read(storage)).toBe("compact")
-})

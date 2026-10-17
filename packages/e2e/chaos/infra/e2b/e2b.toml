@@ -1,0 +1,5 @@
+template_name = "ren-chaos-executor"
+dockerfile = "e2b.Dockerfile"
+start_cmd = "/opt/ren/start.sh"
+cpu_count = 1
+memory_mb = 1024

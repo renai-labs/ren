@@ -7,15 +7,23 @@
   "license": "UNLICENSED",
   "scripts": {
     "test": "playwright test",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "chaos": "bun test --timeout 120000",
+    "chaos:live": "CHAOS_MODE=live bun test --timeout 120000 chaos/cases/live-model.test.ts chaos/cases/litellm.test.ts",
+    "chaos:deployed": "CHAOS_MODE=deployed bun test --timeout 120000 chaos/cases/e2b.test.ts chaos/cases/soak.test.ts",
+    "chaos:template": "bun script/chaos/template.ts"
   },
   "devDependencies": {
-    "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:",
+    "@opencode/client": "catalog:",
     "@playwright/test": "catalog:",
-    "@ren/client": "workspace:*",
+    "@ren/brain-api": "workspace:*",
+    "@ren/cell": "workspace:*",
+    "@ren/executor": "workspace:*",
+    "@ren/schema": "workspace:*",
     "@ren/server": "workspace:*",
     "@ren/util": "workspace:*",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
     "effect": "catalog:"
   }
 }

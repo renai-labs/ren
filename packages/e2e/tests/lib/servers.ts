@@ -30,10 +30,19 @@ export async function emailedCode(request: APIRequestContext, to: string) {
   return code
 }
 
-export async function createUser(request: APIRequestContext, input: { name: string; email: string; password: string }) {
+export async function emailedLink(request: APIRequestContext, to: string, includes: string) {
+  const link = (await lastEmail(request, to, includes))
+    .split(/\s+/)
+    .find((word) => word.startsWith("http") && word.includes(includes))
+  if (link === undefined) throw new Error(`No link with ${includes} emailed to ${to}`)
+  return new URL(link)
+}
+
+export async function createUser(request: APIRequestContext, input: { name: string; email: string; verify?: boolean }) {
   const headers = { origin: appOrigin }
-  const signUp = await request.post(`${serverURL}/auth/sign-up/email`, { headers, data: input })
+  const signUp = await request.post(`${serverURL}/auth/sign-up/email`, { headers, data: { ...input, password } })
   expect(signUp.ok()).toBe(true)
+  if (input.verify === false) return
   const verify = await request.post(`${serverURL}/auth/email-otp/verify-email`, {
     headers,
     data: { email: input.email, otp: await emailedCode(request, input.email) },
@@ -48,16 +57,17 @@ export async function signIn(request: APIRequestContext, input: { email: string;
 export async function createOrganization(request: APIRequestContext, owner: { name: string }) {
   const company = `Acme${crypto.randomUUID().slice(0, 8)}`
   const email = `${owner.name.split(" ")[0]?.toLowerCase() ?? "owner"}@${company.toLowerCase()}.com`
-  await createUser(request, { name: owner.name, email, password })
+  await createUser(request, { name: owner.name, email })
   return { organization: company, email }
 }
 
-export async function inviteMember(request: APIRequestContext, email: string) {
+export async function inviteMember(request: APIRequestContext, email: string, role: "member" | "admin" = "member") {
   const invited = await request.post(`${serverURL}/auth/organization/invite-member`, {
     headers: { origin: appOrigin },
-    data: { email, role: "member" },
+    data: { email, role },
   })
   expect(invited.ok()).toBe(true)
+  return Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await invited.json()).id
 }
 
 export async function organizationName(request: APIRequestContext) {
@@ -70,17 +80,11 @@ export async function addMember(
   member: APIRequestContext,
   input: { name: string; email: string; role?: "member" | "admin" },
 ) {
-  const headers = { origin: appOrigin }
-  const invited = await owner.post(`${serverURL}/auth/organization/invite-member`, {
-    headers,
-    data: { email: input.email, role: input.role ?? "member" },
-  })
-  expect(invited.ok()).toBe(true)
-  const invitation = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await invited.json())
-  await createUser(member, { name: input.name, email: input.email, password })
+  const invitationId = await inviteMember(owner, input.email, input.role)
+  await createUser(member, { name: input.name, email: input.email })
   const accepted = await member.post(`${serverURL}/auth/organization/accept-invitation`, {
-    headers,
-    data: { invitationId: invitation.id },
+    headers: { origin: appOrigin },
+    data: { invitationId },
   })
   expect(accepted.ok()).toBe(true)
 }

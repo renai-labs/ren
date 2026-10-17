@@ -1,17 +1,13 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { BunHttpServer, BunServices } from "@effect/platform-bun"
-import { EnvironmentToken } from "@ren/brain-api/environment-token"
-import { Signature } from "@ren/brain-api/signature"
-import { NodeCompatible } from "@ren/executor/node-compatible"
-import { Server } from "@ren/executor/server"
+import { Machine, Processes } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, DateTime, Effect, Layer, ManagedRuntime, Schema } from "effect"
-import { HttpRouter, HttpServer } from "effect/http"
+import { Effect, ManagedRuntime, Schema } from "effect"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { Pid } from "./lib/pid.js"
 import { Shared } from "./lib/shared.js"
 import type { StubModel } from "./lib/stub-model.js"
 import { TestCell } from "./lib/test-cell.js"
@@ -19,7 +15,6 @@ import { Wrangler } from "./lib/wrangler.js"
 
 setDefaultTimeout(120_000)
 
-const pair = await Effect.runPromise(Signature.generate("test"))
 const brain = Brain.ID.create()
 const stub = Shared.stub()
 const fileTools = new Set(["read", "write", "edit", "glob", "grep", "shell"])
@@ -28,51 +23,31 @@ const productionWorker = "src/worker.ts"
 
 const machine = async (environmentId: Environment.ID) => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "ren-lifecycle-")))
-  const runtime = ManagedRuntime.make(
-    HttpRouter.serve(Server.layer, { disableLogger: true }).pipe(
-      Layer.provide(HttpServer.layerServices),
-      Layer.provide(NodeCompatible.layer),
-      Layer.provide(BunServices.layer),
-      Layer.provide(
-        ConfigProvider.layer(
-          ConfigProvider.fromUnknown({
-            EXECUTOR_ENVIRONMENT_ID: environmentId,
-            EXECUTOR_WORKSPACE: directory,
-            BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([pair.publicKey]),
-          }),
-        ),
-      ),
-      Layer.provideMerge(BunHttpServer.layer({ port: 0, hostname: "127.0.0.1" })),
-    ),
-  )
-  const server = await runtime.runPromise(HttpServer.HttpServer)
-  return { environmentId, directory, url: HttpServer.formatAddress(server.address), dispose: () => runtime.dispose() }
+  const runtime = ManagedRuntime.make(Machine.layer({ environmentId, workspace: directory }))
+  return { environmentId, directory, url: await runtime.runPromise(Machine.url), dispose: () => runtime.dispose() }
 }
 
-type Machine = Awaited<ReturnType<typeof machine>>
+type Target = Awaited<ReturnType<typeof machine>>
 
-const accessTo = async (target: Machine, generation = 1) => {
-  const expiresAt = DateTime.makeUnsafe(Date.now() + 3_600_000)
-  return {
-    environmentId: target.environmentId,
-    url: target.url,
-    token: await Effect.runPromise(
-      EnvironmentToken.sign(pair.privateKey, {
-        env: target.environmentId,
-        brain,
-        exp: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000),
-      }),
-    ),
-    expiresAt,
-    generation,
-  }
-}
-
-const varsFor = async (accesses: ReadonlyArray<{ readonly target: Machine; readonly generation?: number }>) => ({
+const varsFor = async (accesses: ReadonlyArray<{ readonly target: Target; readonly generation?: number }>) => ({
   ...Shared.vars(stub.url),
   TEST_ENVIRONMENT_ACCESS: Schema.encodeSync(
     Schema.fromJsonString(Schema.toCodecJson(Schema.Array(Environment.Access))),
-  )(await Promise.all(accesses.map((entry) => accessTo(entry.target, entry.generation)))),
+  )(
+    await Promise.all(
+      accesses.map((entry) =>
+        Effect.runPromise(
+          Machine.access({
+            url: entry.target.url,
+            environmentId: entry.target.environmentId,
+            brain,
+            lifetimeMs: 3_600_000,
+            generation: entry.generation ?? 1,
+          }),
+        ),
+      ),
+    ),
+  ),
 })
 
 const shell = (command: string) => ({ tool: { name: "shell", input: { command } } })
@@ -80,11 +55,11 @@ const shell = (command: string) => ({ tool: { name: "shell", input: { command } 
 const lastToolResult = (call: StubModel.Call) =>
   JSON.stringify(call.body.messages.findLast((message) => message.role === "tool")?.content ?? "")
 
-const where = (target: Machine) => ({ environmentId: target.environmentId, directory: target.directory })
+const where = (target: Target) => ({ environmentId: target.environmentId, directory: target.directory })
 
-let first: Machine
-let second: Machine
-let replacement: Machine
+let first: Target
+let second: Target
+let replacement: Target
 let cell: Wrangler.Instance
 let standard: Record<string, string>
 
@@ -166,6 +141,13 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     await expectPlaced(sessions)
   })
 
+  test("workerd holds a tool's output stream open while a command runs for 20 seconds", async () => {
+    const session = await begin([where(first)])
+    const started = Date.now()
+    expect(lastToolResult(await session.turn(stub.script(shell("sleep 20 && echo late"))))).toContain("late")
+    expect(Date.now() - started).toBeGreaterThanOrEqual(20_000)
+  })
+
   test("after the cell is killed and restarted, every session's tools are where its last start put them", async () => {
     const sessions = await placed()
     await cell.crash()
@@ -179,6 +161,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
       const done = await previous
       const session = await begin([where(first)])
       const moving = session.start([where(second)]).catch(() => undefined)
+      // ast-grep-ignore: no-test-sleep -- the crash must land at each point of the start
       await Bun.sleep(delay)
       await cell.crash()
       await moving
@@ -197,6 +180,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
       const session = await connect()
       expect((await session.opened.models()).status).toBe(204)
       const starting = session.start([where(first)]).catch(() => undefined)
+      // ast-grep-ignore: no-test-sleep -- the crash must land at each point of the start
       await Bun.sleep(delay)
       await cell.crash()
       await starting
@@ -228,9 +212,9 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     const pidFile = join(first.directory, `${crypto.randomUUID()}.pid`)
     const running = stub.script(shell(`echo $$ > ${pidFile}; exec sleep 120`))
     await session.send(running)
-    const pid = await waitForPid(pidFile)
+    const pid = await Effect.runPromise(Pid.read(pidFile))
     await cell.crash()
-    const killedAt = await waitUntil(() => Bun.spawnSync(["kill", "-0", String(pid)]).exitCode !== 0, 60_000)
+    const killedAt = await waitUntil(() => !Processes.running(pid), 60_000)
     if (killedAt === undefined) process.kill(pid, "SIGKILL")
     running.set({ reply: "stopped" })
     await cell.start()
@@ -243,6 +227,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     expect(await pwdOf(session)).toContain(first.directory)
     await cell.restart(standard, productionWorker)
     const without = stub.script(shell("pwd"))
+    // ast-grep-ignore: no-test-sleep -- a turn without tools must answer within a deadline, not hang
     const answered = await Promise.race([session.turn(without, 1), Bun.sleep(30_000).then(() => undefined)])
     expect(answered).toBeDefined()
     expect(answered?.tools.filter((tool) => fileTools.has(tool))).toEqual([])
@@ -265,14 +250,6 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
   })
 })
 
-const waitForPid = async (path: string, deadline = Date.now() + 15_000): Promise<number> => {
-  const pid = Number.parseInt((await Bun.file(path).exists()) ? await Bun.file(path).text() : "", 10)
-  if (Number.isInteger(pid)) return pid
-  if (Date.now() > deadline) throw new Error(`${path} never held a pid`)
-  await Bun.sleep(50)
-  return waitForPid(path, deadline)
-}
-
 const waitUntil = async (
   condition: () => boolean,
   timeout: number,
@@ -280,6 +257,7 @@ const waitUntil = async (
 ): Promise<number | undefined> => {
   if (condition()) return Date.now() - started
   if (Date.now() - started > timeout) return undefined
+  // ast-grep-ignore: no-test-sleep -- polls the real worker's process list
   await Bun.sleep(250)
   return waitUntil(condition, timeout, started)
 }

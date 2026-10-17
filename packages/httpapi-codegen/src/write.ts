@@ -2,10 +2,7 @@ export * as Write from "./write.js"
 
 import { isAbsolute, join } from "node:path"
 import { Effect, FileSystem, PlatformError, Schema } from "effect"
-import type { HttpApi, HttpApiGroup } from "effect/http-api"
 import { format } from "prettier"
-import { Compile } from "./compile.js"
-import { EmitEffect } from "./emit-effect.js"
 import { Errors } from "./errors.js"
 import type { Types } from "./types.js"
 
@@ -80,15 +77,4 @@ export function write(
     })
     yield* fs.writeFileString(manifest, manifestContent)
   })
-}
-
-export function generate<Id extends string, Groups extends HttpApiGroup.Constraint>(
-  api: HttpApi.HttpApi<Id, Groups>,
-  options: { readonly directory: string },
-): Effect.Effect<void, Errors.GenerationError | PlatformError.PlatformError, FileSystem.FileSystem> {
-  return Effect.try({
-    try: () => EmitEffect.emitEffect(Compile.compile(api)),
-    catch: (error) =>
-      error instanceof Errors.GenerationError ? error : new Errors.GenerationError({ reason: String(error) }),
-  }).pipe(Effect.flatMap((output) => write(output, options.directory)))
 }

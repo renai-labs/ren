@@ -17,6 +17,7 @@
     "prettier": "catalog:"
   },
   "devDependencies": {
+    "@effect/platform-bun": "catalog:",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:"
   }

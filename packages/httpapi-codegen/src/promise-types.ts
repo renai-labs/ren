@@ -9,7 +9,6 @@ import { SchemaShape } from "./schema-shape.js"
 import { TypeText } from "./type-text.js"
 import type { Types } from "./types.js"
 
-type OutputTypes = Readonly<Record<string, { readonly name: string; readonly import: string }>>
 type TypeOf = (schema: Schema.Top, decoded?: boolean) => string
 type CodeDocument = ReturnType<typeof SchemaRepresentation.toCodeDocument>
 
@@ -121,7 +120,6 @@ function renderEndpointTypes(
   endpoint: Types.Endpoint,
   typeOf: TypeOf,
   outputTypeOf: (schema: Schema.Top) => string,
-  outputTypes: OutputTypes | undefined,
 ) {
   const prefix = Names.promiseTypePrefix(group.identifier, endpoint.clientPath)
   const schemas = {
@@ -143,9 +141,7 @@ function renderEndpointTypes(
       return `readonly ${JSON.stringify(field.name)}${field.optional ? "?" : ""}: ${type}`
     })
     .join("; ")
-  const success =
-    outputTypes?.[Names.clientOperationKey(group, endpoint)]?.name ??
-    outputTypeOf(promiseSuccessSchema(endpoint.successes[0]))
+  const success = outputTypeOf(promiseSuccessSchema(endpoint.successes[0]))
   return [
     ...(Operations.promiseInputMode(endpoint) === "none" ? [] : [`export type ${prefix}Input = { ${input} }`]),
     `export type ${prefix}Output = ${endpoint.unwrapData ? `(${success})["data"]` : success}`,
@@ -159,11 +155,7 @@ function renderErrorType(error: NonNullable<ReturnType<typeof SchemaShape.declar
   return `export type ${error.identifier} = { readonly ${JSON.stringify(error.key)}: ${JSON.stringify(error.tag)}; ${fields} }\nexport const is${error.identifier} = (value: unknown): value is ${error.identifier} => typeof value === "object" && value !== null && ${JSON.stringify(error.key)} in value && value[${JSON.stringify(error.key)}] === ${JSON.stringify(error.tag)}`
 }
 
-export function renderPromiseTypes(
-  groups: ReadonlyArray<Types.Group>,
-  outputTypes?: OutputTypes,
-  mutableOutputs = false,
-) {
+export function renderPromiseTypes(groups: ReadonlyArray<Types.Group>, mutableOutputs: boolean) {
   const types = new Map<SchemaAST.AST, string>()
   const typeOf: TypeOf = (schema, decoded = false) => {
     const projected = decoded ? Schema.toType(schema) : Schema.toEncoded(schema)
@@ -197,7 +189,7 @@ export function renderPromiseTypes(
   const errorTypes = [...errors.values()].map((error) => renderErrorType(error, typeOf))
   const operations = groups
     .flatMap((group) =>
-      group.endpoints.flatMap((endpoint) => renderEndpointTypes(group, endpoint, typeOf, outputTypeOf, outputTypes)),
+      group.endpoints.flatMap((endpoint) => renderEndpointTypes(group, endpoint, typeOf, outputTypeOf)),
     )
     .join("\n\n")
   const reservedNames = new Set([
@@ -210,7 +202,6 @@ export function renderPromiseTypes(
         return [`${prefix}Input`, `${prefix}Output`]
       }),
     ),
-    ...Object.values(outputTypes ?? {}).map((output) => output.name),
   ])
   const rendered = structuralTypes(outputSchemas, mutableOutputs, reservedNames)
   const resolve = (source: string) =>
@@ -222,6 +213,5 @@ export function renderPromiseTypes(
   )
     ? `export type JsonValue = null | boolean | number | string | ${mutableOutputs ? "Array<JsonValue> | { [key: string]: JsonValue }" : "ReadonlyArray<JsonValue> | { readonly [key: string]: JsonValue }"}`
     : ""
-  const imports = [...new Set(Object.values(outputTypes ?? {}).map((override) => override.import))]
-  return [...imports, json, ...rendered.definitions, ...resolvedErrors, resolvedOperations].filter(Boolean).join("\n\n")
+  return [json, ...rendered.definitions, ...resolvedErrors, resolvedOperations].filter(Boolean).join("\n\n")
 }

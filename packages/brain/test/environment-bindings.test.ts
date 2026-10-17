@@ -1,62 +1,28 @@
 import { expect, test } from "bun:test"
-import { BunHttpServer, BunServices } from "@effect/platform-bun"
-import { EnvironmentToken } from "@ren/brain-api/environment-token"
-import { Signature } from "@ren/brain-api/signature"
-import { NodeCompatible } from "@ren/executor/node-compatible"
-import { Server } from "@ren/executor/server"
+import { Machine, Processes, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, Context, DateTime, Effect, Exit, Layer, Option, Schedule, Schema, Scope, Stream } from "effect"
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
+import { Context, Effect, Exit, Layer, Option, Schedule, Scope, Stream } from "effect"
+import { FetchHttpClient } from "effect/http"
 import { ChildProcess } from "effect/process"
 import { KeyValueStore } from "effect/persistence"
-import { mkdir, mkdtemp, realpath } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { EnvironmentAccess } from "../src/environment-access.js"
 import { EnvironmentBindings } from "../src/environment-bindings.js"
 import { Environments } from "../src/environments.js"
 import { OpenCodeWorkspaceDriver } from "../src/opencode-workspace-driver.js"
-import { testEffect } from "./lib/effect.js"
 
-const pair = await Effect.runPromise(Signature.generate("test"))
 const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-bindings-")))
 await mkdir(join(workspace, "project"))
 await Bun.write(join(workspace, "project/notes.md"), "on the environment\n")
-const executor = () =>
-  HttpRouter.serve(Server.layer, { disableLogger: true }).pipe(
-    Layer.provide(HttpServer.layerServices),
-    Layer.provide(NodeCompatible.layer),
-    Layer.provide(BunServices.layer),
-    Layer.provide(
-      ConfigProvider.layer(
-        ConfigProvider.fromUnknown({
-          EXECUTOR_ENVIRONMENT_ID: environmentId,
-          EXECUTOR_WORKSPACE: workspace,
-          BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([pair.publicKey]),
-        }),
-      ),
-    ),
-    Layer.provideMerge(BunHttpServer.layer({ port: 0, hostname: "127.0.0.1" })),
-  )
-const it = testEffect(executor())
+const it = testEffect(Machine.layer({ environmentId, workspace }))
 
 const build = Effect.fnUntraced(function* (store: Layer.Layer<KeyValueStore.KeyValueStore>) {
-  const server = yield* HttpServer.HttpServer
-  const expiresAt = DateTime.makeUnsafe(Date.now() + 600_000)
-  const access = {
-    environmentId,
-    url: HttpServer.formatAddress(server.address),
-    token: yield* EnvironmentToken.sign(pair.privateKey, {
-      env: environmentId,
-      brain: Brain.ID.create(),
-      exp: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000),
-    }),
-    expiresAt,
-    generation: 1,
-  }
+  const access = yield* Machine.access({ url: yield* Machine.url, environmentId, brain: Brain.ID.create() })
   const context = yield* Layer.build(
     EnvironmentBindings.layer.pipe(
       Layer.provideMerge(Environments.layer),
@@ -119,8 +85,6 @@ it.live("follows the session's binding on every file call, under the session's d
     const connection = OpenCodeWorkspaceDriver.sessionConnection(subject.environments, subject.bindings, sessionId)
     const unbound = yield* Effect.flip(connection.overrides.read("/workspace/notes.md"))
     expect(unbound._tag).toBe("Environment.Failed")
-    yield* subject.bindings.set(sessionId, { sessionDirectory: "/workspace", location: null })
-    expect((yield* Effect.flip(connection.overrides.read("/workspace/notes.md")))._tag).toBe("Environment.Failed")
     yield* subject.bindings.set(sessionId, {
       sessionDirectory: "/workspace",
       location: { environmentId, directory: project },
@@ -129,33 +93,59 @@ it.live("follows the session's binding on every file call, under the session's d
     expect(new TextDecoder().decode(read.bytes)).toBe("on the environment\n")
     const missing = yield* Effect.flip(connection.overrides.read("/workspace/absent.md"))
     expect(missing._tag === "Environment.NotFound" && missing.path).toBe("/workspace/absent.md")
+    yield* subject.bindings.set(sessionId, { sessionDirectory: "/workspace", location: null })
+    expect((yield* Effect.flip(connection.overrides.read("/workspace/notes.md")))._tag).toBe("Environment.Failed")
   }),
 )
 
-test("maps paths under the session's directory onto the environment's directory", () => {
-  const physical = OpenCodeWorkspaceDriver.physicalPath("/workspace", "/home/ren/project")
-  expect(physical("/workspace")).toBe("/home/ren/project")
-  expect(physical("/workspace/src/a.ts")).toBe("/home/ren/project/src/a.ts")
-  expect(physical("/workspaces/other")).toBe("/workspaces/other")
-  expect(physical("/tmp/out")).toBe("/tmp/out")
-  expect(physical("relative/a.ts")).toBe("relative/a.ts")
+it.live("a file override follows a changed binding without changing another session's binding", () =>
+  Effect.gen(function* () {
+    const subject = yield* build(KeyValueStore.layerMemory)
+    const directory = yield* Effect.acquireRelease(
+      Effect.promise(() => mkdtemp(join(workspace, "moving-"))),
+      (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+    )
+    const first = join(directory, "first")
+    const second = join(directory, "second")
+    yield* Effect.promise(() => Promise.all([mkdir(first), mkdir(second)]))
+    const sessionId = Session.ID.create()
+    const otherId = Session.ID.create()
+    yield* Effect.forEach([sessionId, otherId], (id) =>
+      subject.bindings.set(id, { sessionDirectory: "/workspace", location: { environmentId, directory: first } }),
+    )
+    yield* subject.bindings.set(sessionId, {
+      sessionDirectory: "/workspace",
+      location: { environmentId, directory: second },
+    })
+    const connection = OpenCodeWorkspaceDriver.sessionConnection(subject.environments, subject.bindings, sessionId)
+    const other = OpenCodeWorkspaceDriver.sessionConnection(subject.environments, subject.bindings, otherId)
+    yield* connection.overrides.write("/workspace/marker", new TextEncoder().encode("second"))
+    yield* other.overrides.write("/workspace/marker", new TextEncoder().encode("first"))
+    expect(yield* Effect.promise(() => Bun.file(join(second, "marker")).text())).toBe("second")
+    expect(yield* Effect.promise(() => Bun.file(join(first, "marker")).text())).toBe("first")
+  }),
+)
+
+test.each([
+  { from: "/workspace", to: "/home/ren/project", path: "/workspace", expected: "/home/ren/project" },
+  { from: "/workspace", to: "/home/ren/project", path: "/workspace/src/a.ts", expected: "/home/ren/project/src/a.ts" },
+  { from: "/workspace", to: "/home/ren/project", path: "/workspaces/other", expected: "/workspaces/other" },
+  { from: "/workspace", to: "/home/ren/project", path: "/tmp/out", expected: "/tmp/out" },
+  { from: "/workspace", to: "/home/ren/project", path: "relative/a.ts", expected: "relative/a.ts" },
+  { from: "/workspace/", to: "/home/ren/project", path: "/workspace", expected: "/home/ren/project" },
+  { from: "/workspace/", to: "/home/ren/project", path: "/workspace/src/a.ts", expected: "/home/ren/project/src/a.ts" },
+  { from: "/workspace", to: "/home/ren/project/", path: "/workspace", expected: "/home/ren/project" },
+  { from: "/workspace", to: "/home/ren/project/", path: "/workspace/a.ts", expected: "/home/ren/project/a.ts" },
+  { from: "/", to: "/home/ren/project", path: "/", expected: "/home/ren/project" },
+  { from: "/", to: "/home/ren/project", path: "/a.ts", expected: "/home/ren/project/a.ts" },
+  { from: "/workspace", to: "/", path: "/workspace", expected: "/" },
+  { from: "/workspace", to: "/", path: "/workspace/a.ts", expected: "/a.ts" },
+])("maps $path from $from onto $to", (row) => {
+  expect(OpenCodeWorkspaceDriver.physicalPath(row.from, row.to)(row.path)).toBe(row.expected)
 })
 
 const replaceable = Effect.gen(function* () {
-  const server = yield* HttpServer.HttpServer
-  const brain = Brain.ID.create()
-  const expiresAt = DateTime.makeUnsafe(Date.now() + 600_000)
-  const access = {
-    environmentId,
-    url: HttpServer.formatAddress(server.address),
-    token: yield* EnvironmentToken.sign(pair.privateKey, {
-      env: environmentId,
-      brain,
-      exp: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000),
-    }),
-    expiresAt,
-    generation: 1,
-  }
+  const access = yield* Machine.access({ url: yield* Machine.url, environmentId, brain: Brain.ID.create() })
   const context = yield* Layer.build(
     EnvironmentBindings.layer.pipe(
       Layer.provideMerge(Environments.layer),
@@ -165,36 +155,31 @@ const replaceable = Effect.gen(function* () {
     ),
   )
   const sessionId = Session.ID.create()
+  const environments = Context.get(context, Environments.Service)
   const bindings = Context.get(context, EnvironmentBindings.Service)
   yield* bindings.set(sessionId, { sessionDirectory: "/workspace", location: { environmentId, directory: project } })
+  const original = yield* Effect.scoped(environments.connect(environmentId))
   const replacement = yield* Scope.make()
-  const next = Context.get(yield* Layer.buildWithScope(Layer.fresh(executor()), replacement), HttpServer.HttpServer)
+  const next = yield* Layer.buildWithScope(Layer.fresh(Machine.layer({ environmentId, workspace })), replacement).pipe(
+    Effect.flatMap((built) => Effect.provide(Machine.url, built)),
+  )
   return {
-    connection: OpenCodeWorkspaceDriver.sessionConnection(
-      Context.get(context, Environments.Service),
-      bindings,
-      sessionId,
-    ),
-    replace: Context.get(context, EnvironmentAccess.Memory).set({
-      ...access,
-      url: HttpServer.formatAddress(next.address),
-      generation: 2,
-    }),
+    connection: OpenCodeWorkspaceDriver.sessionConnection(environments, bindings, sessionId),
+    replace: Context.get(context, EnvironmentAccess.Memory)
+      .set({ ...access, url: next, generation: 2 })
+      .pipe(
+        Effect.andThen(
+          Effect.scoped(environments.connect(environmentId)).pipe(
+            Effect.repeat({ until: (current) => current !== original, schedule: Schedule.spaced(10) }),
+            Effect.timeout(5_000),
+          ),
+        ),
+      ),
     stopReplacement: Scope.close(replacement, Exit.void),
   }
 })
 
 const text = (stream: Stream.Stream<Uint8Array, unknown>) => Stream.decodeText(stream).pipe(Stream.mkString)
-
-const isGone = (pid: number) =>
-  Effect.sync(() => {
-    try {
-      process.kill(pid, 0)
-      return false
-    } catch {
-      return true
-    }
-  }).pipe(Effect.repeat({ until: (gone) => gone, schedule: Schedule.spaced(50) }), Effect.timeout(5_000))
 
 it.live(
   "a command started before a replacement finishes there and returns its result, and the next goes to the new machine",
@@ -205,7 +190,6 @@ it.live(
         ChildProcess.make("sh", ["-c", "sleep 0.5; echo old; exit 6"]),
       )
       yield* subject.replace
-      yield* Effect.sleep(100)
       const next = yield* subject.connection.spawner.spawn(ChildProcess.make("sh", ["-c", "echo new"]))
       expect(yield* text(next.stdout)).toBe("new\n")
       expect(yield* text(old.stdout)).toBe("old\n")
@@ -222,23 +206,7 @@ it.live("stopping a command after a replacement still kills it on the old machin
     const scope = yield* Scope.make()
     const old = yield* subject.connection.spawner.spawn(ChildProcess.make("sleep", ["30"])).pipe(Scope.provide(scope))
     yield* subject.replace
-    yield* Effect.sleep(100)
     yield* Scope.close(scope, Exit.void)
-    expect(yield* isGone(old.pid)).toBe(true)
+    expect(yield* Processes.exits(old.pid)).toBe(true)
   }),
 )
-
-test("maps a session directory saved with a trailing slash, and the root directory", () => {
-  const trailing = OpenCodeWorkspaceDriver.physicalPath("/workspace/", "/home/ren/project")
-  expect(trailing("/workspace")).toBe("/home/ren/project")
-  expect(trailing("/workspace/src/a.ts")).toBe("/home/ren/project/src/a.ts")
-  const toTrailing = OpenCodeWorkspaceDriver.physicalPath("/workspace", "/home/ren/project/")
-  expect(toTrailing("/workspace")).toBe("/home/ren/project")
-  expect(toTrailing("/workspace/a.ts")).toBe("/home/ren/project/a.ts")
-  const root = OpenCodeWorkspaceDriver.physicalPath("/", "/home/ren/project")
-  expect(root("/")).toBe("/home/ren/project")
-  expect(root("/a.ts")).toBe("/home/ren/project/a.ts")
-  const toRoot = OpenCodeWorkspaceDriver.physicalPath("/workspace", "/")
-  expect(toRoot("/workspace")).toBe("/")
-  expect(toRoot("/workspace/a.ts")).toBe("/a.ts")
-})

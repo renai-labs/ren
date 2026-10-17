@@ -1,7 +1,5 @@
 export { Compile } from "./compile.js"
-export { EmitEffect } from "./emit-effect.js"
 export { EmitEffectImported } from "./emit-effect-imported.js"
-export { EmitEffectShape } from "./emit-effect-shape.js"
 export { EmitPromise } from "./emit-promise.js"
 export { EmitReactQuery } from "./emit-react-query.js"
 export { Errors } from "./errors.js"

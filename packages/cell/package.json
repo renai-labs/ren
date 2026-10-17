@@ -12,7 +12,7 @@
     "deploy:celld": "celld deploy",
     "deploy:cloudflare": "wrangler deploy",
     "test": "bun ../../script/test.ts",
-    "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/cell.test.ts test/remote-tools-cell.test.ts test/environment-lifecycle-cell.test.ts",
+    "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/cell.test.ts test/environment-lifecycle-cell.test.ts",
     "typecheck": "tsgo -b"
   },
   "dependencies": {
@@ -27,7 +27,6 @@
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@effect/platform-bun": "catalog:",
     "@ren/executor": "workspace:*",
     "@cloudflare/workers-types": "catalog:",
     "@types/bun": "catalog:",

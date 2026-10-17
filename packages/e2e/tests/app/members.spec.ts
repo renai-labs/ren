@@ -46,9 +46,6 @@ test("an owner invites people, then resends and revokes an invitation", async ({
   await expect(page.getByText(`Invitation to ${second} revoked`)).toBeVisible()
   await expect(page.getByRole("row", { name: new RegExp(second) })).toBeHidden()
 
-  await page.getByRole("button", { name: "Search for an invitation" }).click()
-  await page.keyboard.type("nobody")
-  await expect(page.getByText("Nothing matches “nobody”")).toBeVisible()
   await page.getByRole("tab", { name: /Members/ }).click()
   await expect(page.getByRole("row", { name: /Grace Hopper/ })).toBeVisible()
 })

@@ -8,19 +8,13 @@ import type { Types } from "./types.js"
 
 export function compile<Id extends string, Groups extends HttpApiGroup.Constraint>(
   api: HttpApi.HttpApi<Id, Groups>,
-  options?: {
-    readonly groupNames?: Readonly<Record<string, string>>
-    readonly omitEndpoints?: ReadonlySet<string>
-  },
 ): Types.Contract {
   const endpoints: Array<Types.Endpoint> = []
   const portable = new Map<SchemaAST.AST, boolean>()
   HttpApi.reflect(api, {
     onGroup() {},
     onEndpoint(source) {
-      if (options?.omitEndpoints?.has(source.endpoint.identifier)) return
-      const groupName = options?.groupNames?.[source.group.identifier] ?? source.group.identifier
-      endpoints.push(BuildEndpoint.buildEndpoint(source, groupName, portable))
+      endpoints.push(BuildEndpoint.buildEndpoint(source, portable))
     },
   })
   const groups = BuildGroups.buildGroups(endpoints)

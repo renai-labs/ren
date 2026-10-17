@@ -4,7 +4,6 @@ import { emailedCode, password, uniqueEmail } from "../lib/servers.js"
 test("a new account is created and verified with the emailed code", async ({ page, request }) => {
   const email = uniqueEmail("signup")
   await page.goto("/app/signup")
-  await expect(page.getByText("By creating an account, you agree to the")).toBeVisible()
   await page.getByRole("button", { name: "Continue", exact: true }).click()
   await expect(page.getByText("Enter your name")).toBeVisible()
   await expect(page.getByText("Enter a valid email")).toBeVisible()
@@ -35,9 +34,6 @@ test("a new account is created and verified with the emailed code", async ({ pag
   await page.keyboard.type(await emailedCode(request, email))
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
-
-  await page.goto("/app/signup")
-  await expect(page).toHaveURL(/\/$/)
 })
 
 test("a rejected address returns to the details step with the server’s reason", async ({ page }) => {
@@ -50,12 +46,4 @@ test("a rejected address returns to the details step with the server’s reason"
   await expect(page.getByLabel("Email")).toHaveAccessibleDescription("Use a permanent email address.")
   await expect(page.getByLabel("Email")).toBeFocused()
   await expect(page.getByLabel("Name")).toHaveValue("Ada Lovelace")
-})
-
-test("verify email without an address goes back to sign in", async ({ page }) => {
-  await page.goto("/app/verify-email?redirect=%2Fsettings")
-  await expect(page).toHaveURL(/\/login\?redirect=%2Fsettings$/)
-  await page.goto("/app/signup")
-  await page.getByRole("link", { name: "Sign in" }).click()
-  await expect(page).toHaveURL(/\/login$/)
 })

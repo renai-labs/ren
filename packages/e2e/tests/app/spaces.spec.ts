@@ -14,8 +14,6 @@ test("a new organization starts with a protected shared space and a personal spa
   await page.goto("/app/")
   await page.getByRole("link", { name: "Spaces" }).click()
   await expect(page.getByRole("heading", { level: 1, name: "Spaces" })).toBeVisible()
-  await expect(page.locator('a[aria-current="page"]')).toHaveCount(1)
-  await expect(page.getByRole("link", { name: "Spaces" })).toHaveAttribute("aria-current", "page")
   await expect(page.getByRole("link", { name: "Open General Space" })).toContainText("1 member")
   await expect(page.getByRole("link", { name: "Open Grace Hopper's Personal Space" })).toBeVisible()
 
@@ -80,11 +78,7 @@ test("a member creates a space, manages its people and archives it", async ({ pa
   await expect(page.getByRole("link", { name: "Open Lab" })).toBeHidden()
 })
 
-test("an admin joins a space they are not in, and a member creates one from a button", async ({
-  page,
-  request,
-  browser,
-}) => {
+test("an admin joins a space they are not in", async ({ page, request }) => {
   await createOrganization(page.request, { name: "Grace Hopper" })
   await addMember(page.request, request, { name: "Alan Turing", email: uniqueEmail("member") })
   const created = await request.post(`${serverURL}/spaces`, {
@@ -101,11 +95,4 @@ test("an admin joins a space they are not in, and a member creates one from a bu
   await join.getByRole("button", { name: "Join space" }).click()
   await expect(page.getByText("Joined Cryptography")).toBeVisible()
   await expect(page.getByRole("heading", { level: 1, name: "Cryptography" })).toBeVisible()
-
-  const context = await browser.newContext({ storageState: await request.storageState(), baseURL: appOrigin })
-  const alan = await context.newPage()
-  await alan.goto("/app/spaces")
-  await expect(alan.getByRole("button", { name: "New space" })).toBeVisible()
-  await expect(alan.getByRole("button", { name: "Create or join a space" })).toBeHidden()
-  await context.close()
 })

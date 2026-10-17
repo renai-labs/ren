@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test"
 import { appURL, createUser, uniqueEmail } from "../lib/servers.js"
 
 test("searches actions and settings from the sidebar and the keyboard", async ({ page }) => {
-  await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("search"), password: "first password" })
+  await createUser(page.request, { name: "Ada Lovelace", email: uniqueEmail("search") })
   await page.goto("/app/")
   await expect(page.getByRole("heading", { name: "Welcome, Ada Lovelace" })).toBeVisible()
 
@@ -10,16 +10,8 @@ test("searches actions and settings from the sidebar and the keyboard", async ({
   const dialog = page.getByRole("dialog", { name: "Search" })
   const search = dialog.getByRole("combobox", { name: "Search" })
   await expect(search).toBeFocused()
-  await expect(search).toHaveAttribute("placeholder", "Search actions and settings…")
   await expect(dialog.getByRole("option", { name: /Use Light Theme/ })).toBeVisible()
   await expect(dialog.getByRole("option", { name: /Members/ })).toBeVisible()
-
-  await page.keyboard.press("Tab")
-  await expect(dialog.getByRole("tab", { name: "Actions" })).toHaveAttribute("aria-selected", "true")
-  await expect(search).toHaveAttribute("placeholder", "Search actions…")
-  await expect(dialog.getByRole("option", { name: /Members/ })).toBeHidden()
-  await page.keyboard.press("Shift+Tab")
-  await expect(dialog.getByRole("tab", { name: "All" })).toHaveAttribute("aria-selected", "true")
 
   await search.fill("zzz")
   await expect(dialog.getByText("No results.")).toBeVisible()

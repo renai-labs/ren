@@ -1,6 +1,4 @@
-import { expect } from "bun:test"
-import { Credential } from "@opencode/schema/credential"
-import { IntegrationID } from "@opencode/schema/integration-id"
+import { expect, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
 import {
   BrainRejectedError,
@@ -8,54 +6,61 @@ import {
   ModelsNotConfiguredError,
   SessionNotStartedError,
 } from "@ren/brain-api/errors"
+import { testEffect } from "@ren/executor/testing"
 import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Effect } from "effect"
+import { Effect, type Scope } from "effect"
 import { BrainTest } from "./lib/brain.js"
-import { Testing } from "./lib/effect.js"
+import { ModelsTest } from "./lib/models.js"
 import { Shared } from "./lib/shared.js"
 
-const it = Testing.testEffect(BrainTest.layer)
+const it = testEffect(BrainTest.layer)
+
+const live = <A, E>(body: Effect.Effect<A, E, BrainTest.Service | Scope.Scope>) =>
+  body.pipe(Effect.scoped, Effect.provide(BrainTest.layer), Effect.runPromise)
 
 const limit = { context: 100_000, output: 4000 }
 
-const deliveries: ReadonlyArray<Session.Delivery> = ["steer", "queue"]
-for (const delivery of deliveries) {
-  it.live(`${delivery} reaches the running turn with the requested delivery semantics`, () =>
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.Service
-      yield* brain.start({ interactive: false })
-      const first = Shared.stub().script({
-        hold: true,
-        tool: {
-          name: "question",
-          input: { questions: [{ question: "Which?", header: "Pick", options: [{ label: "A", description: "a" }] }] },
-        },
-      })
-      const second = Shared.stub().script()
-      yield* brain.send(`first ${first.marker}`)
-      yield* Effect.promise(() => first.called())
-      yield* brain.send(`second ${second.marker}`, { delivery })
-      first.release()
-      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
-      expect(second.calls[0]?.body.messages.map((item) => item.role).filter((role) => role !== "system")).toEqual(
-        delivery === "steer"
-          ? ["user", "assistant", "tool", "user"]
-          : ["user", "assistant", "tool", "assistant", "user"],
-      )
-    }),
-  )
+const catalog = (
+  models: ReadonlyArray<Models.Info>,
+  apiKey = Shared.apiKey("catalog-key"),
+  baseUrl = Shared.stub().url,
+): Models.Access => ({ endpoints: [{ id: "stub", protocol: "openai-chat", baseUrl, apiKey, models }] })
+
+const question = {
+  name: "question",
+  input: { questions: [{ question: "Which?", header: "Pick", options: [{ label: "A", description: "a" }] }] },
 }
 
-it.live("start refuses an environment when the brain cannot use environments", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    const error = yield* brain
-      .start({ environments: [{ environmentId: Environment.ID.create(), directory: "/workspace" }] })
-      .pipe(Effect.flip)
-    expect(error).toBeInstanceOf(BrainRejectedError)
-  }),
+test.each<[Session.Delivery, Array<string>]>([
+  ["steer", ["user", "assistant", "tool", "user"]],
+  ["queue", ["user", "assistant", "tool", "assistant", "user"]],
+])(
+  "a %s message and a model switch during a turn reach the running turn with the delivery's semantics and serve every later dispatch",
+  (delivery, roles) =>
+    live(
+      Effect.gen(function* () {
+        const brain = yield* BrainTest.Service
+        yield* brain.start({ interactive: false })
+        const first = Shared.stub().script({ hold: true, tool: question })
+        const second = Shared.stub().script()
+        yield* brain.send(`first ${first.marker}`)
+        yield* Effect.promise(() => first.called())
+        yield* brain.start({ interactive: false, model: { endpointId: "stub", modelId: "stub-other" } })
+        yield* brain.send(`second ${second.marker}`, { delivery })
+        first.release()
+        const sessionID = SessionID.make(brain.id)
+        yield* brain.opencode.session.wait({ sessionID })
+        expect(second.calls[0]?.body.messages.map((item) => item.role).filter((role) => role !== "system")).toEqual(
+          roles,
+        )
+        const models = [...first.calls, ...second.calls].map((call) => call.body.model)
+        expect(models[0]).toBe("stub-model")
+        expect(new Set(models.slice(1))).toEqual(new Set(["stub-other"]))
+        expect(yield* brain.opencode.session.get({ sessionID })).toMatchObject({ model: { id: "stub-other" } })
+      }),
+    ),
 )
 
 it.live("start creates a session with Ren's identity, model, agent and instructions", () =>
@@ -79,7 +84,7 @@ it.live("start creates a session with Ren's identity, model, agent and instructi
     expect(yield* brain.opencode.session.instructions.entry.list({ sessionID })).toEqual([
       { key: "team", value: "Ren" },
     ])
-    expect((yield* brain.client.brain["brain.state"]()).nextReconcileAt).not.toBeNull()
+    expect((yield* brain.state).nextReconcileAt).not.toBeNull()
   }),
 )
 
@@ -117,45 +122,6 @@ it.live("start accepts its initial message after configuration and deduplicates 
     yield* brain.opencode.session.wait({ sessionID })
     expect((yield* brain.opencode.message.list({ sessionID })).data).toEqual(messages)
     expect(script.calls).toHaveLength(1)
-  }),
-)
-
-it.live("a retried start can submit its initial message when the session already exists without that message", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    yield* brain.start()
-    const script = Shared.stub().script()
-    const messageId = Session.MessageID.create()
-    yield* brain.start({
-      initialMessage: { messageId, prompt: { text: `initial ${script.marker}` }, sender: { userId: "user_1" } },
-    })
-    const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
-    expect(
-      (yield* brain.opencode.message.list({ sessionID })).data.filter((message) => String(message.id) === messageId),
-    ).toHaveLength(1)
-    expect(script.calls).toHaveLength(1)
-  }),
-)
-
-it.live("a rejected start submits no initial message", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    const script = Shared.stub().script()
-    expect(
-      yield* brain
-        .start({
-          agent: "missing",
-          initialMessage: {
-            messageId: Session.MessageID.create(),
-            prompt: { text: `initial ${script.marker}` },
-            sender: { userId: "user_1" },
-          },
-        })
-        .pipe(Effect.flip),
-    ).toBeInstanceOf(BrainRejectedError)
-    expect((yield* brain.opencode.session.list()).data).toEqual([])
-    expect(script.calls).toEqual([])
   }),
 )
 
@@ -201,36 +167,38 @@ it.live("a token-session mismatch fails before acquiring the harness", () =>
         },
       }).pipe(Effect.flip),
     ).toBeInstanceOf(ForbiddenError)
-    expect(yield* brain.client.brain["brain.state"]()).toMatchObject({
-      isOpen: false,
-      holders: 0,
-      nextReconcileAt: null,
-    })
+    expect(yield* brain.state).toMatchObject({ isOpen: false, holders: 0, nextReconcileAt: null })
   }),
 )
 
-it.live("unknown agents and models are typed rejections and create no session", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    const inputs: ReadonlyArray<Partial<Session.StartInput>> = [
-      { agent: "nobody" },
-      { model: { endpointId: "stub", modelId: "missing" } },
-    ]
-    for (const input of inputs) expect(yield* brain.start(input).pipe(Effect.flip)).toBeInstanceOf(BrainRejectedError)
-    expect((yield* brain.opencode.session.list()).data).toEqual([])
-  }),
-)
-
-it.live("start and send without a model configuration fail before acquiring the harness", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    brain.stored.clear()
-    expect(yield* brain.start().pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
-    expect(yield* brain.send("early").pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
-    expect(yield* brain.client.brain["brain.state"]()).toMatchObject({ isOpen: false, nextReconcileAt: null })
-    yield* brain.configureModels()
-    expect(yield* brain.start()).toEqual({ sessionId: brain.id, harness: "opencode" })
-  }),
+test.each<[string, Partial<Session.StartInput>]>([
+  ["an unknown agent", { agent: "nobody" }],
+  ["an unknown model", { model: { endpointId: "stub", modelId: "missing" } }],
+  [
+    "an environment in a brain that cannot use environments",
+    { environments: [{ environmentId: Environment.ID.create(), directory: "/workspace" }] },
+  ],
+])("start rejects %s, creates no session and submits no initial message", (_name, input) =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.Service
+      const script = Shared.stub().script()
+      expect(
+        yield* brain
+          .start({
+            ...input,
+            initialMessage: {
+              messageId: Session.MessageID.create(),
+              prompt: { text: `initial ${script.marker}` },
+              sender: { userId: "user_1" },
+            },
+          })
+          .pipe(Effect.flip),
+      ).toBeInstanceOf(BrainRejectedError)
+      expect((yield* brain.opencode.session.list()).data).toEqual([])
+      expect(script.calls).toEqual([])
+    }),
+  ),
 )
 
 it.live("send before start is a typed SessionNotStartedError", () =>
@@ -311,26 +279,18 @@ it.live("a busy start applies changes without interrupting the running turn", ()
   }),
 )
 
-it.live("a configuration replaces the brain's credentials, and an older expiring key never replaces a newer one", () =>
+it.live("a configuration replaces the brain's credentials", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service
     const expires = Date.now() + 3_600_000
     yield* brain.start()
-    yield* brain.configureModels({
-      stub: Shared.apiKey("old", expires),
-      anthropic: Shared.apiKey("anthropic"),
-    })
+    yield* brain.configureModels({ stub: Shared.apiKey("old", expires), anthropic: Shared.apiKey("anthropic") })
     expect(yield* brain.credentials.all()).toHaveLength(2)
     yield* brain.configureModels({ stub: Shared.apiKey("new", expires + 1000) })
     const script = Shared.stub().script()
     yield* brain.send(`key ${script.marker}`)
-    const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
     expect(script.calls[0]?.authorization).toBe("Bearer new")
-    yield* brain.configureModels({ stub: Shared.apiKey("old", expires) })
-    expect((yield* brain.credentials.all()).map((credential) => credential.value)).toMatchObject([
-      { type: "oauth", access: "new" },
-    ])
     yield* brain.configureModels({ stub: Shared.apiKey("replacement") })
     expect((yield* brain.credentials.all()).map((credential) => credential.value)).toEqual([
       { type: "key", key: "replacement" },
@@ -339,129 +299,27 @@ it.live("a configuration replaces the brain's credentials, and an older expiring
 )
 
 it.live(
-  "removing the models deletes the brain's credentials and refuses start and send until a new configuration",
+  "without models, start and send are refused before acquiring the harness, and removing models deletes the brain's credentials",
   () =>
     Effect.gen(function* () {
       const brain = yield* BrainTest.Service
+      const refused = Effect.gen(function* () {
+        expect(yield* brain.start().pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
+        expect(yield* brain.send("refused").pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
+      })
+      yield* brain.removeModels
+      yield* refused
+      expect(yield* brain.state).toMatchObject({ isOpen: false, nextReconcileAt: null })
+      yield* brain.configureModels()
       yield* brain.start()
       yield* brain.configureModels({ stub: Shared.apiKey("removed") })
       expect(yield* brain.credentials.all()).toHaveLength(1)
       yield* brain.removeModels
       expect(yield* brain.credentials.all()).toEqual([])
-      expect(yield* brain.start().pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
-      expect(yield* brain.send("after removal").pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
+      yield* refused
       yield* brain.configureModels()
       expect(yield* brain.start()).toEqual({ sessionId: brain.id, harness: "opencode" })
     }),
-)
-
-it.live("a configuration keeps Ren credentials that models do not own", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    yield* brain.start()
-    yield* brain.credentials.create({
-      id: Credential.ID.make("cred_ren_other_stub"),
-      integrationID: IntegrationID.make("stub"),
-      value: { type: "key", key: "other" },
-      label: "Ren",
-    })
-    yield* brain.configureModels({ stub: Shared.apiKey("model") })
-    yield* brain.removeModels
-    expect((yield* brain.credentials.all()).map((credential) => credential.id)).toEqual([
-      Credential.ID.make("cred_ren_other_stub"),
-    ])
-  }),
-)
-
-it.live("an endpoint configured while the harness is open serves the next start", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    yield* brain.start()
-    yield* brain.configureModels({ later: Shared.apiKey("later") })
-    yield* brain.start({ model: { endpointId: "later", modelId: "stub-model" } })
-    const script = Shared.stub().script()
-    yield* brain.send(`later ${script.marker}`)
-    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
-    expect(script.calls[0]?.authorization).toBe("Bearer later")
-  }),
-)
-
-it.live("an endpoint removed while the harness is open refuses its models at the next start", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    yield* brain.start()
-    yield* brain.configureModels({ stub: Shared.apiKey("stub"), later: Shared.apiKey("later") })
-    yield* brain.start({ model: { endpointId: "later", modelId: "stub-model" } })
-    yield* brain.configureModels({ stub: Shared.apiKey("stub") })
-    expect(
-      yield* brain.start({ model: { endpointId: "later", modelId: "stub-model" } }).pipe(Effect.flip),
-    ).toBeInstanceOf(BrainRejectedError)
-  }),
-)
-
-const withModel = (access: Models.Access, model: Models.Info): Models.Access => ({
-  endpoints: access.endpoints.map((endpoint) => ({ ...endpoint, models: [...endpoint.models, model] })),
-})
-
-it.live("a model added to an endpoint while the harness is open can be chosen at the next start", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    yield* brain.start()
-    const access = Shared.access({ later: Shared.apiKey("later") }, Shared.stub().url)
-    yield* brain.client.brain["brain.configureModels"]({ payload: { access } })
-    yield* brain.start({ model: { endpointId: "later", modelId: "stub-model" } })
-    yield* brain.client.brain["brain.configureModels"]({
-      payload: { access: withModel(access, { id: "later-new", name: "Later New", limit }) },
-    })
-    expect(yield* brain.start({ model: { endpointId: "later", modelId: "later-new" } })).toEqual({
-      sessionId: brain.id,
-      harness: "opencode",
-    })
-  }),
-)
-
-it.live("a model removed from an endpoint while the harness is open is refused at the next start", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    yield* brain.start()
-    const access = Shared.access({ later: Shared.apiKey("later") }, Shared.stub().url)
-    yield* brain.client.brain["brain.configureModels"]({
-      payload: { access: withModel(access, { id: "later-old", name: "Later Old", limit }) },
-    })
-    yield* brain.start({ model: { endpointId: "later", modelId: "later-old" } })
-    yield* brain.client.brain["brain.configureModels"]({ payload: { access } })
-    expect(
-      yield* brain.start({ model: { endpointId: "later", modelId: "later-old" } }).pipe(Effect.flip),
-    ).toBeInstanceOf(BrainRejectedError)
-  }),
-)
-
-it.live("a base URL changed while the harness is open reaches the next model call with its key", () =>
-  Effect.gen(function* () {
-    const brain = yield* BrainTest.Service
-    yield* brain.start()
-    yield* brain.client.brain["brain.configureModels"]({
-      payload: { access: Shared.access({ later: Shared.apiKey("first") }, Shared.stub().url) },
-    })
-    yield* brain.start({ model: { endpointId: "later", modelId: "stub-model" } })
-    const first = Shared.stub().script()
-    yield* brain.send(`first ${first.marker}`)
-    const sessionID = SessionID.make(brain.id)
-    yield* brain.opencode.session.wait({ sessionID })
-    yield* brain.client.brain["brain.configureModels"]({
-      payload: {
-        access: Shared.access({ later: Shared.apiKey("moved") }, Shared.stub().url.replace(/\/v1$/u, "/moved/v1")),
-      },
-    })
-    const second = Shared.stub().script()
-    yield* brain.send(`second ${second.marker}`)
-    yield* brain.opencode.session.wait({ sessionID })
-    expect([first.calls[0]?.path, second.calls[0]?.path, second.calls[0]?.authorization]).toEqual([
-      "/v1/chat/completions",
-      "/moved/v1/chat/completions",
-      "Bearer moved",
-    ])
-  }),
 )
 
 it.live("an expiring key configured during a turn reaches its next model call", () =>
@@ -495,11 +353,209 @@ it.live("an expired key refuses start and send without a model call until a fres
     expect(yield* brain.send(`expired ${script.marker}`).pipe(Effect.flip)).toEqual(refused)
     expect(yield* brain.start().pipe(Effect.flip)).toEqual(refused)
     expect(script.calls).toEqual([])
-    const sessionID = SessionID.make(brain.id)
     yield* brain.configureModels({ stub: Shared.apiKey("fresh", Date.now() + 3_600_000) })
     const fresh = Shared.stub().script()
     yield* brain.send(`fresh ${fresh.marker}`)
-    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
     expect(fresh.calls[0]?.authorization).toBe("Bearer fresh")
+  }),
+)
+
+it.live(
+  "a model and an endpoint added while the harness is open are listed with their metadata and serve the next turns",
+  () =>
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.Service
+      yield* brain.start()
+      yield* brain.client.brain["brain.configureModels"]({
+        payload: {
+          access: {
+            endpoints: [
+              ...catalog([
+                { id: "stub-model", name: "Stub", limit },
+                {
+                  id: "stub-added",
+                  name: "Stub Added",
+                  limit: { context: 50_000, output: 2000 },
+                  efforts: ["low", "high"],
+                },
+              ]).endpoints,
+              ...Shared.access({ later: Shared.apiKey("later") }, Shared.stub().url).endpoints,
+            ],
+          },
+        },
+      })
+      const added = (yield* brain.opencode.model.list()).data.find(
+        (model) => model.providerID === "stub" && model.modelID === "stub-added",
+      )
+      expect(added).toMatchObject({
+        name: "Stub Added",
+        limit: { context: 50_000, output: 2000 },
+        variants: [
+          { id: "low", settings: { reasoningEffort: "low" } },
+          { id: "high", settings: { reasoningEffort: "high" } },
+        ],
+      })
+      expect(added?.variants).toHaveLength(2)
+      const sessionID = SessionID.make(brain.id)
+      yield* brain.start({ model: { endpointId: "stub", modelId: "stub-added", variant: "high" } })
+      const script = Shared.stub().script()
+      yield* brain.send(`added ${script.marker}`)
+      yield* brain.opencode.session.wait({ sessionID })
+      yield* brain.start({ model: { endpointId: "later", modelId: "stub-model" } })
+      const later = Shared.stub().script()
+      yield* brain.send(`later ${later.marker}`)
+      yield* brain.opencode.session.wait({ sessionID })
+      expect([...script.calls, ...later.calls].map((call) => [call.body.model, call.authorization])).toEqual([
+        ["stub-added", "Bearer catalog-key"],
+        ["stub-model", "Bearer later"],
+      ])
+    }),
+)
+
+it.live("an anthropic endpoint becomes a provider with its efforts as variants, and its key reaches the model", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    yield* brain.client.brain["brain.configureModels"]({
+      payload: {
+        access: {
+          endpoints: [
+            {
+              id: "gateway-anthropic",
+              protocol: "anthropic-messages",
+              baseUrl: Shared.stub().url,
+              apiKey: Shared.apiKey("anthropic-key", Date.now() + 3_600_000),
+              models: [{ id: "stub-claude", name: "Gateway Claude", limit, efforts: ["low", "max"] }],
+            },
+          ],
+        },
+      },
+    })
+    expect(
+      (yield* brain.opencode.model.list()).data
+        .filter((model) => model.providerID === "gateway-anthropic")
+        .map((model) => model.variants.map((variant) => ({ id: String(variant.id), settings: variant.settings }))),
+    ).toEqual([
+      [
+        { id: "low", settings: { thinking: { type: "adaptive", display: "summarized" }, effort: "low" } },
+        { id: "max", settings: { thinking: { type: "adaptive", display: "summarized" }, effort: "max" } },
+      ],
+    ])
+    yield* brain.start({ model: { endpointId: "gateway-anthropic", modelId: "stub-claude" } })
+    const script = Shared.stub().script()
+    yield* brain.send(`anthropic ${script.marker}`)
+    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    expect(script.calls.map((call) => [call.path, call.authorization, call.apiKey])).toEqual([
+      ["/v1/messages", "Bearer anthropic-key", null],
+    ])
+  }),
+)
+
+it.live("a model removed from the catalog while the harness is open is no longer listed or selectable", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    yield* brain.client.brain["brain.configureModels"]({
+      payload: {
+        access: catalog([
+          { id: "stub-model", limit },
+          { id: "stub-added", limit },
+        ]),
+      },
+    })
+    yield* brain.client.brain["brain.configureModels"]({ payload: { access: catalog([{ id: "stub-model", limit }]) } })
+    expect(
+      (yield* brain.opencode.model.list()).data.filter(
+        (model) => model.providerID === "stub" && model.modelID === "stub-added",
+      ),
+    ).toEqual([])
+    expect(
+      yield* brain.start({ model: { endpointId: "stub", modelId: "stub-added" } }).pipe(Effect.flip),
+    ).toBeInstanceOf(BrainRejectedError)
+  }),
+)
+
+test.each<[string, Models.Access, Models.Access, Session.Model]>([
+  [
+    "a model removed from its endpoint",
+    catalog([
+      { id: "stub-model", limit },
+      { id: "stub-added", limit },
+    ]),
+    catalog([{ id: "stub-model", limit }]),
+    { endpointId: "stub", modelId: "stub-added" },
+  ],
+  [
+    "an endpoint removed",
+    Shared.access({ stub: Shared.apiKey("stub-ren"), later: Shared.apiKey("later") }, Shared.stub().url),
+    Shared.access({ stub: Shared.apiKey("stub-ren") }, Shared.stub().url),
+    { endpointId: "later", modelId: "stub-model" },
+  ],
+])("the selected model removed while the harness is open (%s) sends no model request", (_name, before, after, model) =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.Service
+      yield* brain.start()
+      yield* brain.client.brain["brain.configureModels"]({ payload: { access: before } })
+      yield* brain.start({ model })
+      yield* brain.client.brain["brain.configureModels"]({ payload: { access: after } })
+      const script = Shared.stub().script()
+      yield* Effect.exit(brain.send(`removed ${script.marker}`))
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      expect(script.calls).toEqual([])
+    }),
+  ),
+)
+
+test.todo("REN-1486 an endpoint's base URL and key changed during a turn reach the next model request", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.Service
+      yield* brain.start()
+      yield* brain.client.brain["brain.configureModels"]({
+        payload: { access: catalog([{ id: "stub-model", limit }], Shared.apiKey("first-key")) },
+      })
+      const first = Shared.stub().script({ hold: true })
+      const second = Shared.stub().script()
+      yield* brain.send(`first ${first.marker}`)
+      yield* Effect.promise(() => first.called())
+      yield* brain.client.brain["brain.configureModels"]({
+        payload: {
+          access: catalog(
+            [{ id: "stub-model", limit }],
+            Shared.apiKey("moved-key"),
+            Shared.stub().url.replace(/\/v1$/, "/moved/v1"),
+          ),
+        },
+      })
+      yield* brain.send(`second ${second.marker}`, { delivery: "queue" })
+      first.release()
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      expect([...first.calls, ...second.calls].map((call) => [call.path, call.authorization])).toEqual([
+        ["/v1/chat/completions", "Bearer first-key"],
+        ["/moved/v1/chat/completions", "Bearer moved-key"],
+      ])
+    }),
+  ),
+)
+
+it.live("a key inside OpenCode's refresh window is renewed through the host before the model request", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    yield* brain.configureModels({ stub: Shared.apiKey("expiring", Date.now() + 60_000) }, "host-token")
+    const script = Shared.stub().script()
+    yield* brain.send(`renew ${script.marker}`)
+    yield* brain.issuer.reply(
+      yield* brain.issuer.next,
+      ModelsTest.granted({
+        access: Shared.access({ stub: Shared.apiKey("renewed", Date.now() + 3_600_000) }, Shared.stub().url),
+        hostToken: "next-token",
+      }),
+    )
+    yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    expect(script.calls.map((call) => call.authorization)).toEqual(["Bearer renewed"])
+    expect(brain.issuer.requests).toEqual(["Bearer host-token"])
   }),
 )

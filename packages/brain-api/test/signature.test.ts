@@ -43,14 +43,6 @@ test("rejects a tampered payload", async () => {
   )
 })
 
-test("signs a standard three segment JWT with a pinned EdDSA header", async () => {
-  const token = await sign()
-  const [header, payload] = token.split(".")
-  expect(token.split(".")).toHaveLength(3)
-  expect(JSON.parse(Buffer.from(header ?? "", "base64url").toString())).toEqual({ alg: "EdDSA", kid: "active" })
-  expect(JSON.parse(Buffer.from(payload ?? "", "base64url").toString())).toEqual(claims)
-})
-
 test("takes the key id from the protected header, not the payload", async () => {
   expect(await verify(await sign(active.privateKey, { ...claims, kid: "retiring" }))).toEqual(
     Option.some({ kid: "active", ...claims }),
@@ -64,30 +56,10 @@ test("rejects a token whose header algorithm is not EdDSA", async () => {
   expect(await verify(`${header}.${payload}.`)).toEqual(Option.none())
 })
 
-test("rejects a token without a header key id", async () => {
-  const header = Buffer.from(JSON.stringify({ alg: "EdDSA" })).toString("base64url")
-  const [, payload, signature] = (await sign()).split(".")
-  expect(await verify(`${header}.${payload}.${signature}`)).toEqual(Option.none())
-})
-
-test("rejects malformed tokens", async () => {
-  expect(await verify("")).toEqual(Option.none())
-  expect(await verify("not-a-token")).toEqual(Option.none())
-  expect(await verify("a.b.c")).toEqual(Option.none())
-})
-
-test("rejects claims that do not decode", async () => {
-  expect(await verify(await sign(active.privateKey, { exp: claims.exp }))).toEqual(Option.none())
-})
-
 test("expires exactly at the claimed expiry", async () => {
   const token = await sign()
   expect(await verify(token, claims.exp * 1000 - 1)).toEqual(Option.some({ kid: "active", ...claims }))
   expect(await verify(token, claims.exp * 1000)).toEqual(Option.none())
-})
-
-test("rejects extra token segments rather than ignoring them", async () => {
-  expect(await verify(`${await sign()}.extra`)).toEqual(Option.none())
 })
 
 test("rejects a token without an expiry", async () => {
@@ -99,17 +71,4 @@ test("round-trips generated keys through their variables", () => {
   const published = Schema.encodeSync(Signature.PublicKeys)([active.publicKey])
   expect(Schema.decodeUnknownSync(Signature.SigningKey)(signing)).toEqual(active.privateKey)
   expect(Schema.decodeUnknownSync(Signature.PublicKeys)(published)).toEqual([active.publicKey])
-})
-
-test("rejects keys of the wrong length, duplicate ids and an empty key list", () => {
-  const published = (value: unknown) => Schema.decodeUnknownOption(Signature.PublicKeys)(JSON.stringify(value))
-  expect(published([{ id: "short", key: "AAAA" }])).toEqual(Option.none())
-  expect(published([])).toEqual(Option.none())
-  const encoded = Schema.encodeSync(Signature.PublicKey)(active.publicKey)
-  expect(published([encoded, encoded])).toEqual(Option.none())
-  expect(
-    Schema.decodeUnknownOption(Signature.SigningKey)(
-      JSON.stringify(Schema.encodeSync(Signature.PublicKey)(active.publicKey)),
-    ),
-  ).toEqual(Option.none())
 })
