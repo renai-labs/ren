@@ -112,7 +112,10 @@ export const start = async () => {
       return driver
     },
     hand: async (label: string) => attach(await ExecutorAdapter.localProcess({ label })),
-    dockerHand: async (label: string) => attach(await ExecutorAdapter.dockerContainer({ label })),
+    dockerHand: async (label: string) => {
+      const container = await ExecutorAdapter.dockerContainer({ label })
+      return { ...(await attach(container)), container }
+    },
     restartCell: async () => {
       await cell.crash()
       await cell.start()

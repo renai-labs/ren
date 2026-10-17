@@ -15,9 +15,13 @@
   },
   "devDependencies": {
     "@opencode/client": "catalog:",
+    "@effect/sql-pg": "catalog:",
     "@playwright/test": "catalog:",
+    "@ren/brain": "workspace:*",
     "@ren/brain-api": "workspace:*",
     "@ren/cell": "workspace:*",
+    "@ren/core": "workspace:*",
+    "@ren/db": "workspace:*",
     "@ren/executor": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/server": "workspace:*",
