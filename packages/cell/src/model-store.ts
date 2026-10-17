@@ -1,7 +1,7 @@
 export * as ModelStore from "./model-store.js"
 
 import { Models } from "@ren/schema/models"
-import { Context, Effect, Layer, Option } from "effect"
+import { Context, Effect, Layer, Option, SynchronizedRef } from "effect"
 import { KeyValueStore } from "effect/persistence"
 
 const accessKey = "ren:models"
@@ -20,7 +20,12 @@ export interface Interface {
   readonly read: Effect.Effect<Option.Option<Models.Access>>
   readonly readHostToken: Effect.Effect<Option.Option<string>>
   readonly write: (access: Models.Access, hostToken: string | undefined) => Effect.Effect<void>
-  readonly removeHostToken: Effect.Effect<void>
+  readonly writeIfUnchanged: (
+    sent: string,
+    access: Models.Access,
+    hostToken: string | undefined,
+  ) => Effect.Effect<boolean>
+  readonly removeHostTokenIfUnchanged: (sent: string) => Effect.Effect<void>
   readonly remove: Effect.Effect<void>
 }
 
@@ -41,19 +46,44 @@ export const layer = Layer.effect(
       size: Effect.forEach(keys, get).pipe(Effect.map((values) => values.filter(Boolean).length)),
     })
     const access = KeyValueStore.toSchemaStore(store, Models.Access)
-    const removeHostToken = store.remove(hostTokenKey).pipe(Effect.orDie, Effect.withSpan("ModelStore.removeHostToken"))
+    const storedHostToken = yield* SynchronizedRef.make(
+      yield* store.get(hostTokenKey).pipe(Effect.map(Option.fromNullishOr), Effect.orDie),
+    )
+    const put = (next: Models.Access, hostToken: string | undefined) =>
+      access
+        .set(accessKey, next)
+        .pipe(
+          Effect.andThen(hostToken ? store.set(hostTokenKey, hostToken) : store.remove(hostTokenKey)),
+          Effect.orDie,
+          Effect.as(Option.fromNullishOr(hostToken)),
+        )
     return Service.of({
       read: access.get(accessKey).pipe(Effect.orDie, Effect.withSpan("ModelStore.read")),
-      readHostToken: store
-        .get(hostTokenKey)
-        .pipe(Effect.map(Option.fromNullishOr), Effect.orDie, Effect.withSpan("ModelStore.readHostToken")),
+      readHostToken: SynchronizedRef.get(storedHostToken).pipe(Effect.withSpan("ModelStore.readHostToken")),
       write: Effect.fn("ModelStore.write")(function* (next: Models.Access, hostToken: string | undefined) {
-        yield* access.set(accessKey, next).pipe(Effect.orDie)
-        if (!hostToken) return yield* removeHostToken
-        yield* store.set(hostTokenKey, hostToken).pipe(Effect.orDie)
+        yield* SynchronizedRef.updateEffect(storedHostToken, () => put(next, hostToken))
       }),
-      removeHostToken,
-      remove: store.clear.pipe(Effect.orDie, Effect.withSpan("ModelStore.remove")),
+      writeIfUnchanged: Effect.fn("ModelStore.writeIfUnchanged")(function* (
+        sent: string,
+        next: Models.Access,
+        hostToken: string | undefined,
+      ) {
+        return yield* SynchronizedRef.modifyEffect(storedHostToken, (stored) =>
+          Option.contains(stored, sent)
+            ? put(next, hostToken).pipe(Effect.map((saved) => [true, saved] as const))
+            : Effect.succeed([false, stored] as const),
+        )
+      }),
+      removeHostTokenIfUnchanged: Effect.fn("ModelStore.removeHostTokenIfUnchanged")(function* (sent: string) {
+        yield* SynchronizedRef.updateEffect(storedHostToken, (stored) =>
+          Option.contains(stored, sent)
+            ? store.remove(hostTokenKey).pipe(Effect.orDie, Effect.as(Option.none()))
+            : Effect.succeed(stored),
+        )
+      }),
+      remove: SynchronizedRef.updateEffect(storedHostToken, () =>
+        store.clear.pipe(Effect.orDie, Effect.as(Option.none())),
+      ).pipe(Effect.withSpan("ModelStore.remove")),
     })
   }),
 )

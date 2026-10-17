@@ -47,9 +47,9 @@ export const make = Effect.fn("Host.make")(function* (
   const services = yield* runtime.contextEffect
   const plugins = Context.get(services, SdkPlugins.Service)
   const endpoints = yield* Ref.make(initial)
-  const reload = yield* Ref.make(Effect.void)
+  const reloads = yield* Ref.make<ReadonlyArray<Effect.Effect<void>>>([])
   const loaded = yield* Deferred.make<void>()
-  yield* plugins.register(RenPlugin.make(endpoints, reload, loaded, refreshKey))
+  yield* plugins.register(RenPlugin.make(endpoints, reloads, loaded, refreshKey))
   const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
@@ -59,7 +59,11 @@ export const make = Effect.fn("Host.make")(function* (
   return {
     fetch,
     credentials: Context.get(services, Credential.Service),
-    configure: (next) => Ref.set(endpoints, next).pipe(Effect.andThen(Ref.get(reload)), Effect.flatten),
+    configure: (next) =>
+      Ref.set(endpoints, next).pipe(
+        Effect.andThen(Ref.get(reloads)),
+        Effect.flatMap((all) => Effect.all(all, { discard: true })),
+      ),
   }
 })
 

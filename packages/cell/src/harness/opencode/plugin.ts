@@ -37,7 +37,7 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
 
 export const make = (
   endpoints: Ref.Ref<ReadonlyArray<Models.Endpoint>>,
-  reload: Ref.Ref<Effect.Effect<void>>,
+  reloads: Ref.Ref<ReadonlyArray<Effect.Effect<void>>>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
 ) =>
@@ -62,7 +62,9 @@ export const make = (
               refresh: (credential) => refresh(integrationID, credential, refreshKey),
             })
         })
-        yield* Ref.set(reload, Effect.andThen(integration.reload(), provider.reload()))
+        const reload = Effect.andThen(integration.reload(), provider.reload())
+        yield* Ref.update(reloads, (all) => [...all, reload])
+        yield* Effect.addFinalizer(() => Ref.update(reloads, (all) => all.filter((each) => each !== reload)))
         yield* Deferred.succeed(loaded, undefined)
       }),
   })
