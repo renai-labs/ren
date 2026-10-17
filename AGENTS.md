@@ -29,7 +29,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 - `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
 - `client`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server` or `brain-api`.
 - `httpapi-codegen` stays independent of every Ren package.
-- `repos/` holds read-only copies of external repositories for reference. Do not edit or import them.
+- `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them.
 
 ## Style
 
