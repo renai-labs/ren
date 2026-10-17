@@ -32,6 +32,9 @@
     "tldts": "catalog:"
   },
   "devDependencies": {
+    "@opencode/client": "catalog:",
+    "@ren/brain": "workspace:*",
+    "@ren/cell": "workspace:*",
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
     "auth": "catalog:",
