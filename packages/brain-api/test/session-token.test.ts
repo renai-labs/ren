@@ -17,7 +17,7 @@ const verify = (token: string, millis = now * 1000) =>
     TestClock.setTime(millis).pipe(Effect.andThen(SessionToken.verify(keys, token)), Effect.provide(TestClock.layer())),
   )
 
-test.each([{ scope: "client" }, { scope: "host", org: Auth.OrganizationID.create() }] as const)(
+test.each([{ scope: "client" }, { scope: "host", org: Auth.OrganizationID.create(), iat: now }] as const)(
   "signs and verifies %j with the active key until its expiry",
   async (scope) => {
     const scoped = { ...claims, ...scope }
