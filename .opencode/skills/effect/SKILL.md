@@ -21,6 +21,8 @@ Use the vendored Effect v4 source, not memory or older Effect v2/v3 examples.
 - Use `Effect.gen(function* () { ... })` for multi-step workflows.
 - Use `Effect.fn("Name")` for service methods and important workflows.
 - Define services as `class Service extends Context.Service<Service, Interface>()("@ren/<package>/<Name>") {}` with an explicit `layer`.
+- Bind services to named variables before calling methods. Do not nest service yields such as `(yield* X.Service).method()`.
+- Die with `new Error(...)`, never a string.
 - Pure helpers do not return `Effect`.
 - Decode JSON with `Schema.UnknownFromJsonString` or a schema decoder, not `JSON.parse`.
 - Use Effect `Schema` for API and domain shapes, branded schemas for IDs, and tagged schema errors for domain errors.
@@ -31,7 +33,7 @@ Use the vendored Effect v4 source, not memory or older Effect v2/v3 examples.
 
 ## Testing patterns
 
-- Use `testEffect(layer)` from `packages/core/test/lib/effect.ts` for tests that exercise services, layers or scoped resources.
+- Use `testEffect(layer)` for tests that exercise services, layers or scoped resources: from `@ren/core/testing` in core and server, and from `@ren/executor/testing` in executor, brain and cell.
 - Use `it.live(...)` for the filesystem, child processes, HTTP servers, the database or real time.
 - Use `Testing.layer` from `@ren/db/testing` for database tests.
 - Run tests from package directories; never from the repo root.
