@@ -1,0 +1,14 @@
+id: no-unconditional-test-skip
+language: Tsx
+message: Do not skip a test unconditionally. Use `skipIf(condition)` for a missing platform or credential, or `test.todo` with the issue ID for a known bug.
+severity: error
+rule:
+  any:
+    - pattern: test.skip($NAME, $$$REST)
+    - pattern: it.skip($NAME, $$$REST)
+    - pattern: describe.skip($NAME, $$$REST)
+constraints:
+  NAME:
+    any:
+      - kind: string
+      - kind: template_string
