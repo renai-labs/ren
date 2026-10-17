@@ -20,6 +20,9 @@ Use the vendored Effect v4 source, not memory or older Effect v2/v3 examples.
 
 - Use `Effect.gen(function* () { ... })` for multi-step workflows.
 - Use `Effect.fn("Name")` for service methods and important workflows.
+- Define services as `class Service extends Context.Service<Service, Interface>()("@ren/<package>/<Name>") {}` with an explicit `layer`.
+- Pure helpers do not return `Effect`.
+- Decode JSON with `Schema.UnknownFromJsonString` or a schema decoder, not `JSON.parse`.
 - Use Effect `Schema` for API and domain shapes, branded schemas for IDs, and tagged schema errors for domain errors.
 - Keep HTTP handlers thin: decode input, call services, map errors. Business rules live in `@ren/core` services.
 - Prefer Effect platform abstractions (`HttpClient`, `FileSystem`, `SqlClient`) over ad hoc promises.
