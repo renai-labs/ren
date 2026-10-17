@@ -1,5 +1,5 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
-import { AbsolutePath, SessionMessage } from "@opencode/client/effect"
+import { AbsolutePath, OpenCode, SessionMessage } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { Environments } from "@ren/brain/environments"
@@ -8,7 +8,7 @@ import { Machine, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, Deferred, Effect, Exit, Layer, Option, Ref, Schedule, Schema, Scope } from "effect"
+import { Context, Deferred, Effect, Exit, Layer, Ref, Schedule, Schema, Scope } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath, stat } from "node:fs/promises"
 import { createServer, type Socket } from "node:net"
@@ -76,7 +76,7 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
     ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     () => Effect.succeedNone,
-    Option.some(environments),
+    true,
   )
   return {
     harness: yield* OpenCodeHarness.make(host, endpoints, AbsolutePath.make(local)),
@@ -441,6 +441,59 @@ it.live(
           sendTo(opened.harness, missing, script).pipe(Effect.andThen(Effect.promise(() => script.called(2)))),
       })
       expect([missingTurn.ran, missingTurn.result]).toEqual([false, expect.stringContaining("No access to a sandbox")])
+    }),
+)
+
+it.live("a long command's notice names its last lines and a file on the sandbox that has the full output", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const result = lastToolResult(yield* session.turn(stub.script(shell("seq 1 30000"))))
+    const file = /full output saved to ([^\]\\]+)\]/.exec(result)?.[1] ?? ""
+    expect(result).toContain("[showing lines 28001-30000 of 30000; full output saved to ")
+    const saved = yield* text(file)
+    expect([saved.split("\n").length - 1, saved.endsWith("29999\n30000\n")]).toEqual([30000, true])
+  }),
+)
+
+it.live("a background command's output file on the sandbox grows while the command runs", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+    const job = stub.script({
+      tool: { name: "shell", input: { command: `echo $$ > ${pidFile}; echo first; exec sleep 30`, background: true } },
+    })
+    const result = lastToolResult(yield* session.turn(job))
+    const file = /Output is streaming to: ([^\]\\"]+)/.exec(result)?.[1] ?? ""
+    const pid = yield* Pid.read(pidFile)
+    yield* text(file).pipe(
+      Effect.repeat({ until: (written) => written === "first\n", schedule: Schedule.spaced(100) }),
+      Effect.timeout("10 seconds"),
+      Effect.ensuring(Effect.sync(() => Processes.running(pid) && process.kill(pid, "SIGKILL"))),
+    )
+  }),
+)
+
+it.live(
+  "a client cannot run a command in the cell: the shell refuses a location without a sandbox, and nothing runs",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const client = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
+        Effect.provide(Layer.fresh(FetchHttpClient.layer)),
+        Effect.provideService(
+          FetchHttpClient.Fetch,
+          Object.assign(
+            (input: string | URL | Request, init?: RequestInit) =>
+              opened.host.fetch(new Request(input instanceof Request ? input.url : String(input), init)),
+            { preconnect: fetch.preconnect },
+          ),
+        ),
+      )
+      const marker = join(workspace, `${crypto.randomUUID()}.ran`)
+      expect((yield* client.shell.create({ command: `touch ${marker}` }).pipe(Effect.flip))._tag).toBe("ClientError")
+      expect(yield* Effect.promise(() => Bun.file(marker).exists())).toBe(false)
     }),
 )
 

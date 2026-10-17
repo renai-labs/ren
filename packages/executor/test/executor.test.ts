@@ -61,6 +61,56 @@ it.live("streams stdout, stderr and the exit code", () =>
   }),
 )
 
+it.live("writes stdout and stderr in their order to the output file, in a new folder, before the exit", () =>
+  Effect.gen(function* () {
+    const outputFile = join(workspace, crypto.randomUUID(), "shell", "sh_1.out")
+    const process = yield* run({
+      command: "sh",
+      arguments: ["-c", "echo one; echo two >&2; sleep 0.1; echo three"],
+      outputFile,
+    })
+    yield* Stream.runDrain(process.events)
+    expect(yield* Effect.promise(() => Bun.file(outputFile).text())).toBe("one\ntwo\nthree\n")
+  }),
+)
+
+it.live("gives a reader with a window only the last bytes it keeps, and counts the bytes and lines it left out", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const spawned = yield* executor.spawn(brain, { command: "seq", arguments: ["1", "100000"] })
+    const events = yield* Stream.runCollect(
+      yield* executor.output(brain, spawned.id, 0, { maxBytes: 1000, intervalMs: 100 }),
+    )
+    const skips = events.flatMap((event) => (event.type === "skip" ? [event] : []))
+    const data = events.flatMap((event) => (event.type === "stdout" || event.type === "stderr" ? [event] : []))
+    const last = data.at(-1)
+    const sent = data.reduce((bytes, event) => bytes + event.bytes.length, 0)
+    const newlines = (bytes: Uint8Array) => bytes.filter((byte) => byte === 10).length
+    expect({
+      bytes: skips.reduce((bytes, skip) => bytes + skip.bytes, 0) + sent,
+      newlines:
+        skips.reduce((count, skip) => count + skip.newlines, 0) +
+        data.reduce((count, event) => count + newlines(event.bytes), 0),
+      ending: last && decoder.decode(last.bytes).endsWith("99999\n100000\n"),
+      exit: events.at(-1),
+    }).toEqual({ bytes: 588895, newlines: 100000, ending: true, exit: { type: "exit", exitCode: 0, signal: null } })
+    expect(sent).toBeLessThan(100_000)
+  }),
+)
+
+it.live("refuses a spawn whose output file cannot be made, and starts no process", () =>
+  Effect.gen(function* () {
+    const blocker = join(workspace, `${crypto.randomUUID()}.txt`)
+    yield* Effect.promise(() => writeFile(blocker, "a file, not a folder"))
+    const marker = join(workspace, `${crypto.randomUUID()}.ran`)
+    const executor = yield* Executor.Service
+    const error = yield* executor
+      .spawn(brain, { command: "touch", arguments: [marker], outputFile: join(blocker, "sh_1.out") })
+      .pipe(Effect.flip)
+    expect([error._tag, existsSync(marker)]).toEqual(["OperationFailedError", false])
+  }),
+)
+
 it.live("runs in the workspace with its environment and the given variables on top", () =>
   Effect.gen(function* () {
     const process = yield* run({

@@ -48,6 +48,11 @@ export const SpawnInput = Schema.Struct({
   variables: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
   shell: Schema.optionalKey(Schema.Union([Schema.Boolean, Schema.String])),
   hasStdin: Schema.optionalKey(Schema.Boolean),
+  outputFile: Schema.optionalKey(
+    Schema.String.annotate({
+      description: "A file on the executor that gets the process’s stdout and stderr, in the order they arrive",
+    }),
+  ),
 }).annotate({ identifier: "Executor.SpawnInput" })
 
 export interface SpawnResult extends Schema.Schema.Type<typeof SpawnResult> {}
@@ -57,12 +62,25 @@ export const SpawnResult = Schema.Struct({ id: ProcessID, pid: Schema.Int }).ann
 
 const Offset = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
+export interface OutputWindow extends Schema.Schema.Type<typeof OutputWindow> {}
+export const OutputWindow = Schema.Struct({
+  maxBytes: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1024 * 1024)),
+  intervalMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+}).annotate({
+  identifier: "Executor.OutputWindow",
+  description:
+    "The reader keeps only the last maxBytes of the output and reads at most once each intervalMs; the rest is a skip",
+})
+
 export const ProcessEvent = Schema.Union([
   Schema.Struct({ type: Schema.Literal("stdout"), offset: Offset, bytes: Schema.Uint8ArrayFromBase64 }),
   Schema.Struct({ type: Schema.Literal("stderr"), offset: Offset, bytes: Schema.Uint8ArrayFromBase64 }),
   Schema.Struct({ type: Schema.Literal("exit"), exitCode: Schema.Int, signal: Schema.Null }),
   Schema.Struct({ type: Schema.Literal("exit"), exitCode: Schema.Null, signal: Signal.Name }),
   Schema.Struct({ type: Schema.Literal("ping") }),
+  Schema.Struct({ type: Schema.Literal("skip"), offset: Offset, bytes: Offset, newlines: Offset }).annotate({
+    description: "Output from offset that a reader with a window does not get: its length and its newlines",
+  }),
 ]).annotate({ identifier: "Executor.ProcessEvent" })
 export type ProcessEvent = typeof ProcessEvent.Type
 
@@ -143,7 +161,7 @@ export const ExecutorApi = RpcGroup.make(
   Rpc.make("executor.hello", { success: Hello }),
   Rpc.make("process.spawn", { payload: SpawnInput, success: SpawnResult, error: OperationFailedError }),
   Rpc.make("process.output", {
-    payload: { ...ProcessRef, cursor: Schema.optionalKey(Offset) },
+    payload: { ...ProcessRef, cursor: Schema.optionalKey(Offset), window: Schema.optionalKey(OutputWindow) },
     success: ProcessEvent,
     error: ProcessNotFoundError,
     stream: true,

@@ -60,7 +60,9 @@ const operations = ExecutorApi.toLayer(
       "executor.hello": () => Effect.succeed(executor.hello),
       "process.spawn": (input) => Effect.flatMap(Caller, (caller) => executor.spawn(caller.brain, input)),
       "process.output": (input) =>
-        Stream.unwrap(Effect.flatMap(Caller, (caller) => executor.output(caller.brain, input.id, input.cursor))),
+        Stream.unwrap(
+          Effect.flatMap(Caller, (caller) => executor.output(caller.brain, input.id, input.cursor, input.window)),
+        ),
       "process.write": (input) =>
         Effect.flatMap(Caller, (caller) => executor.writeStdin(caller.brain, input.id, input.data, input.end ?? false)),
       "process.heartbeat": (input) => Effect.flatMap(Caller, (caller) => executor.heartbeat(caller.brain, input.id)),

@@ -186,6 +186,41 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     expect(lastToolResult(await session.turn(stub.script(shell(`tail -n 1 ${background}`))))).toContain("30000")
   })
 
+  test("a command that prints 64 MiB keeps workerd's memory bounded, and its full output is on the sandbox", async () => {
+    const session = await begin()
+    const folder = join(first.directory, session.sessionId)
+    expect(
+      Bun.spawnSync(["sh", "-c", `mkdir -p ${folder} && head -c 50331648 /dev/urandom | base64 > ${folder}/big.txt`])
+        .exitCode,
+    ).toBe(0)
+    const descendants = (pid: number): ReadonlyArray<number> => {
+      const children = new TextDecoder()
+        .decode(Bun.spawnSync(["pgrep", "-P", String(pid)]).stdout)
+        .split("\n")
+        .filter(Boolean)
+        .map(Number)
+      return [...children, ...children.flatMap(descendants)]
+    }
+    const workerd = descendants(cell.pid() ?? 0).filter((pid) =>
+      new TextDecoder().decode(Bun.spawnSync(["ps", "-o", "comm=", "-p", String(pid)]).stdout).includes("workerd"),
+    )
+    const rssMiB = () =>
+      workerd.reduce(
+        (sum, pid) =>
+          sum +
+          Number(new TextDecoder().decode(Bun.spawnSync(["ps", "-o", "rss=", "-p", String(pid)]).stdout).trim()) / 1024,
+        0,
+      )
+    const idle = rssMiB()
+    const samples: Array<number> = []
+    const sampler = setInterval(() => samples.push(rssMiB()), 200)
+    const result = lastToolResult(await session.turn(stub.script(shell("cat big.txt"))))
+    clearInterval(sampler)
+    const saved = /full output saved to ([^\]\\]+)\]/.exec(result)?.[1] ?? ""
+    expect(Bun.file(saved).size).toBe(Bun.file(join(folder, "big.txt")).size)
+    expect(Math.max(...samples) - idle).toBeLessThan(32)
+  })
+
   test("after the cell sleeps and wakes, a session's tools run on its sandbox, and one without has none", async () => {
     const onSandbox = await begin()
     const local = await begin(false)

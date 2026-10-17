@@ -14,7 +14,7 @@ import { Machine, Processes, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Layer, Exit, ManagedRuntime, Option, Ref, Schema, Scope } from "effect"
+import { Context, Effect, Layer, Exit, ManagedRuntime, Ref, Schema, Scope } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import { createServer, connect } from "node:net"
 import { lstat, mkdir, mkdtemp, readdir, realpath, symlink } from "node:fs/promises"
@@ -94,7 +94,7 @@ const open = Effect.fnUntraced(function* () {
     embedded(RenWorkspaceDriver.replacements(environments)),
     endpoints,
     () => Effect.succeedNone,
-    Option.some(environments),
+    true,
   )
   return {
     harness: yield* OpenCodeHarness.make(host, endpoints, AbsolutePath.make(local)),

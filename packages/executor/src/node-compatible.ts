@@ -9,6 +9,7 @@ import {
   maxFileBytes,
   OperationFailedError,
   orphanAfter,
+  type OutputWindow,
   pingEvery,
   type ProcessEvent,
   ProcessID,
@@ -53,6 +54,10 @@ export const exitedLimitBytes = 64 * 1024 * 1024
 
 type OutputEvent = Extract<ProcessEvent, { readonly type: "stdout" | "stderr" }>
 
+type KeptChunk = OutputEvent & { readonly newlinesBefore: number }
+
+const countNewlines = (bytes: Uint8Array) => bytes.reduce((count, byte) => (byte === 10 ? count + 1 : count), 0)
+
 type ExitEvent = Extract<ProcessEvent, { readonly type: "exit" }>
 
 interface Entry {
@@ -61,12 +66,13 @@ interface Entry {
   readonly scope: Scope.Closeable
   readonly handle: ChildProcessSpawner.ChildProcessHandle
   readonly stdin: Queue.Queue<Uint8Array, Cause.Done> | undefined
-  readonly chunks: Array<OutputEvent>
+  readonly chunks: Array<KeptChunk>
   readonly readerPositions: Map<object, number>
   readonly logChanged: PubSub.PubSub<void>
   readonly readerMoves: PubSub.Subscription<void>
   readonly readerMoved: PubSub.PubSub<void>
   nextOffset: number
+  newlines: number
   exit: ExitEvent | undefined
   failure: Cause.Cause<never> | undefined
   seenAtMs: number
@@ -190,9 +196,16 @@ export const layer = Layer.effect(
     const outputFrom = (entry: Entry, position: number) =>
       entry.chunks.flatMap((chunk): ReadonlyArray<OutputEvent> => {
         if (chunk.offset + chunk.bytes.length <= position) return []
-        if (chunk.offset >= position) return [chunk]
-        return [{ ...chunk, offset: position, bytes: chunk.bytes.subarray(position - chunk.offset) }]
+        if (chunk.offset >= position) return [{ type: chunk.type, offset: chunk.offset, bytes: chunk.bytes }]
+        return [{ type: chunk.type, offset: position, bytes: chunk.bytes.subarray(position - chunk.offset) }]
       })
+
+    const newlinesAt = (entry: Entry, offset: number) => {
+      const chunk = entry.chunks.find((kept) => offset < kept.offset + kept.bytes.length)
+      if (!chunk) return entry.newlines
+      if (offset <= chunk.offset) return chunk.newlinesBefore
+      return chunk.newlinesBefore + countNewlines(chunk.bytes.subarray(0, offset - chunk.offset))
+    }
 
     const waitForChange: (
       entry: Entry,
@@ -217,6 +230,20 @@ export const layer = Layer.effect(
 
     const spawn = Effect.fn("Executor.spawn")(function* (brain: Brain.ID, input: SpawnInput) {
       const entryScope = yield* Scope.fork(scope)
+      const outputFile = input.outputFile
+      const output = outputFile
+        ? yield* Effect.acquireRelease(
+            Effect.tryPromise(async () => {
+              await mkdir(dirname(path(outputFile)), { recursive: true })
+              return open(path(outputFile), "w")
+            }),
+            (file) => Effect.promise(() => file.close()),
+          ).pipe(
+            Scope.provide(entryScope),
+            Effect.mapError((cause) => new OperationFailedError({ message: message(cause) })),
+            Effect.onError(() => Scope.close(entryScope, Exit.void)),
+          )
+        : undefined
       const stdin = input.hasStdin === true ? yield* Queue.bounded<Uint8Array, Cause.Done>(16) : undefined
       const handle = yield* spawner
         .spawn(
@@ -249,6 +276,7 @@ export const layer = Layer.effect(
         readerMoves: yield* PubSub.subscribe(readerMoved).pipe(Scope.provide(entryScope)),
         readerMoved,
         nextOffset: 0,
+        newlines: 0,
         exit: undefined,
         failure: undefined,
         seenAtMs: yield* Clock.currentTimeMillis,
@@ -263,8 +291,10 @@ export const layer = Layer.effect(
       yield* Stream.merge(tagged(handle.stdout, "stdout"), tagged(handle.stderr, "stderr")).pipe(
         Stream.runForEach((written) =>
           Effect.gen(function* () {
-            entry.chunks.push({ ...written, offset: entry.nextOffset })
+            if (output) yield* Effect.promise(() => output.write(written.bytes).catch(() => undefined))
+            entry.chunks.push({ ...written, offset: entry.nextOffset, newlinesBefore: entry.newlines })
             entry.nextOffset += written.bytes.length
+            entry.newlines += countNewlines(written.bytes)
             yield* PubSub.publish(entry.logChanged, undefined)
             yield* trim(entry)
           }),
@@ -292,7 +322,12 @@ export const layer = Layer.effect(
       return { id, pid: handle.pid }
     })
 
-    const output = Effect.fn("Executor.output")(function* (brain: Brain.ID, id: ProcessID, cursor?: number) {
+    const output = Effect.fn("Executor.output")(function* (
+      brain: Brain.ID,
+      id: ProcessID,
+      cursor?: number,
+      window?: OutputWindow,
+    ) {
       const entry = yield* find(brain, id)
       const reader = {}
       const leave = Clock.currentTimeMillis.pipe(
@@ -304,15 +339,37 @@ export const layer = Layer.effect(
       )
       const events = Stream.unwrap(
         Effect.map(PubSub.subscribe(entry.logChanged), (logChanges) =>
-          Stream.paginate(cursor ?? 0, (position: number) =>
+          Stream.paginate({ position: cursor ?? 0, newlines: newlinesAt(entry, cursor ?? 0), sentAtMs: 0 }, (state) =>
             Effect.gen(function* () {
-              entry.readerPositions.set(reader, position)
+              // oxlint-disable-next-line ren/no-comments -- A reader with a window skips what it does not keep, so it never holds back the trim of older output.
+              entry.readerPositions.set(reader, window ? Number.POSITIVE_INFINITY : state.position)
               yield* PubSub.publish(entry.readerMoved, undefined)
-              yield* waitForChange(entry, position, logChanges)
+              yield* waitForChange(entry, state.position, logChanges)
+              if (window && !entry.exit) {
+                const waitMs = state.sentAtMs + window.intervalMs - (yield* Clock.currentTimeMillis)
+                if (waitMs > 0) yield* Effect.sleep(Duration.millis(waitMs))
+              }
               if (entry.failure) return yield* Effect.failCause(entry.failure)
-              const chunks = outputFrom(entry, position)
-              if (entry.exit) return [[...chunks, entry.exit], Option.none<number>()] as const
-              return [chunks, Option.some(entry.nextOffset)] as const
+              const end = entry.nextOffset
+              const from = window ? Math.max(state.position, end - window.maxBytes) : state.position
+              const events: ReadonlyArray<ProcessEvent> = [
+                ...(from > state.position
+                  ? [
+                      {
+                        type: "skip" as const,
+                        offset: state.position,
+                        bytes: from - state.position,
+                        newlines: newlinesAt(entry, from) - state.newlines,
+                      },
+                    ]
+                  : []),
+                ...outputFrom(entry, from),
+              ]
+              if (entry.exit) return [[...events, entry.exit], Option.none()] as const
+              return [
+                events,
+                Option.some({ position: end, newlines: entry.newlines, sentAtMs: yield* Clock.currentTimeMillis }),
+              ] as const
             }),
           ),
         ),

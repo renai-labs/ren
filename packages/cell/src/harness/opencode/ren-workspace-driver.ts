@@ -2,6 +2,7 @@ export * as RenWorkspaceDriver from "./ren-workspace-driver.js"
 
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
+import { Shell } from "@opencode/core/shell"
 import { WorkspaceDriver } from "@opencode/core/workspace/driver"
 import { Workspace } from "@opencode/schema/workspace"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
@@ -13,6 +14,7 @@ import { Hand } from "@ren/brain/hand"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer, Schema } from "effect"
+import { RenShell } from "./ren-shell.js"
 
 export const provider = "ren"
 
@@ -92,7 +94,7 @@ const files = (hand: Hand.SessionHand): EnvironmentFiles.FilesImpl => {
 
 export const session = (environments: Environments.Interface, sessionId: Session.ID) => {
   const hand = Hand.session(environments, sessionId, Environment.sessionDirectory(sessionId), killedBySignal)
-  return { spawner: hand.spawner, overrides: files(hand) }
+  return { spawner: hand.spawner, spawnerWith: hand.spawnerWith, overrides: files(hand) }
 }
 
 export const replacements = (environments: Environments.Interface): LayerNode.Replacements => [
@@ -115,4 +117,5 @@ export const replacements = (environments: Environments.Interface): LayerNode.Re
   RipgrepBinary.node.replace(
     Layer.succeed(RipgrepBinary.Service, RipgrepBinary.Service.of({ filepath: Effect.succeed("rg") })),
   ),
+  Shell.node.replace(RenShell.node((sessionId) => session(environments, sessionId))),
 ]
