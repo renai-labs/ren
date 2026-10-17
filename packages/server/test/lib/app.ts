@@ -11,6 +11,8 @@ import { Routes } from "../../src/routes.js"
 
 export const origin = "http://localhost:5173"
 
+export const cellKey = { id: "test", secret: "a-test-cell-key-of-at-least-32-characters" }
+
 export const config = {
   BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
   BETTER_AUTH_URL: "http://localhost:4000",
@@ -19,6 +21,24 @@ export const config = {
   GOOGLE_CLIENT_SECRET: "google-client-secret",
   APP_URL: `${origin}/app`,
 }
+
+export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readonly<Record<string, string>>) =>
+  ConfigProvider.layerAdd(
+    ConfigProvider.fromUnknown({
+      ...config,
+      BETTER_AUTH_URL: baseURL,
+      SKIP_EMAIL_VERIFICATION: "true",
+      SIGNUP_MX_CHECK: "false",
+      CELL_URL: "http://127.0.0.1:9",
+      CELL_KEYS: JSON.stringify([cellKey]),
+      ...overrides,
+    }),
+    { asPrimary: true },
+  )
+
+export const services = Layer.mergeAll(BrainHost.layer, Mailer.layer, SignupGuard.layer).pipe(
+  Layer.provide([Models.layerNone, Environments.layer]),
+)
 
 export const makeApp = (
   routes: typeof Routes.layer = Routes.layer,
@@ -30,8 +50,7 @@ export const makeApp = (
 ) =>
   HttpRouter.toWebHandler(
     routes.pipe(
-      Layer.provide([BrainHost.layer, Mailer.layer, SignupGuard.layer]),
-      Layer.provide([Models.layerNone, Environments.layer]),
+      Layer.provide(services),
       Layer.provide(Testing.layer),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(BunHttpServer.layerHttpServices),
@@ -40,20 +59,7 @@ export const makeApp = (
           ? Logger.layer([Logger.make((log) => options.logs?.push(Logger.formatJson.log(log)))])
           : Layer.empty,
       ),
-      Layer.provide(
-        ConfigProvider.layerAdd(
-          ConfigProvider.fromUnknown({
-            ...config,
-            BETTER_AUTH_URL: options?.baseURL ?? config.BETTER_AUTH_URL,
-            SKIP_EMAIL_VERIFICATION: "true",
-            SIGNUP_MX_CHECK: "false",
-            CELL_URL: "http://127.0.0.1:9",
-            CELL_KEYS: JSON.stringify([{ id: "test", secret: "a-test-cell-key-of-at-least-32-characters" }]),
-            ...options?.config,
-          }),
-          { asPrimary: true },
-        ),
-      ),
+      Layer.provide(environment(options?.baseURL, options?.config)),
     ),
     { disableLogger: !options?.logs },
   )

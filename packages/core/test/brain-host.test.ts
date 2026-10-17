@@ -370,6 +370,27 @@ describe("BrainHost", () => {
         expect(claims(refreshed.hostToken ?? "").exp).toBe(Duration.toSeconds("5 hours"))
       }).pipe(Effect.provide(host(settings, expiring))),
     )
+
+    it.effect("each call to a host carries a host token for the session, signed for that call", () =>
+      Effect.gen(function* () {
+        const tokens: Array<string | null> = []
+        const server = yield* serve((request) => {
+          tokens.push(request.headers.get("ren-host-token"))
+          return new Response(null, { status: 413 })
+        })
+        const sessionId = Session.ID.create()
+        yield* Effect.gen(function* () {
+          yield* Effect.flip(start(sessionId))
+          yield* TestClock.adjust("10 minutes")
+          yield* Effect.flip(send(sessionId, "hello"))
+        }).pipe(Effect.provide(host({ ...settings, CELL_URL: server.url.origin })))
+        const signed = { kid: TestToken.keys[0].id, sid: sessionId, scope: "host" as const, org: organizationId }
+        expect(tokens.map((token) => claims(token ?? ""))).toEqual([
+          { ...signed, iat: 0, exp: Duration.toSeconds("2 hours") },
+          { ...signed, iat: Duration.toSeconds("10 minutes"), exp: Duration.toSeconds("130 minutes") },
+        ])
+      }),
+    )
   })
 
   describe("failures", () => {
