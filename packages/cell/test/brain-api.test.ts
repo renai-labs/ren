@@ -10,7 +10,7 @@ import { testEffect } from "@ren/executor/testing"
 import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Effect, type Scope } from "effect"
+import { Cause, Effect, type Scope } from "effect"
 import { BrainTest } from "./lib/brain.js"
 import { ModelsTest } from "./lib/models.js"
 import { Shared } from "./lib/shared.js"
@@ -205,6 +205,27 @@ it.live("send before start is a typed SessionNotStartedError", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service
     expect(yield* brain.send("early").pipe(Effect.flip)).toBeInstanceOf(SessionNotStartedError)
+  }),
+)
+
+it.live("a start and a send for a new session at the same time: the send is refused, or it runs after the start", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    const script = Shared.stub().script()
+    const messageId = Session.MessageID.create()
+    const [started, sent] = yield* Effect.all(
+      [brain.start(), brain.send(`early ${script.marker}`, { messageId }).pipe(Effect.exit)],
+      { concurrency: "unbounded" },
+    )
+    expect(started).toEqual({ sessionId: brain.id, harness: "opencode" })
+    if (sent._tag === "Failure") {
+      expect(Cause.squash(sent.cause)).toBeInstanceOf(SessionNotStartedError)
+      expect(script.calls).toEqual([])
+      return
+    }
+    expect(sent.value).toEqual({ messageId })
+    yield* Effect.promise(() => script.called())
+    expect((yield* brain.opencode.session.list()).data).toHaveLength(1)
   }),
 )
 

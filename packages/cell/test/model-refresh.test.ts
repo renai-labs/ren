@@ -2,12 +2,14 @@ import { expect, test } from "bun:test"
 import { ForbiddenError, ModelsUnavailableError } from "@ren/brain-api/errors"
 import { testEffect } from "@ren/executor/testing"
 import type { Models } from "@ren/schema/models"
+import { Session } from "@ren/schema/session"
 import { Context, DateTime, Effect, Fiber, Layer, Option, Redacted, Schema, type Scope } from "effect"
 import { TestClock } from "effect/testing"
 import { ModelRefresh } from "../src/model-refresh.js"
 import { HostToken } from "../src/host-token.js"
 import { ModelStore } from "../src/model-store.js"
 import { ModelsTest } from "./lib/models.js"
+import { FakeRen } from "./lib/ren.js"
 import { Shared } from "./lib/shared.js"
 import { TestToken } from "./lib/token.js"
 
@@ -53,6 +55,7 @@ const make = Effect.gen(function* () {
     ...issuer,
     store: Context.get(services, ModelStore.Service),
     refresh: Context.get(services, ModelRefresh.Service),
+    hostToken: Context.get(services, HostToken.Service),
   }
 })
 
@@ -177,6 +180,32 @@ it.effect("concurrent refreshes of one or two expiring endpoints are served by o
     expect(subject.requests).toEqual(["Bearer old-host"])
     expect(yield* subject.store.readHostToken).toEqual(Option.some("new-host"))
   }),
+)
+
+it.effect(
+  "a model refresh on a Ren that never answers ends in 10 seconds and does not block the host token renewal",
+  () =>
+    Effect.gen(function* () {
+      const subject = yield* make
+      yield* TestClock.setTime(Date.now())
+      const sessionId = Session.ID.create()
+      const access = grant({ stub: Shared.apiKey("old-key", expiring) })
+      yield* subject.store.write(access, yield* Effect.promise(() => FakeRen.hostToken(sessionId)))
+      const refreshing = yield* subject.refresh("stub").pipe(Effect.forkChild)
+      yield* subject.next
+      const soon = yield* Effect.promise(() => FakeRen.hostToken(sessionId, 60))
+      yield* subject.store.write(access, soon)
+      const renewing = yield* subject.hostToken.current.pipe(Effect.forkChild)
+      const exchange = yield* subject.next
+      expect(exchange.authorization).toBe(`Bearer ${soon}`)
+      const renewed = yield* Effect.promise(() => FakeRen.hostToken(sessionId))
+      yield* subject.reply(exchange, Response.json({ hostToken: renewed }))
+      expect(yield* Fiber.join(renewing)).toEqual(Option.some(renewed))
+      expect(refreshing.pollUnsafe()).toBeUndefined()
+      yield* TestClock.adjust(HostToken.renAnswersWithin)
+      expect(yield* Fiber.join(refreshing)).toEqual(Option.none())
+      expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(access)))
+    }),
 )
 
 it.effect("a renewal that omits the requested endpoint removes it and returns no key", () =>

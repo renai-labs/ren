@@ -1,17 +1,35 @@
 import { expect, test } from "bun:test"
+import { BunServices } from "@effect/platform-bun"
+import type { SpawnResult } from "@ren/brain-api/executor-api"
 import { Machine, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Exit, Layer, Schedule, Scope, Stream } from "effect"
-import { FetchHttpClient } from "effect/http"
-import { ChildProcess } from "effect/process"
-import { mkdtemp, realpath } from "node:fs/promises"
+import {
+  Clock,
+  Context,
+  DateTime,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Ref,
+  Schedule,
+  Scope,
+  Stream,
+} from "effect"
+import { FetchHttpClient, HttpClient } from "effect/http"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
+import { TestClock } from "effect/testing"
+import { mkdtemp, realpath, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { EnvironmentAccess } from "../src/environment-access.js"
 import { Environments } from "../src/environments.js"
 import { Hand } from "../src/hand.js"
+import { Sandbox } from "./lib/sandbox.js"
 
 const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-hand-")))
@@ -30,14 +48,18 @@ const sessionId = Session.ID.create()
 const accessAt = (url: string) =>
   Machine.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: join(workspace, sessionId) })
 
-const environmentsWith = (access: Layer.Layer<EnvironmentAccess.Service>) =>
-  Layer.build(Environments.layer.pipe(Layer.provide(access), Layer.provide(FetchHttpClient.layer))).pipe(
+const environmentsWith = (
+  access: Layer.Layer<EnvironmentAccess.Service>,
+  http: Layer.Layer<HttpClient.HttpClient> = FetchHttpClient.layer,
+) =>
+  Layer.build(Environments.layer.pipe(Layer.provide(access), Layer.provide(http))).pipe(
     Effect.map((context) => Context.get(context, Environments.Service)),
   )
 
-const connectTo = Effect.fnUntraced(function* (url: string) {
+const connectTo = Effect.fnUntraced(function* (url: string, http?: Layer.Layer<HttpClient.HttpClient>) {
   const environments = yield* environmentsWith(
     EnvironmentAccess.layerFixed(new Map([[sessionId, yield* accessAt(url)]])),
+    http,
   )
   return yield* environments.connect(sessionId, "processes")
 })
@@ -266,4 +288,445 @@ it.live("stopping a command after a replacement still kills it on the old sandbo
     yield* Scope.close(scope, Exit.void)
     expect(yield* Processes.exits(old.pid)).toBe(true)
   }),
+)
+
+const local = Layer.build(BunServices.layer).pipe(
+  Effect.map((context) => Context.get(context, ChildProcessSpawner.ChildProcessSpawner)),
+)
+
+const bothSpawners = Effect.gen(function* () {
+  return [
+    { name: "ren", spawner: Hand.spawner(yield* connect, killed) },
+    { name: "local", spawner: yield* local },
+  ] as const
+})
+
+const encoder = new TextEncoder()
+
+const exitOf = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+  handle.exitCode.pipe(
+    Effect.map(Number),
+    Effect.catch(() => Effect.succeed("failed" as const)),
+  )
+
+it.live("gives stdout and stderr together in all, as Effect's spawner does", () =>
+  Effect.gen(function* () {
+    const results = yield* Effect.forEach(yield* bothSpawners, (subject) =>
+      Effect.gen(function* () {
+        const handle = yield* subject.spawner.spawn(ChildProcess.make("sh", ["-c", "echo out; echo err >&2"]))
+        return { lines: (yield* text(handle.all)).split("\n").filter(Boolean).toSorted(), exit: yield* exitOf(handle) }
+      }),
+    )
+    expect(results.at(1)).toEqual({ lines: ["err", "out"], exit: 0 })
+    expect(results.at(0)).toEqual(results.at(1))
+  }),
+)
+
+it.live("leaves stdin open when endOnDone is false, as Effect's spawner does", () =>
+  Effect.gen(function* () {
+    const results = yield* Effect.forEach(yield* bothSpawners, (subject) =>
+      Effect.gen(function* () {
+        const handle = yield* subject.spawner.spawn(
+          ChildProcess.make("cat", [], { stdin: { stream: Stream.make(encoder.encode("a")), endOnDone: false } }),
+        )
+        const echoed = yield* firstLine(handle.stdout)
+        const isRunning = yield* handle.isRunning
+        yield* handle.kill({ killSignal: "SIGKILL" })
+        return { echoed, isRunning }
+      }),
+    )
+    expect(results.at(1)).toEqual({ echoed: "a", isRunning: true })
+    expect(results.at(0)).toEqual(results.at(1))
+  }),
+)
+
+it.live("refuses a piped command with a clear cause", () =>
+  Effect.gen(function* () {
+    const spawner = Hand.spawner(yield* connect, killed)
+    const error = yield* spawner
+      .spawn(ChildProcess.pipeTo(ChildProcess.make("echo", ["x"]), ChildProcess.make("cat")))
+      .pipe(Effect.flip)
+    expect([error.reason._tag, error.message]).toEqual([
+      "BadArgument",
+      expect.stringContaining("A ren environment does not run piped commands"),
+    ])
+  }),
+)
+
+it.live("says a command is running until it exits, as Effect's spawner does", () =>
+  Effect.gen(function* () {
+    const results = yield* Effect.forEach(yield* bothSpawners, (subject) =>
+      Effect.gen(function* () {
+        const handle = yield* subject.spawner.spawn(ChildProcess.make("cat", []))
+        const before = yield* handle.isRunning
+        yield* Stream.make(encoder.encode("x")).pipe(Stream.run(handle.stdin))
+        const exit = yield* exitOf(handle)
+        return { before, exit, after: yield* handle.isRunning }
+      }),
+    )
+    expect(results.at(1)).toEqual({ before: true, exit: 0, after: false })
+    expect(results.at(0)).toEqual(results.at(1))
+  }),
+)
+
+it.live("stops a command that ignores the signal after the force delay, as Effect's spawner does", () =>
+  Effect.gen(function* () {
+    const results = yield* Effect.forEach(yield* bothSpawners, (subject) =>
+      Effect.gen(function* () {
+        const handle = yield* subject.spawner.spawn(
+          ChildProcess.make("sh", ["-c", "trap '' TERM; echo ready; while :; do sleep 0.1; done"]),
+        )
+        yield* firstLine(handle.stdout)
+        yield* handle.kill({ killSignal: "SIGTERM", forceKillAfter: "300 millis" })
+        return { exit: yield* exitOf(handle), isRunning: yield* handle.isRunning }
+      }),
+    )
+    expect(results.at(1)).toEqual({ exit: "failed", isRunning: false })
+    expect(results.at(0)).toEqual(results.at(1))
+  }),
+)
+
+it.live("gives the same exit codes as Effect's spawner, from 0 to 255", () =>
+  Effect.gen(function* () {
+    const spawners = yield* bothSpawners
+    const codes = [0, 1, 2, 42, 126, 127, 128, 129, 200, 255]
+    const results = yield* Effect.forEach(spawners, (subject) =>
+      Effect.forEach(codes, (code) =>
+        subject.spawner.spawn(ChildProcess.make("sh", ["-c", `exit ${code}`])).pipe(Effect.flatMap(exitOf)),
+      ),
+    )
+    expect(results.at(1)).toEqual(codes)
+    expect(results.at(0)).toEqual(codes)
+  }),
+)
+
+it.live("gives a command with no stdin option an open stdin, as Effect's spawner does", () =>
+  Effect.gen(function* () {
+    const results = yield* Effect.forEach(yield* bothSpawners, (subject) =>
+      Effect.gen(function* () {
+        const handle = yield* subject.spawner.spawn(ChildProcess.make("sh", ["-c", "read line; echo got:$line"]))
+        yield* Stream.make(encoder.encode("hi\n")).pipe(Stream.run(handle.stdin))
+        return { stdout: yield* text(handle.stdout), exit: yield* exitOf(handle) }
+      }),
+    )
+    expect(results.at(1)).toEqual({ stdout: "got:hi\n", exit: 0 })
+    expect(results.at(0)).toEqual(results.at(1))
+  }),
+)
+
+it.live("gives a command with stdin ignore no input, so cat exits at once, as Effect's spawner does", () =>
+  Effect.gen(function* () {
+    const results = yield* Effect.forEach(yield* bothSpawners, (subject) =>
+      Effect.gen(function* () {
+        const handle = yield* subject.spawner.spawn(ChildProcess.make("cat", [], { stdin: "ignore" }))
+        return { stdout: yield* text(handle.stdout), exit: yield* exitOf(handle) }
+      }),
+    )
+    expect(results.at(1)).toEqual({ stdout: "", exit: 0 })
+    expect(results.at(0)).toEqual(results.at(1))
+  }),
+)
+
+it.live("stops with SIGKILL a command that ignores SIGTERM when its scope closes", () =>
+  Effect.gen(function* () {
+    const spawner = Hand.spawner(yield* connect, killed)
+    const scope = yield* Scope.make()
+    const handle = yield* spawner
+      .spawn(ChildProcess.make("sh", ["-c", "trap '' TERM; echo ready; while :; do sleep 0.1; done"]))
+      .pipe(Scope.provide(scope))
+    yield* firstLine(handle.stdout)
+    yield* Scope.close(scope, Exit.void)
+    expect(yield* Processes.exits(handle.pid)).toBe(true)
+  }),
+)
+
+const opening = (open: EnvironmentAccess.Interface["open"]) =>
+  Layer.succeed(
+    EnvironmentAccess.Service,
+    EnvironmentAccess.Service.of({ subscribe: Effect.succeed(Stream.never), open }),
+  )
+
+const isStopped = (handle: ChildProcessSpawner.ChildProcessHandle) =>
+  handle.isRunning.pipe(Effect.map((isRunning) => !isRunning))
+
+const heartbeatsInAMinute = Effect.fnUntraced(function* (sandbox: Sandbox.Probe, connection: Environments.Connection) {
+  yield* connection.client["executor.hello"]()
+  const before = yield* Ref.get(sandbox.heartbeats)
+  yield* Sandbox.advance(Duration.minutes(1))
+  yield* connection.client["executor.hello"]()
+  return { before, after: yield* Ref.get(sandbox.heartbeats) }
+})
+
+const startSandbox = Effect.fnUntraced(function* (options?: Parameters<typeof Sandbox.probe>[0]) {
+  const sandbox = yield* Sandbox.probe(options)
+  return { sandbox, url: yield* Sandbox.start({ environmentId, workspace, executor: sandbox.layer }) }
+})
+
+it.effect("a heartbeat that the executor refuses as expired gets a new token, and the command is not stopped", () =>
+  Effect.gen(function* () {
+    const { sandbox, url } = yield* startSandbox()
+    const opens = yield* Ref.make(0)
+    const environments = yield* environmentsWith(
+      opening(() =>
+        Ref.getAndUpdate(opens, (count) => count + 1).pipe(
+          Effect.flatMap((count) =>
+            Clock.currentTimeMillis.pipe(
+              Effect.flatMap((issuedAt) =>
+                Machine.access({
+                  url,
+                  environmentId,
+                  brain: Brain.ofSession(sessionId),
+                  directory: join(workspace, sessionId),
+                  issuedAt,
+                  lifetimeMs: count === 0 ? 60_000 : 600_000,
+                }).pipe(
+                  Effect.map((access) =>
+                    count === 0 ? { ...access, expiresAt: DateTime.makeUnsafe(issuedAt + 900_000) } : access,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    )
+    const connection = yield* environments.connect(sessionId, "processes")
+    const handle = yield* Hand.spawner(connection, killed).spawn(ChildProcess.make("cat", []))
+    yield* Sandbox.advance(Duration.seconds(55))
+    expect(yield* Ref.get(opens)).toBe(1)
+    const before = yield* Ref.get(sandbox.heartbeats)
+    yield* Sandbox.advance(Duration.seconds(35))
+    expect(yield* Ref.get(opens)).toBe(2)
+    expect(yield* Ref.get(sandbox.heartbeats)).toBeGreaterThanOrEqual(before + 4)
+    yield* Stream.make(encoder.encode("alive")).pipe(Stream.run(handle.stdin))
+    expect(yield* text(handle.stdout)).toBe("alive")
+    expect(Number(yield* handle.exitCode)).toBe(0)
+  }),
+)
+
+it.effect("a command with no output for 2 minutes is not reported as silent, because pings keep the stream open", () =>
+  Effect.gen(function* () {
+    const { sandbox, url } = yield* startSandbox()
+    const link = yield* Sandbox.link
+    const handle = yield* Hand.spawner(yield* connectTo(url, link.layer), killed).spawn(ChildProcess.make("cat", []))
+    yield* Sandbox.advance(Duration.minutes(2))
+    expect(yield* Ref.get(sandbox.pings)).toBeGreaterThanOrEqual(20)
+    expect((yield* Ref.get(link.requests)).filter((request) => request.rpc === "process.output")).toHaveLength(1)
+    yield* Stream.make(encoder.encode("done")).pipe(Stream.run(handle.stdin))
+    expect(yield* text(handle.stdout)).toBe("done")
+    expect(yield* text(handle.stderr)).toBe("")
+    expect(Number(yield* handle.exitCode)).toBe(0)
+  }),
+)
+
+it.effect(
+  "a scope that closes between the spawn request and its answer leaves a command the sandbox stops in 30 seconds",
+  () =>
+    Effect.gen(function* () {
+      const spawned = yield* Deferred.make<SpawnResult>()
+      const { url } = yield* startSandbox({
+        afterSpawn: (result) => Deferred.succeed(spawned, result).pipe(Effect.andThen(Effect.never)),
+      })
+      const scope = yield* Scope.make()
+      const request = yield* Hand.spawner(yield* connectTo(url), killed)
+        .spawn(ChildProcess.make("sleep", ["300"]))
+        .pipe(Scope.provide(scope), Effect.forkScoped)
+      const command = yield* Deferred.await(spawned)
+      expect(Processes.running(command.pid)).toBe(true)
+      yield* Fiber.interrupt(request)
+      yield* Scope.close(scope, Exit.void)
+      yield* Sandbox.advance(Duration.seconds(30))
+      expect(yield* Processes.exits(command.pid)).toBe(true)
+    }),
+)
+
+it.effect("stops heartbeating when the command exits", () =>
+  Effect.gen(function* () {
+    const { sandbox, url } = yield* startSandbox()
+    const connection = yield* connectTo(url)
+    const handle = yield* Hand.spawner(connection, killed).spawn(ChildProcess.make("cat", []))
+    yield* Sandbox.advanceUntil(Ref.get(sandbox.heartbeats).pipe(Effect.map((count) => count >= 3)))
+    yield* Stream.make(encoder.encode("x")).pipe(Stream.run(handle.stdin))
+    expect(Number(yield* handle.exitCode)).toBe(0)
+    const beats = yield* heartbeatsInAMinute(sandbox, connection)
+    expect(beats.after).toBe(beats.before)
+  }),
+)
+
+it.effect("leaves no heartbeat and no output stream after 50 commands have run", () =>
+  Effect.gen(function* () {
+    const { sandbox, url } = yield* startSandbox()
+    const connection = yield* connectTo(url)
+    const spawner = Hand.spawner(connection, killed)
+    const exits = yield* Effect.forEach(
+      Array.from({ length: 50 }, (_, index) => index),
+      (index) =>
+        spawner
+          .spawn(ChildProcess.make("sh", ["-c", `echo ${index}`]))
+          .pipe(Effect.flatMap((handle) => Effect.all([text(handle.stdout), exitOf(handle)]))),
+      { concurrency: 10 },
+    )
+    expect(exits.map((result) => result.at(1))).toEqual(Array.from({ length: 50 }, () => 0))
+    yield* Sandbox.advanceUntil(Ref.get(sandbox.outputsOpen).pipe(Effect.map((open) => open === 0)))
+    const beats = yield* heartbeatsInAMinute(sandbox, connection)
+    expect(beats.after).toBe(beats.before)
+    expect(yield* Ref.get(sandbox.outputsOpen)).toBe(0)
+  }),
+)
+
+it.effect(
+  "a command that waits on an open stdin and is interrupted leaves no process, output stream or heartbeat",
+  () =>
+    Effect.gen(function* () {
+      const { sandbox, url } = yield* startSandbox()
+      const connection = yield* connectTo(url)
+      const started = yield* Deferred.make<number>()
+      const run = Hand.spawner(connection, killed)
+        .spawn(ChildProcess.make("cat", []))
+        .pipe(
+          Effect.flatMap((handle) =>
+            Deferred.succeed(started, Number(handle.pid)).pipe(Effect.andThen(handle.exitCode)),
+          ),
+          Effect.scoped,
+        )
+      const fiber = yield* Effect.forkScoped(run)
+      const pid = yield* Deferred.await(started)
+      yield* Sandbox.advanceUntil(Ref.get(sandbox.outputsOpen).pipe(Effect.map((open) => open === 1)))
+      yield* Fiber.interrupt(fiber)
+      expect(yield* Processes.exits(pid)).toBe(true)
+      yield* Sandbox.advanceUntil(Ref.get(sandbox.outputsOpen).pipe(Effect.map((open) => open === 0)))
+      const beats = yield* heartbeatsInAMinute(sandbox, connection)
+      expect(beats.after).toBe(beats.before)
+    }),
+)
+
+const lossy = Effect.fnUntraced(function* (command: ChildProcess.Command) {
+  const { sandbox, url } = yield* startSandbox()
+  const relay = yield* Relay.make(Relay.portOf(url))
+  const link = yield* Sandbox.link
+  const handle = yield* Hand.spawner(yield* connectTo(relay.url, link.layer), killed).spawn(command)
+  yield* Sandbox.advanceUntil(
+    Effect.zipWith(
+      Ref.get(sandbox.pings),
+      Ref.get(sandbox.heartbeats),
+      (pings, heartbeats) => pings >= 1 && heartbeats >= 2,
+    ),
+  )
+  return {
+    sandbox,
+    relay,
+    link,
+    handle,
+    lose: Ref.set(link.down, true).pipe(Effect.andThen(relay.cut)),
+    restore: Ref.set(link.down, false),
+  }
+})
+
+const disconnected = "[environment disconnected: the command did not finish]"
+
+it.effect(
+  "a connection lost for 25 seconds comes back and the command lives, and one lost for 35 seconds ends with a notice",
+  () =>
+    Effect.gen(function* () {
+      const short = yield* lossy(ChildProcess.make("cat", []))
+      yield* short.lose
+      yield* Sandbox.advance(Duration.seconds(25))
+      yield* short.restore
+      yield* Sandbox.advanceUntil(Ref.get(short.sandbox.outputsOpen).pipe(Effect.map((open) => open === 1)))
+      yield* Stream.make(encoder.encode("alive")).pipe(Stream.run(short.handle.stdin))
+      expect(yield* text(short.handle.stdout)).toBe("alive")
+      expect(yield* text(short.handle.stderr)).toBe("")
+      expect(Number(yield* short.handle.exitCode)).toBe(0)
+
+      const long = yield* lossy(ChildProcess.make("cat", []))
+      yield* long.lose
+      yield* Sandbox.advance(Duration.seconds(35))
+      yield* long.handle.exitCode.pipe(Effect.flip)
+      expect(yield* text(long.handle.stderr)).toContain(disconnected)
+      expect(yield* Processes.exits(long.handle.pid)).toBe(true)
+    }),
+)
+
+it.effect("tries to reconnect once a second for 30 seconds, and no faster", () =>
+  Effect.gen(function* () {
+    const lost = yield* lossy(ChildProcess.make("cat", []))
+    yield* lost.lose
+    yield* Sandbox.advanceUntil(isStopped(lost.handle), Duration.minutes(2))
+    const tries = (yield* Ref.get(lost.link.requests)).filter(
+      (request) => request.rpc === "process.output" && request.refused,
+    )
+    expect(tries.length).toBeGreaterThanOrEqual(25)
+    expect(tries.length).toBeLessThanOrEqual(31)
+    expect(tries.slice(1).every((request, index) => request.atMs - (tries.at(index)?.atMs ?? 0) >= 1_000)).toBe(true)
+  }),
+)
+
+it.effect(
+  "a stream that goes silent is dropped after 15 seconds, then tried again until 30 seconds, then ends with a notice",
+  () =>
+    Effect.gen(function* () {
+      const lost = yield* lossy(ChildProcess.make("cat", []))
+      const tries = Ref.get(lost.link.requests).pipe(
+        Effect.map((all) => all.filter((request) => request.rpc === "process.output" && request.refused).length),
+      )
+      const frozenAt = yield* Clock.currentTimeMillis
+      yield* lost.relay.freeze
+      yield* Ref.set(lost.link.down, true)
+      yield* Sandbox.advance(Duration.seconds(12))
+      expect(yield* tries).toBe(0)
+      yield* Sandbox.advance(Duration.seconds(6))
+      expect(yield* tries).toBeGreaterThan(0)
+      yield* Sandbox.advanceUntil(isStopped(lost.handle), Duration.minutes(2))
+      expect((yield* Clock.currentTimeMillis) - frozenAt).toBeLessThanOrEqual(40_000)
+      yield* lost.handle.exitCode.pipe(Effect.flip)
+      expect(yield* text(lost.handle.stderr)).toContain(disconnected)
+    }),
+)
+
+it.effect("a command that exits while the connection is lost gives its exit when the connection comes back", () =>
+  Effect.gen(function* () {
+    const flag = join(workspace, `flag-${sessionId}`)
+    const lost = yield* lossy(
+      ChildProcess.make("sh", ["-c", `echo ready; while [ ! -e ${flag} ]; do sleep 0.05; done; echo bye; exit 3`]),
+    )
+    yield* lost.lose
+    yield* Sandbox.advance(Duration.seconds(10))
+    yield* Effect.promise(() => writeFile(flag, ""))
+    expect(yield* Processes.exits(lost.handle.pid)).toBe(true)
+    yield* Sandbox.advance(Duration.seconds(10))
+    yield* lost.restore
+    yield* Sandbox.advanceUntil(isStopped(lost.handle), Duration.minutes(1))
+    expect(yield* text(lost.handle.stdout)).toBe("ready\nbye\n")
+    expect(yield* text(lost.handle.stderr)).toBe("")
+    expect(Number(yield* lost.handle.exitCode)).toBe(3)
+  }),
+)
+
+it.effect(
+  "a heartbeat for a command the sandbox no longer knows, or one that races a stop, gives the caller no error",
+  () =>
+    Effect.gen(function* () {
+      const relay = yield* Relay.make(Relay.portOf(yield* Sandbox.start({ environmentId, workspace })))
+      const link = yield* Sandbox.link
+      const spawner = Hand.spawner(yield* connectTo(relay.url, link.layer), killed)
+      const forgotten = yield* spawner.spawn(ChildProcess.make("cat", []))
+      yield* relay.target(Relay.portOf(yield* Sandbox.start({ environmentId, workspace })))
+      yield* relay.cut
+      const heartbeats = Ref.get(link.requests).pipe(
+        Effect.map((all) => all.filter((request) => request.rpc === "process.heartbeat").length),
+      )
+      const before = yield* heartbeats
+      yield* Sandbox.advanceUntil(isStopped(forgotten))
+      yield* Sandbox.advance(Duration.seconds(15))
+      expect(yield* heartbeats).toBeGreaterThanOrEqual(before + 2)
+      expect(yield* text(forgotten.stderr)).toBe(`\n${disconnected}\n`)
+      const racing = yield* spawner.spawn(ChildProcess.make("cat", []))
+      yield* TestClock.adjust(Duration.seconds(3))
+      yield* Effect.all([TestClock.adjust(Duration.seconds(2)), racing.kill({ killSignal: "SIGKILL" })], {
+        concurrency: "unbounded",
+      })
+      const error = yield* racing.exitCode.pipe(Effect.flip)
+      expect(error.cause instanceof Killed && error.cause.signal).toBe("SIGKILL")
+      expect(yield* text(racing.stderr)).toBe("")
+    }),
 )

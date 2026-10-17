@@ -86,7 +86,7 @@ interface CoreConfig {
 
 const environmentsConfig = (config: CoreConfig) => ({
   ENVIRONMENTS: JSON.stringify(
-    config.present === false ? [] : [{ id: environmentId, capacity: 4, sandboxes: config.sandboxes }],
+    config.present === false ? [] : [{ id: environmentId, capacity: 100, sandboxes: config.sandboxes }],
   ),
   ENVIRONMENT_KEYS: JSON.stringify((config.keys ?? [Machine.keys.privateKey]).map(encodedKey)),
   ...(config.lifetime && { ENVIRONMENT_TOKEN_LIFETIME: config.lifetime }),
@@ -219,7 +219,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     const sessionId = Session.ID.create()
     await start(sessionId)
     const before = core.issued.length
-    expect(await turn(sessionId, "sleep 30; echo outlived")).toContain("outlived")
+    expect(await turn(sessionId, "sleep 30; echo outlived")).toBe(JSON.stringify("outlived\n"))
     expect(core.issued.length - before).toBeGreaterThanOrEqual(2)
   })
 
@@ -228,7 +228,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     const two = Session.ID.create()
     await Promise.all([start(one), start(two)])
     await turn(one, "echo one > mine.txt")
-    expect(await turn(two, "ls; pwd")).not.toContain("mine.txt")
+    expect(await turn(two, "ls")).toBe(JSON.stringify("(no output)"))
     expect(await Bun.file(join(first.directory, one, "mine.txt")).text()).toBe("one\n")
   })
 
@@ -239,7 +239,19 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     await cell.crash()
     await restartCore(current)
     await cell.start()
-    expect(await turn(sessionId, "cat kept.txt")).toContain("kept")
+    expect(await turn(sessionId, "cat kept.txt")).toBe(JSON.stringify("kept\n"))
+  })
+
+  test("a Ren restarted between an environment token and its refresh gives the refresh", async () => {
+    const sessionId = Session.ID.create()
+    await start(sessionId)
+    expect(await turn(sessionId, "echo first")).toBe(JSON.stringify("first\n"))
+    await restartCore(current)
+    const before = core.issued.length
+    // ast-grep-ignore: no-test-sleep -- the real 20-second environment token must reach its refresh window
+    await Bun.sleep(15_000)
+    expect(await turn(sessionId, "echo refreshed")).toBe(JSON.stringify("refreshed\n"))
+    expect(core.issued.length - before).toBeGreaterThanOrEqual(1)
   })
 
   test("a sandbox that Ren replaces is reached after one failed call, and an old one is not used again", async () => {
@@ -267,22 +279,22 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
   test("Ren down during a turn: tools work until the token expires, then Ren does not answer, then it works again", async () => {
     const sessionId = Session.ID.create()
     await start(sessionId)
-    expect(await turn(sessionId, "echo fresh")).toContain("fresh")
+    expect(await turn(sessionId, "echo fresh")).toBe(JSON.stringify("fresh\n"))
     await core.stop()
-    expect(await turn(sessionId, "echo still")).toContain("still")
+    expect(await turn(sessionId, "echo still")).toBe(JSON.stringify("still\n"))
     // ast-grep-ignore: no-test-sleep -- the real 20-second environment token must expire while Ren is down
     await Bun.sleep(21_000)
     expect(await turn(sessionId, "echo expired")).toContain("Ren does not answer")
     await startCore(current)
     // ast-grep-ignore: no-test-sleep -- the cell waits 30 seconds before it asks Ren again
     await Bun.sleep(31_000)
-    expect(await turn(sessionId, "echo back")).toContain("back")
+    expect(await turn(sessionId, "echo back")).toBe(JSON.stringify("back\n"))
   })
 
   test("an environment removed from Ren's configuration gives no access to the next tool call, and the chat goes on", async () => {
     const sessionId = Session.ID.create()
     await start(sessionId)
-    expect(await turn(sessionId, "echo before")).toContain("before")
+    expect(await turn(sessionId, "echo before")).toBe(JSON.stringify("before\n"))
     const config = current
     await restartCore({ ...config, present: false })
     await cell.crash()
@@ -305,7 +317,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     })
     const onKnowing = Session.ID.create()
     await start(onKnowing)
-    expect(await turn(onKnowing, "echo knows")).toContain("knows")
+    expect(await turn(onKnowing, "echo knows")).toBe(JSON.stringify("knows\n"))
     await restartCore({
       ...signedByNewer,
       sandboxes: [{ id: old.id, url: old.url, generation: 1, workspace: old.directory }],

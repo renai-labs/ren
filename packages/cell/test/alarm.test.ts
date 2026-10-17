@@ -31,7 +31,8 @@ const setup = Effect.gen(function* () {
     snapshots: Effect.Success<Harness.Instance["sessions"]>
     alarm: number | null
     reading: Effect.Effect<void>
-  } = { snapshots: [], alarm: null, reading: Effect.void }
+    closing: Effect.Effect<void>
+  } = { snapshots: [], alarm: null, reading: Effect.void, closing: Effect.void }
   const activity = Cell.Activity.of({
     requests: yield* Ref.make(0),
     wait: yield* FiberHandle.make<void>(),
@@ -71,9 +72,13 @@ const setup = Effect.gen(function* () {
           return instance
         }),
         () =>
-          Effect.sync(() => {
-            events.push("close")
-          }),
+          Effect.suspend(() => current.closing).pipe(
+            Effect.andThen(
+              Effect.sync(() => {
+                events.push("close")
+              }),
+            ),
+          ),
       ),
     ),
   )
@@ -229,6 +234,26 @@ it.effect(
       expect(cell.events.at(-1)).toBe("close")
       expect(yield* cell.harness.state).toEqual({ isOpen: false, holders: 0 })
     }),
+)
+
+it.effect("a request that arrives while the host closes waits for the close, then opens a new host", () =>
+  Effect.gen(function* () {
+    const cell = yield* setup
+    const entered = yield* Deferred.make<void>()
+    const released = yield* Deferred.make<void>()
+    cell.current.snapshots = [cell.session()]
+    cell.current.closing = Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(released)))
+    const alarm = yield* Effect.forkChild(cell.run(Cell.alarm()))
+    yield* Deferred.await(entered)
+    const request = yield* Effect.forkChild(Effect.scoped(cell.run(Cell.acquire)))
+    yield* TestClock.adjust("1 second")
+    expect(cell.events.filter((event) => event === "open")).toHaveLength(1)
+    expect(request.pollUnsafe()).toBeUndefined()
+    yield* Deferred.succeed(released, undefined)
+    yield* Fiber.join(alarm)
+    yield* Fiber.join(request)
+    expect(cell.events.filter((event) => event === "open" || event === "close")).toEqual(["open", "close", "open"])
+  }),
 )
 
 test.todo("REN-1486 two alarms that reconcile at once resend a queued prompt once and open one host", () =>

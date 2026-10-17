@@ -49,7 +49,7 @@ export const start = () => {
   const answers = new Map<Session.ID, () => Answer | Promise<Answer>>()
   const calls: Array<Call> = []
   const held: Array<() => void> = []
-  const state = { refuseHosts: false }
+  const state = { refuseHosts: false, refreshGate: undefined as (() => Promise<void>) | undefined }
   const presented = { token: "" }
   const listeners = new Set<() => void>()
   const record = (endpoint: Call["endpoint"], sessionId: Session.ID | undefined, status: number) => {
@@ -91,6 +91,7 @@ export const start = () => {
           Effect.gen(function* () {
             const host = yield* CurrentHost
             record("host.refresh", host.brainId, 200)
+            yield* Effect.promise(() => state.refreshGate?.() ?? Promise.resolve())
             return { hostToken: yield* Effect.promise(() => hostToken(host.brainId)) }
           }),
         ),
@@ -141,6 +142,9 @@ export const start = () => {
     },
     refuseHosts: (refusing: boolean) => {
       state.refuseHosts = refusing
+    },
+    holdRefresh: (gate: (() => Promise<void>) | undefined) => {
+      state.refreshGate = gate
     },
     accessCalls: (sessionId: Session.ID) =>
       calls.filter((call) => call.endpoint === "environments.access" && call.sessionId === sessionId).length,

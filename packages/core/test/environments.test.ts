@@ -42,34 +42,44 @@ const subjectIn = Effect.fnUntraced(function* () {
 })
 
 describe("Environments", () => {
-  it.live("gives a bound session its folder, its sandbox and a token for its brain, signed with the first key", () =>
-    Effect.gen(function* () {
-      const environments = yield* environmentsWith()
-      const subject = yield* subjectIn()
-      const binding = yield* environments.bind(subject, environmentId)
-      expect(binding).toEqual({
-        location: { environmentId, directory: `/workspace/${subject.brainId}` },
-        isNew: true,
-      })
-      const before = Date.now()
-      const access = yield* environments.access(subject)
-      expect([access.environmentId, access.directory, access.url, access.generation]).toEqual([
-        environmentId,
-        `/workspace/${subject.brainId}`,
-        "http://127.0.0.1:7001",
-        1,
-      ])
-      const claims = yield* EnvironmentToken.verify([keys[0].publicKey], access.token)
-      expect(Option.map(claims, (found) => [found.kid, found.env, found.brain])).toEqual(
-        Option.some(["new", environmentId, Brain.ofSession(subject.brainId)]),
-      )
-      expect(Option.map(claims, (found) => found.exp * 1000)).toEqual(
-        Option.some(DateTime.toEpochMillis(access.expiresAt)),
-      )
-      expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(14 * 60_000)
-      expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(15 * 60_000)
-      expect(yield* EnvironmentToken.verify([keys[1].publicKey], access.token)).toEqual(Option.none())
-    }),
+  it.live(
+    "gives a bound session its folder, all capabilities by default, its sandbox and a token for its brain, signed with the first key",
+    () =>
+      Effect.gen(function* () {
+        const environments = yield* environmentsWith()
+        const subject = yield* subjectIn()
+        const binding = yield* environments.bind(subject, environmentId)
+        expect(binding).toEqual({
+          location: {
+            environmentId,
+            directory: `/workspace/${subject.brainId}`,
+            capabilities: ["files", "processes"],
+          },
+          isNew: true,
+        })
+        expect(yield* environments.find(subject)).toEqual(Option.some(binding.location))
+        expect(yield* environments.find({ ...subject, organizationId: yield* Seed.organization() })).toEqual(
+          Option.none(),
+        )
+        const before = Date.now()
+        const access = yield* environments.access(subject)
+        expect([access.environmentId, access.directory, access.url, access.generation]).toEqual([
+          environmentId,
+          `/workspace/${subject.brainId}`,
+          "http://127.0.0.1:7001",
+          1,
+        ])
+        const claims = yield* EnvironmentToken.verify([keys[0].publicKey], access.token)
+        expect(Option.map(claims, (found) => [found.kid, found.env, found.brain])).toEqual(
+          Option.some(["new", environmentId, Brain.ofSession(subject.brainId)]),
+        )
+        expect(Option.map(claims, (found) => found.exp * 1000)).toEqual(
+          Option.some(DateTime.toEpochMillis(access.expiresAt)),
+        )
+        expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(14 * 60_000)
+        expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(15 * 60_000)
+        expect(yield* EnvironmentToken.verify([keys[1].publicKey], access.token)).toEqual(Option.none())
+      }),
   )
 
   it.live("a configured token lifetime is the access's lifetime", () =>

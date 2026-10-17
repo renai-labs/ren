@@ -506,6 +506,7 @@ describe("BrainHost", () => {
                   ENVIRONMENTS: JSON.stringify([
                     {
                       id: environmentId,
+                      capabilities: ["files"],
                       capacity: 1,
                       sandboxes: [{ id: "a", url: "http://127.0.0.1:7001", generation: 1 }],
                     },
@@ -537,19 +538,25 @@ describe("BrainHost", () => {
         org,
       )
 
-    environmentIt.live("start binds a new session and gives the cell the session's own folder", () =>
-      Effect.gen(function* () {
-        const cell = yield* recordingCell()
-        const brain = yield* hostWith(cell.url)
-        const org = yield* Seed.organization()
-        const sessionId = Session.ID.create()
-        yield* startOn(brain, sessionId, org)
-        expect(cell.starts.map((input) => input.environment)).toEqual([
-          { environmentId, directory: `/workspace/${sessionId}` },
-        ])
-        const access = yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org })
-        expect([access.environmentId, access.url]).toEqual([environmentId, "http://127.0.0.1:7001"])
-      }),
+    environmentIt.live(
+      "start gives the cell the session's folder and its environment's capabilities, also on a later start that names none",
+      () =>
+        Effect.gen(function* () {
+          const cell = yield* recordingCell()
+          const brain = yield* hostWith(cell.url)
+          const org = yield* Seed.organization()
+          const sessionId = Session.ID.create()
+          yield* startOn(brain, sessionId, org)
+          yield* brain.start({ sessionId, harness: "opencode", instructions: {}, interactive: true }, org)
+          const location: Environment.Location = {
+            environmentId,
+            directory: `/workspace/${sessionId}`,
+            capabilities: ["files"],
+          }
+          expect(cell.starts.map((input) => input.environment)).toEqual([location, location])
+          const access = yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org })
+          expect([access.environmentId, access.url]).toEqual([environmentId, "http://127.0.0.1:7001"])
+        }),
     )
 
     environmentIt.live("Ren refuses an unknown environment, or a change of environment, before it calls the cell", () =>
