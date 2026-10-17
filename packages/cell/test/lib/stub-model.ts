@@ -263,9 +263,15 @@ export const start = (): Server => {
           { error: { message: `stub model status ${behaviour.status}`, type: "stub_error" } },
           { status: behaviour.status },
         )
-      return new Response(endpoint.stream(call.body, behaviour, entry?.gate.promise ?? Promise.resolve()), {
-        headers: { "content-type": "text/event-stream" },
+      const chunks = endpoint.stream(call.body, behaviour, entry?.gate.promise ?? Promise.resolve())
+      const body = new ReadableStream<Uint8Array>({
+        pull: async (controller) => {
+          const next = await chunks.next()
+          if (next.done) controller.close()
+          else controller.enqueue(next.value)
+        },
       })
+      return new Response(body, { headers: { "content-type": "text/event-stream" } })
     },
   })
 
