@@ -150,6 +150,7 @@ export const layer = Layer.effect(
           sid: subject.brainId,
           scope: "host",
           org: subject.organizationId,
+          iat: Math.floor((yield* Clock.currentTimeMillis) / 1000),
           exp,
         }),
       } satisfies ModelsBody
@@ -180,7 +181,7 @@ export const layer = Layer.effect(
             Effect.mapError((cause) => new BrainUnavailable({ cause })),
             Effect.flatMap((access) => configure(subject, access)),
             Effect.andThen(request),
-            Effect.catchTag("ModelsNotConfiguredError", Effect.die),
+            Effect.catchTag("ModelsNotConfiguredError", (cause) => Effect.fail(new BrainUnavailable({ cause }))),
           ),
         ),
       )

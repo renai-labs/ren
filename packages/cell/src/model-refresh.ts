@@ -32,9 +32,10 @@ const make = Effect.fn("ModelRefresh.make")(function* (url: string | undefined) 
       )
     : Option.none()
   const fresh = (apiKey: Models.ApiKey, now: DateTime.Utc) =>
-    Option.fromNullishOr(apiKey.expiresAt).pipe(
-      Option.exists((expiresAt) => DateTime.isGreaterThan(expiresAt, DateTime.addDuration(now, window))),
-    )
+    Option.match(Option.fromNullishOr(apiKey.expiresAt), {
+      onNone: () => true,
+      onSome: (expiresAt) => DateTime.isGreaterThan(expiresAt, DateTime.addDuration(now, window)),
+    })
 
   return (endpointId: string) =>
     refreshing.withPermit(
@@ -47,10 +48,9 @@ const make = Effect.fn("ModelRefresh.make")(function* (url: string | undefined) 
         if (Option.isNone(client) || Option.isNone(stored) || Option.isNone(token)) return Option.none()
         const body = yield* client.value.models["models.refresh"]().pipe(
           Effect.provideService(HostToken, token.value),
-          Effect.tapErrorTag("ForbiddenError", () => store.removeHostToken),
+          Effect.tapErrorTag("ForbiddenError", () => store.removeHostTokenIfUnchanged(token.value)),
         )
-        if (Option.getOrUndefined(yield* store.readHostToken) !== token.value) return Option.none()
-        yield* store.write(body.access, body.hostToken)
+        if (!(yield* store.writeIfUnchanged(token.value, body.access, body.hostToken))) return Option.none()
         return Option.fromNullishOr(body.access.endpoints.find((endpoint) => endpoint.id === endpointId)?.apiKey)
       }).pipe(
         Effect.catch((error) =>

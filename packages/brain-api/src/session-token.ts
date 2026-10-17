@@ -17,6 +17,7 @@ export const Claims = Schema.Union([
     sid: Session.ID,
     scope: Schema.Literal("host"),
     org: Auth.OrganizationID,
+    iat: Schema.Int,
     exp: Schema.Int,
   }),
 ]).annotate({ identifier: "SessionToken.Claims" })
