@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { Machine, Processes } from "@ren/executor/testing"
+import { Machine, Processes, Relay } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Effect, ManagedRuntime } from "effect"
+import { Effect, Exit, ManagedRuntime, Scope } from "effect"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -27,6 +27,43 @@ const sandbox = async () => {
 }
 
 type Sandbox = Awaited<ReturnType<typeof sandbox>>
+
+// oxlint-disable-next-line ren/no-comments -- A sandbox behind a relay keeps its URL when its executor restarts, as a resumed sandbox does.
+const restartable = async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "ren-lifecycle-restart-")))
+  const state = { runtime: ManagedRuntime.make(Machine.layer({ environmentId, workspace: directory })) }
+  const scope = Effect.runSync(Scope.make())
+  const relay = await Effect.runPromise(
+    Relay.make(Relay.portOf(await state.runtime.runPromise(Machine.url))).pipe(Scope.provide(scope)),
+  )
+  return {
+    directory,
+    url: relay.url,
+    restart: async () => {
+      await state.runtime.dispose()
+      state.runtime = ManagedRuntime.make(Machine.layer({ environmentId, workspace: directory }))
+      await Effect.runPromise(relay.target(Relay.portOf(await state.runtime.runPromise(Machine.url))))
+      await Effect.runPromise(relay.cut)
+    },
+    dispose: async () => {
+      await Effect.runPromise(Scope.close(scope, Exit.void))
+      await state.runtime.dispose()
+    },
+  }
+}
+
+const signalCell = (instance: Wrangler.Instance, signal: "STOP" | "CONT") => {
+  const descendants = (pid: number): ReadonlyArray<number> => {
+    const children = new TextDecoder()
+      .decode(Bun.spawnSync(["pgrep", "-P", String(pid)]).stdout)
+      .split("\n")
+      .filter(Boolean)
+      .map(Number)
+    return [...children, ...children.flatMap(descendants)]
+  }
+  const root = instance.pid()
+  if (root) for (const pid of [root, ...descendants(root)]) Bun.spawnSync(["kill", `-${signal}`, String(pid)])
+}
 
 const shell = (command: string) => ({ tool: { name: "shell", input: { command } } })
 
@@ -128,6 +165,27 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     expect(ren.accessCalls(session.sessionId)).toBe(1)
   })
 
+  test("the full output of a long command, in the foreground or the background, is on the sandbox at the path OpenCode names", async () => {
+    const session = await begin()
+    const savedTo = (result: string) =>
+      result.match(/(?:full output saved to|Output is streaming to:) ([^\]\\"]+)/)?.[1] ?? ""
+    const foreground = savedTo(lastToolResult(await session.turn(stub.script(shell("seq 1 30000")))))
+    expect(foreground).toStartWith("/tmp/opencode/data/shell/")
+    expect(await pwdOf(session)).toContain(session.sessionId)
+    expect(
+      lastToolResult(await session.turn(stub.script(shell(`tail -n 1 ${foreground}; grep -c . ${foreground}`)))),
+    ).toContain("30000\\n30000")
+    const read = stub.script({ tool: { name: "read", input: { path: foreground, offset: 15000, limit: 1 } } })
+    expect(lastToolResult(await session.turn(read))).toContain("15000")
+    const job = stub.script({ tool: { name: "shell", input: { command: "seq 1 30000; sleep 1", background: true } } })
+    const background = savedTo(lastToolResult(await session.turn(job)))
+    expect(background).toStartWith("/tmp/opencode/data/shell/")
+    // oxlint-disable-next-line ren/no-comments -- An idle cell parks after 2 seconds here and cancels its background jobs, so a foreground command keeps it awake.
+    await session.send(stub.script(shell("sleep 4")))
+    await stub.waitFor((call) => JSON.stringify(call.body.messages).includes('state=\\"completed\\"'))
+    expect(lastToolResult(await session.turn(stub.script(shell(`tail -n 1 ${background}`))))).toContain("30000")
+  })
+
   test("after the cell sleeps and wakes, a session's tools run on its sandbox, and one without has none", async () => {
     const onSandbox = await begin()
     const local = await begin(false)
@@ -145,7 +203,9 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
   test("workerd holds a tool's output stream open while a command runs for 20 seconds", async () => {
     const session = await begin()
     const started = Date.now()
-    expect(lastToolResult(await session.turn(stub.script(shell("sleep 20 && echo late"))))).toContain("late")
+    expect(lastToolResult(await session.turn(stub.script(shell("sleep 20 && echo late"))))).toBe(
+      JSON.stringify("late\n"),
+    )
     expect(Date.now() - started).toBeGreaterThanOrEqual(20_000)
   })
 
@@ -260,6 +320,157 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     without.set({ reply: "no tools" })
     await cell.restart(withRen)
     expect(await pwdOf(session)).toContain(join(first.directory, session.sessionId))
+  })
+
+  test("a cell killed while it asks Ren for access gets it at the next tool call after the restart", async () => {
+    const session = await connect()
+    const calls = { count: 0 }
+    const access = await Effect.runPromise(
+      Machine.access({
+        url: first.url,
+        environmentId,
+        brain: Brain.ofSession(session.sessionId),
+        directory: join(first.directory, session.sessionId),
+        lifetimeMs: 3_600_000,
+      }),
+    )
+    ren.answer(session.sessionId, () => (calls.count++ === 0 ? { type: "hold" } : { type: "access", access }))
+    await session.configure()
+    expect((await session.start(true)).status).toBe(200)
+    await session.send(stub.script(shell("pwd")))
+    await ren.reached(session.sessionId)
+    await cell.crash()
+    await cell.start()
+    expect(await pwdOf(session)).toContain(join(first.directory, session.sessionId))
+  })
+
+  test("an executor restarted while the cell sleeps is reached by the next tool call", async () => {
+    const restarting = await restartable()
+    const session = await begin(true, restarting)
+    expect(await pwdOf(session)).toContain(restarting.directory)
+    await session.opened.until((state) => Bun.deepEquals(state, TestCell.closed), 30_000)
+    await restarting.restart()
+    expect(await pwdOf(session)).toContain(join(restarting.directory, session.sessionId))
+    await restarting.dispose()
+  })
+
+  test("an executor restarted during a command ends the call with the disconnected notice, and the next command works", async () => {
+    const restarting = await restartable()
+    const session = await begin(true, restarting)
+    const pidFile = join(restarting.directory, `${crypto.randomUUID()}.pid`)
+    const running = stub.script(shell(`echo $$ > ${pidFile}; exec sleep 120`))
+    await session.send(running)
+    await Effect.runPromise(Pid.read(pidFile))
+    const restartedAt = Date.now()
+    await restarting.restart()
+    expect(lastToolResult(await running.called(2))).toContain("environment disconnected")
+    expect(Date.now() - restartedAt).toBeLessThan(45_000)
+    expect(await pwdOf(session)).toContain(join(restarting.directory, session.sessionId))
+    await restarting.dispose()
+  }, 120_000)
+
+  test("a frozen cell sends no heartbeats, so the executor stops its command within 35 seconds", async () => {
+    const session = await begin()
+    const pidFile = join(first.directory, `${crypto.randomUUID()}.pid`)
+    const running = stub.script(shell(`echo $$ > ${pidFile}; exec sleep 120`))
+    await session.send(running)
+    const pid = await Effect.runPromise(Pid.read(pidFile))
+    signalCell(cell, "STOP")
+    const stoppedAfter = await waitUntil(() => !Processes.running(pid), 60_000)
+    signalCell(cell, "CONT")
+    running.set({ reply: "stopped" })
+    if (stoppedAfter === undefined) process.kill(pid, "SIGKILL")
+    expect(stoppedAfter).toBeLessThan(35_000)
+    expect(await pwdOf(session)).toContain(join(first.directory, session.sessionId))
+  }, 150_000)
+
+  test("a background job stops on the sandbox when the cell closes the session's harness", async () => {
+    const session = await begin()
+    const pidFile = join(first.directory, `${crypto.randomUUID()}.pid`)
+    const job = stub.script({
+      tool: { name: "shell", input: { command: `echo $$ > ${pidFile}; exec sleep 300`, background: true } },
+    })
+    await session.turn(job)
+    const pid = await Effect.runPromise(Pid.read(pidFile))
+    await session.opened.until((state) => Bun.deepEquals(state, TestCell.closed), 60_000)
+    const stoppedAfter = await waitUntil(() => !Processes.running(pid), 45_000)
+    if (stoppedAfter === undefined) process.kill(pid, "SIGKILL")
+    expect(stoppedAfter).toBeDefined()
+  }, 150_000)
+
+  test("a cell restarted during the 30-second wait after Ren failed asks Ren once at the next tool call", async () => {
+    const session = await connect()
+    ren.answer(session.sessionId, () => ({ type: "unavailable", message: "Ren is restarting" }))
+    await session.configure()
+    expect((await session.start(true)).status).toBe(200)
+    expect(await pwdOf(session)).toContain("Ren is restarting")
+    await place(session.sessionId, first)
+    await cell.crash()
+    await cell.start()
+    const before = ren.accessCalls(session.sessionId)
+    expect(await pwdOf(session)).toContain(join(first.directory, session.sessionId))
+    expect(ren.accessCalls(session.sessionId) - before).toBe(1)
+  })
+
+  test("killing one cell leaves the commands of another cell on the same sandbox running", async () => {
+    const other = await Wrangler.make(withRen)
+    const survivor = await begin()
+    const opened = await TestCell.make(other.url)
+    const victimId = Session.ID.make(opened.id)
+    await place(victimId, first)
+    expect((await opened.models(Shared.access(), await FakeRen.hostToken(victimId))).status).toBe(204)
+    expect(
+      (
+        await opened.brain("/ren/sessions", {
+          sessionId: victimId,
+          harness: "opencode",
+          interactive: false,
+          environment: { environmentId, directory: Environment.sessionDirectory(victimId) },
+        })
+      ).status,
+    ).toBe(200)
+    const marker = join(first.directory, `${crypto.randomUUID()}.pid`)
+    const lasting = stub.script(shell(`echo $$ > ${marker}; sleep 4; echo survived`))
+    await survivor.send(lasting)
+    await Effect.runPromise(Pid.read(marker))
+    await opened.brain(`/ren/sessions/${victimId}/messages`, {
+      messageId: Session.MessageID.create(),
+      prompt: { text: `${stub.script(shell("exec sleep 120")).marker} use the tool` },
+      sender: { userId: "user_1" },
+    })
+    await other.crash()
+    expect(lastToolResult(await lasting.called(2))).toBe(JSON.stringify("survived\n"))
+    await other.dispose()
+  }, 240_000)
+
+  test("a host token that expires soon makes the next send ask Ren for a new configuration, and then tools work", async () => {
+    const session = await connect()
+    await place(session.sessionId, first)
+    expect((await session.opened.models(Shared.access(), await FakeRen.hostToken(session.sessionId, 60))).status).toBe(
+      204,
+    )
+    expect((await session.start(true)).status).toBe(409)
+    await session.configure()
+    expect((await session.start(true)).status).toBe(200)
+    expect(await pwdOf(session)).toContain(join(first.directory, session.sessionId))
+  })
+
+  test("removing a brain's models during a command lets the command finish, and refuses the next send", async () => {
+    const session = await begin()
+    const done = join(first.directory, session.sessionId, `${crypto.randomUUID()}.done`)
+    const running = stub.script(shell(`sleep 2; echo finished > ${done}`))
+    await session.send(running)
+    await ren.reached(session.sessionId)
+    const before = ren.accessCalls(session.sessionId)
+    expect((await session.opened.removeModels()).status).toBe(204)
+    await waitUntil(() => Bun.spawnSync(["test", "-f", done]).exitCode === 0, 30_000)
+    expect(await Bun.file(done).text()).toBe("finished\n")
+    const refused = await session.opened.brain(`/ren/sessions/${session.sessionId}/messages`, {
+      messageId: Session.MessageID.create(),
+      prompt: { text: `${stub.script(shell("pwd")).marker} use the tool` },
+      sender: { userId: "user_1" },
+    })
+    expect([refused.status, ren.accessCalls(session.sessionId) - before]).toEqual([409, 0])
   })
 
   test("a session started without an environment cannot get one later, and a new session can", async () => {

@@ -64,4 +64,58 @@ describe("Host API: environments.access and host.refresh", () => {
     const claims = await Effect.runPromise(SessionToken.verify([key], body.hostToken))
     expect(claims._tag === "Some" && claims.value).toEqual(expect.objectContaining({ sid, scope: "host", org }))
   })
+
+  test("a host token signed with the retiring key works, and one signed with a removed key is refused", async () => {
+    const retiring = { id: "retiring", secret: "a-retiring-cell-key-of-at-least-32-chars" }
+    const rotating = makeApp(undefined, { config: { CELL_KEYS: JSON.stringify([key, retiring]) } })
+    const sign = (signer: typeof key) =>
+      Effect.runPromise(
+        SessionToken.sign(signer, {
+          sid: Session.ID.create(),
+          scope: "host",
+          org: Auth.OrganizationID.create(),
+          iat,
+          exp,
+        }),
+      )
+    const removed = { id: "removed", secret: "a-removed-cell-key-of-at-least-32-chars" }
+    const statuses = await Promise.all(
+      [await sign(retiring), await sign(removed)].map((token) =>
+        rotating
+          .handler(
+            new Request("http://localhost/brain/host/refresh", {
+              method: "POST",
+              headers: { authorization: `Bearer ${token}` },
+            }),
+          )
+          .then((response) => response.status),
+      ),
+    )
+    await rotating.dispose()
+    expect(statuses).toEqual([200, 403])
+  })
+
+  test("no host token or environment token is in the server's log", async () => {
+    const logs: Array<string> = []
+    const logged = makeApp(undefined, { logs })
+    const sid = Session.ID.create()
+    const valid = await hostToken(sid, Auth.OrganizationID.create())
+    const expired = await Effect.runPromise(
+      SessionToken.sign(key, { sid, scope: "host", org: Auth.OrganizationID.create(), iat, exp: iat - 60 }),
+    )
+    const responses = await Promise.all(
+      ["/brain/environment/access", "/brain/host/refresh"].flatMap((path) =>
+        [valid, expired, "not-a-token"].map((token) =>
+          logged.handler(
+            new Request(`http://localhost${path}`, { method: "POST", headers: { authorization: `Bearer ${token}` } }),
+          ),
+        ),
+      ),
+    )
+    const issued = await Promise.all(responses.map((response) => response.text()))
+    await logged.dispose()
+    const refreshed = issued.flatMap((body) => body.match(/"hostToken":"([^"]+)"/)?.slice(1) ?? [])
+    expect(logs.length).toBeGreaterThan(0)
+    expect([valid, expired, ...refreshed].filter((token) => logs.some((line) => line.includes(token)))).toEqual([])
+  })
 })

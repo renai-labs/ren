@@ -9,9 +9,8 @@ export interface Exchange {
   readonly response: Deferred.Deferred<Response>
 }
 
-export const storage = () => {
-  const stored = new Map<string, string>()
-  return ModelStore.layer.pipe(
+export const storage = (stored = new Map<string, string>()) =>
+  ModelStore.layer.pipe(
     Layer.provideMerge(
       Layer.succeed(
         ModelStore.Storage,
@@ -23,7 +22,6 @@ export const storage = () => {
       ),
     ),
   )
-}
 
 export const granted = (body: ModelsBody) => Response.json(Schema.encodeSync(ModelsBody)(body))
 

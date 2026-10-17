@@ -5,7 +5,7 @@ import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { Testing } from "@ren/db/testing"
-import { ConfigProvider, Layer } from "effect"
+import { ConfigProvider, Layer, Logger } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { Routes } from "../../src/routes.js"
 
@@ -22,7 +22,11 @@ export const config = {
 
 export const makeApp = (
   routes: typeof Routes.layer = Routes.layer,
-  options?: { readonly baseURL?: string; readonly config?: Readonly<Record<string, string>> },
+  options?: {
+    readonly baseURL?: string
+    readonly config?: Readonly<Record<string, string>>
+    readonly logs?: Array<string>
+  },
 ) =>
   HttpRouter.toWebHandler(
     routes.pipe(
@@ -31,6 +35,11 @@ export const makeApp = (
       Layer.provide(Testing.layer),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(BunHttpServer.layerHttpServices),
+      Layer.provideMerge(
+        options?.logs
+          ? Logger.layer([Logger.make((log) => options.logs?.push(Logger.formatJson.log(log)))])
+          : Layer.empty,
+      ),
       Layer.provide(
         ConfigProvider.layerAdd(
           ConfigProvider.fromUnknown({
@@ -46,7 +55,7 @@ export const makeApp = (
         ),
       ),
     ),
-    { disableLogger: true },
+    { disableLogger: !options?.logs },
   )
 
 export const authRequest = (path: string, body: unknown, cookie = "", baseURL = "http://localhost:4000") =>

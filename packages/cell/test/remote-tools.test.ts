@@ -1,5 +1,6 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
-import { AbsolutePath } from "@opencode/client/effect"
+import { AbsolutePath, SessionMessage } from "@opencode/client/effect"
+import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { Environments } from "@ren/brain/environments"
 import { EnvironmentAccess } from "@ren/brain/environment-access"
@@ -7,9 +8,10 @@ import { Machine, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Layer, Ref, Schema, type Scope } from "effect"
+import { Context, Deferred, Effect, Exit, Layer, Option, Ref, Schedule, Schema, Scope } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath, stat } from "node:fs/promises"
+import { createServer, type Socket } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Env } from "../src/env.js"
@@ -41,7 +43,7 @@ const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 const accessTo = (url: string, sessionId: Session.ID) =>
   Machine.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
-const open = Effect.fnUntraced(function* () {
+const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effect.void) {
   const context = yield* Layer.build(EnvironmentAccess.layerMemory(new Map()))
   const memory = Context.get(context, EnvironmentAccess.Memory)
   const opens = yield* Ref.make(0)
@@ -50,6 +52,7 @@ const open = Effect.fnUntraced(function* () {
     EnvironmentAccess.Service.of({
       open: (sessionId) =>
         Ref.update(opens, (count) => count + 1).pipe(
+          Effect.andThen(beforeOpen),
           Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
         ),
       subscribe: Context.get(context, EnvironmentAccess.Service).subscribe,
@@ -73,10 +76,11 @@ const open = Effect.fnUntraced(function* () {
     ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     () => Effect.succeedNone,
-    true,
+    Option.some(environments),
   )
   return {
     harness: yield* OpenCodeHarness.make(host, endpoints, AbsolutePath.make(local)),
+    host,
     memory,
     opens: Ref.get(opens),
   }
@@ -115,17 +119,31 @@ const restart = (
     ...(initialMessage && { initialMessage }),
   })
 
-const locationOf = (sessionId: Session.ID) => ({ environmentId, directory: Environment.sessionDirectory(sessionId) })
+const locationOf = (sessionId: Session.ID, capabilities?: ReadonlyArray<Environment.Capability>) => ({
+  environmentId,
+  directory: Environment.sessionDirectory(sessionId),
+  ...(capabilities && { capabilities }),
+})
 
 const begin = Effect.fnUntraced(function* (
   opened: Opened,
-  options: { readonly onEnvironment?: boolean; readonly agent?: string; readonly url?: string } = {},
+  options: {
+    readonly onEnvironment?: boolean
+    readonly agent?: string
+    readonly url?: string
+    readonly capabilities?: ReadonlyArray<Environment.Capability>
+  } = {},
 ) {
   const sessionId = Session.ID.create()
   const onEnvironment = options.onEnvironment ?? true
   if (onEnvironment)
     yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* Machine.url), sessionId))
-  yield* restart(opened.harness, sessionId, onEnvironment ? locationOf(sessionId) : undefined, options.agent)
+  yield* restart(
+    opened.harness,
+    sessionId,
+    onEnvironment ? locationOf(sessionId, options.capabilities) : undefined,
+    options.agent,
+  )
   const send = (script: StubModel.Script) => sendTo(opened.harness, sessionId, script)
   return {
     sessionId,
@@ -309,6 +327,29 @@ test.each<[string, boolean, string | undefined]>([
     ),
 )
 
+test.each<[string, Array<Environment.Capability>, Array<string>, string]>([
+  ["files only", ["files"], ["read", "write", "edit", "glob", "grep"], "runs no commands, so the shell tool is off"],
+  ["commands only", ["processes"], ["shell"], "gives no file access, so the read, write, edit"],
+])(
+  "a sandbox with %s gets only its tools, also after a later start that names no environment",
+  (_name, capabilities, offered, note) =>
+    live(
+      Effect.gen(function* () {
+        const opened = yield* open()
+        const session = yield* begin(opened, { capabilities })
+        const first = yield* session.turn(stub.script(), 1)
+        yield* restart(opened.harness, session.sessionId)
+        const later = yield* session.turn(stub.script(), 1)
+        expect([first, later].map((call) => fileTools.filter((tool) => call.tools.includes(tool)))).toEqual([
+          offered,
+          offered,
+        ])
+        expect(JSON.stringify(later.body.messages)).toContain(note)
+        expect(yield* opened.opens).toBe(0)
+      }),
+    ),
+)
+
 it.live("keeps a session's environment when a later start does not name one", () =>
   Effect.gen(function* () {
     const opened = yield* open()
@@ -403,6 +444,67 @@ it.live(
     }),
 )
 
+it.live("V1 a note written to the session while a tool call runs reaches the model at the next step of the turn", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+    const note = `note-${crypto.randomUUID()}`
+    const script = stub.script(shell(`echo $$ > ${pidFile}; sleep 2; echo done`))
+    yield* session.send(script)
+    yield* Pid.read(pidFile)
+    yield* opened.host.sessions.synthetic({
+      sessionID: SessionID.make(session.sessionId),
+      text: note,
+      resume: false,
+    })
+    // oxlint-disable-next-line ren/no-comments -- The note is the newest user message, so the stub cannot match this call to the script by its marker.
+    const next = yield* Effect.promise(() => stub.waitFor((call) => JSON.stringify(call.body.messages).includes(note)))
+    expect(lastToolResult(next)).toBe(JSON.stringify("done\n"))
+  }),
+)
+
+// oxlint-disable-next-line ren/no-comments -- OpenCode's snapshots track the cell's folder, not the sandbox, so a revert sees no file changes (D51 defers it).
+it.live("V3 a revert with files to a turn that changed a file on the sandbox lists no files and leaves the file", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const file = join(workspace, `${crypto.randomUUID()}.txt`)
+    const first = stub.script({ tool: { name: "write", input: { path: file, content: "one\n" } } })
+    yield* session.send(first)
+    yield* Effect.promise(() => first.called(2))
+    const second = stub.script({ tool: { name: "write", input: { path: file, content: "two\n" } } })
+    const sent = yield* session.send(second)
+    yield* Effect.promise(() => second.called(2))
+    const staged = yield* opened.host.sessions.revert
+      .stage({
+        sessionID: SessionID.make(session.sessionId),
+        messageID: SessionMessage.ID.make(sent.messageId),
+        files: true,
+      })
+      .pipe(Effect.retry({ schedule: Schedule.spaced(250), times: 40 }))
+    expect([staged.files, yield* text(file)]).toEqual([[], "two\n"])
+  }),
+)
+
+it.live("V2 the execute.after hook runs for a subagent's tool call: its failed shell call names the cause", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    yield* opened.memory.remove(session.sessionId)
+    const child = stub.script(shell("echo child"))
+    yield* session.turn(
+      stub.script({
+        tool: {
+          name: "subagent",
+          input: { agent: "general", description: "Run it", prompt: `${child.marker} run it` },
+        },
+      }),
+    )
+    expect(lastToolResult(yield* Effect.promise(() => child.called(2)))).toContain("No access to a sandbox")
+  }),
+)
+
 it.live("a helper of a session with no environment has no file or shell tools", () =>
   Effect.gen(function* () {
     const opened = yield* open()
@@ -465,16 +567,207 @@ it.live("a tool call fails clearly while the sandbox is down, and the next one w
   }),
 )
 
-test.todo("Q2 the model reads the full output of a long command at the path that OpenCode names", () =>
-  live(
+const frozenSandbox = Effect.gen(function* () {
+  const machinePort = Relay.portOf(yield* Machine.url)
+  const relay = yield* Relay.make(machinePort)
+  const sockets = new Set<Socket>()
+  const hole = yield* Effect.acquireRelease(
+    Effect.promise(async () => {
+      const server = createServer((socket) => sockets.add(socket))
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+      return server
+    }),
+    (server) =>
+      Effect.promise(
+        () =>
+          new Promise<void>((resolve) => {
+            for (const socket of sockets) socket.destroy()
+            server.close(() => resolve())
+          }),
+      ),
+  )
+  const address = hole.address()
+  const holePort = typeof address === "object" && address !== null ? address.port : 0
+  return {
+    url: relay.url,
+    freeze: relay.freeze.pipe(Effect.andThen(relay.target(holePort))),
+    thaw: relay.target(machinePort),
+  }
+})
+
+const idle = (opened: Opened, sessionId: Session.ID) =>
+  opened.harness.sessions.pipe(
+    Effect.map((states) => states.find((state) => String(state.id) === sessionId)?.active === false),
+  )
+
+it.live("closing the host while a tool call waits for access completes, and the tool call ends", () =>
+  Effect.gen(function* () {
+    const entered = yield* Deferred.make<void>()
+    const ended = yield* Deferred.make<void>()
+    const scope = yield* Scope.make()
+    const opened = yield* open(
+      Deferred.succeed(entered, undefined).pipe(
+        Effect.andThen(Effect.never),
+        Effect.onInterrupt(() => Deferred.succeed(ended, undefined)),
+      ),
+    ).pipe(Scope.provide(scope))
+    const session = yield* begin(opened)
+    yield* session.send(stub.script(shell("pwd")))
+    yield* Deferred.await(entered)
+    yield* Scope.close(scope, Exit.void).pipe(Effect.timeout("15 seconds"))
+    yield* Deferred.await(ended).pipe(Effect.timeout("5 seconds"))
+  }),
+)
+
+// oxlint-disable-next-line ren/no-comments -- OpenCode runs a command in a detached fiber, so a host close leaves it to the executor's 30 second heartbeat rule (accepted for v1).
+it.live(
+  "a command that runs when the host closes stops on the sandbox within 35 seconds, when its heartbeats stop",
+  () =>
+    Effect.gen(function* () {
+      const scope = yield* Scope.make()
+      const opened = yield* open().pipe(Scope.provide(scope))
+      const session = yield* begin(opened)
+      const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+      yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 120`)))
+      const pid = yield* Pid.read(pidFile)
+      const closedAt = performance.now()
+      yield* Scope.close(scope, Exit.void).pipe(Effect.timeout("15 seconds"))
+      yield* Effect.sync(() => Processes.running(pid)).pipe(
+        Effect.repeat({ until: (running) => !running, schedule: Schedule.spaced(250) }),
+        Effect.timeout("40 seconds"),
+        Effect.ensuring(Effect.sync(() => Processes.running(pid) && process.kill(pid, "SIGKILL"))),
+      )
+      expect(performance.now() - closedAt).toBeLessThan(35_000)
+    }),
+  60_000,
+)
+
+it.live(
+  "a start for a new session on a frozen sandbox succeeds at once, and a turn of another session is not blocked",
+  () =>
     Effect.gen(function* () {
       const opened = yield* open()
-      const session = yield* begin(opened)
-      const call = yield* session.turn(stub.script(shell("seq 1 30000")))
-      const path = toolOutput(call).match(/full output saved to ([^\]"]+)/)?.[1]
-      expect(path).toBeDefined()
-      const read = toolOutput(yield* session.turn(stub.script({ tool: { name: "read", input: { path } } })))
-      expect(read).toContain("15000")
+      const frozen = yield* frozenSandbox
+      yield* frozen.freeze
+      yield* begin(opened, { url: frozen.url }).pipe(Effect.timeout("5 seconds"))
+      expect(yield* opened.opens).toBe(0)
+      const other = yield* begin(opened)
+      const result = lastToolResult(yield* other.turn(stub.script(shell("echo ok"))))
+      expect([result, yield* opened.opens]).toEqual([JSON.stringify("ok\n"), 1])
     }),
-  ),
+)
+
+it.live("an interrupt during a command on a frozen sandbox ends in the kill's limit and leaves the session idle", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const frozen = yield* frozenSandbox
+    const session = yield* begin(opened, { url: frozen.url })
+    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+    yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 60`)))
+    const pid = yield* Pid.read(pidFile)
+    yield* frozen.freeze
+    const own = (yield* opened.harness.sessions).find((state) => String(state.id) === session.sessionId)
+    expect(own).toBeDefined()
+    if (!own) return
+    const startedAt = performance.now()
+    yield* own.interrupt.pipe(
+      Effect.andThen(own.wait(12_000)),
+      Effect.ensuring(Effect.sync(() => void Bun.spawnSync(["kill", "-9", String(pid)]))),
+    )
+    expect(performance.now() - startedAt).toBeLessThan(10_000)
+    expect(yield* idle(opened, session.sessionId)).toBe(true)
+  }),
+)
+
+it.live("closing the host during a command on a frozen sandbox completes in its limit, and a later turn works", () =>
+  Effect.gen(function* () {
+    const frozen = yield* frozenSandbox
+    const scope = yield* Scope.make()
+    const first = yield* open().pipe(Scope.provide(scope))
+    const session = yield* begin(first, { url: frozen.url })
+    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+    yield* session.send(stub.script(shell(`echo $$ > ${pidFile}; exec sleep 60`)))
+    const pid = yield* Pid.read(pidFile)
+    yield* frozen.freeze
+    const startedAt = performance.now()
+    yield* Scope.close(scope, Exit.void).pipe(
+      Effect.timeout("12 seconds"),
+      Effect.ensuring(Effect.sync(() => void Bun.spawnSync(["kill", "-9", String(pid)]))),
+    )
+    expect(performance.now() - startedAt).toBeLessThan(10_000)
+    yield* frozen.thaw
+    const second = yield* open()
+    const later = yield* begin(second, { url: frozen.url })
+    expect(lastToolResult(yield* later.turn(stub.script(shell("echo back"))))).toBe(JSON.stringify("back\n"))
+  }),
+)
+
+it.live("a command that leaves a child holding stdout returns in the time of the local shell", () =>
+  Effect.gen(function* () {
+    const command = (pidFile: string) => `sleep 5 & echo $! > ${pidFile}; echo done`
+    const localPid = join(workspace, `${crypto.randomUUID()}.pid`)
+    const localStart = performance.now()
+    yield* Effect.promise(async () => {
+      const local = Bun.spawn(["sh", "-c", command(localPid)], { stdout: "pipe" })
+      await Promise.all([new Response(local.stdout).text(), local.exited])
+    })
+    const localMs = performance.now() - localStart
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const remotePid = join(workspace, `${crypto.randomUUID()}.pid`)
+    const remoteStart = performance.now()
+    const result = lastToolResult(yield* session.turn(stub.script(shell(command(remotePid)))))
+    const remoteMs = performance.now() - remoteStart
+    expect(result).toContain("done")
+    expect(Math.abs(remoteMs - localMs)).toBeLessThan(3000)
+  }),
+)
+
+it.live("opening the host and reading its sessions as the alarm does contact neither Ren nor the sandbox", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const script = stub.script({ hold: true })
+    yield* session.send(script)
+    yield* Effect.promise(() => script.called())
+    expect(yield* idle(opened, session.sessionId)).toBe(false)
+    expect(yield* opened.opens).toBe(0)
+    expect((yield* Effect.promise(() => stat(folder(session.sessionId)).catch(() => undefined))) === undefined).toBe(
+      true,
+    )
+    script.release()
+  }),
+)
+
+it.live("destroying the ren workspace leaves the sandbox's folder and Ren untouched", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    yield* session.turn(stub.script(shell("echo kept > kept.txt")))
+    yield* opened.host.workspaces.destroy(RenWorkspaceDriver.workspaceId(session.sessionId))
+    expect(yield* text(join(folder(session.sessionId), "kept.txt"))).toBe("kept\n")
+    expect(yield* opened.opens).toBe(1)
+  }),
+)
+
+it.live(
+  "a start with a first message that names another folder creates no session, accepts no message and calls no model",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const sessionId = Session.ID.create()
+      const script = stub.script()
+      yield* opened.memory.set(sessionId, yield* accessTo(yield* Machine.url, sessionId))
+      const error = yield* restart(opened.harness, sessionId, { environmentId, directory: "/workspace" }, undefined, {
+        messageId: Session.MessageID.create(),
+        prompt: { text: `${script.marker} hello` },
+        sender: { userId: "user_1" },
+      }).pipe(Effect.flip)
+      expect(error.message).toBe(`Session ${sessionId} works in /workspace/${sessionId} on its sandbox, not /workspace`)
+      expect((yield* opened.harness.sessions).filter((state) => String(state.id) === sessionId)).toEqual([])
+      expect((yield* sendTo(opened.harness, sessionId, stub.script()).pipe(Effect.flip))._tag).toBe(
+        "SessionNotStartedError",
+      )
+      expect([script.calls, yield* opened.opens]).toEqual([[], 0])
+    }),
 )
