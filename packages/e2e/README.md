@@ -13,7 +13,7 @@ End-to-end tests across server, client, CLI and app (Playwright), and the chaos 
 
 ## Dependencies
 
-Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`Machine` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Host API's `environments.access` and `host.refresh` for the hand each session was placed on.
+Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`Machine` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Host API's `environments.access` and `host.refresh` for the hand each session was placed on. The issuer keeps no sessions: it answers the sync checkpoints and restore with no sessions, and refuses each upload. The real-stack cases run the real Ren server with Postgres instead, so sessions sync and restore there.
 
 ## Two runners
 
