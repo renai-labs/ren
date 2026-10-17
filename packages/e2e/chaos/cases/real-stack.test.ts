@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { Duration } from "effect"
+import { SessionDriver } from "../lib/drivers/session.js"
 import { Platform } from "../lib/platform.js"
 import { ModelProvider } from "../lib/provider/model.js"
 import { RealStack } from "../lib/real-stack.js"
@@ -250,5 +251,48 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       await Bun.sleep(Duration.toMillis(EnvironmentConnections.retryRenAfter) + 1_000)
       expect(await session.tool("shell", { command: "echo allowed" })).toBe("allowed\n")
     }, 600_000)
+
+    test("the alarm syncs a turn with a tool call to Postgres, and again after the cell dies during a pass, with no request to the cell", async () => {
+      const session = await stack().session()
+      expect(await session.tool("shell", { command: "echo synced" })).toBe("synced\n")
+      expect((await session.synced()).messages.some((row) => row.endsWith(" idle"))).toBe(true)
+      const batch = stack().renProxy.inject(
+        { operation: new RegExp(`^POST /brain/sync/sessions/${session.sessionId}/uploads/\\d+/messages$`) },
+        { type: "hold" },
+      )
+      await session.opencode.session.update({ sessionID: session.sessionId, title: "Renamed" })
+      const expected = await session.local()
+      await batch.committed
+      await stack().restartCell()
+      batch.release()
+      expect((await session.synced(expected)).title).toBe("Renamed")
+    }, 600_000)
+
+    test("a session whose cell lost its storage continues on its next message from the copy in Postgres", async () => {
+      const session = await stack().session({ environment: false })
+      await session.turn([ModelProvider.text("first")])
+      await session.settled()
+      const before = await session.synced()
+      await stack().loseCellStorage()
+      await session.turn([ModelProvider.text("second")], "next")
+      const after = await session.settled()
+      expect(before.messages.every((row) => after.some((message) => row.startsWith(`${message.id} `)))).toBe(true)
+      expect(SessionDriver.assistantTexts(after).join("")).toBe("firstsecond")
+      await session.synced()
+    }, 600_000)
+
+    // oxlint-disable-next-line ren/no-comments -- OpenCode's import API takes only a directory, so a restored session has no workspace yet (the TODO in the cell's OpenCode harness).
+    test.todo(
+      "P5-08 a session with an environment whose cell lost its storage restores, and its next tool call runs in the same container folder",
+      async () => {
+        const session = await stack().session()
+        expect(await session.tool("shell", { command: "echo kept > kept.txt" })).toBe("(no output)")
+        await session.synced()
+        await stack().loseCellStorage()
+        expect(await session.tool("shell", { command: "cat kept.txt; pwd" })).toBe(
+          `kept\n/workspace/${session.sessionId}\n`,
+        )
+      },
+    )
   },
 )

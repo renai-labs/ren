@@ -333,6 +333,62 @@ describe("OpenCodeSync", () => {
     }),
   )
 
+  it.live("a raw NUL in a title reaches Postgres as U+FFFD, and the pass commits", () =>
+    Effect.gen(function* () {
+      const host = yield* setup()
+      const sync = yield* host.sync()
+      yield* host.rename(host.root, "a\u0000b")
+      expect(yield* sync.step()).toEqual({ drained: true })
+      expect((yield* SyncTest.remote(host.brain.id)).sessions.map((session) => session.title)).toEqual(["a\uFFFDb"])
+    }),
+  )
+
+  it.live("restore reads every page of a session with more messages than one page, in transcript order", () =>
+    Effect.gen(function* () {
+      const host = yield* setup()
+      yield* host.turn(host.root)
+      const columns = host.db
+        .query<{ name: string }, []>("pragma table_info(session_message)")
+        .all()
+        .map((column) => column.name)
+      const last = host.db
+        .query<{ id: string; seq: number }, [string]>(
+          "select id, seq from session_message where session_id = ? order by seq desc limit 1",
+        )
+        .get(host.root)
+      if (!last) return yield* Effect.die(new Error("The turn wrote no message"))
+      const copied = columns
+        .map((column) => {
+          if (column === "id") return "'msg_copy_' || printf('%04d', n)"
+          return column === "seq" ? `${last.seq} + n` : column
+        })
+        .join(", ")
+      host.db.transaction(() => {
+        host.db.run(
+          `insert into session_message (${columns.join(", ")}) with recursive copies(n) as (select 1 union all select n + 1 from copies where n < 1000) select ${copied} from session_message, copies where id = ?`,
+          [last.id],
+        )
+        host.db.run("update event_sequence set seq = ? where aggregate_id = ?", [last.seq + 1000, host.root])
+      })()
+      const sync = yield* host.sync()
+      expect(yield* sync.step()).toEqual({ drained: true })
+      const expected = yield* host.expectEqual
+      host.proxy.clear()
+      const imported: Array<OpenCodeMessageRow> = []
+      yield* sync.restore({
+        sessionId: host.brain.id,
+        exists: () => Effect.succeed(false),
+        create: Effect.void,
+        setRestoring: (value) => Effect.sync(() => void (host.host.restoring = value)),
+        import: (data) => Effect.sync(() => imported.push(...data.messages)),
+      })
+      expect(imported.map((message) => message.id)).toEqual(expected.messages.map((message) => message.id))
+      expect(
+        host.proxy.requests.filter((request) => request.path === `/brain/sync/sessions/${host.root}/messages`),
+      ).toHaveLength(Math.floor(expected.messages.length / 500) + 1)
+    }),
+  )
+
   it.live("a session that OpenCode deletes during a pass does not commit, and the next step does not send it", () =>
     Effect.gen(function* () {
       const host = yield* setup()
