@@ -350,10 +350,13 @@ describe("SessionSync", () => {
     Effect.gen(function* () {
       const sync = yield* SessionSync.Service
       const { host, rootId } = yield* tree()
-      const json = JSON.stringify({ output: "tool output with \u0000 and ünïcode", nested: { b: 1, a: [2, 1] } })
+      const json = JSON.stringify({
+        output: "tool output with \u0000, a lone \ud800 and ünïcode",
+        nested: { b: 1, a: [2, 1] },
+      })
       const row = Sync.session(rootId, {
         metadata: json,
-        cost: 0.1 + 0.2,
+        cost: Number.MAX_VALUE / 3,
         tokens_input: 2 ** 53 - 1,
         time_created: Sync.now,
         time_suspended: 8_640_000_000_000_000,
