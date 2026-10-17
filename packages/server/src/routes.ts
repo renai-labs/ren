@@ -52,35 +52,37 @@ const Cors = HttpRouter.middleware(
 )
 
 export const layer = Layer.mergeAll(
-  HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
-    Layer.provide([
-      HealthHandler,
-      MeHandler,
-      InvitationHandler,
-      SpaceHandler,
-      SpaceMemberHandler,
-      EnvironmentTemplateHandler,
-      EnvironmentProviderHandler,
-      SpaceEnvironmentTemplateHandler,
-    ]),
-    Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
-    Layer.provide([
-      Health.layer,
-      Invitation.layer,
-      Space.layer,
-      SpaceMember.layer,
-      EnvironmentTemplates.layer,
-      SpaceEnvironmentTemplate.layer,
-    ]),
-  ),
-  HttpApiBuilder.layer(RenHostApi).pipe(
-    Layer.provide([HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
-    Layer.provide(BrainHost.hostAuthentication),
-  ),
+  Layer.mergeAll(
+    HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
+      Layer.provide([
+        HealthHandler,
+        MeHandler,
+        InvitationHandler,
+        SpaceHandler,
+        SpaceMemberHandler,
+        EnvironmentTemplateHandler,
+        EnvironmentProviderHandler,
+        SpaceEnvironmentTemplateHandler,
+      ]),
+      Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
+      Layer.provide([
+        Health.layer,
+        Invitation.layer,
+        Space.layer,
+        SpaceMember.layer,
+        EnvironmentTemplates.layer,
+        SpaceEnvironmentTemplate.layer,
+      ]),
+    ),
+    HttpApiBuilder.layer(RenHostApi).pipe(
+      Layer.provide([HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
+      Layer.provide(BrainHost.hostAuthentication),
+    ),
+    AuthRoute,
+  ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
     Layer.provide([BrainHost.hostAuthentication, bodyLimit(maxBodyBytes), SessionSync.layer]),
   ),
-  AuthRoute,
   Cors,
 ).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))
