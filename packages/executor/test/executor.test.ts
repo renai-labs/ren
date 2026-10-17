@@ -3,7 +3,7 @@ import { BunServices } from "@effect/platform-bun"
 import type { ProcessEvent, SpawnInput } from "@ren/brain-api/executor-api"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
-import { ConfigProvider, Context, Duration, Effect, Exit, Layer, Option, Scope, Stream } from "effect"
+import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { mkdtemp, realpath, symlink } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -363,5 +363,42 @@ it.live("fails to spawn a command that does not exist", () =>
       .spawn(brain, { command: "true", arguments: [], directory: "ren-no-such-directory" })
       .pipe(Effect.flip)
     expect(directory._tag).toBe("OperationFailedError")
+  }),
+)
+
+it.effect("a reader that stops reading holds a command back for 15 seconds at most, then the command runs on", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const spawned = yield* executor.spawn(brain, { command: "head", arguments: ["-c", "10000000", "/dev/zero"] })
+    const reached = yield* Deferred.make<void>()
+    yield* Stream.unwrap(executor.output(brain, spawned.id)).pipe(
+      Stream.tap(() => Deferred.succeed(reached, undefined).pipe(Effect.andThen(Effect.never))),
+      Stream.runDrain,
+      Effect.forkScoped,
+    )
+    yield* Deferred.await(reached)
+    yield* Effect.promise(() => Bun.sleep(500))
+    expect(Processes.running(spawned.pid)).toBe(true)
+    yield* TestClock.adjust(Duration.seconds(16))
+    const finished = yield* Effect.promise(() => Bun.sleep(100)).pipe(
+      Effect.map(() => !Processes.running(spawned.pid)),
+      Effect.repeat({ until: (done) => done, times: 25 }),
+    )
+    expect(finished).toBe(true)
+    const late = yield* Stream.runCollect(Stream.unwrap(executor.output(brain, spawned.id)))
+    const kept = late.flatMap((event) => (event.type === "stdout" ? [event] : []))
+    const last = kept.at(-1)
+    expect(last && last.offset + last.bytes.length).toBe(10_000_000)
+    expect(late.at(-1)).toEqual({ type: "exit", exitCode: 0, signal: null })
+  }),
+)
+
+it.live("lists the shells the machine has, its own default first", () =>
+  Effect.gen(function* () {
+    const shells = (yield* Executor.Service).hello.shells ?? []
+    expect(shells.length).toBeGreaterThan(0)
+    expect(shells.filter((shell) => !Bun.which(shell))).toEqual([])
+    expect(new Set(shells).size).toBe(shells.length)
+    if (process.env.SHELL) expect(shells.at(0)).toBe(process.env.SHELL)
   }),
 )

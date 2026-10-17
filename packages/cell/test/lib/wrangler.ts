@@ -7,19 +7,27 @@ import type { Celld } from "./celld.js"
 
 const cell = path.resolve(import.meta.dir, "../..")
 
-export const make = async (vars: Readonly<Record<string, string>>, main = "src/worker.ts"): Promise<Celld.Instance> => {
+export interface Instance extends Celld.Instance {
+  readonly restart: (vars: Readonly<Record<string, string>>, main?: string) => Promise<void>
+  readonly crash: () => Promise<void>
+}
+
+export const make = async (vars: Readonly<Record<string, string>>, main = "src/worker.ts"): Promise<Instance> => {
   const project = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "ren-wrangler-")))
   const config = await Bun.file(path.join(cell, "wrangler.jsonc")).text()
-  await Bun.write(
-    path.join(project, "wrangler.jsonc"),
-    config.replace('"src/worker.ts"', JSON.stringify(path.join(cell, main))),
-  )
-  await Bun.write(
-    path.join(project, ".dev.vars"),
-    Object.entries(vars)
-      .map((entry) => `${entry[0]}='${entry[1]}'`)
-      .join("\n"),
-  )
+  const configure = async (nextVars: Readonly<Record<string, string>>, nextMain: string) => {
+    await Bun.write(
+      path.join(project, "wrangler.jsonc"),
+      config.replace('"src/worker.ts"', JSON.stringify(path.join(cell, nextMain))),
+    )
+    await Bun.write(
+      path.join(project, ".dev.vars"),
+      Object.entries(nextVars)
+        .map((entry) => `${entry[0]}='${entry[1]}'`)
+        .join("\n"),
+    )
+  }
+  await configure(vars, main)
   const socket = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
   const url = `http://127.0.0.1:${socket.port}`
   const port = String(socket.port)
@@ -99,5 +107,32 @@ export const make = async (vars: Readonly<Record<string, string>>, main = "src/w
     await ready()
   }
   await start()
-  return { url, start, kill, logs: () => Promise.resolve(state.output), dispose }
+  return {
+    url,
+    start,
+    kill,
+    logs: () => Promise.resolve(state.output),
+    dispose,
+    restart: async (nextVars, nextMain = main) => {
+      await kill()
+      await configure(nextVars, nextMain)
+      await start()
+    },
+    crash: async () => {
+      const child = state.child
+      if (!child) return
+      const descendants = (pid: number): ReadonlyArray<number> => {
+        const children = new TextDecoder()
+          .decode(Bun.spawnSync(["pgrep", "-P", String(pid)]).stdout)
+          .split("\n")
+          .filter(Boolean)
+          .map(Number)
+        return [...children, ...children.flatMap(descendants)]
+      }
+      for (const pid of [child.pid, ...descendants(child.pid)]) Bun.spawnSync(["kill", "-KILL", String(pid)])
+      await child.exited
+      await state.drained
+      state.child = undefined
+    },
+  }
 }

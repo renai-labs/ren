@@ -331,3 +331,56 @@ it.live("notes how much output was lost when the executor no longer has it", () 
     expect(Number(yield* handle.exitCode)).toBe(0)
   }),
 )
+
+it.live("keeps the output and exit code of two commands running at once apart", () =>
+  Effect.gen(function* () {
+    const spawner = OpenCodeWorkspaceDriver.spawner(yield* connect)
+    const run = (name: string, code: number) =>
+      Effect.gen(function* () {
+        const handle = yield* spawner.spawn(
+          ChildProcess.make("sh", [
+            "-c",
+            `for i in 1 2 3; do echo ${name}$i; echo ${name}-err$i >&2; sleep 0.1; done; exit ${code}`,
+          ]),
+        )
+        const [stdout, stderr, exit] = yield* Effect.all([text(handle.stdout), text(handle.stderr), handle.exitCode], {
+          concurrency: "unbounded",
+        })
+        return { stdout, stderr, exit: Number(exit) }
+      })
+    const [left, right] = yield* Effect.all([run("left", 3), run("right", 4)], { concurrency: "unbounded" })
+    expect(left).toEqual({ stdout: "left1\nleft2\nleft3\n", stderr: "left-err1\nleft-err2\nleft-err3\n", exit: 3 })
+    expect(right).toEqual({
+      stdout: "right1\nright2\nright3\n",
+      stderr: "right-err1\nright-err2\nright-err3\n",
+      exit: 4,
+    })
+  }),
+)
+
+it.live("runs a shell script with the machine's default shell when the brain asked for one the machine lacks", () =>
+  Effect.gen(function* () {
+    const connection = yield* connect
+    expect(connection.hello.shells?.length).toBeGreaterThan(0)
+    const spawner = OpenCodeWorkspaceDriver.spawner(connection)
+    const handle = yield* spawner.spawn(ChildProcess.make("/no/such/dir/ksh", ["-c", "echo $((6 * 7))"]))
+    expect(yield* text(handle.stdout)).toBe("42\n")
+    expect(Number(yield* handle.exitCode)).toBe(0)
+  }),
+)
+
+it.live("leaves a command that is not a shell script alone", () =>
+  Effect.gen(function* () {
+    const spawner = OpenCodeWorkspaceDriver.spawner(yield* connect)
+    const error = yield* spawner.spawn(ChildProcess.make("/no/such/dir/ksh", ["--version"])).pipe(Effect.flip)
+    expect(error.reason._tag).toBe("Unknown")
+  }),
+)
+
+it.live("keeps a shell the machine has, so a script asking for sh runs in sh", () =>
+  Effect.gen(function* () {
+    const spawner = OpenCodeWorkspaceDriver.spawner(yield* connect)
+    const handle = yield* spawner.spawn(ChildProcess.make("/bin/sh", ["-c", 'echo "${ZSH_VERSION:-not zsh}"']))
+    expect(yield* text(handle.stdout)).toBe("not zsh\n")
+  }),
+)

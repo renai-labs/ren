@@ -28,6 +28,11 @@ export const Hello = Schema.Struct({
   workspaceDirectory: Schema.String,
   os: Schema.String,
   arch: Schema.String,
+  shells: Schema.optionalKey(
+    Schema.Array(Schema.String).annotate({
+      description: "The shells this machine has, by absolute path. The first is its default.",
+    }),
+  ),
 }).annotate({ identifier: "Executor.Hello" })
 
 export interface SpawnInput extends Schema.Schema.Type<typeof SpawnInput> {}
@@ -136,6 +141,7 @@ export const ExecutorApi = RpcGroup.make(
     },
     error: Schema.Union([ProcessNotFoundError, OperationFailedError]),
   }),
+  Rpc.make("process.heartbeat", { payload: ProcessRef, error: ProcessNotFoundError }),
   Rpc.make("process.kill", {
     payload: {
       ...ProcessRef,
