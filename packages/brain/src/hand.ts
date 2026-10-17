@@ -267,7 +267,7 @@ export const session = (
 ): SessionHand => {
   const sessionSpawner = (options: SpawnOptions = {}) =>
     ChildProcessSpawner.make((command) =>
-      environments.connect(sessionId, "processes").pipe(
+      environments.connect(sessionId).pipe(
         Effect.mapError(childProcessError("spawn")),
         Effect.flatMap((connection) => {
           const physical = physicalPath(sessionDirectory, connection.directory)
@@ -289,7 +289,7 @@ export const session = (
     spawner: sessionSpawner(),
     spawnerWith: sessionSpawner,
     files: (use) =>
-      environments.connect(sessionId, "files").pipe(
+      environments.connect(sessionId).pipe(
         Effect.flatMap((connection) => use(connection, physicalPath(sessionDirectory, connection.directory))),
         Effect.scoped,
       ),

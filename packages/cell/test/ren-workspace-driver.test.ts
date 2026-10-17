@@ -1,7 +1,7 @@
 import { expect } from "bun:test"
+import { TestAccess } from "@ren/brain/testing"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
-import { EnvironmentAccess } from "@ren/brain/environment-access"
 import { Environments } from "@ren/brain/environments"
 import { Machine, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
@@ -25,10 +25,7 @@ const sessionFor = Effect.fnUntraced(function* (
   sessionId: Session.ID,
 ) {
   const environments = yield* Layer.build(
-    Environments.layer.pipe(
-      Layer.provide(EnvironmentAccess.layerFixed(accesses)),
-      Layer.provide(FetchHttpClient.layer),
-    ),
+    Environments.layer.pipe(Layer.provide(TestAccess.fixed(accesses)), Layer.provide(FetchHttpClient.layer)),
   ).pipe(Effect.map((context) => Context.get(context, Environments.Service)))
   return RenWorkspaceDriver.session(environments, sessionId)
 })

@@ -423,7 +423,6 @@ export const layer = Layer.effect(
       hello: {
         protocol,
         version: manifest.version,
-        capabilities: ["processes", "files"],
         environmentId: config.environmentId,
         workspaceDirectory: workspace,
         os: process.platform,
