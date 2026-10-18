@@ -110,12 +110,60 @@ const adaptGroupSpaceMember = (raw: RawClient["space-member"]) => ({
   archive: EndpointSpaceMemberArchive(raw),
 })
 
+type SessionListRequest = Parameters<RawClient["session"]["session.list"]>[0]
+type SessionListInput = {
+  readonly spaceId: SessionListRequest["query"]["spaceId"]
+  readonly page: SessionListRequest["query"]["page"]
+  readonly pageSize: SessionListRequest["query"]["pageSize"]
+}
+const EndpointSessionList = (raw: RawClient["session"]) => (input: SessionListInput) =>
+  raw["session.list"]({ query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SessionGetRequest = Parameters<RawClient["session"]["session.get"]>[0]
+type SessionGetInput = { readonly idOrSlug: SessionGetRequest["params"]["idOrSlug"] }
+const EndpointSessionGet = (raw: RawClient["session"]) => (input: SessionGetInput) =>
+  raw["session.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type SessionCreateRequest = Parameters<RawClient["session"]["session.create"]>[0]
+type SessionCreateInput = {
+  readonly id: SessionCreateRequest["payload"]["id"]
+  readonly spaceId: SessionCreateRequest["payload"]["spaceId"]
+  readonly message?: SessionCreateRequest["payload"]["message"]
+}
+const EndpointSessionCreate = (raw: RawClient["session"]) => (input: SessionCreateInput) =>
+  raw["session.create"]({ payload: { id: input["id"], spaceId: input["spaceId"], message: input["message"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SessionArchiveRequest = Parameters<RawClient["session"]["session.archive"]>[0]
+type SessionArchiveInput = { readonly id: SessionArchiveRequest["params"]["id"] }
+const EndpointSessionArchive = (raw: RawClient["session"]) => (input: SessionArchiveInput) =>
+  raw["session.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSession = (raw: RawClient["session"]) => ({
+  list: EndpointSessionList(raw),
+  get: EndpointSessionGet(raw),
+  create: EndpointSessionCreate(raw),
+  archive: EndpointSessionArchive(raw),
+})
+
+type ChatAccessRequest = Parameters<RawClient["chat"]["chat.access"]>[0]
+type ChatAccessInput = { readonly id: ChatAccessRequest["params"]["id"] }
+const EndpointChatAccess = (raw: RawClient["chat"]) => (input: ChatAccessInput) =>
+  raw["chat.access"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupChat = (raw: RawClient["chat"]) => ({ access: EndpointChatAccess(raw) })
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
   invitation: adaptGroupInvitation(raw["invitation"]),
   space: adaptGroupSpace(raw["space"]),
   "space-member": adaptGroupSpaceMember(raw["space-member"]),
+  session: adaptGroupSession(raw["session"]),
+  chat: adaptGroupChat(raw["chat"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

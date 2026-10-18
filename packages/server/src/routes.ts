@@ -6,6 +6,8 @@ import { Access } from "@ren/core/access"
 import { BrainHost } from "@ren/core/brain-host"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
+import { Session } from "@ren/core/session"
+import { SessionDirectory } from "@ren/core/session/directory"
 import { SessionSync } from "@ren/core/session-sync"
 import { Space } from "@ren/core/space"
 import { SpaceMember } from "@ren/core/space/member"
@@ -14,12 +16,14 @@ import { HttpEffect, HttpMiddleware, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "./api.js"
 import { Auth } from "./auth.js"
+import { ChatHandler } from "./handlers/chat.js"
 import { HealthHandler } from "./handlers/health.js"
 import { InvitationHandler } from "./handlers/invitation.js"
 import { MeHandler } from "./handlers/me.js"
 import { EnvironmentsHandler } from "./handlers/environments.js"
 import { HostHandler } from "./handlers/host.js"
 import { ModelsHandler } from "./handlers/models.js"
+import { SessionHandler } from "./handlers/session.js"
 import { SpaceHandler } from "./handlers/space.js"
 import { SpaceMemberHandler } from "./handlers/space-member.js"
 import { SyncHandler } from "./handlers/sync.js"
@@ -50,9 +54,23 @@ const Cors = HttpRouter.middleware(
 export const layer = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
-      Layer.provide([HealthHandler, MeHandler, InvitationHandler, SpaceHandler, SpaceMemberHandler]),
+      Layer.provide([
+        HealthHandler,
+        MeHandler,
+        InvitationHandler,
+        SpaceHandler,
+        SpaceMemberHandler,
+        SessionHandler,
+        ChatHandler,
+      ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
-      Layer.provide([Health.layer, Invitation.layer, Space.layer, SpaceMember.layer]),
+      Layer.provide([
+        Health.layer,
+        Invitation.layer,
+        Space.layer,
+        SpaceMember.layer,
+        SessionDirectory.layer.pipe(Layer.provide(Session.layer)),
+      ]),
     ),
     HttpApiBuilder.layer(HostApi).pipe(
       Layer.provide([ModelsHandler, EnvironmentsHandler, HostHandler]),

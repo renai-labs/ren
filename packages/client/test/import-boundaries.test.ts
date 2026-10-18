@@ -30,6 +30,8 @@ describe("public import boundaries", () => {
       never: ["effect", "@ren/schema", "@ren/protocol", ...serverSide],
     },
     { entrypoint: "@ren/client/effect", uses: ["effect", "@ren/schema", "@ren/protocol"], never: serverSide },
+    { entrypoint: "@ren/client/chat", uses: [], never: ["effect", "@ren/schema", "@ren/protocol", ...serverSide] },
+    { entrypoint: "@ren/client/chat/effect", uses: ["effect", "@ren/schema", "@ren/protocol"], never: serverSide },
   ])("$entrypoint imports only what it may", async (row) => {
     const bundle = await bundleInputs(row.entrypoint)
 

@@ -1,8 +1,14 @@
 export * as Session from "./session.js"
 
 import { Effect, Schema, Struct } from "effect"
+import { Auth } from "./auth.js"
 import { Environment } from "./environment.js"
 import { Identifier } from "./identifier.js"
+import { Pagination } from "./pagination.js"
+import { Primitive } from "./primitive.js"
+import { SessionCapabilities } from "./session-capabilities.js"
+import { SessionMessage } from "./session-message.js"
+import { Space } from "./space.js"
 
 const encoder = new TextEncoder()
 
@@ -129,3 +135,52 @@ export const HostState = Schema.Struct({
   waitingSince: Schema.NullOr(Schema.DateTimeUtc),
   nextReconcileAt: Schema.NullOr(Schema.DateTimeUtc),
 }).annotate({ identifier: "Session.HostState" })
+
+export const Status = Schema.Literals(["idle", "busy"]).annotate({ identifier: "Session.Status" })
+export type Status = typeof Status.Type
+
+export interface Info extends Schema.Schema.Type<typeof Info> {}
+export const Info = Schema.Struct({
+  id: ID,
+  spaceId: Space.ID,
+  createdBy: Auth.UserID,
+  harness: Harness,
+  title: Schema.NullOr(Schema.String),
+  status: Status,
+  capabilities: SessionCapabilities.Info,
+  createdAt: Schema.DateTimeUtc,
+  updatedAt: Schema.DateTimeUtc,
+  archivedAt: Schema.NullOr(Schema.DateTimeUtc),
+}).annotate({ identifier: "Session.Info" })
+
+export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
+export const ListInput = Schema.Struct({
+  spaceId: Space.ID,
+  ...Pagination.fields(50),
+}).annotate({ identifier: "Session.ListInput" })
+
+const Page = Pagination.Page(Info).annotate({ identifier: "Session.Page" })
+
+export interface FirstMessage extends Schema.Schema.Type<typeof FirstMessage> {}
+export const FirstMessage = Schema.Struct({
+  id: SessionMessage.ID,
+  text: Schema.NonEmptyString,
+}).annotate({ identifier: "Session.FirstMessage" })
+
+export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
+export const CreateInput = Schema.Struct({
+  id: ID,
+  spaceId: Space.ID,
+  message: Schema.optional(FirstMessage),
+}).annotate({ identifier: "Session.CreateInput" })
+
+export const definition = Primitive.define({
+  name: "session",
+  plural: "sessions",
+  id: ID,
+  info: Info,
+  list: { input: ListInput, page: Page },
+  get: true,
+  create: { input: CreateInput, result: Info },
+  archive: true,
+})

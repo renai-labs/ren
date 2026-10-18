@@ -30,7 +30,7 @@ export class Rejected extends Schema.TaggedError<Rejected>()("Harness.Rejected",
 
 export class Conflict extends Schema.TaggedError<Conflict>()("Harness.Conflict", { message: Schema.String }) {}
 
-export interface Prompt {
+interface Prompt {
   readonly id: SessionMessage.ID
   readonly text: string
   readonly delivery: SessionInbox.Delivery

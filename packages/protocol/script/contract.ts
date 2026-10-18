@@ -6,6 +6,7 @@ const exceptions = new Map([
   ["health", "Server status for clients and load balancers."],
   ["me", "The signed-in user and their active organization."],
   ["invitation", "Invitation preview before the invitee signs in."],
+  ["chat", "Short-lived access to a session's brain for the Chat API; it reads no session field and writes nothing."],
 ])
 
 const operations = [

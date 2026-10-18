@@ -8,11 +8,13 @@
   "exports": {
     ".": "./src/index.ts",
     "./effect": "./src/effect/index.ts",
+    "./chat": "./src/chat/index.ts",
+    "./chat/effect": "./src/chat/effect/index.ts",
     "./react": "./src/react/index.ts"
   },
   "scripts": {
     "generate": "bun run script/generate.ts",
-    "check:generated": "bun run generate && git diff --exit-code -- src/generated src/effect/generated src/react/generated",
+    "check:generated": "bun run generate && git diff --exit-code -- src/generated src/effect/generated src/react/generated src/chat/generated src/chat/effect/generated",
     "test": "bun test --timeout 30000 --only-failures",
     "typecheck": "tsgo --noEmit"
   },

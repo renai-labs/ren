@@ -1,0 +1,140 @@
+import { afterAll, beforeAll, describe, expect } from "bun:test"
+import { SessionToken } from "@ren/brain-api/session-token"
+import { Shared, TestToken } from "@ren/cell/testing"
+import { Testing } from "@ren/db/testing"
+import { Auth } from "@ren/schema/auth"
+import { SessionMessage } from "@ren/schema/session-message"
+import { Effect, Layer, ManagedRuntime, Result, Schema } from "effect"
+import { Base64Url } from "effect/encoding"
+import { Access } from "../src/access.js"
+import { Models } from "../src/models.js"
+import { Session } from "../src/session.js"
+import { SessionDirectory } from "../src/session/directory.js"
+import { Space } from "../src/space.js"
+import { SpaceProvisioning } from "../src/space/provisioning.js"
+import { testEffect } from "./lib/effect.js"
+import { Host } from "./lib/host.js"
+import { Seed } from "./lib/seed.js"
+
+const runtime = ManagedRuntime.make(Shared.layer)
+beforeAll(async () => {
+  settings.CELL_URL = (await runtime.runPromise(Shared.Service)).url
+}, 120_000)
+afterAll(() => runtime.dispose())
+const stub = Shared.stub()
+
+const configured = Shared.access({ stub: Shared.apiKey("sk-configured") })
+
+const models = Layer.succeed(
+  Models.Service,
+  Models.Service.of({
+    catalog: () => Effect.succeed(Models.catalog(configured)),
+    grant: () => Effect.succeed(configured),
+    refreshIfDue: () => Effect.succeedNone,
+    revoke: () => Effect.void,
+  }),
+)
+
+const settings = { CELL_URL: "", CELL_KEYS: TestToken.vars.CELL_KEYS }
+
+const it = testEffect(
+  Layer.unwrap(
+    Effect.sync(() =>
+      Layer.mergeAll(SessionDirectory.layer, Space.layer, SpaceProvisioning.layer).pipe(
+        Layer.provideMerge(Session.layer),
+        Layer.provideMerge(Host.layer(settings, models)),
+        Layer.provideMerge(Access.layer),
+        Layer.provideMerge(Testing.layer),
+      ),
+    ),
+  ),
+)
+
+const page = { page: 1, pageSize: 50 }
+
+const member = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, role = "member") {
+  const provisioning = yield* SpaceProvisioning.Service
+  const seeded = yield* Seed.user()
+  yield* Seed.member(organizationId, seeded.id, role)
+  yield* provisioning.createInitialMemberships(organizationId, seeded)
+  return { userId: seeded.id, organizationId, roles: [role] }
+})
+
+const claims = (token: string) =>
+  Schema.decodeUnknownSync(Schema.fromJsonString(SessionToken.Claims))(
+    Result.getOrThrow(Base64Url.decodeString(token.slice(0, token.indexOf(".")))),
+  )
+
+describe("SessionDirectory", () => {
+  it.live(
+    "a member starts a chat with its first message in a space; members of the space see it, others do not, and its access carries the member",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* SessionDirectory.Service
+        const spaces = yield* Space.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* member(organizationId)
+        const grace = yield* member(organizationId)
+        const team = yield* spaces.create(ada, { name: "Team" })
+        const script = stub.script()
+        const id = Session.ID.create()
+        const created = yield* sessions.create(ada, {
+          id,
+          spaceId: team.id,
+          message: { id: SessionMessage.ID.create(), text: `plan ${script.marker}` },
+        })
+        expect(created).toMatchObject({ id, spaceId: team.id, createdBy: ada.userId, archivedAt: null })
+        expect((yield* Effect.promise(() => script.called())).text).toContain(script.marker)
+        expect((yield* sessions.list(ada, { spaceId: team.id, ...page })).items.map((item) => item.id)).toEqual([id])
+        expect(yield* sessions.list(grace, { spaceId: team.id, ...page })).toMatchObject({ items: [], total: 0 })
+        expect((yield* Effect.flip(sessions.get(grace, id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(sessions.access(grace, id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(sessions.create(grace, { id: Session.ID.create(), spaceId: team.id })))._tag).toBe(
+          "Primitive.NotFound",
+        )
+        const access = yield* sessions.access(ada, id)
+        expect(claims(access.token)).toMatchObject({ sid: id, scope: "client", sub: ada.userId })
+        const read = yield* Effect.promise(() =>
+          fetch(`${access.url}/chat/session/${id}`, { headers: { authorization: TestToken.basic(access.token) } }),
+        )
+        expect(read.status).toBe(200)
+      }),
+  )
+
+  it.live("creating again with the same ID is safe for its creator and a conflict for anyone else", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionDirectory.Service
+      const organizationId = yield* Seed.organization()
+      const ada = yield* member(organizationId)
+      const admin = yield* member(organizationId, "admin")
+      const spaces = yield* Space.Service
+      const spaceId = (yield* spaces.list(ada, page)).items.at(0)?.id
+      if (!spaceId) return yield* Effect.die(new Error("Ada has no space"))
+      const id = Session.ID.create()
+      yield* sessions.create(ada, { id, spaceId })
+      expect(yield* sessions.create(ada, { id, spaceId })).toMatchObject({ id })
+      expect((yield* Effect.flip(sessions.create(admin, { id, spaceId })))._tag).toBe("Primitive.Conflict")
+    }),
+  )
+
+  it.live("its creator or an admin archives a chat, which leaves the list; another member may not", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionDirectory.Service
+      const spaces = yield* Space.Service
+      const organizationId = yield* Seed.organization()
+      const ada = yield* member(organizationId)
+      const grace = yield* member(organizationId)
+      const admin = yield* member(organizationId, "admin")
+      const general = (yield* spaces.list(ada, page)).items.at(0)
+      if (!general) return yield* Effect.die(new Error("Ada has no space"))
+      const first = Session.ID.create()
+      const second = Session.ID.create()
+      yield* sessions.create(ada, { id: first, spaceId: general.id })
+      yield* sessions.create(ada, { id: second, spaceId: general.id })
+      expect((yield* Effect.flip(sessions.archive(grace, first)))._tag).toBe("Primitive.Forbidden")
+      expect((yield* sessions.archive(ada, first)).archivedAt).not.toBeNull()
+      expect((yield* sessions.archive(admin, second)).archivedAt).not.toBeNull()
+      expect((yield* sessions.list(ada, { spaceId: general.id, ...page })).items).toEqual([])
+    }),
+  )
+})

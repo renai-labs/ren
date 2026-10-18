@@ -24,10 +24,8 @@ export interface Accepted extends Schema.Schema.Type<typeof Accepted> {}
 export const Accepted = Schema.Struct({ id: SessionMessage.ID }).annotate({ identifier: "Chat.Accepted" })
 
 export const MessagesQuery = Schema.Struct({
-  limit: Schema.optionalKey(
-    Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 200 })),
-  ),
-  cursor: Schema.optionalKey(Schema.String),
+  limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 200 }))),
+  cursor: Schema.optional(Schema.String),
 }).annotate({ identifier: "Chat.MessagesQuery" })
 
 export const EventGroup = HttpApiGroup.make("event")

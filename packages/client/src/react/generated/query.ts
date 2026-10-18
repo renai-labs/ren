@@ -10,6 +10,11 @@ import type {
   SpaceMemberListInput,
   SpaceMemberCreateInput,
   SpaceMemberArchiveInput,
+  SessionListInput,
+  SessionGetInput,
+  SessionCreateInput,
+  SessionArchiveInput,
+  ChatAccessInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -113,6 +118,52 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["space-member", "archive"] as const,
             mutationFn: (input: SpaceMemberArchiveInput) => client["space-member"]["archive"](input),
+          }),
+      },
+    },
+    session: {
+      list: {
+        queryKey: (input?: SessionListInput) =>
+          input === undefined ? (["session", "list"] as const) : (["session", "list", input] as const),
+        queryOptions: (input: SessionListInput) =>
+          queryOptions({
+            queryKey: ["session", "list", input] as const,
+            queryFn: (context) => client["session"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: SessionGetInput) =>
+          input === undefined ? (["session", "get"] as const) : (["session", "get", input] as const),
+        queryOptions: (input: SessionGetInput) =>
+          queryOptions({
+            queryKey: ["session", "get", input] as const,
+            queryFn: (context) => client["session"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["session", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["session", "create"] as const,
+            mutationFn: (input: SessionCreateInput) => client["session"]["create"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["session", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["session", "archive"] as const,
+            mutationFn: (input: SessionArchiveInput) => client["session"]["archive"](input),
+          }),
+      },
+    },
+    chat: {
+      access: {
+        mutationKey: () => ["chat", "access"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["chat", "access"] as const,
+            mutationFn: (input: ChatAccessInput) => client["chat"]["access"](input),
           }),
       },
     },

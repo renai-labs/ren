@@ -24,7 +24,7 @@ const conflict = (error: Harness.Conflict) => new ConflictError({ message: error
 const frame = <const Type extends "server.connected" | "server.heartbeat">(type: Type) =>
   Effect.map(Clock.currentTimeMillis, (created) => ({ id: `evt_${type}_${created}`, created, type, data: {} }))
 
-export const events = Stream.unwrap(
+const events = Stream.unwrap(
   Effect.gen(function* () {
     const info = yield* Cell.Info
     const harness = yield* Cell.acquire
@@ -62,7 +62,7 @@ const sender = Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
   Option.map(Option.fromNullishOr(request.headers[userHeader]), (userId) => ({ userId })),
 )
 
-export const handlers = Layer.mergeAll(
+const handlers = Layer.mergeAll(
   HttpApiBuilder.group(ChatApi, "event", (group) =>
     Effect.gen(function* () {
       const context = yield* Effect.context<Services>()
