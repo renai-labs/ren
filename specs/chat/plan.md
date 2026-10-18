@@ -184,6 +184,15 @@ Rules:
 - Apply each batch of events in one registry update.
 - Never drop an event for an unknown message silently: mark the transcript stale and re-read (SYNC-100, SYNC-119).
 
+Where the port differs from OpenCode:
+
+- The reducer returns read commands (`Refresh`, `Revalidate`, `Settle`, `Complete`) instead of calling the API; `ChatSession` runs them through `Reads`, the port of `createSync`.
+- A delta for an assistant message the client does not have asks for a debounced transcript re-read; OpenCode drops it.
+- A successful `session.prompt` acknowledges its optimistic row, as the echo does. A prompt sent while the stream is parked misses its echo, and the re-read after the reconnect would otherwise keep the row forever.
+- After `stream.ended` the connection is `parked` and does not reconnect until `wake`, which every send calls. The host calls `wake` when the member returns, and `resync` on visibility and network changes.
+- The connection re-reads every read the UI asked for after each `server.connected`, so views do not track the connection themselves.
+- The client token goes in Basic auth (`ren:<token>`), which the cell worker reads.
+
 ## 7. `@ren/ui` and `@ren/app`
 
 `@ren/ui` gets the visual pieces, each with a story and a spec, at ren-v1 parity ([inventory 05](inventory/05-ren-v1.md#components-list)): transcript rows (user, assistant text, reasoning, tool, tool group, file change, notice, divider, retry, error), the composer (editor, attachments, toolbar, queue panel, alternate delivery), the permission and question docks, the jump-to-latest button, and the timeline scroller. Rendering logic that needs the DOM (streaming markdown blocks, pacing, scroll follow, virtualization) lives here, ported from `session-ui/src/components/*` and `app/src/session/timeline/*`.

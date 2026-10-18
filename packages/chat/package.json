@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ren/chat",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "bun ../../script/test.ts",
+    "typecheck": "tsgo -b"
+  },
+  "dependencies": {
+    "@ren/client": "workspace:*",
+    "@ren/schema": "workspace:*",
+    "effect": "catalog:"
+  },
+  "peerDependencies": {
+    "@effect/atom-react": "catalog:",
+    "react": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@effect/atom-react": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@effect/atom-react": "catalog:",
+    "@opencode/schema": "catalog:",
+    "@ren/cell": "workspace:*",
+    "@types/bun": "catalog:",
+    "@types/react": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "react": "catalog:"
+  }
+}

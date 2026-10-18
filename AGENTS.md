@@ -25,9 +25,9 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 - `brain-api` is the internal contract between Ren, a session's host and an environment's executor: it depends only on `schema`; `core` calls it and `cell` serves it. `cell` depends only on `schema`, `brain-api`, `brain` and the Chat API (`@ren/protocol/chat`, which it serves to clients).
 - `executor` runs on an environment's machine and serves the Executor API. It depends only on `schema` and `brain-api`.
 - `brain` holds brain code that is the same on every host, such as the OpenCode `ren` driver. It depends only on `schema` and `brain-api`.
-- `client` may depend only on `schema` and `protocol`. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `schema`, `ui` and `util`, and uses `better-auth/client` for auth flows.
+- `client` may depend only on `schema` and `protocol`. `chat` builds on `client`, `schema` and `protocol` and is the live chat runtime for every client platform. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `chat`, `schema`, `ui` and `util`, and uses `better-auth/client` for auth flows.
 - `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
-- `client`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server` or `brain-api`.
+- `client`, `chat`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server` or `brain-api`.
 - `httpapi-codegen` stays independent of every Ren package.
 - `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them.
 
