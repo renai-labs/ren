@@ -23,7 +23,7 @@ None yet.
 
 ## Decision records
 
-None yet.
+- [Agents](agents/v1.md): agents as settings on a session, the waterfall of defaults, and the decisions for v1.
 
 ## Historical
 
