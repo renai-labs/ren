@@ -23,7 +23,7 @@ None yet.
 
 ## Decision records
 
-None yet.
+- [Chat](chat/plan.md): the chat stack across platforms and harnesses, and the [inventory](chat/inventory/README.md) of edge cases to port.
 
 ## Historical
 
