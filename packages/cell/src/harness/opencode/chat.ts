@@ -19,7 +19,10 @@ const One = Schema.Struct({ data: Schema.Unknown })
 const unwrap = (raw: unknown) => Option.map(Schema.decodeUnknownOption(One)(raw), (one) => one.data)
 const Page = Schema.Struct({
   data: Schema.Array(Schema.Unknown),
-  cursor: Schema.Struct({ previous: Schema.optionalKey(Schema.String), next: Schema.optionalKey(Schema.String) }),
+  cursor: Schema.Struct({
+    previous: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    next: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  }),
 })
 const Active = Schema.Struct({ data: Schema.Record(Schema.String, Schema.Unknown) })
 const Model = Schema.Struct({
@@ -158,7 +161,10 @@ export const make = (fetch: (request: Request) => Promise<Response>): Harness.Ch
         const decoded = yield* Schema.decodeUnknownEffect(Page)(raw).pipe(Effect.orDie)
         return {
           items: yield* list({ data: decoded.data }, Translate.message),
-          cursor: decoded.cursor,
+          cursor: {
+            ...(decoded.cursor.previous && { previous: decoded.cursor.previous }),
+            ...(decoded.cursor.next && { next: decoded.cursor.next }),
+          },
         } satisfies SessionMessage.Page
       }),
     message: (sessionId, messageId) =>
