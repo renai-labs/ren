@@ -11,6 +11,7 @@ interface Behaviour {
   readonly dripMs?: number
   readonly tool?: { readonly name: string; readonly input: unknown }
   readonly summary?: string
+  readonly reasoning?: string
 }
 
 export interface Call {
@@ -165,11 +166,21 @@ async function* reply(body: ChatRequest, behaviour: Behaviour, gate: Promise<voi
   yield chunk({ role: "assistant", content: "" })
   await pause()
   if (behaviour.malformed) yield encoder.encode("data: {not json\n\n")
+  if (behaviour.reasoning && !answered) yield chunk({ reasoning_content: behaviour.reasoning })
   if (tool) {
-    const call = { name: tool.name, arguments: JSON.stringify(tool.input) }
+    const input = JSON.stringify(tool.input)
+    const half = Math.floor(input.length / 2)
     yield chunk({
-      tool_calls: [{ index: 0, id: `call_${crypto.randomUUID().slice(0, 8)}`, type: "function", function: call }],
+      tool_calls: [
+        {
+          index: 0,
+          id: `call_${crypto.randomUUID().slice(0, 8)}`,
+          type: "function",
+          function: { name: tool.name, arguments: input.slice(0, half) },
+        },
+      ],
     })
+    yield chunk({ tool_calls: [{ index: 0, function: { arguments: input.slice(half) } }] })
   }
   yield* words.slice(0, 1).map((word) => chunk({ content: word }))
   if (behaviour.cut) {

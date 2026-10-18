@@ -95,16 +95,19 @@ New modules in `@ren/schema`, copied from `@opencode/schema` 2.0.27 and renamed 
 | `session-message`                               | Message union (user, synthetic, system, skill, shell, assistant, compaction, idle, agent- and model-switched), content (text, reasoning, tool and its four states) | `session-message.js`           |
 | `session-inbox`                                 | Pending input: delivery `steer \| queue`, admitted items                                                                                                           | `session-inbox.js`             |
 | `session-event`                                 | The allowlisted event union and the stream envelope (`server.connected`, heartbeat, `stream.ended`)                                                                | `session-event.js`, `event.js` |
-| `session-status`                                | `idle \| busy \| retry` plus Ren's `parked` (cell closed)                                                                                                          | `session-status-event.js`      |
+| `session-status`                                | `idle \| busy \| retry`, read per session family. Not an event: OpenCode v2 does not emit `session.status`. "Parked" is a client state after `stream.ended`.       | `session-status-event.js`      |
 | `permission` (add to the agents module), `form` | Permission request and reply; form (question) fields, state and reply                                                                                              | `permission.js`, `form.js`     |
 | `session-capabilities`                          | The capability flags (C6)                                                                                                                                          | new                            |
+| `session-info`, `session-model`                 | The harness view of a session (title, cost, tokens, revert, capabilities); model references and the `model.list` item                                              | `session.js`, `model.js`       |
 | `session-error`                                 | `{ type, message, status? }`                                                                                                                                       | `session-error.js`             |
 
 Ren additions to the copied shapes:
 
 - User messages carry `sender: { userId }` (spaces have several members). The cell sets it from `metadata.userID`.
 - Session info comes from Ren (`space`, `createdBy`, `harness`, `capabilities`) and is merged with OpenCode's title, cost, tokens and status.
-- Dropped: `location-switched`, `session.moved`, instructions text, everything outside one session.
+- Dropped: `location-switched`, `session.moved`, instructions text, provider state, everything outside one session.
+- The event allowlist is the `SessionEvent.Event` union itself: the brain decodes each OpenCode event with it, which drops unknown types and strips unknown fields (`cell/src/harness/opencode/translate.ts`).
+- Client-minted message IDs use OpenCode's ascending format (`SessionMessage.ID.create()`), since revert compares IDs.
 
 ## 4. Brain: `ChatApi`
 

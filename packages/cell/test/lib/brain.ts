@@ -133,6 +133,7 @@ export const make = Effect.fnUntraced(function* (
       Effect.promise(() => web.fetch(new Request(`http://cell${path}`, init))),
     store: Context.get(services, ModelStore.Service),
     opencode,
+    harness: host.fetch,
     credentials: host.credentials,
     start: (input: Partial<Session.StartInput> = {}) =>
       client.brain["brain.start"]({
