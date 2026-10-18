@@ -90,7 +90,14 @@ export const ExternalField = Schema.Struct({
   description: Schema.optionalKey(Schema.String),
 }).annotate({ identifier: "Form.ExternalField" })
 
-export const Field = Schema.Union([StringField, NumberField, IntegerField, BooleanField, MultiselectField, ExternalField])
+export const Field = Schema.Union([
+  StringField,
+  NumberField,
+  IntegerField,
+  BooleanField,
+  MultiselectField,
+  ExternalField,
+])
   .pipe(Schema.toTaggedUnion("type"))
   .annotate({ identifier: "Form.Field" })
 export type Field = StringField | NumberField | IntegerField | BooleanField | MultiselectField | ExternalField
@@ -103,9 +110,11 @@ export const Info = Schema.Struct({
   fields: Schema.NonEmptyArray(Field),
 }).annotate({ identifier: "Form.Info" })
 
-export const Value = Schema.Union([Schema.String, Schema.Number, Schema.Boolean, Schema.Array(Schema.String)]).annotate({
-  identifier: "Form.Value",
-})
+export const Value = Schema.Union([Schema.String, Schema.Number, Schema.Boolean, Schema.Array(Schema.String)]).annotate(
+  {
+    identifier: "Form.Value",
+  },
+)
 export type Value = typeof Value.Type
 
 export const Answer = Schema.Record(Schema.String, Value).annotate({ identifier: "Form.Answer" })
@@ -113,4 +122,3 @@ export type Answer = typeof Answer.Type
 
 export interface Reply extends Schema.Schema.Type<typeof Reply> {}
 export const Reply = Schema.Struct({ answer: Answer }).annotate({ identifier: "Form.Reply" })
-

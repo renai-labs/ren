@@ -39,6 +39,7 @@ const usage = {
 }
 
 export const Connected = define("server.connected", {})
+export const Heartbeat = define("server.heartbeat", {})
 export const Ended = define("stream.ended", { reason: Schema.Literals(["idle", "closing"]) })
 
 export const Created = define("session.created", {
@@ -253,5 +254,5 @@ export type Type = Event["type"]
 
 export const types: ReadonlySet<string> = new Set(definitions.map((definition) => definition.fields.type.literal))
 
-export const Frame = Schema.Union([Connected, Ended, Event]).annotate({ identifier: "SessionEvent.Frame" })
+export const Frame = Schema.Union([Connected, Heartbeat, Ended, Event]).annotate({ identifier: "SessionEvent.Frame" })
 export type Frame = typeof Frame.Type

@@ -111,7 +111,7 @@ Ren additions to the copied shapes:
 
 ## 4. Brain: `ChatApi`
 
-Defined in `@ren/protocol/chat` (C14), one group per area, following the protocol package's rules. Served by the brain for a `client`-scope token, for its session and that session's children. Replaces the OpenCode deny-list in `cell/src/harness/opencode/routes.ts`. "Slice" ships in §9 steps 1–6; "B" ships with its inventory area.
+Defined in `@ren/protocol/chat` (C14) as three groups (`event`, `model`, `session`), all under `/chat/*`. Served by the brain for its session and that session's children. The worker lets a `client`-scope token reach `/chat/*` only, answers CORS for it, and passes the token's `sub` (the member) to the brain, which records it as the message's sender. Raw OpenCode routes are for `server`-scope tokens only. Replaces the OpenCode deny-list in `cell/src/harness/opencode/routes.ts`. "Slice" ships in §9 steps 1–6; "B" ships with its inventory area.
 
 Reads (C17):
 

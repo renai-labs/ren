@@ -16,6 +16,7 @@ import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
 import { Sync } from "../../sync.js"
 import { Harness } from "../harness.js"
+import { OpenCodeChat } from "./chat.js"
 import { Credentials } from "./credentials.js"
 import { Host } from "./host.js"
 import { OpenCodeRows } from "./opencode-rows.js"
@@ -41,6 +42,8 @@ const missingNotes: Readonly<Record<Environment.Capability, string>> = {
 }
 
 const environmentInstruction = "ren.environment"
+
+const renModelKey = "ren.model"
 
 const notSupported = (sessionId: string) =>
   new BrainRejectedError({ message: `Session ${sessionId} cannot change its environment: not supported yet` })
@@ -154,6 +157,22 @@ const checkEnvironment = Effect.fn("OpenCodeHarness.checkEnvironment")(function*
   return true
 })
 
+const applyRenModel = Effect.fn("OpenCodeHarness.applyRenModel")(function* (
+  client: OpenCodeClient,
+  sessionID: Session.ID,
+  model: Model.Ref,
+  session: Option.Option<Session.Info>,
+) {
+  const metadata = Option.match(session, {
+    onNone: (): Session.Metadata => ({}),
+    onSome: (found) => found.metadata ?? {},
+  })
+  const renModel = `${model.providerID}/${model.id}#${model.variant ?? ""}`
+  if (metadata[renModelKey] === renModel) return
+  if (Option.isSome(session)) yield* client.session.switchModel({ sessionID, model }).pipe(Effect.orDie)
+  yield* client.session.update({ sessionID, metadata: { ...metadata, [renModelKey]: renModel } }).pipe(Effect.orDie)
+})
+
 const start = Effect.fn("OpenCodeHarness.start")(function* (
   client: OpenCodeClient,
   host: Host.Instance,
@@ -193,8 +212,8 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
     yield* client.session.update({ sessionID, title: input.title, permissions }).pipe(Effect.orDie)
     if (agent && agent !== session.value.agent)
       yield* client.session.switchAgent({ sessionID, agent }).pipe(Effect.orDie)
-    if (model) yield* client.session.switchModel({ sessionID, model }).pipe(Effect.orDie)
   }
+  if (model) yield* applyRenModel(client, sessionID, model, session)
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
     { ...input.instructions, ...environmentInstructions(host, input.sessionId, placement) },
@@ -288,6 +307,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
 
   return {
     fetch: host.fetch,
+    chat: OpenCodeChat.make(host.fetch),
     configure: (next: ReadonlyArray<Models.Endpoint>) => mutations.withPermit(configure(next)),
     start: (input: StartInput) =>
       mutations.withPermit(

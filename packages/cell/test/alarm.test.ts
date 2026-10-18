@@ -21,6 +21,7 @@ import { TestClock } from "effect/testing"
 import { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { Cell } from "../src/cell.js"
 import { Harness } from "../src/harness/harness.js"
+import { OpenCodeChat } from "../src/harness/opencode/chat.js"
 import { Sync } from "../src/sync.js"
 import { BrainTest } from "./lib/brain.js"
 import { Shared } from "./lib/shared.js"
@@ -58,6 +59,8 @@ const setup = Effect.gen(function* () {
       ALARM_INTERVAL_MS: 30_000,
       WAIT_BUDGET_MS: 600_000,
       PARK_AFTER_MS: 600_000,
+      CHAT_IDLE_MS: 120_000,
+      CHAT_HEARTBEAT_MS: 15_000,
     },
     storage: {
       getAlarm: () => Promise.resolve(current.alarm),
@@ -68,8 +71,10 @@ const setup = Effect.gen(function* () {
       },
     },
   })
+  const fetch = () => Promise.resolve(new Response(null))
   const instance: Harness.Instance = {
-    fetch: () => Promise.resolve(new Response(null)),
+    fetch,
+    chat: OpenCodeChat.make(fetch),
     configure: () => Effect.die(new Error("alarm must not configure models")),
     start: () => Effect.die(new Error("alarm must not start sessions")),
     send: () => Effect.die(new Error("alarm must not send messages")),

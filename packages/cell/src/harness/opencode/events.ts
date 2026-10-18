@@ -13,9 +13,15 @@ export const stream = (fetch: (request: Request) => Promise<Response>) =>
       ).pipe(Effect.orDie)
       const body = response.body
       if (!body) return yield* Effect.die(new Error("OpenCode's event stream has no body"))
-      return Stream.fromReadableStream({ evaluate: () => body, onError: (error) => error }).pipe(
+      return Stream.fromReadableStream({
+        evaluate: () => body,
+        onError: (cause) => new Error("OpenCode's event stream failed", { cause }),
+      }).pipe(
         Stream.decodeText,
         Stream.pipeThroughChannel(Sse.decode()),
+        Stream.mapError((cause) =>
+          cause instanceof Error ? cause : new Error("OpenCode's event stream failed", { cause }),
+        ),
         Stream.map((event) => decodeJson(event.data)),
         Stream.filter(Option.isSome),
         Stream.map((decoded) => decoded.value),

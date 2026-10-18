@@ -90,10 +90,29 @@ const send = Effect.fnUntraced(function* (
   )
 })
 
-const surface = (access: Session.ClientAccess, path: string, method = "GET") =>
-  Effect.promise(() =>
-    fetch(`${access.url}${path}`, { method, headers: { authorization: TestToken.basic(access.token) } }),
-  )
+const surface = (access: Session.ClientAccess, path: string) =>
+  Effect.promise(() => fetch(`${access.url}${path}`, { headers: { authorization: TestToken.basic(access.token) } }))
+
+const succeeded = (access: Session.ClientAccess) =>
+  Effect.promise(async () => {
+    const response = await fetch(`${access.url}/chat/event`, {
+      headers: { authorization: TestToken.basic(access.token) },
+    })
+    const reader = response.body?.pipeThrough(new TextDecoderStream()).getReader()
+    if (!reader) throw new Error("the event stream has no body")
+    const read = async (text: string): Promise<void> => {
+      if (text.includes('"type":"server.connected"') && text.includes("session.execution.succeeded")) {
+        await reader.cancel()
+        return
+      }
+      const next = await reader.read()
+      if (next.done) throw new Error("the event stream ended")
+      return read(text + next.value)
+    }
+    const first = await reader.read()
+    if (first.done) throw new Error("the event stream ended")
+    return { done: read(first.value) }
+  })
 
 const claims = (token: string) =>
   Schema.decodeUnknownSync(Schema.fromJsonString(SessionToken.Claims))(
@@ -246,9 +265,10 @@ describe("BrainHost", () => {
         yield* Effect.gen(function* () {
           const brain = yield* BrainHost.Service
           yield* start(sessionId)
+          const finished = yield* succeeded(yield* brain.access(sessionId))
           yield* send(sessionId, `first ${first.marker}`)
           yield* Effect.promise(() => first.called())
-          yield* surface(yield* brain.access(sessionId), `/api/experimental/session/${sessionId}/wait`, "POST")
+          yield* Effect.promise(() => finished.done)
           yield* Ref.set(refreshes, [Shared.access({ stub: Shared.apiKey("sk-refreshed") })])
           yield* send(sessionId, `second ${second.marker}`)
           yield* Effect.promise(() => second.called())
@@ -330,14 +350,14 @@ describe("BrainHost", () => {
   })
 
   describe("access", () => {
-    it.live("its token reads the started session through the client surface", () =>
+    it.live("its token reads the started session through the Chat API", () =>
       Effect.gen(function* () {
         const brain = yield* BrainHost.Service
         const sessionId = Session.ID.create()
         expect(yield* start(sessionId)).toEqual({ sessionId, harness: "opencode" })
-        const response = yield* surface(yield* brain.access(sessionId), `/api/session/${sessionId}`)
+        const response = yield* surface(yield* brain.access(sessionId), `/chat/session/${sessionId}`)
         expect(response.status).toBe(200)
-        expect(yield* Effect.promise(() => response.json())).toMatchObject({ data: { id: sessionId } })
+        expect(yield* Effect.promise(() => response.json())).toMatchObject({ id: sessionId })
       }),
     )
   })

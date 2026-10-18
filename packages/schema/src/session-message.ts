@@ -334,16 +334,7 @@ export const Info = Schema.Union([
   Idle,
 ]).annotate({ identifier: "SessionMessage.Info" })
 export type Info =
-  | AgentSwitched
-  | ModelSwitched
-  | User
-  | Synthetic
-  | System
-  | Skill
-  | Shell
-  | Assistant
-  | Compaction
-  | Idle
+  AgentSwitched | ModelSwitched | User | Synthetic | System | Skill | Shell | Assistant | Compaction | Idle
 export type Type = Info["type"]
 
 export interface Page extends Schema.Schema.Type<typeof Page> {}
