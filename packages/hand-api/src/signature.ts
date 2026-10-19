@@ -1,7 +1,7 @@
 export * as Signature from "./signature.js"
 
 import { Clock, Effect, Option, Schema } from "effect"
-import { decodeProtectedHeader, type JWTPayload, jwtVerify, SignJWT } from "jose"
+import { decodeProtectedHeader, jwtVerify, SignJWT } from "jose"
 
 const keyAlgorithm = "Ed25519"
 const tokenAlgorithm = "EdDSA"
@@ -57,7 +57,10 @@ export const publicKeyOf = Effect.fn("Signature.publicKeyOf")(function* (key: Pr
   return yield* Schema.decodeUnknownEffect(PublicKey)({ id: key.id, key: jwk.x }).pipe(Effect.orDie)
 })
 
-export const sign = Effect.fnUntraced(function* (key: PrivateKey, claims: JWTPayload) {
+export const sign = Effect.fn("Signature.sign")(function* (
+  key: PrivateKey,
+  claims: { readonly exp: number; readonly [claim: string]: Schema.Json },
+) {
   const subtle = yield* Effect.promise(() =>
     crypto.subtle.importKey("pkcs8", new Uint8Array(key.key), keyAlgorithm, false, ["sign"]),
   )

@@ -1,19 +1,14 @@
-import { Models } from "@ren/schema/models"
+import { Brain } from "@ren/schema/brain"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Schema, Struct } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { BrainRejectedError, ForbiddenError, ModelsNotConfiguredError, SessionNotStartedError } from "./errors.js"
 
-export const ModelsBody = Schema.Struct({
-  access: Models.Access,
-  hostToken: Schema.optionalKey(Schema.NonEmptyString),
-}).annotate({ identifier: "Brain.ModelsBody" })
-export type ModelsBody = typeof ModelsBody.Type
-
 export const StartBody = Session.StartInput.mapFields((fields) => ({
   ...Struct.omit(fields, ["environmentId"]),
   directory: Schema.optionalKey(
-    Schema.String.check(Schema.isStartingWith("/")).annotate({
+    Hand.Directory.annotate({
       description: "The session’s directory on its hand. Only a session with an environment has one.",
     }),
   ),
@@ -52,7 +47,7 @@ const BrainGroup = HttpApiGroup.make("brain")
   )
   .add(
     HttpApiEndpoint.put("brain.configureModels", "/ren/models", {
-      payload: ModelsBody,
+      payload: Brain.ModelGrant,
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.configureModels",

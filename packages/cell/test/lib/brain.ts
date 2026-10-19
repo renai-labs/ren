@@ -5,7 +5,7 @@ import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/brain-api/brain-api"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Ref, Schema, Semaphore } from "effect"
+import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Redacted, Ref, Schema, Semaphore } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -114,7 +114,10 @@ const make = Effect.gen(function* () {
     issuer,
     configureModels: (apiKeys?: Readonly<Record<string, Models.ApiKey>>, hostToken?: string) =>
       client.brain["brain.configureModels"]({
-        payload: { access: Shared.access(apiKeys, Shared.stub().url), ...(hostToken && { hostToken }) },
+        payload: {
+          access: Shared.access(apiKeys, Shared.stub().url),
+          ...(hostToken && { hostToken: Redacted.make(hostToken) }),
+        },
       }),
     removeModels: client.brain["brain.removeModels"](),
     state: client.brain["brain.state"](),

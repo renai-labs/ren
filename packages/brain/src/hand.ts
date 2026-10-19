@@ -78,7 +78,7 @@ export type KilledBySignal = (signal: Signal.Name) => unknown
 export interface SpawnOptions {
   readonly outputFile?: string
   readonly window?: OutputWindow
-  readonly onSkip?: (skipped: { readonly bytes: number; readonly newlines: number }) => void
+  readonly onSkip?: (skipped: { readonly length: number; readonly newlines: number }) => void
 }
 
 export const spawner = (
@@ -145,10 +145,10 @@ export const spawner = (
         if (event.type === "skip") {
           const reached = yield* Ref.get(position)
           if (event.offset > reached) yield* Queue.offer(stderrChunks, lostNotice(event.offset - reached))
-          const end = event.offset + event.bytes
+          const end = event.offset + event.length
           if (end <= reached) return
           yield* Ref.set(position, end)
-          options.onSkip?.({ bytes: end - Math.max(reached, event.offset), newlines: event.newlines })
+          options.onSkip?.({ length: end - Math.max(reached, event.offset), newlines: event.newlines })
           return
         }
         if (event.type === "exit") {

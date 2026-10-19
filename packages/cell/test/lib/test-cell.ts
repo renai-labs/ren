@@ -1,8 +1,9 @@
 export * as TestCell from "./test-cell.js"
 
 import { OpenCode } from "@opencode/client"
-import { BrainApi, ModelsBody } from "@ren/brain-api/brain-api"
-import { DateTime, Effect, Schema } from "effect"
+import { BrainApi } from "@ren/brain-api/brain-api"
+import { Brain } from "@ren/schema/brain"
+import { DateTime, Effect, Redacted, Schema } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import type { Models } from "@ren/schema/models"
@@ -63,7 +64,9 @@ export const make = async (url: string) => {
       fetch(`${url}/ren/models`, {
         method: "PUT",
         headers: { authorization: server, "content-type": "application/json" },
-        body: JSON.stringify(Schema.encodeSync(ModelsBody)({ access, ...(hostToken && { hostToken }) })),
+        body: JSON.stringify(
+          Schema.encodeSync(Brain.ModelGrant)({ access, ...(hostToken && { hostToken: Redacted.make(hostToken) }) }),
+        ),
       }),
     removeModels: () => fetch(`${url}/ren/models`, { method: "DELETE", headers: { authorization: server } }),
     server,

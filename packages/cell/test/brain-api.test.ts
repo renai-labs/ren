@@ -10,7 +10,7 @@ import {
 import { testEffect } from "@ren/executor/testing"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Cause, Effect, type Scope } from "effect"
+import { Cause, Effect, Redacted, type Scope } from "effect"
 import { BrainTest } from "./lib/brain.js"
 import { ModelsTest } from "./lib/models.js"
 import { Shared } from "./lib/shared.js"
@@ -569,7 +569,7 @@ it.live("a key inside OpenCode's refresh window is renewed through the host befo
       yield* brain.issuer.next,
       ModelsTest.granted({
         access: Shared.access({ stub: Shared.apiKey("renewed", Date.now() + 3_600_000) }, Shared.stub().url),
-        hostToken: "next-token",
+        hostToken: Redacted.make("next-token"),
       }),
     )
     yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })

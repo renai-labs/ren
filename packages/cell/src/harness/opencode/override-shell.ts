@@ -194,7 +194,7 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
                   outputFile: file,
                   window: { maxBytes: keep, intervalMs: readEvery },
                   onSkip: (skipped) => {
-                    output.size += skipped.bytes
+                    output.size += skipped.length
                     output.newlines += skipped.newlines
                     output.tail = new Uint8Array()
                   },

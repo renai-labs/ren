@@ -1,6 +1,6 @@
 export * as BrainHost from "./brain-host.js"
 
-import { BrainApi, type ModelsBody, type StartBody } from "@ren/brain-api/brain-api"
+import { BrainApi, type StartBody } from "@ren/brain-api/brain-api"
 import {
   BrainRejectedError,
   HandNotFoundError,
@@ -12,6 +12,7 @@ import {
 } from "@ren/brain-api/errors"
 import { SessionToken } from "@ren/brain-api/session-token"
 import type { Auth } from "@ren/schema/auth"
+import type { Brain } from "@ren/schema/brain"
 import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
@@ -34,7 +35,8 @@ import {
 } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
-import { CurrentHost, HostAuthentication, type HostTokenBody } from "@ren/brain-api/host-api"
+import type { Host } from "@ren/brain-api/host"
+import { CurrentHost, HostAuthentication } from "@ren/brain-api/host-api"
 import { Hands } from "./hands.js"
 import { Models } from "./models.js"
 
@@ -71,8 +73,8 @@ export interface Interface {
     organizationId: Auth.OrganizationID,
   ) => Effect.Effect<void, BrainUnavailable | BrainRejectedError>
   readonly authenticateHost: (hostToken: Redacted.Redacted) => Effect.Effect<CurrentHost["Service"], ForbiddenError>
-  readonly refreshModels: (host: CurrentHost["Service"]) => Effect.Effect<ModelsBody, ModelsUnavailableError>
-  readonly refreshHostToken: (host: CurrentHost["Service"]) => Effect.Effect<HostTokenBody>
+  readonly refreshModels: (host: CurrentHost["Service"]) => Effect.Effect<Brain.ModelGrant, ModelsUnavailableError>
+  readonly refreshHostToken: (host: CurrentHost["Service"]) => Effect.Effect<Host.Refreshed>
   readonly accessHand: (
     host: CurrentHost["Service"],
   ) => Effect.Effect<Hand.Access, HandNotFoundError | HandUnavailableError>
@@ -172,7 +174,7 @@ export const layer = Layer.effect(
         yield* DateTime.now,
       )
       const exp = Math.floor(DateTime.toEpochMillis(DateTime.addDuration(lastExpiry, hostTokenLifetime)) / 1000)
-      return { access, hostToken: yield* hostToken(subject, exp) } satisfies ModelsBody
+      return { access, hostToken: Redacted.make(yield* hostToken(subject, exp)) } satisfies Brain.ModelGrant
     })
 
     const configure = (subject: Models.Subject, access: Models.Access) =>
@@ -277,7 +279,7 @@ export const layer = Layer.effect(
         const exp = Math.floor(
           DateTime.toEpochMillis(DateTime.addDuration(yield* DateTime.now, hostTokenLifetime)) / 1000,
         )
-        return { hostToken: yield* hostToken(host, exp) }
+        return { hostToken: Redacted.make(yield* hostToken(host, exp)) }
       }),
       accessHand: Effect.fn("BrainHost.accessHand")(function* (host: CurrentHost["Service"]) {
         return yield* hands.access(host).pipe(

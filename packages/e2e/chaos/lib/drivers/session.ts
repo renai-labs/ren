@@ -1,11 +1,11 @@
 export * as SessionDriver from "./session.js"
 
 import type { OpenCodeClient, OpenCodeEvent, SessionMessageInfo } from "@opencode/client"
-import { ModelsBody } from "@ren/brain-api/brain-api"
+import { Brain } from "@ren/schema/brain"
 import { TestCell } from "@ren/cell/testing"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Schema } from "effect"
+import { Redacted, Schema } from "effect"
 import type { ModelProvider } from "../provider/model.js"
 import { Wait } from "../wait.js"
 
@@ -22,7 +22,7 @@ export interface SendOptions {
   readonly delivery?: Session.Delivery
 }
 
-const encodeModels = Schema.encodeSync(ModelsBody)
+const encodeModels = Schema.encodeSync(Brain.ModelGrant)
 
 export const messages = async (opencode: OpenCodeClient, sessionID: string) =>
   (await opencode.message.list({ sessionID, order: "asc", limit: 200 })).data
@@ -62,7 +62,9 @@ export const make = async (url: string, provider?: ModelProvider.Instance, repai
     fetch(`${url}/ren/models`, {
       method: "PUT",
       headers: { authorization: cell.server, "content-type": "application/json" },
-      body: JSON.stringify(encodeModels({ access, ...(hostToken !== undefined && { hostToken }) })),
+      body: JSON.stringify(
+        encodeModels({ access, ...(hostToken !== undefined && { hostToken: Redacted.make(hostToken) }) }),
+      ),
     })
   const send = async (text: string, options: SendOptions = {}) => {
     const messageId = options.messageId ?? Session.MessageID.create()

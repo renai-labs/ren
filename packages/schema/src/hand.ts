@@ -6,9 +6,11 @@ import { Identifier } from "./identifier.js"
 export const ID = Identifier.make("hnd", "Hand.ID")
 export type ID = typeof ID.Type
 
+export const Directory = Schema.String.check(Schema.isStartingWith("/")).annotate({ identifier: "Hand.Directory" })
+
 export interface Access extends Schema.Schema.Type<typeof Access> {}
 export const Access = Schema.Struct({
-  directory: Schema.String.check(Schema.isStartingWith("/")),
+  directory: Directory,
   url: Schema.URL,
   token: Schema.Redacted(Schema.String),
   expiresAt: Schema.DateTimeUtc,

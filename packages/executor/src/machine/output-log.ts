@@ -126,7 +126,7 @@ export const read = (log: Log, cursor?: number, window?: OutputWindow): Stream.S
                   {
                     type: "skip" as const,
                     offset: state.position,
-                    bytes: from - state.position,
+                    length: from - state.position,
                     newlines: newlinesAt(log, from) - state.newlines,
                   },
                 ]

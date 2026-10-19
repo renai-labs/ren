@@ -120,7 +120,10 @@ test.each<
       yield* change(subject.store)
       yield* subject.reply(
         exchange,
-        ModelsTest.granted({ access: grant({ stub: Shared.apiKey("late-key", 2 * renewed) }), hostToken: "late-host" }),
+        ModelsTest.granted({
+          access: grant({ stub: Shared.apiKey("late-key", 2 * renewed) }),
+          hostToken: Redacted.make("late-host"),
+        }),
       )
       expect(key(yield* Fiber.join(pending))).not.toEqual(Option.some("late-key"))
       expect(yield* subject.store.readHostToken).toEqual(hostToken)
@@ -144,7 +147,7 @@ todo(
       exchange,
       ModelsTest.granted({
         access: grant({ stub: Shared.apiKey("stub-new", renewed), anthropic: Shared.apiKey("anthropic-new", renewed) }),
-        hostToken: "host",
+        hostToken: Redacted.make("host"),
       }),
     )
     yield* Fiber.join(pending)
@@ -169,7 +172,7 @@ it.effect("concurrent refreshes of one or two expiring endpoints are served by o
       yield* subject.next,
       ModelsTest.granted({
         access: grant({ stub: Shared.apiKey("stub-new", renewed), anthropic: Shared.apiKey("anthropic-new", renewed) }),
-        hostToken: "new-host",
+        hostToken: Redacted.make("new-host"),
       }),
     )
     expect((yield* Fiber.join(pending)).map(key)).toEqual([
@@ -217,7 +220,10 @@ it.effect("a renewal that omits the requested endpoint removes it and returns no
     )
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     const remaining = grant({ anthropic: Shared.apiKey("anthropic-new", renewed) })
-    yield* subject.reply(yield* subject.next, ModelsTest.granted({ access: remaining, hostToken: "new-host" }))
+    yield* subject.reply(
+      yield* subject.next,
+      ModelsTest.granted({ access: remaining, hostToken: Redacted.make("new-host") }),
+    )
     expect(yield* Fiber.join(pending)).toEqual(Option.none())
     expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(remaining)))
     expect(yield* subject.store.readHostToken).toEqual(Option.some("new-host"))
@@ -230,7 +236,10 @@ it.effect("a renewed key that expires earlier is the issuer's answer: it is stor
     yield* subject.store.write(grant({ stub: Shared.apiKey("old-key", expiring) }), "old-host")
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     const earlier = grant({ stub: Shared.apiKey("renewed-key", expiring - 30_000) })
-    yield* subject.reply(yield* subject.next, ModelsTest.granted({ access: earlier, hostToken: "new-host" }))
+    yield* subject.reply(
+      yield* subject.next,
+      ModelsTest.granted({ access: earlier, hostToken: Redacted.make("new-host") }),
+    )
     expect(key(yield* Fiber.join(pending))).toEqual(Option.some("renewed-key"))
     expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(earlier)))
   }),
@@ -267,7 +276,10 @@ it.effect("a key expiring exactly at the five-minute window is renewed before it
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     yield* subject.reply(
       yield* subject.next,
-      ModelsTest.granted({ access: grant({ stub: Shared.apiKey("renewed", 4_600_000) }), hostToken: "next-host" }),
+      ModelsTest.granted({
+        access: grant({ stub: Shared.apiKey("renewed", 4_600_000) }),
+        hostToken: Redacted.make("next-host"),
+      }),
     )
     expect(key(yield* Fiber.join(pending))).toEqual(Option.some("renewed"))
     expect(subject.requests).toEqual(["Bearer host"])
@@ -287,7 +299,10 @@ it.effect("an unavailable renewal keeps the stored key and host token, and the n
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     yield* subject.reply(
       yield* subject.next,
-      ModelsTest.granted({ access: grant({ stub: Shared.apiKey("new-key", renewed) }), hostToken: "new-host" }),
+      ModelsTest.granted({
+        access: grant({ stub: Shared.apiKey("new-key", renewed) }),
+        hostToken: Redacted.make("new-host"),
+      }),
     )
     expect(key(yield* Fiber.join(pending))).toEqual(Option.some("new-key"))
     expect(subject.requests).toEqual(["Bearer old-host", "Bearer old-host"])
