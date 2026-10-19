@@ -107,18 +107,23 @@ export const pending = (
 
 export const messages = (state: ChatState.State, sessionID: string, page: SessionMessage.Page): ChatState.State => {
   const fetched = page.items.toReversed()
-  const ids = new Set(fetched.map((item) => item.id))
+  const ids = new Set<string>(fetched.map((item) => item.id))
+  const delivered = [...state.outbox].filter((id) => ids.has(id))
+  const settled = delivered.reduce(
+    (next, id) => Reducer.removePending(next, sessionID, id),
+    delivered.length > 0 ? { ...state, outbox: new Set([...state.outbox].filter((id) => !ids.has(id))) } : state,
+  )
   const admitted = new Set(
-    ChatState.pending(state, sessionID).flatMap((item) =>
+    ChatState.pending(settled, sessionID).flatMap((item) =>
       item.type === "user" || item.type === "synthetic" ? [item.id] : [],
     ),
   )
-  const local = ChatState.messages(state, sessionID).filter(
-    (item) => !ids.has(item.id) && (state.outbox.has(item.id) || admitted.has(item.id)),
+  const local = ChatState.messages(settled, sessionID).filter(
+    (item) => !ids.has(item.id) && (settled.outbox.has(item.id) || admitted.has(item.id)),
   )
   return {
-    ...state,
-    messages: ChatState.set(state.messages, sessionID, [...fetched, ...local]),
+    ...settled,
+    messages: ChatState.set(settled.messages, sessionID, [...fetched, ...local]),
     cursor: page.cursor.next
       ? ChatState.set(state.cursor, sessionID, page.cursor.next)
       : ChatState.drop(state.cursor, sessionID),

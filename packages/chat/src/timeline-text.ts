@@ -1,6 +1,7 @@
 export * as TimelineText from "./timeline-text.js"
 
 import type { SessionMessage } from "@ren/schema/session-message"
+import type { SessionModel } from "@ren/schema/session-model"
 import type { SessionStatus } from "@ren/schema/session-status"
 import { DateTime } from "effect"
 import { Projection } from "./projection.js"
@@ -119,4 +120,21 @@ export const shellError = (message: SessionMessage.Shell) => {
   if (message.status === "timeout") return "Timed out"
   if (message.status === "killed") return "Cancelled"
   return message.status === "exited" && message.exit ? `Exit ${message.exit}` : undefined
+}
+
+export const mentions = (message: SessionMessage.User) =>
+  [...(message.files ?? []), ...(message.agents ?? []), ...(message.skills ?? [])]
+    .flatMap((item) => (item.mention ? [{ start: item.mention.start, end: item.mention.end }] : []))
+    .filter((range) => range.start >= 0 && range.end > range.start && range.end <= message.text.length)
+    .toSorted((a, b) => a.start - b.start)
+    .reduce<Array<{ start: number; end: number }>>((kept, range) => {
+      if ((kept.at(-1)?.end ?? 0) <= range.start) kept.push(range)
+      return kept
+    }, [])
+
+export const modelLabel = (model: SessionModel.Ref, names: ReadonlyMap<string, string>) => {
+  if (!model.id) return
+  const name = names.get(model.id) ?? model.id
+  const variant = model.variant && model.variant !== "default" ? model.variant : undefined
+  return variant ? `${name} ${variant.slice(0, 1).toUpperCase()}${variant.slice(1)}` : name
 }

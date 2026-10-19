@@ -1,16 +1,19 @@
 export * as ConversationShell from "./conversation-shell.js"
 
 import { cva } from "class-variance-authority"
-import { createContext, use, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { createContext, Fragment, use, useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 import type { ComponentPropsWithoutRef, KeyboardEvent, ReactNode, Ref, UIEvent } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
 import { assignRef, ShellContext } from "../lib/conversation-context.js"
 import { JumpToLatest } from "../lib/conversation-timeline.js"
+import { itemVariants, leadingSlot } from "../lib/list-chrome.js"
 import { AttachmentTile } from "./attachment-tile.js"
 import { Button } from "./button.js"
 import { Icon } from "./icon.js"
+import type { Glyph } from "./icon.js"
 import { IconButton } from "./icon-button.js"
 import { KeyboardKey } from "./keyboard-key.js"
+import { Surface } from "./surface.js"
 import { Text } from "./text.js"
 
 export { Timeline } from "../lib/conversation-timeline.js"
@@ -317,7 +320,8 @@ type ResolvedLayout = Exclude<ComposerLayout, "adaptive">
 const ComposerLayoutContext = createContext<{
   layout: ResolvedLayout
   measure: ((multiline: boolean) => void) | undefined
-}>({ layout: "stacked", measure: undefined })
+  listbox: string | undefined
+}>({ layout: "stacked", measure: undefined, listbox: undefined })
 
 const composerLayoutClasses: Record<ResolvedLayout, { form: string; input: string; status: string }> = {
   inline: {
@@ -352,9 +356,16 @@ function resolveLayout(layout: ComposerLayout | undefined, multiline: boolean, a
 
 export function Composer(props: ComposerProps) {
   const [multiline, setMultiline] = useState(false)
+  const listbox = useId()
   const layout = resolveLayout(props.layout, multiline, Boolean(props.attachments))
   return (
-    <ComposerLayoutContext value={{ layout, measure: props.layout === "adaptive" ? setMultiline : undefined }}>
+    <ComposerLayoutContext
+      value={{
+        layout,
+        measure: props.layout === "adaptive" ? setMultiline : undefined,
+        listbox: props.suggestions ? listbox : undefined,
+      }}
+    >
       <div className="relative flex w-full min-w-0 flex-col gap-2">
         {props.suggestions ? <div className="absolute inset-x-0 bottom-full z-50 mb-6">{props.suggestions}</div> : null}
         {props.header ? <div className="flex min-w-0 items-center px-1">{props.header}</div> : null}
@@ -440,11 +451,17 @@ const composerInputPadding: Record<ResolvedLayout, string> = {
   stacked: "px-4 pt-4 pb-2",
 }
 
+export type MentionKind = "agent" | "skill" | "file"
+
+export type MentionRange = { start: number; end: number; kind: MentionKind; label: string }
+
 export type ComposerInputProps = {
   focusOnMount?: boolean
   height?: ComposerInputHeight
   overlay?: ComposerInputOverlay
   overlayContent?: ReactNode
+  mentions?: readonly MentionRange[]
+  activeSuggestion?: string
   ref?: Ref<HTMLTextAreaElement>
 } & Omit<ComponentPropsWithoutRef<"textarea">, "className" | "style">
 
@@ -454,6 +471,8 @@ export function ComposerInput(props: ComposerInputProps) {
     height,
     overlay: overlayProp,
     overlayContent,
+    mentions,
+    activeSuggestion,
     ref,
     onScroll,
     onKeyDown,
@@ -465,7 +484,8 @@ export function ComposerInput(props: ComposerInputProps) {
   const measure = context.measure
   const input = useRef<HTMLTextAreaElement | null>(null)
   const layer = useRef<HTMLDivElement>(null)
-  const overlay = overlayProp ?? "none"
+  const shown = overlayOf({ overlay: overlayProp, overlayContent, mentions, value: props.value })
+  const overlay = shown.overlay
   const synchronize = () => {
     if (!input.current || !layer.current) return
     layer.current.scrollTop = input.current.scrollTop
@@ -501,11 +521,13 @@ export function ComposerInput(props: ComposerInputProps) {
             padding,
           )}
         >
-          {overlayContent}
+          {shown.content}
         </div>
       )}
       <textarea
         data-slot="composer-input"
+        {...(overlay === "highlight" && { spellCheck: false })}
+        {...suggestionAttributes(context.listbox, activeSuggestion)}
         ref={(node) => {
           input.current = node
           if (typeof ref === "function") return ref(node)
@@ -530,6 +552,198 @@ export function ComposerInput(props: ComposerInputProps) {
         {...attributes}
       />
     </>
+  )
+}
+
+function overlayOf(input: {
+  overlay: ComposerInputOverlay | undefined
+  overlayContent: ReactNode
+  mentions: readonly MentionRange[] | undefined
+  value: ComposerInputProps["value"]
+}): { overlay: ComposerInputOverlay; content: ReactNode } {
+  if (input.mentions?.length)
+    return {
+      overlay: "highlight",
+      content: <MentionHighlights text={String(input.value ?? "")} mentions={input.mentions} />,
+    }
+  return { overlay: input.overlay ?? "none", content: input.overlayContent }
+}
+
+function suggestionAttributes(listbox: string | undefined, active: string | undefined) {
+  if (!listbox) return {}
+  return {
+    "aria-autocomplete": "list" as const,
+    "aria-controls": listbox,
+    ...(active && { "aria-activedescendant": suggestionID(listbox, active) }),
+  }
+}
+
+const mentionGlyphs: Record<MentionKind, Glyph> = { agent: "Ghost", skill: "Skill", file: "File" }
+
+function MentionHighlights(props: { text: string; mentions: readonly MentionRange[] }) {
+  const ordered = props.mentions.toSorted((left, right) => left.start - right.start)
+  const pieces = ordered.flatMap((mention, index) => {
+    const from = index === 0 ? 0 : (ordered[index - 1]?.end ?? 0)
+    return [
+      { key: `text-${from}`, text: props.text.slice(from, mention.start) },
+      { key: `mention-${mention.start}`, mention },
+    ]
+  })
+  return (
+    <span>
+      {pieces.map((piece) =>
+        "mention" in piece ? (
+          <Mention key={piece.key} icon={<Icon glyph={mentionGlyphs[piece.mention.kind]} />}>
+            {props.text.slice(piece.mention.start + 1, piece.mention.end - piece.mention.label.length)}
+            {piece.mention.label}
+          </Mention>
+        ) : (
+          <Fragment key={piece.key}>{piece.text}</Fragment>
+        ),
+      )}
+      {props.text.slice(ordered.at(-1)?.end ?? 0)}
+      {props.text.endsWith("\n") ? "\u200b" : null}
+    </span>
+  )
+}
+
+export type MentionProps = { icon?: ReactNode; children: ReactNode }
+
+export function Mention(props: MentionProps) {
+  return (
+    <span
+      data-slot="composer-mention"
+      className="rounded-control bg-fill-inverse/tint [box-decoration-break:clone] font-medium text-text-primary ring-2 ring-border-strong/tint"
+    >
+      <span className="relative text-transparent">
+        @
+        {props.icon ? (
+          <span className="absolute top-1/2 left-px inline-grid size-4 -translate-y-1/2 place-items-center overflow-hidden rounded-control text-text-primary [&_img]:size-4 [&_img]:object-contain [&_svg]:size-4">
+            {props.icon}
+          </span>
+        ) : null}
+      </span>
+      {props.children}
+    </span>
+  )
+}
+
+const suggestionID = (listbox: string, value: string) => `${listbox}-${encodeURIComponent(value)}`
+
+export type SuggestionKind = MentionKind | "command"
+
+export type Suggestion = { value: string; kind: SuggestionKind; label: string; description?: string | undefined }
+
+export type SuggestionsProps = {
+  label: string
+  items: readonly Suggestion[]
+  active: string | undefined
+  onActiveChange: (value: string) => void
+  onSelect: (value: string) => void
+}
+
+const suggestionGroups: Record<SuggestionKind, string> = {
+  agent: "Agents",
+  skill: "Skills",
+  file: "Files",
+  command: "Commands",
+}
+
+const suggestionGlyphs: Partial<Record<SuggestionKind, Glyph>> = mentionGlyphs
+
+export function Suggestions(props: SuggestionsProps) {
+  const listbox = use(ComposerLayoutContext).listbox
+  const list = useRef<HTMLDivElement>(null)
+  const starts = props.items.flatMap((item, index) =>
+    index === 0 || props.items[index - 1]?.kind !== item.kind ? [index] : [],
+  )
+  const groups = starts.map((start, index) => props.items.slice(start, starts[index + 1]))
+  useLayoutEffect(() => {
+    list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
+  }, [props.active])
+  return (
+    <Surface.Overlay
+      id={listbox}
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the text field keeps focus and points into the options, which a <select> cannot do
+      role="listbox"
+      aria-label={props.label}
+      padding="small"
+      overflow="scrolling"
+      height="limited"
+    >
+      <div ref={list} className="flex flex-col">
+        {groups.map((group) => (
+          <SuggestionGroup key={group.at(0)?.value} kind={group.at(0)?.kind ?? "command"}>
+            {group.map((item) => (
+              <SuggestionOption
+                key={item.value}
+                id={listbox ? suggestionID(listbox, item.value) : undefined}
+                item={item}
+                active={item.value === props.active}
+                onActiveChange={props.onActiveChange}
+                onSelect={props.onSelect}
+              />
+            ))}
+          </SuggestionGroup>
+        ))}
+      </div>
+    </Surface.Overlay>
+  )
+}
+
+function SuggestionGroup(props: { kind: SuggestionKind; children: ReactNode }) {
+  return (
+    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- options inside a listbox group through role="group"; an <optgroup> needs a <select>
+    <div role="group" aria-label={suggestionGroups[props.kind]} className="flex min-w-0 flex-col gap-1">
+      <span
+        aria-hidden="true"
+        className="truncate px-2 pt-2 text-2xs font-reading-semibold text-text-secondary uppercase"
+      >
+        {suggestionGroups[props.kind]}
+      </span>
+      {props.children}
+    </div>
+  )
+}
+
+function SuggestionOption(props: {
+  id: string | undefined
+  item: Suggestion
+  active: boolean
+  onActiveChange: (value: string) => void
+  onSelect: (value: string) => void
+}) {
+  const glyph = suggestionGlyphs[props.item.kind]
+  return (
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- the text field keeps focus and drives the options through aria-activedescendant
+    <div
+      id={props.id}
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- an <option> lives only inside a <select>, which cannot keep the text field focused
+      role="option"
+      aria-selected={props.active}
+      onMouseDown={(event) => event.preventDefault()}
+      onPointerMove={() => {
+        if (!props.active) props.onActiveChange(props.item.value)
+      }}
+      onClick={() => props.onSelect(props.item.value)}
+      className={composeClasses(itemVariants({ density: "compact", interactive: true, selected: props.active }))}
+    >
+      {glyph ? (
+        <span className={leadingSlot}>
+          <Icon glyph={glyph} />
+        </span>
+      ) : null}
+      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+        <Text purpose="body" element="span" truncation="single-line">
+          {props.item.label}
+        </Text>
+        {props.item.description ? (
+          <Text purpose="body" tone="secondary" element="span" truncation="single-line">
+            {props.item.description}
+          </Text>
+        ) : null}
+      </span>
+    </div>
   )
 }
 

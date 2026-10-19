@@ -17,6 +17,7 @@
   "dependencies": {
     "@ren/client": "workspace:*",
     "@ren/schema": "workspace:*",
+    "diff": "catalog:",
     "effect": "catalog:"
   },
   "peerDependencies": {

@@ -11,7 +11,7 @@ import { FetchHttpClient, HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 import type { Platform } from "../platform/platform.js"
 
-interface Chat {
+export interface Chat {
   readonly atoms: ChatAtoms.ChatAtoms
   readonly registry: AtomRegistry.AtomRegistry
 }

@@ -97,3 +97,41 @@ story("blocks every answer while a reply is in flight", async ({ visit }) => {
   await expect(root.getByRole("radio", { name: "Allow once" })).toBeDisabled()
   await expect(root.getByRole("textbox", { name: "Deny and tell Ren what to do instead" })).not.toBeEditable()
 })
+
+story("dismisses with Escape", async ({ visit, page }) => {
+  const root = await visit("ui-questionnaire--dismissible")
+  await root.getByRole("radio", { name: "Bun" }).focus()
+  await page.keyboard.press("Escape")
+  await expect(root.getByRole("status").filter({ hasText: "Dismissed" })).toBeVisible()
+})
+
+story("goes back a question with the back shortcut", async ({ visit, page }) => {
+  const root = await visit("ui-questionnaire--dismissible")
+  const progress = root.getByRole("progressbar", { name: "Questionnaire progress" })
+  await root.getByRole("radio", { name: "Bun" }).click()
+  await root.getByRole("button", { name: "Next" }).click()
+  await expect(progress).toContainText("2 of 2")
+  const apple = await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.userAgent))
+  await page.keyboard.press(apple ? "Meta+BracketLeft" : "Alt+ArrowLeft")
+  await expect(progress).toContainText("1 of 2")
+  await expect(root.getByRole("radio", { name: "Bun" })).toBeChecked()
+})
+
+story("restores saved progress and reports each change", async ({ visit }) => {
+  const root = await visit("ui-questionnaire--saved-progress")
+  await expect(root.getByRole("progressbar", { name: "Questionnaire progress" })).toContainText("2 of 2")
+  await expect(root.getByRole("checkbox", { name: "Lint" })).toBeChecked()
+  await root.getByRole("checkbox", { name: "Typecheck" }).click()
+  await expect(root.getByRole("status").filter({ hasText: "Saved" })).toContainText(
+    "Step 2: q0 Bun, q1 Lint, Typecheck",
+  )
+})
+
+story("minimizes to the question and expands again", async ({ visit }) => {
+  const root = await visit("ui-questionnaire--dismissible")
+  await root.getByRole("button", { name: "Minimize question" }).click()
+  await expect(root.getByRole("radio", { name: "Bun" })).toBeHidden()
+  await expect(root.getByText("Which package manager should the new workspace use?")).toBeVisible()
+  await root.getByRole("button", { name: "Expand question" }).click()
+  await expect(root.getByRole("radio", { name: "Bun" })).toBeVisible()
+})

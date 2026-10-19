@@ -1,9 +1,10 @@
-import { ChatState, Family, Working } from "@ren/chat"
+import { ChatState, Family, TimelineSearch, ToolState, Working } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session-message"
 import { Button } from "@ren/ui/button"
 import { ConversationShell } from "@ren/ui/conversation-shell"
+import { FindBar } from "@ren/ui/find-bar"
 import { Notice } from "@ren/ui/notice"
 import { StateMessage } from "@ren/ui/state-message"
 import { Text } from "@ren/ui/text"
@@ -11,7 +12,7 @@ import { Toast } from "@ren/ui/toast"
 import { useQuery } from "@tanstack/react-query"
 import { Option } from "effect"
 import { AsyncResult } from "effect/reactivity"
-import { useRef, useState } from "react"
+import { useDeferredValue, useRef, useState } from "react"
 import type { RefObject } from "react"
 import { Chat } from "../../lib/chat.js"
 import { RouterContext } from "../../lib/router-context.js"
@@ -40,6 +41,7 @@ function useShortcuts(input: {
   state: ChatState.State
   scroller: RefObject<ConversationShell.TimelineHandle | null>
   onBackground: () => void
+  onFind: () => void
   onChild: (sessionID: Session.ID | undefined) => void
 }) {
   Keyboard.useKeyDown((event) => {
@@ -55,6 +57,7 @@ function useShortcuts(input: {
       previous: () => input.scroller.current?.step(-1),
       next: () => input.scroller.current?.step(1),
       background: input.onBackground,
+      find: input.onFind,
       parent: () => {
         const parent = input.child ? input.state.info[input.child]?.parentID : undefined
         input.onChild(parent && parent !== input.sessionID ? Session.ID.make(parent) : undefined)
@@ -119,13 +122,138 @@ const read = (session: ReturnType<typeof ChatReact.useSession>) => {
 const blocked = (state: ChatState.State, sessionID: Session.ID) =>
   Boolean(Family.permission(state, sessionID) ?? Family.form(state, sessionID))
 
+interface Find {
+  readonly value: string
+  readonly active: number
+}
+
+const findTarget = (rows: ReturnType<typeof read>["rows"], match: TimelineSearch.Match | undefined) => {
+  if (!match) return
+  if (match.role === "user") return Timeline.rowFor(rows, match.messageID)
+  return Timeline.rowForPart(rows, (reference) => reference.partID === match.partID)
+}
+
+const partTarget = (
+  rows: ReturnType<typeof read>["rows"],
+  messages: ReadonlyArray<SessionMessage.Info>,
+  part: string | undefined,
+) => {
+  if (!part) return
+  const shells = new Set(
+    messages.flatMap((message) =>
+      message.type === "assistant"
+        ? message.content.flatMap((content) =>
+            content.type === "tool" &&
+            content.state.status !== "streaming" &&
+            ToolState.metadata(content).shellID === part
+              ? [content.id]
+              : [],
+          )
+        : [],
+    ),
+  )
+  return Timeline.rowForPart(rows, (reference) => reference.partID === part || shells.has(reference.partID))
+}
+
+const revealTarget = (rows: {
+  readonly search: string | undefined
+  readonly part: string | undefined
+  readonly message: string | undefined
+}) => ({
+  target: rows.search ?? rows.part ?? rows.message,
+  hold: rows.search === undefined && rows.part !== undefined,
+})
+
+function useFind(messages: ReadonlyArray<SessionMessage.Info>, rows: ReturnType<typeof read>["rows"]) {
+  const [find, setFind] = useState<Find>()
+  const query = useDeferredValue(find?.value ?? "")
+  const matches = TimelineSearch.matches(messages, query)
+  const active = TimelineSearch.step(find?.active ?? 0, matches.length, 0)
+  const match = find ? matches[active] : undefined
+  const row = findTarget(rows, match)
+  return {
+    find,
+    row,
+    open: () => setFind((previous) => previous ?? { value: "", active: 0 }),
+    bar: find ? (
+      <FindBar
+        value={find.value}
+        onValueChange={(value) => setFind({ value, active: 0 })}
+        count={matches.length}
+        active={active}
+        match={row && match ? { row, occurrence: match.occurrence } : undefined}
+        onStep={(delta) =>
+          setFind((previous) =>
+            previous ? { ...previous, active: TimelineSearch.step(previous.active, matches.length, delta) } : previous,
+          )
+        }
+        onClose={() => setFind(undefined)}
+      />
+    ) : null,
+  }
+}
+
+function useInputActions(sessionID: Session.ID) {
+  const [updating, setUpdating] = useState<ReadonlySet<string>>(() => new Set())
+  const queueInput = ChatReact.useAction(sessionID, (opened, inboxID: SessionMessage.ID) => opened.queueInput(inboxID))
+  const cancelInput = ChatReact.useAction(sessionID, (opened, inboxID: SessionMessage.ID) =>
+    opened.cancelInput(inboxID),
+  )
+  const act = (action: "queue" | "cancel", message: SessionMessage.User) => {
+    if (updating.has(message.id)) return
+    setUpdating((previous) => new Set([...previous, message.id]))
+    const request = action === "queue" ? queueInput(message.id) : cancelInput(message.id)
+    void request
+      .catch(failed(action === "queue" ? "Could not move the message to the queue" : "Could not delete the message"))
+      .finally(() => setUpdating((previous) => new Set([...previous].filter((id) => id !== message.id))))
+  }
+  return { updating, act }
+}
+
+function useOpenSession(input: {
+  sessionID: Session.ID
+  state: ChatState.State
+  onChild: (sessionID: Session.ID) => void
+  onNavigate: (sessionID: Session.ID) => void
+}) {
+  const context = RouterContext.useRouterContext()
+  return (id: string) => {
+    if (id === input.sessionID) return
+    if (Family.tree(input.state, input.sessionID).includes(id)) return input.onChild(Session.ID.make(id))
+    void context.queryClient.query(context.api.session.get.queryOptions({ idOrSlug: id })).then(
+      (found) => input.onNavigate(Session.ID.make(found.id)),
+      () => Toast.manager.add({ type: "error", title: "Could not find that chat" }),
+    )
+  }
+}
+
+function useRevert(sessionID: Session.ID, restore: (message: Option.Option<SessionMessage.User>) => void) {
+  const [reverting, setReverting] = useState(false)
+  const revert = ChatReact.useAction(sessionID, (opened, messageID: SessionMessage.ID) => opened.revert(messageID))
+  return {
+    reverting,
+    onRevert: (message: SessionMessage.User) => {
+      if (reverting) return
+      setReverting(true)
+      void revert(message.id)
+        .then(restore, failed("Could not revert to this message"))
+        .finally(() => setReverting(false))
+    },
+  }
+}
+
+const modelNamesOf = (models: ReturnType<typeof ChatReact.useModels>) =>
+  new Map(AsyncResult.getOrElse(models, () => []).map((model) => [model.id, model.name]))
+
 export function SessionChat(props: {
   sessionID: Session.ID
   message: SessionMessage.ID | undefined
+  part: string | undefined
   child: Session.ID | undefined
   onFollow: () => void
   onChild: (sessionID: Session.ID | undefined) => void
   onArchived: () => void
+  onNavigate: (sessionID: Session.ID) => void
 }) {
   const platform = Platform.usePlatform()
   const context = RouterContext.useRouterContext()
@@ -145,21 +273,32 @@ export function SessionChat(props: {
   const asking = ChatState.permissionSessions(state).length + ChatState.formSessions(state).length
   const scroller = useRef<ConversationShell.TimelineHandle>(null)
   const [restored, setRestored] = useState(0)
+  const finder = useFind(messages, rows)
+  const reveal = revealTarget({
+    search: finder.row,
+    part: partTarget(rows, messages, props.part),
+    message: Timeline.rowFor(rows, props.message),
+  })
+  const modelNames = modelNamesOf(ChatReact.useModels(props.sessionID))
+  const inputs = useInputActions(props.sessionID)
+  const openSession = useOpenSession({
+    sessionID: props.sessionID,
+    state,
+    onChild: props.onChild,
+    onNavigate: props.onNavigate,
+  })
   Chat.useReveal(props.sessionID, props.sessionID, props.message)
   const loadMore = ChatReact.useAction(props.sessionID, (opened) => opened.loadMore(props.sessionID))
-  const revert = ChatReact.useAction(props.sessionID, (opened, messageID: SessionMessage.ID) =>
-    opened.revert(messageID),
-  )
   const undo = ChatReact.useAction(props.sessionID, (opened) => opened.undo)
   const redo = ChatReact.useAction(props.sessionID, (opened) => opened.redo)
   const compact = ChatReact.useAction(props.sessionID, (opened) => opened.compact(info?.model))
   const background = ChatReact.useAction(props.sessionID, (opened) => opened.background)
-
   const restore = (message: Option.Option<SessionMessage.User>) => {
     if (Option.isNone(message)) return
     SessionDrafts.restore(platform, props.sessionID, message.value.text)
     setRestored((count) => count + 1)
   }
+  const reverter = useRevert(props.sessionID, restore)
 
   Attention.useNotify({ running, asking, title })
 
@@ -169,6 +308,7 @@ export function SessionChat(props: {
     state,
     scroller,
     onBackground: () => void background().catch(failed("Could not move the work to the background")),
+    onFind: finder.open,
     onChild: props.onChild,
   })
 
@@ -182,16 +322,19 @@ export function SessionChat(props: {
         ) : undefined
       }
       header={
-        <SessionHeader
-          state={state}
-          sessionID={props.sessionID}
-          fallbackTitle={stored.data ?? undefined}
-          onOpen={props.onChild}
-          onUndo={() => void undo().then(restore, failed("Could not undo the last message"))}
-          onRedo={() => void redo().catch(failed("Could not restore the undone messages"))}
-          onCompact={() => void compact().catch(failed("Could not compact the chat"))}
-          onArchived={props.onArchived}
-        />
+        <>
+          <SessionHeader
+            state={state}
+            sessionID={props.sessionID}
+            fallbackTitle={stored.data ?? undefined}
+            onOpen={props.onChild}
+            onUndo={() => void undo().then(restore, failed("Could not undo the last message"))}
+            onRedo={() => void redo().catch(failed("Could not restore the undone messages"))}
+            onCompact={() => void compact().catch(failed("Could not compact the chat"))}
+            onArchived={props.onArchived}
+          />
+          {finder.bar}
+        </>
       }
       timeline={
         <ConversationShell.Timeline
@@ -202,20 +345,27 @@ export function SessionChat(props: {
             loading: ChatState.loadingHistory(state, props.sessionID),
             onLoadOlder: () => void loadMore().catch(failed("Could not load earlier messages")),
           }}
-          target={Timeline.rowFor(rows, props.message)}
+          target={reveal.target}
+          hold={reveal.hold}
           onFollowChange={(following) => {
             if (following) props.onFollow()
           }}
           {...transcriptRows({
             view: { root: props.sessionID, sessionID: props.sessionID },
+            state,
             messages,
+            modelNames,
+            part: props.part,
+            reverting: reverter.reverting,
+            updating: inputs.updating,
+            onPending: inputs.act,
+            onOpenSession: openSession,
             rows,
             activeMessageID: timeline?.activeMessageID,
             busy: running,
             working: timeline ? Working.show(state, props.sessionID, timeline) : false,
             ...(info?.capabilities.revert !== false && {
-              onRevert: (message: SessionMessage.User) =>
-                void revert(message.id).then(restore, failed("Could not revert to this message")),
+              onRevert: reverter.onRevert,
             }),
             onOpenChild: props.onChild,
           })}

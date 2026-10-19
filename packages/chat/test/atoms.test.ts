@@ -2,6 +2,7 @@ import { expect, setDefaultTimeout, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
+import { SessionMessage } from "@ren/schema/session-message"
 import { Shell } from "@ren/schema/shell"
 import { DateTime, Effect, Layer, Option, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -79,6 +80,34 @@ test("the timeline atom of a session shows a prompt and its reply as rows", () =
       expect.stringMatching(/^user-message:/),
       expect.stringMatching(/^assistant-part:part:/),
     ])
+  }).pipe(Effect.scoped, Effect.runPromise))
+
+test("a new chat's first prompt is in the timeline as soon as its session opens, before the session echoes it", () =>
+  Effect.gen(function* () {
+    const made = yield* setup
+    const id = SessionMessage.ID.create()
+    made.atoms.handoff(made.brain.id, { id, text: "Draft the quarterly report" })
+    const state = made.atoms.state(made.brain.id)
+    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(state)))
+    const opened = yield* made.until(state, AsyncResult.isSuccess)
+    expect(
+      AsyncResult.isSuccess(opened) &&
+        ChatState.userMessages(opened.value, made.brain.id).map((message) => message.text),
+    ).toEqual(["Draft the quarterly report"])
+  }).pipe(Effect.scoped, Effect.runPromise))
+
+test("the file atom searches the session only once the mention has a query", () =>
+  Effect.gen(function* () {
+    const made = yield* setup
+    yield* Effect.promise(() => Bun.write(`${made.brain.directory}/launch-plan.md`, "# Plan"))
+    const empty = made.atoms.files({ root: made.brain.id, query: "" })
+    const typed = made.atoms.files({ root: made.brain.id, query: "launch", type: "file" })
+    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(empty)))
+    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(typed)))
+    const none = yield* made.until(empty, AsyncResult.isSuccess)
+    expect(AsyncResult.isSuccess(none) && none.value).toEqual([])
+    const found = yield* made.until(typed, AsyncResult.isSuccess)
+    expect(AsyncResult.isSuccess(found) && found.value).toEqual([{ path: "launch-plan.md", type: "file" }])
   }).pipe(Effect.scoped, Effect.runPromise))
 
 test("the child atom of a subagent session reads its transcript through the root session", () =>

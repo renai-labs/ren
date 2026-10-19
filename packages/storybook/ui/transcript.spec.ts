@@ -95,3 +95,64 @@ story("announces that Ren is working", async ({ visit }) => {
   const root = await visit("ui-transcript--working")
   await expect(root.getByRole("status")).toHaveText("Preparing the next step")
 })
+
+story("opens a changed file to show its diff, and moves between files with the arrow keys", async ({ visit, page }) => {
+  const root = await visit("ui-transcript--file-changes")
+  const summary = root.getByRole("button", { name: "src/report/summary.ts, 2 additions, 1 deletion" })
+  await expect(root.getByRole("button", { name: "src/report/churn.ts, created" })).toBeVisible()
+  await expect(root.getByRole("button", { name: "src/report/legacy.ts, deleted" })).toBeVisible()
+  await expect(root.getByRole("region", { name: "Changes in src/report/summary.ts" })).toBeHidden()
+  await summary.click()
+  await expect(summary).toHaveAttribute("aria-expanded", "true")
+  const diff = root.getByRole("region", { name: "Changes in src/report/summary.ts" })
+  await expect(diff).toContainText("export const growth = revenue.total * 0.12")
+  await expect(diff).toContainText("12 unchanged lines")
+  await summary.focus()
+  await page.keyboard.press("ArrowDown")
+  await expect(root.getByRole("button", { name: "src/report/churn.ts, created" })).toBeFocused()
+})
+
+story("highlights a diff once its highlighter loads", async ({ visit }) => {
+  const root = await visit("ui-transcript--file-changes")
+  await root.getByRole("button", { name: "src/report/summary.ts, 2 additions, 1 deletion" }).click()
+  const diff = root.getByRole("region", { name: "Changes in src/report/summary.ts" })
+  await expect(diff.locator("code span[style*='--shiki-light']").first()).toBeAttached()
+})
+
+story("opens a subagent and names its state", async ({ visit }) => {
+  const root = await visit("ui-transcript--subagent-running")
+  const card = root.getByRole("button", {
+    name: "Explore Find where revenue is computed (background), running",
+  })
+  await expect(card).toBeEnabled()
+  await expect(root.getByText("Needs input")).toBeVisible()
+  await expect(root.getByText("└ grep revenue")).toBeVisible()
+})
+
+story("lists the first ten links and focuses the next one when shown", async ({ visit }) => {
+  const root = await visit("ui-transcript--links")
+  const results = root.getByRole("navigation", { name: "Search results" })
+  await expect(results.getByRole("link")).toHaveCount(10)
+  await results.getByRole("button", { name: "Show 2 more" }).click()
+  await expect(results.getByRole("link")).toHaveCount(12)
+  await expect(results.getByRole("link", { name: "https://docs.example.com/revenue/11" })).toBeFocused()
+})
+
+story("pairs each question with its answer", async ({ visit }) => {
+  const root = await visit("ui-transcript--answers")
+  await expect(root.getByRole("term").first()).toHaveText("Which package manager should the new workspace use?")
+  await expect(root.getByRole("definition").last()).toHaveText("Lint, Typecheck")
+})
+
+story("links session IDs and URLs in inline code", async ({ visit }) => {
+  const root = await visit("ui-transcript--response-with-links")
+  await expect(root.getByRole("button", { name: "ses_01JZ8Q3RVK7M2N4P6S8T0W2Y4A" })).toBeVisible()
+  const link = root.getByRole("link", { name: "https://docs.example.com/revenue" })
+  await expect(link).toHaveAttribute("href", "https://docs.example.com/revenue")
+  await expect(link).toHaveAttribute("target", "_blank")
+})
+
+story("keeps mentions in a user message readable in place", async ({ visit }) => {
+  const root = await visit("ui-transcript--user-text")
+  await expect(root.getByText("Ask @review to check @src/report/summary.ts before Friday")).toBeVisible()
+})

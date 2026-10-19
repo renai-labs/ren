@@ -13,3 +13,12 @@ export function rowFor(rows: ReadonlyArray<TimelineRow.Row>, messageID: string |
   const row = messageID ? rows.find((item) => messageIDs(item).includes(messageID)) : undefined
   return row && TimelineRow.key(row)
 }
+
+export function rowForPart(rows: ReadonlyArray<TimelineRow.Row>, matches: (reference: TimelineRow.PartRef) => boolean) {
+  const row = rows.findLast(
+    (item) =>
+      item._tag === "AssistantPart" &&
+      (item.group.type === "part" ? [item.group.ref] : item.group.refs).some((reference) => matches(reference)),
+  )
+  return row && TimelineRow.key(row)
+}

@@ -2,9 +2,11 @@ export * as Family from "./family.js"
 
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
+import type { SessionInfo } from "@ren/schema/session-info"
 import type { SessionMessage } from "@ren/schema/session-message"
-import { Predicate } from "effect"
+import { DateTime, Predicate } from "effect"
 import { ChatState } from "./chat-state.js"
+import { ToolDisplay } from "./tool-display.js"
 import { ToolState } from "./tool-state.js"
 
 export interface Task {
@@ -93,6 +95,22 @@ export const childTitle = (state: ChatState.State, sessionID: string, fallback: 
   return description ?? (info.title?.replace(/\s+\(@[^)]+ subagent\)$/, "") || fallback)
 }
 
+export const taskSession = (state: ChatState.State, parentID: string, tool: SessionMessage.Tool) => {
+  const metadata = ToolState.metadata(tool)
+  const id = string(metadata.sessionID) ?? string(metadata.sessionId)
+  if (id?.startsWith("ses_")) return id
+  const description = string(ToolState.input(tool).description) ?? ""
+  return Object.values(state.info)
+    .filter((info) => info.parentID === parentID && (info.title ?? "").startsWith(description))
+    .reduce<SessionInfo.Info | undefined>(
+      (newest, info) =>
+        newest && DateTime.toEpochMillis(newest.time.created) >= DateTime.toEpochMillis(info.time.created)
+          ? newest
+          : info,
+      undefined,
+    )?.id
+}
+
 const isWork = (part: SessionMessage.Content): part is SessionMessage.Tool =>
   part.type === "tool" && (part.name === "subagent" || part.name === "shell")
 
@@ -169,5 +187,66 @@ export const background = (state: ChatState.State, sessionID: string): Backgroun
   return {
     blocking,
     tasks: [...new Map([...subagents, ...active, ...shells, ...live].map((task) => [task.id, task])).values()],
+  }
+}
+
+export type Attention = "asking" | "running" | "idle"
+
+export const attention = (state: ChatState.State, sessionID: string): Attention => {
+  if (permission(state, sessionID) ?? form(state, sessionID)) return "asking"
+  const ids = tree(state, sessionID)
+  const working = ids.some(
+    (id) =>
+      ChatState.activity(state, id) === "running" ||
+      ChatState.pending(state, id).some((item) => item.type !== "synthetic"),
+  )
+  return working ? "running" : "idle"
+}
+
+export type SubagentStatus = "delegating" | "running" | "completed" | "failed"
+
+export interface Subagent {
+  readonly child: string | undefined
+  readonly title: string
+  readonly description: string | undefined
+  readonly status: SubagentStatus
+  readonly background: boolean
+  readonly needsInput: boolean
+  readonly tools: number
+  readonly activity?: string
+}
+
+const subagentStatus = (tool: SessionMessage.Tool, running: boolean): SubagentStatus => {
+  if (tool.state.status === "streaming") return "delegating"
+  if (tool.state.status === "running" || running) return "running"
+  return ToolState.failed(tool) ? "failed" : "completed"
+}
+
+const toolsOf = (state: ChatState.State, sessionID: string | undefined) =>
+  sessionID
+    ? ChatState.messages(state, sessionID).flatMap((message) =>
+        message.type === "assistant"
+          ? message.content.filter((content): content is SessionMessage.Tool => content.type === "tool")
+          : [],
+      )
+    : []
+
+export const subagent = (state: ChatState.State, parentID: string, tool: SessionMessage.Tool): Subagent => {
+  const child = taskSession(state, parentID, tool)
+  const input = ToolState.input(tool)
+  const agent = string(input.agent) ?? string(input.subagent_type)
+  const background = tool.state.status === "completed" && ToolState.metadata(tool).status === "running"
+  const status = subagentStatus(tool, background || (child ? ChatState.activity(state, child) === "running" : false))
+  const tools = toolsOf(state, child)
+  const current = status === "running" ? tools.findLast((item) => item.state.status !== "streaming") : undefined
+  return {
+    child,
+    title: agent ? agent.slice(0, 1).toUpperCase() + agent.slice(1) : "Subagent",
+    description: string(input.description) ?? child,
+    status,
+    background,
+    needsInput: child ? Boolean(permission(state, child) ?? form(state, child)) : false,
+    tools: tools.length,
+    ...(current && { activity: [ToolDisplay.name(current), ToolDisplay.subtitle(current)].filter(Boolean).join(" ") }),
   }
 }

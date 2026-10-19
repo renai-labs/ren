@@ -34,9 +34,15 @@ export interface Options {
   readonly access: Effect.Effect<Session.ClientAccess, unknown>
   readonly initialMessageLimit?: number
   readonly sender?: SessionMessage.Sender
+  readonly handoff?: Handoff
   readonly autoApprove?: boolean
   readonly connection?: Partial<Pick<Connection.Options, "connectTimeout" | "idleTimeout" | "reconnectDelay">>
   readonly onError?: (error: unknown) => Effect.Effect<void>
+}
+
+export interface Handoff {
+  readonly id: SessionMessage.ID
+  readonly text: string
 }
 
 type Client = Effect.Success<ReturnType<typeof Ren.make>>
@@ -92,7 +98,22 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const scope = yield* Effect.scope
   const http = yield* HttpClient.HttpClient
   const root = options.sessionID
-  const state = yield* SubscriptionRef.make(ChatState.empty)
+  const handoff = options.handoff
+  const state = yield* SubscriptionRef.make(
+    handoff
+      ? Outbox.admit(
+          ChatState.empty,
+          {
+            sessionID: root,
+            id: handoff.id,
+            text: handoff.text,
+            delivery: "steer",
+            ...(options.sender && { sender: options.sender }),
+          },
+          yield* DateTime.now,
+        )
+      : ChatState.empty,
+  )
   const status = yield* SubscriptionRef.make<Connection.Status>("connecting")
   const reads = yield* Reads.make<unknown>()
   const accessLock = yield* Semaphore.make(1)

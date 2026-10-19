@@ -183,3 +183,94 @@ describe("Composer model", () => {
     })
   })
 })
+
+describe("Composer lists", () => {
+  test("hides OpenCode's built-in skills and commands, which members can't use in Ren", () => {
+    expect(Composer.hidden).toEqual({ skills: ["opencode", "report"], commands: ["init", "review"] })
+    expect(
+      Composer.offeredSkills([
+        { id: "opencode", name: "opencode" },
+        { id: "report", name: "report" },
+        { id: "release-notes", name: "Release notes" },
+      ]).map((skill) => skill.id),
+    ).toEqual(["release-notes"])
+    expect(
+      Composer.offeredCommands([{ name: "init" }, { name: "review" }, { name: "deploy" }]).map(
+        (command) => command.name,
+      ),
+    ).toEqual(["deploy"])
+  })
+})
+
+describe("Composer suggestions", () => {
+  test.each([
+    {
+      name: "opens inline commands when slash is the entire prompt",
+      text: "/re",
+      result: { kind: "command", query: "re" },
+    },
+    {
+      name: "keeps inline commands closed when slash is not the entire prompt",
+      text: "explain /re",
+      result: undefined,
+    },
+    { name: "opens nested slash command names", text: "/review/", result: { kind: "command", query: "review/" } },
+    {
+      name: "opens context completion at the cursor",
+      text: "alpha @sr omega",
+      cursor: 9,
+      result: { kind: "mention", start: 6, query: "sr" },
+    },
+    { name: "opens context completion for a bare @", text: "@", result: { kind: "mention", start: 0, query: "" } },
+    { name: "ignores an @ inside a word", text: "ada@example", result: undefined },
+  ])("$name", (row) => {
+    expect(Composer.trigger(row.text, row.cursor ?? row.text.length)).toEqual(row.result)
+  })
+
+  const press = (key: string, ctrlKey = false) => ({ key, ctrlKey, isComposing: false })
+
+  test("loops active popover items with arrow keys", () => {
+    expect(Composer.suggestionKey(press("ArrowDown"), ["first", "second"], "second")).toEqual({
+      type: "move",
+      active: "first",
+    })
+    expect(Composer.suggestionKey(press("ArrowUp"), ["first", "second"], "first")).toEqual({
+      type: "move",
+      active: "second",
+    })
+    expect(Composer.suggestionKey(press("n", true), ["first", "second"], "first")).toEqual({
+      type: "move",
+      active: "second",
+    })
+  })
+
+  test("closes a popover with ctrl-g before stopping a run", () => {
+    expect(Composer.suggestionKey(press("g", true), ["first"], "first")).toEqual({ type: "close" })
+    expect(Composer.suggestionKey(press("Escape"), ["first"], "first")).toEqual({ type: "close" })
+  })
+
+  test("selects the active item with Tab or Enter, but not while an IME composes", () => {
+    expect(Composer.suggestionKey(press("Enter"), ["first"], "first")).toEqual({ type: "select", id: "first" })
+    expect(Composer.suggestionKey(press("Tab"), ["first"], "first")).toEqual({ type: "select", id: "first" })
+    expect(Composer.suggestionKey({ ...press("Enter"), isComposing: true }, ["first"], "first")).toBeUndefined()
+  })
+
+  test("keeps the active item while it is still listed, otherwise the first item becomes active", () => {
+    expect(Composer.activeSuggestion(["first", "second"], "second")).toBe("second")
+    expect(Composer.activeSuggestion(["first", "second"], "gone")).toBe("first")
+    expect(Composer.activeSuggestion([], "gone")).toBeUndefined()
+  })
+
+  const commands = [{ name: "deploy" }, { name: "review/nested" }]
+
+  test.each([
+    { text: "/deploy staging now", result: { name: "deploy", text: "staging now" } },
+    { text: "/deploy\nstaging", result: { name: "deploy", text: "staging" } },
+    { text: "/deploy", result: { name: "deploy", text: "" } },
+    { text: "/review/nested", result: { name: "review/nested", text: "" } },
+    { text: "/deployx nope", result: undefined },
+    { text: "ask /deploy later", result: undefined },
+  ])("parses $text as a slash command", (row) => {
+    expect(Composer.slash(row.text, commands)).toEqual(row.result)
+  })
+})

@@ -1,6 +1,8 @@
 export * as ToolDisplay from "./tool-display.js"
 
 import type { SessionMessage } from "@ren/schema/session-message"
+import { Predicate } from "effect"
+import { PatchFiles } from "./patch-files.js"
 import { TimelineText } from "./timeline-text.js"
 import { ToolState } from "./tool-state.js"
 
@@ -188,7 +190,10 @@ const subjects: Readonly<Record<string, Subject>> = {
   skill: (input, metadata) => text(metadata.name) ?? text(input.id) ?? text(input.name),
   patch: files,
   apply_patch: files,
-  question: (input) => count(input.questions, "question"),
+  question: (input, metadata) =>
+    Array.isArray(input.questions) && Array.isArray(metadata.answers) && metadata.answers.length > 0
+      ? `${input.questions.length} answered`
+      : count(input.questions, "question"),
   subagent: delegated,
   task: delegated,
 }
@@ -233,3 +238,80 @@ export const group = (items: ReadonlyArray<GroupItem>) => {
   const list = formatters.list
   return { title: `Used ${total} ${tools.length ? list.format([...new Set(tools)]) : thought}`, count: total }
 }
+
+const urlPattern = /https?:\/\/[^\s<>"'`)\]]+/g
+
+export const links = (tool: SessionMessage.Tool) =>
+  tool.name === "websearch"
+    ? [
+        ...new Set(
+          [...(ToolState.output(tool) ?? "").matchAll(urlPattern)].map((match) =>
+            (match.at(0) ?? "").replaceAll(/[),.;:!?]+$/g, ""),
+          ),
+        ),
+      ]
+    : []
+
+const questionText = (value: unknown) =>
+  Predicate.isObject(value) && "question" in value && typeof value.question === "string" ? value.question : undefined
+
+export const answers = (tool: SessionMessage.Tool) => {
+  const input = ToolState.input(tool)
+  const values = ToolState.metadata(tool).answers
+  if (tool.name !== "question" || !Array.isArray(input.questions) || !Array.isArray(values) || values.length === 0)
+    return []
+  return input.questions.flatMap((item: unknown, index) => {
+    const question = questionText(item)
+    const answer: unknown = values[index]
+    const chosen = Array.isArray(answer) ? answer.filter((value): value is string => typeof value === "string") : []
+    return question ? [{ question, answer: chosen.join(", ") || "(no answer)" }] : []
+  })
+}
+
+const matchKeys: Readonly<Record<string, string>> = { glob: "count", grep: "matches" }
+
+export const matches = (tool: SessionMessage.Tool) => {
+  const key = lookup(matchKeys, tool.name)
+  const value = key ? ToolState.metadata(tool)[key] : undefined
+  if (typeof value !== "number" || !Number.isFinite(value) || value === 0) return
+  return `${value} ${value === 1 ? "match" : "matches"}`
+}
+
+export const loaded = (tool: SessionMessage.Tool) => {
+  if (tool.name !== "read" || tool.state.status !== "completed") return []
+  const value = ToolState.metadata(tool).loaded
+  return Array.isArray(value) ? value.filter((path): path is string => typeof path === "string") : []
+}
+
+export type RunKind = "read" | "file" | "skill" | "single"
+
+export type Run =
+  | { readonly type: "tools"; readonly kind: RunKind; readonly tools: ReadonlyArray<SessionMessage.Tool> }
+  | { readonly type: "item"; readonly item: GroupItem }
+
+const runKind = (tool: SessionMessage.Tool): RunKind => {
+  if (PatchFiles.isFileChange(tool)) return "file"
+  if (ToolState.groupedRead(tool)) return "read"
+  return tool.name === "skill" && tool.state.status !== "error" && subtitle(tool) ? "skill" : "single"
+}
+
+export const runs = (items: ReadonlyArray<GroupItem>): ReadonlyArray<Run> =>
+  items
+    .reduce<
+      Array<{ type: "item"; item: GroupItem } | { type: "tools"; kind: RunKind; tools: Array<SessionMessage.Tool> }>
+    >((result, item) => {
+      if (item.type !== "tool") {
+        result.push({ type: "item", item })
+        return result
+      }
+      const kind = runKind(item)
+      const previous = result.at(-1)
+      if (kind !== "single" && previous?.type === "tools" && previous.kind === kind) previous.tools.push(item)
+      else result.push({ type: "tools", kind, tools: [item] })
+      return result
+    }, [])
+    .map((run): Run =>
+      run.type === "tools" && run.tools.length === 1 && run.kind !== "file"
+        ? { type: "tools", kind: "single", tools: run.tools }
+        : run,
+    )

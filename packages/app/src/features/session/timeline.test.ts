@@ -23,3 +23,36 @@ describe("rowFor", () => {
     expect(Timeline.rowFor(rows, "msg_z")).toBeUndefined()
   })
 })
+
+describe("rowForPart", () => {
+  const grouped = [
+    ...rows,
+    new TimelineRow.AssistantPart({
+      userMessageID: "msg_a",
+      group: {
+        key: "context:msg_d:call_1",
+        type: "context",
+        refs: [
+          { messageID: "msg_d", partID: "call_1" },
+          { messageID: "msg_d", partID: "call_2" },
+        ],
+      },
+      previousAssistantPart: true,
+    }),
+    new TimelineRow.AssistantPart({
+      userMessageID: "msg_a",
+      group: { key: "call_2", type: "part", ref: { messageID: "msg_e", partID: "call_2" } },
+      previousAssistantPart: true,
+    }),
+  ]
+
+  test("finds the last row that holds a part, alone or in a group", () => {
+    expect(Timeline.rowForPart(grouped, (reference) => reference.partID === "call_1")).toBe(
+      "assistant-part:context:context:msg_d:call_1",
+    )
+    expect(Timeline.rowForPart(grouped, (reference) => reference.partID === "call_2")).toBe(
+      "assistant-part:part:call_2",
+    )
+    expect(Timeline.rowForPart(grouped, (reference) => reference.partID === "call_9")).toBeUndefined()
+  })
+})

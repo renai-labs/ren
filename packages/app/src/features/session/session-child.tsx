@@ -71,6 +71,7 @@ export function SessionChild(props: {
             }}
             {...transcriptRows({
               view: { root: props.root, sessionID: props.sessionID },
+              state: props.state,
               messages,
               rows: timeline?.rows ?? [],
               activeMessageID: timeline?.activeMessageID,

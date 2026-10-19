@@ -127,4 +127,73 @@ describe("tool display", () => {
     expect(ToolDisplay.group([reasoning])).toEqual({ title: "Used 1 Thought", count: 1 })
     expect(ToolDisplay.group([{ type: "notice" }])).toEqual({ title: "Updates", count: 0 })
   })
+
+  test("lists unique web search links without trailing punctuation", () => {
+    const output = "See https://a.dev/docs, then (https://b.dev/x). Again https://a.dev/docs."
+    expect(ToolDisplay.links(tool("websearch", "completed", {}, { output }))).toEqual([
+      "https://a.dev/docs",
+      "https://b.dev/x",
+    ])
+    expect(ToolDisplay.links(tool("read", "completed", {}, { output }))).toEqual([])
+  })
+
+  test("pairs answered questions with their answers", () => {
+    const questions = [{ question: "Which colour?" }, { question: "Which sizes?" }, { question: "Notes?" }]
+    const answered = tool("question", "completed", { questions }, { metadata: { answers: [["Blue"], ["S", "M"], []] } })
+    expect(ToolDisplay.answers(answered)).toEqual([
+      { question: "Which colour?", answer: "Blue" },
+      { question: "Which sizes?", answer: "S, M" },
+      { question: "Notes?", answer: "(no answer)" },
+    ])
+    expect(ToolDisplay.subtitle(answered)).toBe("3 answered")
+    expect(ToolDisplay.answers(tool("question", "completed", { questions }))).toEqual([])
+    expect(ToolDisplay.subtitle(tool("question", "completed", { questions }))).toBe("3 questions")
+  })
+
+  test("counts glob and grep matches when there are any", () => {
+    expect(ToolDisplay.matches(tool("glob", "completed", {}, { metadata: { count: 1 } }))).toBe("1 match")
+    expect(ToolDisplay.matches(tool("grep", "completed", {}, { metadata: { matches: 12 } }))).toBe("12 matches")
+    expect(ToolDisplay.matches(tool("grep", "completed", {}, { metadata: { matches: 0 } }))).toBeUndefined()
+    expect(ToolDisplay.matches(tool("list", "completed", {}, { metadata: { count: 3 } }))).toBeUndefined()
+  })
+
+  test("lists the files a completed read loaded", () => {
+    const read = tool(
+      "read",
+      "completed",
+      { path: "src/a.ts" },
+      { metadata: { loaded: ["AGENTS.md", 3, "src/AGENTS.md"] } },
+    )
+    expect(ToolDisplay.loaded(read)).toEqual(["AGENTS.md", "src/AGENTS.md"])
+    expect(ToolDisplay.loaded(tool("read", "running", { path: "src/a.ts" }))).toEqual([])
+  })
+
+  test("merges runs of reads, file changes and named skills inside an open group", () => {
+    const reasoning: SessionMessage.Reasoning = { type: "reasoning", text: "Planning" }
+    const items = [
+      tool("read", "completed", { path: "a.ts" }),
+      tool("read", "completed", { path: "b.ts" }),
+      tool("edit", "completed", { path: "a.ts" }),
+      tool("write", "completed", { path: "c.ts" }),
+      tool("skill", "completed", { name: "review" }),
+      tool("skill", "completed", { name: "deploy" }),
+      reasoning,
+      tool("read", "completed", { path: "c.ts" }),
+      tool("grep", "completed", { pattern: "x" }),
+      tool("edit", "error", { path: "d.ts" }),
+    ]
+    expect(
+      ToolDisplay.runs(items).map((run) =>
+        run.type === "tools" ? `${run.kind}:${run.tools.map((item) => item.name).join(",")}` : run.item.type,
+      ),
+    ).toEqual([
+      "read:read,read",
+      "file:edit,write",
+      "skill:skill,skill",
+      "reasoning",
+      "single:read",
+      "single:grep",
+      "single:edit",
+    ])
+  })
 })

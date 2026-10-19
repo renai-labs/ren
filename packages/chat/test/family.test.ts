@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
-import type { SessionMessage } from "@ren/schema/session-message"
+import { SessionMessage } from "@ren/schema/session-message"
 import { Shell } from "@ren/schema/shell"
 import { Schema } from "effect"
 import { ChatState } from "../src/chat-state.js"
@@ -9,7 +9,14 @@ import { Family } from "../src/family.js"
 import { Hydrate } from "../src/hydrate.js"
 import { Fixture } from "./lib/fixture.js"
 
-const sessions = (list: ReadonlyArray<{ readonly id: string; readonly parentID?: string; readonly title?: string }>) =>
+const sessions = (
+  list: ReadonlyArray<{
+    readonly id: string
+    readonly parentID?: string
+    readonly title?: string
+    readonly time?: object
+  }>,
+) =>
   Hydrate.info(
     ChatState.empty,
     list.map((item) => Fixture.session(item.id, item)),
@@ -239,4 +246,99 @@ test("a running shell outside the transcript is background work, unless the open
     shell("sh_other", "bun lint", "ses_other"),
   ])
   expect(Family.background(live, "ses_root").tasks).toEqual([{ id: "sh_dev", type: "shell", label: "bun dev" }])
+})
+
+test("a subagent call finds its child by metadata, else the newest child titled by its description", () => {
+  const family = sessions([
+    { id: "ses_root" },
+    { id: "ses_old", parentID: "ses_root", title: "Inspect the code (@general subagent)" },
+    {
+      id: "ses_new",
+      parentID: "ses_root",
+      title: "Inspect the code (@general subagent)",
+      time: { created: 5, updated: 5 },
+    },
+    { id: "ses_else", parentID: "ses_root", title: "Something else", time: { created: 9, updated: 9 } },
+  ])
+  const call = (metadata: object) =>
+    Schema.decodeUnknownSync(SessionMessage.Tool)(
+      subagent("call_1", "running", metadata, { description: "Inspect the code", agent: "general" }),
+    )
+  expect(Family.taskSession(family, "ses_root", call({ sessionID: "ses_old" }))).toBe("ses_old")
+  expect(Family.taskSession(family, "ses_root", call({}))).toBe("ses_new")
+  expect(Family.taskSession(family, "ses_other", call({}))).toBeUndefined()
+})
+
+test("a family needs attention for an open request, else works while any session in it runs", () => {
+  const family = sessions([{ id: "ses_root" }, { id: "ses_child", parentID: "ses_root" }])
+  expect(Family.attention(family, "ses_root")).toBe("idle")
+  expect(Family.attention({ ...family, active: { ses_child: "running" } }, "ses_root")).toBe("running")
+  const asking = {
+    ...family,
+    active: { ses_root: "running" as const },
+    forms: { ses_child: [question("frm_1", "ses_child")] },
+  }
+  expect(Family.attention(asking, "ses_root")).toBe("asking")
+  const queued = transcript(family, "ses_root", [])
+  expect(
+    Family.attention(
+      {
+        ...queued,
+        pending: {
+          ses_root: [
+            Fixture.inbox({
+              id: "msg_q",
+              sessionID: "ses_root",
+              type: "user",
+              delivery: "steer",
+              payload: { text: "next" },
+              time: { created: 1 },
+            }),
+          ],
+        },
+      },
+      "ses_root",
+    ),
+  ).toBe("running")
+})
+
+test("a subagent card reads its child's state, tools and requests", () => {
+  const family = sessions([{ id: "ses_root" }, { id: "ses_child", parentID: "ses_root", title: "Inspect the code" }])
+  const withChild = transcript(family, "ses_child", [
+    assistant("msg_c", [
+      {
+        type: "tool",
+        id: "call_grep",
+        name: "grep",
+        state: { status: "running", input: { pattern: "revenue", path: "src" }, metadata: {} },
+        time: { created: 1 },
+      },
+    ]),
+  ])
+  const call = (status: "running" | "completed", metadata: object) =>
+    Schema.decodeUnknownSync(SessionMessage.Tool)(
+      subagent("call_1", status, metadata, { description: "Inspect the code", agent: "explore" }),
+    )
+  const live = { ...withChild, active: { ses_child: "running" as const } }
+  expect(Family.subagent(live, "ses_root", call("running", { sessionID: "ses_child" }))).toEqual({
+    child: "ses_child",
+    title: "Explore",
+    description: "Inspect the code",
+    status: "running",
+    background: false,
+    needsInput: false,
+    tools: 1,
+    activity: "Grep src",
+  })
+  const background = Family.subagent(
+    withChild,
+    "ses_root",
+    call("completed", { sessionID: "ses_child", status: "running" }),
+  )
+  expect(background.status).toBe("running")
+  expect(background.background).toBe(true)
+  const asking = { ...withChild, forms: { ses_child: [question("frm_1", "ses_child")] } }
+  const waiting = Family.subagent(asking, "ses_root", call("completed", { sessionID: "ses_child" }))
+  expect(waiting).toMatchObject({ status: "completed", needsInput: true })
+  expect(waiting.activity).toBeUndefined()
 })

@@ -1,9 +1,15 @@
+import { Session } from "@ren/schema/session"
 import { ApplicationShell } from "@ren/ui/application-shell"
 import { StateMessage } from "@ren/ui/state-message"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useRouterState } from "@tanstack/react-router"
+import { lazy, Suspense } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { SessionTitle } from "./session-title.js"
+
+const ChatListStatus = lazy(() =>
+  import("./chat-list-status.js").then((module) => ({ default: module.ChatListStatus })),
+)
 
 export function ChatList() {
   const context = RouterContext.useRouterContext()
@@ -31,6 +37,11 @@ export function ChatList() {
       key={chat.id}
       current={pathname === `/sessions/${chat.id}`}
       label={SessionTitle.display(chat.title, SessionTitle.untitled)}
+      trailing={
+        <Suspense fallback={null}>
+          <ChatListStatus sessionID={Session.ID.make(chat.id)} />
+        </Suspense>
+      }
       render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
     />
   ))

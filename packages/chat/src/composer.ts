@@ -2,6 +2,7 @@ export * as Composer from "./composer.js"
 
 // oxlint-disable typescript/no-misused-spread -- drafts are plain readonly structs; Struct.assign would widen the optional keys these updates keep
 
+import type { SessionCatalog } from "@ren/schema/session-catalog"
 import type { SessionInbox } from "@ren/schema/session-inbox"
 import { SessionMessage } from "@ren/schema/session-message"
 import { SessionModel } from "@ren/schema/session-model"
@@ -167,4 +168,89 @@ export const submission = (
     sent,
     next: chosen === "queue" && draft.model ? { ...empty, model: draft.model } : empty,
   }
+}
+
+export const hidden: { readonly skills: ReadonlyArray<string>; readonly commands: ReadonlyArray<string> } = {
+  skills: ["opencode", "report"],
+  commands: ["init", "review"],
+}
+
+export const offeredSkills = (skills: ReadonlyArray<SessionCatalog.Skill>) =>
+  skills.filter((skill) => !hidden.skills.includes(skill.id))
+
+export const offeredCommands = (commands: ReadonlyArray<SessionCatalog.Command>) =>
+  commands.filter((command) => !hidden.commands.includes(command.name))
+
+export type Trigger =
+  | { readonly kind: "mention"; readonly start: number; readonly query: string }
+  | { readonly kind: "command"; readonly query: string }
+
+const mentionTrigger = /(?:^|\s)@([^\s@]*)$/
+const commandTrigger = /^\/(\S*)$/
+
+export const trigger = (text: string, cursor: number): Trigger | undefined => {
+  const mention = mentionTrigger.exec(text.slice(0, cursor))
+  if (mention) {
+    const query = mention.at(1) ?? ""
+    return { kind: "mention", start: cursor - query.length - 1, query }
+  }
+  const command = commandTrigger.exec(text)
+  return command ? { kind: "command", query: command.at(1) ?? "" } : undefined
+}
+
+export const slash = (text: string, commands: ReadonlyArray<SessionCatalog.Command>) => {
+  if (!text.startsWith("/")) return
+  const separator = text.search(/\s/)
+  const name = text.slice(1, separator === -1 ? undefined : separator)
+  if (!commands.some((command) => command.name === name)) return
+  return { name, text: separator === -1 ? "" : text.slice(separator).trim() }
+}
+
+export interface SuggestionPress {
+  readonly key: string
+  readonly ctrlKey: boolean
+  readonly isComposing: boolean
+}
+
+export type SuggestionKey =
+  | { readonly type: "close" }
+  | { readonly type: "select"; readonly id: string }
+  | { readonly type: "move"; readonly active: string }
+
+export const activeSuggestion = (ids: ReadonlyArray<string>, active: string | undefined) =>
+  active && ids.includes(active) ? active : ids.at(0)
+
+const suggestionActions: Readonly<Record<string, "close" | "select">> = {
+  Escape: "close",
+  "Ctrl+g": "close",
+  Tab: "select",
+  Enter: "select",
+}
+
+const suggestionMoves: Readonly<Record<string, 1 | -1>> = {
+  ArrowDown: 1,
+  ArrowUp: -1,
+  "Ctrl+n": 1,
+  "Ctrl+p": -1,
+}
+
+export const suggestionKey = (
+  press: SuggestionPress,
+  ids: ReadonlyArray<string>,
+  active: string | undefined,
+): SuggestionKey | undefined => {
+  if (press.isComposing) return
+  const chord = press.ctrlKey ? `Ctrl+${press.key.toLowerCase()}` : press.key
+  const action = suggestionActions[chord] ?? suggestionActions[press.key]
+  if (action === "close") return { type: "close" }
+  if (action === "select") return active ? { type: "select", id: active } : undefined
+  const direction = suggestionMoves[chord] ?? suggestionMoves[press.key]
+  if (!direction) return
+  const next = ids.at(moved(active ? ids.indexOf(active) : -1, direction, ids.length))
+  return next ? { type: "move", active: next } : undefined
+}
+
+const moved = (current: number, direction: 1 | -1, length: number) => {
+  if (current < 0) return direction === 1 ? 0 : length - 1
+  return (current + direction + length) % length
 }

@@ -229,3 +229,26 @@ describe("outbox", () => {
     expect(Outbox.admit(echoed, { sessionID, id, text: "local", delivery: "steer" }, Fixture.at(2))).toBe(echoed)
   })
 })
+
+describe("new chat handoff", () => {
+  const id = SessionMessage.ID.make("msg_first")
+  const handed = Outbox.admit(
+    ChatState.empty,
+    { sessionID, id, text: "Draft the report", delivery: "steer" },
+    Fixture.at(1),
+  )
+  const unread = Hydrate.pending(Hydrate.startPending(handed, sessionID), sessionID, [])
+
+  test("shows a new chat's first prompt before the session echoes it, through reads that miss it", () => {
+    const read = Hydrate.messages(unread, sessionID, Fixture.page([]))
+    expect(ChatState.messages(read, sessionID).map((message) => message.id)).toEqual([id])
+    expect(ChatState.inputs(read, sessionID)).toEqual([id])
+  })
+
+  test("merges the first prompt into the server's copy once the session has delivered it", () => {
+    const synced = Hydrate.messages(unread, sessionID, Fixture.page([Fixture.user("msg_first", 3, "Draft the report")]))
+    expect(ChatState.messages(synced, sessionID)).toEqual([Fixture.user(id, 3, "Draft the report")])
+    expect(ChatState.pending(synced, sessionID)).toEqual([])
+    expect(synced.outbox.size).toBe(0)
+  })
+})

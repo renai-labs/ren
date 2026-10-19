@@ -39,16 +39,30 @@ export interface Options<R, ER> {
   readonly lifecycle?: (listener: (event: Lifecycle) => void) => () => void
 }
 
+export const handoffLimit = 40
+
 export const make = <R, ER>(options: Options<R, ER>) => {
+  const handoffs = new Map<Session.ID, ChatSession.Handoff>()
+
+  const handoff = (sessionID: Session.ID, prompt: ChatSession.Handoff) => {
+    handoffs.delete(sessionID)
+    handoffs.set(sessionID, prompt)
+    const oldest = [...handoffs.keys()].slice(0, Math.max(0, handoffs.size - handoffLimit))
+    for (const key of oldest) handoffs.delete(key)
+  }
+
   const session = Atom.family((sessionID: Session.ID) =>
     options.runtime
       .atom(
         Effect.gen(function* () {
           const context = yield* Effect.context<R>()
+          const handed = handoffs.get(sessionID)
+          handoffs.delete(sessionID)
           const opened = yield* ChatSession.make({
             sessionID,
             access: options.access(sessionID).pipe(Effect.provide(context)),
             ...(options.sender && { sender: options.sender }),
+            ...(handed && { handoff: handed }),
           })
           yield* opened.open(sessionID).pipe(
             Effect.andThen(opened.enrich(sessionID)),
@@ -146,7 +160,9 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const files = Atom.family((search: FileQuery) =>
     Atom.make((get) =>
-      Effect.flatMap(get.result(session(search.root)), (opened) => opened.searchFiles(search.query, search.type)),
+      search.query
+        ? Effect.flatMap(get.result(session(search.root)), (opened) => opened.searchFiles(search.query, search.type))
+        : Effect.succeed([]),
     ),
   )
 
@@ -181,6 +197,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
   )
 
   return {
+    handoff,
     session,
     state,
     status,

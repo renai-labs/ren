@@ -158,3 +158,111 @@ export const Retry: Story = {
     <Transcript.Retry attempt={2} message="The model provider is overloaded" next={Date.UTC(2026, 0, 1, 12, 0, 10)} />
   ),
 }
+
+const reportHunks: ReadonlyArray<Transcript.DiffHunk> = [
+  {
+    collapsedBefore: 0,
+    lines: [
+      { type: "context", text: 'import { revenue } from "./revenue"', oldLine: 1, newLine: 1 },
+      { type: "deletion", text: "export const growth = revenue.total * 0.1", oldLine: 2, newLine: undefined },
+      { type: "addition", text: "export const growth = revenue.total * 0.12", oldLine: undefined, newLine: 2 },
+      { type: "addition", text: "export const churn = 0.024", oldLine: undefined, newLine: 3 },
+    ],
+  },
+  {
+    collapsedBefore: 12,
+    lines: [{ type: "context", text: "export default growth", oldLine: 15, newLine: 16 }],
+  },
+]
+
+export const FileChanges: Story = {
+  render: () => (
+    <Transcript.FileChanges>
+      <Transcript.FileChange path="src/report/summary.ts" change="modified" additions={2} deletions={1}>
+        <Transcript.Diff file="src/report/summary.ts" hunks={reportHunks} />
+      </Transcript.FileChange>
+      <Transcript.FileChange path="src/report/churn.ts" change="created" additions={1} deletions={0}>
+        <Transcript.Diff
+          file="src/report/churn.ts"
+          hunks={[
+            {
+              collapsedBefore: 0,
+              lines: [{ type: "addition", text: "export const churn = 0.024", oldLine: undefined, newLine: 1 }],
+            },
+          ]}
+        />
+      </Transcript.FileChange>
+      <Transcript.FileChange path="src/report/legacy.ts" change="deleted" additions={0} deletions={3} />
+    </Transcript.FileChanges>
+  ),
+}
+
+export const Subagent: Story = {
+  decorators: inList,
+  render: () => (
+    <Transcript.Subagent
+      title="Explore"
+      description="Find where revenue is computed"
+      status="completed"
+      tools={4}
+      onOpen={() => undefined}
+    />
+  ),
+}
+export const SubagentRunning: Story = {
+  decorators: inList,
+  render: () => (
+    <Transcript.Subagent
+      title="Explore"
+      description="Find where revenue is computed"
+      status="running"
+      background
+      needsInput
+      tools={1}
+      activity="grep revenue"
+      onOpen={() => undefined}
+    />
+  ),
+}
+
+export const Links: Story = {
+  render: () => (
+    <Transcript.Links
+      label="Search results"
+      links={Array.from({ length: 12 }, (_, index) => `https://docs.example.com/revenue/${index + 1}`)}
+    />
+  ),
+}
+
+export const Answers: Story = {
+  render: () => (
+    <Transcript.Answers
+      items={[
+        { question: "Which package manager should the new workspace use?", answer: "Bun" },
+        { question: "Which checks should run before each commit?", answer: "Lint, Typecheck" },
+      ]}
+    />
+  ),
+}
+
+export const ResponseWithLinks: Story = {
+  render: () => (
+    <Transcript.Response
+      content="The subagent ses_01JZ8Q3RVK7M2N4P6S8T0W2Y4A finished. The docs live at `https://docs.example.com/revenue`."
+      streaming={false}
+      onOpenSession={() => undefined}
+    />
+  ),
+}
+
+export const UserText: Story = {
+  render: () => (
+    <Transcript.UserText
+      text="Ask @review to check @src/report/summary.ts before Friday"
+      highlights={[
+        { start: 4, end: 11 },
+        { start: 21, end: 43 },
+      ]}
+    />
+  ),
+}

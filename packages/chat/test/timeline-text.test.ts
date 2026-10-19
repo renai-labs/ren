@@ -171,4 +171,42 @@ describe("timeline text", () => {
     expect(TimelineText.shellError(shell({ exit: 0 }))).toBeUndefined()
     expect(TimelineText.shellError(shell({ status: "running" }))).toBeUndefined()
   })
+
+  test("highlights mention ranges in order and skips overlaps", () => {
+    const user: SessionMessage.User = {
+      id: SessionMessage.ID.make("msg_user"),
+      type: "user",
+      text: "Ask @review about @src/a.ts now",
+      time: { created: at(1) },
+      agents: [{ name: "review", mention: { start: 4, end: 11, text: "@review" } }],
+      files: [
+        {
+          data: "",
+          mime: "text/plain",
+          source: { type: "uri", uri: "file:///src/a.ts" },
+          mention: { start: 18, end: 27, text: "@src/a.ts" },
+        },
+        {
+          data: "",
+          mime: "text/plain",
+          source: { type: "uri", uri: "file:///src" },
+          mention: { start: 20, end: 24, text: "rc/a" },
+        },
+      ],
+    }
+    expect(TimelineText.mentions(user)).toEqual([
+      { start: 4, end: 11 },
+      { start: 18, end: 27 },
+    ])
+  })
+
+  test("names a model from the catalog with its variant", () => {
+    const names = new Map([["claude-sonnet", "Claude Sonnet"]])
+    expect(TimelineText.modelLabel({ id: "claude-sonnet", providerID: "anthropic" }, names)).toBe("Claude Sonnet")
+    expect(TimelineText.modelLabel({ id: "claude-sonnet", providerID: "anthropic", variant: "high" }, names)).toBe(
+      "Claude Sonnet High",
+    )
+    expect(TimelineText.modelLabel({ id: "gpt", providerID: "openai", variant: "default" }, names)).toBe("gpt")
+    expect(TimelineText.modelLabel({ id: "", providerID: "" }, names)).toBeUndefined()
+  })
 })

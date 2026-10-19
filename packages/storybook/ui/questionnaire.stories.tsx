@@ -3,7 +3,7 @@ import { useState } from "react"
 import { Button } from "@ren/ui/button"
 import { Notice } from "@ren/ui/notice"
 import { Questionnaire } from "@ren/ui/questionnaire"
-import type { QuestionnaireQuestion } from "@ren/ui/questionnaire"
+import type { QuestionnaireProgress, QuestionnaireQuestion } from "@ren/ui/questionnaire"
 
 const permission: QuestionnaireQuestion = {
   name: "permission",
@@ -87,3 +87,49 @@ export const LeadingAction: Story = {
     ),
   },
 }
+
+function DismissibleQuestionnaire() {
+  const [dismissed, setDismissed] = useState(false)
+  return (
+    <div className="flex w-120 flex-col gap-4">
+      <Questionnaire
+        questions={questions}
+        onSubmit={() => undefined}
+        onDismiss={() => setDismissed(true)}
+        collapsible
+      />
+      {dismissed ? <Notice title="Dismissed">The question was dismissed.</Notice> : null}
+    </div>
+  )
+}
+
+export const Dismissible: Story = { render: () => <DismissibleQuestionnaire /> }
+
+function SavedQuestionnaire() {
+  const [saved, setSaved] = useState<QuestionnaireProgress>()
+  return (
+    <div className="flex w-120 flex-col gap-4">
+      <Questionnaire
+        questions={questions}
+        onSubmit={() => undefined}
+        progress={{
+          step: 1,
+          answers: {
+            q0: { choices: ["Bun"], custom: "", skipped: false },
+            q1: { choices: ["Lint"], custom: "", skipped: false },
+          },
+        }}
+        onProgressChange={setSaved}
+      />
+      {saved === undefined ? null : (
+        <Notice title="Saved">
+          {`Step ${saved.step + 1}: ${Object.entries(saved.answers)
+            .map((entry) => `${entry[0]} ${entry[1].choices.join(", ")}`)
+            .join(", ")}`}
+        </Notice>
+      )}
+    </div>
+  )
+}
+
+export const SavedProgress: Story = { render: () => <SavedQuestionnaire /> }

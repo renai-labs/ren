@@ -39,4 +39,10 @@ describe("Composer keys", () => {
     expect(ComposerKeys.intent(key("ArrowUp", { altKey: true }), false)).toBeUndefined()
     expect(ComposerKeys.intent(key("ArrowDown", { shiftKey: true }), false)).toBeUndefined()
   })
+
+  test("Mod+ArrowUp moves the first queued message back to the text field", () => {
+    expect(ComposerKeys.intent(key("ArrowUp", { metaKey: true }), false)).toBe("edit")
+    expect(ComposerKeys.intent(key("ArrowUp", { ctrlKey: true }), true)).toBe("edit")
+    expect(ComposerKeys.intent(key("ArrowDown", { metaKey: true }), false)).toBeUndefined()
+  })
 })

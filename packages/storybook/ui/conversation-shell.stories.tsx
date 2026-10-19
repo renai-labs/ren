@@ -159,6 +159,142 @@ function LiveComposer(props: {
   )
 }
 
+const mentionItems: ReadonlyArray<ConversationShell.Suggestion> = [
+  { value: "agent:explore", kind: "agent", label: "explore", description: "Searches the codebase" },
+  { value: "agent:general", kind: "agent", label: "general", description: "Researches open questions" },
+  { value: "skill:release-notes", kind: "skill", label: "Release notes", description: "Writes release notes" },
+  { value: "file:docs/plan.md", kind: "file", label: "docs/plan.md" },
+]
+
+const mentionTrigger = /(?:^|\s)@([^\s@]*)$/
+
+const mentionRanges = (text: string, picked: ReadonlyArray<ConversationShell.Suggestion>) =>
+  picked.flatMap((item) => {
+    const needle = `@  ${item.label}`
+    const start = text.indexOf(needle)
+    return start === -1 || item.kind === "command"
+      ? []
+      : [{ start, end: start + needle.length, kind: item.kind, label: item.label }]
+  })
+
+function MentionComposer() {
+  const input = useRef<HTMLTextAreaElement>(null)
+  const [draft, setDraft] = useState("")
+  const [query, setQuery] = useState<{ start: number; text: string }>()
+  const [active, setActive] = useState<string>()
+  const [picked, setPicked] = useState<ReadonlyArray<ConversationShell.Suggestion>>([])
+  const [sent, setSent] = useState("")
+  const items = query ? mentionItems.filter((item) => item.label.toLowerCase().includes(query.text.toLowerCase())) : []
+  const current = active && items.some((item) => item.value === active) ? active : items.at(0)?.value
+  const mentions = mentionRanges(draft, picked)
+  const choose = (value: string) => {
+    const item = mentionItems.find((entry) => entry.value === value)
+    const cursor = input.current?.selectionStart ?? draft.length
+    if (!item || !query) return
+    const inserted = `@  ${item.label} `
+    const next = draft.slice(0, query.start) + inserted + draft.slice(cursor)
+    setDraft(next)
+    setPicked((previous) => [...previous, item])
+    setQuery(undefined)
+    requestAnimationFrame(() =>
+      input.current?.setSelectionRange(query.start + inserted.length, query.start + inserted.length),
+    )
+  }
+  const navigate = (key: string) => {
+    const ids = items.map((item) => item.value)
+    const index = current ? ids.indexOf(current) : -1
+    if (key === "ArrowDown" || key === "ArrowUp")
+      setActive(ids.at((index + (key === "ArrowDown" ? 1 : -1)) % ids.length))
+    if (key === "Enter" && current) choose(current)
+    if (key === "Escape") setQuery(undefined)
+    return ["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(key)
+  }
+  const unmention = (key: string, caret: number) => {
+    const mention = mentions.find((range) => range.end === caret)
+    if (key !== "Backspace" || !mention) return false
+    setDraft(draft.slice(0, mention.start) + draft.slice(mention.end))
+    return true
+  }
+  return (
+    <>
+      <ConversationShell.Composer
+        label="Message Ren"
+        onSubmit={() => {
+          setSent(draft)
+          setDraft("")
+        }}
+        suggestions={
+          items.length > 0 ? (
+            <ConversationShell.Suggestions
+              label="Mentions"
+              items={items}
+              active={current}
+              onActiveChange={setActive}
+              onSelect={choose}
+            />
+          ) : undefined
+        }
+        footerTrailing={
+          <IconButton type="submit" appearance="primary" shape="circle" size="medium" label="Send">
+            <Icon glyph="ArrowUp" />
+          </IconButton>
+        }
+      >
+        <ConversationShell.ComposerInput
+          ref={input}
+          aria-label="Message"
+          placeholder="Ask @explore to find the billing code"
+          value={draft}
+          mentions={mentions}
+          {...(current && { activeSuggestion: current })}
+          onChange={(event) => {
+            const value = event.currentTarget.value
+            const match = mentionTrigger.exec(value.slice(0, event.currentTarget.selectionStart))
+            setDraft(value)
+            setQuery(
+              match
+                ? { start: event.currentTarget.selectionStart - (match[1] ?? "").length - 1, text: match[1] ?? "" }
+                : undefined,
+            )
+          }}
+          onKeyDown={(event) => {
+            if (items.length > 0 ? navigate(event.key) : unmention(event.key, event.currentTarget.selectionStart))
+              event.preventDefault()
+          }}
+        />
+      </ConversationShell.Composer>
+      <output aria-label="Sent messages">{sent}</output>
+    </>
+  )
+}
+
+function MentionedComposer() {
+  return (
+    <ConversationShell.Composer
+      label="Message Ren"
+      onSubmit={() => undefined}
+      footerTrailing={
+        <IconButton type="submit" appearance="primary" shape="circle" size="medium" label="Send">
+          <Icon glyph="ArrowUp" />
+        </IconButton>
+      }
+    >
+      <ConversationShell.ComposerInput
+        aria-label="Message"
+        value="Ask @  general to review the plan"
+        readOnly
+        overlay="highlight"
+        overlayContent={
+          <span>
+            Ask <ConversationShell.Mention icon={<Icon glyph="Ghost" />}>{"  "}general</ConversationShell.Mention> to
+            review the plan
+          </span>
+        }
+      />
+    </ConversationShell.Composer>
+  )
+}
+
 const transcript = (
   <>
     <ConversationShell.Message author="user" sender="Ada Lovelace" avatar={<Avatar.Root name="Ada Lovelace" />}>
@@ -304,6 +440,9 @@ export const PastedText: Story = {
     ),
   },
 }
+
+export const ComposerMention: Story = { args: { composer: <MentionedComposer /> } }
+export const MentionSuggestions: Story = { args: { composer: <MentionComposer /> } }
 
 type Turn = { readonly key: string; readonly author: "user" | "assistant"; readonly text: string }
 

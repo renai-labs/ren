@@ -41,6 +41,13 @@ describe("intent", () => {
     expect(SessionKeys.intent(press({ key: "Escape" }), root)).toBeUndefined()
   })
 
+  test("mod+f opens find in the chat", () => {
+    expect(SessionKeys.intent(press({ key: "f", code: "KeyF", metaKey: true }), root)).toBe("find")
+    expect(SessionKeys.intent(press({ key: "f", code: "KeyF", ctrlKey: true }), { ...root, apple: false })).toBe("find")
+    expect(SessionKeys.intent(press({ key: "f", code: "KeyF", ctrlKey: true }), root)).toBeUndefined()
+    expect(SessionKeys.intent(press({ key: "f", code: "KeyF", metaKey: true, shiftKey: true }), root)).toBeUndefined()
+  })
+
   test("ignores key repeat and IME composition", () => {
     const key = press({ code: "BracketLeft", metaKey: true, altKey: true })
     expect(SessionKeys.intent({ ...key, repeat: true }, root)).toBeUndefined()

@@ -8,6 +8,7 @@ import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
 import { useState } from "react"
 import type { ReactNode } from "react"
+import { FormProgress } from "./form-progress.js"
 import { Requests } from "./requests.js"
 import { SessionTitle } from "./session-title.js"
 
@@ -104,6 +105,16 @@ export function SessionRequests(props: {
           resetKey={form.id}
           questions={Requests.formQuestions(form)}
           pending={sending === form.id}
+          collapsible
+          progress={FormProgress.read(form.id)}
+          onProgressChange={(progress) => FormProgress.write(form.id, progress)}
+          onDismiss={() =>
+            settle(
+              form.id,
+              () => cancelForm([Session.ID.make(form.sessionID), form.id]),
+              "Could not dismiss the question",
+            )
+          }
           leadingAction={
             <Button
               appearance="plain"
@@ -123,7 +134,10 @@ export function SessionRequests(props: {
           onSubmit={(data) =>
             settle(
               form.id,
-              () => replyForm([Session.ID.make(form.sessionID), form.id, Requests.readFormAnswer(form, data)]),
+              () =>
+                replyForm([Session.ID.make(form.sessionID), form.id, Requests.readFormAnswer(form, data)]).then(() =>
+                  FormProgress.clear(form.id),
+                ),
               "Could not send your answer",
             )
           }

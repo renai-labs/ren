@@ -8,6 +8,7 @@ export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
   validateSearch: Schema.toStandardSchemaV1(
     Schema.Struct({
       message: Schema.optionalKey(SessionMessage.ID.pipe(Schema.catchDecoding(() => Effect.succeedNone))),
+      part: Schema.optionalKey(Schema.NonEmptyString.pipe(Schema.catchDecoding(() => Effect.succeedNone))),
       child: Schema.optionalKey(Session.ID.pipe(Schema.catchDecoding(() => Effect.succeedNone))),
     }),
   ),

@@ -20,13 +20,17 @@ export function SessionPage() {
           key={params.sessionId}
           sessionID={Session.ID.make(params.sessionId)}
           message={search.message}
+          part={search.part}
           child={search.child}
           onFollow={() => {
-            if (search.message)
+            if (search.message || search.part)
               void navigate({ search: (previous) => (previous.child ? { child: previous.child } : {}), replace: true })
           }}
           onChild={(child) => void navigate({ search: child ? { child } : {} })}
           onArchived={() => void navigate({ to: "/" })}
+          onNavigate={(sessionID) =>
+            void navigate({ to: "/sessions/$sessionId", params: { sessionId: sessionID }, search: {} })
+          }
         />
       </ChatReact.Provider>
     </RegistryContext>

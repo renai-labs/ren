@@ -42,9 +42,12 @@ export type TimelineProps<Item> = {
   // ast-grep-ignore: no-render-props, -- hands each virtualized row back to the caller
   renderItem: (item: Item) => ReactNode
   marker?: (item: Item) => boolean
+  itemMessage?: (item: Item) => string | undefined
+  itemBusy?: (item: Item) => boolean
   footer?: ReactNode
   history?: TimelineHistory | undefined
   target?: string | undefined
+  hold?: boolean
   onFollowChange?: (following: boolean) => void
   ref?: Ref<TimelineHandle>
 }
@@ -96,6 +99,7 @@ interface Gesture {
   active: { key: string; mark: number } | undefined
   frame: number | undefined
   revealed: string | undefined
+  anchor: string | undefined
   requesting: boolean
   dock: number
   stick: boolean
@@ -115,6 +119,7 @@ const gesture = (): Gesture => ({
   active: undefined,
   frame: undefined,
   revealed: undefined,
+  anchor: undefined,
   requesting: false,
   dock: 0,
   stick: false,
@@ -140,6 +145,7 @@ export function Timeline<Item>(props: TimelineProps<Item>) {
   const sizer = useRef<HTMLDivElement>(null)
   const following = useRef(true)
   const state = useRef(gesture()).current
+  const latest = useRef<ReadonlyArray<string>>([])
   const [pinned, setPinned] = useState(true)
   const [jump, setJump] = useState(false)
   const [margin, setMargin] = useState(48)
@@ -178,7 +184,10 @@ export function Timeline<Item>(props: TimelineProps<Item>) {
   const follow = (next: boolean) => {
     if (following.current === next) return
     following.current = next
-    if (next) state.active = undefined
+    if (next) {
+      state.active = undefined
+      state.anchor = undefined
+    }
     setPinned(next)
     props.onFollowChange?.(next)
   }
@@ -206,6 +215,7 @@ export function Timeline<Item>(props: TimelineProps<Item>) {
     const root = scroller.current
     if (!root || nestedScroller(target, root)) return
     state.mark += 1
+    state.anchor = undefined
   }
   const loadOlder = () => {
     const root = scroller.current
@@ -232,6 +242,7 @@ export function Timeline<Item>(props: TimelineProps<Item>) {
   useImperativeHandle(props.ref, () => ({ resume, step }))
 
   useLayoutEffect(() => {
+    latest.current = keys
     const initial = state.known.size === 0
     for (const key of keys.filter((item) => !state.known.has(item))) {
       if (!initial) state.added.add(key)
@@ -271,6 +282,8 @@ export function Timeline<Item>(props: TimelineProps<Item>) {
           if (String(virtualizer.options.getItemKey(entry[0])) === entry[1].key) resize(entry[0], entry[1].size)
         const root = scroller.current
         if (following.current && root && Math.abs(distanceFromEnd(root)) > endEpsilon) virtualizer.scrollToEnd()
+        const anchored = state.anchor === undefined ? -1 : latest.current.indexOf(state.anchor)
+        if (!following.current && anchored >= 0) virtualizer.scrollToIndex(anchored, { align: "start" })
       })
     }
     return () => {
@@ -286,7 +299,7 @@ export function Timeline<Item>(props: TimelineProps<Item>) {
     state.maxScroll = root.scrollHeight - root.clientHeight
     const atEnd = state.maxScroll - state.scrollTop <= endEpsilon
     const arrived = state.scrollTop > previousTop + endEpsilon || state.maxScroll < previousMax
-    if (state.maxScroll <= 1 || (atEnd && arrived)) follow(true)
+    if (state.maxScroll <= 1 || (atEnd && arrived && state.anchor === undefined)) follow(true)
     else if ((state.pointer || state.touching) && state.scrollTop < previousTop - endEpsilon) unpin()
     schedule()
     if (!following.current) loadOlder()
@@ -424,6 +437,7 @@ export function Timeline<Item>(props: TimelineProps<Item>) {
     if (props.target === undefined) state.revealed = undefined
     if (!settled || targetIndex < 0 || state.revealed === props.target) return
     state.revealed = props.target
+    state.anchor = props.hold ? props.target : undefined
     following.current = false
     setPinned(false)
     props.onFollowChange?.(false)
@@ -471,6 +485,14 @@ export function Timeline<Item>(props: TimelineProps<Item>) {
                 <div
                   key={row.key}
                   data-index={row.index}
+                  data-row-key={row.key}
+                  data-message-id={item === undefined ? undefined : props.itemMessage?.(item)}
+                  id={
+                    item !== undefined && props.marker?.(item) && props.itemMessage?.(item)
+                      ? `message-${props.itemMessage(item)}`
+                      : undefined
+                  }
+                  aria-busy={item !== undefined && props.itemBusy?.(item) ? true : undefined}
                   ref={virtualizer.measureElement}
                   className="absolute inset-x-0 top-0"
                   style={{ transform: `translateY(${row.start - margin}px)` }}

@@ -149,3 +149,31 @@ export const Hidden = {
 export const Auxiliary = {
   args: { transcript, composer: <Composer />, auxiliary: <Text purpose="heading">Artifacts</Text> },
 }
+export const ComposerMention = {
+  args: {
+    transcript,
+    composer: (
+      <ConversationShell.Composer
+        onSubmit={() => undefined}
+        footerTrailing={
+          <IconButton type="submit" appearance="primary" shape="circle" size="medium" label="Send">
+            <Icon glyph="ArrowUp" />
+          </IconButton>
+        }
+      >
+        <ConversationShell.ComposerInput
+          aria-label="Message"
+          value="Ask @  general to review the plan"
+          readOnly
+          overlay="highlight"
+          overlayContent={
+            <span>
+              Ask <ConversationShell.Mention icon={<Icon glyph="Ghost" />}>{"  "}general</ConversationShell.Mention> to
+              review the plan
+            </span>
+          }
+        />
+      </ConversationShell.Composer>
+    ),
+  },
+}

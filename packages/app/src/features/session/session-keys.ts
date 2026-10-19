@@ -12,12 +12,18 @@ export interface Context {
   readonly blocking: boolean
 }
 
-export type Intent = "previous" | "next" | "background" | "parent"
+export type Intent = "previous" | "next" | "background" | "parent" | "find"
 
 const brackets: Readonly<Record<string, Intent>> = { BracketLeft: "previous", BracketRight: "next" }
 
 const modified = (press: Press, apple: boolean) =>
   (apple ? press.metaKey && !press.ctrlKey : press.ctrlKey && !press.metaKey) && press.altKey && !press.shiftKey
+
+const find = (press: Press, apple: boolean) =>
+  (apple ? press.metaKey && !press.ctrlKey : press.ctrlKey && !press.metaKey) &&
+  !press.altKey &&
+  !press.shiftKey &&
+  press.code === "KeyF"
 
 const plain = (press: Press) => !press.metaKey && !press.altKey && !press.shiftKey
 
@@ -30,6 +36,7 @@ const parent = (press: Press, context: Context) =>
 export function intent(press: Press, context: Context): Intent | undefined {
   if (press.isComposing || press.repeat) return
   if (modified(press, context.apple)) return brackets[press.code]
+  if (find(press, context.apple)) return "find"
   if (background(press, context)) return "background"
   if (parent(press, context)) return "parent"
   return
