@@ -1,10 +1,11 @@
 export * as HandProvider from "./hand-provider.js"
 
-import type { Signature } from "@ren/hand-api/signature"
+import { ExecutorClient } from "@ren/hand-api/executor-client"
 import type { Environment } from "@ren/schema/environment"
 import type { Hand } from "@ren/schema/hand"
 import type { HandProvider } from "@ren/schema/hand-provider"
-import { Context, Effect, Layer, Option, Schema } from "effect"
+import { Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
+import { type HttpClient, HttpClientRequest } from "effect/http"
 
 export { ID, Info, Infos } from "@ren/schema/hand-provider"
 
@@ -20,7 +21,7 @@ interface ProvisionInput<Config> {
   readonly handId: Hand.ID
   readonly environmentId: Environment.ID
   readonly config: Config
-  readonly publicKeys: readonly [Signature.PublicKey, ...ReadonlyArray<Signature.PublicKey>]
+  readonly variables: Readonly<Record<string, string>>
 }
 
 export interface Endpoint {
@@ -45,6 +46,24 @@ export interface Provider {
   readonly connect: (binding: Schema.Json) => Effect.Effect<Endpoint, Gone | Failed>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
 }
+
+const executorAnswersWithin = Duration.seconds(1)
+
+const executorAskedEvery = Duration.millis(200)
+
+const executorReadyWithin = Duration.seconds(30)
+
+export const waitForExecutor = (http: HttpClient.HttpClient, url: URL) =>
+  http.execute(HttpClientRequest.post(ExecutorClient.rpcUrl(url))).pipe(
+    Effect.asVoid,
+    Effect.timeout(executorAnswersWithin),
+    Effect.retry({ schedule: Schedule.spaced(executorAskedEvery) }),
+    Effect.timeout(executorReadyWithin),
+    Effect.mapError(
+      () =>
+        new Failed({ message: `The executor at ${url} did not answer within ${Duration.format(executorReadyWithin)}` }),
+    ),
+  )
 
 export const make = <Config, Binding>(definition: Definition<Config, Binding>): Provider => {
   const config = Schema.toCodecJson(definition.config)

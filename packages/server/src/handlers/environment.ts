@@ -1,4 +1,5 @@
 import { Environments } from "@ren/core/environments"
+import { HandProvider } from "@ren/core/hand-provider"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "../api.js"
@@ -18,7 +19,9 @@ export const EnvironmentHandler = HttpApiBuilder.group(Api, "environment", (hand
 
 export const HandProviderHandler = HttpApiBuilder.group(Api, "handProvider", (handlers) =>
   Effect.gen(function* () {
-    const environments = yield* Environments.Service
-    return handlers.handle("handProvider.list", () => environments.providers)
+    const registry = yield* HandProvider.Registry
+    return handlers.handle("handProvider.list", () =>
+      Effect.succeed(registry.providers.map((provider) => provider.info)),
+    )
   }),
 )

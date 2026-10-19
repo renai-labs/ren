@@ -1,5 +1,6 @@
 import { describe, expect } from "bun:test"
 import { BunServices } from "@effect/platform-bun"
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { HandToken } from "@ren/hand-api/hand-token"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Image, Sandbox } from "@ren/executor/testing"
@@ -23,11 +24,12 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
         const provider = yield* Docker.provider
         const image = yield* Effect.promise(Image.build)
         const config = yield* provider.check({ image, memoryMiB: 512 })
+        const handId = Hand.ID.create()
         const input = {
-          handId: Hand.ID.create(),
+          handId,
           environmentId: Environment.ID.create(),
           config,
-          publicKeys: [Sandbox.keys.publicKey] as const,
+          variables: ExecutorVariables.make(handId, [Sandbox.keys.publicKey]),
         }
         const bindings = yield* Effect.all([provider.provision(input), provider.provision(input)], {
           concurrency: "unbounded",

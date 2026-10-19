@@ -3,6 +3,7 @@ export * as Server from "./server.js"
 import { HandToken } from "@ren/hand-api/hand-token"
 import { Authentication, Caller, ExecutorApi, UnauthorizedError } from "@ren/hand-api/executor-api"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { Signature } from "@ren/hand-api/signature"
 import { Config, Effect, Layer, Option, Schema, Stream } from "effect"
 import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -12,7 +13,7 @@ import { Executor } from "./executor.js"
 const unauthorized = new UnauthorizedError({ message: "Authentication required" })
 
 const authenticationCheck = Effect.gen(function* () {
-  const publicKeys = yield* Config.schema(Signature.PublicKeys, "HAND_PUBLIC_KEYS")
+  const publicKeys = yield* Config.schema(Signature.PublicKeys, ExecutorVariables.publicKeys)
   const executor = yield* Executor.Service
   return (authorizationHeader: string | undefined) => {
     const token = authorizationHeader?.toLowerCase().startsWith("bearer ") ? authorizationHeader.slice(7).trim() : ""

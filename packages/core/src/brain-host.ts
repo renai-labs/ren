@@ -15,7 +15,6 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
-import type { Space } from "@ren/schema/space"
 import {
   Array,
   ByteSize,
@@ -53,15 +52,10 @@ export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("Br
   cause: Schema.Defect(),
 }) {}
 
-export interface Owner {
-  readonly organizationId: Auth.OrganizationID
-  readonly spaceId: Space.ID
-}
-
 export interface Interface {
   readonly start: (
     input: Session.StartInput,
-    owner: Owner,
+    placement: Hands.Placement,
   ) => Effect.Effect<Session.Started, BrainUnavailable | BrainRejectedError>
   readonly send: (
     input: Session.SendInput,
@@ -221,14 +215,14 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, owner: Owner) {
+      start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, placement: Hands.Placement) {
         if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
-        const subject = { sessionId: input.sessionId, organizationId: owner.organizationId }
+        const subject = { sessionId: input.sessionId, organizationId: placement.organizationId }
         const requested = input.environmentId
         const binding = requested
           ? Option.some(
               yield* hands
-                .bind({ ...subject, spaceId: owner.spaceId }, requested)
+                .bind({ ...subject, spaceId: placement.spaceId }, requested)
                 .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
             )
           : Option.map(yield* hands.find(subject), (directory) => ({ directory, isNew: false }))

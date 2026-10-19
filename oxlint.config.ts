@@ -42,7 +42,7 @@ const packageBoundaries = [
   {
     files: ["packages/executor/**"],
     regex: "^@ren/(?!schema(/|$)|hand-api(/|$))",
-    message: "The executor runs on an environment's machine. It depends only on schema and the Hand API.",
+    message: "The executor runs on a hand's machine. It depends only on schema and the Hand API.",
   },
   {
     files: ["packages/db/**"],
@@ -57,19 +57,19 @@ const packageBoundaries = [
   {
     files: ["packages/cell/**"],
     regex: "^@ren/(core|db|server|protocol)(/|$)",
-    message: "The cell bundle runs in workerd. It depends only on schema and the Brain API.",
+    message: "The cell bundle runs in workerd. It depends only on schema, the Brain API, the Hand API and brain.",
   },
   {
     files: ["packages/cell/src/*.ts"],
-    regex: "^(@ren/(core|db|server|protocol)(/|$)|@opencode/)",
+    regex: "^(@ren/(core|db|server|protocol|executor)(/|$)|@opencode/)",
     message:
-      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema and the Brain API.",
+      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema, the Brain API, the Hand API and brain.",
   },
   {
     files: ["packages/cell/src/harness/**"],
-    regex: "^(@ren/(core|db|server|protocol)(/|$)|cloudflare:)",
+    regex: "^(@ren/(core|db|server|protocol|executor)(/|$)|cloudflare:)",
     message:
-      "A harness never uses Durable Object APIs; the host passes it storage and requests. The cell depends only on schema and the Brain API.",
+      "A harness never uses Durable Object APIs; the host passes it storage and requests. The cell depends only on schema, the Brain API, the Hand API and brain.",
   },
   {
     files: ["packages/server/src/handlers/**"],

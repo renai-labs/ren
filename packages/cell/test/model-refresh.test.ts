@@ -4,6 +4,7 @@ import { testEffect } from "@ren/executor/testing"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Context, DateTime, Effect, Fiber, Layer, Option, Redacted, Schema, type Scope } from "effect"
+import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { ModelRefresh } from "../src/model-refresh.js"
 import { HostToken } from "../src/host-token.js"
@@ -49,6 +50,7 @@ const make = Effect.gen(function* () {
     ModelRefresh.layer(issuer.url).pipe(
       Layer.provideMerge(HostToken.layer(issuer.url, TestToken.keys)),
       Layer.provideMerge(ModelsTest.storage()),
+      Layer.provide(FetchHttpClient.layer),
     ),
   )
   return {

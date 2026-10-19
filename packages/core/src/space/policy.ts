@@ -4,6 +4,7 @@ import { Auth } from "@ren/schema/auth"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { Space } from "@ren/schema/space"
+import { SpaceEnvironment } from "@ren/schema/space-environment"
 import { SpaceMember } from "@ren/schema/space-member"
 import { isNotNull, or, sql } from "drizzle-orm"
 import type { Access } from "../access.js"
@@ -14,8 +15,6 @@ const spaceMember = {
   holds: (membershipId: Space.MembershipID | null) => Boolean(membershipId),
   condition: isNotNull(SpaceQueries.membership.id),
 }
-
-export const memberOfSpace = spaceMember.name
 
 export const administratorRoles = ["owner", "admin"] as const satisfies ReadonlyArray<Auth.Role>
 
@@ -28,6 +27,8 @@ const organizationActions = Primitive.actions(Space.definition, ["list", "create
 const spaceActions = Primitive.actions(Space.definition, ["get", "update", "archive"])
 
 const memberActions = Primitive.actions(SpaceMember.definition)
+
+const spaceEnvironmentActions = Primitive.actions(SpaceEnvironment.definition)
 
 export const documents = [
   {
@@ -43,6 +44,13 @@ export const documents = [
     statements: [
       { actions: memberActions, roles: administratorRoles, on: Policy.everywhere },
       { actions: memberActions, roles: organizationRoles, on: spaceMember.name },
+    ],
+  },
+  {
+    primitive: SpaceEnvironment.definition.name,
+    statements: [
+      { actions: spaceEnvironmentActions, roles: administratorRoles, on: Policy.everywhere },
+      { actions: spaceEnvironmentActions, roles: organizationRoles, on: spaceMember.name },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>

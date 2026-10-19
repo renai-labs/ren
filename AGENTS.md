@@ -23,7 +23,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 
 - Runtime dependencies point from `schema` to `protocol`, `db` and `core`, and from those to `server`.
 - `brain-api` is the internal contract between Ren and a session's host: it depends only on `schema`; `core` calls it and `cell` serves it. `cell` depends only on `schema`, `brain-api`, `hand-api` and `brain`.
-- `hand-api` is the internal contract between a brain and a hand's executor, and the environment token Ren signs for it: it depends only on `schema`; `core` signs, `brain` calls and `executor` serves.
+- `hand-api` is the internal contract between a brain and a hand's executor, and the hand token Ren signs for it: it depends only on `schema`; `core` signs, `brain` calls and `executor` serves.
 - `executor` runs on a hand's machine and serves the Executor API. It depends only on `schema` and `hand-api`.
 - `brain` holds brain code that is the same on every host and every harness: how a brain reaches its hand. It depends only on `schema` and `hand-api`.
 - `client` may depend only on `schema` and `protocol`. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `schema`, `ui` and `util`, and uses `better-auth/client` for auth flows.
