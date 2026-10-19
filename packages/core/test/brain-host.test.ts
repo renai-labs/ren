@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { Shared, TestToken } from "@ren/cell/testing"
 import { SessionToken } from "@ren/brain-api/session-token"
-import { Signature } from "@ren/brain-api/signature"
+import { Signature } from "@ren/hand-api/signature"
 import { Testing } from "@ren/db/testing"
 import { Environment } from "@ren/schema/environment"
 import { Auth } from "@ren/schema/auth"

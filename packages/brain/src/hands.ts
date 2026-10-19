@@ -1,7 +1,7 @@
-export * as Environments from "./environments.js"
+export * as Hands from "./hands.js"
 
-import { type Hello, protocol } from "@ren/brain-api/executor-api"
-import { ExecutorClient } from "@ren/brain-api/executor-client"
+import { type Hello, protocol } from "@ren/hand-api/executor-api"
+import { ExecutorClient } from "@ren/hand-api/executor-client"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import {
@@ -22,7 +22,7 @@ import {
 import { HttpClient } from "effect/http"
 import { EnvironmentAccess } from "./environment-access.js"
 
-export class Unavailable extends Schema.TaggedError<Unavailable>()("Environments.Unavailable", {
+export class Unavailable extends Schema.TaggedError<Unavailable>()("Hands.Unavailable", {
   sessionId: Session.ID,
   reason: Schema.Literals(["no_access", "ren_unavailable", "unreachable", "token_refused", "incompatible", "unusable"]),
   message: Schema.String,
@@ -45,7 +45,7 @@ export interface Interface {
   readonly connect: (sessionId: Session.ID) => Effect.Effect<Connection, Unavailable, Scope.Scope>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@ren/brain/Environments") {}
+export class Service extends Context.Service<Service, Interface>()("@ren/brain/Hands") {}
 
 interface Entry {
   readonly connection: Connection
@@ -60,7 +60,7 @@ export const layer = Layer.effect(
     const accesses = new Map<Session.ID, SynchronizedRef.SynchronizedRef<Environment.Access>>()
     const failures = new Map<Session.ID, { readonly error: Unavailable; readonly retryAtMs: number }>()
 
-    const ask = Effect.fn("Environments.ask")(function* (sessionId: Session.ID) {
+    const ask = Effect.fn("Hands.ask")(function* (sessionId: Session.ID) {
       const now = yield* Clock.currentTimeMillis
       const failed = failures.get(sessionId)
       if (failed?.error.reason === "ren_unavailable" && now < failed.retryAtMs) return yield* failed.error
@@ -83,7 +83,7 @@ export const layer = Layer.effect(
 
     const connections: RcMap.RcMap<Session.ID, Entry, Unavailable> = yield* RcMap.make({
       idleTimeToLive: Duration.infinity,
-      lookup: Effect.fn("Environments.lookup")(function* (sessionId: Session.ID) {
+      lookup: Effect.fn("Hands.lookup")(function* (sessionId: Session.ID) {
         const entryScope = yield* Effect.scope
         const attempt = yield* Scope.fork(entryScope)
         return yield* Effect.gen(function* () {
@@ -200,7 +200,7 @@ export const layer = Layer.effect(
       }),
     })
     return Service.of({
-      connect: Effect.fn("Environments.connect")(function* (sessionId: Session.ID) {
+      connect: Effect.fn("Hands.connect")(function* (sessionId: Session.ID) {
         const entry = yield* RcMap.get(connections, sessionId).pipe(
           Effect.tapError(() => RcMap.invalidate(connections, sessionId)),
         )

@@ -55,7 +55,7 @@
       "name": "@ren/brain",
       "version": "0.0.0",
       "dependencies": {
-        "@ren/brain-api": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
       },
@@ -72,7 +72,6 @@
       "dependencies": {
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
-        "jose": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -91,6 +90,7 @@
         "@opencode/util": "catalog:",
         "@ren/brain": "workspace:*",
         "@ren/brain-api": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
       },
@@ -148,6 +148,7 @@
       "dependencies": {
         "@ren/brain-api": "workspace:*",
         "@ren/db": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/util": "workspace:*",
         "disposable-email-domains-js": "catalog:",
@@ -189,6 +190,7 @@
         "@ren/core": "workspace:*",
         "@ren/db": "workspace:*",
         "@ren/executor": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/server": "workspace:*",
         "@ren/util": "workspace:*",
@@ -202,9 +204,22 @@
       "version": "0.0.0",
       "dependencies": {
         "@effect/platform-bun": "catalog:",
-        "@ren/brain-api": "workspace:*",
+        "@ren/hand-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+      },
+    },
+    "packages/hand-api": {
+      "name": "@ren/hand-api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ren/schema": "workspace:*",
+        "effect": "catalog:",
+        "jose": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -1282,6 +1297,8 @@
     "@ren/e2e": ["@ren/e2e@workspace:packages/e2e"],
 
     "@ren/executor": ["@ren/executor@workspace:packages/executor"],
+
+    "@ren/hand-api": ["@ren/hand-api@workspace:packages/hand-api"],
 
     "@ren/httpapi-codegen": ["@ren/httpapi-codegen@workspace:packages/httpapi-codegen"],
 

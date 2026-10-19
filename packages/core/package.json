@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@ren/brain-api": "workspace:*",
+    "@ren/hand-api": "workspace:*",
     "@ren/db": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/util": "workspace:*",

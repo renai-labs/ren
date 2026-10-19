@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { Signature } from "@ren/brain-api/signature"
+import { Signature } from "@ren/hand-api/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
-import { Machine } from "@ren/executor/testing"
+import { Sandbox } from "@ren/executor/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -52,9 +52,9 @@ interface Sandbox {
 const sandbox = async (id: string, publicKeys?: readonly [Signature.PublicKey, ...Array<Signature.PublicKey>]) => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-lifecycle-")))
   const runtime = ManagedRuntime.make(
-    Machine.layer({ environmentId, workspace: directory, ...(publicKeys && { publicKeys }) }),
+    Sandbox.layer({ environmentId, workspace: directory, ...(publicKeys && { publicKeys }) }),
   )
-  return { id, directory, url: await runtime.runPromise(Machine.url), dispose: () => runtime.dispose() }
+  return { id, directory, url: await runtime.runPromise(Sandbox.url), dispose: () => runtime.dispose() }
 }
 
 const port = await (async () => {
@@ -88,7 +88,7 @@ const environmentsConfig = (config: CoreConfig) => ({
   ENVIRONMENTS: JSON.stringify(
     config.present === false ? [] : [{ id: environmentId, capacity: 100, sandboxes: config.sandboxes }],
   ),
-  ENVIRONMENT_KEYS: JSON.stringify((config.keys ?? [Machine.keys.privateKey]).map(encodedKey)),
+  ENVIRONMENT_KEYS: JSON.stringify((config.keys ?? [Sandbox.keys.privateKey]).map(encodedKey)),
   ...(config.lifetime && { ENVIRONMENT_TOKEN_LIFETIME: config.lifetime }),
 })
 
@@ -307,10 +307,10 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
   })
 
   test("a new signing key works on an executor that knows it, and an old executor refuses the token clearly", async () => {
-    const knowing = await sandbox("sandbox-new", [newer.publicKey, Machine.keys.publicKey])
+    const knowing = await sandbox("sandbox-new", [newer.publicKey, Sandbox.keys.publicKey])
     const old = await sandbox("sandbox-old")
     const config = current
-    const signedByNewer = { lifetime: "20 seconds", keys: [newer.privateKey, Machine.keys.privateKey] }
+    const signedByNewer = { lifetime: "20 seconds", keys: [newer.privateKey, Sandbox.keys.privateKey] }
     await restartCore({
       ...signedByNewer,
       sandboxes: [{ id: knowing.id, url: knowing.url, generation: 1, workspace: knowing.directory }],

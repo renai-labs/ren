@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
-import { EnvironmentToken } from "@ren/brain-api/environment-token"
-import { Signature } from "@ren/brain-api/signature"
+import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { Signature } from "@ren/hand-api/signature"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"

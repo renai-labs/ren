@@ -24,6 +24,7 @@
     "@opencode/util": "catalog:",
     "@ren/brain": "workspace:*",
     "@ren/brain-api": "workspace:*",
+    "@ren/hand-api": "workspace:*",
     "@ren/schema": "workspace:*",
     "effect": "catalog:"
   },

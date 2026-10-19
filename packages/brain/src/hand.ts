@@ -1,7 +1,23 @@
 export * as Hand from "./hand.js"
 
-import { orphanAfter, type OutputWindow, pingEvery, type ProcessEvent, stallAfter } from "@ren/brain-api/executor-api"
-import type { Signal } from "@ren/brain-api/signal"
+import {
+  type DirectoryEntry,
+  type FileInfo,
+  type FileNotFoundError,
+  FileTooLargeError,
+  maxFileBytes,
+  type OperationFailedError,
+  orphanAfter,
+  type OutputWindow,
+  pingEvery,
+  type ProcessEvent,
+  type Range,
+  type ReadResult,
+  stallAfter,
+  type UnauthorizedError,
+  type WrongKindError,
+} from "@ren/hand-api/executor-api"
+import type { Signal } from "@ren/hand-api/signal"
 import type { Session } from "@ren/schema/session"
 import {
   Cause,
@@ -22,7 +38,8 @@ import {
   Struct,
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
-import type { Environments } from "./environments.js"
+import type { RpcClientError } from "effect/rpc"
+import type { Hands } from "./hands.js"
 
 const withoutTrailingSlash = (path: string) => path.replace(/(?<=.)\/+$/, "")
 
@@ -79,11 +96,7 @@ export interface SpawnOptions {
   readonly onSkip?: (skipped: { readonly bytes: number; readonly newlines: number }) => void
 }
 
-export const spawner = (
-  connection: Environments.Connection,
-  killedBySignal: KilledBySignal,
-  options: SpawnOptions = {},
-) =>
+export const spawner = (connection: Hands.Connection, killedBySignal: KilledBySignal, options: SpawnOptions = {}) =>
   ChildProcessSpawner.make(
     Effect.fnUntraced(function* (command) {
       if (command._tag === "PipedCommand")
@@ -251,23 +264,54 @@ export const spawner = (
     }),
   )
 
+type Unreached = Hands.Unavailable | UnauthorizedError | RpcClientError.RpcClientError
+
+export interface Files {
+  readonly read: (
+    path: string,
+    range?: Range,
+  ) => Effect.Effect<
+    ReadResult,
+    FileNotFoundError | WrongKindError | FileTooLargeError | OperationFailedError | Unreached
+  >
+  readonly write: (
+    path: string,
+    bytes: Uint8Array,
+  ) => Effect.Effect<void, FileTooLargeError | OperationFailedError | Unreached>
+  readonly stat: (path: string) => Effect.Effect<FileInfo, FileNotFoundError | OperationFailedError | Unreached>
+  readonly list: (
+    path: string,
+  ) => Effect.Effect<
+    ReadonlyArray<DirectoryEntry>,
+    FileNotFoundError | WrongKindError | OperationFailedError | Unreached
+  >
+  readonly remove: (path: string) => Effect.Effect<void, OperationFailedError | Unreached>
+  readonly move: (from: string, to: string) => Effect.Effect<void, FileNotFoundError | OperationFailedError | Unreached>
+  readonly mkdir: (path: string) => Effect.Effect<void, OperationFailedError | Unreached>
+}
+
 export interface SessionHand {
   readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]
   readonly spawnerWith: (options: SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
-  readonly files: <A, E>(
-    use: (connection: Environments.Connection, physical: (path: string) => string) => Effect.Effect<A, E>,
-  ) => Effect.Effect<A, E | Environments.Unavailable>
+  readonly files: Files
 }
 
 export const session = (
-  environments: Environments.Interface,
+  hands: Hands.Interface,
   sessionId: Session.ID,
   sessionDirectory: string,
   killedBySignal: KilledBySignal,
 ): SessionHand => {
+  const withConnection = <A, E>(
+    use: (connection: Hands.Connection, physical: (path: string) => string) => Effect.Effect<A, E>,
+  ) =>
+    hands.connect(sessionId).pipe(
+      Effect.flatMap((connection) => use(connection, physicalPath(sessionDirectory, connection.directory))),
+      Effect.scoped,
+    )
   const sessionSpawner = (options: SpawnOptions = {}) =>
     ChildProcessSpawner.make((command) =>
-      environments.connect(sessionId).pipe(
+      hands.connect(sessionId).pipe(
         Effect.mapError(childProcessError("spawn")),
         Effect.flatMap((connection) => {
           const physical = physicalPath(sessionDirectory, connection.directory)
@@ -288,10 +332,27 @@ export const session = (
   return {
     spawner: sessionSpawner(),
     spawnerWith: sessionSpawner,
-    files: (use) =>
-      environments.connect(sessionId).pipe(
-        Effect.flatMap((connection) => use(connection, physicalPath(sessionDirectory, connection.directory))),
-        Effect.scoped,
-      ),
+    files: {
+      read: (path, range) =>
+        withConnection((connection, physical) =>
+          connection.client["files.read"]({ path: physical(path), ...(range && { range }) }),
+        ),
+      write: (path, bytes) =>
+        bytes.length > maxFileBytes
+          ? Effect.fail(new FileTooLargeError({ path, sizeBytes: bytes.length, maxBytes: maxFileBytes }))
+          : withConnection((connection, physical) => connection.client["files.write"]({ path: physical(path), bytes })),
+      stat: (path) =>
+        withConnection((connection, physical) => connection.client["files.stat"]({ path: physical(path) })),
+      list: (path) =>
+        withConnection((connection, physical) => connection.client["files.list"]({ path: physical(path) })),
+      remove: (path) =>
+        withConnection((connection, physical) => connection.client["files.remove"]({ path: physical(path) })),
+      move: (from, to) =>
+        withConnection((connection, physical) =>
+          connection.client["files.move"]({ from: physical(from), to: physical(to) }),
+        ),
+      mkdir: (path) =>
+        withConnection((connection, physical) => connection.client["files.mkdir"]({ path: physical(path) })),
+    },
   }
 }

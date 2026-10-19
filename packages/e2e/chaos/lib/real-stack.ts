@@ -2,13 +2,13 @@ export * as RealStack from "./real-stack.js"
 
 import { PgClient } from "@effect/sql-pg"
 import { OpenCode } from "@opencode/client"
-import { Signature } from "@ren/brain-api/signature"
+import { Signature } from "@ren/hand-api/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { BrainHost } from "@ren/core/brain-host"
 import { Environments } from "@ren/core/environments"
 import { Models } from "@ren/core/models"
 import { Database } from "@ren/db/database"
-import { Machine } from "@ren/executor/testing"
+import { Sandbox } from "@ren/executor/testing"
 import { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -128,7 +128,7 @@ export const start = async (options: {
 
   const keys = {
     CELL_KEYS: TestToken.vars.CELL_KEYS,
-    ENVIRONMENT_KEYS: JSON.stringify([encodedKey(Machine.keys.privateKey)]),
+    ENVIRONMENT_KEYS: JSON.stringify([encodedKey(Sandbox.keys.privateKey)]),
     ...(options.tokenLifetime && { ENVIRONMENT_TOKEN_LIFETIME: options.tokenLifetime }),
   }
   const server = { child: undefined as Bun.Subprocess | undefined, log: "" }

@@ -1,7 +1,7 @@
 export * as ExecutorDriver from "./executor.js"
 
-import type { ProcessEvent, ProcessID } from "@ren/brain-api/executor-api"
-import { ExecutorClient } from "@ren/brain-api/executor-client"
+import type { ProcessEvent, ProcessID } from "@ren/hand-api/executor-api"
+import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Cause, Effect, Exit, ManagedRuntime, Predicate, Scope, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Wait } from "../wait.js"

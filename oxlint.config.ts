@@ -8,8 +8,9 @@ const vendored = {
   message: "repos/ holds vendored reference source. Import from the package dependency instead.",
 }
 const serverOnly = {
-  regex: "^@ren/(core|db|server|brain-api)(/|$)",
-  message: "Client-side packages never import core, db, server or the internal Brain API. Go through @ren/client.",
+  regex: "^@ren/(core|db|server|brain-api|hand-api)(/|$)",
+  message:
+    "Client-side packages never import core, db, server or the internal Brain and Hand APIs. Go through @ren/client.",
 }
 const packageBoundaries = [
   { files: ["packages/schema/**"], regex: "^@ren/", message: "Schema imports nothing from Ren." },
@@ -20,13 +21,18 @@ const packageBoundaries = [
   },
   {
     files: ["packages/brain-api/**"],
-    regex: "^@ren/(core|db|server|protocol|cell)(/|$)",
+    regex: "^@ren/(?!schema(/|$))",
     message: "The Brain API depends only on schema. Core calls it and hosts serve it.",
   },
   {
+    files: ["packages/hand-api/**"],
+    regex: "^@ren/(?!schema(/|$))",
+    message: "The Hand API depends only on schema. Ren signs its tokens, a brain calls it and an executor serves it.",
+  },
+  {
     files: ["packages/brain/**"],
-    regex: "^@ren/(?!schema(/|$)|brain-api(/|$)|executor(/|$))",
-    message: "Brain code runs on every host. It depends only on schema and the Brain API; tests may start an executor.",
+    regex: "^@ren/(?!schema(/|$)|hand-api(/|$)|executor(/|$))",
+    message: "Brain code runs on every host. It depends only on schema and the Hand API; tests may start an executor.",
   },
   {
     files: ["packages/brain/src/**"],
@@ -35,8 +41,8 @@ const packageBoundaries = [
   },
   {
     files: ["packages/executor/**"],
-    regex: "^@ren/(?!schema(/|$)|brain-api(/|$))",
-    message: "The executor runs on an environment's machine. It depends only on schema and the Brain API.",
+    regex: "^@ren/(?!schema(/|$)|hand-api(/|$))",
+    message: "The executor runs on an environment's machine. It depends only on schema and the Hand API.",
   },
   {
     files: ["packages/db/**"],

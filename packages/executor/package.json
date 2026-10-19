@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@effect/platform-bun": "catalog:",
-    "@ren/brain-api": "workspace:*",
+    "@ren/hand-api": "workspace:*",
     "@ren/schema": "workspace:*",
     "effect": "catalog:"
   },

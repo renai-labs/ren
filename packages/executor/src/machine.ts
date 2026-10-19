@@ -1,4 +1,4 @@
-export * as NodeCompatible from "./node-compatible.js"
+export * as Machine from "./machine.js"
 
 import {
   exitedKeptFor,
@@ -11,17 +11,15 @@ import {
   orphanAfter,
   type OutputWindow,
   pingEvery,
-  type ProcessEvent,
   ProcessID,
   ProcessNotFoundError,
   protocol,
   type Range,
   type SpawnInput,
-  stallAfter,
   StdinFullError,
   WrongKindError,
-} from "@ren/brain-api/executor-api"
-import { Signal } from "@ren/brain-api/signal"
+} from "@ren/hand-api/executor-api"
+import { Signal } from "@ren/hand-api/signal"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import {
@@ -34,7 +32,6 @@ import {
   Layer,
   type PlatformError,
   Option,
-  PubSub,
   Queue,
   Schedule,
   Schema,
@@ -47,18 +44,9 @@ import { access, lstat, mkdir, open, readdir, realpath, rename, rm, stat, writeF
 import { basename, dirname, join, resolve } from "node:path"
 import manifest from "../package.json"
 import { Executor } from "./executor.js"
-
-export const logLimitBytes = 2 * 1024 * 1024
+import { OutputLog } from "./machine/output-log.js"
 
 export const exitedLimitBytes = 64 * 1024 * 1024
-
-type OutputEvent = Extract<ProcessEvent, { readonly type: "stdout" | "stderr" }>
-
-type KeptChunk = OutputEvent & { readonly newlinesBefore: number }
-
-const countNewlines = (bytes: Uint8Array) => bytes.reduce((count, byte) => (byte === 10 ? count + 1 : count), 0)
-
-type ExitEvent = Extract<ProcessEvent, { readonly type: "exit" }>
 
 interface Entry {
   readonly id: ProcessID
@@ -66,15 +54,7 @@ interface Entry {
   readonly scope: Scope.Closeable
   readonly handle: ChildProcessSpawner.ChildProcessHandle
   readonly stdin: Queue.Queue<Uint8Array, Cause.Done> | undefined
-  readonly chunks: Array<KeptChunk>
-  readonly readerPositions: Map<object, number>
-  readonly logChanged: PubSub.PubSub<void>
-  readonly readerMoves: PubSub.Subscription<void>
-  readonly readerMoved: PubSub.PubSub<void>
-  nextOffset: number
-  newlines: number
-  exit: ExitEvent | undefined
-  failure: Cause.Cause<never> | undefined
+  readonly log: OutputLog.Log
   seenAtMs: number
   isHeartbeating: boolean
 }
@@ -157,72 +137,31 @@ export const layer = Layer.effect(
         if (exitOrder.includes(entry.id)) exitOrder.splice(exitOrder.indexOf(entry.id), 1)
       }).pipe(Effect.andThen(Scope.close(entry.scope, Exit.void)))
 
-    const trim: (entry: Entry) => Effect.Effect<void> = Effect.fnUntraced(function* (entry: Entry) {
-      const first = entry.chunks.at(0)
-      if (!first || entry.chunks.length === 1 || entry.nextOffset - first.offset <= logLimitBytes) return
-      const end = first.offset + first.bytes.length
-      if ([...entry.readerPositions.values()].some((position) => position < end)) {
-        const moved = yield* PubSub.take(entry.readerMoves).pipe(Effect.timeoutOption(stallAfter))
-        if (Option.isSome(moved)) return yield* trim(entry)
-        for (const reader of entry.readerPositions.keys())
-          if ((entry.readerPositions.get(reader) ?? end) < end) entry.readerPositions.delete(reader)
-      }
-      entry.chunks.shift()
-      return yield* trim(entry)
-    })
-
-    const keptBytes = (entry: Entry) => entry.chunks.reduce((bytes, chunk) => bytes + chunk.bytes.length, 0)
-
-    const recordExit = Effect.fnUntraced(function* (entry: Entry, event: ExitEvent) {
-      entry.exit = event
+    const recordExit = Effect.fnUntraced(function* (entry: Entry, event: OutputLog.ExitEvent) {
+      yield* OutputLog.end(entry.log, event)
       entry.seenAtMs = yield* Clock.currentTimeMillis
-      yield* PubSub.publish(entry.logChanged, undefined)
       exitOrder.push(entry.id)
       const exited = exitOrder.flatMap((id) => {
         const found = processes.get(id)
         return found ? [found] : []
       })
-      const total = exited.reduce((bytes, found) => bytes + keptBytes(found), 0)
+      const total = exited.reduce((bytes, found) => bytes + OutputLog.keptBytes(found.log), 0)
       const oldest = exited.reduce<{ readonly bytes: number; readonly entries: ReadonlyArray<Entry> }>(
         (dropped, found) =>
           total - dropped.bytes > exitedLimitBytes
-            ? { bytes: dropped.bytes + keptBytes(found), entries: [...dropped.entries, found] }
+            ? { bytes: dropped.bytes + OutputLog.keptBytes(found.log), entries: [...dropped.entries, found] }
             : dropped,
         { bytes: 0, entries: [] },
       )
       yield* Effect.forEach(oldest.entries, release, { discard: true })
     })
 
-    const outputFrom = (entry: Entry, position: number) =>
-      entry.chunks.flatMap((chunk): ReadonlyArray<OutputEvent> => {
-        if (chunk.offset + chunk.bytes.length <= position) return []
-        if (chunk.offset >= position) return [{ type: chunk.type, offset: chunk.offset, bytes: chunk.bytes }]
-        return [{ type: chunk.type, offset: position, bytes: chunk.bytes.subarray(position - chunk.offset) }]
-      })
-
-    const newlinesAt = (entry: Entry, offset: number) => {
-      const chunk = entry.chunks.find((kept) => offset < kept.offset + kept.bytes.length)
-      if (!chunk) return entry.newlines
-      if (offset <= chunk.offset) return chunk.newlinesBefore
-      return chunk.newlinesBefore + countNewlines(chunk.bytes.subarray(0, offset - chunk.offset))
-    }
-
-    const waitForChange: (
-      entry: Entry,
-      position: number,
-      logChanges: PubSub.Subscription<void>,
-    ) => Effect.Effect<void> = Effect.fnUntraced(function* (entry, position, logChanges) {
-      if (entry.nextOffset > position || entry.exit || entry.failure) return
-      yield* PubSub.take(logChanges)
-      return yield* waitForChange(entry, position, logChanges)
-    })
-
     yield* Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const orphans = [...processes.values()].filter((entry) =>
-        entry.exit
-          ? entry.readerPositions.size === 0 && now - entry.seenAtMs >= Duration.toMillis(exitedKeptFor)
-          : (entry.readerPositions.size === 0 || entry.isHeartbeating) &&
+        entry.log.exit
+          ? !OutputLog.hasReaders(entry.log) && now - entry.seenAtMs >= Duration.toMillis(exitedKeptFor)
+          : (!OutputLog.hasReaders(entry.log) || entry.isHeartbeating) &&
             now - entry.seenAtMs >= Duration.toMillis(orphanAfter),
       )
       yield* Effect.forEach(orphans, release, { discard: true })
@@ -263,27 +202,18 @@ export const layer = Layer.effect(
           Effect.onError(() => Scope.close(entryScope, Exit.void)),
         )
       const id = ProcessID.create()
-      const readerMoved = yield* PubSub.sliding<void>(1)
       const entry: Entry = {
         id,
         brain,
         scope: entryScope,
         handle,
         stdin,
-        chunks: [],
-        readerPositions: new Map(),
-        logChanged: yield* PubSub.sliding<void>(1),
-        readerMoves: yield* PubSub.subscribe(readerMoved).pipe(Scope.provide(entryScope)),
-        readerMoved,
-        nextOffset: 0,
-        newlines: 0,
-        exit: undefined,
-        failure: undefined,
+        log: yield* OutputLog.make.pipe(Scope.provide(entryScope)),
         seenAtMs: yield* Clock.currentTimeMillis,
         isHeartbeating: false,
       }
       processes.set(id, entry)
-      const tagged = (stream: Stream.Stream<Uint8Array, PlatformError.PlatformError>, type: OutputEvent["type"]) =>
+      const tagged = (stream: Stream.Stream<Uint8Array, PlatformError.PlatformError>, type: "stdout" | "stderr") =>
         stream.pipe(
           Stream.map((bytes) => ({ type, bytes })),
           Stream.ignore,
@@ -292,19 +222,15 @@ export const layer = Layer.effect(
         Stream.runForEach((written) =>
           Effect.gen(function* () {
             if (output) yield* Effect.promise(() => output.write(written.bytes).catch(() => undefined))
-            entry.chunks.push({ ...written, offset: entry.nextOffset, newlinesBefore: entry.newlines })
-            entry.nextOffset += written.bytes.length
-            entry.newlines += countNewlines(written.bytes)
-            yield* PubSub.publish(entry.logChanged, undefined)
-            yield* trim(entry)
+            yield* OutputLog.append(entry.log, written.type, written.bytes)
           }),
         ),
         Effect.andThen(
           handle.exitCode.pipe(
-            Effect.map((exitCode): ExitEvent => ({ type: "exit", exitCode, signal: null })),
+            Effect.map((exitCode): OutputLog.ExitEvent => ({ type: "exit", exitCode, signal: null })),
             Effect.catch((error) =>
               Option.match(killedBy(error), {
-                onSome: (signal) => Effect.succeed<ExitEvent>({ type: "exit", exitCode: null, signal }),
+                onSome: (signal) => Effect.succeed<OutputLog.ExitEvent>({ type: "exit", exitCode: null, signal }),
                 onNone: () => Effect.die(error),
               }),
             ),
@@ -312,11 +238,7 @@ export const layer = Layer.effect(
         ),
         Effect.flatMap((event) => recordExit(entry, event)),
         Effect.andThen(stdin ? Queue.shutdown(stdin) : Effect.void),
-        Effect.onError((cause) =>
-          Effect.sync(() => {
-            entry.failure = cause
-          }).pipe(Effect.andThen(PubSub.publish(entry.logChanged, undefined))),
-        ),
+        Effect.onError((cause) => OutputLog.fail(entry.log, cause)),
         Effect.forkIn(entryScope),
       )
       return { id, pid: handle.pid }
@@ -329,56 +251,14 @@ export const layer = Layer.effect(
       window?: OutputWindow,
     ) {
       const entry = yield* find(brain, id)
-      const reader = {}
-      const leave = Clock.currentTimeMillis.pipe(
-        Effect.flatMap((now) => {
-          entry.readerPositions.delete(reader)
-          entry.seenAtMs = now
-          return PubSub.publish(entry.readerMoved, undefined)
-        }),
-      )
-      const events = Stream.unwrap(
-        Effect.map(PubSub.subscribe(entry.logChanged), (logChanges) =>
-          Stream.paginate({ position: cursor ?? 0, newlines: newlinesAt(entry, cursor ?? 0), sentAtMs: 0 }, (state) =>
-            Effect.gen(function* () {
-              // oxlint-disable-next-line ren/no-comments -- A reader with a window skips what it does not keep, so it never holds back the trim of older output.
-              entry.readerPositions.set(reader, window ? Number.POSITIVE_INFINITY : state.position)
-              yield* PubSub.publish(entry.readerMoved, undefined)
-              yield* waitForChange(entry, state.position, logChanges)
-              if (window && !entry.exit) {
-                const waitMs = state.sentAtMs + window.intervalMs - (yield* Clock.currentTimeMillis)
-                if (waitMs > 0) yield* Effect.sleep(Duration.millis(waitMs))
-              }
-              if (entry.failure) return yield* Effect.failCause(entry.failure)
-              const end = entry.nextOffset
-              const from = window ? Math.max(state.position, end - window.maxBytes) : state.position
-              const events: ReadonlyArray<ProcessEvent> = [
-                ...(from > state.position
-                  ? [
-                      {
-                        type: "skip" as const,
-                        offset: state.position,
-                        bytes: from - state.position,
-                        newlines: newlinesAt(entry, from) - state.newlines,
-                      },
-                    ]
-                  : []),
-                ...outputFrom(entry, from),
-              ]
-              if (entry.exit) return [[...events, entry.exit], Option.none()] as const
-              return [
-                events,
-                Option.some({ position: end, newlines: entry.newlines, sentAtMs: yield* Clock.currentTimeMillis }),
-              ] as const
-            }),
-          ),
-        ),
-      )
-      return events.pipe(
+      const seen = Effect.map(Clock.currentTimeMillis, (now) => {
+        entry.seenAtMs = now
+      })
+      return OutputLog.read(entry.log, cursor, window).pipe(
         Stream.merge(Stream.tick(pingEvery).pipe(Stream.drop(1), Stream.as({ type: "ping" as const })), {
           haltStrategy: "left",
         }),
-        Stream.ensuring(leave),
+        Stream.ensuring(seen),
       )
     })
 

@@ -64,7 +64,7 @@ Each is its own spec, on the same Brain API:
 - **Hands.** A `WorkspaceDriver` so tools that need a computer (shell, files, terminal) run in a sandbox. The `ren` driver already runs them on an environment's executor, and it resumes a process's output from a cursor after a dropped connection. What remains:
   - **Spawn retries.** If the connection drops during `process.spawn`, the brain cannot tell whether the command started. The fix is an id chosen by the client, so a retried spawn finds the process it started.
   - **Stdin retries.** A dropped `process.write` cannot be retried safely: the executor needs a stdin offset to ignore bytes it already has.
-  - **Change notices from Ren.** `Environments` reconnects when `EnvironmentAccess` reports a new URL or generation, but only `layerMemory` reports changes. The Host API layer must report them too.
+  - **Change notices from Ren.** `Hands` reconnects when `EnvironmentAccess` reports a new URL or generation, but only `layerMemory` reports changes. The Host API layer must report them too.
   - **Environments v1** is built: Ren keeps the binding in `session_environment` and gives access through the Host API. `setEnvironment` and the sandbox life cycle come later.
 - **Skills, MCP and agents.** Through plugin transforms. Blocking plan mode means removing the `plan` agent with `agent.transform`.
 - **Bring-your-own providers.** Today a user's own key works for any provider in the cell's `OPENCODE_CONFIG`, with its key form's answers (Azure's `resourceName`, Cloudflare's `accountId`) in `configuration`. Two pieces remain:
