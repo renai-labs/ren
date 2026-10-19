@@ -18,3 +18,11 @@ export function isTyping(event: KeyboardEvent) {
     (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
   )
 }
+
+export function fromPage(event: KeyboardEvent) {
+  return event.target === document.body || event.target === document.documentElement
+}
+
+export function isPrintable(event: KeyboardEvent) {
+  return event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey
+}

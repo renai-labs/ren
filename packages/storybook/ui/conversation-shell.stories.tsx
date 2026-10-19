@@ -58,6 +58,106 @@ function Composer(props: { layout?: ConversationShell.ComposerLayout; disabled?:
   )
 }
 
+function LiveComposer(props: {
+  layout?: ConversationShell.ComposerLayout
+  running?: boolean
+  starting?: boolean
+  queued?: ReadonlyArray<string>
+  pasted?: string
+}) {
+  const [draft, setDraft] = useState("")
+  const [pasted, setPasted] = useState(props.pasted)
+  const [events, setEvents] = useState<ReadonlyArray<string>>([])
+  const [queued, setQueued] = useState(props.queued ?? [])
+  const log = (event: string) => setEvents((current) => [...current, event])
+  const content = draft.trim().length > 0 || Boolean(pasted)
+  const running = props.running ?? false
+  const submit = (
+    <ConversationShell.ComposerSubmit
+      running={running}
+      content={content}
+      starting={props.starting ?? false}
+      disabled={!content}
+      onStop={() => log("stop")}
+    />
+  )
+  const alternate =
+    running && content ? (
+      <ConversationShell.ComposerAlternate
+        label="Queue"
+        shortcut="⌘↵"
+        onActivate={() => {
+          log(`queue ${draft}`)
+          setDraft("")
+        }}
+      />
+    ) : null
+  return (
+    <>
+      <ConversationShell.Composer
+        label="Message Ren"
+        layout={props.layout}
+        onSubmit={() => {
+          log(`send ${draft}`)
+          setDraft("")
+        }}
+        attachments={
+          pasted ? (
+            <ConversationShell.PastedText
+              text={pasted}
+              onRemove={() => setPasted(undefined)}
+              onShowInTextField={() => {
+                setDraft((current) => current + pasted)
+                setPasted(undefined)
+              }}
+            />
+          ) : undefined
+        }
+        queue={
+          queued.length > 0 ? (
+            <ConversationShell.Queue label={`${queued.length} queued`} count={queued.length}>
+              {queued.map((text, index) => (
+                <ConversationShell.QueueItem
+                  key={text}
+                  text={text}
+                  actions={index === 0 && !running ? "visible" : "on-hover"}
+                  sendLabel={running ? "Send now" : "Send"}
+                  onSend={() => log(`steer ${text}`)}
+                  onMove={() => {
+                    setQueued((current) => current.filter((item) => item !== text))
+                    setDraft(text)
+                  }}
+                  onRemove={() => setQueued((current) => current.filter((item) => item !== text))}
+                />
+              ))}
+            </ConversationShell.Queue>
+          ) : undefined
+        }
+        trailing={
+          <>
+            {alternate}
+            {submit}
+          </>
+        }
+        footerTrailing={
+          <>
+            {alternate}
+            {submit}
+          </>
+        }
+      >
+        <ConversationShell.ComposerInput
+          aria-label="Message"
+          placeholder={running ? "Also add a chart of monthly revenue" : "Summarise last quarter’s revenue"}
+          value={draft}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+        />
+      </ConversationShell.Composer>
+      <output aria-label="Composer events">{events.join(" | ")}</output>
+    </>
+  )
+}
+
 const transcript = (
   <>
     <ConversationShell.Message author="user" sender="Ada Lovelace" avatar={<Avatar.Root name="Ada Lovelace" />}>
@@ -166,4 +266,40 @@ export const Hidden: Story = {
 }
 export const Auxiliary: Story = {
   args: { auxiliary: <Text purpose="heading">Artifacts</Text> },
+}
+export const AdaptiveComposer: Story = { args: { composer: <LiveComposer layout="adaptive" /> } }
+export const Running: Story = { args: { composer: <LiveComposer layout="adaptive" running /> } }
+export const StartingSession: Story = { args: { composer: <LiveComposer starting /> } }
+export const QueuedMessages: Story = {
+  args: {
+    composer: (
+      <LiveComposer
+        layout="adaptive"
+        running
+        queued={["Add a chart of monthly revenue.", "Then email the report to finance."]}
+      />
+    ),
+  },
+}
+export const LongQueue: Story = {
+  args: {
+    composer: (
+      <LiveComposer
+        queued={[
+          "Add a chart of monthly revenue.",
+          "Then email the report to finance.",
+          "Split revenue by region.",
+          "Add last year for comparison.",
+          "Highlight the enterprise plan.",
+        ]}
+      />
+    ),
+  },
+}
+export const PastedText: Story = {
+  args: {
+    composer: (
+      <LiveComposer layout="adaptive" pasted={"Quarter,Revenue,Churn\nQ1,1.2M,3.1%\nQ2,1.4M,2.4%\n".repeat(60)} />
+    ),
+  },
 }

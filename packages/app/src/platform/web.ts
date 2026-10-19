@@ -1,6 +1,7 @@
 import type { Platform } from "./platform.js"
 
 const prefix = "ren."
+const draftPrefix = "ren.draft."
 const externalProtocols = new Set(["http:", "https:", "mailto:"])
 
 export function createWebPlatform(): Platform.Info {
@@ -18,6 +19,11 @@ export function createWebPlatform(): Platform.Info {
       get: (key) => localStorage.getItem(prefix + key) ?? undefined,
       set: (key, value) => localStorage.setItem(prefix + key, value),
       remove: (key) => localStorage.removeItem(prefix + key),
+    },
+    drafts: {
+      get: (key) => localStorage.getItem(draftPrefix + key) ?? undefined,
+      set: (key, value) => localStorage.setItem(draftPrefix + key, value),
+      remove: (key) => localStorage.removeItem(draftPrefix + key),
     },
     openExternal: (url) => {
       if (!externalProtocols.has(new URL(url).protocol)) return

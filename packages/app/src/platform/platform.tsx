@@ -14,6 +14,7 @@ interface Base {
   readonly serverUrl: string
   readonly appUrl: string
   readonly storage: Storage
+  readonly drafts?: Storage
   readonly openExternal: (url: string) => void
   readonly notify: (title: string, body?: string) => Promise<void>
   readonly fetch?: typeof globalThis.fetch

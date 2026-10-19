@@ -1,10 +1,14 @@
 export * as ConversationShell from "./conversation-shell.js"
 
 import { cva } from "class-variance-authority"
-import { createContext, use, useLayoutEffect, useRef } from "react"
+import { createContext, use, useEffect, useLayoutEffect, useRef, useState } from "react"
 import type { ComponentPropsWithoutRef, KeyboardEvent, ReactNode, Ref, UIEvent } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
+import { AttachmentTile } from "./attachment-tile.js"
+import { Button } from "./button.js"
 import { Icon } from "./icon.js"
+import { IconButton } from "./icon-button.js"
+import { KeyboardKey } from "./keyboard-key.js"
 import { Text } from "./text.js"
 
 export type Mode = "live" | "pending" | "read-only" | "replay"
@@ -316,11 +320,15 @@ export function Bubble(props: BubbleProps) {
   )
 }
 
-export type ComposerLayout = "stacked" | "inline"
+export type ComposerLayout = "stacked" | "inline" | "adaptive"
+type ResolvedLayout = Exclude<ComposerLayout, "adaptive">
 
-const ComposerLayoutContext = createContext<ComposerLayout>("stacked")
+const ComposerLayoutContext = createContext<{
+  layout: ResolvedLayout
+  measure: ((multiline: boolean) => void) | undefined
+}>({ layout: "stacked", measure: undefined })
 
-const composerLayoutClasses: Record<ComposerLayout, { form: string; input: string; status: string }> = {
+const composerLayoutClasses: Record<ResolvedLayout, { form: string; input: string; status: string }> = {
   inline: {
     form: "flex-row items-end rounded-full",
     input: "grow basis-1/2",
@@ -334,6 +342,7 @@ export type ComposerProps = {
   onSubmit: () => void
   label?: string
   header?: ReactNode
+  queue?: ReactNode
   attachments?: ReactNode
   leading?: ReactNode
   trailing?: ReactNode
@@ -345,60 +354,71 @@ export type ComposerProps = {
   children: ReactNode
 }
 
+function resolveLayout(layout: ComposerLayout | undefined, multiline: boolean, attachments: boolean): ResolvedLayout {
+  if (layout === "adaptive") return multiline || attachments ? "stacked" : "inline"
+  return layout ?? "stacked"
+}
+
 export function Composer(props: ComposerProps) {
-  const layout = props.layout ?? "stacked"
-  const inline = layout === "inline"
-  const classes = composerLayoutClasses[layout]
+  const [multiline, setMultiline] = useState(false)
+  const layout = resolveLayout(props.layout, multiline, Boolean(props.attachments))
   return (
-    <ComposerLayoutContext value={layout}>
+    <ComposerLayoutContext value={{ layout, measure: props.layout === "adaptive" ? setMultiline : undefined }}>
       <div className="relative flex w-full min-w-0 flex-col gap-2">
         {props.suggestions ? <div className="absolute inset-x-0 bottom-full z-50 mb-6">{props.suggestions}</div> : null}
         {props.header ? <div className="flex min-w-0 items-center px-1">{props.header}</div> : null}
-        <form
-          data-slot="composer"
-          aria-label={props.label}
-          style={{ viewTransitionName: "session-composer" }}
-          onSubmit={(event) => {
-            event.preventDefault()
-            props.onSubmit()
-          }}
-          className={composeClasses(
-            "relative flex w-full min-w-0 overflow-hidden border border-border-primary bg-background-secondary shadow-composer transition-standard focus-within:shadow-composer-focus",
-            classes.form,
-          )}
-        >
-          {props.attachments ? (
-            <div
-              data-testid="attachments-preview"
-              className="flex w-full flex-row gap-2 overflow-x-auto overscroll-contain px-3 pt-3"
-            >
-              {props.attachments}
-            </div>
-          ) : null}
-          {inline && props.leading ? (
-            <div className="flex shrink-0 items-center self-end pb-2 pl-2">{props.leading}</div>
-          ) : null}
-          <div className={composeClasses("relative flex min-w-0 self-stretch", classes.input)}>
-            {props.children}
-            {props.status ? (
-              <div className={composeClasses("absolute z-10", classes.status)}>{props.status}</div>
-            ) : null}
-          </div>
-          {inline && props.trailing ? (
-            <div className="flex min-w-0 items-center gap-2 self-end pr-2 pb-2">{props.trailing}</div>
-          ) : null}
-          {inline ? null : <ComposerFooter leading={props.footerLeading} trailing={props.footerTrailing} />}
-          {props.dropIndicator ? (
-            <output
-              data-slot="drop-overlay"
-              className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-container border-2 border-dashed border-border-strong bg-background-primary text-sm text-text-primary"
-            >
-              {props.dropIndicator}
-            </output>
-          ) : null}
-        </form>
+        {props.queue ? <div className="-mb-6 flex min-w-0 flex-col px-3">{props.queue}</div> : null}
+        <ComposerForm {...props} layout={layout} />
       </div>
     </ComposerLayoutContext>
+  )
+}
+
+function ComposerForm(props: Omit<ComposerProps, "layout"> & { layout: ResolvedLayout }) {
+  const inline = props.layout === "inline"
+  const classes = composerLayoutClasses[props.layout]
+  return (
+    <form
+      data-slot="composer"
+      aria-label={props.label}
+      style={{ viewTransitionName: "session-composer" }}
+      onSubmit={(event) => {
+        event.preventDefault()
+        props.onSubmit()
+      }}
+      className={composeClasses(
+        "relative flex w-full min-w-0 overflow-hidden border border-border-primary bg-background-secondary shadow-composer transition-standard focus-within:shadow-composer-focus",
+        classes.form,
+      )}
+    >
+      {props.attachments ? (
+        <div
+          data-testid="attachments-preview"
+          className="flex w-full flex-row gap-2 overflow-x-auto overscroll-contain px-3 pt-3"
+        >
+          {props.attachments}
+        </div>
+      ) : null}
+      {inline && props.leading ? (
+        <div className="flex shrink-0 items-center self-end pb-2 pl-2">{props.leading}</div>
+      ) : null}
+      <div className={composeClasses("relative flex min-w-0 self-stretch", classes.input)}>
+        {props.children}
+        {props.status ? <div className={composeClasses("absolute z-10", classes.status)}>{props.status}</div> : null}
+      </div>
+      {inline && props.trailing ? (
+        <div className="flex min-w-0 items-center gap-2 self-end pr-2 pb-2">{props.trailing}</div>
+      ) : null}
+      {inline ? null : <ComposerFooter leading={props.footerLeading} trailing={props.footerTrailing} />}
+      {props.dropIndicator ? (
+        <output
+          data-slot="drop-overlay"
+          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-container border-2 border-dashed border-border-strong bg-background-primary text-sm text-text-primary"
+        >
+          {props.dropIndicator}
+        </output>
+      ) : null}
+    </form>
   )
 }
 
@@ -415,6 +435,7 @@ function ComposerFooter(props: { leading: ReactNode; trailing: ReactNode }) {
 function submitOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
   if (event.defaultPrevented || event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return
   event.preventDefault()
+  if (event.repeat) return
   const form = event.currentTarget.form
   if (form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled) return
   form?.requestSubmit()
@@ -423,12 +444,13 @@ function submitOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
 export type ComposerInputHeight = "content" | "standard"
 export type ComposerInputOverlay = "none" | "highlight" | "preview"
 
-const composerInputPadding: Record<ComposerLayout, string> = {
+const composerInputPadding: Record<ResolvedLayout, string> = {
   inline: "px-2 py-3",
   stacked: "px-4 pt-4 pb-2",
 }
 
 export type ComposerInputProps = {
+  focusOnMount?: boolean
   height?: ComposerInputHeight
   overlay?: ComposerInputOverlay
   overlayContent?: ReactNode
@@ -436,8 +458,20 @@ export type ComposerInputProps = {
 } & Omit<ComponentPropsWithoutRef<"textarea">, "className" | "style">
 
 export function ComposerInput(props: ComposerInputProps) {
-  const { height, overlay: overlayProp, overlayContent, ref, onScroll, onKeyDown, ...attributes } = props
-  const layout = use(ComposerLayoutContext)
+  const {
+    focusOnMount,
+    height,
+    overlay: overlayProp,
+    overlayContent,
+    ref,
+    onScroll,
+    onKeyDown,
+    rows,
+    ...attributes
+  } = props
+  const context = use(ComposerLayoutContext)
+  const layout = context.layout
+  const measure = context.measure
   const input = useRef<HTMLTextAreaElement | null>(null)
   const layer = useRef<HTMLDivElement>(null)
   const overlay = overlayProp ?? "none"
@@ -447,6 +481,22 @@ export function ComposerInput(props: ComposerInputProps) {
     layer.current.scrollLeft = input.current.scrollLeft
   }
   useLayoutEffect(synchronize, [props.value, overlay])
+  useEffect(() => {
+    const node = input.current
+    if (!focusOnMount || !node) return
+    node.focus()
+    node.setSelectionRange(node.value.length, node.value.length)
+  }, [focusOnMount])
+  useLayoutEffect(() => {
+    const node = input.current
+    if (!measure || !node) return
+    if (!props.value) return measure(false)
+    if (layout === "stacked") return
+    const style = getComputedStyle(node)
+    const padding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)
+    const lineHeight = Number.parseFloat(style.lineHeight) || 20
+    if (node.scrollHeight - padding > lineHeight * 1.5) measure(true)
+  }, [props.value, layout, measure])
   const padding = composerInputPadding[layout]
   return (
     <>
@@ -478,6 +528,7 @@ export function ComposerInput(props: ComposerInputProps) {
           onKeyDown?.(event)
           submitOnEnter(event)
         }}
+        rows={rows ?? (measure && layout === "inline" ? 1 : undefined)}
         className={composeClasses(
           "relative field-sizing-content max-h-48 w-full min-w-0 resize-none bg-transparent text-base placeholder-muted text-text-primary focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-disabled sm:text-sm",
           padding,
@@ -488,5 +539,191 @@ export function ComposerInput(props: ComposerInputProps) {
         {...attributes}
       />
     </>
+  )
+}
+
+export type ComposerSubmitProps = {
+  running: boolean
+  content: boolean
+  disabled?: boolean
+  starting?: boolean
+  onStop: () => void
+}
+
+export function ComposerSubmit(props: ComposerSubmitProps) {
+  if (props.starting)
+    return (
+      <IconButton type="submit" appearance="secondary" shape="circle" size="medium" pending label="Starting session">
+        <Icon glyph="ArrowUp" />
+      </IconButton>
+    )
+  const stop = (appearance: "primary" | "secondary") => (
+    <IconButton
+      appearance={appearance}
+      shape="circle"
+      size="medium"
+      label="Stop"
+      onClick={(event) => {
+        event.preventDefault()
+        props.onStop()
+      }}
+    >
+      <Icon glyph="Stop" />
+    </IconButton>
+  )
+  if (props.running && !props.content) return stop("primary")
+  const send = (
+    <IconButton
+      type="submit"
+      appearance={props.content ? "primary" : "secondary"}
+      shape="circle"
+      size="medium"
+      label="Send"
+      disabled={props.disabled}
+    >
+      <Icon glyph="ArrowUp" />
+    </IconButton>
+  )
+  if (!props.running) return send
+  return (
+    <div className="flex items-center gap-2">
+      {stop("secondary")}
+      {send}
+    </div>
+  )
+}
+
+export type ComposerAlternateProps = {
+  label: string
+  shortcut: string
+  description?: string
+  onActivate: () => void
+}
+
+export function ComposerAlternate(props: ComposerAlternateProps) {
+  return (
+    <Button appearance="ghost" size="small" title={props.description} onClick={props.onActivate}>
+      {props.label}
+      <KeyboardKey>{props.shortcut}</KeyboardKey>
+    </Button>
+  )
+}
+
+export type QueueProps = {
+  label: string
+  count: number
+  children: ReactNode
+}
+
+export function Queue(props: QueueProps) {
+  return (
+    <section
+      aria-label={props.label}
+      data-slot="composer-queue"
+      className="flex min-w-0 flex-col rounded-t-container border border-b-0 border-border-primary bg-background-secondary pb-6"
+    >
+      {props.count > 3 ? (
+        <div className="px-3 pt-2">
+          <Text purpose="caption" tone="secondary" element="span">
+            {props.label}
+          </Text>
+        </div>
+      ) : null}
+      <ul
+        className={composeClasses(
+          "flex min-w-0 flex-col py-1",
+          props.count > 4 && "max-h-37 overflow-y-auto overscroll-contain mask-b-from-80%",
+        )}
+      >
+        {props.children}
+      </ul>
+    </section>
+  )
+}
+
+export type QueueItemProps = {
+  text: string
+  detail?: ReactNode
+  actions?: "on-hover" | "visible"
+  busy?: boolean
+  sendLabel?: string
+  onSend?: () => void
+  onMove?: () => void
+  onRemove?: () => void
+}
+
+export function QueueItem(props: QueueItemProps) {
+  const visible = props.actions === "visible"
+  return (
+    <li data-slot="composer-queue-item" className="group/queue flex min-h-8 min-w-0 items-center gap-2 px-3">
+      <span className="min-w-0 flex-1">
+        <Text purpose="body" truncation="single-line" element="span">
+          {props.text}
+        </Text>
+      </span>
+      {props.detail ? (
+        <Text purpose="caption" tone="secondary" element="span">
+          {props.detail}
+        </Text>
+      ) : null}
+      <span
+        className={composeClasses(
+          "flex shrink-0 items-center gap-1 transition-standard",
+          visible
+            ? "opacity-100"
+            : "opacity-0 group-focus-within/queue:opacity-100 group-hover/queue:opacity-100 [@media(hover:none)]:opacity-100",
+          props.busy && "pointer-events-none",
+        )}
+      >
+        {props.onSend ? (
+          <IconButton label={props.sendLabel ?? "Send now"} size="compact" disabled={props.busy} onClick={props.onSend}>
+            <Icon glyph="ArrowUp" />
+          </IconButton>
+        ) : null}
+        {props.onMove ? (
+          <IconButton label="Move to composer" size="compact" disabled={props.busy} onClick={props.onMove}>
+            <Icon glyph="Restore" />
+          </IconButton>
+        ) : null}
+        {props.onRemove ? (
+          <IconButton label="Remove" size="compact" disabled={props.busy} onClick={props.onRemove}>
+            <Icon glyph="X" />
+          </IconButton>
+        ) : null}
+      </span>
+    </li>
+  )
+}
+
+const characters = new Intl.NumberFormat()
+
+export type PastedTextProps = {
+  text: string
+  disabled?: boolean
+  onRemove: () => void
+  onShowInTextField: () => void
+}
+
+export function PastedText(props: PastedTextProps) {
+  return (
+    <AttachmentTile.Excerpt
+      name="Pasted text"
+      removeLabel="Remove pasted text"
+      {...(props.disabled ? {} : { onRemove: props.onRemove })}
+      footer={
+        <>
+          <Text purpose="caption" element="span">
+            {characters.format(props.text.length)} characters
+          </Text>
+          <Button appearance="link" disabled={props.disabled} onClick={props.onShowInTextField}>
+            Show in text field
+          </Button>
+        </>
+      }
+    >
+      <Text purpose="caption" truncation="three-lines">
+        {props.text.slice(0, 300)}
+      </Text>
+    </AttachmentTile.Excerpt>
   )
 }
