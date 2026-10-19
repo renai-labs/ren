@@ -211,7 +211,7 @@ export const start = async (options: {
     Models.Service,
     Models.Service.of({
       catalog: () => Effect.succeed({ endpoints: [] }),
-      grant: (subject) => Effect.sync(() => grants.get(subject.brainId) ?? stubAccess()),
+      grant: (subject) => Effect.sync(() => grants.get(subject.sessionId) ?? stubAccess()),
       refreshIfDue: () => Effect.succeedNone,
       revoke: () => Effect.void,
     }),

@@ -23,7 +23,7 @@ export type Answer =
   | { readonly type: "hold" }
 
 export interface Call {
-  readonly endpoint: "environments.access" | "host.refresh" | "models.refresh"
+  readonly endpoint: "environments.access" | "environments.release" | "host.refresh" | "models.refresh"
   readonly sessionId: Session.ID | undefined
   readonly hostToken: string
   readonly status: number
@@ -59,30 +59,34 @@ export const start = () => {
   const handlers = Layer.mergeAll(
     HttpApiBuilder.group(HostApi, "environments", (group) =>
       Effect.succeed(
-        group.handle("environments.access", () =>
-          Effect.gen(function* () {
-            const host = yield* CurrentHost
-            const answer = yield* Effect.promise(async (): Promise<Answer> =>
-              (answers.get(host.brainId) ?? (() => ({ type: "not_found" }) as const))(),
-            )
-            if (answer.type === "hold") {
-              record("environments.access", host.brainId, 0)
-              return yield* Effect.callback<never>((resume) => {
-                held.push(() => resume(Effect.never))
-              })
-            }
-            if (answer.type === "not_found") {
-              record("environments.access", host.brainId, 404)
-              return yield* new EnvironmentNotFoundError({ message: `Session ${host.brainId} has no environment` })
-            }
-            if (answer.type === "unavailable") {
-              record("environments.access", host.brainId, 503)
-              return yield* new EnvironmentUnavailableError({ message: answer.message })
-            }
-            record("environments.access", host.brainId, 200)
-            return answer.access
-          }),
-        ),
+        group
+          .handle("environments.access", () =>
+            Effect.gen(function* () {
+              const host = yield* CurrentHost
+              const answer = yield* Effect.promise(async (): Promise<Answer> =>
+                (answers.get(host.sessionId) ?? (() => ({ type: "not_found" }) as const))(),
+              )
+              if (answer.type === "hold") {
+                record("environments.access", host.sessionId, 0)
+                return yield* Effect.callback<never>((resume) => {
+                  held.push(() => resume(Effect.never))
+                })
+              }
+              if (answer.type === "not_found") {
+                record("environments.access", host.sessionId, 404)
+                return yield* new EnvironmentNotFoundError({ message: `Session ${host.sessionId} has no environment` })
+              }
+              if (answer.type === "unavailable") {
+                record("environments.access", host.sessionId, 503)
+                return yield* new EnvironmentUnavailableError({ message: answer.message })
+              }
+              record("environments.access", host.sessionId, 200)
+              return answer.access
+            }),
+          )
+          .handle("environments.release", () =>
+            Effect.map(CurrentHost, (host) => record("environments.release", host.sessionId, 204)),
+          ),
       ),
     ),
     HttpApiBuilder.group(HostApi, "host", (group) =>
@@ -90,9 +94,9 @@ export const start = () => {
         group.handle("host.refresh", () =>
           Effect.gen(function* () {
             const host = yield* CurrentHost
-            record("host.refresh", host.brainId, 200)
+            record("host.refresh", host.sessionId, 200)
             yield* Effect.promise(() => state.refreshGate?.() ?? Promise.resolve())
-            return { hostToken: yield* Effect.promise(() => hostToken(host.brainId)) }
+            return { hostToken: yield* Effect.promise(() => hostToken(host.sessionId)) }
           }),
         ),
       ),
@@ -102,7 +106,7 @@ export const start = () => {
         group.handle("models.refresh", () =>
           Effect.gen(function* () {
             const host = yield* CurrentHost
-            record("models.refresh", host.brainId, 503)
+            record("models.refresh", host.sessionId, 503)
             return yield* new ModelsUnavailableError({ message: "The fake Ren grants no models" })
           }),
         ),
@@ -120,7 +124,7 @@ export const start = () => {
           if (Option.isNone(host) || host.value.scope !== "host")
             return yield* new ForbiddenError({ message: "The host token is not valid" })
           return yield* httpEffect.pipe(
-            Effect.provideService(CurrentHost, { brainId: host.value.sid, organizationId: host.value.org }),
+            Effect.provideService(CurrentHost, { sessionId: host.value.sid, organizationId: host.value.org }),
           )
         }),
     }),

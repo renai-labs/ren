@@ -43,6 +43,7 @@ export interface Connection {
 
 export interface Interface {
   readonly connect: (sessionId: Session.ID) => Effect.Effect<Connection, Unavailable, Scope.Scope>
+  readonly release: (sessionId: Session.ID) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/brain/HandConnections") {}
@@ -200,6 +201,16 @@ export const layer = Layer.effect(
         )
         yield* entry.ready
         return entry.connection
+      }),
+      release: Effect.fn("HandConnections.release")(function* (sessionId: Session.ID) {
+        yield* RcMap.invalidate(connections, sessionId)
+        yield* handAccess
+          .release(sessionId)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning(`Could not release the hand seat of session ${sessionId}: ${error.message}`),
+            ),
+          )
       }),
     })
   }),

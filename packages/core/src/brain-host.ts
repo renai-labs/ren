@@ -76,6 +76,7 @@ export interface Interface {
   readonly accessEnvironment: (
     host: CurrentHost["Service"],
   ) => Effect.Effect<Hand.Access, EnvironmentNotFoundError | EnvironmentUnavailableError>
+  readonly releaseEnvironment: (host: CurrentHost["Service"]) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
@@ -157,7 +158,7 @@ export const layer = Layer.effect(
 
     const hostToken = Effect.fnUntraced(function* (subject: Models.Subject, exp: number) {
       return yield* SessionToken.sign(key, {
-        sid: subject.brainId,
+        sid: subject.sessionId,
         scope: "host",
         org: subject.organizationId,
         iat: Math.floor((yield* Clock.currentTimeMillis) / 1000),
@@ -176,7 +177,7 @@ export const layer = Layer.effect(
 
     const configure = (subject: Models.Subject, access: Models.Access) =>
       body(subject, access).pipe(
-        Effect.flatMap((payload) => call(subject.brainId, brain.brain["brain.configureModels"]({ payload }))),
+        Effect.flatMap((payload) => call(subject.sessionId, brain.brain["brain.configureModels"]({ payload }))),
       )
 
     const withModels = Effect.fnUntraced(function* <A, E>(
@@ -220,7 +221,7 @@ export const layer = Layer.effect(
     return Service.of({
       start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, owner: Owner) {
         if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
-        const subject = { brainId: input.sessionId, organizationId: owner.organizationId }
+        const subject = { sessionId: input.sessionId, organizationId: owner.organizationId }
         const requested = input.environmentId
         const binding = requested
           ? Option.some(
@@ -242,7 +243,7 @@ export const layer = Layer.effect(
       send: Effect.fn("BrainHost.send")(function* (input: Session.SendInput, organizationId: Auth.OrganizationID) {
         yield* validatePrompt(input.prompt)
         return yield* withModels(
-          { brainId: input.sessionId, organizationId },
+          { sessionId: input.sessionId, organizationId },
           call(
             input.sessionId,
             brain.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
@@ -255,7 +256,7 @@ export const layer = Layer.effect(
       ) {
         const cleared = yield* Effect.exit(call(sessionId, brain.brain["brain.removeModels"]()))
         yield* models
-          .revoke({ brainId: sessionId, organizationId })
+          .revoke({ sessionId, organizationId })
           .pipe(Effect.mapError((cause) => new BrainUnavailable({ cause })))
         return yield* cleared
       }),
@@ -263,7 +264,7 @@ export const layer = Layer.effect(
         const claims = yield* SessionToken.verify(Redacted.value(config.keys), Redacted.value(hostToken))
         if (Option.isNone(claims) || claims.value.scope !== "host")
           return yield* new ForbiddenError({ message: "The host token is not valid" })
-        return { brainId: claims.value.sid, organizationId: claims.value.org }
+        return { sessionId: claims.value.sid, organizationId: claims.value.org }
       }),
       refreshModels: Effect.fn("BrainHost.refreshModels")(function* (host: CurrentHost["Service"]) {
         const access = yield* models.grant(host).pipe(
@@ -285,6 +286,9 @@ export const layer = Layer.effect(
             "Hands.Unavailable": (error) => Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
           }),
         )
+      }),
+      releaseEnvironment: Effect.fn("BrainHost.releaseEnvironment")(function* (host: CurrentHost["Service"]) {
+        yield* hands.release(host)
       }),
       access: Effect.fn("BrainHost.access")(function* (sessionId: Session.ID) {
         const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + clientLifetime

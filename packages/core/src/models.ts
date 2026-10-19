@@ -8,7 +8,7 @@ import { Context, Effect, Layer, Option, Schema } from "effect"
 export { Access, Catalog, Endpoint, catalog } from "@ren/schema/models"
 
 export interface Subject {
-  readonly brainId: Session.ID
+  readonly sessionId: Session.ID
   readonly organizationId: Auth.OrganizationID
 }
 

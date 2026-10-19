@@ -129,7 +129,7 @@ describe("Environments", () => {
       expect((yield* links.create(setup.ada, link).pipe(Effect.flip))._tag).toBe("Primitive.Conflict")
       expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([linked])
       expect((yield* links.list(grace, { ...page, spaceId: setup.space.id })).items).toEqual([])
-      const session = { brainId: Session.ID.create(), organizationId: setup.organizationId, spaceId: setup.space.id }
+      const session = { sessionId: Session.ID.create(), organizationId: setup.organizationId, spaceId: setup.space.id }
       yield* hands.bind(session, made.id)
       yield* hands.access(session)
       expect((yield* links.archive(setup.ada, linked.id)).archivedAt).not.toBeNull()
@@ -164,7 +164,7 @@ describe("Environments", () => {
       const setup = yield* team()
       const made = yield* environments.create(setup.admin, input)
       yield* links.create(setup.ada, { spaceId: setup.space.id, environmentId: made.id })
-      const session = { brainId: Session.ID.create(), organizationId: setup.organizationId, spaceId: setup.space.id }
+      const session = { sessionId: Session.ID.create(), organizationId: setup.organizationId, spaceId: setup.space.id }
       yield* hands.bind(session, made.id)
       yield* hands.access(session)
       const handId = (yield* Ref.get(probe.provisions)).at(-1)

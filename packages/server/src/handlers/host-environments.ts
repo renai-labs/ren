@@ -6,11 +6,18 @@ import { HttpApiBuilder } from "effect/http-api"
 export const HostEnvironmentsHandler = HttpApiBuilder.group(HostApi, "environments", (handlers) =>
   Effect.gen(function* () {
     const brain = yield* BrainHost.Service
-    return handlers.handle("environments.access", () =>
-      Effect.gen(function* () {
-        const host = yield* CurrentHost
-        return yield* brain.accessEnvironment(host)
-      }),
-    )
+    return handlers
+      .handle("environments.access", () =>
+        Effect.gen(function* () {
+          const host = yield* CurrentHost
+          return yield* brain.accessEnvironment(host)
+        }),
+      )
+      .handle("environments.release", () =>
+        Effect.gen(function* () {
+          const host = yield* CurrentHost
+          yield* brain.releaseEnvironment(host)
+        }),
+      )
   }),
 )
