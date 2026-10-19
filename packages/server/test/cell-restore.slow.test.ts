@@ -53,7 +53,7 @@ const setup = Effect.fnUntraced(function* () {
   const authorization = TestToken.basic(
     yield* SessionToken.sign(cellKey, {
       sid: id,
-      scope: "client",
+      scope: "server",
       exp: Math.floor(Date.now() / 1000) + 3600,
     }),
   )
