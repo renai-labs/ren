@@ -29,6 +29,8 @@ import type {
   SessionArchiveOutput,
   ChatAccessInput,
   ChatAccessOutput,
+  ChatForkInput,
+  ChatForkOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -298,6 +300,18 @@ export function make(options: ClientOptions) {
             path: `/sessions/${encodeURIComponent(input.id)}/chat`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      fork: (input: ChatForkInput, requestOptions?: RequestOptions) =>
+        request<ChatForkOutput>(
+          {
+            method: "POST",
+            path: `/sessions/${encodeURIComponent(input.sessionId)}/fork`,
+            body: { id: input["id"], messageId: input["messageId"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
             empty: false,
           },
           requestOptions,

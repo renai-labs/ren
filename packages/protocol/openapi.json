@@ -1082,6 +1082,94 @@
         "description": "Return the URL of the session’s brain and a short-lived token for the Chat API. Ask again before `expiresAt`.",
         "summary": "Open a session’s chat"
       }
+    },
+    "/sessions/{sessionId}/fork": {
+      "post": {
+        "tags": ["chat"],
+        "operationId": "chat.fork",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Start a new session in the same space from the session’s messages before `messageId`. The new session links to its source in `forkedFrom`. Retrying with the same `id` returns the fork.",
+        "summary": "Fork a session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Session.ForkInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
     }
   },
   "components": {
@@ -1390,6 +1478,32 @@
         "required": ["id", "text"],
         "additionalProperties": false
       },
+      "Session.ForkInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Session.ID_1"
+          },
+          "messageId": {
+            "$ref": "#/components/schemas/SessionMessage.ID_1"
+          }
+        },
+        "required": ["id", "messageId"],
+        "additionalProperties": false
+      },
+      "Session.ForkSource": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/Session.ID"
+          },
+          "messageId": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          }
+        },
+        "required": ["sessionId", "messageId"],
+        "additionalProperties": false
+      },
       "Session.Harness": {
         "anyOf": [
           {
@@ -1401,6 +1515,11 @@
       "Session.ID": {
         "type": "string",
         "pattern": "^ses_"
+      },
+      "Session.ID_1": {
+        "type": "string",
+        "pattern": "^ses_",
+        "description": "The ID of the new session. The client mints it, so a retry is safe."
       },
       "Session.Info": {
         "type": "object",
@@ -1448,6 +1567,17 @@
                 "type": "null"
               }
             ]
+          },
+          "forkedFrom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Session.ForkSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The session and message this session was forked before, if it is a fork."
           }
         },
         "required": [
@@ -1460,7 +1590,8 @@
           "capabilities",
           "createdAt",
           "updatedAt",
-          "archivedAt"
+          "archivedAt",
+          "forkedFrom"
         ],
         "additionalProperties": false
       },
@@ -1553,6 +1684,11 @@
       "SessionMessage.ID": {
         "type": "string",
         "pattern": "^msg_"
+      },
+      "SessionMessage.ID_1": {
+        "type": "string",
+        "pattern": "^msg_",
+        "description": "The fork starts with the source’s messages before this one."
       },
       "Space.AssignmentID": {
         "type": "string",

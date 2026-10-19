@@ -34,6 +34,8 @@ export type SessionCapabilitiesInfo = {
   files: boolean
 }
 
+export type SessionMessageID = string
+
 export type SessionClientAccess = { url: string; token: string; expiresAt: string }
 
 export type HealthInfo = { status: HealthStatus; version: string }
@@ -91,6 +93,14 @@ export type SpaceMemberPending = {
   archivedAt: string | null
 }
 
+export type SessionForkSource = { sessionId: SessionID; messageId: SessionMessageID }
+
+export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
+
+export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
+
+export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
+
 export type SessionInfo = {
   id: SessionID
   spaceId: SpaceID
@@ -102,17 +112,12 @@ export type SessionInfo = {
   createdAt: string
   updatedAt: string
   archivedAt: string | null
+  forkedFrom: SessionForkSource | null
 }
 
-export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
-
-export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
-
-export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
+export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
 export type SessionPage = { items: Array<SessionInfo>; page: number; pageSize: number; total: number }
-
-export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
 export type UnauthorizedError = { readonly _tag: "UnauthorizedError"; readonly message: string }
 export const isUnauthorizedError = (value: unknown): value is UnauthorizedError =>
@@ -275,3 +280,11 @@ export type SessionArchiveOutput = SessionInfo
 export type ChatAccessInput = { readonly id: { readonly id: string }["id"] }
 
 export type ChatAccessOutput = SessionClientAccess
+
+export type ChatForkInput = {
+  readonly sessionId: { readonly sessionId: string }["sessionId"]
+  readonly id: { readonly id: string; readonly messageId: string }["id"]
+  readonly messageId: { readonly id: string; readonly messageId: string }["messageId"]
+}
+
+export type ChatForkOutput = SessionInfo

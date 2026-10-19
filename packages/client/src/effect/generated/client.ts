@@ -154,7 +154,19 @@ type ChatAccessInput = { readonly id: ChatAccessRequest["params"]["id"] }
 const EndpointChatAccess = (raw: RawClient["chat"]) => (input: ChatAccessInput) =>
   raw["chat.access"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupChat = (raw: RawClient["chat"]) => ({ access: EndpointChatAccess(raw) })
+type ChatForkRequest = Parameters<RawClient["chat"]["chat.fork"]>[0]
+type ChatForkInput = {
+  readonly sessionId: ChatForkRequest["params"]["sessionId"]
+  readonly id: ChatForkRequest["payload"]["id"]
+  readonly messageId: ChatForkRequest["payload"]["messageId"]
+}
+const EndpointChatFork = (raw: RawClient["chat"]) => (input: ChatForkInput) =>
+  raw["chat.fork"]({
+    params: { sessionId: input["sessionId"] },
+    payload: { id: input["id"], messageId: input["messageId"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupChat = (raw: RawClient["chat"]) => ({ access: EndpointChatAccess(raw), fork: EndpointChatFork(raw) })
 
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),

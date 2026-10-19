@@ -3,7 +3,7 @@ export * as OpenCodeStore from "./opencode-store.js"
 import type { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
 import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
-import { and, asc, eq, getColumns, inArray, sql } from "drizzle-orm"
+import { and, asc, eq, getColumns, inArray, lt, sql } from "drizzle-orm"
 import type { PgTable } from "drizzle-orm/pg-core"
 import { Effect, Record, Struct } from "effect"
 
@@ -98,3 +98,55 @@ export const messages = (
     )
     .orderBy(asc(Database.Schema.opencode_message.seq), asc(Database.Schema.opencode_message.id))
     .limit(limit)
+
+export const fork = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  input: { readonly from: Session.ID; readonly to: Session.ID; readonly before: string; readonly ordinal: number },
+) {
+  const source = (yield* transaction
+    .select()
+    .from(Database.Schema.opencode_session)
+    .where(eq(Database.Schema.opencode_session.session_id, input.from))).at(0)
+  const boundary = yield* transaction
+    .select({ id: Database.Schema.opencode_message.id })
+    .from(Database.Schema.opencode_message)
+    .where(
+      and(
+        eq(Database.Schema.opencode_message.session_id, input.from),
+        eq(Database.Schema.opencode_message.id, input.before),
+      ),
+    )
+  if (!source || boundary.length === 0) return false
+  const now = Date.now()
+  yield* transaction.insert(Database.Schema.opencode_session).values({
+    ...source,
+    session_id: input.to,
+    slug: `${source.slug}-fork`,
+    title: source.title && `${source.title} (fork #${input.ordinal})`,
+    time_created: now,
+    time_updated: now,
+    time_idle: null,
+    time_viewed: null,
+    idle_outcome: null,
+    time_archived: null,
+    time_suspended: null,
+  })
+  yield* transaction.insert(Database.Schema.opencode_message).select(
+    transaction
+      .select({
+        id: Database.Schema.opencode_message.id,
+        session_id: sql<Session.ID>`${input.to}`.as("session_id"),
+        type: Database.Schema.opencode_message.type,
+        seq: Database.Schema.opencode_message.seq,
+        data: Database.Schema.opencode_message.data,
+      })
+      .from(Database.Schema.opencode_message)
+      .where(
+        and(
+          eq(Database.Schema.opencode_message.session_id, input.from),
+          lt(Database.Schema.opencode_message.id, input.before),
+        ),
+      ),
+  )
+  return true
+})

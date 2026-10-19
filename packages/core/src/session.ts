@@ -15,6 +15,8 @@ export type ID = Session.ID
 export const MessageID = Session.MessageID
 export type MessageID = Session.MessageID
 
+export const StartInput = Session.StartInput
+
 export class NotFound extends Schema.TaggedError<NotFound>()("Session.NotFound", { message: Schema.String }) {}
 
 export class AlreadyExists extends Schema.TaggedError<AlreadyExists>()("Session.AlreadyExists", {

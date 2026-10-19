@@ -5,7 +5,7 @@ import type { Session as SessionSchema } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session-capabilities"
 import { Space } from "@ren/schema/space"
 import { and, count, desc, eq, isNull, sql, type SQL } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "../access.js"
 import type { Actor } from "../actor.js"
 import { BrainHost } from "../brain-host.js"
@@ -17,6 +17,11 @@ import { OpenCodeStore } from "./opencode-store.js"
 
 export type Interface = Primitive.Interface<typeof SessionSchema.definition> & {
   readonly access: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionSchema.ClientAccess, Primitive.NotFound>
+  readonly fork: (
+    actor: Actor.Info,
+    id: Session.ID,
+    input: SessionSchema.ForkInput,
+  ) => Effect.Effect<SessionSchema.Info, Primitive.NotFound | Primitive.Conflict>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SessionDirectory") {}
@@ -54,7 +59,15 @@ const toInfo = (row: Row): SessionSchema.Info => ({
     ? DateTime.makeUnsafe(row.opencode.updatedAt)
     : DateTime.fromDateUnsafe(row.session.created_at),
   archivedAt: row.session.archived_at && DateTime.fromDateUnsafe(row.session.archived_at),
+  forkedFrom:
+    row.session.fork_session_id && row.session.fork_message_id
+      ? { sessionId: row.session.fork_session_id, messageId: row.session.fork_message_id }
+      : null,
 })
+
+const messageNotFound = new Primitive.NotFound({ message: "Message not found." })
+
+const forkConflict = new Primitive.Conflict({ message: "A session with this ID already exists." })
 
 const spaceGet = Primitive.action(Space.definition, "get")
 const spaceUpdate = Primitive.action(Space.definition, "update")
@@ -186,6 +199,61 @@ export const layer = Layer.effect(
       access: Effect.fn("SessionDirectory.access")(function* (actor: Actor.Info, id: Session.ID) {
         yield* read(actor, id)
         return yield* brain.access(id, actor.userId)
+      }),
+      fork: Effect.fn("SessionDirectory.fork")(function* (
+        actor: Actor.Info,
+        id: Session.ID,
+        input: SessionSchema.ForkInput,
+      ) {
+        const source = yield* read(actor, id)
+        const existing = yield* sessions.get(input.id).pipe(Effect.option)
+        if (Option.isSome(existing)) {
+          if (existing.value.createdBy !== actor.userId) return yield* forkConflict
+          return toInfo(yield* read(actor, input.id))
+        }
+        yield* brain
+          .flush(id, actor.organizationId)
+          .pipe(Effect.catchTags({ BrainUnavailable: Effect.die, BrainRejectedError: Effect.die }))
+        const start = yield* Schema.decodeUnknownEffect(Session.StartInput)({
+          ...(source.session.start_input ?? { harness: source.session.harness }),
+          sessionId: input.id,
+        }).pipe(Effect.orDie)
+        const startInput = yield* Schema.encodeEffect(Session.StartInput)(start).pipe(Effect.orDie)
+        yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const created = yield* transaction
+              .insert(Database.Schema.agent_session)
+              .values({
+                id: input.id,
+                organization_id: actor.organizationId,
+                space_id: source.session.space_id,
+                created_by: actor.userId,
+                root_id: input.id,
+                harness: source.session.harness,
+                start_input: startInput,
+                fork_session_id: id,
+                fork_message_id: input.messageId,
+              })
+              .onConflictDoNothing()
+              .returning({ id: Database.Schema.agent_session.id })
+            if (created.length === 0) return yield* forkConflict
+            const forks = yield* transaction
+              .select({ total: count() })
+              .from(Database.Schema.agent_session)
+              .where(eq(Database.Schema.agent_session.fork_session_id, id))
+            const copied = yield* OpenCodeStore.fork(transaction, {
+              from: id,
+              to: input.id,
+              before: input.messageId,
+              ordinal: forks.at(0)?.total ?? 1,
+            })
+            if (!copied) return yield* messageNotFound
+          }),
+        )
+        yield* brain
+          .start(start, actor.organizationId)
+          .pipe(Effect.catchTags({ BrainUnavailable: Effect.die, BrainRejectedError: Effect.die }))
+        return toInfo(yield* read(actor, input.id))
       }),
     })
   }),

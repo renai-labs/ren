@@ -139,6 +139,12 @@ export const HostState = Schema.Struct({
 export const Status = Schema.Literals(["idle", "busy"]).annotate({ identifier: "Session.Status" })
 export type Status = typeof Status.Type
 
+export interface ForkSource extends Schema.Schema.Type<typeof ForkSource> {}
+export const ForkSource = Schema.Struct({
+  sessionId: ID,
+  messageId: SessionMessage.ID,
+}).annotate({ identifier: "Session.ForkSource" })
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -151,6 +157,9 @@ export const Info = Schema.Struct({
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),
+  forkedFrom: Schema.NullOr(ForkSource).annotate({
+    description: "The session and message this session was forked before, if it is a fork.",
+  }),
 }).annotate({ identifier: "Session.Info" })
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
@@ -173,6 +182,14 @@ export const CreateInput = Schema.Struct({
   spaceId: Space.ID,
   message: Schema.optional(FirstMessage),
 }).annotate({ identifier: "Session.CreateInput" })
+
+export interface ForkInput extends Schema.Schema.Type<typeof ForkInput> {}
+export const ForkInput = Schema.Struct({
+  id: ID.annotate({ description: "The ID of the new session. The client mints it, so a retry is safe." }),
+  messageId: SessionMessage.ID.annotate({
+    description: "The fork starts with the source’s messages before this one.",
+  }),
+}).annotate({ identifier: "Session.ForkInput" })
 
 export const definition = Primitive.define({
   name: "session",

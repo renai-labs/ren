@@ -30,7 +30,7 @@ export const of = (harness: Session.Harness): Info =>
       permissions: true,
       forms: true,
       revert: false,
-      fork: false,
+      fork: true,
       compact: false,
       shell: false,
       commands: false,

@@ -5,11 +5,15 @@ import { ModelsBody } from "@ren/brain-api/brain-api"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
+import { Access } from "@ren/core/access"
 import { BrainHost } from "@ren/core/brain-host"
 import { Session } from "@ren/core/session"
+import { SessionDirectory } from "@ren/core/session/directory"
 import { Seed } from "@ren/core/testing"
-import type { Database } from "@ren/db/database"
-import { Deferred, Effect, Queue, Schema } from "effect"
+import { Database } from "@ren/db/database"
+import { SessionMessage } from "@ren/schema/session-message"
+import { Space } from "@ren/schema/space"
+import { Deferred, Effect, Layer, Queue, Schema } from "effect"
 import { HttpServer } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { cellKey } from "./lib/app.js"
@@ -67,7 +71,7 @@ const setup = Effect.fnUntraced(function* () {
   const sessions = yield* Session.Service
   const brain = yield* BrainHost.Service
   const id = Session.ID.create()
-  const client = TestToken.basic(yield* SessionToken.sign(cellKey, { sid: id, scope: "client", exp: seconds(3600) }))
+  const client = TestToken.basic(yield* SessionToken.sign(cellKey, { sid: id, scope: "server", exp: seconds(3600) }))
   const opencode = OpenCode.make({ baseUrl: celld().url, headers: { authorization: client } })
   const commits = yield* Queue.unbounded<void>()
   proxy.observe((request, status) => {
@@ -296,5 +300,51 @@ describe("cell sync", () => {
       expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
       expect(yield* SyncTest.remote(cell.id)).toEqual(yield* cell.local)
     }),
+  )
+
+  it.live(
+    "a fork before a message starts a new brain from the source's synced messages before it and links to its source",
+    () =>
+      Effect.gen(function* () {
+        const cell = yield* setup()
+        const database = yield* Database.Service
+        yield* Seed.member(cell.owner.organizationId, cell.owner.createdBy, "member")
+        yield* database.db.insert(Database.Schema.space_member).values({
+          id: Space.MembershipID.create(),
+          space_id: cell.owner.spaceId,
+          user_id: cell.owner.createdBy,
+        })
+        const actor = { userId: cell.owner.createdBy, organizationId: cell.owner.organizationId, roles: ["member"] }
+        const first = stub.script({ reply: "first answer" })
+        yield* cell.create(`first ${first.marker}`)
+        yield* cell.idle
+        const boundary = SessionMessage.ID.create()
+        const second = {
+          ...cell.message(`second ${stub.script().marker}`),
+          messageId: Session.MessageID.make(boundary),
+        }
+        yield* Session.Service.pipe(
+          Effect.flatMap((sessions) => sessions.send({ sessionId: cell.id, delivery: "steer", ...second })),
+        )
+        yield* cell.idle
+        const directory = yield* SessionDirectory.Service
+        const id = Session.ID.create()
+        const forked = yield* directory.fork(actor, cell.id, { id, messageId: boundary })
+        expect(forked).toMatchObject({
+          id,
+          title: expect.stringMatching(/ \(fork #1\)$/),
+          capabilities: expect.objectContaining({ fork: true }),
+          forkedFrom: { sessionId: cell.id, messageId: boundary },
+        })
+        const access = yield* cell.brain.access(id)
+        const read = yield* Effect.promise(() =>
+          fetch(`${access.url}/chat/session/${id}/message?limit=20`, {
+            headers: { authorization: TestToken.basic(access.token) },
+          }).then((response) => response.text()),
+        )
+        expect(read).toContain(first.marker)
+        expect(read).toContain("first answer")
+        expect(read).not.toContain(second.prompt.text)
+      }).pipe(Effect.provide(SessionDirectory.layer.pipe(Layer.provide(Access.layer)))),
   )
 })

@@ -76,7 +76,7 @@ test("a prompt streams the turn as it happens, and the reads show the same turn 
       })
       expect(yield* brain.chat.session["session.get"]({ params })).toMatchObject({
         id: brain.id,
-        capabilities: { steer: true, fork: false },
+        capabilities: { steer: true, fork: true },
       })
       expect(yield* brain.chat.session["session.status"]()).toEqual({})
     }),

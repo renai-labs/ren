@@ -1,5 +1,6 @@
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
+import type { SessionMessage } from "@ren/schema/session-message"
 import { Space } from "@ren/schema/space"
 import { defineRelationsPart } from "drizzle-orm"
 import {
@@ -41,6 +42,10 @@ export const agent_session = pgTable(
       .$type<Session.ID>()
       .notNull()
       .references((): AnyPgColumn => agent_session.id, { onDelete: "cascade" }),
+    fork_session_id: text()
+      .$type<Session.ID>()
+      .references((): AnyPgColumn => agent_session.id, { onDelete: "set null" }),
+    fork_message_id: text().$type<SessionMessage.ID>(),
     harness: text().$type<Session.Harness>().notNull(),
     start_input: jsonb().$type<Omit<typeof Session.StartInput.Encoded, "initialMessage">>(),
     sync_seq: bigint({ mode: "number" }),
