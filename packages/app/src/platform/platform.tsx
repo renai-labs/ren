@@ -9,12 +9,16 @@ export interface Storage {
   readonly remove: (key: string) => void
 }
 
+export interface Drafts extends Storage {
+  readonly subscribe?: (listener: (key: string) => void) => () => void
+}
+
 interface Base {
   readonly version: string
   readonly serverUrl: string
   readonly appUrl: string
   readonly storage: Storage
-  readonly drafts?: Storage
+  readonly drafts?: Drafts
   readonly openExternal: (url: string) => void
   readonly notify: (title: string, body?: string) => Promise<void>
   readonly fetch?: typeof globalThis.fetch

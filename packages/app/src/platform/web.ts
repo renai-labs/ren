@@ -1,3 +1,5 @@
+import { Result } from "effect"
+import { DraftStore } from "./draft-store.js"
 import type { Platform } from "./platform.js"
 
 const prefix = "ren."
@@ -20,11 +22,15 @@ export function createWebPlatform(): Platform.Info {
       set: (key, value) => localStorage.setItem(prefix + key, value),
       remove: (key) => localStorage.removeItem(prefix + key),
     },
-    drafts: {
-      get: (key) => localStorage.getItem(draftPrefix + key) ?? undefined,
-      set: (key, value) => localStorage.setItem(draftPrefix + key, value),
-      remove: (key) => localStorage.removeItem(draftPrefix + key),
-    },
+    drafts: DraftStore.make({
+      storage: Result.getOrUndefined(Result.try(() => window.localStorage)),
+      prefix: draftPrefix,
+      watch: (handler) => {
+        const changed = (event: StorageEvent) => handler(event.key)
+        window.addEventListener("storage", changed)
+        return () => window.removeEventListener("storage", changed)
+      },
+    }),
     openExternal: (url) => {
       if (!externalProtocols.has(new URL(url).protocol)) return
       window.open(url, "_blank", "noopener,noreferrer")
