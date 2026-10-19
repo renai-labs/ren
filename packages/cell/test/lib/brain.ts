@@ -35,7 +35,10 @@ const make = Effect.gen(function* () {
   const alarm: { at: number | null } = { at: null }
   const services = yield* Layer.build(
     Layer.mergeAll(
-      ModelRefresh.layer(issuer.url).pipe(Layer.provideMerge(HostToken.layer(issuer.url, TestToken.keys))),
+      ModelRefresh.layer(issuer.url).pipe(
+        Layer.provideMerge(HostToken.layer(issuer.url, TestToken.keys)),
+        Layer.provide(FetchHttpClient.layer),
+      ),
       Layer.succeed(
         Cell.Info,
         Cell.Info.of({

@@ -21,6 +21,7 @@ import {
   StdinFullError,
   WrongKindError,
 } from "@ren/hand-api/executor-api"
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { Signal } from "@ren/hand-api/signal"
 import { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
@@ -93,7 +94,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const config = yield* Config.all({
-      handId: Config.schema(Hand.ID, "EXECUTOR_HAND_ID"),
+      handId: Config.schema(Hand.ID, ExecutorVariables.handId),
       workspaceDirectory: Config.String("EXECUTOR_WORKSPACE").pipe(Config.withDefault(process.cwd())),
     })
     const workspace = yield* Effect.promise(() => realpath(resolve(config.workspaceDirectory)))

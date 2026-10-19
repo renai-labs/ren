@@ -10,9 +10,7 @@ import { HandProvider } from "./hand-provider.js"
 import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 
-export type Interface = Primitive.Interface<typeof Environment.definition> & {
-  readonly providers: Effect.Effect<ReadonlyArray<HandProvider.Info>>
-}
+export type Interface = Primitive.Interface<typeof Environment.definition>
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Environments") {}
 
@@ -54,7 +52,7 @@ export const layer = Layer.effect(
     const inOrganization = (actor: Actor.Info) =>
       and(eq(table.organization_id, actor.organizationId), isNull(table.archived_at))
 
-    const checked = Effect.fnUntraced(function* (provider: HandProvider.ID, config: unknown) {
+    const checkConfig = Effect.fnUntraced(function* (provider: HandProvider.ID, config: unknown) {
       const found = registry.get(provider)
       if (Option.isNone(found))
         return yield* new Primitive.Invalid({
@@ -83,24 +81,26 @@ export const layer = Layer.effect(
       provider: HandProvider.ID,
       environmentId: Environment.ID,
     ) {
-      const hands = yield* database.db
-        .delete(Database.Schema.hand)
-        .where(and(eq(Database.Schema.hand.environment_id, environmentId), isNotNull(Database.Schema.hand.binding)))
-        .returning({ binding: Database.Schema.hand.binding })
+      const hands = Database.Schema.hand
+      const bound = yield* database.db
+        .select({ id: hands.id, binding: hands.binding })
+        .from(hands)
+        .where(and(eq(hands.environment_id, environmentId), isNotNull(hands.binding)))
         .pipe(Effect.orDie)
       yield* Option.match(registry.get(provider), {
         onNone: () => Effect.void,
         onSome: (found) =>
           Effect.forEach(
-            hands.map((hand) => hand.binding).filter(Predicate.isNotNull),
-            (binding) =>
-              found
-                .destroy(binding)
-                .pipe(
-                  Effect.catch((error) =>
-                    Effect.logWarning(`Could not destroy a hand of environment ${environmentId}`, error),
-                  ),
+            bound.flatMap((hand) =>
+              Predicate.isNotNull(hand.binding) ? [{ id: hand.id, binding: hand.binding }] : [],
+            ),
+            (hand) =>
+              found.destroy(hand.binding).pipe(
+                Effect.andThen(database.db.delete(hands).where(eq(hands.id, hand.id)).pipe(Effect.orDie)),
+                Effect.catch((error) =>
+                  Effect.logWarning(`Could not destroy hand ${hand.id} of environment ${environmentId}`, error),
                 ),
+              ),
             { concurrency: 4, discard: true },
           ),
       })
@@ -130,12 +130,12 @@ export const layer = Layer.effect(
           }),
         )
       }),
-      get: Effect.fn("Environments.get")(function* (actor: Actor.Info, idOrSlug: string) {
-        if (!Schema.is(Environment.ID)(idOrSlug) || !isAllowed(actor, actions.get)) return yield* notFound
+      get: Effect.fn("Environments.get")(function* (actor: Actor.Info, id: string) {
+        if (!Schema.is(Environment.ID)(id) || !isAllowed(actor, actions.get)) return yield* notFound
         const rows = yield* database.db
           .select()
           .from(table)
-          .where(and(inOrganization(actor), eq(table.id, idOrSlug)))
+          .where(and(inOrganization(actor), eq(table.id, id)))
           .pipe(Effect.orDie)
         const row = rows.at(0)
         if (!row) return yield* notFound
@@ -144,7 +144,7 @@ export const layer = Layer.effect(
       create: Effect.fn("Environments.create")(function* (actor: Actor.Info, input: Environment.CreateInput) {
         if (!isAllowed(actor, actions.create))
           return yield* new Primitive.Forbidden({ message: "Only organization admins can create environments." })
-        const config = yield* checked(input.provider, input.config)
+        const config = yield* checkConfig(input.provider, input.config)
         const rows = yield* database.db
           .insert(table)
           .values({
@@ -175,7 +175,7 @@ export const layer = Layer.effect(
               return yield* new Primitive.Forbidden({ message: "You cannot edit this environment." })
             const config = Predicate.isUndefined(input.config)
               ? undefined
-              : yield* checked(found.provider, input.config)
+              : yield* checkConfig(found.provider, input.config)
             const updated = yield* transaction
               .update(table)
               .set({
@@ -214,9 +214,6 @@ export const layer = Layer.effect(
         if (archived.isNew) yield* destroyHands(archived.info.provider, id)
         return archived.info
       }),
-      providers: Effect.sync(() => registry.providers.map((provider) => provider.info)).pipe(
-        Effect.withSpan("Environments.providers"),
-      ),
     })
   }),
 )

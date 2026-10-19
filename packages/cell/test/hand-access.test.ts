@@ -39,8 +39,9 @@ const build = Effect.fnUntraced(function* (url: string = ren.url, stored = new M
   const sessionId = Session.ID.create()
   const vars = Schema.decodeUnknownSync(Env.Vars)({ ...Shared.vars(Shared.stub().url), REN_URL: url })
   const context = yield* Layer.build(
-    HostAccess.layer(url).pipe(
+    HostAccess.layer.pipe(
       Layer.provideMerge(HostToken.layer(url, vars.CELL_KEYS)),
+      Layer.provide(FetchHttpClient.layer),
       Layer.provideMerge(ModelsTest.storage(stored)),
       Layer.provideMerge(
         Layer.succeed(

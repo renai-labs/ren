@@ -1,5 +1,6 @@
 export * as Hands from "./hands.js"
 
+import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { HandToken } from "@ren/hand-api/hand-token"
 import { Signature } from "@ren/hand-api/signature"
 import { Database } from "@ren/db/database"
@@ -18,7 +19,8 @@ interface Subject {
   readonly organizationId: Auth.OrganizationID
 }
 
-interface Placement extends Subject {
+export interface Placement {
+  readonly organizationId: Auth.OrganizationID
   readonly spaceId: Space.ID
 }
 
@@ -36,7 +38,10 @@ interface Binding {
 }
 
 export interface Interface {
-  readonly bind: (placement: Placement, environmentId: Environment.ID) => Effect.Effect<Binding, NotFound | Changed>
+  readonly bind: (
+    placement: Subject & Placement,
+    environmentId: Environment.ID,
+  ) => Effect.Effect<Binding, NotFound | Changed>
   readonly find: (subject: Subject) => Effect.Effect<Option.Option<string>>
   readonly unbind: (sessionId: Session.ID) => Effect.Effect<void>
   readonly access: (subject: Subject) => Effect.Effect<Hand.Access, NotFound | Unavailable>
@@ -84,7 +89,7 @@ export const layer = Layer.effect(
         }),
     })
 
-    const usable = Effect.fnUntraced(function* (placement: Placement, environmentId: Environment.ID) {
+    const usable = Effect.fnUntraced(function* (placement: Subject & Placement, environmentId: Environment.ID) {
       const rows = yield* database.db
         .select({ provider: environments.provider })
         .from(environments)
@@ -197,7 +202,7 @@ export const layer = Layer.effect(
             handId: assigned.handId,
             environmentId: assigned.environment.id,
             config: assigned.environment.config,
-            publicKeys: keys.publicKeys,
+            variables: ExecutorVariables.make(assigned.handId, keys.publicKeys),
           })
           .pipe(
             Effect.mapError(unavailable),
@@ -236,7 +241,7 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      bind: Effect.fn("Hands.bind")(function* (placement: Placement, environmentId: Environment.ID) {
+      bind: Effect.fn("Hands.bind")(function* (placement: Subject & Placement, environmentId: Environment.ID) {
         yield* usable(placement, environmentId)
         const inserted = yield* database.db
           .insert(sessions)

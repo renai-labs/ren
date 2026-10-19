@@ -16,6 +16,7 @@ import {
   Schema,
   Semaphore,
 } from "effect"
+import { FetchHttpClient } from "effect/http"
 import { Env } from "./env.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
@@ -170,6 +171,7 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
       const cell = yield* Info
       return ModelRefresh.layer(cell.vars.REN_URL).pipe(
         Layer.provideMerge(HostToken.layer(cell.vars.REN_URL, cell.vars.CELL_KEYS)),
+        Layer.provide(FetchHttpClient.layer),
       )
     }),
   )

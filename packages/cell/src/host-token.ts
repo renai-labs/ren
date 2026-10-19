@@ -3,7 +3,7 @@ export * as HostToken from "./host-token.js"
 import { HostApi } from "@ren/brain-api/host-api"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Clock, Context, Duration, Effect, Layer, Option, Redacted, Semaphore } from "effect"
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
+import { HttpClient, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { ModelStore } from "./model-store.js"
 
@@ -19,20 +19,20 @@ export class Service extends Context.Service<
   }
 >()("@ren/cell/HostToken") {}
 
-class Sent extends Context.Service<Sent, string>()("@ren/cell/HostToken/Sent") {}
+class PresentedToken extends Context.Service<PresentedToken, string>()("@ren/cell/HostToken/PresentedToken") {}
 
 export const client = (url: string) =>
   Effect.gen(function* () {
-    const http = yield* HttpClient.HttpClient.pipe(Effect.provide(FetchHttpClient.layer))
+    const http = yield* HttpClient.HttpClient
     return yield* HttpApiClient.makeWith(HostApi, {
       baseUrl: url,
       httpClient: HttpClient.mapRequestEffect(http, (request) =>
-        Effect.map(Sent, (token) => HttpClientRequest.bearerToken(request, token)),
+        Effect.map(PresentedToken, (token) => HttpClientRequest.bearerToken(request, token)),
       ),
     })
   })
 
-export const withToken = (token: string) => Effect.provideService(Sent, token)
+export const withToken = (token: string) => Effect.provideService(PresentedToken, token)
 
 export const layer = (url: string | undefined, keys: ReadonlyArray<SessionToken.Key>) =>
   Layer.effect(

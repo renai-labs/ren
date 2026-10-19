@@ -11,10 +11,7 @@ const connections = Layer.unwrap(
   Effect.gen(function* () {
     const info = yield* Cell.Info
     if (!info.vars.REN_URL) return Layer.empty
-    return HandConnections.layer.pipe(
-      Layer.provide(HostAccess.layer(info.vars.REN_URL)),
-      Layer.provide(FetchHttpClient.layer),
-    )
+    return HandConnections.layer.pipe(Layer.provide(HostAccess.layer), Layer.provide(FetchHttpClient.layer))
   }),
 )
 

@@ -178,8 +178,8 @@ describe("Environments", () => {
 
   it.live("lists each provider with a JSON Schema of its config, for the form", () =>
     Effect.gen(function* () {
-      const environments = yield* Environments.Service
-      expect(yield* environments.providers).toEqual([
+      const registry = yield* HandProvider.Registry
+      expect(registry.providers.map((provider) => provider.info)).toEqual([
         {
           id: HandProvider.ID.make("test"),
           title: "Test",
