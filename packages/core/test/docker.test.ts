@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { BunServices } from "@effect/platform-bun"
-import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { HandToken } from "@ren/hand-api/hand-token"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Image, Sandbox } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
@@ -35,14 +35,14 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
         expect(bindings[1]).toEqual(bindings[0])
         yield* Effect.addFinalizer(() => provider.destroy(bindings[0]).pipe(Effect.ignore))
         const endpoint = yield* provider.connect(bindings[0])
-        const token = yield* EnvironmentToken.sign(Sandbox.keys.privateKey, {
-          env: input.environmentId,
+        const token = yield* HandToken.sign(Sandbox.keys.privateKey, {
+          hand: input.handId,
           brain: Brain.ID.create(),
           exp: Math.floor(Date.now() / 1000) + 60,
         })
         const client = yield* ExecutorClient.make({ url: endpoint.url, token: Effect.succeed(token) })
         const hello = yield* client["executor.hello"]()
-        expect(hello.environmentId).toBe(input.environmentId)
+        expect(hello.handId).toBe(input.handId)
         yield* provider.destroy(bindings[0])
         yield* provider.destroy(bindings[0])
         expect((yield* provider.connect(bindings[0]).pipe(Effect.flip))._tag).toBe("HandProviders.Gone")

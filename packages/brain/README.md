@@ -16,7 +16,7 @@ Brain code that is the same on every host and every harness. A host (the cell in
 - The hand does not answer (a transport error or a time limit): the connection closes, so the next call asks Ren again and finds a resumed or replaced hand. The failed call is not sent again.
 - A new URL, generation or directory from a refresh closes the connection; a new token alone does not. A caller that holds the old connection keeps it until its scope closes.
 - The spawner refuses piped commands, kills a process when its scope closes, sends `process.heartbeat` every five seconds, retries stdin that the executor refuses as full, and fails `exitCode` with the harness's signal error.
-- The spawner follows a process's output from a cursor. It reconnects every second when the stream drops or goes silent for 15 seconds, and gives up when the executor no longer knows the process or has not been heard from for 30 seconds; stderr then ends with `[environment disconnected: the command did not finish]`. Lost output adds `[environment reconnected: N bytes of output were lost]`.
+- The spawner follows a process's output from a cursor. It reconnects every second when the stream drops or goes silent for 15 seconds, and gives up when the executor no longer knows the process or has not been heard from for 30 seconds; stderr then ends with `[hand disconnected: the command did not finish]`. Lost output adds `[hand reconnected: N bytes of output were lost]`.
 
 ## Dependencies
 

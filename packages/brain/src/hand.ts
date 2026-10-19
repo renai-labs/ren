@@ -41,10 +41,10 @@ import { ChildProcessSpawner } from "effect/process"
 import type { RpcClientError } from "effect/rpc"
 import type { HandConnections } from "./hand-connections.js"
 
-const disconnectedNotice = new TextEncoder().encode("\n[environment disconnected: the command did not finish]\n")
+const disconnectedNotice = new TextEncoder().encode("\n[hand disconnected: the command did not finish]\n")
 
 const lostNotice = (bytes: number) =>
-  new TextEncoder().encode(`\n[environment reconnected: ${bytes} bytes of output were lost]\n`)
+  new TextEncoder().encode(`\n[hand reconnected: ${bytes} bytes of output were lost]\n`)
 
 export const reconnectAfter = Duration.seconds(1)
 

@@ -2,7 +2,7 @@ import { expect } from "bun:test"
 import { BunServices } from "@effect/platform-bun"
 import { maxFileBytes, type ProcessEvent, type SpawnInput } from "@ren/hand-api/executor-api"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { existsSync } from "node:fs"
@@ -20,7 +20,7 @@ const executor = Machine.layer.pipe(
   Layer.provide(BunServices.layer),
   Layer.provide(
     ConfigProvider.layer(
-      ConfigProvider.fromUnknown({ EXECUTOR_ENVIRONMENT_ID: Environment.ID.create(), EXECUTOR_WORKSPACE: workspace }),
+      ConfigProvider.fromUnknown({ EXECUTOR_HAND_ID: Hand.ID.create(), EXECUTOR_WORKSPACE: workspace }),
     ),
   ),
 )

@@ -18,7 +18,7 @@ import { HealthHandler } from "./handlers/health.js"
 import { InvitationHandler } from "./handlers/invitation.js"
 import { MeHandler } from "./handlers/me.js"
 import { EnvironmentHandler, HandProviderHandler } from "./handlers/environment.js"
-import { HostEnvironmentsHandler } from "./handlers/host-environments.js"
+import { HostHandsHandler } from "./handlers/host-hands.js"
 import { HostHandler } from "./handlers/host.js"
 import { ModelsHandler } from "./handlers/models.js"
 import { SpaceHandler } from "./handlers/space.js"
@@ -70,7 +70,7 @@ export const layer = Layer.mergeAll(
     ]),
   ),
   HttpApiBuilder.layer(HostApi).pipe(
-    Layer.provide([ModelsHandler, HostEnvironmentsHandler, HostHandler]),
+    Layer.provide([ModelsHandler, HostHandsHandler, HostHandler]),
     Layer.provide(BrainHost.hostAuthentication),
   ),
   AuthRoute,

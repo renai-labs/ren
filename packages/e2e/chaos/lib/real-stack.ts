@@ -12,6 +12,7 @@ import { Database } from "@ren/db/database"
 import { Sandbox } from "@ren/executor/testing"
 import { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { SpaceEnvironment } from "@ren/schema/space-environment"
@@ -83,6 +84,7 @@ export const start = async (options: {
     stderr: "inherit",
   })
   if ((await migrate.exited) !== 0) throw new Error("migrating the real-stack database failed")
+  const direct = new Bun.SQL(database.href)
   const databaseRuntime = ManagedRuntime.make(
     Database.layer.pipe(Layer.provideMerge(PgClient.layer({ url: Redacted.make(database.href) }))),
   )
@@ -102,10 +104,11 @@ export const start = async (options: {
 
   const sandboxes = await Promise.all(
     options.environments.map(async (environment) => {
+      const environmentId = Environment.ID.create()
       const container = await ExecutorAdapter.dockerContainer({ label: `real-${environment.label}` })
       const state = { generation: 1, proxy: await FaultProxy.make(container.url()) }
       const retired: Array<FaultProxy.Instance> = []
-      return { environment, container, state, retired }
+      return { environment, environmentId, container, state, retired }
     }),
   )
   const handsFile = path.join(os.tmpdir(), `${name}-hands.json`)
@@ -115,7 +118,7 @@ export const start = async (options: {
       JSON.stringify(
         Object.fromEntries(
           sandboxes.map((sandbox) => [
-            sandbox.container.environmentId,
+            sandbox.environmentId,
             { url: sandbox.state.proxy.url, generation: sandbox.state.generation },
           ]),
         ),
@@ -132,7 +135,7 @@ export const start = async (options: {
           Effect.andThen(
             service.db.insert(Database.Schema.environment).values(
               sandboxes.map((sandbox) => ({
-                id: sandbox.container.environmentId,
+                id: sandbox.environmentId,
                 organization_id: organizationId,
                 name: sandbox.environment.label,
                 provider: ChaosHands.providerId,
@@ -146,9 +149,16 @@ export const start = async (options: {
               sandboxes.map((sandbox) => ({
                 id: SpaceEnvironment.ID.create(),
                 space_id: spaceId,
-                environment_id: sandbox.container.environmentId,
+                environment_id: sandbox.environmentId,
               })),
             ),
+          ),
+          Effect.andThen(
+            service.db
+              .insert(Database.Schema.hand)
+              .values(
+                sandboxes.map((sandbox) => ({ id: sandbox.container.handId, environment_id: sandbox.environmentId })),
+              ),
           ),
         ),
     ),
@@ -161,8 +171,8 @@ export const start = async (options: {
 
   const keys = {
     CELL_KEYS: TestToken.vars.CELL_KEYS,
-    ENVIRONMENT_KEYS: JSON.stringify([encodedKey(Sandbox.keys.privateKey)]),
-    ...(options.tokenLifetime && { ENVIRONMENT_TOKEN_LIFETIME: options.tokenLifetime }),
+    HAND_KEYS: JSON.stringify([encodedKey(Sandbox.keys.privateKey)]),
+    ...(options.tokenLifetime && { HAND_TOKEN_LIFETIME: options.tokenLifetime }),
   }
   const server = { child: undefined as Bun.Subprocess | undefined, log: "" }
   const startServer = async () => {
@@ -238,15 +248,21 @@ export const start = async (options: {
         ),
       ),
     )
+  const replaceContainer = async (entry: (typeof sandboxes)[number]) => {
+    const handId = Hand.ID.create()
+    await entry.container.replace(handId)
+    await direct`DELETE FROM hand WHERE environment_id = ${entry.environmentId} AND binding IS NULL`
+    await direct`INSERT INTO hand (id, environment_id) VALUES (${handId}, ${entry.environmentId})`
+  }
   const sandbox = (entry: (typeof sandboxes)[number]): Sandbox => ({
-    environmentId: entry.container.environmentId,
+    environmentId: entry.environmentId,
     container: entry.container,
     proxy: () => entry.state.proxy,
     generation: () => entry.state.generation,
     folder: (sessionId) => `/workspace/${sessionId}`,
     retarget: () => entry.state.proxy.target(entry.container.url()),
     replaceAtNewUrl: async () => {
-      await entry.container.replace()
+      await replaceContainer(entry)
       entry.state.proxy.partition(true)
       entry.state.proxy.cutAll()
       entry.retired.push(entry.state.proxy)
@@ -257,7 +273,7 @@ export const start = async (options: {
       await startServer()
     },
     replaceAtSameUrl: async () => {
-      await entry.container.replace()
+      await replaceContainer(entry)
       entry.state.proxy.target(entry.container.url())
       entry.state.generation += 1
       await writeHands()
@@ -344,7 +360,7 @@ export const start = async (options: {
     cell,
     renProxy,
     session,
-    issued: () => renProxy.count("POST /brain/environment/access"),
+    issued: () => renProxy.count("POST /brain/hand/access"),
     serverLog: () => server.log,
     restartServer: async () => {
       await stopServer()
@@ -379,6 +395,7 @@ export const start = async (options: {
       )
       await Promise.all([renProxy.stop(), provider.stop()])
       await databaseRuntime.dispose()
+      await direct.close()
       await admin.unsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
       await admin.close()
     },

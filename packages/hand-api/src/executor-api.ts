@@ -1,4 +1,4 @@
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Identifier } from "@ren/schema/identifier"
 import { Brain } from "@ren/schema/brain"
 import { Context, Duration, Schema } from "effect"
@@ -25,7 +25,7 @@ export interface Hello extends Schema.Schema.Type<typeof Hello> {}
 export const Hello = Schema.Struct({
   protocol: Schema.Int,
   version: Schema.String,
-  environmentId: Environment.ID,
+  handId: Hand.ID,
   os: Schema.String,
   arch: Schema.String,
   shells: Schema.optionalKey(

@@ -1,10 +1,9 @@
 export * as Sandbox from "./sandbox.js"
 
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
-import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { HandToken } from "@ren/hand-api/hand-token"
 import { Signature } from "@ren/hand-api/signature"
 import type { Brain } from "@ren/schema/brain"
-import type { Environment } from "@ren/schema/environment"
 import type { Hand } from "@ren/schema/hand"
 import { ConfigProvider, DateTime, Effect, Layer, Redacted, Schema } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
@@ -14,7 +13,7 @@ import { Server } from "../../src/server.js"
 export const keys = await Effect.runPromise(Signature.generate("test"))
 
 export const layer = (options: {
-  readonly environmentId: Environment.ID
+  readonly handId: Hand.ID
   readonly workspace: string
   readonly executor?: typeof Machine.layer
   readonly publicKeys?: readonly [Signature.PublicKey, ...ReadonlyArray<Signature.PublicKey>]
@@ -26,7 +25,7 @@ export const layer = (options: {
     Layer.provide(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          EXECUTOR_ENVIRONMENT_ID: options.environmentId,
+          EXECUTOR_HAND_ID: options.handId,
           EXECUTOR_WORKSPACE: options.workspace,
           BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(options.publicKeys ?? [keys.publicKey]),
         }),
@@ -39,7 +38,7 @@ export const url = Effect.map(HttpServer.HttpServer, (server) => HttpServer.form
 
 export const access = Effect.fnUntraced(function* (options: {
   readonly url: string
-  readonly environmentId: Environment.ID
+  readonly handId: Hand.ID
   readonly directory: string
   readonly brain: Brain.ID
   readonly lifetimeMs?: number
@@ -51,8 +50,8 @@ export const access = Effect.fnUntraced(function* (options: {
     directory: options.directory,
     url: new URL(options.url),
     token: Redacted.make(
-      yield* EnvironmentToken.sign(keys.privateKey, {
-        env: options.environmentId,
+      yield* HandToken.sign(keys.privateKey, {
+        hand: options.handId,
         brain: options.brain,
         exp: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000),
       }),

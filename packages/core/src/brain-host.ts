@@ -3,8 +3,8 @@ export * as BrainHost from "./brain-host.js"
 import { BrainApi, type ModelsBody, type StartBody } from "@ren/brain-api/brain-api"
 import {
   BrainRejectedError,
-  EnvironmentNotFoundError,
-  EnvironmentUnavailableError,
+  HandNotFoundError,
+  HandUnavailableError,
   ForbiddenError,
   type ModelsNotConfiguredError,
   ModelsUnavailableError,
@@ -40,8 +40,8 @@ import { Models } from "./models.js"
 
 export {
   BrainRejectedError,
-  EnvironmentNotFoundError,
-  EnvironmentUnavailableError,
+  HandNotFoundError,
+  HandUnavailableError,
   ForbiddenError,
   ModelsUnavailableError,
   SessionNotStartedError,
@@ -73,10 +73,10 @@ export interface Interface {
   readonly authenticateHost: (hostToken: Redacted.Redacted) => Effect.Effect<CurrentHost["Service"], ForbiddenError>
   readonly refreshModels: (host: CurrentHost["Service"]) => Effect.Effect<ModelsBody, ModelsUnavailableError>
   readonly refreshHostToken: (host: CurrentHost["Service"]) => Effect.Effect<HostTokenBody>
-  readonly accessEnvironment: (
+  readonly accessHand: (
     host: CurrentHost["Service"],
-  ) => Effect.Effect<Hand.Access, EnvironmentNotFoundError | EnvironmentUnavailableError>
-  readonly releaseEnvironment: (host: CurrentHost["Service"]) => Effect.Effect<void>
+  ) => Effect.Effect<Hand.Access, HandNotFoundError | HandUnavailableError>
+  readonly releaseHand: (host: CurrentHost["Service"]) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
@@ -279,15 +279,15 @@ export const layer = Layer.effect(
         )
         return { hostToken: yield* hostToken(host, exp) }
       }),
-      accessEnvironment: Effect.fn("BrainHost.accessEnvironment")(function* (host: CurrentHost["Service"]) {
+      accessHand: Effect.fn("BrainHost.accessHand")(function* (host: CurrentHost["Service"]) {
         return yield* hands.access(host).pipe(
           Effect.catchTags({
-            "Hands.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
-            "Hands.Unavailable": (error) => Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
+            "Hands.NotFound": (error) => Effect.fail(new HandNotFoundError({ message: error.message })),
+            "Hands.Unavailable": (error) => Effect.fail(new HandUnavailableError({ message: error.message })),
           }),
         )
       }),
-      releaseEnvironment: Effect.fn("BrainHost.releaseEnvironment")(function* (host: CurrentHost["Service"]) {
+      releaseHand: Effect.fn("BrainHost.releaseHand")(function* (host: CurrentHost["Service"]) {
         yield* hands.release(host)
       }),
       access: Effect.fn("BrainHost.access")(function* (sessionId: Session.ID) {

@@ -16,15 +16,11 @@ const handlers = (around: Around) =>
         ),
       ),
     ),
-    HttpApiBuilder.group(HostApi, "environments", (group) =>
+    HttpApiBuilder.group(HostApi, "hands", (group) =>
       Effect.map(BrainHost.Service, (brain) =>
         group
-          .handle("environments.access", () =>
-            around("environments.access", Effect.flatMap(CurrentHost, brain.accessEnvironment)),
-          )
-          .handle("environments.release", () =>
-            around("environments.release", Effect.flatMap(CurrentHost, brain.releaseEnvironment)),
-          ),
+          .handle("hands.access", () => around("hands.access", Effect.flatMap(CurrentHost, brain.accessHand)))
+          .handle("hands.release", () => around("hands.release", Effect.flatMap(CurrentHost, brain.releaseHand))),
       ),
     ),
     HttpApiBuilder.group(HostApi, "host", (group) =>

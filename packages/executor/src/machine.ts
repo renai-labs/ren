@@ -21,7 +21,7 @@ import {
 } from "@ren/hand-api/executor-api"
 import { Signal } from "@ren/hand-api/signal"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import {
   Cause,
   Clock,
@@ -91,7 +91,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const config = yield* Config.all({
-      environmentId: Config.schema(Environment.ID, "EXECUTOR_ENVIRONMENT_ID"),
+      handId: Config.schema(Hand.ID, "EXECUTOR_HAND_ID"),
       workspaceDirectory: Config.String("EXECUTOR_WORKSPACE").pipe(Config.withDefault(process.cwd())),
     })
     const workspace = yield* Effect.promise(() => realpath(resolve(config.workspaceDirectory)))
@@ -303,7 +303,7 @@ export const layer = Layer.effect(
       hello: {
         protocol,
         version: manifest.version,
-        environmentId: config.environmentId,
+        handId: config.handId,
         os: process.platform,
         arch: process.arch,
         shells,

@@ -4,7 +4,7 @@ import { BunServices } from "@effect/platform-bun"
 import type { SpawnResult } from "@ren/hand-api/executor-api"
 import { Sandbox, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { ID } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import {
   Clock,
@@ -32,9 +32,9 @@ import { HandConnections } from "../src/hand-connections.js"
 import { Hand } from "../src/hand.js"
 import { Probe } from "./lib/probe.js"
 
-const environmentId = Environment.ID.create()
+const handId = ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-hand-")))
-const it = testEffect(Sandbox.layer({ environmentId, workspace }))
+const it = testEffect(Sandbox.layer({ handId, workspace }))
 
 class Killed extends Error {
   constructor(readonly signal: string) {
@@ -47,7 +47,7 @@ const killed = (signal: string) => new Killed(signal)
 const sessionId = Session.ID.create()
 
 const accessAt = (url: string) =>
-  Sandbox.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: join(workspace, sessionId) })
+  Sandbox.access({ url, handId, brain: Brain.ofSession(sessionId), directory: join(workspace, sessionId) })
 
 const environmentsWith = (
   access: Layer.Layer<HandAccess.Service>,
@@ -148,7 +148,7 @@ it.live("loses no output and keeps the exit code when the connection drops mid-c
 it.live("says the environment lost the command when a restarted executor no longer knows it", () =>
   Effect.gen(function* () {
     const through = yield* throughRelay
-    const restarted = yield* Layer.build(Layer.fresh(Sandbox.layer({ environmentId, workspace }))).pipe(
+    const restarted = yield* Layer.build(Layer.fresh(Sandbox.layer({ handId, workspace }))).pipe(
       Effect.flatMap((context) => Effect.provide(Sandbox.url, context)),
     )
     const handle = yield* through.spawner.spawn(ChildProcess.make("sh", ["-c", "echo started; sleep 30"]))
@@ -156,7 +156,7 @@ it.live("says the environment lost the command when a restarted executor no long
     yield* through.relay.target(Relay.portOf(restarted))
     yield* through.relay.cut
     yield* handle.exitCode.pipe(Effect.flip, Effect.timeout(10_000))
-    expect(yield* text(handle.stderr)).toContain("[environment disconnected: the command did not finish]")
+    expect(yield* text(handle.stderr)).toContain("[hand disconnected: the command did not finish]")
   }),
 )
 
@@ -173,7 +173,7 @@ it.live("notes how much output was lost when the executor no longer has it", () 
     yield* through.relay.refuse(false)
     const stdout = yield* text(handle.stdout)
     expect(stdout.endsWith("\nend\n")).toBe(true)
-    expect(yield* text(handle.stderr)).toMatch(/\[environment reconnected: \d+ bytes of output were lost\]/)
+    expect(yield* text(handle.stderr)).toMatch(/\[hand reconnected: \d+ bytes of output were lost\]/)
     expect(Number(yield* handle.exitCode)).toBe(0)
   }),
 )
@@ -221,7 +221,7 @@ it.live("runs a shell script in a shell the machine has, and leaves other comman
 const replaceable = Effect.gen(function* () {
   const access = yield* Sandbox.access({
     url: yield* Sandbox.url,
-    environmentId,
+    handId,
     brain: Brain.ofSession(sessionId),
     directory: join(workspace, sessionId),
     lifetimeMs: 6_000,
@@ -230,7 +230,7 @@ const replaceable = Effect.gen(function* () {
   const environments = yield* environmentsWith(Layer.succeedContext(context))
   const original = yield* Effect.scoped(environments.connect(sessionId))
   const replacement = yield* Scope.make()
-  const next = yield* Layer.buildWithScope(Layer.fresh(Sandbox.layer({ environmentId, workspace })), replacement).pipe(
+  const next = yield* Layer.buildWithScope(Layer.fresh(Sandbox.layer({ handId, workspace })), replacement).pipe(
     Effect.flatMap((built) => Effect.provide(Sandbox.url, built)),
   )
   return {
@@ -481,7 +481,7 @@ const heartbeatsInAMinute = Effect.fnUntraced(function* (sandbox: Probe.Probe, c
 
 const startSandbox = Effect.fnUntraced(function* (options?: Parameters<typeof Probe.make>[0]) {
   const sandbox = yield* Probe.make(options)
-  return { sandbox, url: yield* Probe.start({ environmentId, workspace, executor: sandbox.layer }) }
+  return { sandbox, url: yield* Probe.start({ handId, workspace, executor: sandbox.layer }) }
 })
 
 it.effect("a heartbeat that the executor refuses as expired gets a new token, and the command is not stopped", () =>
@@ -496,7 +496,7 @@ it.effect("a heartbeat that the executor refuses as expired gets a new token, an
               Effect.flatMap((issuedAt) =>
                 Sandbox.access({
                   url,
-                  environmentId,
+                  handId,
                   brain: Brain.ofSession(sessionId),
                   directory: join(workspace, sessionId),
                   issuedAt,
@@ -644,7 +644,7 @@ const lossy = Effect.fnUntraced(function* (command: ChildProcess.Command) {
   }
 })
 
-const disconnected = "[environment disconnected: the command did not finish]"
+const disconnected = "[hand disconnected: the command did not finish]"
 
 it.effect(
   "a connection lost for 25 seconds comes back and the command lives, and one lost for 35 seconds ends with a notice",
@@ -728,11 +728,11 @@ it.effect(
   "a heartbeat for a command the sandbox no longer knows, or one that races a stop, gives the caller no error",
   () =>
     Effect.gen(function* () {
-      const relay = yield* Relay.make(Relay.portOf(yield* Probe.start({ environmentId, workspace })))
+      const relay = yield* Relay.make(Relay.portOf(yield* Probe.start({ handId, workspace })))
       const link = yield* Probe.link
       const spawner = Hand.spawner(yield* connectTo(relay.url, link.layer), killed)
       const forgotten = yield* spawner.spawn(ChildProcess.make("cat", []))
-      yield* relay.target(Relay.portOf(yield* Probe.start({ environmentId, workspace })))
+      yield* relay.target(Relay.portOf(yield* Probe.start({ handId, workspace })))
       yield* relay.cut
       const heartbeats = Ref.get(link.requests).pipe(
         Effect.map((all) => all.filter((request) => request.rpc === "process.heartbeat").length),

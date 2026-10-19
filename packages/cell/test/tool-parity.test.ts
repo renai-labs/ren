@@ -13,7 +13,7 @@ import { HandAccess } from "@ren/brain/hand-access"
 import { HandConnections } from "@ren/brain/hand-connections"
 import { Sandbox, Processes, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Exit, ManagedRuntime, Option, Ref, Schema, Scope } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
@@ -32,7 +32,7 @@ import type { StubModel } from "./lib/stub-model.js"
 
 setDefaultTimeout(60_000)
 
-const environmentId = Environment.ID.create()
+const handId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-parity-")))
 const local = await realpath(await mkdtemp(join(tmpdir(), "ren-parity-local-")))
 const stub = Shared.stub()
@@ -51,7 +51,7 @@ const endpoints = Shared.access(undefined, stub.url).endpoints.map((endpoint) =>
   endpoint.id === "stub" ? { ...endpoint, models: [...endpoint.models, gptModel] } : endpoint,
 )
 
-const served = Sandbox.layer({ environmentId, workspace })
+const served = Sandbox.layer({ handId, workspace })
 const it = testEffect(served)
 
 const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof served> | Scope.Scope>) =>
@@ -60,7 +60,7 @@ const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof served> | Sco
 const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
 const accessTo = (url: string, sessionId: Session.ID) =>
-  Sandbox.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
+  Sandbox.access({ url, handId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
 const embedded = (replacements: Parameters<typeof createEmbeddedRoutes>[1]) =>
   createEmbeddedRoutes(

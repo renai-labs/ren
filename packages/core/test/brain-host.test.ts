@@ -505,7 +505,7 @@ describe("BrainHost", () => {
             Layer.provide(
               ConfigProvider.layer(
                 ConfigProvider.fromUnknown({
-                  ENVIRONMENT_KEYS: JSON.stringify([
+                  HAND_KEYS: JSON.stringify([
                     {
                       id: keys.privateKey.id,
                       key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(keys.privateKey.key),
@@ -550,7 +550,7 @@ describe("BrainHost", () => {
           `/workspace/${sessionId}`,
           `/workspace/${sessionId}`,
         ])
-        const access = yield* brain.accessEnvironment({ sessionId, organizationId: org })
+        const access = yield* brain.accessHand({ sessionId, organizationId: org })
         expect(access.directory).toBe(`/workspace/${sessionId}`)
       }),
     )
@@ -581,8 +581,8 @@ describe("BrainHost", () => {
         expect((yield* startOn(brain, sessionId, org, yield* Seed.environment(org)).pipe(Effect.flip))._tag).toBe(
           "BrainRejectedError",
         )
-        expect((yield* brain.accessEnvironment({ sessionId, organizationId: org }).pipe(Effect.flip))._tag).toBe(
-          "EnvironmentNotFoundError",
+        expect((yield* brain.accessHand({ sessionId, organizationId: org }).pipe(Effect.flip))._tag).toBe(
+          "HandNotFoundError",
         )
       }),
     )

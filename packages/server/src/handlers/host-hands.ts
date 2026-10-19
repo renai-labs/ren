@@ -3,20 +3,20 @@ import { BrainHost } from "@ren/core/brain-host"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
-export const HostEnvironmentsHandler = HttpApiBuilder.group(HostApi, "environments", (handlers) =>
+export const HostHandsHandler = HttpApiBuilder.group(HostApi, "hands", (handlers) =>
   Effect.gen(function* () {
     const brain = yield* BrainHost.Service
     return handlers
-      .handle("environments.access", () =>
+      .handle("hands.access", () =>
         Effect.gen(function* () {
           const host = yield* CurrentHost
-          return yield* brain.accessEnvironment(host)
+          return yield* brain.accessHand(host)
         }),
       )
-      .handle("environments.release", () =>
+      .handle("hands.release", () =>
         Effect.gen(function* () {
           const host = yield* CurrentHost
-          yield* brain.releaseEnvironment(host)
+          yield* brain.releaseHand(host)
         }),
       )
   }),

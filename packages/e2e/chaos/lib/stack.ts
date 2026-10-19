@@ -45,7 +45,7 @@ export const start = async () => {
       hand &&
       ExecutorAdapter.access({
         url: hand.proxy.url,
-        environmentId: hand.instance.environmentId,
+        handId: hand.instance.handId,
         brain: Brain.ofSession(sessionId),
         directory: `${hand.instance.workspace}/${sessionId}`,
         lifetimeMs: hand.lifetimeMs(),
@@ -69,7 +69,7 @@ export const start = async () => {
         state.lifetimeMs = lifetimeMs
       },
       retarget: () => proxy.target(instance.url()),
-      driver: async () => ExecutorDriver.connect(proxy.url, await ExecutorAdapter.token(instance.environmentId, brain)),
+      driver: async () => ExecutorDriver.connect(proxy.url, await ExecutorAdapter.token(instance.handId, brain)),
     }
   }
 

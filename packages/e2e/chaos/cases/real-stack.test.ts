@@ -128,7 +128,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       await full().container.restart()
       full().retarget()
       const result = (await turn.called(2, 120_000)).toolResults
-      expect([result.includes("environment disconnected"), result.includes("finished")]).toEqual([true, false])
+      expect([result.includes("hand disconnected"), result.includes("finished")]).toEqual([true, false])
       expect(Date.now() - started).toBeLessThan(60_000)
       await session.settled()
       expect(await session.tool("shell", { command: "echo back" })).toBe("back\n")
@@ -232,11 +232,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
 
     test("a refused token request names the cause, the brain does not ask again for 30 seconds, and then the call works", async () => {
       const session = await stack().session()
-      const rule = stack().renProxy.inject(
-        { operation: "POST /brain/environment/access" },
-        { type: "status", status: 403 },
-        1,
-      )
+      const rule = stack().renProxy.inject({ operation: "POST /brain/hand/access" }, { type: "status", status: 403 }, 1)
       const refused = await session.tool("shell", { command: "echo refused" })
       expect([rule.applied(), refused.includes("Unable to execute"), refused.includes("refused\n")]).toEqual([
         true,

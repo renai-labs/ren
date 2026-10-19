@@ -23,13 +23,13 @@ export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("Mana
 
 const never = Number.MAX_SAFE_INTEGER
 
-const environmentFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
+const handFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
   if (value instanceof HandConnections.Unavailable) return value
   if (ExecutorClient.isNoAnswer(value) && value instanceof Error)
     return { message: `The hand does not answer: ${value.message}` }
   if (depth > 8 || !Predicate.isObject(value)) return undefined
   return ["cause", "error", "reason"]
-    .map((key) => (Predicate.hasProperty(value, key) ? environmentFailure(value[key], depth + 1) : undefined))
+    .map((key) => (Predicate.hasProperty(value, key) ? handFailure(value[key], depth + 1) : undefined))
     .find(Boolean)
 }
 
@@ -72,7 +72,7 @@ export const make = (
           yield* tool.hook("execute.after", (event) =>
             Effect.sync(() => {
               if (event.status !== "error") return
-              const failure = environmentFailure(event.error.error)
+              const failure = handFailure(event.error.error)
               if (!failure || event.error.message.includes(failure.message)) return
               event.error = new Tool.Error({
                 message: `${event.error.message}: ${failure.message}`,

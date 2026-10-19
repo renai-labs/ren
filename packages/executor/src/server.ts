@@ -1,6 +1,6 @@
 export * as Server from "./server.js"
 
-import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { HandToken } from "@ren/hand-api/hand-token"
 import { Authentication, Caller, ExecutorApi, UnauthorizedError } from "@ren/hand-api/executor-api"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Signature } from "@ren/hand-api/signature"
@@ -16,10 +16,10 @@ const authenticationCheck = Effect.gen(function* () {
   const executor = yield* Executor.Service
   return (authorizationHeader: string | undefined) => {
     const token = authorizationHeader?.toLowerCase().startsWith("bearer ") ? authorizationHeader.slice(7).trim() : ""
-    return (!token ? Effect.succeedNone : EnvironmentToken.verify(publicKeys, token)).pipe(
+    return (!token ? Effect.succeedNone : HandToken.verify(publicKeys, token)).pipe(
       Effect.map((verifiedClaims) =>
         verifiedClaims.pipe(
-          Option.filter((claims) => claims.env === executor.hello.environmentId),
+          Option.filter((claims) => claims.hand === executor.hello.handId),
           Option.map((claims) => ({ brain: claims.brain })),
         ),
       ),

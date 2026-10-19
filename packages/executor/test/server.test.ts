@@ -1,10 +1,10 @@
 import { expect } from "bun:test"
-import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { HandToken } from "@ren/hand-api/hand-token"
 import { FileTooLargeError, ProcessID } from "@ren/hand-api/executor-api"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Signature } from "@ren/hand-api/signature"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Redacted, Stream } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { RpcClientError } from "effect/rpc"
@@ -17,16 +17,14 @@ import { testEffect } from "./lib/effect.js"
 import { Sandbox } from "./lib/sandbox.js"
 import { Processes } from "./lib/process.js"
 
-const environmentId = Environment.ID.create()
+const handId = Hand.ID.create()
 const brain = Brain.ID.create()
 const workspace = await mkdtemp(join(tmpdir(), "ren-executor-"))
-const it = testEffect(Sandbox.layer({ environmentId, workspace }).pipe(Layer.provideMerge(FetchHttpClient.layer)))
+const it = testEffect(Sandbox.layer({ handId, workspace }).pipe(Layer.provideMerge(FetchHttpClient.layer)))
 
-const token = Effect.fnUntraced(function* (
-  claims: { readonly environmentId?: Environment.ID; readonly brain?: Brain.ID } = {},
-) {
+const token = Effect.fnUntraced(function* (claims: { readonly handId?: Hand.ID; readonly brain?: Brain.ID } = {}) {
   return Redacted.value(
-    (yield* Sandbox.access({ url: yield* Sandbox.url, environmentId, brain, directory: workspace, ...claims })).token,
+    (yield* Sandbox.access({ url: yield* Sandbox.url, handId, brain, directory: workspace, ...claims })).token,
   )
 })
 
@@ -61,15 +59,15 @@ const refused = Effect.fnUntraced(function* () {
   const valid = yield* token()
   const other = yield* Signature.generate("other")
   const impostor = yield* Signature.generate(Sandbox.keys.publicKey.id)
-  const claims = { env: environmentId, brain, exp: Math.floor(Date.now() / 1000) + 600 }
+  const claims = { hand: handId, brain, exp: Math.floor(Date.now() / 1000) + 600 }
   return [
     {
       name: "a key the executor does not know",
-      authorization: `Bearer ${yield* EnvironmentToken.sign(other.privateKey, claims)}`,
+      authorization: `Bearer ${yield* HandToken.sign(other.privateKey, claims)}`,
     },
     {
       name: "a known key id signed by another key",
-      authorization: `Bearer ${yield* EnvironmentToken.sign(impostor.privateKey, claims)}`,
+      authorization: `Bearer ${yield* HandToken.sign(impostor.privateKey, claims)}`,
     },
     {
       name: "another token type",
@@ -77,11 +75,11 @@ const refused = Effect.fnUntraced(function* () {
     },
     {
       name: "a token for another environment",
-      authorization: `Bearer ${yield* token({ environmentId: Environment.ID.create() })}`,
+      authorization: `Bearer ${yield* token({ handId: Hand.ID.create() })}`,
     },
     {
       name: "an expired token",
-      authorization: `Bearer ${Redacted.value((yield* Sandbox.access({ url: yield* Sandbox.url, environmentId, brain, directory: workspace, issuedAt: Date.now() - 3_600_000 })).token)}`,
+      authorization: `Bearer ${Redacted.value((yield* Sandbox.access({ url: yield* Sandbox.url, handId, brain, directory: workspace, issuedAt: Date.now() - 3_600_000 })).token)}`,
     },
     { name: "another scheme", authorization: `Basic ${valid}` },
   ]
@@ -106,9 +104,7 @@ it.live("answers a bad token before it decodes the payload", () =>
     }
     expect(yield* answer(invalidSpawn)).toEqual(unauthorized)
     expect(
-      yield* answer(
-        invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* token({ environmentId: Environment.ID.create() }))),
-      ),
+      yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* token({ handId: Hand.ID.create() })))),
     ).toEqual(unauthorized)
     expect(yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken("not.a-token")))).toEqual(unauthorized)
     const decoded = yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* token())))
@@ -119,7 +115,7 @@ it.live("answers a bad token before it decodes the payload", () =>
 
 it.live("gives a client with a bad token the typed UnauthorizedError", () =>
   Effect.gen(function* () {
-    const foreign = yield* connect(yield* token({ environmentId: Environment.ID.create() }))
+    const foreign = yield* connect(yield* token({ handId: Hand.ID.create() }))
     const empty = yield* connect("")
     const errors = yield* Effect.forEach([foreign, empty], (api) =>
       Effect.all([
@@ -208,7 +204,7 @@ it.live("refuses a token of another type, from an unknown key or scheme, and tak
     const valid = yield* token()
     const lowercase = yield* post(hello, `bearer ${valid}`)
     expect(lowercase.status).toBe(200)
-    expect(lowercase.body).toContain(environmentId)
+    expect(lowercase.body).toContain(handId)
   }),
 )
 
@@ -216,7 +212,7 @@ it.live("answers a token for another environment with 401 and starts no process"
   Effect.gen(function* () {
     const marker = `ren-d4-${crypto.randomUUID()}`
     const spawn = rpc("process.spawn", { command: "sh", arguments: ["-c", "sleep 30; true", marker] })
-    const foreign = yield* post(spawn, `Bearer ${yield* token({ environmentId: Environment.ID.create() })}`)
+    const foreign = yield* post(spawn, `Bearer ${yield* token({ handId: Hand.ID.create() })}`)
     expect(foreign.status).toBe(401)
     expect(foreign.body).not.toContain("prc_")
     expect(Processes.matching(marker)).toEqual([])
@@ -267,7 +263,7 @@ it.effect("keeps streaming output to a reader whose token expires, and refuses t
   Effect.gen(function* () {
     const expiring = yield* Sandbox.access({
       url: yield* Sandbox.url,
-      environmentId,
+      handId,
       brain,
       directory: workspace,
       issuedAt: 0,

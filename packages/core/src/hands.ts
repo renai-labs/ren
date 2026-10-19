@@ -1,6 +1,6 @@
 export * as Hands from "./hands.js"
 
-import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { HandToken } from "@ren/hand-api/hand-token"
 import { Signature } from "@ren/hand-api/signature"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
@@ -69,8 +69,8 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.all({
-      keys: Config.option(Config.schema(Schema.RedactedFromValue(SigningKeys), "ENVIRONMENT_KEYS")),
-      lifetime: Config.Duration("ENVIRONMENT_TOKEN_LIFETIME").pipe(Config.withDefault(Duration.minutes(15))),
+      keys: Config.option(Config.schema(Schema.RedactedFromValue(SigningKeys), "HAND_KEYS")),
+      lifetime: Config.Duration("HAND_TOKEN_LIFETIME").pipe(Config.withDefault(Duration.minutes(15))),
       directory: Config.String("HAND_DIRECTORY").pipe(Config.withDefault("/workspace")),
     })
     const database = yield* Database.Service
@@ -186,7 +186,7 @@ export const layer = Layer.effect(
     ): Effect.fn.Return<Hand.Access, NotFound | Unavailable> {
       const assigned = yield* assign(subject)
       const keys = yield* Option.match(signing, {
-        onNone: () => Effect.die(new Error("ENVIRONMENT_KEYS has no signing key")),
+        onNone: () => Effect.die(new Error("HAND_KEYS has no signing key")),
         onSome: Effect.succeed,
       })
       const provider = registry.get(assigned.environment.provider)
@@ -228,8 +228,8 @@ export const layer = Layer.effect(
         directory: directoryOf(subject.sessionId),
         url: endpoint.value.url,
         token: Redacted.make(
-          yield* EnvironmentToken.sign(keys.key, {
-            env: assigned.environment.id,
+          yield* HandToken.sign(keys.key, {
+            hand: assigned.handId,
             brain: Brain.ofSession(subject.sessionId),
             exp,
           }),

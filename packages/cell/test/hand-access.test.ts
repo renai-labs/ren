@@ -4,7 +4,7 @@ import { HandAccess } from "@ren/brain/hand-access"
 import { HandConnections } from "@ren/brain/hand-connections"
 import { Sandbox, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, DateTime, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -24,12 +24,12 @@ afterAll(() => ren.stop())
 
 const it = testEffect(Layer.empty)
 
-const environmentId = Environment.ID.create()
+const handId = Hand.ID.create()
 
 const accessFor = (sessionId: Session.ID) =>
   Sandbox.access({
     url: "http://127.0.0.1:9",
-    environmentId,
+    handId,
     brain: Brain.ofSession(sessionId),
     directory: `/workspace/${sessionId}`,
     lifetimeMs: 900_000,
@@ -79,7 +79,7 @@ it.live("asks Ren once for the session of its host token and gives the access Re
       DateTime.toEpochMillis(access.expiresAt),
     ])
     expect(ren.calls.filter((call) => call.sessionId === subject.sessionId)).toEqual([
-      { endpoint: "environments.access", sessionId: subject.sessionId, hostToken, status: 200 },
+      { endpoint: "hands.access", sessionId: subject.sessionId, hostToken, status: 200 },
     ])
   }),
 )
@@ -164,7 +164,7 @@ it.live("a host token in its last five minutes is renewed through host.refresh, 
     const calls = ren.calls.filter((call) => call.sessionId === subject.sessionId)
     expect(calls.map((call) => [call.endpoint, call.hostToken === expiring])).toEqual([
       ["host.refresh", true],
-      ["environments.access", false],
+      ["hands.access", false],
     ])
     expect(Option.getOrUndefined(yield* subject.store.readHostToken)).toBe(calls.at(1)?.hostToken)
   }),
@@ -194,7 +194,7 @@ it.live("50 calls in the renewal window of the host token make one host.refresh 
     const calls = ren.calls.filter((call) => call.sessionId === subject.sessionId)
     expect(opened).toHaveLength(50)
     expect(calls.filter((call) => call.endpoint === "host.refresh")).toHaveLength(1)
-    const used = new Set(calls.filter((call) => call.endpoint === "environments.access").map((call) => call.hostToken))
+    const used = new Set(calls.filter((call) => call.endpoint === "hands.access").map((call) => call.hostToken))
     expect([used.size, used.has(expiring)]).toEqual([1, false])
   }),
 )
@@ -213,7 +213,7 @@ it.live("a host token configured while the host token is being renewed wins, wit
     yield* subject.configure(newer)
     gate.resolve()
     yield* Fiber.join(opening).pipe(Effect.ensuring(Effect.sync(() => ren.holdRefresh(undefined))))
-    expect(ren.calls.findLast((call) => call.endpoint === "environments.access")?.hostToken).toBe(newer)
+    expect(ren.calls.findLast((call) => call.endpoint === "hands.access")?.hostToken).toBe(newer)
     expect(yield* subject.store.readHostToken).toEqual(Option.some(newer))
   }),
 )

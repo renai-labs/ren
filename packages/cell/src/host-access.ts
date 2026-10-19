@@ -24,10 +24,10 @@ export const layer = (url: string) =>
           const unavailable = (message: string) => new HandAccess.Unavailable({ sessionId, message })
           const token = yield* hostToken.current
           if (Option.isNone(token)) return yield* unavailable("the cell has no valid host token")
-          return yield* host.environments["environments.access"]().pipe(
+          return yield* host.hands["hands.access"]().pipe(
             HostToken.withToken(token.value),
             Effect.timeout(HostToken.renAnswersWithin),
-            Effect.catchTag("EnvironmentNotFoundError", (error) =>
+            Effect.catchTag("HandNotFoundError", (error) =>
               Effect.fail(new HandAccess.NotFound({ sessionId, message: error.message })),
             ),
             Effect.catchTag("ForbiddenError", (error) =>
@@ -35,7 +35,7 @@ export const layer = (url: string) =>
                 .removeHostTokenIfUnchanged(token.value)
                 .pipe(Effect.andThen(Effect.fail(unavailable(`Ren refused the host token: ${error.message}`)))),
             ),
-            Effect.catchTag("EnvironmentUnavailableError", (error) => Effect.fail(unavailable(error.message))),
+            Effect.catchTag("HandUnavailableError", (error) => Effect.fail(unavailable(error.message))),
             Effect.catchIf(
               (error) => error._tag !== "HandAccess.NotFound" && error._tag !== "HandAccess.Unavailable",
               (error) => Effect.fail(unavailable(error.message)),
@@ -48,7 +48,7 @@ export const layer = (url: string) =>
             return yield* unavailable(`This cell holds session ${info.sessionId}, not ${sessionId}`)
           const token = yield* hostToken.current
           if (Option.isNone(token)) return yield* unavailable("the cell has no valid host token")
-          return yield* host.environments["environments.release"]().pipe(
+          return yield* host.hands["hands.release"]().pipe(
             HostToken.withToken(token.value),
             Effect.timeout(HostToken.renAnswersWithin),
             Effect.mapError((error) => unavailable(error.message)),
