@@ -1,5 +1,5 @@
 import { TestAccess } from "@ren/brain/testing"
-import { Hands } from "@ren/brain/hands"
+import { HandConnections } from "@ren/brain/hand-connections"
 import { Hand } from "@ren/brain/hand"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
@@ -246,12 +246,12 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
         Effect.gen(function* () {
           const environments = Context.get(
             yield* Layer.build(
-              Hands.layer.pipe(
+              HandConnections.layer.pipe(
                 Layer.provide(TestAccess.fixed(new Map([[sessionId, access]]))),
                 Layer.provide(FetchHttpClient.layer),
               ),
             ),
-            Hands.Service,
+            HandConnections.Service,
           )
           const hands = Hand.session(
             environments,

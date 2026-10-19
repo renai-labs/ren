@@ -9,7 +9,7 @@ import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
 import type { LayerNode } from "@opencode/util/effect/layer-node"
 import { FileNotFoundError, FileTooLargeError, WrongKindError } from "@ren/hand-api/executor-api"
 import type { Signal } from "@ren/hand-api/signal"
-import type { Hands } from "@ren/brain/hands"
+import type { HandConnections } from "@ren/brain/hand-connections"
 import { Hand } from "@ren/brain/hand"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -72,12 +72,12 @@ const files = (hand: Hand.Files): EnvironmentFiles.FilesImpl => {
   }
 }
 
-export const session = (hands: Hands.Interface, sessionId: Session.ID) => {
-  const hand = Hand.session(hands, sessionId, Environment.sessionDirectory(sessionId), killedBySignal)
+export const session = (connections: HandConnections.Interface, sessionId: Session.ID) => {
+  const hand = Hand.session(connections, sessionId, Environment.sessionDirectory(sessionId), killedBySignal)
   return { spawner: hand.spawner, spawnerWith: hand.spawnerWith, overrides: files(hand.files) }
 }
 
-export const replacements = (hands: Hands.Interface): LayerNode.Replacements => [
+export const replacements = (connections: HandConnections.Interface): LayerNode.Replacements => [
   WorkspaceDriver.node.replace(
     WorkspaceDriver.registryNode({
       [provider]: WorkspaceDriver.make({
@@ -86,7 +86,7 @@ export const replacements = (hands: Hands.Interface): LayerNode.Replacements => 
           Schema.decodeUnknownEffect(Session.ID)(
             `ses_${input.workspaceID.slice(input.workspaceID.indexOf("_") + 1)}`,
           ).pipe(
-            Effect.map((sessionId) => session(hands, sessionId)),
+            Effect.map((sessionId) => session(connections, sessionId)),
             Effect.mapError((cause) => new WorkspaceDriver.Error({ message: cause.message, cause })),
           ),
         suspendForIdle: () => Effect.void,
@@ -97,5 +97,5 @@ export const replacements = (hands: Hands.Interface): LayerNode.Replacements => 
   RipgrepBinary.node.replace(
     Layer.succeed(RipgrepBinary.Service, RipgrepBinary.Service.of({ filepath: Effect.succeed("rg") })),
   ),
-  Shell.node.replace(OverrideShell.node((sessionId) => session(hands, sessionId))),
+  Shell.node.replace(OverrideShell.node((sessionId) => session(connections, sessionId))),
 ]

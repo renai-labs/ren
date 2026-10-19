@@ -3,10 +3,10 @@ export * as TestAccess from "./access.js"
 import type { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Ref } from "effect"
-import { EnvironmentAccess } from "../../src/environment-access.js"
+import { HandAccess } from "../../src/hand-access.js"
 
 const notFound = (sessionId: Session.ID) =>
-  new EnvironmentAccess.NotFound({ sessionId, message: `Session ${sessionId} has no access to an environment` })
+  new HandAccess.NotFound({ sessionId, message: `Session ${sessionId} has no access to an environment` })
 
 const found = (accesses: ReadonlyMap<Session.ID, Environment.Access>, sessionId: Session.ID) => {
   const access = accesses.get(sessionId)
@@ -14,10 +14,7 @@ const found = (accesses: ReadonlyMap<Session.ID, Environment.Access>, sessionId:
 }
 
 export const fixed = (accesses: ReadonlyMap<Session.ID, Environment.Access>) =>
-  Layer.succeed(
-    EnvironmentAccess.Service,
-    EnvironmentAccess.Service.of({ open: (sessionId) => found(accesses, sessionId) }),
-  )
+  Layer.succeed(HandAccess.Service, HandAccess.Service.of({ open: (sessionId) => found(accesses, sessionId) }))
 
 export interface MemoryInterface {
   readonly set: (sessionId: Session.ID, access: Environment.Access) => Effect.Effect<void>
@@ -37,8 +34,8 @@ export const memory = (initial: ReadonlyMap<Session.ID, Environment.Access>) =>
           return next
         })
       return Context.make(
-        EnvironmentAccess.Service,
-        EnvironmentAccess.Service.of({
+        HandAccess.Service,
+        HandAccess.Service.of({
           open: (sessionId) => Effect.flatMap(Ref.get(accesses), (current) => found(current, sessionId)),
         }),
       ).pipe(

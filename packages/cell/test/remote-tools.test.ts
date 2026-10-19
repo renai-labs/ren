@@ -3,8 +3,8 @@ import { TestAccess } from "@ren/brain/testing"
 import { AbsolutePath, OpenCode, SessionMessage } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { Hands } from "@ren/brain/hands"
-import { EnvironmentAccess } from "@ren/brain/environment-access"
+import { HandConnections } from "@ren/brain/hand-connections"
+import { HandAccess } from "@ren/brain/hand-access"
 import { Sandbox, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
@@ -49,18 +49,18 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
   const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
   const counted = Layer.succeed(
-    EnvironmentAccess.Service,
-    EnvironmentAccess.Service.of({
+    HandAccess.Service,
+    HandAccess.Service.of({
       open: (sessionId) =>
         Ref.update(opens, (count) => count + 1).pipe(
           Effect.andThen(beforeOpen),
-          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
+          Effect.andThen(Context.get(context, HandAccess.Service).open(sessionId)),
         ),
     }),
   )
   const environments = Context.get(
-    yield* Layer.build(Hands.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
-    Hands.Service,
+    yield* Layer.build(HandConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
+    HandConnections.Service,
   )
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url))
   const endpoints = Shared.access(undefined, stub.url).endpoints

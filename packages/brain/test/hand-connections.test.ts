@@ -29,8 +29,8 @@ import { TestClock } from "effect/testing"
 import { mkdtemp, realpath, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Hands } from "../src/hands.js"
-import { EnvironmentAccess } from "../src/environment-access.js"
+import { HandConnections } from "../src/hand-connections.js"
+import { HandAccess } from "../src/hand-access.js"
 import { Hand } from "../src/hand.js"
 import { Probe } from "./lib/probe.js"
 
@@ -63,26 +63,26 @@ const accessAt = (
   })
 
 const environmentsWith = (
-  access: Layer.Layer<EnvironmentAccess.Service>,
+  access: Layer.Layer<HandAccess.Service>,
   http: Layer.Layer<HttpClient.HttpClient> = FetchHttpClient.layer,
 ) =>
-  Layer.build(Hands.layer.pipe(Layer.provide(access), Layer.provide(http))).pipe(
-    Effect.map((context) => Context.get(context, Hands.Service)),
+  Layer.build(HandConnections.layer.pipe(Layer.provide(access), Layer.provide(http))).pipe(
+    Effect.map((context) => Context.get(context, HandConnections.Service)),
   )
 
-const opening = (open: EnvironmentAccess.Interface["open"]) =>
-  Layer.succeed(EnvironmentAccess.Service, EnvironmentAccess.Service.of({ open }))
+const opening = (open: HandAccess.Interface["open"]) =>
+  Layer.succeed(HandAccess.Service, HandAccess.Service.of({ open }))
 
 const machine = (options: Parameters<typeof Sandbox.layer>[0]) =>
   Layer.build(Layer.fresh(Sandbox.layer(options))).pipe(
     Effect.flatMap((context) => Effect.provide(Sandbox.url, context)),
   )
 
-const renDown = (id: Session.ID) => new EnvironmentAccess.Unavailable({ sessionId: id, message: "connection refused" })
+const renDown = (id: Session.ID) => new HandAccess.Unavailable({ sessionId: id, message: "connection refused" })
 
-const noAccess = (id: Session.ID) => new EnvironmentAccess.NotFound({ sessionId: id, message: "no binding" })
+const noAccess = (id: Session.ID) => new HandAccess.NotFound({ sessionId: id, message: "no binding" })
 
-const connect = (environments: Hands.Interface) => environments.connect(sessionId)
+const connect = (environments: HandConnections.Interface) => environments.connect(sessionId)
 
 const build = (options: { readonly failures: number; readonly gate?: Deferred.Deferred<void> }) =>
   Effect.gen(function* () {
@@ -104,8 +104,8 @@ const build = (options: { readonly failures: number; readonly gate?: Deferred.De
         return count < options.failures ? { ...access, token: "invalid" } : access
       }),
     )
-    const environments = yield* Layer.build(Hands.layer.pipe(Layer.provide(host), Layer.provide(http))).pipe(
-      Effect.map((context) => Context.get(context, Hands.Service)),
+    const environments = yield* Layer.build(HandConnections.layer.pipe(Layer.provide(host), Layer.provide(http))).pipe(
+      Effect.map((context) => Context.get(context, HandConnections.Service)),
     )
     return { environments, opens, requests }
   })
@@ -125,7 +125,7 @@ it.live("concurrent failing connects share one failure and one renewal", () =>
       { concurrency: "unbounded" },
     )
     const errors = exits.map((exit) => (Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined))
-    expect(errors[0]).toBeInstanceOf(Hands.Unavailable)
+    expect(errors[0]).toBeInstanceOf(HandConnections.Unavailable)
     expect(new Set(errors).size).toBe(1)
     expect(yield* Ref.get(subject.opens)).toBe(2)
     expect(yield* Ref.get(subject.requests)).toBe(2)
@@ -390,8 +390,8 @@ const controlled = Effect.fnUntraced(function* (initial: Environment.Access) {
   )
   const environments = yield* environmentsWith(
     Layer.succeed(
-      EnvironmentAccess.Service,
-      EnvironmentAccess.Service.of({
+      HandAccess.Service,
+      HandAccess.Service.of({
         open: () =>
           Effect.gen(function* () {
             const snapshot = yield* Ref.get(current)
@@ -416,7 +416,7 @@ const controlled = Effect.fnUntraced(function* (initial: Environment.Access) {
   }
 })
 
-const where = (environments: Hands.Interface) =>
+const where = (environments: HandConnections.Interface) =>
   Effect.scoped(Effect.flatMap(connect(environments), (connection) => connection.client["executor.hello"]())).pipe(
     Effect.map((hello) => hello.workspaceDirectory),
   )

@@ -39,7 +39,7 @@ The message is submitted after applying the session configuration and instructio
 
 ## Environments
 
-The production cell has `Hands` whenever `REN_URL` is set. It asks Ren for a session's access through the Host API (`environments.access`, with the host token) at the first file or shell call; `start`, a wake and a continue contact neither Ren nor a sandbox. The cell keeps the answer in memory only: the binding is in Ren's database, in `session_environment`.
+The production cell has `HandConnections` whenever `REN_URL` is set. It asks Ren for a session's access through the Host API (`environments.access`, with the host token) at the first file or shell call; `start`, a wake and a continue contact neither Ren nor a sandbox. The cell keeps the answer in memory only: the binding is in Ren's database, in `session_environment`.
 
 `start` accepts `environment` only for a new session, which then works in `/workspace/<session>` in a `ren` workspace. A later `start` without `environment` keeps it; an `environment` for a session that started without one answers "not supported yet". Ren refuses a change of environment before it calls the cell. A session without an environment has no read, write, edit, patch, glob, grep or shell; its other tools stay, and the `ren.environment` instruction tells the model why. A tool error names its cause (no access, Ren does not answer, the sandbox does not answer, token refused, not compatible) through the public `execute.after` hook.
 
@@ -68,7 +68,7 @@ bun typecheck
 - `brain-api.test.ts`: `HttpApiTest.groups` with the real Brain handlers, OpenCode adapter, in-memory SQLite and a loopback model fixture. No cell process is needed.
 - `alarm.test.ts`: the actual `Cell.alarm` under `TestClock`, first with scripted snapshots, then with the in-process OpenCode harness.
 - `remote-tools.test.ts`: the in-process OpenCode harness with tools on real executors.
-- `environment-access.test.ts`: the Host API `EnvironmentAccess` against a fake Ren (`test/lib/ren.ts`).
+- `hand-access.test.ts`: the Host API `HandAccess` against a fake Ren (`test/lib/ren.ts`).
 - `workspace-driver.test.ts`: the OpenCode `ren` driver's file and error mapping.
 - `lease.test.ts`, `reconcile.test.ts`, `credentials.test.ts`, `model-refresh.test.ts`: Ren's ownership, decisions and transformations.
 - `cell.test.ts`: a smoke set of authentication, routing, body limits, streams and the idle close against celld; the same suite runs under Wrangler.

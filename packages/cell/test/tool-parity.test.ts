@@ -9,8 +9,8 @@ import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
 import { Session as OpenCodeSession } from "@opencode/core/session"
 import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { EnvironmentAccess } from "@ren/brain/environment-access"
-import { Hands } from "@ren/brain/hands"
+import { HandAccess } from "@ren/brain/hand-access"
+import { HandConnections } from "@ren/brain/hand-connections"
 import { Sandbox, Processes, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
@@ -78,17 +78,17 @@ const open = Effect.fnUntraced(function* () {
   const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
   const counted = Layer.succeed(
-    EnvironmentAccess.Service,
-    EnvironmentAccess.Service.of({
+    HandAccess.Service,
+    HandAccess.Service.of({
       open: (sessionId) =>
         Ref.update(opens, (count) => count + 1).pipe(
-          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
+          Effect.andThen(Context.get(context, HandAccess.Service).open(sessionId)),
         ),
     }),
   )
   const environments = Context.get(
-    yield* Layer.build(Hands.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
-    Hands.Service,
+    yield* Layer.build(HandConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
+    HandConnections.Service,
   )
   const host = yield* Host.make(
     embedded(RenWorkspaceDriver.replacements(environments)),
@@ -129,7 +129,7 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
       credentials: Context.get(services, Credential.Service),
       sessions: Context.get(services, OpenCodeSession.Service),
       workspaces: Context.get(services, Workspace.Service),
-      hasHands: false,
+      hasHandConnections: false,
       configure: () => Effect.void,
     },
     endpoints,

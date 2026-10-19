@@ -39,7 +39,7 @@ import {
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import type { RpcClientError } from "effect/rpc"
-import type { Hands } from "./hands.js"
+import type { HandConnections } from "./hand-connections.js"
 
 const withoutTrailingSlash = (path: string) => path.replace(/(?<=.)\/+$/, "")
 
@@ -96,7 +96,11 @@ export interface SpawnOptions {
   readonly onSkip?: (skipped: { readonly bytes: number; readonly newlines: number }) => void
 }
 
-export const spawner = (connection: Hands.Connection, killedBySignal: KilledBySignal, options: SpawnOptions = {}) =>
+export const spawner = (
+  connection: HandConnections.Connection,
+  killedBySignal: KilledBySignal,
+  options: SpawnOptions = {},
+) =>
   ChildProcessSpawner.make(
     Effect.fnUntraced(function* (command) {
       if (command._tag === "PipedCommand")
@@ -264,7 +268,7 @@ export const spawner = (connection: Hands.Connection, killedBySignal: KilledBySi
     }),
   )
 
-type Unreached = Hands.Unavailable | UnauthorizedError | RpcClientError.RpcClientError
+type Unreached = HandConnections.Unavailable | UnauthorizedError | RpcClientError.RpcClientError
 
 export interface Files {
   readonly read: (
@@ -297,21 +301,21 @@ export interface SessionHand {
 }
 
 export const session = (
-  hands: Hands.Interface,
+  connections: HandConnections.Interface,
   sessionId: Session.ID,
   sessionDirectory: string,
   killedBySignal: KilledBySignal,
 ): SessionHand => {
   const withConnection = <A, E>(
-    use: (connection: Hands.Connection, physical: (path: string) => string) => Effect.Effect<A, E>,
+    use: (connection: HandConnections.Connection, physical: (path: string) => string) => Effect.Effect<A, E>,
   ) =>
-    hands.connect(sessionId).pipe(
+    connections.connect(sessionId).pipe(
       Effect.flatMap((connection) => use(connection, physicalPath(sessionDirectory, connection.directory))),
       Effect.scoped,
     )
   const sessionSpawner = (options: SpawnOptions = {}) =>
     ChildProcessSpawner.make((command) =>
-      hands.connect(sessionId).pipe(
+      connections.connect(sessionId).pipe(
         Effect.mapError(childProcessError("spawn")),
         Effect.flatMap((connection) => {
           const physical = physicalPath(sessionDirectory, connection.directory)
