@@ -186,7 +186,7 @@ Rules:
 
 Where the port differs from OpenCode:
 
-- The reducer returns read commands (`Refresh`, `Revalidate`, `Settle`, `Complete`) instead of calling the API; `ChatSession` runs them through `Reads`, the port of `createSync`.
+- The reducer returns read commands (`Refresh`, `Revalidate`, `Settle`, `Complete`, `Rename`) instead of calling the API; `ChatSession` runs them through `Reads`, the port of `createSync`.
 - A delta for an assistant message the client does not have asks for a debounced transcript re-read; OpenCode drops it.
 - A successful `session.prompt` acknowledges its optimistic row, as the echo does. A prompt sent while the stream is parked misses its echo, and the re-read after the reconnect would otherwise keep the row forever.
 - After `stream.ended` the connection is `parked` and does not reconnect until `wake`, which every send calls. The host calls `wake` when the member returns, and `resync` on visibility and network changes.

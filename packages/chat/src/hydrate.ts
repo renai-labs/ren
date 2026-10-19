@@ -35,6 +35,12 @@ export const info = (state: ChatState.State, sessions: ReadonlyArray<SessionInfo
   info: sessions.reduce((record, session) => ChatState.set(record, session.id, session), state.info),
 })
 
+export const rename = (state: ChatState.State, sessionID: string, title: string): ChatState.State => {
+  const info = state.info[sessionID]
+  if (!info || info.title === title) return state
+  return { ...state, info: ChatState.set(state.info, sessionID, { ...info, title }) }
+}
+
 export const startPending = (state: ChatState.State, sessionID: string): ChatState.State => ({
   ...state,
   pendingOverlay: ChatState.set(state.pendingOverlay, sessionID, new Map()),

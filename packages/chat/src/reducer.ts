@@ -23,6 +23,7 @@ export type Command =
   | { readonly _tag: "Revalidate"; readonly read: Read }
   | { readonly _tag: "Settle"; readonly read: Read }
   | { readonly _tag: "Complete"; readonly read: Read }
+  | { readonly _tag: "Rename"; readonly read: Read & { readonly _tag: "Info" }; readonly title: string }
 
 export interface Result {
   readonly state: ChatState.State
@@ -438,13 +439,8 @@ const handlers: Handlers = {
       [{ _tag: "Refresh", read: { _tag: "Message", sessionID, messageID: id } }],
     )
   },
-  "session.renamed": (state, event) => {
-    const sessionID = event.data.sessionID
-    return done(
-      editInfo(state, sessionID, (info) => ({ ...info, title: event.data.title })),
-      [{ _tag: "Revalidate", read: { _tag: "Info", sessionID } }],
-    )
-  },
+  "session.renamed": (state, event) =>
+    done(state, [{ _tag: "Rename", read: { _tag: "Info", sessionID: event.data.sessionID }, title: event.data.title }]),
   "session.inbox.delivered": (state, event) => {
     const data = event.data
     const admitted = ChatState.hasInput(state, data.sessionID, data.inboxID)

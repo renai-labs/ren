@@ -159,3 +159,19 @@ test("a permission request arrives live and leaves once the member answers it", 
       yield* until(chat.state, settled(brain.id))
     }),
   ))
+
+test("a rename reaches the chat after its session read, so a stale read cannot undo it", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* until(chat.status, (status) => status === "connected")
+      yield* Effect.all([
+        chat.open(brain.id),
+        brain.opencode.session.update({ sessionID: SessionID.make(brain.id), title: "Renamed live" }),
+      ])
+      const renamed = yield* until(chat.state, (state) => state.info[brain.id]?.title === "Renamed live")
+      expect(renamed.info[brain.id]?.title).toBe("Renamed live")
+    }),
+  ))

@@ -139,6 +139,17 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     Effect.gen(function* () {
       const key = Reducer.key(command.read)
       if (command._tag === "Complete") return reads.complete(key)
+      if (command._tag === "Rename") {
+        if ((yield* SubscriptionRef.get(status)) !== "connected") return
+        return yield* reads
+          .run(key, load(command.read))
+          .pipe(
+            Effect.andThen(update((current) => Hydrate.rename(current, command.read.sessionID, command.title))),
+            Effect.catch(report),
+            Effect.forkIn(scope),
+            Effect.asVoid,
+          )
+      }
       if (
         command._tag === "Revalidate" &&
         !reads.has(key) &&

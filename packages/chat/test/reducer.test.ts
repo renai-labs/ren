@@ -199,13 +199,14 @@ describe("session info", () => {
       type: "session.renamed",
       data: { sessionID, title: "Generated title" },
     })
-    const revalidate: ReadonlyArray<Reducer.Command> = [{ _tag: "Revalidate", read: { _tag: "Info", sessionID } }]
-    const early = Reducer.apply(ChatState.empty, event)
-    expect(early.commands).toEqual(revalidate)
-    const stale = Hydrate.info(early.state, [Fixture.session(sessionID)])
-    const renamed = Reducer.apply(stale, event)
-    expect(renamed.state.info[sessionID]?.title).toBe("Generated title")
-    expect(renamed.commands).toEqual(revalidate)
+    const reading = Reducer.apply(ChatState.empty, event)
+    expect(reading).toEqual({
+      state: ChatState.empty,
+      commands: [{ _tag: "Rename", read: { _tag: "Info", sessionID }, title: "Generated title" }],
+    })
+    const stale = Hydrate.info(reading.state, [Fixture.session(sessionID)])
+    expect(Hydrate.rename(stale, sessionID, "Generated title").info[sessionID]?.title).toBe("Generated title")
+    expect(Hydrate.rename(ChatState.empty, sessionID, "Generated title")).toBe(ChatState.empty)
   })
 })
 
