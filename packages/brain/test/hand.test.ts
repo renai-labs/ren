@@ -27,8 +27,8 @@ import { TestClock } from "effect/testing"
 import { mkdtemp, realpath, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { EnvironmentAccess } from "../src/environment-access.js"
-import { Hands } from "../src/hands.js"
+import { HandAccess } from "../src/hand-access.js"
+import { HandConnections } from "../src/hand-connections.js"
 import { Hand } from "../src/hand.js"
 import { Probe } from "./lib/probe.js"
 
@@ -50,11 +50,11 @@ const accessAt = (url: string) =>
   Sandbox.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: join(workspace, sessionId) })
 
 const environmentsWith = (
-  access: Layer.Layer<EnvironmentAccess.Service>,
+  access: Layer.Layer<HandAccess.Service>,
   http: Layer.Layer<HttpClient.HttpClient> = FetchHttpClient.layer,
 ) =>
-  Layer.build(Hands.layer.pipe(Layer.provide(access), Layer.provide(http))).pipe(
-    Effect.map((context) => Context.get(context, Hands.Service)),
+  Layer.build(HandConnections.layer.pipe(Layer.provide(access), Layer.provide(http))).pipe(
+    Effect.map((context) => Context.get(context, HandConnections.Service)),
   )
 
 const connectTo = Effect.fnUntraced(function* (url: string, http?: Layer.Layer<HttpClient.HttpClient>) {
@@ -483,13 +483,13 @@ it.live("stops with SIGKILL a command that ignores SIGTERM when its scope closes
   }),
 )
 
-const opening = (open: EnvironmentAccess.Interface["open"]) =>
-  Layer.succeed(EnvironmentAccess.Service, EnvironmentAccess.Service.of({ open }))
+const opening = (open: HandAccess.Interface["open"]) =>
+  Layer.succeed(HandAccess.Service, HandAccess.Service.of({ open }))
 
 const isStopped = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   handle.isRunning.pipe(Effect.map((isRunning) => !isRunning))
 
-const heartbeatsInAMinute = Effect.fnUntraced(function* (sandbox: Probe.Probe, connection: Hands.Connection) {
+const heartbeatsInAMinute = Effect.fnUntraced(function* (sandbox: Probe.Probe, connection: HandConnections.Connection) {
   yield* connection.client["executor.hello"]()
   const before = yield* Ref.get(sandbox.heartbeats)
   yield* Probe.advance(Duration.minutes(1))

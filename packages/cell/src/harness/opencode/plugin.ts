@@ -5,7 +5,7 @@ import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Tool } from "@opencode/schema/tool"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
-import { Hands } from "@ren/brain/hands"
+import { HandConnections } from "@ren/brain/hand-connections"
 import type { Models } from "@ren/schema/models"
 import { Clock, DateTime, Deferred, Effect, Option, Predicate, Redacted, Ref, Schema, Struct } from "effect"
 import type { Harness } from "../harness.js"
@@ -22,7 +22,7 @@ export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("Mana
 const never = Number.MAX_SAFE_INTEGER
 
 const environmentFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
-  if (value instanceof Hands.Unavailable) return value
+  if (value instanceof HandConnections.Unavailable) return value
   if (ExecutorClient.isNoAnswer(value) && value instanceof Error)
     return { message: `The sandbox does not answer: ${value.message}` }
   if (depth > 8 || !Predicate.isObject(value)) return undefined
@@ -53,7 +53,7 @@ export const make = (
   reloads: Ref.Ref<ReadonlyArray<Effect.Effect<void>>>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
-  hasHands: boolean,
+  hasHandConnections: boolean,
 ) =>
   Plugin.define({
     id: "ren",
@@ -62,11 +62,11 @@ export const make = (
         const tool = context.tool
         const integration = context.integration
         const provider = context.provider
-        if (!hasHands)
+        if (!hasHandConnections)
           yield* tool.transform((editor) => {
             for (const id of unavailable) editor.remove(id)
           })
-        if (hasHands)
+        if (hasHandConnections)
           yield* tool.hook("execute.after", (event) =>
             Effect.sync(() => {
               if (event.status !== "error") return
