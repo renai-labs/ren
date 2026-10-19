@@ -56,6 +56,10 @@ export interface Chat {
   readonly permissions: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Permission.Request>, NotFound>
   readonly forms: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Form.Info>, NotFound>
   readonly prompt: (sessionId: Session.ID, prompt: Prompt) => Effect.Effect<void, NotFound | Conflict>
+  readonly compact: (
+    sessionId: Session.ID,
+    id: SessionMessage.ID,
+  ) => Effect.Effect<SessionInbox.Compaction, NotFound | Conflict>
   readonly interrupt: (sessionId: Session.ID) => Effect.Effect<void, NotFound>
   readonly switchModel: (sessionId: Session.ID, model: SessionModel.Ref) => Effect.Effect<void, NotFound | Rejected>
   readonly replyPermission: (

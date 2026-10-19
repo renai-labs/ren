@@ -19,6 +19,7 @@ interface Base {
   readonly fetch?: typeof globalThis.fetch
   readonly writeClipboardText?: (text: string) => Promise<void>
   readonly readClipboardImage?: () => Promise<File | undefined>
+  readonly onLifecycle?: (listener: (event: "foreground" | "online") => void) => () => void
 }
 
 export type Info =

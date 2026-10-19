@@ -17,9 +17,11 @@ export type Read =
   | { readonly _tag: "Pending"; readonly sessionID: Session.ID }
   | { readonly _tag: "Permissions"; readonly sessionID: Session.ID }
   | { readonly _tag: "Forms"; readonly sessionID: Session.ID }
+  | { readonly _tag: "Children"; readonly sessionID: Session.ID }
 
 export type Command =
   | { readonly _tag: "Refresh"; readonly read: Read }
+  | { readonly _tag: "Invalidate"; readonly read: Read }
   | { readonly _tag: "Revalidate"; readonly read: Read }
   | { readonly _tag: "Settle"; readonly read: Read }
   | { readonly _tag: "Complete"; readonly read: Read }
@@ -138,6 +140,15 @@ const recordPending = (state: ChatState.State, sessionID: string, inboxID: strin
   return {
     ...state,
     pendingOverlay: set(state.pendingOverlay, sessionID, new Map([...overlay, [inboxID, update]])),
+  }
+}
+
+const observe = (state: ChatState.State, sessionID: string, inboxID: string): ChatState.State => {
+  const active = state.compacting[sessionID]
+  if (!active || active.observed.has(inboxID)) return state
+  return {
+    ...state,
+    compacting: set(state.compacting, sessionID, { ...active, observed: new Set([...active.observed, inboxID]) }),
   }
 }
 
@@ -327,7 +338,9 @@ const compactionEnded = (state: ChatState.State, event: Of<"session.compaction.e
 
 const compactionFailed = (state: ChatState.State, event: Of<"session.compaction.failed">): Result => {
   const data = event.data
-  const removed = data.inputID ? removePending(state, data.sessionID, data.inputID) : state
+  const removed = data.inputID
+    ? observe(removePending(state, data.sessionID, data.inputID), data.sessionID, data.inputID)
+    : state
   return done(
     withMessages(removed, data.sessionID, (messages) => {
       const position = messages.findLastIndex((item) => item.type === "compaction" && item.status === "running")
@@ -390,18 +403,31 @@ const handlers: Handlers = {
     ]),
   "session.deleted": (state, event) => {
     const id = event.data.sessionID
-    return done({
-      ...state,
-      info: drop(state.info, id),
-      active: drop(state.active, id),
-      messages: drop(state.messages, id),
-      cursor: drop(state.cursor, id),
-      pending: drop(state.pending, id),
-      permissions: drop(state.permissions, id),
-      forms: drop(state.forms, id),
-      outbox: new Set([...state.outbox].filter((item) => !ChatState.pending(state, id).some((p) => p.id === item))),
-      activeOverlay: state.activeOverlay && new Map([...state.activeOverlay, [id, undefined]]),
-    })
+    const reads: ReadonlyArray<Read> = [
+      { _tag: "Info", sessionID: id },
+      { _tag: "Messages", sessionID: id },
+      { _tag: "Pending", sessionID: id },
+      { _tag: "Permissions", sessionID: id },
+      { _tag: "Forms", sessionID: id },
+      { _tag: "Children", sessionID: id },
+    ]
+    return done(
+      {
+        ...state,
+        info: drop(state.info, id),
+        active: drop(state.active, id),
+        messages: drop(state.messages, id),
+        cursor: drop(state.cursor, id),
+        pending: drop(state.pending, id),
+        permissions: drop(state.permissions, id),
+        forms: drop(state.forms, id),
+        outbox: new Set([...state.outbox].filter((item) => !ChatState.pending(state, id).some((p) => p.id === item))),
+        compacting: drop(state.compacting, id),
+        history: new Set([...state.history].filter((item) => item !== id)),
+        activeOverlay: state.activeOverlay && new Map([...state.activeOverlay, [id, undefined]]),
+      },
+      reads.map((read) => ({ _tag: "Invalidate", read })),
+    )
   },
   "session.usage.updated": (state, event) =>
     done(
@@ -444,7 +470,7 @@ const handlers: Handlers = {
   "session.inbox.delivered": (state, event) => {
     const data = event.data
     const admitted = ChatState.hasInput(state, data.sessionID, data.inboxID)
-    const removed = removePending(state, data.sessionID, data.inboxID)
+    const removed = observe(removePending(state, data.sessionID, data.inboxID), data.sessionID, data.inboxID)
     if (!admitted) return done(removed)
     return done(
       withMessages(removed, data.sessionID, (messages) => {
@@ -459,7 +485,8 @@ const handlers: Handlers = {
   },
   "session.inbox.delivery.changed": (state, event) =>
     done(updateDelivery(state, event.data.sessionID, event.data.inboxID, event.data.delivery)),
-  "session.inbox.cancelled": (state, event) => done(retract(state, event.data.sessionID, event.data.inboxID)),
+  "session.inbox.cancelled": (state, event) =>
+    done(observe(retract(state, event.data.sessionID, event.data.inboxID), event.data.sessionID, event.data.inboxID)),
   "session.inbox.enqueued": (state, event) => {
     const item = {
       id: event.data.inboxID,
@@ -467,11 +494,26 @@ const handlers: Handlers = {
       time: { created: time(event.created) },
       ...event.data.item,
     }
-    const acknowledged = {
-      ...state,
-      outbox: new Set([...state.outbox].filter((id) => id !== item.id)),
-    }
-    return done(admit(recordPending(acknowledged, item.sessionID, item.id, item), item))
+    const admitted = admit(
+      recordPending(
+        { ...state, outbox: new Set([...state.outbox].filter((id) => id !== item.id)) },
+        item.sessionID,
+        item.id,
+        item,
+      ),
+      item,
+    )
+    if (item.type !== "compaction") return done(admitted)
+    const observed = observe(admitted, item.sessionID, item.id)
+    const active = observed.compacting[item.sessionID]
+    if (!active || active.id === item.id || !observed.outbox.has(active.id)) return done(observed)
+    return done(
+      removePending(
+        { ...observed, outbox: new Set([...observed.outbox].filter((id) => id !== active.id)) },
+        item.sessionID,
+        active.id,
+      ),
+    )
   },
   "session.execution.started": (state, event) => done(setActive(state, event.data.sessionID, "running")),
   "session.execution.succeeded": ended,
@@ -662,7 +704,9 @@ const handlers: Handlers = {
     })),
   "session.compaction.started": (state, event) => {
     const data = event.data
-    const removed = data.inputID ? removePending(state, data.sessionID, data.inputID) : state
+    const removed = data.inputID
+      ? observe(removePending(state, data.sessionID, data.inputID), data.sessionID, data.inputID)
+      : state
     return done(
       insert(removed, data.sessionID, {
         id: data.inputID ?? messageIDFromEvent(event.id),

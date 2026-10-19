@@ -18,6 +18,8 @@ import type {
   SessionFormListOutput,
   SessionPromptInput,
   SessionPromptOutput,
+  SessionCompactInput,
+  SessionCompactOutput,
   SessionInterruptInput,
   SessionInterruptOutput,
   SessionModelSwitchInput,
@@ -319,6 +321,18 @@ export function make(options: ClientOptions) {
             body: { id: input["id"], text: input["text"], delivery: input["delivery"] },
             successStatus: 200,
             declaredStatuses: [403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      compact: (input: SessionCompactInput, requestOptions?: RequestOptions) =>
+        request<SessionCompactOutput>(
+          {
+            method: "POST",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/compact`,
+            body: { id: input["id"] },
+            successStatus: 200,
+            declaredStatuses: [404, 409],
             empty: false,
           },
           requestOptions,

@@ -31,5 +31,20 @@ export function createWebPlatform(): Platform.Info {
       new Notification(title, body === undefined ? undefined : { body })
     },
     writeClipboardText: (text) => navigator.clipboard.writeText(text),
+    onLifecycle: (listener) => {
+      const visibility = () => {
+        if (document.visibilityState === "visible") listener("foreground")
+      }
+      const pageshow = () => listener("foreground")
+      const online = () => listener("online")
+      document.addEventListener("visibilitychange", visibility)
+      window.addEventListener("pageshow", pageshow)
+      window.addEventListener("online", online)
+      return () => {
+        document.removeEventListener("visibilitychange", visibility)
+        window.removeEventListener("pageshow", pageshow)
+        window.removeEventListener("online", online)
+      }
+    },
   }
 }

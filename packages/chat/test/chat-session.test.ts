@@ -160,6 +160,123 @@ test("a permission request arrives live and leaves once the member answers it", 
     }),
   ))
 
+test("auto-approve answers a live request once, and one asked before it was enabled", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      yield* brain.opencode.session.update({
+        sessionID: SessionID.make(brain.id),
+        permissions: [{ action: "webfetch", resource: "*", effect: "ask" }],
+      })
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const fetch = { tool: { name: "webfetch", input: { url: "https://example.com" } } }
+      yield* chat.prompt({ text: stub.script(fetch).marker })
+      yield* until(chat.state, (state) => (state.permissions[brain.id] ?? []).length > 0)
+      yield* SubscriptionRef.set(chat.autoApprove, true)
+      yield* until(chat.state, settled(brain.id))
+      yield* chat.prompt({ text: stub.script(fetch).marker })
+      const done = yield* until(
+        chat.state,
+        (state) =>
+          settled(brain.id)(state) &&
+          ChatState.messages(state, brain.id).filter((message) => message.type === "idle").length === 2,
+      )
+      expect(done.permissions[brain.id]).toEqual([])
+      const tools = ChatState.messages(done, brain.id).flatMap((message) =>
+        message.type === "assistant"
+          ? message.content.flatMap((part) => (part.type === "tool" ? [part.state] : []))
+          : [],
+      )
+      expect(tools).toHaveLength(2)
+      expect(
+        tools.filter((tool) => tool.status === "error" && tool.error.message.toLowerCase().includes("reject")),
+      ).toEqual([])
+    }),
+  ))
+
+test("coalesces duplicate gestures until the admission request settles", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const summarized = { summary: "## Objective\n- the summary" }
+      yield* chat.prompt({ text: stub.script(summarized).marker })
+      yield* until(chat.state, settled(brain.id))
+      yield* chat.prompt({ text: stub.script(summarized).marker })
+      yield* until(chat.state, (state) => settled(brain.id)(state) && ChatState.messages(state, brain.id).length >= 6)
+      const reply = stub.script({ reply: "after the summary" })
+      const results = yield* Effect.all([chat.compact(), chat.compact(), chat.prompt({ text: reply.marker })], {
+        concurrency: "unbounded",
+      })
+      expect(results[0]).toBe(results[1])
+      const done = yield* until(
+        chat.state,
+        (state) =>
+          settled(brain.id)(state) &&
+          ChatState.messages(state, brain.id).some(
+            (message) => message.type === "compaction" && message.status === "completed",
+          ) &&
+          ChatState.messages(state, brain.id).some(
+            (message) =>
+              message.type === "assistant" &&
+              message.content.some((part) => part.type === "text" && part.text === "after the summary"),
+          ),
+      )
+      expect(ChatState.messages(done, brain.id).filter((message) => message.type === "compaction")).toHaveLength(1)
+      expect(done.compacting).toEqual({})
+      expect(done.outbox.size).toBe(0)
+    }),
+  ))
+
+test("bulk history (join)", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const writer = yield* open(brain)
+      yield* writer.open(brain.id)
+      yield* until(writer.status, (status) => status === "connected")
+      yield* Effect.forEach(
+        ["first", "second"],
+        (reply) =>
+          writer
+            .prompt({ text: stub.script({ reply }).marker })
+            .pipe(
+              Effect.andThen(
+                until(writer.state, (state) =>
+                  ChatState.messages(state, brain.id).some(
+                    (message) =>
+                      message.type === "assistant" &&
+                      message.content.some((part) => part.type === "text" && part.text === reply),
+                  ),
+                ),
+              ),
+              Effect.andThen(until(writer.state, settled(brain.id))),
+            ),
+        { discard: true },
+      )
+      const full = ChatState.messages(yield* SubscriptionRef.get(writer.state), brain.id).map((message) => message.id)
+      const reader = yield* ChatSession.make({ sessionID: brain.id, access, initialMessageLimit: 2 }).pipe(
+        Effect.provide(http(brain)),
+      )
+      yield* reader.open(brain.id)
+      expect(ChatState.more(yield* SubscriptionRef.get(reader.state), brain.id)).toBe(true)
+      yield* Effect.all([reader.loadMore(brain.id), reader.loadMore(brain.id), reader.loadMore(brain.id, true)], {
+        concurrency: "unbounded",
+      })
+      const loaded = yield* SubscriptionRef.get(reader.state)
+      expect(ChatState.messages(loaded, brain.id).map((message) => message.id)).toEqual(full)
+      expect(ChatState.more(loaded, brain.id)).toBe(false)
+      expect(ChatState.loadingHistory(loaded, brain.id)).toBe(false)
+    }),
+  ))
+
 test("a rename reaches the chat after its session read, so a stale read cannot undo it", () =>
   live(
     Effect.gen(function* () {

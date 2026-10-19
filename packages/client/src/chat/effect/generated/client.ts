@@ -90,6 +90,16 @@ const EndpointSessionPrompt = (raw: RawClient["session"]) => (input: SessionProm
     payload: { id: input["id"], text: input["text"], delivery: input["delivery"] },
   }).pipe(Effect.mapError(mapClientError))
 
+type SessionCompactRequest = Parameters<RawClient["session"]["session.compact"]>[0]
+type SessionCompactInput = {
+  readonly sessionID: SessionCompactRequest["params"]["sessionID"]
+  readonly id: SessionCompactRequest["payload"]["id"]
+}
+const EndpointSessionCompact = (raw: RawClient["session"]) => (input: SessionCompactInput) =>
+  raw["session.compact"]({ params: { sessionID: input["sessionID"] }, payload: { id: input["id"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
 type SessionInterruptRequest = Parameters<RawClient["session"]["session.interrupt"]>[0]
 type SessionInterruptInput = { readonly sessionID: SessionInterruptRequest["params"]["sessionID"] }
 const EndpointSessionInterrupt = (raw: RawClient["session"]) => (input: SessionInterruptInput) =>
@@ -153,6 +163,7 @@ const adaptGroupSession = (raw: RawClient["session"]) => ({
     cancel: EndpointSessionFormCancel(raw),
   },
   prompt: EndpointSessionPrompt(raw),
+  compact: EndpointSessionCompact(raw),
   interrupt: EndpointSessionInterrupt(raw),
   model: { switch: EndpointSessionModelSwitch(raw) },
 })

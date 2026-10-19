@@ -137,6 +137,16 @@ const handlers = Layer.mergeAll(
             ),
           ),
         )
+        .handle("session.compact", (request) =>
+          run((chat) =>
+            chat.compact(request.params.sessionID, request.payload.id).pipe(
+              Effect.catchTags({
+                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
+                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
+              }),
+            ),
+          ),
+        )
         .handle("session.interrupt", (request) =>
           run((chat) => chat.interrupt(request.params.sessionID).pipe(Effect.mapError(notFound))),
         )

@@ -34,6 +34,7 @@ export interface Connection {
   readonly status: Effect.Effect<Status>
   readonly wake: Effect.Effect<void>
   readonly resync: (reason: string) => Effect.Effect<void>
+  readonly foreground: Effect.Effect<void>
 }
 
 export const defaults = {
@@ -42,6 +43,8 @@ export const defaults = {
   reconnectDelay: 1_000,
   flushInterval: "16 millis",
 } as const
+
+export const foregroundIdleThreshold = 20_000
 
 export const make = Effect.fnUntraced(function* (options: Options) {
   const settings = { ...defaults, ...options }
@@ -54,6 +57,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const forced = yield* Ref.make(false)
   const attempt = yield* Ref.make(0)
   const current = yield* FiberHandle.make<"ended", Lost>()
+  const activity = yield* Ref.make(0)
+
+  const touch = Effect.flatMap(Clock.currentTimeMillis, (now) => Ref.set(activity, now))
 
   const setStatus = (next: Status) => Ref.set(status, next).pipe(Effect.andThen(options.onStatus(next)))
 
@@ -81,6 +87,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       const next = pull.pipe(
         Effect.mapError((cause) => new Lost({ message: "The event stream failed", cause })),
         Pull.catchDone(lost("The event stream disconnected")),
+        Effect.tap(() => touch),
       )
       const opening = yield* next.pipe(
         Effect.timeoutOrElse({
@@ -123,15 +130,24 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   yield* Effect.forkIn(Effect.forever(cycle), scope)
 
+  const wake = awake.open.pipe(Effect.asVoid)
+
+  const resync = (reason: string) =>
+    Effect.gen(function* () {
+      if ((yield* Ref.get(status)) !== "connected") return
+      yield* Effect.logInfo("The chat event stream resyncs", { reason })
+      yield* Ref.set(forced, true)
+      yield* FiberHandle.clear(current)
+    })
+
   return {
     status: Ref.get(status),
-    wake: awake.open.pipe(Effect.asVoid),
-    resync: (reason: string) =>
-      Effect.gen(function* () {
-        if ((yield* Ref.get(status)) !== "connected") return
-        yield* Effect.logInfo("The chat event stream resyncs", { reason })
-        yield* Ref.set(forced, true)
-        yield* FiberHandle.clear(current)
-      }),
+    wake,
+    resync,
+    foreground: Effect.gen(function* () {
+      yield* wake
+      if ((yield* Clock.currentTimeMillis) - (yield* Ref.get(activity)) < foregroundIdleThreshold) return
+      yield* resync("The page returned to the foreground after the event stream went quiet")
+    }),
   } satisfies Connection
 })

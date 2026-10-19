@@ -23,6 +23,9 @@ export const PromptInput = Schema.Struct({
 export interface Accepted extends Schema.Schema.Type<typeof Accepted> {}
 export const Accepted = Schema.Struct({ id: SessionMessage.ID }).annotate({ identifier: "Chat.Accepted" })
 
+export interface CompactInput extends Schema.Schema.Type<typeof CompactInput> {}
+export const CompactInput = Schema.Struct({ id: SessionMessage.ID }).annotate({ identifier: "Chat.CompactInput" })
+
 export const MessagesQuery = Schema.Struct({
   limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 200 }))),
   cursor: Schema.optional(Schema.String),
@@ -173,6 +176,21 @@ export const SessionGroup = HttpApiGroup.make("session")
         summary: "Send a message",
         description:
           "Send a message to the session. `steer` reaches the running turn; `queue` waits for the turn to end. Sending the same `id` again returns the same answer and sends nothing new.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("session.compact", "/chat/session/:sessionID/compact", {
+      params,
+      payload: CompactInput,
+      success: SessionInbox.Compaction,
+      error: [NotFoundError, ConflictError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.compact",
+        summary: "Compact the session",
+        description:
+          "Summarize the history so later turns send the summary instead of the older messages. The session merges a compaction that is already pending, so the answer may carry another `id` than the one sent.",
       }),
     ),
   )

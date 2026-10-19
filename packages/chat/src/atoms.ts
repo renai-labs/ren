@@ -2,7 +2,7 @@ export * as ChatAtoms from "./atoms.js"
 
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session-message"
-import { Effect, Option, Stream, SubscriptionRef } from "effect"
+import { Effect, Option, Queue, Stream, SubscriptionRef } from "effect"
 import type { HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 import { ChatSession } from "./chat-session.js"
@@ -10,11 +10,14 @@ import { ChatState } from "./chat-state.js"
 import { Projection } from "./projection.js"
 import type { TimelineDetail } from "./timeline-detail.js"
 
+export type Lifecycle = "foreground" | "online"
+
 export interface Options<R, ER> {
   readonly runtime: Atom.AtomRuntime<R | HttpClient.HttpClient, ER>
   readonly access: (sessionID: Session.ID) => Effect.Effect<Session.ClientAccess, unknown, R>
   readonly sender?: SessionMessage.Sender
   readonly detail?: TimelineDetail.Detail
+  readonly lifecycle?: (listener: (event: Lifecycle) => void) => () => void
 }
 
 export const make = <R, ER>(options: Options<R, ER>) => {
@@ -32,6 +35,21 @@ export const make = <R, ER>(options: Options<R, ER>) => {
             Effect.catch((error) => Effect.logWarning("The chat could not load the session", error)),
             Effect.forkScoped,
           )
+          const lifecycle = options.lifecycle
+          if (lifecycle)
+            yield* Stream.callback<Lifecycle>((queue) =>
+              Effect.acquireRelease(
+                Effect.sync(() => lifecycle((event) => Queue.offerUnsafe(queue, event))),
+                (unsubscribe) => Effect.sync(unsubscribe),
+              ),
+            ).pipe(
+              Stream.runForEach((event) =>
+                event === "online"
+                  ? opened.wake.pipe(Effect.andThen(opened.resync("The network connection is back")))
+                  : opened.foreground,
+              ),
+              Effect.forkScoped,
+            )
           return opened
         }),
       )

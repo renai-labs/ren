@@ -31,6 +31,7 @@ function atomsFor(platform: Platform.Info, userId: string) {
   return ChatAtoms.make({
     runtime: Atom.runtime(FetchHttpClient.layer),
     sender: { userId },
+    ...(platform.onLifecycle && { lifecycle: platform.onLifecycle }),
     access: (sessionID: Session.ID) =>
       Ren.make({ baseUrl: platform.serverUrl }).pipe(
         Effect.flatMap((ren) => ren.chat.access({ id: sessionID })),

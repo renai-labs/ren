@@ -101,6 +101,26 @@ effect("a forced resync replaces the stream immediately and only while connected
   }),
 )
 
+effect("a page back in the foreground resyncs only a stream that went quiet", () =>
+  Effect.gen(function* () {
+    const fake = yield* setup()
+    const first = yield* Queue.take(fake.subscriptions)
+    yield* Queue.offer(first.queue, connected)
+    yield* fake.until("connected")
+
+    yield* TestClock.adjust("15 seconds")
+    yield* fake.connection.foreground
+    expect(yield* Deferred.isDone(first.closed)).toBe(false)
+
+    yield* TestClock.adjust("5 seconds")
+    yield* fake.connection.foreground
+    const second = yield* Queue.take(fake.subscriptions)
+    expect(yield* Deferred.isDone(first.closed)).toBe(true)
+    yield* Queue.offer(second.queue, connected)
+    yield* fake.until("connected")
+  }),
+)
+
 test.each([
   ["closes", (queue: Subscription["queue"]) => Queue.end(queue)],
   ["fails", (queue: Subscription["queue"]) => Queue.fail(queue, new Error("contract failure"))],

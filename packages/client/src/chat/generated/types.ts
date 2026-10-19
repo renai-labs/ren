@@ -1010,6 +1010,13 @@ export type SessionPromptInput = {
 
 export type SessionPromptOutput = ChatAccepted
 
+export type SessionCompactInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly id: { readonly id: string }["id"]
+}
+
+export type SessionCompactOutput = SessionInboxCompaction
+
 export type SessionInterruptInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
 export type SessionInterruptOutput = void

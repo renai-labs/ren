@@ -124,6 +124,16 @@ export const older = (
   }
 }
 
+export const loadingHistory = (state: ChatState.State, sessionID: string, loading: boolean): ChatState.State => {
+  if (state.history.has(sessionID) === loading) return state
+  return {
+    ...state,
+    history: loading
+      ? new Set([...state.history, sessionID])
+      : new Set([...state.history].filter((item) => item !== sessionID)),
+  }
+}
+
 export const message = (state: ChatState.State, sessionID: string, item: SessionMessage.Info): ChatState.State => {
   const list = ChatState.messages(state, sessionID)
   return {

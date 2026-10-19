@@ -4,6 +4,7 @@ import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session-capabilities"
+import { SessionInbox } from "@ren/schema/session-inbox"
 import type { SessionMessage } from "@ren/schema/session-message"
 import { SessionModel } from "@ren/schema/session-model"
 import type { SessionStatus } from "@ren/schema/session-status"
@@ -45,6 +46,8 @@ const failure = (status: number, message: string): Option.Option<Failure> => {
 }
 
 const ErrorBody = Schema.Struct({ message: Schema.String })
+
+const decodeCompaction = Schema.decodeUnknownOption(SessionInbox.Compaction)
 
 export const make = (fetch: (request: Request) => Promise<Response>): Harness.Chat => {
   const call = Effect.fnUntraced(function* (
@@ -211,6 +214,16 @@ export const make = (fetch: (request: Request) => Promise<Response>): Harness.Ch
               Effect.flatMap((raw) => list(raw, Translate.inbox)),
             )).some((item) => item.id === prompt.id)
             if (!sent && !queued) return yield* error
+          }),
+        ),
+      ),
+    compact: (sessionId, id) =>
+      call("POST", `/api/session/${sessionId}/compact`, { id }).pipe(
+        Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
+        Effect.flatMap((raw) =>
+          Option.match(Option.flatMap(unwrap(raw), decodeCompaction), {
+            onNone: () => Effect.die(new Error(`The brain cannot read the compaction of session ${sessionId}`)),
+            onSome: Effect.succeed,
           }),
         ),
       ),

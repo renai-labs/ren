@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session-event"
+import type { SessionInbox } from "@ren/schema/session-inbox"
 import { SessionMessage } from "@ren/schema/session-message"
 import { ChatState } from "../src/chat-state.js"
 import { Hydrate } from "../src/hydrate.js"
@@ -210,38 +211,168 @@ describe("session info", () => {
   })
 })
 
+describe("revert", () => {
+  test("a committed revert drops the pending items and rows from its boundary on", () => {
+    const user = (id: string, created: number) =>
+      Fixture.inbox({ id, sessionID, type: "user", delivery: "queue", time: { created }, payload: { text: id } })
+    const loaded = Hydrate.pending(
+      Hydrate.messages(
+        Hydrate.info(ChatState.empty, [Fixture.session(sessionID, { revert: { messageID: "msg_2" } })]),
+        sessionID,
+        Fixture.page([Fixture.user("msg_3", 3), Fixture.user("msg_2", 2), Fixture.user("msg_1", 1)]),
+      ),
+      sessionID,
+      [user("msg_0", 0), user("msg_4", 4)],
+    )
+    const committed = Reducer.apply(
+      loaded,
+      Fixture.event({
+        id: "evt_commit",
+        created: 5,
+        type: "session.revert.committed",
+        data: { sessionID, to: "msg_2" },
+      }),
+    ).state
+    expect(committed.info[sessionID]?.revert).toBeUndefined()
+    expect(ChatState.pending(committed, sessionID).map((item) => item.id)).toEqual(Fixture.ids("msg_0"))
+    expect(ChatState.messages(committed, sessionID).map((item) => item.id)).toEqual(Fixture.ids("msg_1"))
+  })
+})
+
 describe("compaction", () => {
-  const enqueue = (id: string) =>
+  const enqueue = (id: string, created = 10) =>
     Fixture.event({
-      id: `evt_${id}`,
-      created: 10,
+      id: `evt_${id}_${created}`,
+      created,
       type: "session.inbox.enqueued",
       data: { sessionID, inboxID: id, item: { type: "compaction", delivery: "steer", payload: {} } },
     })
 
-  test.each([
-    Fixture.event({
+  const item = (id: string, created = 10): SessionInbox.Compaction => ({
+    id: SessionMessage.ID.make(id),
+    sessionID,
+    time: { created: Fixture.at(created) },
+    type: "compaction",
+    delivery: "steer",
+    payload: {},
+  })
+
+  const proposed = SessionMessage.ID.make("msg_proposed")
+
+  const propose = (state: ChatState.State) => Outbox.propose(state, sessionID, proposed, Fixture.at(10))
+
+  const emit = (state: ChatState.State, ...events: ReadonlyArray<SessionEvent.Event>) =>
+    Reducer.applyAll(state, events).state
+
+  const consumed = {
+    started: Fixture.event({
       id: "evt_started",
       created: 10,
       type: "session.compaction.started",
       data: { sessionID, inputID: "msg_canonical", reason: "manual", recent: "" },
     }),
-    Fixture.event({
+    cancelled: Fixture.event({
       id: "evt_cancelled",
       created: 10,
       type: "session.inbox.cancelled",
       data: { sessionID, inboxID: "msg_canonical" },
     }),
-    Fixture.event({
+    failed: Fixture.event({
       id: "evt_failed",
       created: 10,
       type: "session.compaction.failed",
       data: { sessionID, inputID: "msg_canonical", reason: "manual", error: { type: "aborted", message: "Cancelled" } },
     }),
-  ])("does not resurrect a canonical item already $type", (event) => {
-    const result = Reducer.applyAll(ChatState.empty, [enqueue("msg_canonical"), event])
-    expect(ChatState.pending(result.state, sessionID)).toEqual([])
-    expect(ChatState.inputs(result.state, sessionID)).toEqual([])
+  }
+
+  test("a proposed compaction is pending but never a transcript row", () => {
+    const compacting = propose(ChatState.empty)
+    expect(ChatState.pending(compacting, sessionID)).toEqual([item("msg_proposed")])
+    expect(ChatState.messages(compacting, sessionID)).toEqual([])
+    expect(ChatState.inputs(compacting, sessionID)).toEqual([])
+    const prompted = Outbox.admit(
+      compacting,
+      { sessionID, id: SessionMessage.ID.make("msg_follow"), text: "Follow up", delivery: "steer" },
+      Fixture.at(11),
+    )
+    expect(ChatState.messages(prompted, sessionID)).toEqual([Fixture.user("msg_follow", 11, "Follow up")])
+  })
+
+  test("substitutes the canonical response ID and reconciles its later echo", () => {
+    const compacting = propose(ChatState.empty)
+    const read = Hydrate.pending(Hydrate.startPending(compacting, sessionID), sessionID, [])
+    expect(ChatState.pending(read, sessionID).map((row) => row.id)).toEqual([proposed])
+    const answered = Outbox.compacted(read, sessionID, proposed, item("msg_canonical"))
+    expect(ChatState.pending(answered, sessionID)).toEqual([item("msg_canonical")])
+    const echoed = emit(answered, enqueue("msg_canonical", 20))
+    expect(ChatState.pending(echoed, sessionID)).toEqual([item("msg_canonical", 20)])
+    expect(ChatState.inputs(echoed, sessionID)).toEqual([])
+  })
+
+  test.each(["proposed", "canonical"])("adopts the %s echo before the response without duplicating it", (kind) => {
+    const id = kind === "proposed" ? proposed : "msg_canonical"
+    const echoed = emit(propose(ChatState.empty), enqueue(id, 20))
+    expect(ChatState.pending(echoed, sessionID)).toEqual([item(id, 20)])
+    const answered = Outbox.compacted(echoed, sessionID, proposed, item(id))
+    expect(ChatState.pending(answered, sessionID)).toEqual([item(id, 20)])
+  })
+
+  test.each(["started", "cancelled", "failed"] as const)(
+    "does not resurrect a canonical item already %s before the response",
+    (kind) => {
+      const before = emit(propose(ChatState.empty), enqueue("msg_canonical"), consumed[kind])
+      expect(ChatState.pending(before, sessionID)).toEqual([])
+      const answered = Outbox.compacted(before, sessionID, proposed, item("msg_canonical"))
+      expect(ChatState.pending(answered, sessionID)).toEqual([])
+      expect(ChatState.inputs(answered, sessionID)).toEqual([])
+      if (kind === "started")
+        expect(ChatState.messages(answered, sessionID)).toMatchObject([{ type: "compaction", status: "running" }])
+    },
+  )
+
+  test("rolls back a rejected compaction and keeps the following prompt", () => {
+    const prompted = Outbox.admit(
+      propose(ChatState.empty),
+      { sessionID, id: SessionMessage.ID.make("msg_follow"), text: "Follow up", delivery: "steer" },
+      Fixture.at(11),
+    )
+    const failed = Outbox.compactFailed(prompted, sessionID, proposed)
+    expect(ChatState.pending(failed, sessionID).map((row) => row.type)).toEqual(["user"])
+    expect(ChatState.messages(failed, sessionID)).toEqual([Fixture.user("msg_follow", 11, "Follow up")])
+    expect(failed.compacting).toEqual({})
+  })
+
+  test.each(["proposed", "canonical", "existing"])(
+    "preserves acknowledged %s compaction after an HTTP error",
+    (kind) => {
+      const before = kind === "existing" ? emit(ChatState.empty, enqueue("msg_canonical")) : ChatState.empty
+      const compacting = propose(before)
+      const id = kind === "proposed" ? proposed : "msg_canonical"
+      const echoed = kind === "existing" ? compacting : emit(compacting, enqueue(id))
+      expect(ChatState.pending(echoed, sessionID)).toEqual([item(id)])
+      const failed = Outbox.compactFailed(echoed, sessionID, proposed)
+      expect(ChatState.pending(failed, sessionID)).toEqual([item(id)])
+    },
+  )
+
+  test("uses a fresh control ID when the known pending compaction starts during model setup", () => {
+    const existing = emit(ChatState.empty, enqueue("msg_existing"))
+    const compacting = propose(existing)
+    expect(ChatState.pending(compacting, sessionID)).toEqual([item("msg_existing")])
+    const started = emit(
+      compacting,
+      Fixture.event({
+        id: "evt_started",
+        created: 10,
+        type: "session.compaction.started",
+        data: { sessionID, inputID: "msg_existing", reason: "manual", recent: "" },
+      }),
+    )
+    const answered = Outbox.compacted(started, sessionID, proposed, item("msg_proposed"))
+    expect(ChatState.pending(answered, sessionID)).toEqual([item("msg_proposed")])
+    expect(ChatState.messages(answered, sessionID)).toMatchObject([
+      { id: "msg_existing", type: "compaction", status: "running" },
+    ])
   })
 
   test("a started compaction folds into its completed summary", () => {

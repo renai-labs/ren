@@ -13,6 +13,11 @@ export type PendingStatus = "starting" | "steering" | "stranded" | "queued"
 
 export type PendingUpdate = SessionInbox.Info | SessionInbox.Delivery | undefined
 
+export interface Compacting {
+  readonly id: string
+  readonly observed: ReadonlySet<string>
+}
+
 export interface State {
   readonly info: Readonly<Record<string, SessionInfo.Info>>
   readonly active: Readonly<Record<string, Activity>>
@@ -22,6 +27,8 @@ export interface State {
   readonly permissions: Readonly<Record<string, ReadonlyArray<Permission.Request>>>
   readonly forms: Readonly<Record<string, ReadonlyArray<Form.Info>>>
   readonly outbox: ReadonlySet<string>
+  readonly compacting: Readonly<Record<string, Compacting>>
+  readonly history: ReadonlySet<string>
   readonly connection: number
   readonly activeOverlay: ReadonlyMap<string, Activity | undefined> | undefined
   readonly pendingOverlay: Readonly<Record<string, ReadonlyMap<string, PendingUpdate>>>
@@ -36,6 +43,8 @@ export const empty: State = {
   permissions: {},
   forms: {},
   outbox: new Set(),
+  compacting: {},
+  history: new Set(),
   connection: 0,
   activeOverlay: undefined,
   pendingOverlay: {},
@@ -91,3 +100,14 @@ export const cost = (state: State, sessionID: string) => {
 
 export const running = (state: State) =>
   Object.entries(state.active).flatMap(([id, activity]) => (activity === "running" ? [id] : []))
+
+export const more = (state: State, sessionID: string) => Boolean(state.cursor[sessionID])
+
+export const loadingHistory = (state: State, sessionID: string) => state.history.has(sessionID)
+
+const asking = (record: Readonly<Record<string, ReadonlyArray<unknown>>>) =>
+  Object.entries(record).flatMap(([id, items]) => (items.length > 0 ? [id] : []))
+
+export const permissionSessions = (state: State) => asking(state.permissions)
+
+export const formSessions = (state: State) => asking(state.forms)

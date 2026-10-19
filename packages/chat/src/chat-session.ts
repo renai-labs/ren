@@ -8,8 +8,8 @@ import type { SessionEvent } from "@ren/schema/session-event"
 import type { SessionInbox } from "@ren/schema/session-inbox"
 import { SessionMessage } from "@ren/schema/session-message"
 import type { SessionModel } from "@ren/schema/session-model"
-import { Clock, Data, DateTime, Effect, Fiber, Option, Semaphore, SubscriptionRef } from "effect"
-import { HttpClient, HttpClientRequest } from "effect/http"
+import { Clock, Data, DateTime, Deferred, Effect, Fiber, Option, Semaphore, Stream, SubscriptionRef } from "effect"
+import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { ChatState } from "./chat-state.js"
 import { Connection } from "./connection.js"
 import { Hydrate } from "./hydrate.js"
@@ -20,6 +20,9 @@ import { Reducer } from "./reducer.js"
 export const messagePageLimit = 20
 export const olderPageLimit = 200
 export const settleMs = 150
+export const headersTimeout = "60 seconds"
+const respondedLimit = 1_000
+const autoApproveRetries = 2
 const refreshBefore = 60_000
 
 export class AccessFailed extends Data.TaggedError("ChatSession.AccessFailed")<{ readonly cause: unknown }> {}
@@ -29,6 +32,7 @@ export interface Options {
   readonly access: Effect.Effect<Session.ClientAccess, unknown>
   readonly initialMessageLimit?: number
   readonly sender?: SessionMessage.Sender
+  readonly autoApprove?: boolean
   readonly connection?: Partial<Pick<Connection.Options, "connectTimeout" | "idleTimeout" | "reconnectDelay">>
   readonly onError?: (error: unknown) => Effect.Effect<void>
 }
@@ -48,10 +52,12 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const state = yield* SubscriptionRef.make(ChatState.empty)
   const status = yield* SubscriptionRef.make<Connection.Status>("connecting")
   const reads = yield* Reads.make<unknown>()
-  const sending = yield* Semaphore.make(1)
   const accessLock = yield* Semaphore.make(1)
   const wanted = new Map<string, Reducer.Read>()
   const settling = new Map<string, Fiber.Fiber<void>>()
+  const histories = new Map<string, Deferred.Deferred<void, unknown>>()
+  const sends = { tail: Deferred.makeUnsafe<void>() }
+  Deferred.doneUnsafe(sends.tail, Effect.void)
   const cached: { current: Option.Option<{ readonly access: Session.ClientAccess; readonly client: Client }> } = {
     current: Option.none(),
   }
@@ -70,7 +76,23 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         return cached.current.value.client
       const access = yield* options.access.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
       const authorized = HttpClient.mapRequest(http, HttpClientRequest.basicAuth("ren", access.token)).pipe(
-        HttpClient.transform((request) => Effect.provideService(request, HttpClient.TracerPropagationEnabled, false)),
+        HttpClient.transform((response, request) =>
+          response.pipe(
+            Effect.provideService(HttpClient.TracerPropagationEnabled, false),
+            Effect.timeoutOrElse({
+              duration: headersTimeout,
+              orElse: () =>
+                Effect.fail(
+                  new HttpClientError.HttpClientError({
+                    reason: new HttpClientError.TransportError({
+                      request,
+                      description: "Timed out waiting for the session to respond",
+                    }),
+                  }),
+                ),
+            }),
+          ),
+        ),
       )
       const made = yield* Ren.make({ baseUrl: access.url }).pipe(
         Effect.provideService(HttpClient.HttpClient, authorized),
@@ -79,6 +101,19 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       return made
     }),
   )
+
+  const send = <A, E>(effect: Effect.Effect<A, E>) =>
+    Effect.suspend(() => {
+      const previous = sends.tail
+      const own = Deferred.makeUnsafe<void>()
+      sends.tail = own
+      return Deferred.await(previous).pipe(
+        Effect.andThen(effect),
+        Effect.onExit(() =>
+          Deferred.await(previous).pipe(Effect.andThen(Deferred.succeed(own, undefined)), Effect.forkIn(scope)),
+        ),
+      )
+    })
 
   const load = (read: Reducer.Read): Effect.Effect<void, unknown> =>
     Effect.gen(function* () {
@@ -95,6 +130,17 @@ export const make = Effect.fnUntraced(function* (options: Options) {
           return yield* api.session
             .get({ sessionID: read.sessionID })
             .pipe(Effect.flatMap((info) => update((current) => Hydrate.info(current, [info]))))
+        case "Children":
+          return yield* api.session.children({ sessionID: read.sessionID }).pipe(
+            Effect.tap((sessions) =>
+              Effect.forEach(
+                sessions,
+                (session) => Effect.sync(() => reads.complete(Reducer.key({ _tag: "Info", sessionID: session.id }))),
+                { discard: true },
+              ),
+            ),
+            Effect.flatMap((sessions) => update((current) => Hydrate.info(current, sessions))),
+          )
         case "Messages":
           return yield* api.session
             .messages({ sessionID: read.sessionID, limit: options.initialMessageLimit ?? messagePageLimit })
@@ -120,10 +166,19 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       }
     })
 
+  const quietly = (effect: Effect.Effect<void, unknown>) =>
+    effect.pipe(
+      Effect.catch((error) =>
+        Effect.flatMap(SubscriptionRef.get(status), (current) =>
+          current === "connected" ? report(error) : Effect.void,
+        ),
+      ),
+    )
+
   const refresh = (read: Reducer.Read) =>
     Effect.gen(function* () {
       if ((yield* SubscriptionRef.get(status)) !== "connected") return
-      yield* reads.run(Reducer.key(read), load(read)).pipe(Effect.catch(report), Effect.forkIn(scope))
+      yield* reads.run(Reducer.key(read), load(read)).pipe(quietly, Effect.forkIn(scope))
     })
 
   const sync = (read: Reducer.Read) => {
@@ -141,13 +196,17 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     Effect.gen(function* () {
       const key = Reducer.key(command.read)
       if (command._tag === "Complete") return reads.complete(key)
+      if (command._tag === "Invalidate") {
+        wanted.delete(key)
+        return reads.invalidate(key)
+      }
       if (command._tag === "Rename") {
         if ((yield* SubscriptionRef.get(status)) !== "connected") return
         return yield* reads
           .run(key, load(command.read))
           .pipe(
             Effect.andThen(update((current) => Hydrate.rename(current, command.read.sessionID, command.title))),
-            Effect.catch(report),
+            quietly,
             Effect.forkIn(scope),
             Effect.asVoid,
           )
@@ -205,6 +264,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     onStatus: (next) =>
       Effect.gen(function* () {
         if (next !== "connected") reads.invalidate()
+        if (next === "reconnecting") cached.current = Option.none()
         yield* SubscriptionRef.set(status, next)
       }),
   })
@@ -217,34 +277,47 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         sync({ _tag: "Pending", sessionID }),
         sync({ _tag: "Permissions", sessionID }),
         sync({ _tag: "Forms", sessionID }),
+        ...(sessionID === root ? [sync({ _tag: "Children", sessionID })] : []),
       ],
       { concurrency: "unbounded", discard: true },
     )
 
-  const children = Effect.gen(function* () {
-    const api = yield* client
-    const sessions = yield* api.session.children({ sessionID: root })
-    yield* update((current) => Hydrate.info(current, sessions))
-  })
-
-  const loadMore = Effect.fnUntraced(function* (sessionID: Session.ID, all = false) {
-    const api = yield* client
-    const cursor = (yield* SubscriptionRef.get(state)).cursor[sessionID]
-    if (!cursor) return
-    const fetch = (
-      next: string,
-      fetched: ReadonlyArray<SessionMessage.Info>,
-    ): Effect.Effect<{ readonly items: ReadonlyArray<SessionMessage.Info>; readonly next?: string }, unknown> =>
-      api.session.messages({ sessionID, cursor: next, limit: all ? olderPageLimit : messagePageLimit }).pipe(
-        Effect.flatMap((page) => {
-          const items = [...fetched, ...page.items]
-          if (all && page.cursor.next) return fetch(page.cursor.next, items)
-          return Effect.succeed({ items, ...(page.cursor.next && { next: page.cursor.next }) })
-        }),
+  const loadMore = (sessionID: Session.ID, all = false): Effect.Effect<void, unknown> =>
+    Effect.suspend(() => {
+      const active = histories.get(sessionID)
+      if (active) return Deferred.await(active).pipe(Effect.andThen(all ? loadMore(sessionID, true) : Effect.void))
+      const done = Deferred.makeUnsafe<void, unknown>()
+      histories.set(sessionID, done)
+      const fetch = (
+        api: Client,
+        next: string,
+        fetched: ReadonlyArray<SessionMessage.Info>,
+      ): Effect.Effect<{ readonly items: ReadonlyArray<SessionMessage.Info>; readonly next?: string }, unknown> =>
+        api.session.messages({ sessionID, cursor: next, limit: all ? olderPageLimit : messagePageLimit }).pipe(
+          Effect.flatMap((page) => {
+            const items = [...fetched, ...page.items]
+            if (all && page.cursor.next) return fetch(api, page.cursor.next, items)
+            return Effect.succeed({ items, ...(page.cursor.next && { next: page.cursor.next }) })
+          }),
+        )
+      return Effect.gen(function* () {
+        const cursor = (yield* SubscriptionRef.get(state)).cursor[sessionID]
+        if (!cursor) return
+        yield* update((current) => Hydrate.loadingHistory(current, sessionID, true))
+        const api = yield* client
+        const result = yield* fetch(api, cursor, [])
+        yield* update((current) => Hydrate.older(current, sessionID, result.items, result.next))
+      }).pipe(
+        Effect.ensuring(update((current) => Hydrate.loadingHistory(current, sessionID, false))),
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            if (histories.get(sessionID) === done) histories.delete(sessionID)
+          }).pipe(Effect.andThen(Deferred.done(done, exit))),
+        ),
+        Effect.forkIn(scope),
+        Effect.andThen(Deferred.await(done)),
       )
-    const result = yield* fetch(cursor, [])
-    yield* update((current) => Hydrate.older(current, sessionID, result.items, result.next))
-  })
+    })
 
   const prompt = Effect.fnUntraced(function* (input: PromptInput) {
     const id = input.id ?? SessionMessage.ID.create()
@@ -259,11 +332,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       ),
     )
     yield* connection.wake
-    yield* sending
-      .withPermits(1)(
-        Effect.flatMap(client, (api) => api.session.prompt({ sessionID: root, id, text: input.text, delivery })),
-      )
-      .pipe(Effect.tapError(() => (fresh ? update((current) => Outbox.rollback(current, root, id)) : Effect.void)))
+    yield* send(
+      Effect.flatMap(client, (api) => api.session.prompt({ sessionID: root, id, text: input.text, delivery })),
+    ).pipe(Effect.tapError(() => (fresh ? update((current) => Outbox.rollback(current, root, id)) : Effect.void)))
     const echoed = yield* SubscriptionRef.modify(state, (current) => [
       !current.outbox.has(id),
       Outbox.acknowledge(current, id),
@@ -271,6 +342,49 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     if (!echoed) yield* execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })
     return id
   })
+
+  const compaction = (id: SessionMessage.ID, model: SessionModel.Ref | undefined) =>
+    send(
+      Effect.gen(function* () {
+        const api = yield* client
+        if (model) yield* api.session.model.switch({ sessionID: root, model })
+        return yield* api.session.compact({ sessionID: root, id })
+      }),
+    ).pipe(
+      Effect.tap((item) => update((current) => Outbox.compacted(current, root, id, item))),
+      Effect.tapError(() => update((current) => Outbox.compactFailed(current, root, id))),
+    )
+
+  const compacting = new Map<
+    string,
+    Deferred.Deferred<Effect.Success<ReturnType<typeof compaction>>, Effect.Error<ReturnType<typeof compaction>>>
+  >()
+
+  const compact = (model?: SessionModel.Ref) =>
+    Effect.suspend(() => {
+      const active = compacting.get(root)
+      if (active) return Deferred.await(active)
+      const done = Deferred.makeUnsafe<
+        Effect.Success<ReturnType<typeof compaction>>,
+        Effect.Error<ReturnType<typeof compaction>>
+      >()
+      compacting.set(root, done)
+      const id = SessionMessage.ID.create()
+      return Effect.gen(function* () {
+        const now = yield* DateTime.now
+        yield* update((current) => Outbox.propose(current, root, id, now))
+        yield* connection.wake
+        yield* compaction(id, model).pipe(
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              if (compacting.get(root) === done) compacting.delete(root)
+            }).pipe(Effect.andThen(Deferred.done(done, exit))),
+          ),
+          Effect.forkIn(scope),
+        )
+        return yield* Deferred.await(done)
+      })
+    })
 
   const removePermission = (sessionID: Session.ID, requestID: Permission.RequestID) =>
     update((current) =>
@@ -290,6 +404,52 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       ),
     ).pipe(Effect.andThen(execute({ _tag: "Refresh", read: { _tag: "Forms", sessionID } })))
 
+  const replyPermission = (sessionID: Session.ID, requestID: Permission.RequestID, reply: Permission.Reply) =>
+    Effect.flatMap(client, (api) => api.session.permission.reply({ sessionID, requestID, reply })).pipe(
+      Effect.catchTag("NotFoundError", () => Effect.void),
+      Effect.andThen(removePermission(sessionID, requestID)),
+    )
+
+  const autoApprove = yield* SubscriptionRef.make(options.autoApprove ?? false)
+  const responded = new Set<string>()
+
+  const approve = (request: Permission.Request) => {
+    const attempt = (retries: number): Effect.Effect<void, unknown> =>
+      replyPermission(request.sessionID, request.id, "once").pipe(
+        Effect.catch((error) =>
+          Effect.gen(function* () {
+            if (retries >= autoApproveRetries) return yield* Effect.fail(error)
+            yield* Effect.sleep(`${retries + 1} seconds`)
+            if (!(yield* SubscriptionRef.get(autoApprove))) return
+            return yield* attempt(retries + 1)
+          }),
+        ),
+      )
+    return attempt(0).pipe(
+      Effect.catch((error) => Effect.sync(() => responded.delete(request.id)).pipe(Effect.andThen(report(error)))),
+    )
+  }
+
+  yield* Stream.zipLatestWith(
+    SubscriptionRef.changes(state),
+    SubscriptionRef.changes(autoApprove),
+    (current, enabled) => (enabled ? Object.values(current.permissions).flat() : []),
+  ).pipe(
+    Stream.runForEach((requests) =>
+      Effect.forEach(
+        requests.filter((request) => !responded.has(request.id)),
+        (request) =>
+          Effect.suspend(() => {
+            responded.add(request.id)
+            if (responded.size > respondedLimit) responded.delete(responded.values().next().value ?? request.id)
+            return Effect.forkIn(approve(request), scope)
+          }),
+        { discard: true },
+      ),
+    ),
+    Effect.forkIn(scope),
+  )
+
   yield* Effect.addFinalizer(() =>
     Effect.forEach([...settling.values()], (fiber) => Fiber.interrupt(fiber), { discard: true }),
   )
@@ -299,20 +459,18 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     state,
     status,
     open,
-    children,
     loadMore,
     prompt,
+    compact,
     wake: connection.wake,
     resync: connection.resync,
+    foreground: connection.foreground,
     models: Effect.flatMap(client, (api) => api.model.list()),
     interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root })),
     switchModel: (model: SessionModel.Ref) =>
-      sending.withPermits(1)(Effect.flatMap(client, (api) => api.session.model.switch({ sessionID: root, model }))),
-    replyPermission: (sessionID: Session.ID, requestID: Permission.RequestID, reply: Permission.Reply) =>
-      Effect.flatMap(client, (api) => api.session.permission.reply({ sessionID, requestID, reply })).pipe(
-        Effect.catchTag("NotFoundError", () => Effect.void),
-        Effect.andThen(removePermission(sessionID, requestID)),
-      ),
+      send(Effect.flatMap(client, (api) => api.session.model.switch({ sessionID: root, model }))),
+    autoApprove,
+    replyPermission,
     replyForm: (sessionID: Session.ID, formID: Form.ID, answer: Form.Answer) =>
       Effect.flatMap(client, (api) => api.session.form.reply({ sessionID, formID, answer })).pipe(
         Effect.catchTags({ NotFoundError: () => Effect.void, ConflictError: () => Effect.void }),

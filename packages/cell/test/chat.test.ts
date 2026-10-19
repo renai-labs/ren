@@ -189,6 +189,40 @@ test("a client answers a permission request and a question through the Chat API"
     }),
   ))
 
+test("a client compacts the session through the Chat API and reads the summary", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const summarized = { summary: "## Objective\n- the summary" }
+      yield* Effect.forEach(
+        [stub.script(summarized), stub.script(summarized)],
+        (script) =>
+          brain.chat.session["session.prompt"]({
+            params,
+            payload: { id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" },
+          }).pipe(Effect.andThen(brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) }))),
+        { discard: true },
+      )
+      const events = yield* follow(brain)
+      yield* events.until("server.connected")
+      const id = SessionMessage.ID.create()
+      expect(yield* brain.chat.session["session.compact"]({ params, payload: { id } })).toMatchObject({
+        id,
+        sessionID: brain.id,
+        type: "compaction",
+      })
+      yield* events.until("session.compaction.ended")
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
+      expect(page.items.find((message) => message.type === "compaction")).toMatchObject({
+        status: "completed",
+        summary: expect.stringContaining("the summary"),
+      })
+    }),
+  ))
+
 test("a session with no messages reads as an empty page", () =>
   live(
     Effect.gen(function* () {
