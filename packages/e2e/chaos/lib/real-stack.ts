@@ -5,7 +5,7 @@ import { OpenCode } from "@opencode/client"
 import { Signature } from "@ren/hand-api/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { BrainHost } from "@ren/core/brain-host"
-import { HandProviders } from "@ren/core/hand-providers"
+import { HandProvider } from "@ren/core/hand-provider"
 import { Hands } from "@ren/core/hands"
 import { Models } from "@ren/core/models"
 import { Database } from "@ren/db/database"
@@ -234,7 +234,7 @@ export const start = async (options: {
             Layer.provide(models),
             Layer.provide(
               Hands.layer.pipe(
-                Layer.provide(HandProviders.layer(ChaosHands.providers)),
+                Layer.provide(HandProvider.layer(ChaosHands.providers)),
                 Layer.provide(Layer.succeedContext(databaseContext)),
               ),
             ),

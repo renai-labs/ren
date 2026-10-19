@@ -11,7 +11,7 @@ import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { and, asc, count, eq, exists, isNull, type SQLWrapper, sql } from "drizzle-orm"
 import { Array, Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
-import { HandProviders } from "./hand-providers.js"
+import { HandProvider } from "./hand-provider.js"
 
 interface Subject {
   readonly sessionId: Session.ID
@@ -70,7 +70,7 @@ export const layer = Layer.effect(
       directory: Config.String("HAND_DIRECTORY").pipe(Config.withDefault("/workspace")),
     })
     const database = yield* Database.Service
-    const registry = yield* HandProviders.Registry
+    const registry = yield* HandProvider.Registry
     const directoryOf = (sessionId: Session.ID) => `${config.directory}/${sessionId}`
     const signing = yield* Option.match(config.keys, {
       onNone: () => Effect.succeedNone,
@@ -188,7 +188,7 @@ export const layer = Layer.effect(
       const provider = registry.get(assigned.environment.provider)
       if (Option.isNone(provider))
         return yield* new Unavailable({ message: `Ren has no hand provider ${assigned.environment.provider}` })
-      const unavailable = (error: HandProviders.Failed) =>
+      const unavailable = (error: HandProvider.Failed) =>
         new Unavailable({ message: `The hand of session ${subject.sessionId} is unavailable: ${error.message}` })
       const binding =
         assigned.binding ??
@@ -211,12 +211,12 @@ export const layer = Layer.effect(
           ))
       const endpoint = yield* provider.value.connect(binding).pipe(
         Effect.map(Option.some),
-        Effect.catchTag("HandProviders.Gone", (gone) =>
+        Effect.catchTag("HandProvider.Gone", (gone) =>
           isRetry
             ? Effect.fail(new Unavailable({ message: gone.message }))
             : replace(assigned.handId).pipe(Effect.as(Option.none())),
         ),
-        Effect.mapError((error) => (error instanceof HandProviders.Failed ? unavailable(error) : error)),
+        Effect.mapError((error) => (error instanceof HandProvider.Failed ? unavailable(error) : error)),
       )
       if (Option.isNone(endpoint)) return yield* connect(subject, true)
       const exp = Math.floor(((yield* Clock.currentTimeMillis) + Duration.toMillis(config.lifetime)) / 1000)

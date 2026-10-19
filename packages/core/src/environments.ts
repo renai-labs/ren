@@ -2,12 +2,11 @@ export * as Environments from "./environments.js"
 
 import { Database } from "@ren/db/database"
 import { Environment } from "@ren/schema/environment"
-import type { HandProvider } from "@ren/schema/hand-provider"
 import { and, asc, count, eq, isNotNull, isNull, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
-import { HandProviders } from "./hand-providers.js"
+import { HandProvider } from "./hand-provider.js"
 import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 
@@ -47,7 +46,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const access = yield* Access.Service
-    const registry = yield* HandProviders.Registry
+    const registry = yield* HandProvider.Registry
 
     const isAllowed = (actor: Actor.Info, action: string) =>
       access.isAllowed({ actor, action, resource: SpacePolicy.organization })
