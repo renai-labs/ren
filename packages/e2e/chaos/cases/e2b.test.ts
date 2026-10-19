@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { E2BHand } from "../lib/adapters/e2b.js"
 import { ExecutorAdapter } from "../lib/adapters/executor.js"
 import { ExecutorDriver } from "../lib/drivers/executor.js"
@@ -25,15 +25,15 @@ const hello = (url: string, authorization?: string) =>
     () => 0,
   )
 
-const sandbox = async (environmentId = Environment.ID.create(), timeoutSeconds = 300) => {
-  const created = await E2BHand.create({ environmentId, timeoutSeconds })
+const sandbox = async (handId = Hand.ID.create(), timeoutSeconds = 300) => {
+  const created = await E2BHand.create({ handId, timeoutSeconds })
   cleanups.push(() => created.kill())
   await E2BHand.ready(created.url)
   const brain = Brain.ID.create()
   const connect = async (lifetimeMs?: number) => {
     const driver = await ExecutorDriver.connect(
       created.url,
-      await ExecutorAdapter.token(created.environmentId, brain, lifetimeMs),
+      await ExecutorAdapter.token(created.handId, brain, lifetimeMs),
     )
     cleanups.push(driver.dispose)
     return driver
@@ -46,7 +46,7 @@ describe.skipIf(Platform.e2b !== undefined)("an executor in an E2B sandbox", () 
     const hand = await sandbox()
     const driver = await hand.connect()
     const greeting = await driver.ok(driver.client["executor.hello"]())
-    expect(greeting.environmentId).toBe(hand.created.environmentId)
+    expect(greeting.handId).toBe(hand.created.handId)
     expect(await hello(hand.created.url)).toBe(401)
   }, 600_000)
 
@@ -79,7 +79,7 @@ describe.skipIf(Platform.e2b !== undefined)("an executor in an E2B sandbox", () 
   }, 600_000)
 
   test("racing a timeout extension with a pause settles in a state that matches reachability", async () => {
-    const hand = await sandbox(Environment.ID.create(), 60)
+    const hand = await sandbox(Hand.ID.create(), 60)
     await Promise.allSettled([hand.created.extend(300), hand.created.pause()])
     const state = await Wait.until("E2B to report a settled state", 60_000, async () => {
       const read = await hand.created.state()
@@ -94,7 +94,7 @@ describe.skipIf(Platform.e2b !== undefined)("an executor in an E2B sandbox", () 
     await driver.ok(driver.client["files.write"]({ path: "generation.txt", bytes: new TextEncoder().encode("one") }))
     await first.created.kill()
     expect(await hello(first.created.url)).not.toBe(401)
-    const replacement = await sandbox(first.created.environmentId)
+    const replacement = await sandbox(first.created.handId)
     expect(replacement.created.url).not.toBe(first.created.url)
     const next = await replacement.connect()
     expect(ExecutorDriver.errorTag(await next.run(next.client["files.stat"]({ path: "generation.txt" })))).toBe(

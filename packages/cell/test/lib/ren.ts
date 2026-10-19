@@ -1,12 +1,7 @@
 export * as FakeRen from "./ren.js"
 
 import { HostApi, CurrentHost, HostAuthentication } from "@ren/brain-api/host-api"
-import {
-  EnvironmentNotFoundError,
-  EnvironmentUnavailableError,
-  ForbiddenError,
-  ModelsUnavailableError,
-} from "@ren/brain-api/errors"
+import { HandNotFoundError, HandUnavailableError, ForbiddenError, ModelsUnavailableError } from "@ren/brain-api/errors"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Auth } from "@ren/schema/auth"
 import type { Hand } from "@ren/schema/hand"
@@ -23,7 +18,7 @@ export type Answer =
   | { readonly type: "hold" }
 
 export interface Call {
-  readonly endpoint: "environments.access" | "environments.release" | "host.refresh" | "models.refresh"
+  readonly endpoint: "hands.access" | "hands.release" | "host.refresh" | "models.refresh"
   readonly sessionId: Session.ID | undefined
   readonly hostToken: string
   readonly status: number
@@ -57,35 +52,35 @@ export const start = () => {
     for (const listener of listeners) listener()
   }
   const handlers = Layer.mergeAll(
-    HttpApiBuilder.group(HostApi, "environments", (group) =>
+    HttpApiBuilder.group(HostApi, "hands", (group) =>
       Effect.succeed(
         group
-          .handle("environments.access", () =>
+          .handle("hands.access", () =>
             Effect.gen(function* () {
               const host = yield* CurrentHost
               const answer = yield* Effect.promise(async (): Promise<Answer> =>
                 (answers.get(host.sessionId) ?? (() => ({ type: "not_found" }) as const))(),
               )
               if (answer.type === "hold") {
-                record("environments.access", host.sessionId, 0)
+                record("hands.access", host.sessionId, 0)
                 return yield* Effect.callback<never>((resume) => {
                   held.push(() => resume(Effect.never))
                 })
               }
               if (answer.type === "not_found") {
-                record("environments.access", host.sessionId, 404)
-                return yield* new EnvironmentNotFoundError({ message: `Session ${host.sessionId} has no environment` })
+                record("hands.access", host.sessionId, 404)
+                return yield* new HandNotFoundError({ message: `Session ${host.sessionId} has no environment` })
               }
               if (answer.type === "unavailable") {
-                record("environments.access", host.sessionId, 503)
-                return yield* new EnvironmentUnavailableError({ message: answer.message })
+                record("hands.access", host.sessionId, 503)
+                return yield* new HandUnavailableError({ message: answer.message })
               }
-              record("environments.access", host.sessionId, 200)
+              record("hands.access", host.sessionId, 200)
               return answer.access
             }),
           )
-          .handle("environments.release", () =>
-            Effect.map(CurrentHost, (host) => record("environments.release", host.sessionId, 204)),
+          .handle("hands.release", () =>
+            Effect.map(CurrentHost, (host) => record("hands.release", host.sessionId, 204)),
           ),
       ),
     ),
@@ -151,7 +146,7 @@ export const start = () => {
       state.refreshGate = gate
     },
     accessCalls: (sessionId: Session.ID) =>
-      calls.filter((call) => call.endpoint === "environments.access" && call.sessionId === sessionId).length,
+      calls.filter((call) => call.endpoint === "hands.access" && call.sessionId === sessionId).length,
     reached: (sessionId: Session.ID, count = 1) =>
       new Promise<void>((resolve) => {
         const check = () => {

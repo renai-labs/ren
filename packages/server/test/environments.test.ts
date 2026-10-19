@@ -36,7 +36,7 @@ describe("Host API: environments.access and host.refresh", () => {
         ),
       ),
     ])
-    const paths = ["/brain/environment/access", "/brain/host/refresh"]
+    const paths = ["/brain/hand/access", "/brain/host/refresh"]
     const statuses = await Promise.all([
       ...paths.map((path) => post(path).then((response) => response.status)),
       ...paths.flatMap((path) =>
@@ -48,11 +48,11 @@ describe("Host API: environments.access and host.refresh", () => {
 
   test("a session with no environment gets a typed not found, not a forbidden", async () => {
     const response = await post(
-      "/brain/environment/access",
+      "/brain/hand/access",
       `Bearer ${await hostToken(Session.ID.create(), Auth.OrganizationID.create())}`,
     )
     expect(response.status).toBe(404)
-    expect(await response.json()).toMatchObject({ _tag: "EnvironmentNotFoundError" })
+    expect(await response.json()).toMatchObject({ _tag: "HandNotFoundError" })
   })
 
   test("a valid host token gets a fresh host token for the same brain, without the model flow", async () => {
@@ -104,7 +104,7 @@ describe("Host API: environments.access and host.refresh", () => {
       SessionToken.sign(key, { sid, scope: "host", org: Auth.OrganizationID.create(), iat, exp: iat - 60 }),
     )
     const responses = await Promise.all(
-      ["/brain/environment/access", "/brain/host/refresh"].flatMap((path) =>
+      ["/brain/hand/access", "/brain/host/refresh"].flatMap((path) =>
         [valid, expired, "not-a-token"].map((token) =>
           logged.handler(
             new Request(`http://localhost${path}`, { method: "POST", headers: { authorization: `Bearer ${token}` } }),

@@ -4,12 +4,7 @@ import type { Session } from "@ren/schema/session"
 import { Context, Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { ModelsBody } from "./brain-api.js"
-import {
-  EnvironmentNotFoundError,
-  EnvironmentUnavailableError,
-  ForbiddenError,
-  ModelsUnavailableError,
-} from "./errors.js"
+import { HandNotFoundError, HandUnavailableError, ForbiddenError, ModelsUnavailableError } from "./errors.js"
 
 export class CurrentHost extends Context.Service<
   CurrentHost,
@@ -49,24 +44,24 @@ const ModelsGroup = HttpApiGroup.make("models")
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "models" }))
 
-const EnvironmentsGroup = HttpApiGroup.make("environments")
+const HandsGroup = HttpApiGroup.make("hands")
   .add(
-    HttpApiEndpoint.post("environments.access", "/brain/environment/access", {
+    HttpApiEndpoint.post("hands.access", "/brain/hand/access", {
       success: Hand.Access,
-      error: [EnvironmentNotFoundError, EnvironmentUnavailableError],
+      error: [HandNotFoundError, HandUnavailableError],
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "environments.access",
+        identifier: "hands.access",
         summary: "Get access to a session’s hand",
         description:
-          "Name the hand and directory of the session named by a host token, with a fresh environment token. The request has no session field: the session comes only from the host token.",
+          "Name the hand and directory of the session named by a host token, with a fresh hand token. The request has no session field: the session comes only from the host token.",
       }),
     ),
   )
   .add(
-    HttpApiEndpoint.post("environments.release", "/brain/environment/release").annotateMerge(
+    HttpApiEndpoint.post("hands.release", "/brain/hand/release").annotateMerge(
       OpenApi.annotations({
-        identifier: "environments.release",
+        identifier: "hands.release",
         summary: "Release a session’s seat on its hand",
         description:
           "Say that the session named by a host token is idle. Its seat stops counting toward its hand’s sessions per hand until its next access; the session keeps its hand.",
@@ -74,7 +69,7 @@ const EnvironmentsGroup = HttpApiGroup.make("environments")
     ),
   )
   .middleware(HostAuthentication)
-  .annotateMerge(OpenApi.annotations({ title: "environments" }))
+  .annotateMerge(OpenApi.annotations({ title: "hands" }))
 
 const HostGroup = HttpApiGroup.make("host")
   .add(
@@ -91,7 +86,7 @@ const HostGroup = HttpApiGroup.make("host")
 
 export const HostApi = HttpApi.make("host")
   .add(ModelsGroup)
-  .add(EnvironmentsGroup)
+  .add(HandsGroup)
   .add(HostGroup)
   .annotateMerge(
     OpenApi.annotations({

@@ -30,14 +30,14 @@ export class ModelsUnavailableError extends Schema.TaggedError<ModelsUnavailable
   { httpApiStatus: 503 },
 ) {}
 
-export class EnvironmentNotFoundError extends Schema.TaggedError<EnvironmentNotFoundError>()(
-  "EnvironmentNotFoundError",
+export class HandNotFoundError extends Schema.TaggedError<HandNotFoundError>()(
+  "HandNotFoundError",
   { message: Schema.String },
   { httpApiStatus: 404 },
 ) {}
 
-export class EnvironmentUnavailableError extends Schema.TaggedError<EnvironmentUnavailableError>()(
-  "EnvironmentUnavailableError",
+export class HandUnavailableError extends Schema.TaggedError<HandUnavailableError>()(
+  "HandUnavailableError",
   { message: Schema.String },
   { httpApiStatus: 503 },
 ) {}

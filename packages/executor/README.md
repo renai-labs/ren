@@ -4,16 +4,16 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 
 ## What belongs here
 
-- `src/executor.ts`: `Executor`, the contract for the processes and files of one environment: `Interface` and `Service`.
+- `src/executor.ts`: `Executor`, the contract for the processes and files of one hand: `Interface` and `Service`.
 - `src/machine.ts`: `Machine`, the `Executor` that runs processes and files on the machine the executor is on, with `node:fs` and Effect's `ChildProcessSpawner`. Each process belongs to the brain that started it. It runs through Effect's `ChildProcessSpawner`, in a scope of its own. A running process that nobody reads or names for 30 seconds is killed with its group. Once its brain sends a `process.heartbeat`, the process is instead killed 30 seconds after the last heartbeat, even while a reader's connection still looks open: a frozen brain can hold a connection open for minutes.
 - `src/machine/output-log.ts`: `OutputLog`, the output of one process: the kept chunks, the readers and their cursors, and the exit.
-- `src/server.ts`: the RPC server. A gate on the route checks the environment token before the RPC server reads the body, and the `Authentication` middleware gives the caller's brain to the handlers.
+- `src/server.ts`: the RPC server. A gate on the route checks the hand token before the RPC server reads the body, and the `Authentication` middleware gives the caller's brain to the handlers.
 - `Dockerfile`: the image Ren's Docker hand provider runs: the bundled `main.ts` on port 4100, with `ripgrep`. `@ren/executor/testing` builds it (`Image.build`).
 - `src/main.ts`: the program. It provides `Machine.layer` and the platform services (`BunServices.layer`), which include the `ChildProcessSpawner`.
 
 ## Notes
 
-- Ren signs environment tokens; the executor only verifies them with `BRAIN_PUBLIC_KEYS`. It holds no secrets.
+- Ren signs hand tokens; the executor only verifies them with `BRAIN_PUBLIC_KEYS`. It holds no secrets.
 - `Machine.layer` needs a `ChildProcessSpawner`; the composition root (`main.ts`, the tests) provides it. File operations stay on `node:fs` for `lstat` and typed `readdir`.
 - `hello` lists the machine's shells (`shells`, by absolute path, its default first).
 - A process's output is a log, like OpenCode's terminals (`pty.ts`):
@@ -32,12 +32,12 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 
 ## Configuration
 
-| Variable                  | Meaning                                                     |
-| ------------------------- | ----------------------------------------------------------- |
-| `EXECUTOR_ENVIRONMENT_ID` | The environment this executor serves. Tokens must name it.  |
-| `EXECUTOR_WORKSPACE`      | The directory relative paths resolve against. Default: cwd. |
-| `BRAIN_PUBLIC_KEYS`       | Ren's public keys, from `bun run keys` in `hand-api`.       |
-| `PORT`                    | Default 4100.                                               |
+| Variable             | Meaning                                                     |
+| -------------------- | ----------------------------------------------------------- |
+| `EXECUTOR_HAND_ID`   | The hand this executor is. Tokens must name it.             |
+| `EXECUTOR_WORKSPACE` | The directory relative paths resolve against. Default: cwd. |
+| `BRAIN_PUBLIC_KEYS`  | Ren's public keys, from `bun run keys` in `hand-api`.       |
+| `PORT`               | Default 4100.                                               |
 
 ## Dependencies
 

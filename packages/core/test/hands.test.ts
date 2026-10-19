@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { HandToken } from "@ren/hand-api/hand-token"
 import { Signature } from "@ren/hand-api/signature"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -35,7 +35,7 @@ const handsWith = Effect.fnUntraced(function* (
   const context = yield* Layer.build(
     Layer.fresh(Hands.layer).pipe(
       Layer.provide(HandProviders.layer([Effect.succeed(probe.provider)])),
-      Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ENVIRONMENT_KEYS: signingKeys, ...config }))),
+      Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ HAND_KEYS: signingKeys, ...config }))),
     ),
   )
   return { hands: Context.get(context, Hands.Service), probe }
@@ -129,9 +129,9 @@ describe("Hands", () => {
         expect(provisions.length).toBe(1)
         expect([access.directory, access.generation]).toEqual([`/workspace/${session.sessionId}`, 1])
         expect(again.url.href).toBe(access.url.href)
-        const claims = yield* EnvironmentToken.verify([keys[0].publicKey], Redacted.value(access.token))
-        expect(Option.map(claims, (found) => [found.kid, found.env, found.brain])).toEqual(
-          Option.some(["new", environmentId, Brain.ofSession(session.sessionId)]),
+        const claims = yield* HandToken.verify([keys[0].publicKey], Redacted.value(access.token))
+        expect(Option.map(claims, (found) => [found.kid, found.hand, found.brain])).toEqual(
+          Option.some(["new", ...provisions, Brain.ofSession(session.sessionId)]),
         )
         expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(14 * 60_000)
         expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(15 * 60_000)
@@ -140,7 +140,7 @@ describe("Hands", () => {
 
   it.live("a configured token lifetime is the access's lifetime", () =>
     Effect.gen(function* () {
-      const subject = yield* handsWith({ ENVIRONMENT_TOKEN_LIFETIME: "20 seconds" })
+      const subject = yield* handsWith({ HAND_TOKEN_LIFETIME: "20 seconds" })
       const organizationId = yield* Seed.organization()
       const session = yield* subjectIn(organizationId)
       yield* subject.hands.bind(session, yield* Seed.environment(organizationId))

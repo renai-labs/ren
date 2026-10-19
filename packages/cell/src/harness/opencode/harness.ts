@@ -21,7 +21,7 @@ import { InstructionEntries } from "./instruction-entries.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 
-const environmentActions = ["read", "edit", "glob", "grep", "shell"]
+const handActions = ["read", "edit", "glob", "grep", "shell"]
 
 const environmentInstruction = "ren.environment"
 
@@ -42,7 +42,7 @@ const environmentInstructions = (host: Host.Instance, handDirectory: Option.Opti
 
 const deniedActions = (host: Host.Instance, input: StartBody, handDirectory: Option.Option<string>) => [
   ...(input.interactive ? [] : ["question"]),
-  ...(host.hasHandConnections && Option.isNone(handDirectory) ? environmentActions : []),
+  ...(host.hasHandConnections && Option.isNone(handDirectory) ? handActions : []),
 ]
 
 const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>

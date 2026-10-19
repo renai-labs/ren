@@ -7,7 +7,7 @@ import { HandConnections } from "@ren/brain/hand-connections"
 import { HandAccess } from "@ren/brain/hand-access"
 import { Sandbox, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, Deferred, Effect, Exit, Layer, Option, Ref, Schedule, Schema, Scope } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
@@ -26,13 +26,13 @@ import type { StubModel } from "./lib/stub-model.js"
 
 setDefaultTimeout(30_000)
 
-const environmentId = Environment.ID.create()
+const handId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
 const local = await realpath(await mkdtemp(join(tmpdir(), "ren-local-")))
 const stub = Shared.stub()
 const fileTools = ["read", "write", "edit", "glob", "grep", "shell"]
 
-const served = Sandbox.layer({ environmentId, workspace })
+const served = Sandbox.layer({ handId, workspace })
 
 const it = testEffect(served)
 
@@ -42,7 +42,7 @@ const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof served> | Sco
 const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
 const accessTo = (url: string, sessionId: Session.ID) =>
-  Sandbox.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
+  Sandbox.access({ url, handId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
 const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effect.void) {
   const context = yield* Layer.build(TestAccess.memory(new Map()))
@@ -539,7 +539,7 @@ it.live(
         session.sessionId,
         yield* Sandbox.access({
           url: yield* Sandbox.url,
-          environmentId,
+          handId,
           brain: Brain.ofSession(session.sessionId),
           directory: folder(session.sessionId),
           lifetimeMs: 6_000,

@@ -1,6 +1,6 @@
 export * as E2BHand from "./e2b.js"
 
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import { Schema } from "effect"
 import { ExecutorAdapter } from "./executor.js"
 import { Process } from "../process.js"
@@ -39,7 +39,7 @@ const call = async (operation: string, method: string, route: string, body?: unk
 
 export interface Sandbox {
   readonly id: string
-  readonly environmentId: Environment.ID
+  readonly handId: Hand.ID
   readonly url: string
   readonly pause: () => Promise<void>
   readonly resume: (timeoutSeconds?: number) => Promise<void>
@@ -72,7 +72,7 @@ const configure = async (
 }
 
 export const create = async (options: {
-  readonly environmentId: Environment.ID
+  readonly handId: Hand.ID
   readonly timeoutSeconds?: number
 }): Promise<Sandbox> => {
   const template = process.env.CHAOS_E2B_TEMPLATE ?? ""
@@ -80,20 +80,20 @@ export const create = async (options: {
     await call("create", "POST", "/sandboxes", {
       templateID: template,
       timeout: options.timeoutSeconds ?? 300,
-      metadata: { "ren-environment": options.environmentId },
+      metadata: { "ren-hand": options.handId },
     }),
   )
   const id = created.sandboxID
   const remove = () => call("kill", "DELETE", `/sandboxes/${id}`)
   const forget = Process.onInterrupt(remove)
   await configure(created.sandboxID, created.envdAccessToken, {
-    EXECUTOR_ENVIRONMENT_ID: options.environmentId,
+    EXECUTOR_HAND_ID: options.handId,
     BRAIN_PUBLIC_KEYS: ExecutorAdapter.publicKeys,
     PORT: String(executorPort),
   })
   return {
     id,
-    environmentId: options.environmentId,
+    handId: options.handId,
     url: endpoint(id),
     pause: async () => {
       await call("pause", "POST", `/sandboxes/${id}/pause`)

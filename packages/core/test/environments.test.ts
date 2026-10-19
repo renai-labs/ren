@@ -28,7 +28,7 @@ const it = testEffect(
     Layer.provide(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          ENVIRONMENT_KEYS: JSON.stringify([
+          HAND_KEYS: JSON.stringify([
             { id: key.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.privateKey.key) },
           ]),
         }),

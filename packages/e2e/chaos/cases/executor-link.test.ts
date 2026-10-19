@@ -13,10 +13,7 @@ const executor = await ExecutorAdapter.localProcess({ label: "executor-link" })
 
 const proxy = await FaultProxy.make(executor.url())
 
-const driver = await ExecutorDriver.connect(
-  proxy.url,
-  await ExecutorAdapter.token(executor.environmentId, Brain.ID.create()),
-)
+const driver = await ExecutorDriver.connect(proxy.url, await ExecutorAdapter.token(executor.handId, Brain.ID.create()))
 
 const lane = { executor, proxy, driver }
 

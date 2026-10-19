@@ -1,10 +1,10 @@
 export * as ExecutorAdapter from "./executor.js"
 
-import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { HandToken } from "@ren/hand-api/hand-token"
 import { Signature } from "@ren/hand-api/signature"
 import { Image, Sandbox } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Effect, Schema } from "effect"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import os from "node:os"
@@ -14,9 +14,9 @@ import { Wait } from "../wait.js"
 
 export const publicKeys = Schema.encodeSync(Signature.PublicKeys)([Sandbox.keys.publicKey])
 
-export const token = (env: Environment.ID, brain: Brain.ID, lifetimeMs = 600_000) =>
+export const token = (hand: Hand.ID, brain: Brain.ID, lifetimeMs = 600_000) =>
   Effect.runPromise(
-    EnvironmentToken.sign(Sandbox.keys.privateKey, { env, brain, exp: Math.floor((Date.now() + lifetimeMs) / 1000) }),
+    HandToken.sign(Sandbox.keys.privateKey, { hand, brain, exp: Math.floor((Date.now() + lifetimeMs) / 1000) }),
   )
 
 export const access = (options: Parameters<typeof Sandbox.access>[0]) => Effect.runPromise(Sandbox.access(options))
@@ -36,10 +36,10 @@ interface Observation {
 
 export interface Instance {
   readonly url: () => string
-  readonly environmentId: Environment.ID
+  readonly handId: Hand.ID
   readonly workspace: string
   readonly restart: () => Promise<void>
-  readonly replace: () => Promise<void>
+  readonly replace: (handId?: Hand.ID) => Promise<void>
   readonly freeze: () => Promise<void>
   readonly thaw: () => Promise<void>
   readonly dispose: () => Promise<void>
@@ -75,9 +75,9 @@ const freePort = async () => {
 
 export const localProcess = async (options: {
   readonly label: string
-  readonly environmentId?: Environment.ID
+  readonly handId?: Hand.ID
 }): Promise<Instance> => {
-  const environmentId = options.environmentId ?? Environment.ID.create()
+  const handId = options.handId ?? Hand.ID.create()
   const workspace = await realpath(await mkdtemp(path.join(os.tmpdir(), "ren-chaos-workspace-")))
   await mkdir(logs, { recursive: true })
   const state: { port: number; starts: number; child: ReturnType<typeof Bun.spawn> | undefined } = {
@@ -101,7 +101,7 @@ export const localProcess = async (options: {
         HOME: workspace,
         TMPDIR: os.tmpdir(),
         PORT: String(state.port),
-        EXECUTOR_ENVIRONMENT_ID: environmentId,
+        EXECUTOR_HAND_ID: handId,
         EXECUTOR_WORKSPACE: workspace,
         BRAIN_PUBLIC_KEYS: publicKeys,
       },
@@ -123,7 +123,7 @@ export const localProcess = async (options: {
   await start()
   return {
     url: () => `http://127.0.0.1:${state.port}`,
-    environmentId,
+    handId,
     workspace,
     restart: async () => {
       await halt()
@@ -152,11 +152,10 @@ const docker = async (args: ReadonlyArray<string>) => {
 
 export const dockerContainer = async (options: {
   readonly label: string
-  readonly environmentId?: Environment.ID
+  readonly handId?: Hand.ID
 }): Promise<Container> => {
-  const environmentId = options.environmentId ?? Environment.ID.create()
   const tag = await Image.build()
-  const state = { container: "", url: "" }
+  const state = { container: "", url: "", handId: options.handId ?? Hand.ID.create() }
   const published = async () => {
     const port = /:(\d+)$/m.exec(await docker(["port", state.container, "4100/tcp"]))?.[1]
     if (!port) throw new Error(`docker published no executor port for ${options.label}`)
@@ -188,7 +187,7 @@ export const dockerContainer = async (options: {
       "--tmpfs",
       `/workspace:rw,size=${64 * 1024 * 1024},mode=1777`,
       "--env",
-      `EXECUTOR_ENVIRONMENT_ID=${environmentId}`,
+      `EXECUTOR_HAND_ID=${state.handId}`,
       "--env",
       `BRAIN_PUBLIC_KEYS=${publicKeys}`,
       tag,
@@ -203,14 +202,17 @@ export const dockerContainer = async (options: {
   await start()
   return {
     url: () => state.url,
-    environmentId,
+    get handId() {
+      return state.handId
+    },
     workspace: "/workspace",
     restart: async () => {
       await docker(["restart", "--time", "0", state.container])
       await published()
     },
-    replace: async () => {
+    replace: async (handId) => {
       await remove()
+      if (handId) state.handId = handId
       await start()
     },
     freeze: () => docker(["pause", state.container]).then(() => undefined),

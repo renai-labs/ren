@@ -50,16 +50,27 @@ const models = Layer.succeed(
 interface Sandbox {
   readonly id: string
   readonly directory: string
-  readonly url: string
+  readonly serve: (handId: Hand.ID) => Promise<string>
   readonly dispose: () => Promise<void>
 }
 
 const sandbox = async (id: string, publicKeys?: readonly [Signature.PublicKey, ...Array<Signature.PublicKey>]) => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-lifecycle-")))
-  const runtime = ManagedRuntime.make(
-    Sandbox.layer({ environmentId, workspace: directory, ...(publicKeys && { publicKeys }) }),
-  )
-  return { id, directory, url: await runtime.runPromise(Sandbox.url), dispose: () => runtime.dispose() }
+  const served = new Map<Hand.ID, { readonly url: Promise<string>; readonly dispose: () => Promise<void> }>()
+  const serve = (handId: Hand.ID) => {
+    const found = served.get(handId)
+    if (found) return found.url
+    const runtime = ManagedRuntime.make(
+      Sandbox.layer({ handId, workspace: directory, ...(publicKeys && { publicKeys }) }),
+    )
+    const url = runtime.runPromise(Sandbox.url)
+    served.set(handId, { url, dispose: () => runtime.dispose() })
+    return url
+  }
+  const dispose = async () => {
+    await Promise.all([...served.values()].map((each) => each.dispose()))
+  }
+  return { id, directory, serve, dispose }
 }
 
 const port = await (async () => {
@@ -86,10 +97,10 @@ interface CoreConfig {
 
 const placed = new Map<Hand.ID, Sandbox>()
 
-const disposed = new Set<string>()
+const disposed = new Set<Sandbox>()
 
 const dispose = async (each: Sandbox) => {
-  disposed.add(each.url)
+  disposed.add(each)
   await each.dispose()
 }
 
@@ -109,9 +120,9 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
       endpoint: (handId) => {
         const on = placed.get(handId) ?? config.target
         placed.set(handId, on)
-        return disposed.has(on.url)
+        return disposed.has(on)
           ? Effect.fail(new HandProviders.Gone({ message: `the sandbox of hand ${handId} is gone` }))
-          : Effect.succeed({ url: new URL(on.url) })
+          : Effect.promise(() => on.serve(handId)).pipe(Effect.map((url) => ({ url: new URL(url) })))
       },
     }),
   )
@@ -119,8 +130,8 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
     {
       CELL_URL: cellUrl,
       CELL_KEYS: TestToken.vars.CELL_KEYS,
-      ENVIRONMENT_KEYS: JSON.stringify((config.keys ?? [Sandbox.keys.privateKey]).map(encodedKey)),
-      ...(config.lifetime && { ENVIRONMENT_TOKEN_LIFETIME: config.lifetime }),
+      HAND_KEYS: JSON.stringify((config.keys ?? [Sandbox.keys.privateKey]).map(encodedKey)),
+      ...(config.lifetime && { HAND_TOKEN_LIFETIME: config.lifetime }),
     },
     models,
     Hands.layer.pipe(
@@ -140,7 +151,7 @@ const startCore = async (config: CoreConfig) => {
   current = config
   const api = HttpRouter.toWebHandler(
     HostApiTest.layer((endpoint, effect) =>
-      endpoint !== "environments.access"
+      endpoint !== "hands.access"
         ? effect
         : effect.pipe(
             Effect.tap((value) =>

@@ -20,7 +20,7 @@ describe.skipIf(Platform.docker !== undefined)("an executor in a container", () 
     lane.container = await ExecutorAdapter.dockerContainer({ label: "executor-docker" })
     lane.driver = await ExecutorDriver.connect(
       lane.container.url(),
-      await ExecutorAdapter.token(lane.container.environmentId, brain),
+      await ExecutorAdapter.token(lane.container.handId, brain),
     )
   }, 300_000)
 
@@ -100,7 +100,7 @@ describe.skipIf(Platform.docker !== undefined)("an executor in a container", () 
     await lanes.container.restart()
     const driver = await ExecutorDriver.connect(
       lanes.container.url(),
-      await ExecutorAdapter.token(lanes.container.environmentId, brain),
+      await ExecutorAdapter.token(lanes.container.handId, brain),
     )
     lane.driver = driver
     await lanes.driver.dispose()

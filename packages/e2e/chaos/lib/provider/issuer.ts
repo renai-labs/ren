@@ -10,7 +10,7 @@ import { Session } from "@ren/schema/session"
 import { Effect, Option, Schema } from "effect"
 
 interface Call {
-  readonly endpoint: "models.refresh" | "environments.access" | "host.refresh"
+  readonly endpoint: "models.refresh" | "hands.access" | "host.refresh"
   readonly hostToken: string | undefined
   readonly status: number
 }
@@ -65,13 +65,13 @@ export const start = (): Instance => {
   }
   const serve = async (endpoint: Call["endpoint"], presented: string): Promise<Response> => {
     const sessionId = await sessionOf(presented)
-    if (endpoint === "environments.access") {
+    if (endpoint === "hands.access") {
       const access = sessionId && (await state.environments(Session.ID.make(sessionId)))
       if (!access)
         return answer(
           endpoint,
           404,
-          { _tag: "EnvironmentNotFoundError", message: "The session has no environment" },
+          { _tag: "HandNotFoundError", message: "The session has no environment" },
           presented,
         )
       return answer(endpoint, 200, encodeAccess(access), presented)
@@ -89,7 +89,7 @@ export const start = (): Instance => {
   }
   const endpoints: Readonly<Record<string, Call["endpoint"]>> = {
     "/brain/models/refresh": "models.refresh",
-    "/brain/environment/access": "environments.access",
+    "/brain/hand/access": "hands.access",
     "/brain/host/refresh": "host.refresh",
   }
   const server = Bun.serve({

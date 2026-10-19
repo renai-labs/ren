@@ -104,7 +104,7 @@ export const provider = Effect.gen(function* () {
         "--publish",
         `127.0.0.1::${executorPort}`,
         "--env",
-        `EXECUTOR_ENVIRONMENT_ID=${input.environmentId}`,
+        `EXECUTOR_HAND_ID=${input.handId}`,
         "--env",
         `BRAIN_PUBLIC_KEYS=${Schema.encodeSync(Signature.PublicKeys)(input.publicKeys)}`,
         ...(input.config.cpus ? ["--cpus", String(input.config.cpus)] : []),

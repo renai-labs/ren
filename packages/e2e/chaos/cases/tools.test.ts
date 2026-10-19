@@ -179,7 +179,7 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
       hand.proxy.partition(false)
       const result = (await turn.script.called(2, 120_000)).toolResults
       expect(Date.now() - cutAt).toBeLessThan(30_000)
-      expect(result === "42\n" || result.includes("environment disconnected")).toBe(true)
+      expect(result === "42\n" || result.includes("hand disconnected")).toBe(true)
       await session.settled(60_000)
       const next = await session.turn([
         ModelProvider.tool("shell", { command: "echo $((1 + 2))" }),
@@ -237,7 +237,7 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
       const sessionId = Session.ID.create()
       const access = await ExecutorAdapter.access({
         url: hand.proxy.url,
-        environmentId: hand.instance.environmentId,
+        handId: hand.instance.handId,
         brain: Brain.ofSession(sessionId),
         directory: `/workspace/${sessionId}`,
       })

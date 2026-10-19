@@ -5,7 +5,7 @@ The Brain API: the internal HTTP contract between the Ren server and whatever ho
 ## What belongs here
 
 - `src/brain-api.ts`: the `BrainApi` and its one group, `brain`.
-- `src/host-api.ts`: the `HostApi`, which Ren serves and a host calls with its host token: `models.refresh` for its brain's model keys, `environments.access` for its session's hand, directory and environment token, and `host.refresh` for a new host token.
+- `src/host-api.ts`: the `HostApi`, which Ren serves and a host calls with its host token: `models.refresh` for its brain's model keys, `hands.access` for its session's hand, directory and hand token, and `host.refresh` for a new host token.
 - `src/errors.ts`: the errors the Brain and Host API endpoints declare, with HTTP statuses.
 - `src/session-token.ts`: the token that authorises a call for one session (`SessionToken.Claims`), its signing keys, and `sign`/`verify`. Core signs, the host verifies, and both use this one implementation.
 
@@ -13,7 +13,7 @@ The Brain API: the internal HTTP contract between the Ren server and whatever ho
 
 - Request and answer shapes (`Session.StartInput`, `Session.Started`, …). They live in `@ren/schema`, because hosts and Ren use them outside HTTP too.
 - Ren's public endpoints (`@ren/protocol`).
-- The Executor API, its client and the environment token (`@ren/hand-api`).
+- The Executor API, its client and the hand token (`@ren/hand-api`).
 
 ## Notes
 
