@@ -1229,10 +1229,34 @@ describe("createTimelineProjection", () => {
     ]
 
     const context = Projection.userContext(messages)
+    const result = Projection.project({ messages, busy: true, reasoning: "full" })
+    const parents = Projection.assistantMessagesByParent(messages)
+    const indexes = Projection.indexes(result.rows)
 
-    expect(Projection.project({ messages, busy: true, reasoning: "full" }).activeMessageID).toBe("msg_user_2")
+    expect(result.activeMessageID).toBe("msg_user_2")
+    expect(parents.get("msg_user_1")?.map((message): string => message.id)).toEqual(["msg_assistant_1"])
+    expect(parents.has("msg_user_2")).toBe(false)
     expect(context.get("msg_user_1")).toEqual({ agent: "build", model: fast })
     expect(context.get("msg_user_2")).toEqual({ agent: "build", model: fast })
+    expect(indexes.messageRowIndex.get("msg_user_1")).toBe(0)
+    expect(indexes.messageLastRowIndex.get("msg_user_1")).toBe(3)
+    expect(indexes.messageRowIndex.get("msg_user_2")).toBe(4)
+    expect(indexes.lastAssistantGroupKey.get("msg_user_1")).toBe("part:msg_assistant_1:msg_assistant_1:text:0")
+  })
+
+  test("indexes a leading partial assistant turn under its projected turn ID", () => {
+    const messages = [
+      assistant("msg_partial_1", [{ type: "text", text: "partial answer" }]),
+      assistant("msg_partial_2", [{ type: "text", text: "final answer" }], {
+        time: { created: at(4), completed: at(5) },
+      }),
+    ]
+
+    expect(
+      Projection.assistantMessagesByParent(messages)
+        .get("msg_partial_1")
+        ?.map((message): string => message.id),
+    ).toEqual(["msg_partial_1", "msg_partial_2"])
   })
 
   test("reuses a stable projected row array", () => {

@@ -69,8 +69,9 @@ function SessionComposer(props: { sessionID: Session.ID; running: boolean }) {
 export function SessionChat(props: { sessionID: Session.ID }) {
   const session = ChatReact.useSession(props.sessionID)
   const state = AsyncResult.getOrElse(session.state, () => ChatState.empty)
-  const rows = AsyncResult.isSuccess(session.timeline) ? session.timeline.value.rows : []
+  const timeline = AsyncResult.isSuccess(session.timeline) ? session.timeline.value : undefined
   const messages = ChatState.messages(state, props.sessionID)
+  const running = ChatState.activity(state, props.sessionID) === "running"
   const reconnecting = AsyncResult.isSuccess(session.status) && session.status.value === "reconnecting"
   return (
     <ConversationShell.Root
@@ -80,7 +81,14 @@ export function SessionChat(props: { sessionID: Session.ID }) {
           <StateMessage state="failed" title="Could not open this chat" />
         ) : undefined
       }
-      transcript={<SessionTranscript messages={messages} rows={rows} />}
+      transcript={
+        <SessionTranscript
+          messages={messages}
+          rows={timeline?.rows ?? []}
+          activeMessageID={timeline?.activeMessageID}
+          busy={running}
+        />
+      }
       interaction={
         <>
           {reconnecting ? (
@@ -93,12 +101,7 @@ export function SessionChat(props: { sessionID: Session.ID }) {
           <SessionRequests sessionID={props.sessionID} state={state} />
         </>
       }
-      composer={
-        <SessionComposer
-          sessionID={props.sessionID}
-          running={ChatState.activity(state, props.sessionID) === "running"}
-        />
-      }
+      composer={<SessionComposer sessionID={props.sessionID} running={running} />}
     />
   )
 }

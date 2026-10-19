@@ -1,167 +1,229 @@
-import { Projection, TimelineRow, ToolState } from "@ren/chat"
+import { Projection, TimelineRow, TimelineText, ToolDisplay } from "@ren/chat"
 import type { SessionMessage } from "@ren/schema/session-message"
 import { ConversationShell } from "@ren/ui/conversation-shell"
-import { Document } from "@ren/ui/document"
-import { Icon } from "@ren/ui/icon"
+import { CopyButton } from "@ren/ui/copy-button"
 import { List } from "@ren/ui/list"
 import { Separator } from "@ren/ui/separator"
 import { Text } from "@ren/ui/text"
+import { Transcript } from "@ren/ui/transcript"
+import { DateTime } from "effect"
+import { Platform } from "../../platform/platform.js"
+import { TranscriptError, TranscriptNotice, TranscriptNoticeItem, TranscriptShell } from "./transcript-notice.js"
+import { TranscriptTool } from "./transcript-tool.js"
 
-type Messages = ReadonlyMap<string, SessionMessage.Info>
-
-const subtitleKeys = ["description", "command", "filePath", "path", "pattern", "url", "query"]
-
-const toolSubtitle = (tool: SessionMessage.Tool) => {
-  const input = ToolState.input(tool)
-  return subtitleKeys.map((key) => input[key]).find((value): value is string => typeof value === "string")
+interface Timeline {
+  readonly messages: ReadonlyMap<string, SessionMessage.Info>
+  readonly turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
+  readonly lastGroups: ReadonlyMap<string, string>
+  readonly activeMessageID: string | undefined
+  readonly busy: boolean
 }
 
-const toolTitle = (name: string) => name.slice(0, 1).toUpperCase() + name.slice(1).replaceAll(/[_-]+/g, " ")
+const working = (timeline: Timeline, turnID: string) => {
+  const last = timeline.turns.get(turnID)?.at(-1)
+  return timeline.busy && timeline.activeMessageID === turnID && Boolean(last) && !last?.time.completed
+}
 
-const groupTitles = { context: "Gathered context", file: "Changed files", read: "Read files" }
+const reasoningDuration = (content: SessionMessage.Reasoning) =>
+  content.time?.completed
+    ? TimelineText.duration(
+        DateTime.toEpochMillis(content.time.completed) - DateTime.toEpochMillis(content.time.created),
+      )
+    : undefined
 
-function Tool(props: { tool: SessionMessage.Tool }) {
-  const running = props.tool.state.status === "streaming" || props.tool.state.status === "running"
-  const failed = props.tool.state.status === "error"
-  const output = ToolState.output(props.tool)
-  const subtitle = toolSubtitle(props.tool)
+function Reasoning(props: { content: SessionMessage.Reasoning; streaming: boolean }) {
   return (
-    <List.TranscriptDisclosure
-      leading={<Icon glyph="Wrench" />}
-      title={
-        <Text purpose="label" tone="inherit" element="span" activity={running ? "shimmer" : "none"}>
-          {toolTitle(props.tool.name)}
-        </Text>
-      }
-      description={subtitle}
-      trailing={
-        failed ? (
-          <Text tone="danger" element="span">
-            Failed
-          </Text>
-        ) : undefined
-      }
-      label={`${toolTitle(props.tool.name)}${subtitle ? ` ${subtitle}` : ""}${running ? ", running" : ""}`}
-    >
-      <Text purpose="code" tone="secondary" element="div" wrapping="preserved">
-        {failed ? ToolState.error(props.tool) : (output ?? JSON.stringify(ToolState.input(props.tool), null, 2))}
-      </Text>
-    </List.TranscriptDisclosure>
+    <Transcript.Reasoning
+      content={props.content.text}
+      streaming={props.streaming}
+      heading={Projection.reasoningHeading(props.content.text)}
+      duration={reasoningDuration(props.content)}
+    />
   )
 }
 
-function Part(props: { messages: Messages; reference: TimelineRow.PartRef }) {
-  const message = props.messages.get(props.reference.messageID)
+const responseMeta = (turn: SessionMessage.Info | undefined, assistants: ReadonlyArray<SessionMessage.Assistant>) => {
+  const duration = TimelineText.duration(
+    TimelineText.turnDuration(turn?.type === "user" ? turn : undefined, assistants) ?? -1,
+  )
+  const interrupted = Projection.isInterrupted(assistants.at(-1)?.error)
+  return [duration, interrupted ? "Interrupted" : undefined].filter(Boolean).join(" · ")
+}
+
+function Response(props: { timeline: Timeline; turnID: string; messageID: string; partID: string; text: string }) {
+  const platform = Platform.usePlatform()
+  const message = props.timeline.messages.get(props.messageID)
+  const streaming = message?.type === "assistant" && !message.time.completed
+  const assistants = props.timeline.turns.get(props.turnID) ?? []
+  const copy = TimelineText.copyText(assistants)
+  const write = platform.writeClipboardText
+  if (!write || copy?.partID !== props.partID || working(props.timeline, props.turnID))
+    return <Transcript.Response content={props.text} streaming={streaming} />
+  const meta = responseMeta(props.timeline.messages.get(props.turnID), assistants)
+  return (
+    <ConversationShell.Message
+      author="assistant"
+      actions={
+        <>
+          <CopyButton value={copy.text} onCopy={write} label="Copy response" size="extra-small" />
+          {meta ? (
+            <Text purpose="caption" tone="secondary" element="span">
+              {meta}
+            </Text>
+          ) : null}
+        </>
+      }
+    >
+      <Transcript.Response content={props.text} streaming={streaming} />
+    </ConversationShell.Message>
+  )
+}
+
+function Part(props: { timeline: Timeline; turnID: string; reference: TimelineRow.PartRef }) {
+  const message = props.timeline.messages.get(props.reference.messageID)
   const content = Projection.resolveContent(message, props.reference.partID)
   const streaming = message?.type === "assistant" && !message.time.completed
   if (content?.type === "text")
-    return <Document.Markdown content={content.text} source={streaming ? "streaming" : "static"} scale="standard" />
+    return (
+      <Response
+        timeline={props.timeline}
+        turnID={props.turnID}
+        messageID={props.reference.messageID}
+        partID={props.reference.partID}
+        text={content.text}
+      />
+    )
   if (content?.type === "reasoning")
-    return <Document.Markdown content={content.text} source={streaming ? "streaming" : "static"} tone="secondary" />
+    return (
+      <List.Root>
+        <Reasoning content={content} streaming={streaming && !content.time?.completed} />
+      </List.Root>
+    )
   if (content?.type === "tool")
     return (
       <List.Root>
-        <Tool tool={content} />
+        <TranscriptTool tool={content} />
       </List.Root>
     )
   return null
 }
 
-function AssistantPart(props: { messages: Messages; row: TimelineRow.AssistantPart }) {
+function GroupItem(props: { timeline: Timeline; reference: TimelineRow.PartRef }) {
+  const message = props.timeline.messages.get(props.reference.messageID)
+  if (props.reference.partID === props.reference.messageID)
+    return message ? <TranscriptNoticeItem message={message} /> : null
+  const content = Projection.resolveContent(message, props.reference.partID)
+  if (content?.type === "tool") return <TranscriptTool tool={content} />
+  if (content?.type === "reasoning")
+    return (
+      <Reasoning
+        content={content}
+        streaming={message?.type === "assistant" && !message.time.completed && !content.time?.completed}
+      />
+    )
+  return null
+}
+
+const groupItem = (timeline: Timeline, reference: TimelineRow.PartRef): ReadonlyArray<ToolDisplay.GroupItem> => {
+  const message = timeline.messages.get(reference.messageID)
+  if (reference.partID === reference.messageID)
+    return message ? [message.type === "shell" ? { type: "shell" } : { type: "notice" }] : []
+  const content = Projection.resolveContent(message, reference.partID)
+  return content ? [content] : []
+}
+
+const groupTitle = (timeline: Timeline, group: Exclude<TimelineRow.PartGroup, { readonly type: "part" }>) => {
+  const items = group.refs.flatMap((reference) => groupItem(timeline, reference))
+  if (group.type === "context") return ToolDisplay.group(items).title
+  const subjects = items.flatMap((item) => {
+    const subject = item.type === "tool" ? ToolDisplay.subtitle(item) : undefined
+    return subject ? [subject] : []
+  })
+  return `${group.type === "read" ? "Read" : "Edited"} ${subjects.join(", ")}`
+}
+
+function AssistantPart(props: { timeline: Timeline; row: TimelineRow.AssistantPart }) {
   const group = props.row.group
-  if (group.type === "part") return <Part messages={props.messages} reference={group.ref} />
+  if (group.type === "part")
+    return <Part timeline={props.timeline} turnID={props.row.userMessageID} reference={group.ref} />
+  const busy =
+    (working(props.timeline, props.row.userMessageID) &&
+      props.timeline.lastGroups.get(props.row.userMessageID) === group.key) ||
+    group.refs.some((reference) => {
+      const content = Projection.resolveContent(props.timeline.messages.get(reference.messageID), reference.partID)
+      return content?.type === "tool" && ToolDisplay.status(content) === "running"
+    })
   return (
     <List.Root>
-      <List.TranscriptDisclosure appearance="summary" title={`${groupTitles[group.type]} (${group.refs.length})`}>
-        {group.refs.flatMap((reference) => {
-          const content = Projection.resolveContent(props.messages.get(reference.messageID), reference.partID)
-          return content?.type === "tool" ? [<Tool key={reference.partID} tool={content} />] : []
-        })}
-      </List.TranscriptDisclosure>
+      <Transcript.ToolGroup title={groupTitle(props.timeline, group)} working={busy}>
+        {group.refs.map((reference) => (
+          <GroupItem key={reference.partID} timeline={props.timeline} reference={reference} />
+        ))}
+      </Transcript.ToolGroup>
     </List.Root>
   )
 }
 
-function noticeText(message: SessionMessage.Info | undefined): string | undefined {
-  if (message?.type === "model-switched") return `Switched to ${message.model.id}`
-  if (message?.type === "agent-switched") return "Agent changed"
-  if (message?.type === "skill") return `Loaded the ${message.name} skill`
-  if (message?.type === "synthetic" || message?.type === "system") return message.description ?? message.text
-  return
-}
-
-function Notice(props: { messages: Messages; messageID: string }) {
-  const message = props.messages.get(props.messageID)
-  if (message?.type === "compaction")
-    return <Separator label={message.status === "failed" ? "Compaction failed" : "Compaction"} />
-  const text = noticeText(message)
-  if (!text) return null
-  return (
-    <Text purpose="caption" tone="secondary">
-      {text}
-    </Text>
-  )
-}
-
-function UserMessage(props: { messages: Messages; messageID: string }) {
-  const message = props.messages.get(props.messageID)
-  if (message?.type !== "user") return null
+function UserMessage(props: { message: SessionMessage.Info | undefined }) {
+  if (props.message?.type !== "user") return null
   return (
     <ConversationShell.Message author="user">
       <ConversationShell.Bubble>
-        <Text wrapping="preserved">{message.text}</Text>
+        <Text wrapping="preserved">{props.message.text}</Text>
       </ConversationShell.Bubble>
     </ConversationShell.Message>
   )
 }
 
-function Shell(props: { messages: Messages; messageID: string }) {
-  const message = props.messages.get(props.messageID)
-  if (message?.type !== "shell") return null
+function Thinking(props: { timeline: Timeline; reference: TimelineRow.PartRef }) {
+  const content = Projection.resolveContent(
+    props.timeline.messages.get(props.reference.messageID),
+    props.reference.partID,
+  )
+  if (content?.type !== "reasoning") return null
   return (
     <List.Root>
-      <List.TranscriptDisclosure
-        leading={<Icon glyph="EnvVariable" />}
-        title={message.command}
-        description={message.status === "running" ? "Running" : undefined}
-      >
-        <Text purpose="code" tone="secondary" element="div" wrapping="preserved">
-          {message.output?.output ?? ""}
-        </Text>
-      </List.TranscriptDisclosure>
+      <Reasoning content={content} streaming />
     </List.Root>
   )
 }
 
-function Row(props: { messages: Messages; row: TimelineRow.Row }) {
+function Retry(props: { timeline: Timeline; turnID: string }) {
+  const retry = TimelineText.retryStatus(props.timeline.turns.get(props.turnID) ?? [], undefined)
+  if (!retry || props.timeline.activeMessageID !== props.turnID) return null
+  return <Transcript.Retry attempt={retry.attempt} message={retry.message} next={retry.next} />
+}
+
+function Shell(props: { message: SessionMessage.Info | undefined }) {
+  if (props.message?.type !== "shell") return null
+  return (
+    <List.Root>
+      <TranscriptShell message={props.message} />
+    </List.Root>
+  )
+}
+
+function Row(props: { timeline: Timeline; row: TimelineRow.Row }) {
   const row = props.row
   switch (row._tag) {
     case "UserMessage":
-      return <UserMessage messages={props.messages} messageID={row.userMessageID} />
+      return <UserMessage message={props.timeline.messages.get(row.userMessageID)} />
     case "AssistantPart":
-      return <AssistantPart messages={props.messages} row={row} />
+      return <AssistantPart timeline={props.timeline} row={row} />
     case "Notice":
-      return <Notice messages={props.messages} messageID={row.messageID} />
+      return <TranscriptNotice message={props.timeline.messages.get(row.messageID)} />
     case "Shell":
-      return <Shell messages={props.messages} messageID={row.messageID} />
+      return <Shell message={props.timeline.messages.get(row.messageID)} />
     case "Thinking":
-      return (
-        <Text tone="secondary" activity="shimmer">
-          Thinking
-        </Text>
-      )
+      return <Thinking timeline={props.timeline} reference={row.ref} />
     case "Retry":
-      return <Text tone="secondary">Retrying</Text>
+      return <Retry timeline={props.timeline} turnID={row.userMessageID} />
     case "Error":
-      return (
-        <Text tone="danger" role="alert">
-          {row.text}
-        </Text>
-      )
+      return <TranscriptError text={row.text} />
     case "TurnDivider":
       return <Separator label="Interrupted" />
     case "CompactionQueued":
-      return <Separator label="Compaction queued" />
+      return <Separator label="Session compaction queued" />
     case "TurnGap":
       return null
   }
@@ -170,7 +232,23 @@ function Row(props: { messages: Messages; row: TimelineRow.Row }) {
 export function SessionTranscript(props: {
   messages: ReadonlyArray<SessionMessage.Info>
   rows: ReadonlyArray<TimelineRow.Row>
+  activeMessageID: string | undefined
+  busy: boolean
 }) {
-  const messages: Messages = new Map(props.messages.map((message) => [message.id, message]))
-  return props.rows.map((row) => <Row key={TimelineRow.key(row)} messages={messages} row={row} />)
+  const timeline: Timeline = {
+    messages: new Map(props.messages.map((message) => [message.id, message])),
+    turns: Projection.assistantMessagesByParent(props.messages),
+    lastGroups: Projection.indexes(props.rows).lastAssistantGroupKey,
+    activeMessageID: props.activeMessageID,
+    busy: props.busy,
+  }
+  const last = props.rows.at(-1)
+  return (
+    <>
+      {props.rows.map((row) => (
+        <Row key={TimelineRow.key(row)} timeline={timeline} row={row} />
+      ))}
+      {props.busy && last?._tag === "UserMessage" ? <Transcript.Working /> : null}
+    </>
+  )
 }

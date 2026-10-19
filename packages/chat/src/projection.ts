@@ -627,6 +627,41 @@ export const project = (input: Input): Projection => {
   }
 }
 
+export const indexes = (
+  rows: ReadonlyArray<TimelineRow.Row>,
+): {
+  readonly messageRowIndex: ReadonlyMap<string, number>
+  readonly messageLastRowIndex: ReadonlyMap<string, number>
+  readonly lastAssistantGroupKey: ReadonlyMap<string, string>
+} => {
+  const messageRowIndex = new Map<string, number>()
+  const messageLastRowIndex = new Map<string, number>()
+  const lastAssistantGroupKey = new Map<string, string>()
+  for (const [index, row] of rows.entries()) {
+    if (!messageRowIndex.has(row.userMessageID)) messageRowIndex.set(row.userMessageID, index)
+    messageLastRowIndex.set(row.userMessageID, index)
+    if (Predicate.isTagged(row, "AssistantPart")) lastAssistantGroupKey.set(row.userMessageID, row.group.key)
+  }
+  return { messageRowIndex, messageLastRowIndex, lastAssistantGroupKey }
+}
+
+export const assistantMessagesByParent = (
+  messages: ReadonlyArray<SessionMessage.Info>,
+): ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>> => {
+  const result = new Map<string, Array<SessionMessage.Assistant>>()
+  const state: { userID: string | undefined } = { userID: undefined }
+  for (const message of messages) {
+    if (message.type === "user") state.userID = message.id
+    if (message.type === "shell") state.userID = undefined
+    if (message.type !== "assistant") continue
+    state.userID ??= message.id
+    const existing = result.get(state.userID)
+    if (existing) existing.push(message)
+    else result.set(state.userID, [message])
+  }
+  return result
+}
+
 export const userContext = (
   messages: ReadonlyArray<SessionMessage.Info>,
 ): ReadonlyMap<string, { readonly agent: string; readonly model: SessionModel.Ref }> => {
