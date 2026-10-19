@@ -38,7 +38,7 @@ const toInfo = (row: typeof table.$inferSelect): SpaceEnvironment.Info => ({
   archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
 })
 
-const isLinkedAlready = (error: EffectDrizzleQueryError) => {
+const isAlreadyInSpace = (error: EffectDrizzleQueryError) => {
   const failure = Cause.isCause(error.cause) ? Cause.findErrorOption(error.cause) : Option.none()
   return (
     Option.isSome(failure) &&
@@ -130,7 +130,7 @@ export const layer = Layer.effect(
               })
               .returning()
               .pipe(
-                Effect.catchIf(isLinkedAlready, () =>
+                Effect.catchIf(isAlreadyInSpace, () =>
                   Effect.fail(new Primitive.Conflict({ message: "The space already has this environment." })),
                 ),
               )
