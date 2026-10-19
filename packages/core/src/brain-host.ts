@@ -225,14 +225,14 @@ export const layer = Layer.effect(
                 .bind({ ...subject, spaceId: placement.spaceId }, requested)
                 .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
             )
-          : Option.map(yield* hands.find(subject), (directory) => ({ directory, isNew: false }))
+          : Option.map(yield* hands.findDirectory(subject), (directory) => ({ directory, isNew: false }))
         const payload = {
           ...Struct.omit(input, ["environmentId"]),
           ...Option.match(binding, { onNone: () => ({}), onSome: (found) => ({ directory: found.directory }) }),
         } satisfies StartBody
         return yield* withModels(subject, call(input.sessionId, brain.brain["brain.start"]({ payload }))).pipe(
           Effect.tapErrorTag("BrainRejectedError", () =>
-            Option.exists(binding, (found) => found.isNew) ? hands.unbind(input.sessionId) : Effect.void,
+            Option.exists(binding, (found) => found.isNew) ? hands.unbind(subject) : Effect.void,
           ),
         )
       }),

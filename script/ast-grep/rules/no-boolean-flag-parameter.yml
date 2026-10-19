@@ -1,0 +1,27 @@
+id: no-boolean-flag-parameter
+language: Tsx
+message: >-
+  A boolean next to other parameters is a flag the call site cannot read (`grantAccess(subject, true)`). Pass it in an options object: `grantAccess(subject, { isRetry: true })`.
+severity: error
+rule:
+  any:
+    - kind: required_parameter
+    - kind: optional_parameter
+  has:
+    field: type
+    has:
+      any:
+        - kind: predefined_type
+          regex: ^boolean$
+        - kind: union_type
+          has:
+            kind: predefined_type
+            regex: ^boolean$
+            stopBy: end
+  inside:
+    kind: formal_parameters
+    has:
+      nthChild: 2
+      any:
+        - kind: required_parameter
+        - kind: optional_parameter

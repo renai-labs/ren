@@ -110,8 +110,8 @@ export const spawner = (
         ...(Predicate.isNotUndefined(command.options.shell) && { shell: command.options.shell }),
         ...Struct.pick(options, ["outputFile"]),
       }).pipe(Effect.mapError(childProcessError("spawn")))
-      const writeStdin = (bytes: Uint8Array, isLastWrite: boolean) =>
-        executor["process.write"]({ id: remoteProcess.id, data: bytes, end: isLastWrite }).pipe(
+      const writeStdin = (bytes: Uint8Array, options: { readonly end: boolean }) =>
+        executor["process.write"]({ id: remoteProcess.id, data: bytes, end: options.end }).pipe(
           Effect.retry({
             while: (error) => error._tag === "StdinFullError",
             schedule: Schedule.spaced(stdinRetryAfter),
@@ -219,8 +219,8 @@ export const spawner = (
       )
       if (stdinStream)
         yield* stdinStream.pipe(
-          Stream.runForEach((bytes) => writeStdin(bytes, false)),
-          Effect.andThen(shouldEndStdin ? writeStdin(new Uint8Array(), true) : Effect.void),
+          Stream.runForEach((bytes) => writeStdin(bytes, { end: false })),
+          Effect.andThen(shouldEndStdin ? writeStdin(new Uint8Array(), { end: true }) : Effect.void),
           Effect.ignore,
           Effect.forkScoped,
         )
@@ -241,8 +241,8 @@ export const spawner = (
             Effect.andThen(Deferred.await(exitResult).pipe(Effect.ignore)),
           ),
         stdin: Sink.forEachArray((chunks: ReadonlyArray<Uint8Array>) =>
-          Effect.forEach(chunks, (bytes) => writeStdin(bytes, false), { discard: true }),
-        ).pipe(Sink.mapEffect(() => (shouldEndStdin ? writeStdin(new Uint8Array(), true) : Effect.void))),
+          Effect.forEach(chunks, (bytes) => writeStdin(bytes, { end: false }), { discard: true }),
+        ).pipe(Sink.mapEffect(() => (shouldEndStdin ? writeStdin(new Uint8Array(), { end: true }) : Effect.void))),
         stdout: Stream.fromQueue(stdoutChunks),
         stderr: Stream.fromQueue(stderrChunks),
         all: Stream.merge(Stream.fromQueue(stdoutChunks), Stream.fromQueue(stderrChunks)),

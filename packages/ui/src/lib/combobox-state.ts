@@ -85,10 +85,10 @@ export function useTree(input: {
       if (parent?.selection === "single" && path.at(-1) === parent.value) setPath(path.slice(0, -1))
     },
     reset,
-    keyDown: (event: BaseUIEvent<KeyboardEvent<HTMLInputElement>>, escapes: boolean) =>
+    keyDown: (event: BaseUIEvent<KeyboardEvent<HTMLInputElement>>, options: { readonly escapes: boolean }) =>
       navigate(event, {
         browsing: typed === "",
-        nested: nested && (event.key !== "Escape" || escapes),
+        nested: nested && (event.key !== "Escape" || options.escapes),
         branch: view
           .flatMap((section) => section.items)
           .find((row) => row.kind === "option" && row.value === highlighted.current && row.option.options),

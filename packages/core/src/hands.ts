@@ -24,6 +24,24 @@ export interface Placement {
   readonly spaceId: Space.ID
 }
 
+interface Bound {
+  readonly directory: Hand.Directory
+  readonly isNew: boolean
+}
+
+export interface Interface {
+  readonly bind: (
+    placement: Subject & Placement,
+    environmentId: Environment.ID,
+  ) => Effect.Effect<Bound, NotFound | Changed>
+  readonly findDirectory: (subject: Subject) => Effect.Effect<Option.Option<Hand.Directory>>
+  readonly unbind: (subject: Subject) => Effect.Effect<void>
+  readonly access: (subject: Subject) => Effect.Effect<Hand.Access, NotFound | Unavailable>
+  readonly release: (subject: Subject) => Effect.Effect<void>
+}
+
+export class Service extends Context.Service<Service, Interface>()("@ren/core/Hands") {}
+
 export class NotFound extends Schema.TaggedError<NotFound>()("Hands.NotFound", { message: Schema.String }) {}
 
 export class Changed extends Schema.TaggedError<Changed>()("Hands.Changed", { message: Schema.String }) {}
@@ -32,38 +50,32 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Hands.Unavai
   message: Schema.String,
 }) {}
 
-interface Binding {
-  readonly directory: string
-  readonly isNew: boolean
-}
-
-export interface Interface {
-  readonly bind: (
-    placement: Subject & Placement,
-    environmentId: Environment.ID,
-  ) => Effect.Effect<Binding, NotFound | Changed>
-  readonly find: (subject: Subject) => Effect.Effect<Option.Option<string>>
-  readonly unbind: (sessionId: Session.ID) => Effect.Effect<void>
-  readonly access: (subject: Subject) => Effect.Effect<Hand.Access, NotFound | Unavailable>
-  readonly release: (subject: Subject) => Effect.Effect<void>
-}
-
-export class Service extends Context.Service<Service, Interface>()("@ren/core/Hands") {}
-
 const environments = Database.Schema.environment
 const hands = Database.Schema.hand
 const sessions = Database.Schema.session_environment
 const spaceEnvironments = Database.Schema.space_environment
 const spaces = Database.Schema.space
 
-const isEnvironmentOfSpace = (spaceId: SQLWrapper, environmentId: SQLWrapper) =>
-  exists(
-    sql`(select 1 from ${spaceEnvironments} inner join ${spaces} on ${spaces.id} = ${spaceEnvironments.space_id} where ${and(
-      eq(spaceEnvironments.space_id, spaceId),
-      eq(spaceEnvironments.environment_id, environmentId),
-      isNull(spaceEnvironments.archived_at),
-      isNull(spaces.archived_at),
-    )})`,
+const isAvailable = (organizationId: Auth.OrganizationID, spaceId: SQLWrapper) =>
+  and(
+    eq(environments.organization_id, organizationId),
+    isNull(environments.archived_at),
+    exists(
+      sql`(select 1 from ${spaceEnvironments} inner join ${spaces} on ${spaces.id} = ${spaceEnvironments.space_id} where ${and(
+        eq(spaceEnvironments.space_id, spaceId),
+        eq(spaceEnvironments.environment_id, environments.id),
+        isNull(spaceEnvironments.archived_at),
+        isNull(spaces.archived_at),
+      )})`,
+    ),
+  )
+
+const isSessionOf = (subject: Subject) =>
+  and(
+    eq(sessions.session_id, subject.sessionId),
+    exists(
+      sql`(select 1 from ${spaces} where ${and(eq(spaces.id, sessions.space_id), eq(spaces.organization_id, subject.organizationId))})`,
+    ),
   )
 
 export const layer = Layer.effect(
@@ -89,17 +101,12 @@ export const layer = Layer.effect(
         }),
     })
 
-    const usable = Effect.fnUntraced(function* (placement: Subject & Placement, environmentId: Environment.ID) {
+    const checkAvailable = Effect.fnUntraced(function* (placement: Subject & Placement, environmentId: Environment.ID) {
       const rows = yield* database.db
         .select({ provider: environments.provider })
         .from(environments)
         .where(
-          and(
-            eq(environments.id, environmentId),
-            eq(environments.organization_id, placement.organizationId),
-            isNull(environments.archived_at),
-            isEnvironmentOfSpace(sql`${placement.spaceId}`, environments.id),
-          ),
+          and(eq(environments.id, environmentId), isAvailable(placement.organizationId, sql`${placement.spaceId}`)),
         )
         .pipe(Effect.orDie)
       const provider = Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) => registry.get(row.provider))
@@ -107,10 +114,10 @@ export const layer = Layer.effect(
         return yield* new NotFound({ message: `Environment ${environmentId} is not available to this session’s space` })
     })
 
-    const assign = (subject: Subject) =>
-      database.transaction((transaction) =>
+    const assign = Effect.fn("Hands.assign")(function* (subject: Subject) {
+      return yield* database.transaction((transaction) =>
         Effect.gen(function* () {
-          const bound = yield* transaction
+          const sessionRows = yield* transaction
             .select({
               spaceId: sessions.space_id,
               environmentId: sessions.environment_id,
@@ -122,25 +129,24 @@ export const layer = Layer.effect(
             .innerJoin(spaces, eq(spaces.id, sessions.space_id))
             .where(and(eq(sessions.session_id, subject.sessionId), eq(spaces.organization_id, subject.organizationId)))
             .for("update", { of: sessions })
-          const session = bound.at(0)
+          const session = sessionRows.at(0)
           if (!session) return yield* new NotFound({ message: `Session ${subject.sessionId} has no environment` })
-          const found = yield* transaction
+          const environmentRows = yield* transaction
             .select()
             .from(environments)
             .where(
               and(
                 eq(environments.id, session.environmentId),
-                isNull(environments.archived_at),
-                isEnvironmentOfSpace(sql`${session.spaceId}`, environments.id),
+                isAvailable(subject.organizationId, sql`${session.spaceId}`),
               ),
             )
             .for("update", { of: environments })
-          const environment = found.at(0)
+          const environment = environmentRows.at(0)
           if (!environment)
             return yield* new NotFound({
               message: `The environment of session ${subject.sessionId} is archived or no longer linked to its space`,
             })
-          const assigned = session.handId
+          const existing = session.handId
             ? Option.some(session.handId)
             : Option.fromNullishOr(
                 (yield* transaction
@@ -153,7 +159,7 @@ export const layer = Layer.effect(
                   .orderBy(asc(hands.created_at))
                   .limit(1)).at(0)?.id,
               )
-          const handId = yield* Option.match(assigned, {
+          const handId = yield* Option.match(existing, {
             onSome: Effect.succeed,
             onNone: () => {
               const id = Hand.ID.create()
@@ -166,9 +172,15 @@ export const layer = Layer.effect(
               .set({ hand_id: handId, idle_at: null })
               .where(eq(sessions.session_id, subject.sessionId))
           const hand = yield* transaction.select({ binding: hands.binding }).from(hands).where(eq(hands.id, handId))
-          return { environment, handId, binding: hand.at(0)?.binding ?? null, generation: session.generation }
+          return {
+            environment,
+            handId,
+            providerBinding: hand.at(0)?.binding ?? null,
+            generation: session.generation,
+          }
         }),
       )
+    })
 
     const replace = (handId: Hand.ID) =>
       database.transaction((transaction) =>
@@ -181,22 +193,28 @@ export const layer = Layer.effect(
         }),
       )
 
-    const connect = Effect.fnUntraced(function* (
+    const grantAccess = Effect.fnUntraced(function* (
       subject: Subject,
-      isRetry: boolean,
+      options: { readonly isRetry: boolean },
     ): Effect.fn.Return<Hand.Access, NotFound | Unavailable> {
-      const assigned = yield* assign(subject)
       const keys = yield* Option.match(signing, {
         onNone: () => Effect.die(new Error("HAND_KEYS has no signing key")),
         onSome: Effect.succeed,
       })
-      const provider = registry.get(assigned.environment.provider)
+      const environmentRows = yield* database.db
+        .select({ provider: environments.provider })
+        .from(sessions)
+        .innerJoin(environments, eq(environments.id, sessions.environment_id))
+        .where(eq(sessions.session_id, subject.sessionId))
+        .pipe(Effect.orDie)
+      const provider = Option.flatMap(Option.fromNullishOr(environmentRows.at(0)), (row) => registry.get(row.provider))
       if (Option.isNone(provider))
-        return yield* new Unavailable({ message: `Ren has no hand provider ${assigned.environment.provider}` })
-      const unavailable = (error: HandProvider.Failed) =>
+        return yield* new NotFound({ message: `Session ${subject.sessionId} has no environment this Ren can run` })
+      const assigned = yield* assign(subject)
+      const unavailableBecause = (error: HandProvider.Failed) =>
         new Unavailable({ message: `The hand of session ${subject.sessionId} is unavailable: ${error.message}` })
-      const binding =
-        assigned.binding ??
+      const providerBinding =
+        assigned.providerBinding ??
         (yield* provider.value
           .provision({
             handId: assigned.handId,
@@ -205,7 +223,7 @@ export const layer = Layer.effect(
             variables: ExecutorVariables.make(assigned.handId, keys.publicKeys),
           })
           .pipe(
-            Effect.mapError(unavailable),
+            Effect.mapError(unavailableBecause),
             Effect.tap((made) =>
               database.db
                 .update(hands)
@@ -214,16 +232,16 @@ export const layer = Layer.effect(
                 .pipe(Effect.orDie),
             ),
           ))
-      const endpoint = yield* provider.value.connect(binding).pipe(
+      const endpoint = yield* provider.value.connect(providerBinding).pipe(
         Effect.map(Option.some),
         Effect.catchTag("HandProvider.Gone", (gone) =>
-          isRetry
+          options.isRetry
             ? Effect.fail(new Unavailable({ message: gone.message }))
             : replace(assigned.handId).pipe(Effect.as(Option.none())),
         ),
-        Effect.mapError((error) => (error instanceof HandProvider.Failed ? unavailable(error) : error)),
+        Effect.catchTag("HandProvider.Failed", (error) => Effect.fail(unavailableBecause(error))),
       )
-      if (Option.isNone(endpoint)) return yield* connect(subject, true)
+      if (Option.isNone(endpoint)) return yield* grantAccess(subject, { isRetry: true })
       const exp = Math.floor(((yield* Clock.currentTimeMillis) + Duration.toMillis(config.lifetime)) / 1000)
       return {
         directory: directoryOf(subject.sessionId),
@@ -242,7 +260,7 @@ export const layer = Layer.effect(
 
     return Service.of({
       bind: Effect.fn("Hands.bind")(function* (placement: Subject & Placement, environmentId: Environment.ID) {
-        yield* usable(placement, environmentId)
+        yield* checkAvailable(placement, environmentId)
         const inserted = yield* database.db
           .insert(sessions)
           .values({
@@ -266,46 +284,30 @@ export const layer = Layer.effect(
           message: `Session ${placement.sessionId} cannot change its environment or space: not supported yet`,
         })
       }),
-      find: Effect.fn("Hands.find")(function* (subject: Subject) {
+      findDirectory: Effect.fn("Hands.findDirectory")(function* (subject: Subject) {
         const rows = yield* database.db
           .select({ environmentId: sessions.environment_id, provider: environments.provider })
           .from(sessions)
           .innerJoin(environments, eq(environments.id, sessions.environment_id))
           .where(
-            and(
-              eq(sessions.session_id, subject.sessionId),
-              eq(environments.organization_id, subject.organizationId),
-              isNull(environments.archived_at),
-              isEnvironmentOfSpace(sessions.space_id, sessions.environment_id),
-            ),
+            and(eq(sessions.session_id, subject.sessionId), isAvailable(subject.organizationId, sessions.space_id)),
           )
           .pipe(Effect.orDie)
         return Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) =>
           Option.map(registry.get(row.provider), () => directoryOf(subject.sessionId)),
         )
       }),
-      unbind: Effect.fn("Hands.unbind")(function* (sessionId: Session.ID) {
-        yield* database.db.delete(sessions).where(eq(sessions.session_id, sessionId)).pipe(Effect.orDie)
+      unbind: Effect.fn("Hands.unbind")(function* (subject: Subject) {
+        yield* database.db.delete(sessions).where(isSessionOf(subject)).pipe(Effect.orDie)
       }),
       access: Effect.fn("Hands.access")(function* (subject: Subject) {
-        return yield* connect(subject, false)
+        return yield* grantAccess(subject, { isRetry: false })
       }),
       release: Effect.fn("Hands.release")(function* (subject: Subject) {
         yield* database.db
           .update(sessions)
           .set({ idle_at: sql`now()` })
-          .where(
-            and(
-              eq(sessions.session_id, subject.sessionId),
-              isNull(sessions.idle_at),
-              exists(
-                database.db
-                  .select({ id: spaces.id })
-                  .from(spaces)
-                  .where(and(eq(spaces.id, sessions.space_id), eq(spaces.organization_id, subject.organizationId))),
-              ),
-            ),
-          )
+          .where(and(isSessionOf(subject), isNull(sessions.idle_at)))
           .pipe(Effect.orDie)
       }),
     })

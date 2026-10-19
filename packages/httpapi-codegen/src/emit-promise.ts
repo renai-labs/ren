@@ -134,7 +134,10 @@ export function emitPromise(contract: Types.Contract, options?: { readonly mutab
   return {
     operations: Operations.promiseOperations(groups),
     files: [
-      { path: "types.ts", content: PromiseTypes.renderPromiseTypes(groups, options?.mutableOutputs ?? false) },
+      {
+        path: "types.ts",
+        content: PromiseTypes.renderPromiseTypes(groups, { mutableOutputs: options?.mutableOutputs ?? false }),
+      },
       { path: "client-error.ts", content: clientErrorSource },
       { path: "client.ts", content: normalizeClientContent(PromiseClient.renderPromiseClient(groups), groups) },
       {

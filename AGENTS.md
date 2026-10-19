@@ -43,6 +43,7 @@ Lint enforces most style rules. Run `bun run check` and follow each message. The
 - Rely on type inference; add explicit annotations only for exports or when inference fails.
 - Prefer functional array methods (`flatMap`, `filter`, `map`) over `for` loops. Use type guards on `filter` to keep inference downstream.
 - Avoid destructuring; use dot access.
+- Pass a boolean that sits next to other parameters in an options object (`grantAccess(subject, { isRetry: true })`), never as a bare `true` or `false`.
 - Optional properties are `key?: T`. Write `key?: T | undefined` only when callers pass `undefined` on purpose.
 - Each module starts with a self-namespace export (`export * as Health from "./health.js"`), then its imports. Package barrels (`src/index.ts`) re-export namespaces only.
 - Import a module's namespace by name: `import { Health } from "@ren/core/health"`. Relative imports use `.js` extensions. Do not use type-position `import("...")`.

@@ -7,6 +7,7 @@ export const ID = Identifier.make("hnd", "Hand.ID")
 export type ID = typeof ID.Type
 
 export const Directory = Schema.String.check(Schema.isStartingWith("/")).annotate({ identifier: "Hand.Directory" })
+export type Directory = typeof Directory.Type
 
 export interface Access extends Schema.Schema.Type<typeof Access> {}
 export const Access = Schema.Struct({
