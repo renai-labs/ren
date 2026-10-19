@@ -2,12 +2,11 @@ import { describe, expect } from "bun:test"
 import { Signature } from "@ren/hand-api/signature"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
-import { HandProvider } from "@ren/schema/hand-provider"
 import { Session } from "@ren/schema/session"
 import { ConfigProvider, Effect, Layer, Ref, Schema } from "effect"
 import { Access } from "../src/access.js"
 import { Environments } from "../src/environments.js"
-import { HandProviders } from "../src/hand-providers.js"
+import { HandProvider } from "../src/hand-provider.js"
 import { Hands } from "../src/hands.js"
 import { Space } from "../src/space.js"
 import { SpaceEnvironment } from "../src/space/environment.js"
@@ -22,7 +21,7 @@ const key = await Effect.runPromise(Signature.generate("environments"))
 
 const it = testEffect(
   Layer.mergeAll(Environments.layer, SpaceEnvironment.layer, Hands.layer, Space.layer, SpaceProvisioning.layer).pipe(
-    Layer.provideMerge(HandProviders.layer([Effect.succeed(probe.provider)])),
+    Layer.provideMerge(HandProvider.layer([Effect.succeed(probe.provider)])),
     Layer.provideMerge(Access.layer),
     Layer.provideMerge(Testing.layer),
     Layer.provide(

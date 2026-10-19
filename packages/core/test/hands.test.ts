@@ -10,7 +10,7 @@ import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { eq, sql } from "drizzle-orm"
 import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
-import { HandProviders } from "../src/hand-providers.js"
+import { HandProvider } from "../src/hand-provider.js"
 import { Hands } from "../src/hands.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/hand-provider.js"
@@ -34,7 +34,7 @@ const handsWith = Effect.fnUntraced(function* (
   const probe = yield* TestProvider.make(options)
   const context = yield* Layer.build(
     Layer.fresh(Hands.layer).pipe(
-      Layer.provide(HandProviders.layer([Effect.succeed(probe.provider)])),
+      Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
       Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ HAND_KEYS: signingKeys, ...config }))),
     ),
   )
