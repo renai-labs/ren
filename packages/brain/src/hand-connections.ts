@@ -162,7 +162,7 @@ export const layer = Layer.effect(
             })
           yield* client["files.mkdir"]({ path: access.directory }).pipe(
             Effect.mapError((error) =>
-              error._tag === "OperationFailedError"
+              error._tag === "FileSystemError"
                 ? new Unavailable({
                     sessionId,
                     reason: "unusable",

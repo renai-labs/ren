@@ -55,11 +55,13 @@ export const SpawnResult = Schema.Struct({ id: ProcessID, pid: Schema.Int }).ann
   identifier: "Executor.SpawnResult",
 })
 
+export const maxWindowBytes = 1024 * 1024
+
 const Offset = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
 export interface OutputWindow extends Schema.Schema.Type<typeof OutputWindow> {}
 export const OutputWindow = Schema.Struct({
-  maxBytes: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(1024 * 1024)),
+  maxBytes: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(maxWindowBytes)),
   intervalMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 }).annotate({
   identifier: "Executor.OutputWindow",
@@ -120,9 +122,17 @@ export class WrongKindError extends Schema.TaggedError<WrongKindError>()("WrongK
   actual: FileType,
 }) {}
 
-export class OperationFailedError extends Schema.TaggedError<OperationFailedError>()("OperationFailedError", {
-  path: Schema.optionalKey(Schema.String),
+export class FileSystemError extends Schema.TaggedError<FileSystemError>()("FileSystemError", {
+  path: Schema.String,
   message: Schema.String,
+}) {}
+
+export class SpawnFailedError extends Schema.TaggedError<SpawnFailedError>()("SpawnFailedError", {
+  message: Schema.String,
+}) {}
+
+export class StdinClosedError extends Schema.TaggedError<StdinClosedError>()("StdinClosedError", {
+  id: ProcessID,
 }) {}
 
 export class StdinFullError extends Schema.TaggedError<StdinFullError>()("StdinFullError", {
@@ -139,14 +149,12 @@ export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundErro
   id: ProcessID,
 }) {}
 
-export class Caller extends Context.Service<Caller, { readonly brain: Brain.ID }>()(
-  "@ren/brain-api/ExecutorApi.Caller",
-) {}
+export class Caller extends Context.Service<Caller, { readonly brain: Brain.ID }>()("@ren/hand-api/Caller") {}
 
 export class Authentication extends RpcMiddleware.Service<
   Authentication,
   { provides: Caller; clientError: RpcClientError.RpcClientError }
->()("@ren/brain-api/ExecutorApi.Authentication", { error: UnauthorizedError, requiredForClient: true }) {}
+>()("@ren/hand-api/Authentication", { error: UnauthorizedError, requiredForClient: true }) {}
 
 const Path = Schema.Struct({ path: Schema.String })
 
@@ -154,7 +162,7 @@ const ProcessRef = { id: ProcessID }
 
 export const ExecutorApi = RpcGroup.make(
   Rpc.make("executor.hello", { success: Hello }),
-  Rpc.make("process.spawn", { payload: SpawnInput, success: SpawnResult, error: OperationFailedError }),
+  Rpc.make("process.spawn", { payload: SpawnInput, success: SpawnResult, error: SpawnFailedError }),
   Rpc.make("process.output", {
     payload: { ...ProcessRef, cursor: Schema.optionalKey(Offset), window: Schema.optionalKey(OutputWindow) },
     success: ProcessEvent,
@@ -167,7 +175,7 @@ export const ExecutorApi = RpcGroup.make(
       data: Schema.Uint8ArrayFromBase64,
       end: Schema.optionalKey(Schema.Boolean),
     },
-    error: Schema.Union([ProcessNotFoundError, StdinFullError, OperationFailedError]),
+    error: Schema.Union([ProcessNotFoundError, StdinFullError, StdinClosedError]),
   }),
   Rpc.make("process.heartbeat", { payload: ProcessRef, error: ProcessNotFoundError }),
   Rpc.make("process.kill", {
@@ -181,26 +189,26 @@ export const ExecutorApi = RpcGroup.make(
   Rpc.make("files.read", {
     payload: { path: Schema.String, range: Schema.optionalKey(Range) },
     success: ReadResult,
-    error: Schema.Union([FileNotFoundError, WrongKindError, FileTooLargeError, OperationFailedError]),
+    error: Schema.Union([FileNotFoundError, WrongKindError, FileTooLargeError, FileSystemError]),
   }),
   Rpc.make("files.write", {
     payload: { path: Schema.String, bytes: Schema.Uint8ArrayFromBase64 },
-    error: Schema.Union([FileTooLargeError, OperationFailedError]),
+    error: Schema.Union([FileTooLargeError, FileSystemError]),
   }),
   Rpc.make("files.stat", {
     payload: Path,
     success: FileInfo,
-    error: Schema.Union([FileNotFoundError, OperationFailedError]),
+    error: Schema.Union([FileNotFoundError, FileSystemError]),
   }),
   Rpc.make("files.list", {
     payload: Path,
     success: Schema.Array(DirectoryEntry),
-    error: Schema.Union([FileNotFoundError, WrongKindError, OperationFailedError]),
+    error: Schema.Union([FileNotFoundError, WrongKindError, FileSystemError]),
   }),
-  Rpc.make("files.remove", { payload: Path, error: OperationFailedError }),
+  Rpc.make("files.remove", { payload: Path, error: FileSystemError }),
   Rpc.make("files.move", {
     payload: { from: Schema.String, to: Schema.String },
-    error: Schema.Union([FileNotFoundError, OperationFailedError]),
+    error: Schema.Union([FileNotFoundError, FileSystemError]),
   }),
-  Rpc.make("files.mkdir", { payload: Path, error: OperationFailedError }),
+  Rpc.make("files.mkdir", { payload: Path, error: FileSystemError }),
 ).middleware(Authentication)

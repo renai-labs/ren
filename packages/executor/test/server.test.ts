@@ -148,7 +148,7 @@ it.live("returns the declared errors", () =>
     const missing = yield* api["files.read"]({ path: "missing" }).pipe(Effect.flip)
     expect(missing._tag === "FileNotFoundError" && missing.path).toBe("missing")
     const failed = yield* api["process.spawn"]({ command: "ren-no-such-command", arguments: [] }).pipe(Effect.flip)
-    expect(failed._tag).toBe("OperationFailedError")
+    expect(failed._tag).toBe("SpawnFailedError")
     const spawned = yield* api["process.spawn"]({ command: "sleep", arguments: ["5"] })
     const other = yield* client({ brain: Brain.ID.create() })
     expect((yield* other["process.output"]({ id: spawned.id }).pipe(Stream.runDrain, Effect.flip))._tag).toBe(

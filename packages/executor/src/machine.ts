@@ -7,7 +7,7 @@ import {
   FileTooLargeError,
   type FileType,
   maxFileBytes,
-  OperationFailedError,
+  FileSystemError,
   orphanAfter,
   type OutputWindow,
   pingEvery,
@@ -15,7 +15,9 @@ import {
   ProcessNotFoundError,
   protocol,
   type Range,
+  SpawnFailedError,
   type SpawnInput,
+  StdinClosedError,
   StdinFullError,
   WrongKindError,
 } from "@ren/hand-api/executor-api"
@@ -72,13 +74,13 @@ const fileType = (entry: { isFile(): boolean; isDirectory(): boolean; isSymbolic
 }
 
 const attempt = <A>(path: string, run: () => Promise<A>) =>
-  Effect.tryPromise({ try: run, catch: (cause) => new OperationFailedError({ path, message: message(cause) }) })
+  Effect.tryPromise({ try: run, catch: (cause) => new FileSystemError({ path, message: message(cause) }) })
 
 const attemptFound = <A>(path: string, run: () => Promise<A>) =>
   Effect.tryPromise({
     try: run,
     catch: (cause) =>
-      isMissing(cause) ? new FileNotFoundError({ path }) : new OperationFailedError({ path, message: message(cause) }),
+      isMissing(cause) ? new FileNotFoundError({ path }) : new FileSystemError({ path, message: message(cause) }),
   })
 
 const killedBy = (error: PlatformError.PlatformError) =>
@@ -179,7 +181,7 @@ export const layer = Layer.effect(
             (file) => Effect.promise(() => file.close()),
           ).pipe(
             Scope.provide(entryScope),
-            Effect.mapError((cause) => new OperationFailedError({ message: message(cause) })),
+            Effect.mapError((cause) => new SpawnFailedError({ message: message(cause) })),
             Effect.onError(() => Scope.close(entryScope, Exit.void)),
           )
         : undefined
@@ -197,8 +199,8 @@ export const layer = Layer.effect(
         )
         .pipe(
           Scope.provide(entryScope),
-          Effect.mapError((cause) => new OperationFailedError({ message: message(cause) })),
-          Effect.catchDefect((defect) => Effect.fail(new OperationFailedError({ message: message(defect) }))),
+          Effect.mapError((cause) => new SpawnFailedError({ message: message(cause) })),
+          Effect.catchDefect((defect) => Effect.fail(new SpawnFailedError({ message: message(defect) }))),
           Effect.onError(() => Scope.close(entryScope, Exit.void)),
         )
       const id = ProcessID.create()
@@ -269,10 +271,10 @@ export const layer = Layer.effect(
       end: boolean,
     ) {
       const stdin = (yield* find(brain, id)).stdin
-      if (!stdin) return yield* new OperationFailedError({ message: "The process has no stdin" })
+      if (!stdin) return yield* new StdinClosedError({ id })
       if (data.length > 0 && (yield* Queue.isFull(stdin))) return yield* new StdinFullError({ id })
       const accepted = data.length === 0 || (yield* Queue.offer(stdin, data))
-      if (!accepted) return yield* new OperationFailedError({ message: "The process’s stdin is closed" })
+      if (!accepted) return yield* new StdinClosedError({ id })
       if (end) yield* Queue.end(stdin)
     })
 

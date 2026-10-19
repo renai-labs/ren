@@ -87,7 +87,7 @@ describe.skipIf(Platform.docker !== undefined)("an executor in a container", () 
     const system = await driver.run(
       driver.client["files.write"]({ path: "/etc/chaos-escape", bytes: new TextEncoder().encode("x") }),
     )
-    expect(ExecutorDriver.errorTag(system)).toBe("OperationFailedError")
+    expect(ExecutorDriver.errorTag(system)).toBe("FileSystemError")
   })
 
   test("after a crash the container has stopped the executor's children and the old process is unknown", async () => {
