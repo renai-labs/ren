@@ -9,7 +9,7 @@ import { SchemaShape } from "./schema-shape.js"
 import { TypeText } from "./type-text.js"
 import type { Types } from "./types.js"
 
-type TypeOf = (schema: Schema.Top, decoded?: boolean) => string
+type TypeOf = (schema: Schema.Top, options?: { readonly decoded: boolean }) => string
 type CodeDocument = ReturnType<typeof SchemaRepresentation.toCodeDocument>
 
 function assertNoReferencedTypes(document: CodeDocument) {
@@ -47,7 +47,10 @@ function structuralType(schema: Schema.Top) {
   )
 }
 
-function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, reservedNames: ReadonlySet<string>) {
+function structuralTypes(
+  schemas: ReadonlyArray<Schema.Top>,
+  options: { readonly mutable: boolean; readonly reservedNames: ReadonlySet<string> },
+) {
   if (schemas.length === 0) return { types: [], definitions: [] }
   const representations = CodegenAst.codegenRepresentations(schemas.map((schema) => CodegenAst.jsonWireAst(schema.ast)))
   const document = SchemaRepresentation.toCodeDocument(representations)
@@ -66,7 +69,7 @@ function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, r
       .map((reference) => [reference.$ref, reference.code.Type]),
   )
   const names = new Map<string, string>()
-  const usedNames = new Set(reservedNames)
+  const usedNames = new Set(options.reservedNames)
   const references = document.references.nonRecursives.filter((reference) => !anonymous.has(reference.$ref))
   const referenceNames = new Set(references.map((reference) => reference.$ref))
   for (const reference of references) {
@@ -81,7 +84,9 @@ function structuralTypes(schemas: ReadonlyArray<Schema.Top>, mutable: boolean, r
     )
     const output = named.replaceAll("Schema.Json", "JsonValue").replaceAll(/(?<!["'])\bunknown\b(?!["'])/g, "any")
     const suggested = TypeText.preserveStringSuggestions(output)
-    return mutable ? suggested.replaceAll("ReadonlyArray<", "Array<").replaceAll(/\breadonly\s+/g, "") : suggested
+    return options.mutable
+      ? suggested.replaceAll("ReadonlyArray<", "Array<").replaceAll(/\breadonly\s+/g, "")
+      : suggested
   }
   const equivalent = new Map<string, string>()
   for (const reference of references) {
@@ -137,7 +142,7 @@ function renderEndpointTypes(
       const type =
         SchemaShape.isOpaquePayload(endpoint) && field.source === "payload"
           ? typeOf(schema)
-          : `(${typeOf(schema, field.source === "query")})[${JSON.stringify(field.name)}]`
+          : `(${typeOf(schema, { decoded: field.source === "query" })})[${JSON.stringify(field.name)}]`
       return `readonly ${JSON.stringify(field.name)}${field.optional ? "?" : ""}: ${type}`
     })
     .join("; ")
@@ -155,10 +160,10 @@ function renderErrorType(error: NonNullable<ReturnType<typeof SchemaShape.declar
   return `export type ${error.identifier} = { readonly ${JSON.stringify(error.key)}: ${JSON.stringify(error.tag)}; ${fields} }\nexport const is${error.identifier} = (value: unknown): value is ${error.identifier} => typeof value === "object" && value !== null && ${JSON.stringify(error.key)} in value && value[${JSON.stringify(error.key)}] === ${JSON.stringify(error.tag)}`
 }
 
-export function renderPromiseTypes(groups: ReadonlyArray<Types.Group>, mutableOutputs: boolean) {
+export function renderPromiseTypes(groups: ReadonlyArray<Types.Group>, options: { readonly mutableOutputs: boolean }) {
   const types = new Map<SchemaAST.AST, string>()
-  const typeOf: TypeOf = (schema, decoded = false) => {
-    const projected = decoded ? Schema.toType(schema) : Schema.toEncoded(schema)
+  const typeOf: TypeOf = (schema, typeOptions) => {
+    const projected = typeOptions?.decoded ? Schema.toType(schema) : Schema.toEncoded(schema)
     const cached = types.get(projected.ast)
     if (cached !== undefined) return cached
     const type = structuralType(projected)
@@ -203,7 +208,7 @@ export function renderPromiseTypes(groups: ReadonlyArray<Types.Group>, mutableOu
       }),
     ),
   ])
-  const rendered = structuralTypes(outputSchemas, mutableOutputs, reservedNames)
+  const rendered = structuralTypes(outputSchemas, { mutable: options.mutableOutputs, reservedNames })
   const resolve = (source: string) =>
     rendered.types.reduce((result, type, index) => result.replaceAll(`__PROMISE_TYPE_${index}__`, type), source)
   const resolvedErrors = errorTypes.map(resolve)
@@ -211,7 +216,7 @@ export function renderPromiseTypes(groups: ReadonlyArray<Types.Group>, mutableOu
   const json = [...rendered.definitions, ...resolvedErrors, resolvedOperations].some((type) =>
     type.includes("JsonValue"),
   )
-    ? `export type JsonValue = null | boolean | number | string | ${mutableOutputs ? "Array<JsonValue> | { [key: string]: JsonValue }" : "ReadonlyArray<JsonValue> | { readonly [key: string]: JsonValue }"}`
+    ? `export type JsonValue = null | boolean | number | string | ${options.mutableOutputs ? "Array<JsonValue> | { [key: string]: JsonValue }" : "ReadonlyArray<JsonValue> | { readonly [key: string]: JsonValue }"}`
     : ""
   return [json, ...rendered.definitions, ...resolvedErrors, resolvedOperations].filter(Boolean).join("\n\n")
 }

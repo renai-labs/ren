@@ -36,8 +36,7 @@ export interface Interface {
   readonly writeStdin: (
     brain: Brain.ID,
     id: ProcessID,
-    data: Uint8Array,
-    end: boolean,
+    input: { readonly data: Uint8Array; readonly end: boolean },
   ) => Effect.Effect<void, ProcessNotFoundError | StdinFullError | StdinClosedError>
   readonly heartbeat: (brain: Brain.ID, id: ProcessID) => Effect.Effect<void, ProcessNotFoundError>
   readonly kill: (

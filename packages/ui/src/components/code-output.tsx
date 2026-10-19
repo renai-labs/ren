@@ -27,7 +27,8 @@ const tokenTone: Record<TokenKind, string> = {
 const whitespace = /^\s+$/
 const operator = /^(?:\|\|?|&&|;)$/
 
-function classify(part: string, commandNext: boolean): { kind: TokenKind; commandNext: boolean } {
+function classify(part: string, state: { readonly commandNext: boolean }): { kind: TokenKind; commandNext: boolean } {
+  const commandNext = state.commandNext
   if (whitespace.test(part)) return { kind: "plain", commandNext: commandNext || part.includes("\n") }
   if (operator.test(part)) return { kind: "punctuation", commandNext: true }
   if (/^["']/.test(part)) return { kind: "string", commandNext }
@@ -42,7 +43,7 @@ function shellTokens(source: string) {
     tokens.push({
       text: part,
       start: previous === undefined ? 0 : previous.start + previous.text.length,
-      ...classify(part, previous?.commandNext ?? true),
+      ...classify(part, { commandNext: previous?.commandNext ?? true }),
     })
   }
   return tokens

@@ -115,8 +115,8 @@ export const layer = Layer.effect(
         ),
     )
     const path = (value: string) => resolve(workspace, value)
-    const describe = (value: string, followLink: boolean) =>
-      attemptFound(value, () => (followLink ? stat(path(value)) : lstat(path(value)))).pipe(
+    const describe = (value: string, options: { readonly followLink: boolean }) =>
+      attemptFound(value, () => (options.followLink ? stat(path(value)) : lstat(path(value)))).pipe(
         Effect.map((stats): FileInfo => ({
           type: fileType(stats),
           sizeBytes: stats.size,
@@ -268,15 +268,14 @@ export const layer = Layer.effect(
     const writeStdin = Effect.fn("Executor.writeStdin")(function* (
       brain: Brain.ID,
       id: ProcessID,
-      data: Uint8Array,
-      end: boolean,
+      input: { readonly data: Uint8Array; readonly end: boolean },
     ) {
       const stdin = (yield* find(brain, id)).stdin
       if (!stdin) return yield* new StdinClosedError({ id })
-      if (data.length > 0 && (yield* Queue.isFull(stdin))) return yield* new StdinFullError({ id })
-      const accepted = data.length === 0 || (yield* Queue.offer(stdin, data))
+      if (input.data.length > 0 && (yield* Queue.isFull(stdin))) return yield* new StdinFullError({ id })
+      const accepted = input.data.length === 0 || (yield* Queue.offer(stdin, input.data))
       if (!accepted) return yield* new StdinClosedError({ id })
-      if (end) yield* Queue.end(stdin)
+      if (input.end) yield* Queue.end(stdin)
     })
 
     const heartbeat = Effect.fn("Executor.heartbeat")(function* (brain: Brain.ID, id: ProcessID) {
@@ -317,7 +316,7 @@ export const layer = Layer.effect(
       heartbeat,
       kill,
       read: Effect.fn("Executor.read")(function* (value: string, range?: Range) {
-        const info = yield* describe(value, true)
+        const info = yield* describe(value, { followLink: true })
         if (info.type !== "file") return yield* new WrongKindError({ path: value, actual: info.type })
         const found = yield* attemptFound(value, async () => {
           await using handle = await open(path(value), "r")
@@ -345,17 +344,17 @@ export const layer = Layer.effect(
               await mkdir(dirname(path(value)), { recursive: true })
               await writeFile(path(value), bytes)
             }),
-      stat: (value) => describe(value, false),
+      stat: (value) => describe(value, { followLink: false }),
       list: Effect.fn("Executor.list")(function* (value: string) {
-        const info = yield* describe(value, true)
+        const info = yield* describe(value, { followLink: true })
         if (info.type !== "directory") return yield* new WrongKindError({ path: value, actual: info.type })
         const entries = yield* attemptFound(value, () => readdir(path(value), { withFileTypes: true }))
         return entries.map((entry) => ({ name: entry.name, type: fileType(entry) }))
       }),
       remove: (value) => attempt(value, () => rm(path(value), { recursive: true, force: true })),
       move: Effect.fn("Executor.move")(function* (from: string, to: string) {
-        yield* describe(from, false)
-        const destination = yield* describe(to, false).pipe(
+        yield* describe(from, { followLink: false })
+        const destination = yield* describe(to, { followLink: false }).pipe(
           Effect.map((info) => (info.type === "directory" ? join(path(to), basename(from)) : path(to))),
           Effect.catchTag("FileNotFoundError", () => Effect.succeed(path(to))),
         )

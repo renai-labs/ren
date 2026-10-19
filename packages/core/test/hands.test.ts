@@ -65,8 +65,8 @@ describe("Hands", () => {
       const session = yield* subjectIn(organizationId)
       const binding = yield* subject.hands.bind(session, environmentId)
       expect(binding).toEqual({ directory: `/workspace/${session.sessionId}`, isNew: true })
-      expect(yield* subject.hands.find(session)).toEqual(Option.some(binding.directory))
-      expect(yield* subject.hands.find({ ...session, organizationId: yield* Seed.organization() })).toEqual(
+      expect(yield* subject.hands.findDirectory(session)).toEqual(Option.some(binding.directory))
+      expect(yield* subject.hands.findDirectory({ ...session, organizationId: yield* Seed.organization() })).toEqual(
         Option.none(),
       )
       expect(yield* Ref.get(subject.probe.provisions)).toEqual([])
@@ -109,7 +109,7 @@ describe("Hands", () => {
         .set({ archived_at: new Date() })
         .where(eq(Database.Schema.space_environment.environment_id, environmentId))
       expect((yield* subject.hands.access(session).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
-      expect(yield* subject.hands.find(session)).toEqual(Option.none())
+      expect(yield* subject.hands.findDirectory(session)).toEqual(Option.none())
     }),
   )
 

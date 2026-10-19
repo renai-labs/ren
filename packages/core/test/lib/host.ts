@@ -11,7 +11,7 @@ const noHands = Layer.succeed(
   Hands.Service.of({
     bind: (_subject, environmentId) =>
       Effect.fail(new Hands.NotFound({ message: `Environment ${environmentId} is not available to this session` })),
-    find: () => Effect.succeed(Option.none()),
+    findDirectory: () => Effect.succeed(Option.none()),
     unbind: () => Effect.void,
     access: (subject) =>
       Effect.fail(new Hands.NotFound({ message: `Session ${subject.sessionId} has no environment` })),

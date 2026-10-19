@@ -24,6 +24,7 @@ export type RootProps = {
 }
 
 function guard(props: RootProps) {
+  // ast-grep-ignore: no-boolean-flag-parameter -- Base UI's onOpenChange signature
   return (next: boolean, details: { reason: string; cancel: () => void }) => {
     if (!next && props.dismissal === "blocked" && details.reason !== "imperative-action") {
       details.cancel()

@@ -138,7 +138,7 @@ for (const shell of [
 it.live("writes stdin and closes it", () =>
   Effect.gen(function* () {
     const process = yield* run({ command: "cat", arguments: [], hasStdin: true })
-    yield* process.executor.writeStdin(brain, process.id, new TextEncoder().encode("hello"), true)
+    yield* process.executor.writeStdin(brain, process.id, { data: new TextEncoder().encode("hello"), end: true })
     expect(yield* collect(process.events)).toEqual({
       stdout: "hello",
       stderr: "",
@@ -402,10 +402,10 @@ it.live("takes a megabyte of stdin in writes larger than its buffer", () =>
     const chunk = new Uint8Array(64 * 1024)
     yield* Effect.forEach(
       Array.from({ length: 16 }, () => chunk),
-      (bytes) => process.executor.writeStdin(brain, process.id, bytes, false),
+      (bytes) => process.executor.writeStdin(brain, process.id, { data: bytes, end: false }),
       { discard: true },
     )
-    yield* process.executor.writeStdin(brain, process.id, new Uint8Array(), true)
+    yield* process.executor.writeStdin(brain, process.id, { data: new Uint8Array(), end: true })
     expect((yield* collect(process.events)).stdout.trim()).toBe(String(16 * 64 * 1024))
   }),
 )
@@ -415,10 +415,12 @@ it.live("refuses stdin at once while the process's stdin queue is full, and take
     const process = yield* run({ command: "sh", arguments: ["-c", "read -r go; cat >/dev/null"], hasStdin: true })
     yield* Effect.forEach(
       Array.from({ length: 16 }, () => encoder.encode("x")),
-      (bytes) => process.executor.writeStdin(brain, process.id, bytes, false),
+      (bytes) => process.executor.writeStdin(brain, process.id, { data: bytes, end: false }),
       { discard: true },
     )
-    const full = yield* process.executor.writeStdin(brain, process.id, encoder.encode("y"), false).pipe(Effect.flip)
+    const full = yield* process.executor
+      .writeStdin(brain, process.id, { data: encoder.encode("y"), end: false })
+      .pipe(Effect.flip)
     expect(full._tag).toBe("StdinFullError")
     yield* process.executor.kill(brain, process.id, "SIGKILL")
     expect((yield* collect(process.events)).exit).toEqual({ type: "exit", exitCode: null, signal: "SIGKILL" })
@@ -428,8 +430,10 @@ it.live("refuses stdin at once while the process's stdin queue is full, and take
 it.live("refuses stdin after it was closed", () =>
   Effect.gen(function* () {
     const process = yield* run({ command: "sh", arguments: ["-c", "cat; sleep 0.5"], hasStdin: true })
-    yield* process.executor.writeStdin(brain, process.id, encoder.encode("a"), true)
-    const error = yield* process.executor.writeStdin(brain, process.id, encoder.encode("b"), false).pipe(Effect.flip)
+    yield* process.executor.writeStdin(brain, process.id, { data: encoder.encode("a"), end: true })
+    const error = yield* process.executor
+      .writeStdin(brain, process.id, { data: encoder.encode("b"), end: false })
+      .pipe(Effect.flip)
     expect(error._tag).toBe("StdinClosedError")
     expect((yield* collect(process.events)).stdout).toBe("a")
   }),
@@ -591,7 +595,9 @@ it.live("refuses stdin for a process that was started without stdin", () =>
   Effect.gen(function* () {
     const process = yield* run({ command: "sleep", arguments: ["30"] })
     for (const end of [false, true]) {
-      const error = yield* process.executor.writeStdin(brain, process.id, encoder.encode("x"), end).pipe(Effect.flip)
+      const error = yield* process.executor
+        .writeStdin(brain, process.id, { data: encoder.encode("x"), end })
+        .pipe(Effect.flip)
       expect(error._tag).toBe("StdinClosedError")
     }
     yield* process.executor.kill(brain, process.id, "SIGKILL")
@@ -607,7 +613,9 @@ it.live("refuses stdin at once for a process that exited", () =>
         Effect.gen(function* () {
           const spawned = yield* executor.spawn(brain, { command: "true", arguments: [], hasStdin: true })
           yield* Stream.runDrain(yield* executor.output(brain, spawned.id))
-          return (yield* executor.writeStdin(brain, spawned.id, encoder.encode("late"), false).pipe(Effect.flip))._tag
+          return (yield* executor
+            .writeStdin(brain, spawned.id, { data: encoder.encode("late"), end: false })
+            .pipe(Effect.flip))._tag
         }),
       { concurrency: 1 },
     )
@@ -629,7 +637,7 @@ it.live("gives a process with no stdin the end of input at once", () =>
 it.live("closes stdin with a write of 0 bytes and the end flag", () =>
   Effect.gen(function* () {
     const process = yield* run({ command: "cat", arguments: [], hasStdin: true })
-    yield* process.executor.writeStdin(brain, process.id, new Uint8Array(), true)
+    yield* process.executor.writeStdin(brain, process.id, { data: new Uint8Array(), end: true })
     expect(yield* collect(process.events)).toEqual({
       stdout: "",
       stderr: "",
@@ -644,12 +652,12 @@ it.live("gives the process the data of a write with the end flag before the end 
     const lines = Array.from({ length: 15 }, (_, index) => `line ${index}\n`)
     yield* Effect.forEach(
       lines,
-      (line) => process.executor.writeStdin(brain, process.id, encoder.encode(line), false),
+      (line) => process.executor.writeStdin(brain, process.id, { data: encoder.encode(line), end: false }),
       {
         discard: true,
       },
     )
-    yield* process.executor.writeStdin(brain, process.id, encoder.encode("last\n"), true)
+    yield* process.executor.writeStdin(brain, process.id, { data: encoder.encode("last\n"), end: true })
     expect((yield* collect(process.events)).stdout).toBe(`${lines.join("")}last\n`)
   }),
 )
@@ -769,11 +777,11 @@ it.live("waits for new output when the cursor is after the end", () =>
       Stream.runCollect,
       Effect.forkScoped,
     )
-    yield* process.executor.writeStdin(brain, process.id, encoder.encode("abc"), false)
+    yield* process.executor.writeStdin(brain, process.id, { data: encoder.encode("abc"), end: false })
     yield* Fiber.join(everything)
     yield* Effect.yieldNow
     expect(yield* Deferred.isDone(seen)).toBe(false)
-    yield* process.executor.writeStdin(brain, process.id, encoder.encode("de"), true)
+    yield* process.executor.writeStdin(brain, process.id, { data: encoder.encode("de"), end: true })
     expect([...(yield* Fiber.join(early))]).toEqual([
       { type: "stdout", offset: 4, bytes: encoder.encode("e") },
       { type: "exit", exitCode: 0, signal: null },
@@ -941,7 +949,7 @@ it.live("gives a reader that comes back after the exit, or while it exits, the r
   Effect.gen(function* () {
     const start = Effect.fnUntraced(function* () {
       const process = yield* run({ command: "cat", arguments: [], hasStdin: true })
-      yield* process.executor.writeStdin(brain, process.id, encoder.encode("abc"), false)
+      yield* process.executor.writeStdin(brain, process.id, { data: encoder.encode("abc"), end: false })
       yield* process.events.pipe(
         Stream.takeUntil((event) => event.type === "stdout"),
         Stream.runDrain,
@@ -949,7 +957,7 @@ it.live("gives a reader that comes back after the exit, or while it exits, the r
       return process
     })
     const after = yield* start()
-    yield* after.executor.writeStdin(brain, after.id, new Uint8Array(), true)
+    yield* after.executor.writeStdin(brain, after.id, { data: new Uint8Array(), end: true })
     yield* Processes.exits(after.pid)
     expect([...(yield* Stream.runCollect(yield* after.executor.output(brain, after.id, 3)))]).toEqual([
       { type: "exit", exitCode: 0, signal: null },
@@ -961,7 +969,7 @@ it.live("gives a reader that comes back after the exit, or while it exits, the r
           const racing = yield* start()
           const both = yield* Effect.all(
             [
-              racing.executor.writeStdin(brain, racing.id, new Uint8Array(), true),
+              racing.executor.writeStdin(brain, racing.id, { data: new Uint8Array(), end: true }),
               Effect.flatMap(racing.executor.output(brain, racing.id, 3), Stream.runCollect),
             ],
             { concurrency: "unbounded" },

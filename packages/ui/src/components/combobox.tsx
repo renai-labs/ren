@@ -94,6 +94,7 @@ function Options(props: PopoverProps & { presentation: Presentation }) {
     onInputValueChange: tree.changeQuery,
     onItemHighlighted: tree.highlight,
     open: props.open ?? ownOpen,
+    // ast-grep-ignore: no-boolean-flag-parameter -- Base UI's onOpenChange signature
     onOpenChange: (next: boolean, details: Combobox.Root.ChangeEventDetails) => {
       if (!next && details.reason === "escape-key" && tree.nested) {
         details.cancel()
@@ -109,7 +110,7 @@ function Options(props: PopoverProps & { presentation: Presentation }) {
       <Body
         {...props}
         tree={tree.tree}
-        onTreeKeyDown={(event) => tree.keyDown(event, !popover)}
+        onTreeKeyDown={(event) => tree.keyDown(event, { escapes: !popover })}
         focusOnMount={!popover}
         pickFirstOnEnter={props.selection !== "multiple"}
       />

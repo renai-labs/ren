@@ -65,7 +65,9 @@ const operations = ExecutorApi.toLayer(
           Effect.flatMap(Caller, (caller) => executor.output(caller.brain, input.id, input.cursor, input.window)),
         ),
       "process.write": (input) =>
-        Effect.flatMap(Caller, (caller) => executor.writeStdin(caller.brain, input.id, input.data, input.end ?? false)),
+        Effect.flatMap(Caller, (caller) =>
+          executor.writeStdin(caller.brain, input.id, { data: input.data, end: input.end ?? false }),
+        ),
       "process.heartbeat": (input) => Effect.flatMap(Caller, (caller) => executor.heartbeat(caller.brain, input.id)),
       "process.kill": (input) =>
         Effect.flatMap(Caller, (caller) =>
