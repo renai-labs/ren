@@ -25,13 +25,18 @@ export const PrivateKey = Schema.Struct({
   key: bytes(privateKeyBytes),
 }).annotate({ identifier: "Signature.PrivateKey" })
 
-export const PublicKeys = Schema.fromJsonString(
-  Schema.NonEmptyArray(PublicKey).check(
-    Schema.makeFilter((keys) => new Set(keys.map((key) => key.id)).size === keys.length || "key ids must be unique"),
-  ),
-).annotate({ identifier: "Signature.PublicKeys" })
+const hasUniqueIds = Schema.makeFilter(
+  (keys: ReadonlyArray<{ readonly id: string }>) =>
+    new Set(keys.map((key) => key.id)).size === keys.length || "key ids must be unique",
+)
 
-export const SigningKey = Schema.fromJsonString(PrivateKey).annotate({ identifier: "Signature.SigningKey" })
+export const PublicKeys = Schema.fromJsonString(Schema.NonEmptyArray(PublicKey).check(hasUniqueIds)).annotate({
+  identifier: "Signature.PublicKeys",
+})
+
+export const PrivateKeys = Schema.fromJsonString(Schema.NonEmptyArray(PrivateKey).check(hasUniqueIds)).annotate({
+  identifier: "Signature.PrivateKeys",
+})
 
 export const generate = Effect.fn("Signature.generate")(function* (id: string) {
   const pair = yield* Effect.promise(() => crypto.subtle.generateKey(keyAlgorithm, true, ["sign", "verify"]))

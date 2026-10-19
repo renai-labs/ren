@@ -27,7 +27,7 @@ export const layer = (options: {
         ConfigProvider.fromUnknown({
           EXECUTOR_HAND_ID: options.handId,
           EXECUTOR_WORKSPACE: options.workspace,
-          BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(options.publicKeys ?? [keys.publicKey]),
+          HAND_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(options.publicKeys ?? [keys.publicKey]),
         }),
       ),
     ),
