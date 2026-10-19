@@ -28,3 +28,27 @@ test("a member starts a chat, follows the reply, sends again and finds the chat 
   await expect(page.getByText("Plan the launch")).toBeVisible()
   await expect(page.getByText("stub reply")).toHaveCount(2)
 })
+
+test("a member renames a chat, reverts a message into the composer and restores it", async ({ page }) => {
+  await createOrganization(page.request, { name: "Ada Lovelace" })
+  await page.goto("/app/")
+  const start = page.getByRole("form", { name: "Start a chat" })
+  await start.getByRole("textbox", { name: "Message" }).fill("Draft the agenda")
+  await start.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible()
+
+  await page.getByRole("button", { name: /^Edit Chat title/ }).click()
+  await page.getByRole("textbox", { name: "Chat title" }).fill("Board agenda")
+  await page.getByRole("textbox", { name: "Chat title" }).press("Enter")
+  await expect(page.getByRole("link", { name: "Board agenda" })).toBeVisible()
+
+  const composer = page.getByRole("form", { name: "Message Ren" })
+  await page.getByText("Draft the agenda").hover()
+  await page.getByRole("button", { name: "Revert to this message" }).click()
+  await expect(composer.getByRole("textbox", { name: "Message" })).toHaveValue("Draft the agenda")
+  await expect(page.getByText("stub reply")).toHaveCount(0)
+
+  await page.getByRole("button", { name: "Restore messages" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible()
+  await expect(page.getByRole("button", { name: "Restore messages" })).toHaveCount(0)
+})

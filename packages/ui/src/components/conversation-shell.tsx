@@ -4,12 +4,17 @@ import { cva } from "class-variance-authority"
 import { createContext, use, useEffect, useLayoutEffect, useRef, useState } from "react"
 import type { ComponentPropsWithoutRef, KeyboardEvent, ReactNode, Ref, UIEvent } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
+import { assignRef, ShellContext } from "../lib/conversation-context.js"
+import { JumpToLatest } from "../lib/conversation-timeline.js"
 import { AttachmentTile } from "./attachment-tile.js"
 import { Button } from "./button.js"
 import { Icon } from "./icon.js"
 import { IconButton } from "./icon-button.js"
 import { KeyboardKey } from "./keyboard-key.js"
 import { Text } from "./text.js"
+
+export { Timeline } from "../lib/conversation-timeline.js"
+export type { TimelineHandle, TimelineHistory, TimelineProps } from "../lib/conversation-timeline.js"
 
 export type Mode = "live" | "pending" | "read-only" | "replay"
 export type ComposerPosition = "docked" | "centered"
@@ -19,6 +24,7 @@ export type RootProps = {
   mode?: Mode
   header?: ReactNode
   transcript?: ReactNode
+  timeline?: ReactNode
   populated: boolean
   placeholder?: ReactNode
   interaction?: ReactNode
@@ -40,40 +46,42 @@ export type RootProps = {
 export function Root(props: RootProps) {
   const hidden = props.hidden ?? false
   const position = props.composerPosition ?? "docked"
+  const [dock, setDock] = useState<HTMLDivElement | null>(null)
+  const container = (node: HTMLDivElement | null) => {
+    setDock(node)
+    return assignRef(props.composerRef, node)
+  }
   return (
-    <div
-      data-slot="conversation-shell"
-      data-mode={props.mode ?? "live"}
-      className="relative flex min-h-0 w-full flex-1 flex-row overflow-hidden"
-    >
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div
-          aria-hidden={hidden || undefined}
-          inert={hidden}
-          className={composeClasses("relative flex min-h-0 flex-1 flex-col", hidden && "invisible")}
-        >
-          {props.header ? (
-            <div className="pointer-events-none absolute top-2 right-2 left-12 z-20 flex min-w-0 items-center gap-1 *:pointer-events-auto md:left-3">
-              {props.header}
-            </div>
-          ) : null}
-          {!props.populated && props.placeholder ? (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-              <div className="pointer-events-auto">{props.placeholder}</div>
-            </div>
-          ) : null}
-          {position === "docked" ? <Transcript {...props} /> : null}
-          <Dock
-            position={position}
-            container={props.composerRef}
-            interaction={props.interaction}
-            composer={props.composer}
-          />
+    <ShellContext value={{ dock, populated: props.populated, scrollbar: props.scrollbar }}>
+      <div
+        data-slot="conversation-shell"
+        data-mode={props.mode ?? "live"}
+        className="relative flex min-h-0 w-full flex-1 flex-row overflow-hidden"
+      >
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div
+            aria-hidden={hidden || undefined}
+            inert={hidden}
+            className={composeClasses("relative flex min-h-0 flex-1 flex-col", hidden && "invisible")}
+          >
+            {props.header ? (
+              <div className="pointer-events-none absolute top-2 right-2 left-12 z-20 flex min-w-0 items-center gap-1 *:pointer-events-auto md:left-3">
+                {props.header}
+              </div>
+            ) : null}
+            {!props.populated && props.placeholder ? (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                <div className="pointer-events-auto">{props.placeholder}</div>
+              </div>
+            ) : null}
+            {position === "docked" ? (props.timeline ?? <Transcript {...props} />) : null}
+            <Dock position={position} container={container} interaction={props.interaction} composer={props.composer} />
+          </div>
+          {props.overlay ? <div className="absolute inset-0 flex min-h-0 flex-col">{props.overlay}</div> : null}
         </div>
-        {props.overlay ? <div className="absolute inset-0 flex min-h-0 flex-col">{props.overlay}</div> : null}
+        <Auxiliary>{props.auxiliary}</Auxiliary>
       </div>
-      <Auxiliary>{props.auxiliary}</Auxiliary>
-    </div>
+    </ShellContext>
   )
 }
 
@@ -186,23 +194,6 @@ function Viewport({
         />
       </div>
     </div>
-  )
-}
-
-function JumpToLatest(props: { visible: boolean; onActivate: () => void; composerHeight?: number | undefined }) {
-  return (
-    <button
-      type="button"
-      aria-label="Scroll to bottom"
-      onClick={props.onActivate}
-      style={props.composerHeight ? { bottom: props.composerHeight - 20 } : undefined}
-      className={composeClasses(
-        "absolute bottom-4 left-1/2 z-20 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-border-primary/disabled bg-background-secondary text-text-secondary shadow-overlay transition-standard hover:text-text-primary active:scale-95 [&_svg]:size-4",
-        props.visible ? "pointer-events-auto scale-100 opacity-100" : "pointer-events-none scale-90 opacity-0",
-      )}
-    >
-      <Icon glyph="ArrowDown" />
-    </button>
   )
 }
 

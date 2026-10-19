@@ -16,6 +16,7 @@ import { Keyboard } from "../../platform/keyboard.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
 import { ComposerKeys } from "./composer-keys.js"
+import { SessionDrafts } from "./session-drafts.js"
 
 const behavior = "steer"
 const historyKey = "history"
@@ -113,7 +114,7 @@ function Controls(props: {
 export function SessionComposer(props: { sessionID: Session.ID; state: ChatState.State; unavailable: boolean }) {
   const platform = Platform.usePlatform()
   const mobile = Viewport.useMobile()
-  const key = `session.${props.sessionID}`
+  const key = SessionDrafts.key(props.sessionID)
   const [draft, setDraft] = useState(() => Composer.decode(platform.drafts?.get(key)))
   const [history, setHistory] = useState(() => ComposerHistory.decode(platform.drafts?.get(historyKey)))
   const [browsing, setBrowsing] = useState(ComposerHistory.idle)

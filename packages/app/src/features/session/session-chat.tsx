@@ -1,56 +1,256 @@
-import { ChatState } from "@ren/chat"
+import { ChatState, Family, Working } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
-import type { Session } from "@ren/schema/session"
+import { Session } from "@ren/schema/session"
+import type { SessionMessage } from "@ren/schema/session-message"
+import { Button } from "@ren/ui/button"
 import { ConversationShell } from "@ren/ui/conversation-shell"
+import { Notice } from "@ren/ui/notice"
 import { StateMessage } from "@ren/ui/state-message"
 import { Text } from "@ren/ui/text"
+import { Toast } from "@ren/ui/toast"
+import { useQuery } from "@tanstack/react-query"
+import { Option } from "effect"
 import { AsyncResult } from "effect/reactivity"
+import { useRef, useState } from "react"
+import type { RefObject } from "react"
+import { Chat } from "../../lib/chat.js"
+import { RouterContext } from "../../lib/router-context.js"
+import { Attention } from "../../platform/attention.js"
+import { Keyboard } from "../../platform/keyboard.js"
+import { Platform } from "../../platform/platform.js"
+import { Viewport } from "../../platform/viewport.js"
+import { SessionChild } from "./session-child.js"
 import { SessionComposer } from "./session-composer.js"
+import { SessionDrafts } from "./session-drafts.js"
+import { SessionHeader } from "./session-header.js"
+import { SessionKeys } from "./session-keys.js"
 import { SessionRequests } from "./session-requests.js"
-import { SessionTranscript } from "./session-transcript.js"
+import { SessionTitle } from "./session-title.js"
+import { transcriptRows } from "./transcript-rows.js"
+import { Timeline } from "./timeline.js"
 
-export function SessionChat(props: { sessionID: Session.ID }) {
-  const session = ChatReact.useSession(props.sessionID)
-  const state = AsyncResult.getOrElse(session.state, () => ChatState.empty)
+const describe = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+const failed = (title: string) => (error: unknown) =>
+  Toast.manager.add({ type: "error", title, description: describe(error) })
+
+function useShortcuts(input: {
+  sessionID: Session.ID
+  child: Session.ID | undefined
+  state: ChatState.State
+  scroller: RefObject<ConversationShell.TimelineHandle | null>
+  onBackground: () => void
+  onChild: (sessionID: Session.ID | undefined) => void
+}) {
+  Keyboard.useKeyDown((event) => {
+    if (event.defaultPrevented) return
+    const intent = SessionKeys.intent(event, {
+      apple: Viewport.apple,
+      child: input.child !== undefined,
+      blocking: Family.background(input.state, input.sessionID).blocking.length > 0,
+    })
+    if (!intent || (intent === "parent" && Keyboard.isTyping(event))) return
+    event.preventDefault()
+    const run: Readonly<Record<SessionKeys.Intent, () => void>> = {
+      previous: () => input.scroller.current?.step(-1),
+      next: () => input.scroller.current?.step(1),
+      background: input.onBackground,
+      parent: () => {
+        const parent = input.child ? input.state.info[input.child]?.parentID : undefined
+        input.onChild(parent && parent !== input.sessionID ? Session.ID.make(parent) : undefined)
+      },
+    }
+    run[intent]()
+  })
+}
+
+function SessionInteraction(props: {
+  sessionID: Session.ID
+  state: ChatState.State
+  reconnecting: boolean
+  onRedo: () => void
+  onOpen: (sessionID: Session.ID) => void
+  onAnswered: () => void
+}) {
+  return (
+    <>
+      {props.reconnecting ? (
+        <output>
+          <Text purpose="caption" tone="secondary">
+            Reconnecting
+          </Text>
+        </output>
+      ) : null}
+      {ChatState.revertMessageID(props.state, props.sessionID) ? (
+        <Notice
+          tone="neutral"
+          placement="banner"
+          layout="inline"
+          action={
+            <Button appearance="plain" size="small" onClick={props.onRedo}>
+              Restore messages
+            </Button>
+          }
+        >
+          Later messages are undone. Sending a message discards them.
+        </Notice>
+      ) : null}
+      <SessionRequests
+        root={props.sessionID}
+        sessionID={props.sessionID}
+        state={props.state}
+        onOpen={props.onOpen}
+        onAnswered={props.onAnswered}
+      />
+    </>
+  )
+}
+
+const read = (session: ReturnType<typeof ChatReact.useSession>) => {
   const timeline = AsyncResult.isSuccess(session.timeline) ? session.timeline.value : undefined
+  return {
+    state: AsyncResult.getOrElse(session.state, () => ChatState.empty),
+    timeline,
+    rows: timeline?.rows ?? [],
+    reconnecting: AsyncResult.isSuccess(session.status) && session.status.value === "reconnecting",
+  }
+}
+
+const blocked = (state: ChatState.State, sessionID: Session.ID) =>
+  Boolean(Family.permission(state, sessionID) ?? Family.form(state, sessionID))
+
+export function SessionChat(props: {
+  sessionID: Session.ID
+  message: SessionMessage.ID | undefined
+  child: Session.ID | undefined
+  onFollow: () => void
+  onChild: (sessionID: Session.ID | undefined) => void
+  onArchived: () => void
+}) {
+  const platform = Platform.usePlatform()
+  const context = RouterContext.useRouterContext()
+  const stored = useQuery({
+    ...context.api.session.get.queryOptions({ idOrSlug: props.sessionID }),
+    select: (session) => session.title,
+  })
+  const session = ChatReact.useSession(props.sessionID)
+  const view = read(session)
+  const state = view.state
+  const timeline = view.timeline
+  const rows = view.rows
   const messages = ChatState.messages(state, props.sessionID)
+  const info = state.info[props.sessionID]
   const running = ChatState.activity(state, props.sessionID) === "running"
-  const reconnecting = AsyncResult.isSuccess(session.status) && session.status.value === "reconnecting"
+  const title = SessionTitle.display(info?.title ?? stored.data, SessionTitle.untitled)
+  const asking = ChatState.permissionSessions(state).length + ChatState.formSessions(state).length
+  const scroller = useRef<ConversationShell.TimelineHandle>(null)
+  const [restored, setRestored] = useState(0)
+  Chat.useReveal(props.sessionID, props.sessionID, props.message)
+  const loadMore = ChatReact.useAction(props.sessionID, (opened) => opened.loadMore(props.sessionID))
+  const revert = ChatReact.useAction(props.sessionID, (opened, messageID: SessionMessage.ID) =>
+    opened.revert(messageID),
+  )
+  const undo = ChatReact.useAction(props.sessionID, (opened) => opened.undo)
+  const redo = ChatReact.useAction(props.sessionID, (opened) => opened.redo)
+  const compact = ChatReact.useAction(props.sessionID, (opened) => opened.compact(info?.model))
+  const background = ChatReact.useAction(props.sessionID, (opened) => opened.background)
+
+  const restore = (message: Option.Option<SessionMessage.User>) => {
+    if (Option.isNone(message)) return
+    SessionDrafts.restore(platform, props.sessionID, message.value.text)
+    setRestored((count) => count + 1)
+  }
+
+  Attention.useNotify({ running, asking, title })
+
+  useShortcuts({
+    sessionID: props.sessionID,
+    child: props.child,
+    state,
+    scroller,
+    onBackground: () => void background().catch(failed("Could not move the work to the background")),
+    onChild: props.onChild,
+  })
+
   return (
     <ConversationShell.Root
       populated={messages.length > 0}
+      hidden={props.child !== undefined}
       placeholder={
         AsyncResult.isFailure(session.state) ? (
           <StateMessage state="failed" title="Could not open this chat" />
         ) : undefined
       }
-      transcript={
-        <SessionTranscript
-          messages={messages}
-          rows={timeline?.rows ?? []}
-          activeMessageID={timeline?.activeMessageID}
-          busy={running}
+      header={
+        <SessionHeader
+          state={state}
+          sessionID={props.sessionID}
+          fallbackTitle={stored.data ?? undefined}
+          onOpen={props.onChild}
+          onUndo={() => void undo().then(restore, failed("Could not undo the last message"))}
+          onRedo={() => void redo().catch(failed("Could not restore the undone messages"))}
+          onCompact={() => void compact().catch(failed("Could not compact the chat"))}
+          onArchived={props.onArchived}
+        />
+      }
+      timeline={
+        <ConversationShell.Timeline
+          ref={scroller}
+          label="Conversation"
+          history={{
+            more: ChatState.more(state, props.sessionID),
+            loading: ChatState.loadingHistory(state, props.sessionID),
+            onLoadOlder: () => void loadMore().catch(failed("Could not load earlier messages")),
+          }}
+          target={Timeline.rowFor(rows, props.message)}
+          onFollowChange={(following) => {
+            if (following) props.onFollow()
+          }}
+          {...transcriptRows({
+            view: { root: props.sessionID, sessionID: props.sessionID },
+            messages,
+            rows,
+            activeMessageID: timeline?.activeMessageID,
+            busy: running,
+            working: timeline ? Working.show(state, props.sessionID, timeline) : false,
+            ...(info?.capabilities.revert !== false && {
+              onRevert: (message: SessionMessage.User) =>
+                void revert(message.id).then(restore, failed("Could not revert to this message")),
+            }),
+            onOpenChild: props.onChild,
+          })}
         />
       }
       interaction={
-        <>
-          {reconnecting ? (
-            <output>
-              <Text purpose="caption" tone="secondary">
-                Reconnecting
-              </Text>
-            </output>
-          ) : null}
-          <SessionRequests sessionID={props.sessionID} state={state} />
-        </>
-      }
-      composer={
-        <SessionComposer
-          key={props.sessionID}
+        <SessionInteraction
           sessionID={props.sessionID}
           state={state}
-          unavailable={AsyncResult.isFailure(session.state)}
+          reconnecting={view.reconnecting}
+          onRedo={() => void redo().catch(failed("Could not restore the undone messages"))}
+          onOpen={props.onChild}
+          onAnswered={() => scroller.current?.resume()}
         />
+      }
+      composer={
+        blocked(state, props.sessionID) ? undefined : (
+          <SessionComposer
+            key={`${props.sessionID}:${restored}`}
+            sessionID={props.sessionID}
+            state={state}
+            unavailable={AsyncResult.isFailure(session.state)}
+          />
+        )
+      }
+      overlay={
+        props.child ? (
+          <SessionChild
+            root={props.sessionID}
+            sessionID={props.child}
+            state={state}
+            rootTitle={title}
+            onOpen={props.onChild}
+          />
+        ) : undefined
       }
     />
   )

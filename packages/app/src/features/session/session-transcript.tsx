@@ -1,23 +1,51 @@
-import { type ChatAtoms, Projection, TimelineRow, TimelineText, ToolDisplay } from "@ren/chat"
+import { type ChatAtoms, Projection, TimelineRow, TimelineText, ToolDisplay, ToolState } from "@ren/chat"
+import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session-message"
+import { Button } from "@ren/ui/button"
 import { ConversationShell } from "@ren/ui/conversation-shell"
 import { CopyButton } from "@ren/ui/copy-button"
+import { Icon } from "@ren/ui/icon"
+import { IconButton } from "@ren/ui/icon-button"
 import { List } from "@ren/ui/list"
 import { Separator } from "@ren/ui/separator"
 import { Text } from "@ren/ui/text"
 import { Transcript } from "@ren/ui/transcript"
-import { DateTime } from "effect"
+import { DateTime, Predicate } from "effect"
+import type { ReactNode } from "react"
 import { Platform } from "../../platform/platform.js"
 import { TranscriptError, TranscriptNotice, TranscriptNoticeItem, TranscriptShell } from "./transcript-notice.js"
 import { TranscriptTool } from "./transcript-tool.js"
 
-interface Timeline {
+export interface Timeline {
   readonly view: ChatAtoms.View | undefined
   readonly messages: ReadonlyMap<string, SessionMessage.Info>
   readonly turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
   readonly lastGroups: ReadonlyMap<string, string>
   readonly activeMessageID: string | undefined
   readonly busy: boolean
+  readonly onRevert: ((message: SessionMessage.User) => void) | undefined
+  readonly onOpenChild: (sessionID: Session.ID) => void
+}
+
+const childOf = (tool: SessionMessage.Tool) => {
+  const metadata = ToolState.metadata(tool)
+  const id = metadata.sessionID ?? metadata.sessionId
+  if ((tool.name !== "subagent" && tool.name !== "task") || !Predicate.isString(id) || !id.startsWith("ses_")) return
+  return Session.ID.make(id)
+}
+
+function Tool(props: { timeline: Timeline; tool: SessionMessage.Tool; wrap: (node: ReactNode) => ReactNode }) {
+  const child = childOf(props.tool)
+  return (
+    <>
+      {props.wrap(<TranscriptTool tool={props.tool} view={props.timeline.view} />)}
+      {child ? (
+        <Button appearance="plain" size="small" onClick={() => props.timeline.onOpenChild(child)}>
+          Open subagent
+        </Button>
+      ) : null}
+    </>
+  )
 }
 
 const working = (timeline: Timeline, turnID: string) => {
@@ -101,11 +129,7 @@ function Part(props: { timeline: Timeline; turnID: string; reference: TimelineRo
       </List.Root>
     )
   if (content?.type === "tool")
-    return (
-      <List.Root>
-        <TranscriptTool tool={content} view={props.timeline.view} />
-      </List.Root>
-    )
+    return <Tool timeline={props.timeline} tool={content} wrap={(node) => <List.Root>{node}</List.Root>} />
   return null
 }
 
@@ -114,7 +138,7 @@ function GroupItem(props: { timeline: Timeline; reference: TimelineRow.PartRef }
   if (props.reference.partID === props.reference.messageID)
     return message ? <TranscriptNoticeItem message={message} /> : null
   const content = Projection.resolveContent(message, props.reference.partID)
-  if (content?.type === "tool") return <TranscriptTool tool={content} view={props.timeline.view} />
+  if (content?.type === "tool") return <Tool timeline={props.timeline} tool={content} wrap={(node) => node} />
   if (content?.type === "reasoning")
     return (
       <Reasoning
@@ -165,12 +189,30 @@ function AssistantPart(props: { timeline: Timeline; row: TimelineRow.AssistantPa
   )
 }
 
-function UserMessage(props: { message: SessionMessage.Info | undefined }) {
-  if (props.message?.type !== "user") return null
+function UserMessage(props: { timeline: Timeline; message: SessionMessage.Info | undefined }) {
+  const platform = Platform.usePlatform()
+  const message = props.message
+  if (message?.type !== "user") return null
+  const write = platform.writeClipboardText
+  const revert = props.timeline.onRevert
   return (
-    <ConversationShell.Message author="user">
+    <ConversationShell.Message
+      author="user"
+      actions={
+        write || revert ? (
+          <>
+            {revert ? (
+              <IconButton label="Revert to this message" size="extra-small" onClick={() => revert(message)}>
+                <Icon glyph="Restore" />
+              </IconButton>
+            ) : null}
+            {write ? <CopyButton value={message.text} onCopy={write} label="Copy message" size="extra-small" /> : null}
+          </>
+        ) : undefined
+      }
+    >
       <ConversationShell.Bubble>
-        <Text wrapping="preserved">{props.message.text}</Text>
+        <Text wrapping="preserved">{message.text}</Text>
       </ConversationShell.Bubble>
     </ConversationShell.Message>
   )
@@ -204,11 +246,11 @@ function Shell(props: { message: SessionMessage.Info | undefined }) {
   )
 }
 
-function Row(props: { timeline: Timeline; row: TimelineRow.Row }) {
+export function TranscriptRow(props: { timeline: Timeline; row: TimelineRow.Row }) {
   const row = props.row
   switch (row._tag) {
     case "UserMessage":
-      return <UserMessage message={props.timeline.messages.get(row.userMessageID)} />
+      return <UserMessage timeline={props.timeline} message={props.timeline.messages.get(row.userMessageID)} />
     case "AssistantPart":
       return <AssistantPart timeline={props.timeline} row={row} />
     case "Notice":
@@ -228,30 +270,4 @@ function Row(props: { timeline: Timeline; row: TimelineRow.Row }) {
     case "TurnGap":
       return null
   }
-}
-
-export function SessionTranscript(props: {
-  view?: ChatAtoms.View
-  messages: ReadonlyArray<SessionMessage.Info>
-  rows: ReadonlyArray<TimelineRow.Row>
-  activeMessageID: string | undefined
-  busy: boolean
-}) {
-  const timeline: Timeline = {
-    view: props.view,
-    messages: new Map(props.messages.map((message) => [message.id, message])),
-    turns: Projection.assistantMessagesByParent(props.messages),
-    lastGroups: Projection.indexes(props.rows).lastAssistantGroupKey,
-    activeMessageID: props.activeMessageID,
-    busy: props.busy,
-  }
-  const last = props.rows.at(-1)
-  return (
-    <>
-      {props.rows.map((row) => (
-        <Row key={TimelineRow.key(row)} timeline={timeline} row={row} />
-      ))}
-      {props.busy && last?._tag === "UserMessage" ? <Transcript.Working /> : null}
-    </>
-  )
 }

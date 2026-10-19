@@ -3,8 +3,7 @@ import { StateMessage } from "@ren/ui/state-message"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useRouterState } from "@tanstack/react-router"
 import { RouterContext } from "../../lib/router-context.js"
-
-const untitled = "New chat"
+import { SessionTitle } from "./session-title.js"
 
 export function ChatList() {
   const context = RouterContext.useRouterContext()
@@ -31,7 +30,7 @@ export function ChatList() {
     <ApplicationShell.NavigationItem
       key={chat.id}
       current={pathname === `/sessions/${chat.id}`}
-      label={chat.title ?? untitled}
+      label={SessionTitle.display(chat.title, SessionTitle.untitled)}
       render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
     />
   ))

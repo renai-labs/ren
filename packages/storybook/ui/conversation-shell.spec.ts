@@ -147,3 +147,83 @@ story("shows a long paste as a card that can go back into the text field", async
   await expect(root.getByRole("textbox", { name: "Message" })).toHaveValue(/^Quarter,Revenue,Churn/)
   await expect(root.getByRole("button", { name: "Remove pasted text" })).toHaveCount(0)
 })
+
+story("opens a long transcript at the latest message and renders only the rows near it", async ({ visit }) => {
+  const root = await visit("ui-conversation-shell--timeline")
+  await expect(root.getByText(/^Answer 200\./)).toBeInViewport()
+  await expect(root.getByText(/^Question 1:/)).toHaveCount(0)
+  await expect(root.getByRole("status", { name: "Following" })).toHaveText("Following")
+})
+
+story("keeps following new turns until the reader scrolls up", async ({ visit, page }) => {
+  const root = await visit("ui-conversation-shell--timeline")
+  await root.getByRole("button", { name: "Add turn" }).click()
+  await expect(root.getByText(/^Answer 201\./)).toBeInViewport()
+  await root.getByText(/^Answer 201\./).hover()
+  await page.mouse.wheel(0, -1200)
+  await expect(root.getByRole("status", { name: "Following" })).toHaveText("Paused")
+  await root.getByRole("button", { name: "Add turn" }).click()
+  await expect(root.getByText(/^Question 202:/)).not.toBeInViewport()
+  await root.getByRole("button", { name: "Scroll to bottom" }).click()
+  await expect(root.getByText(/^Answer 202\./)).toBeInViewport()
+  await expect(root.getByRole("status", { name: "Following" })).toHaveText("Following")
+})
+
+story("follows again once the reader scrolls back to the end", async ({ visit, page }) => {
+  const root = await visit("ui-conversation-shell--timeline")
+  await root.getByText(/^Answer 200\./).hover()
+  await page.mouse.wheel(0, -600)
+  await expect(root.getByRole("status", { name: "Following" })).toHaveText("Paused")
+  await page.mouse.wheel(0, 5000)
+  await expect(root.getByRole("status", { name: "Following" })).toHaveText("Following")
+})
+
+story("moves between prompts and resumes following after the last one", async ({ visit }) => {
+  const root = await visit("ui-conversation-shell--timeline")
+  const previous = root.getByRole("button", { name: "Previous prompt" })
+  const next = root.getByRole("button", { name: "Next prompt" })
+  await previous.click()
+  await expect(root.getByRole("status", { name: "Following" })).toHaveText("Paused")
+  await previous.click()
+  await previous.click()
+  await expect(root.getByText(/^Question 195:/)).toBeInViewport()
+  await expect(root.getByText(/^Answer 200\./)).not.toBeInViewport()
+  await next.click()
+  await expect(root.getByText(/^Question 196:/)).toBeInViewport()
+  await expect(async () => {
+    await next.click()
+    await expect(root.getByRole("status", { name: "Following" })).toHaveText("Following", { timeout: 300 })
+  }).toPass()
+  await next.click()
+  await expect(root.getByText(/^Answer 200\./)).toBeInViewport()
+  await expect(root.getByRole("status", { name: "Following" })).toHaveText("Following")
+})
+
+story("loads older messages at the top and keeps the reading position", async ({ visit, page }) => {
+  const root = await visit("ui-conversation-shell--timeline-history")
+  const loading = root.getByRole("status", { name: "Loading earlier messages" })
+  const anchor = root.getByText(/^Question 51:/)
+  await expect(root.getByText(/^Answer 60\./)).toBeInViewport()
+  await root.getByText(/^Answer 60\./).hover()
+  await page.mouse.wheel(0, -100_000)
+  await expect(loading).toBeVisible()
+  await expect(anchor).toBeInViewport()
+  const before = await anchor.boundingBox()
+  await expect(root.getByText(/^Answer 50\./)).toBeAttached()
+  await expect(loading).toHaveCount(0)
+  const after = await anchor.boundingBox()
+  expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThan(2)
+})
+
+story("opens on a linked message instead of the latest one", async ({ visit }) => {
+  const root = await visit("ui-conversation-shell--timeline-target")
+  await expect(root.getByText(/^Question 40:/)).toBeInViewport()
+  await expect(root.getByRole("status", { name: "Following" })).toHaveText("Paused")
+})
+
+story("shows every row of a short transcript", async ({ visit }) => {
+  const root = await visit("ui-conversation-shell--timeline-short")
+  await expect(root.getByText(/^Question 1:/)).toBeInViewport()
+  await expect(root.getByText(/^Answer 2\./)).toBeInViewport()
+  await expect(root.getByRole("status", { name: "Following" })).toHaveText("Following")
+})

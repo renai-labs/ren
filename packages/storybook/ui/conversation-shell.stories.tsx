@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Avatar } from "@ren/ui/avatar"
 import { Badge } from "@ren/ui/badge"
+import { Button } from "@ren/ui/button"
 import { ConversationShell } from "@ren/ui/conversation-shell"
 import { Document } from "@ren/ui/document"
 import { Icon } from "@ren/ui/icon"
@@ -303,3 +304,99 @@ export const PastedText: Story = {
     ),
   },
 }
+
+type Turn = { readonly key: string; readonly author: "user" | "assistant"; readonly text: string }
+
+const topics = ["revenue", "churn", "hiring", "pricing", "support", "security"]
+
+const turn = (index: number): ReadonlyArray<Turn> => [
+  {
+    key: `question-${index}`,
+    author: "user",
+    text: `Question ${index}: how did ${topics[index % topics.length]} change?`,
+  },
+  {
+    key: `answer-${index}`,
+    author: "assistant",
+    text: `Answer ${index}. ${"The finance sheet shows a steady trend across every region this quarter. ".repeat((index % 4) + 1)}`,
+  },
+]
+
+const turns = (from: number, to: number) =>
+  Array.from({ length: to - from + 1 }, (_, offset) => turn(from + offset)).flat()
+
+function TimelineDemo(props: { first: number; last: number; start?: number; target?: string }) {
+  const [rows, setRows] = useState(() => turns(props.start ?? props.first, props.last))
+  const [loading, setLoading] = useState(false)
+  const [following, setFollowing] = useState(true)
+  const timeline = useRef<ConversationShell.TimelineHandle>(null)
+  const oldest = Number(rows.at(0)?.key.split("-").at(1) ?? props.first)
+  const newest = Number(rows.at(-1)?.key.split("-").at(1) ?? props.last)
+  return (
+    <ConversationShell.Root
+      populated
+      timeline={
+        <ConversationShell.Timeline
+          ref={timeline}
+          label="Conversation"
+          items={rows}
+          itemKey={(row) => row.key}
+          marker={(row) => row.author === "user"}
+          target={props.target}
+          onFollowChange={setFollowing}
+          history={{
+            more: oldest > props.first,
+            loading,
+            onLoadOlder: () => {
+              setLoading(true)
+              setTimeout(() => {
+                setRows((current) => [...turns(Math.max(props.first, oldest - 10), oldest - 1), ...current])
+                setLoading(false)
+              }, 400)
+            },
+          }}
+          // ast-grep-ignore: no-render-props, -- the virtualized timeline hands each row back
+          renderItem={(row) =>
+            row.author === "user" ? (
+              <ConversationShell.Message author="user">
+                <ConversationShell.Bubble>
+                  <Text>{row.text}</Text>
+                </ConversationShell.Bubble>
+              </ConversationShell.Message>
+            ) : (
+              <ConversationShell.Message author="assistant">
+                <Text>{row.text}</Text>
+              </ConversationShell.Message>
+            )
+          }
+        />
+      }
+      interaction={
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            appearance="secondary"
+            size="small"
+            onClick={() => setRows((current) => [...current, ...turn(newest + 1)])}
+          >
+            Add turn
+          </Button>
+          <Button appearance="secondary" size="small" onClick={() => timeline.current?.step(-1)}>
+            Previous prompt
+          </Button>
+          <Button appearance="secondary" size="small" onClick={() => timeline.current?.step(1)}>
+            Next prompt
+          </Button>
+          <output aria-label="Following">{following ? "Following" : "Paused"}</output>
+        </div>
+      }
+      composer={<Composer />}
+    />
+  )
+}
+
+export const Timeline: Story = { render: () => <TimelineDemo first={1} last={200} /> }
+export const TimelineHistory: Story = { render: () => <TimelineDemo first={1} last={60} start={51} /> }
+export const TimelineTarget: Story = {
+  render: () => <TimelineDemo first={1} last={120} target="question-40" />,
+}
+export const TimelineShort: Story = { render: () => <TimelineDemo first={1} last={2} /> }
