@@ -571,3 +571,95 @@ describe("pending status", () => {
     expect(setup.status("msg_queued")).toBe("queued")
   })
 })
+
+describe("running shells", () => {
+  const shell = (id: string, created: number) =>
+    Fixture.event({
+      id: `evt_${id}`,
+      created,
+      type: "shell.created",
+      data: { info: { id, sessionID, status: "running", command: "sleep 30", time: { started: created } } },
+    })
+
+  test("a created shell joins the running shells, and leaves once it exits or is removed", () => {
+    const started = Reducer.applyAll(ChatState.empty, [shell("sh_one", 1), shell("sh_two", 2)]).state
+    expect<ReadonlyArray<string>>(ChatState.shells(started, sessionID).map((info) => info.id)).toEqual([
+      "sh_one",
+      "sh_two",
+    ])
+    const ended = Reducer.applyAll(started, [
+      Fixture.event({ id: "evt_exit", created: 3, type: "shell.exited", data: { id: "sh_one", status: "exited" } }),
+      Fixture.event({ id: "evt_remove", created: 4, type: "shell.deleted", data: { id: "sh_two" } }),
+    ]).state
+    expect(ChatState.shells(ended, sessionID)).toEqual([])
+  })
+
+  test("a shell tool's result, a shell's completion notice and a user shell re-read the shells once they were read", () => {
+    const tool = Fixture.message({
+      id: "msg_assistant",
+      type: "assistant",
+      agent: "build",
+      model: Fixture.model,
+      content: [
+        {
+          type: "tool",
+          id: "call_shell",
+          name: "shell",
+          state: { status: "running", input: { command: "sleep 30" }, metadata: {} },
+          time: { created: 1 },
+        },
+        {
+          type: "tool",
+          id: "call_read",
+          name: "read",
+          state: { status: "running", input: {}, metadata: {} },
+          time: { created: 1 },
+        },
+      ],
+      time: { created: 1 },
+    })
+    const events = [
+      step("evt_shell", 2, "session.tool.success", {
+        id: "call_shell",
+        content: [{ type: "text", text: "moved to the background" }],
+        metadata: { status: "running", shellID: "sh_one" },
+        executed: true,
+      }),
+      step("evt_read", 2, "session.tool.success", {
+        id: "call_read",
+        content: [{ type: "text", text: "read" }],
+        executed: true,
+      }),
+      Fixture.event({
+        id: "evt_notice",
+        created: 3,
+        type: "session.inbox.enqueued",
+        data: {
+          sessionID,
+          inboxID: "msg_notice",
+          item: {
+            type: "synthetic",
+            payload: { text: "done", metadata: { source: "shell", shellID: "sh_one" } },
+            delivery: "steer",
+          },
+        },
+      }),
+      Fixture.event({
+        id: "evt_user_shell",
+        created: 4,
+        type: "session.shell.started",
+        data: { sessionID, shell: { id: "sh_two", status: "running", command: "ls", time: { started: 4 } } },
+      }),
+    ]
+    const transcript = Hydrate.messages(ChatState.empty, sessionID, Fixture.page([tool]))
+    const settle: Reducer.Command = { _tag: "Settle", read: { _tag: "Shells" } }
+    expect(Reducer.applyAll(transcript, events).commands.filter((command) => command.read._tag === "Shells")).toEqual(
+      [],
+    )
+    expect(
+      Reducer.applyAll(Hydrate.shells(transcript, []), events).commands.filter(
+        (command) => command.read._tag === "Shells",
+      ),
+    ).toEqual([settle, settle, settle])
+  })
+})

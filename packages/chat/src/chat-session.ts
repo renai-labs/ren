@@ -8,6 +8,7 @@ import type { SessionEvent } from "@ren/schema/session-event"
 import type { SessionInbox } from "@ren/schema/session-inbox"
 import { SessionMessage } from "@ren/schema/session-message"
 import type { SessionModel } from "@ren/schema/session-model"
+import type { Shell } from "@ren/schema/shell"
 import { Clock, Data, DateTime, Deferred, Effect, Fiber, Option, Semaphore, Stream, SubscriptionRef } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { ChatState } from "./chat-state.js"
@@ -192,6 +193,10 @@ export const make = Effect.fnUntraced(function* (options: Options) {
           return yield* api.session.form
             .list({ sessionID: read.sessionID })
             .pipe(Effect.flatMap((items) => update((current) => Hydrate.forms(current, read.sessionID, items))))
+        case "Shells":
+          return yield* api.shell
+            .list({ sessionID: root })
+            .pipe(Effect.flatMap((shells) => update((current) => Hydrate.shells(current, shells))))
       }
     })
 
@@ -218,6 +223,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const isLoaded = (current: ChatState.State, read: Reducer.Read) => {
     if (read._tag === "Info") return Boolean(current.info[read.sessionID])
     if (read._tag === "Messages") return Boolean(current.messages[read.sessionID])
+    if (read._tag === "Shells") return Boolean(current.shells)
     return false
   }
 
@@ -306,7 +312,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         sync({ _tag: "Pending", sessionID }),
         sync({ _tag: "Permissions", sessionID }),
         sync({ _tag: "Forms", sessionID }),
-        ...(sessionID === root ? [sync({ _tag: "Children", sessionID })] : []),
+        ...(sessionID === root ? [sync({ _tag: "Children", sessionID }), sync({ _tag: "Shells" })] : []),
       ],
       { concurrency: "unbounded", discard: true },
     )
@@ -594,6 +600,12 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       Effect.flatMap(client, (api) => api.session.form.cancel({ sessionID, formID })).pipe(
         Effect.catchTags({ NotFoundError: () => Effect.void, ConflictError: () => Effect.void }),
         Effect.andThen(removeForm(sessionID, formID)),
+      ),
+    shellOutput: (sessionID: Session.ID, shellID: Shell.ID, cursor: number) =>
+      Effect.flatMap(client, (api) => api.shell.output({ sessionID, shellID, cursor })),
+    stopShell: (sessionID: Session.ID, shellID: Shell.ID) =>
+      Effect.flatMap(client, (api) => api.shell.remove({ sessionID, shellID })).pipe(
+        Effect.andThen(update((current) => Hydrate.stopShell(current, shellID))),
       ),
   }
 })

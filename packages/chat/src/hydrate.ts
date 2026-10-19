@@ -8,6 +8,7 @@ import type { SessionInbox } from "@ren/schema/session-inbox"
 import type { SessionInfo } from "@ren/schema/session-info"
 import type { SessionMessage } from "@ren/schema/session-message"
 import type { SessionStatus } from "@ren/schema/session-status"
+import type { Shell } from "@ren/schema/shell"
 import { Struct } from "effect"
 import { ChatState } from "./chat-state.js"
 import { Reducer } from "./reducer.js"
@@ -176,3 +177,11 @@ export const forms = (state: ChatState.State, sessionID: string, list: ReadonlyA
   ...state,
   forms: ChatState.set(state.forms, sessionID, list),
 })
+
+export const shells = (state: ChatState.State, list: ReadonlyArray<Shell.Info>): ChatState.State => ({
+  ...state,
+  shells: Object.fromEntries(list.map((shell) => [shell.id, shell])),
+})
+
+export const stopShell = (state: ChatState.State, shellID: string): ChatState.State =>
+  state.shells?.[shellID] ? { ...state, shells: ChatState.drop(state.shells, shellID) } : state

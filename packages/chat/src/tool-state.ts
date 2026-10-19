@@ -1,6 +1,7 @@
 export * as ToolState from "./tool-state.js"
 
 import type { SessionMessage } from "@ren/schema/session-message"
+import { Shell } from "@ren/schema/shell"
 import { Option, Predicate, Schema } from "effect"
 
 const decodeInput = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)))
@@ -20,6 +21,16 @@ export const output = (tool: SessionMessage.Tool) => {
   }
   if (!("content" in tool.state)) return
   return tool.state.content.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n") || undefined
+}
+
+const saved: ReadonlySet<unknown> = new Set(["exited", "timeout", "killed"])
+
+const isShellID = Schema.is(Shell.ID)
+
+export const liveShellID = (tool: SessionMessage.Tool) => {
+  const values = metadata(tool)
+  if (tool.name !== "shell" || saved.has(values.status) || !isShellID(values.shellID)) return
+  return values.shellID
 }
 
 export const error = (tool: SessionMessage.Tool) =>

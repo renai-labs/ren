@@ -2,6 +2,7 @@ export * as ChatReact from "./react.js"
 
 import { RegistryContext, useAtomMount, useAtomValue } from "@effect/atom-react"
 import type { Session } from "@ren/schema/session"
+import type { Shell } from "@ren/schema/shell"
 import { Effect } from "effect"
 import { createContext, createElement, type ReactNode, useCallback, useContext } from "react"
 import type { ChatAtoms } from "./atoms.js"
@@ -30,6 +31,11 @@ export const useSession = (sessionID: Session.ID) => {
 }
 
 export const useChild = (root: Session.ID, sessionID: Session.ID) => useAtomValue(useAtoms().child({ root, sessionID }))
+
+export const useShellRunning = (root: Session.ID, shellID: Shell.ID) =>
+  useAtomValue(useAtoms().shellRunning({ root, shellID }))
+
+export const useShellOutput = (view: ChatAtoms.ShellView) => useAtomValue(useAtoms().shellOutput(view))
 
 export const useModels = (sessionID: Session.ID) => useAtomValue(useAtoms().models(sessionID))
 

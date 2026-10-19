@@ -1,8 +1,12 @@
 export * as Host from "./host.js"
 
 import { Credential } from "@opencode/core/credential"
+// ast-grep-ignore: no-import-alias -- this module declares the cell's own Instance, and OpenCode's is a value
+import { Instance as OpenCodeInstance } from "@opencode/core/instance/service"
+import { Plugin } from "@opencode/core/plugin"
 import { SdkPlugins } from "@opencode/core/plugin/sdk"
 import { Session } from "@opencode/core/session"
+import { Shell } from "@opencode/core/shell"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
@@ -12,7 +16,8 @@ import type { Models } from "@ren/schema/models"
 import { Context, Deferred, Effect, Fiber, Layer, ManagedRuntime, Option, Ref, type Scope } from "effect"
 import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import manifest from "../../../package.json"
-import type { Harness } from "../harness.js"
+import { SessionID } from "@opencode/schema/session-id"
+import { Harness } from "../harness.js"
 import { RenPlugin } from "./plugin.js"
 import { RenWorkspaceDriver } from "./ren-workspace-driver.js"
 
@@ -50,6 +55,7 @@ export const make = Effect.fn("Host.make")(function* (
     | SessionRestart.Service
     | Session.Service
     | Workspace.Service
+    | OpenCodeInstance.Service
     | HttpRouter.HttpRouter,
     Error
   >,
@@ -73,10 +79,26 @@ export const make = Effect.fn("Host.make")(function* (
   yield* Deferred.await(loaded)
   const resuming = runtime.runFork(Context.get(services, SessionRestart.Service).resumeSuspendedSessions)
   yield* Effect.addFinalizer(() => Fiber.interrupt(resuming))
+  const sessions = Context.get(services, Session.Service)
+  const instances = Context.get(services, OpenCodeInstance.Service)
   return {
     fetch,
+    shells: (sessionId, use) =>
+      sessions.get(SessionID.make(sessionId)).pipe(
+        Effect.catchTag("Session.NotFoundError", () =>
+          Effect.fail(new Harness.NotFound({ message: `Session ${sessionId} is not in this brain` })),
+        ),
+        Effect.flatMap((session) =>
+          Plugin.awaitActivation.pipe(
+            Effect.andThen(Shell.Service),
+            instances.provide(session),
+            Effect.orDie,
+            Effect.flatMap(use),
+          ),
+        ),
+      ),
     credentials: Context.get(services, Credential.Service),
-    sessions: Context.get(services, Session.Service),
+    sessions,
     workspaces: Context.get(services, Workspace.Service),
     hasEnvironments,
     configure: (next) =>
@@ -89,6 +111,10 @@ export const make = Effect.fn("Host.make")(function* (
 
 export interface Instance {
   readonly fetch: (request: Request) => Promise<Response>
+  readonly shells: <A, E>(
+    sessionId: string,
+    use: (shell: Shell.Interface) => Effect.Effect<A, E>,
+  ) => Effect.Effect<A, E | Harness.NotFound>
   readonly credentials: Credential.Interface
   readonly sessions: Session.Interface
   readonly workspaces: Workspace.Interface

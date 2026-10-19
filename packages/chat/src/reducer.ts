@@ -18,6 +18,7 @@ export type Read =
   | { readonly _tag: "Permissions"; readonly sessionID: Session.ID }
   | { readonly _tag: "Forms"; readonly sessionID: Session.ID }
   | { readonly _tag: "Children"; readonly sessionID: Session.ID }
+  | { readonly _tag: "Shells" }
 
 export type Command =
   | { readonly _tag: "Refresh"; readonly read: Read }
@@ -34,6 +35,7 @@ export interface Result {
 
 export const key = (read: Read) => {
   if (read._tag === "Status") return "status"
+  if (read._tag === "Shells") return "shells"
   if (read._tag === "Message") return `message:${read.sessionID}:${read.messageID}`
   return `${read._tag.toLowerCase()}:${read.sessionID}`
 }
@@ -127,6 +129,25 @@ const isTool =
   (id: string) =>
   (content: Content): content is SessionMessage.Tool =>
     content.type === "tool" && content.id === id
+
+const reshell = (result: Result, shell = true): Result =>
+  shell && result.state.shells
+    ? { ...result, commands: [...result.commands, { _tag: "Settle", read: { _tag: "Shells" } }] }
+    : result
+
+const isShellTool = (state: ChatState.State, sessionID: string, messageID: string, toolID: string) =>
+  ChatState.messages(state, sessionID).some(
+    (item) =>
+      item.id === messageID &&
+      item.type === "assistant" &&
+      item.content.some((part) => part.type === "tool" && part.id === toolID && part.name === "shell"),
+  )
+
+const toolEnded = (
+  state: ChatState.State,
+  event: Of<"session.tool.success" | "session.tool.failed">,
+  result: Result,
+): Result => reshell(result, isShellTool(state, event.data.sessionID, event.data.assistantMessageID, event.data.id))
 
 const setActive = (state: ChatState.State, sessionID: string, activity: ChatState.Activity): ChatState.State => ({
   ...state,
@@ -391,6 +412,35 @@ const editInfo = (
   return info ? { ...state, info: set(state.info, sessionID, edit(info)) } : state
 }
 
+const enqueued = (state: ChatState.State, event: Of<"session.inbox.enqueued">): Result => {
+  const item = {
+    id: event.data.inboxID,
+    sessionID: event.data.sessionID,
+    time: { created: time(event.created) },
+    ...event.data.item,
+  }
+  const admitted = admit(
+    recordPending(
+      { ...state, outbox: new Set([...state.outbox].filter((id) => id !== item.id)) },
+      item.sessionID,
+      item.id,
+      item,
+    ),
+    item,
+  )
+  if (item.type !== "compaction") return done(admitted)
+  const observed = observe(admitted, item.sessionID, item.id)
+  const active = observed.compacting[item.sessionID]
+  if (!active || active.id === item.id || !observed.outbox.has(active.id)) return done(observed)
+  return done(
+    removePending(
+      { ...observed, outbox: new Set([...observed.outbox].filter((id) => id !== active.id)) },
+      item.sessionID,
+      active.id,
+    ),
+  )
+}
+
 type Events = { readonly [Type in Event["type"]]: Of<Type> }
 
 type Handlers = { readonly [Type in Event["type"]]: (state: ChatState.State, event: Events[Type]) => Result }
@@ -488,48 +538,28 @@ const handlers: Handlers = {
     done(updateDelivery(state, event.data.sessionID, event.data.inboxID, event.data.delivery)),
   "session.inbox.cancelled": (state, event) =>
     done(observe(retract(state, event.data.sessionID, event.data.inboxID), event.data.sessionID, event.data.inboxID)),
-  "session.inbox.enqueued": (state, event) => {
-    const item = {
-      id: event.data.inboxID,
-      sessionID: event.data.sessionID,
-      time: { created: time(event.created) },
-      ...event.data.item,
-    }
-    const admitted = admit(
-      recordPending(
-        { ...state, outbox: new Set([...state.outbox].filter((id) => id !== item.id)) },
-        item.sessionID,
-        item.id,
-        item,
-      ),
-      item,
-    )
-    if (item.type !== "compaction") return done(admitted)
-    const observed = observe(admitted, item.sessionID, item.id)
-    const active = observed.compacting[item.sessionID]
-    if (!active || active.id === item.id || !observed.outbox.has(active.id)) return done(observed)
-    return done(
-      removePending(
-        { ...observed, outbox: new Set([...observed.outbox].filter((id) => id !== active.id)) },
-        item.sessionID,
-        active.id,
-      ),
-    )
-  },
+  "session.inbox.enqueued": (state, event) =>
+    reshell(
+      enqueued(state, event),
+      event.data.item.type === "synthetic" && event.data.item.payload.metadata?.source === "shell",
+    ),
   "session.execution.started": (state, event) => done(setActive(state, event.data.sessionID, "running")),
   "session.execution.succeeded": ended,
   "session.execution.failed": ended,
   "session.execution.interrupted": ended,
   "session.synthetic": (state, event) =>
-    done(
-      insert(state, event.data.sessionID, {
-        id: messageIDFromEvent(event.id),
-        type: "synthetic",
-        text: event.data.text,
-        ...(event.data.description && { description: event.data.description }),
-        ...(event.data.metadata && { metadata: event.data.metadata }),
-        time: { created: time(event.created) },
-      }),
+    reshell(
+      done(
+        insert(state, event.data.sessionID, {
+          id: messageIDFromEvent(event.id),
+          type: "synthetic",
+          text: event.data.text,
+          ...(event.data.description && { description: event.data.description }),
+          ...(event.data.metadata && { metadata: event.data.metadata }),
+          time: { created: time(event.created) },
+        }),
+      ),
+      event.data.metadata?.source === "shell",
     ),
   "session.skill.activated": (state, event) =>
     done(
@@ -543,36 +573,40 @@ const handlers: Handlers = {
       }),
     ),
   "session.shell.started": (state, event) =>
-    done(
-      insert(state, event.data.sessionID, {
-        id: messageIDFromEvent(event.id),
-        type: "shell",
-        shellID: event.data.shell.id,
-        command: event.data.shell.command,
-        status: event.data.shell.status,
-        // ast-grep-ignore: no-nullish-comparison, -- an exit code of 0 is an exit code
-        ...(event.data.shell.exit !== undefined && { exit: event.data.shell.exit }),
-        time: { created: time(event.created) },
-      }),
+    reshell(
+      done(
+        insert(state, event.data.sessionID, {
+          id: messageIDFromEvent(event.id),
+          type: "shell",
+          shellID: event.data.shell.id,
+          command: event.data.shell.command,
+          status: event.data.shell.status,
+          // ast-grep-ignore: no-nullish-comparison, -- an exit code of 0 is an exit code
+          ...(event.data.shell.exit !== undefined && { exit: event.data.shell.exit }),
+          time: { created: time(event.created) },
+        }),
+      ),
     ),
   "session.shell.ended": (state, event) =>
-    done(
-      withMessages(state, event.data.sessionID, (messages) => {
-        const match = messages.findLast((item) => item.type === "shell" && item.shellID === event.data.shell.id)
-        if (match?.type !== "shell") return messages
-        return messages.map((item) =>
-          item === match
-            ? {
-                ...match,
-                status: event.data.shell.status,
-                // ast-grep-ignore: no-nullish-comparison, -- an exit code of 0 is an exit code
-                ...(event.data.shell.exit !== undefined && { exit: event.data.shell.exit }),
-                output: event.data.output,
-                time: { ...match.time, completed: time(event.created) },
-              }
-            : item,
-        )
-      }),
+    reshell(
+      done(
+        withMessages(state, event.data.sessionID, (messages) => {
+          const match = messages.findLast((item) => item.type === "shell" && item.shellID === event.data.shell.id)
+          if (match?.type !== "shell") return messages
+          return messages.map((item) =>
+            item === match
+              ? {
+                  ...match,
+                  status: event.data.shell.status,
+                  // ast-grep-ignore: no-nullish-comparison, -- an exit code of 0 is an exit code
+                  ...(event.data.shell.exit !== undefined && { exit: event.data.shell.exit }),
+                  output: event.data.output,
+                  time: { ...match.time, completed: time(event.created) },
+                }
+              : item,
+          )
+        }),
+      ),
     ),
   "session.step.started": stepStarted,
   "session.step.streamed": (state, event) =>
@@ -667,37 +701,45 @@ const handlers: Handlers = {
         : undefined,
     ),
   "session.tool.success": (state, event) =>
-    editContent(state, event.data.sessionID, event.data.assistantMessageID, isTool(event.data.id), (tool) =>
-      tool.state.status === "running"
-        ? {
-            ...tool,
-            executed: event.data.executed || tool.executed === true,
-            state: {
-              status: "completed",
-              input: tool.state.input,
-              content: event.data.content,
-              ...(event.data.metadata && { metadata: event.data.metadata }),
-            },
-            time: { ...tool.time, completed: time(event.created) },
-          }
-        : undefined,
+    toolEnded(
+      state,
+      event,
+      editContent(state, event.data.sessionID, event.data.assistantMessageID, isTool(event.data.id), (tool) =>
+        tool.state.status === "running"
+          ? {
+              ...tool,
+              executed: event.data.executed || tool.executed === true,
+              state: {
+                status: "completed",
+                input: tool.state.input,
+                content: event.data.content,
+                ...(event.data.metadata && { metadata: event.data.metadata }),
+              },
+              time: { ...tool.time, completed: time(event.created) },
+            }
+          : undefined,
+      ),
     ),
   "session.tool.failed": (state, event) =>
-    editContent(state, event.data.sessionID, event.data.assistantMessageID, isTool(event.data.id), (tool) =>
-      tool.state.status === "streaming" || tool.state.status === "running"
-        ? {
-            ...tool,
-            executed: event.data.executed || tool.executed === true,
-            state: {
-              status: "error",
-              input: tool.state.status === "streaming" ? {} : tool.state.input,
-              error: event.data.error,
-              ...(event.data.content && { content: event.data.content }),
-              ...(event.data.metadata && { metadata: event.data.metadata }),
-            },
-            time: { ...tool.time, completed: time(event.created) },
-          }
-        : undefined,
+    toolEnded(
+      state,
+      event,
+      editContent(state, event.data.sessionID, event.data.assistantMessageID, isTool(event.data.id), (tool) =>
+        tool.state.status === "streaming" || tool.state.status === "running"
+          ? {
+              ...tool,
+              executed: event.data.executed || tool.executed === true,
+              state: {
+                status: "error",
+                input: tool.state.status === "streaming" ? {} : tool.state.input,
+                error: event.data.error,
+                ...(event.data.content && { content: event.data.content }),
+                ...(event.data.metadata && { metadata: event.data.metadata }),
+              },
+              time: { ...tool.time, completed: time(event.created) },
+            }
+          : undefined,
+      ),
     ),
   "session.retry.scheduled": (state, event) =>
     editAssistant(state, event.data.sessionID, event.data.assistantMessageID, (assistant) => ({
@@ -754,6 +796,12 @@ const handlers: Handlers = {
     done({ ...state, forms: removeKeyed(state.forms, event.data.sessionID, event.data.id) }),
   "form.cancelled": (state, event) =>
     done({ ...state, forms: removeKeyed(state.forms, event.data.sessionID, event.data.id) }),
+  "shell.created": (state, event) =>
+    done({ ...state, shells: set(state.shells ?? {}, event.data.info.id, event.data.info) }),
+  "shell.exited": (state, event) =>
+    done(state.shells ? { ...state, shells: drop(state.shells, event.data.id) } : state),
+  "shell.deleted": (state, event) =>
+    done(state.shells ? { ...state, shells: drop(state.shells, event.data.id) } : state),
 }
 
 const handle = <Type extends Event["type"]>(state: ChatState.State, type: Type, event: Events[Type]) =>

@@ -5,6 +5,7 @@ import type { Permission } from "@ren/schema/permission"
 import type { SessionInbox } from "@ren/schema/session-inbox"
 import type { SessionInfo } from "@ren/schema/session-info"
 import type { SessionMessage } from "@ren/schema/session-message"
+import type { Shell } from "@ren/schema/shell"
 import { DateTime } from "effect"
 
 export type Activity = "idle" | "running"
@@ -26,6 +27,7 @@ export interface State {
   readonly pending: Readonly<Record<string, ReadonlyArray<SessionInbox.Info>>>
   readonly permissions: Readonly<Record<string, ReadonlyArray<Permission.Request>>>
   readonly forms: Readonly<Record<string, ReadonlyArray<Form.Info>>>
+  readonly shells: Readonly<Record<string, Shell.Info>> | undefined
   readonly outbox: ReadonlySet<string>
   readonly compacting: Readonly<Record<string, Compacting>>
   readonly history: ReadonlySet<string>
@@ -42,6 +44,7 @@ export const empty: State = {
   pending: {},
   permissions: {},
   forms: {},
+  shells: undefined,
   outbox: new Set(),
   compacting: {},
   history: new Set(),
@@ -141,6 +144,11 @@ export const cost = (state: State, sessionID: string) => {
 
 export const running = (state: State) =>
   Object.entries(state.active).flatMap(([id, activity]) => (activity === "running" ? [id] : []))
+
+export const shells = (state: State, sessionID: string): ReadonlyArray<Shell.Info> =>
+  Object.values(state.shells ?? {}).filter((shell) => shell.sessionID === sessionID)
+
+export const shellRunning = (state: State, shellID: string) => Boolean(state.shells?.[shellID])
 
 export const more = (state: State, sessionID: string) => Boolean(state.cursor[sessionID])
 

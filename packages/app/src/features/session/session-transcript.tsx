@@ -1,4 +1,4 @@
-import { Projection, TimelineRow, TimelineText, ToolDisplay } from "@ren/chat"
+import { type ChatAtoms, Projection, TimelineRow, TimelineText, ToolDisplay } from "@ren/chat"
 import type { SessionMessage } from "@ren/schema/session-message"
 import { ConversationShell } from "@ren/ui/conversation-shell"
 import { CopyButton } from "@ren/ui/copy-button"
@@ -12,6 +12,7 @@ import { TranscriptError, TranscriptNotice, TranscriptNoticeItem, TranscriptShel
 import { TranscriptTool } from "./transcript-tool.js"
 
 interface Timeline {
+  readonly view: ChatAtoms.View | undefined
   readonly messages: ReadonlyMap<string, SessionMessage.Info>
   readonly turns: ReadonlyMap<string, ReadonlyArray<SessionMessage.Assistant>>
   readonly lastGroups: ReadonlyMap<string, string>
@@ -102,7 +103,7 @@ function Part(props: { timeline: Timeline; turnID: string; reference: TimelineRo
   if (content?.type === "tool")
     return (
       <List.Root>
-        <TranscriptTool tool={content} />
+        <TranscriptTool tool={content} view={props.timeline.view} />
       </List.Root>
     )
   return null
@@ -113,7 +114,7 @@ function GroupItem(props: { timeline: Timeline; reference: TimelineRow.PartRef }
   if (props.reference.partID === props.reference.messageID)
     return message ? <TranscriptNoticeItem message={message} /> : null
   const content = Projection.resolveContent(message, props.reference.partID)
-  if (content?.type === "tool") return <TranscriptTool tool={content} />
+  if (content?.type === "tool") return <TranscriptTool tool={content} view={props.timeline.view} />
   if (content?.type === "reasoning")
     return (
       <Reasoning
@@ -230,12 +231,14 @@ function Row(props: { timeline: Timeline; row: TimelineRow.Row }) {
 }
 
 export function SessionTranscript(props: {
+  view?: ChatAtoms.View
   messages: ReadonlyArray<SessionMessage.Info>
   rows: ReadonlyArray<TimelineRow.Row>
   activeMessageID: string | undefined
   busy: boolean
 }) {
   const timeline: Timeline = {
+    view: props.view,
     messages: new Map(props.messages.map((message) => [message.id, message])),
     turns: Projection.assistantMessagesByParent(props.messages),
     lastGroups: Projection.indexes(props.rows).lastAssistantGroupKey,

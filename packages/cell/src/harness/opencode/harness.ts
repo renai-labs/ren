@@ -307,7 +307,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
 
   return {
     fetch: host.fetch,
-    chat: OpenCodeChat.make(host.fetch),
+    chat: OpenCodeChat.make(host),
     configure: (next: ReadonlyArray<Models.Endpoint>) => mutations.withPermit(configure(next)),
     start: (input: StartInput) =>
       mutations.withPermit(

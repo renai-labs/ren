@@ -3,7 +3,7 @@ export * as Chat from "./chat.js"
 import { ChatApi } from "@ren/protocol/chat"
 import { ConflictError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
 import type { SessionEvent } from "@ren/schema/session-event"
-import { Clock, Effect, Layer, Option, Ref, Stream } from "effect"
+import { Clock, Effect, Layer, Option, Predicate, Ref, Stream } from "effect"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
@@ -229,6 +229,32 @@ const handlers = Layer.mergeAll(
                 "Harness.Conflict": (e) => Effect.fail(conflict(e)),
               }),
             ),
+          ),
+        )
+    }),
+  ),
+  HttpApiBuilder.group(ChatApi, "shell", (group) =>
+    Effect.gen(function* () {
+      const context = yield* Effect.context<Services>()
+      const run = <A, E>(use: (chat: Harness.Chat) => Effect.Effect<A, E>) =>
+        Effect.flatMap(Cell.acquire, (harness) => use(harness.chat)).pipe(Effect.scoped, Effect.provide(context))
+      return group
+        .handle("shell.list", (request) =>
+          run((chat) => chat.shells(request.params.sessionID).pipe(Effect.mapError(notFound))),
+        )
+        .handle("shell.output", (request) =>
+          run((chat) =>
+            chat
+              .shellOutput(request.params.sessionID, request.params.shellID, {
+                ...(Predicate.isNumber(request.query.cursor) && { cursor: request.query.cursor }),
+                ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
+              })
+              .pipe(Effect.mapError(notFound)),
+          ),
+        )
+        .handle("shell.remove", (request) =>
+          run((chat) =>
+            chat.removeShell(request.params.sessionID, request.params.shellID).pipe(Effect.mapError(notFound)),
           ),
         )
     }),

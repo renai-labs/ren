@@ -42,6 +42,12 @@ import type {
   SessionFormReplyOutput,
   SessionFormCancelInput,
   SessionFormCancelOutput,
+  ShellListInput,
+  ShellListOutput,
+  ShellOutputInput,
+  ShellOutputOutput,
+  ShellRemoveInput,
+  ShellRemoveOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -445,6 +451,42 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+    },
+    shell: {
+      list: (input: ShellListInput, requestOptions?: RequestOptions) =>
+        request<ShellListOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/shell`,
+            successStatus: 200,
+            declaredStatuses: [404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      output: (input: ShellOutputInput, requestOptions?: RequestOptions) =>
+        request<ShellOutputOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/shell/${encodeURIComponent(input.shellID)}/output`,
+            query: { cursor: input["cursor"], limit: input["limit"] },
+            successStatus: 200,
+            declaredStatuses: [404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      remove: (input: ShellRemoveInput, requestOptions?: RequestOptions) =>
+        request<ShellRemoveOutput>(
+          {
+            method: "DELETE",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/shell/${encodeURIComponent(input.shellID)}`,
+            successStatus: 204,
+            declaredStatuses: [404],
+            empty: true,
+          },
+          requestOptions,
+        ),
     },
   }
 }

@@ -70,6 +70,31 @@ export const ToolCommand: Story = {
     ),
   },
 }
+function LiveCommand() {
+  const [lines, setLines] = useState(["$ bun test --watch"])
+  return (
+    <>
+      <List.Root>
+        <Transcript.Tool kind="command" title="Running" subtitle="bun test --watch" status="running" defaultOpen>
+          <Transcript.ToolDetail label="Output" value={lines.join("\n")} appearance="code" follow />
+        </Transcript.Tool>
+      </List.Root>
+      <Button
+        onClick={() =>
+          setLines((previous) => [
+            ...previous,
+            ...Array.from({ length: 20 }, (_, index) => `test ${previous.length + index} passed`),
+          ])
+        }
+      >
+        Print more
+      </Button>
+    </>
+  )
+}
+
+export const ToolCommandLive: Story = { render: () => <LiveCommand /> }
+
 export const ToolUnknown: Story = {
   decorators: inList,
   args: { kind: "tool", title: "Linear search", subtitle: "open bugs" },

@@ -1,6 +1,6 @@
 export * as Transcript from "./transcript.js"
 
-import { useState, useSyncExternalStore } from "react"
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import type { ReactNode } from "react"
 import { TranscriptDisclosure } from "../lib/list-transcript.js"
 import { useStreamingText } from "../lib/streaming-text.js"
@@ -140,16 +140,30 @@ export type ToolDetailProps = {
   label: string
   value: string
   appearance?: "code" | "text"
+  follow?: boolean
 }
 
 export function ToolDetail(props: ToolDetailProps) {
+  const section = useRef<HTMLElement>(null)
+  const pinned = useRef(true)
+  const follow = props.follow === true
+  useLayoutEffect(() => {
+    const element = section.current
+    if (!follow || !element || !pinned.current) return
+    element.scrollTop = element.scrollHeight
+  }, [follow, props.value])
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <Text purpose="caption" element="h4">
         {props.label}
       </Text>
       <section
+        ref={section}
         aria-label={props.label}
+        onScroll={(event) => {
+          const element = event.currentTarget
+          pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 2
+        }}
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- the detail can overflow, so keyboard users need to reach it to scroll
         tabIndex={0}
         className="max-h-64 min-h-0 overflow-y-auto overscroll-contain rounded-small outline-none focus-visible:outline-2 focus-visible:outline-accent-primary"

@@ -226,10 +226,45 @@ const adaptGroupSession = (raw: RawClient["session"]) => ({
   model: { switch: EndpointSessionModelSwitch(raw) },
 })
 
+type ShellListRequest = Parameters<RawClient["shell"]["shell.list"]>[0]
+type ShellListInput = { readonly sessionID: ShellListRequest["params"]["sessionID"] }
+const EndpointShellList = (raw: RawClient["shell"]) => (input: ShellListInput) =>
+  raw["shell.list"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+type ShellOutputRequest = Parameters<RawClient["shell"]["shell.output"]>[0]
+type ShellOutputInput = {
+  readonly sessionID: ShellOutputRequest["params"]["sessionID"]
+  readonly shellID: ShellOutputRequest["params"]["shellID"]
+  readonly cursor?: ShellOutputRequest["query"]["cursor"]
+  readonly limit?: ShellOutputRequest["query"]["limit"]
+}
+const EndpointShellOutput = (raw: RawClient["shell"]) => (input: ShellOutputInput) =>
+  raw["shell.output"]({
+    params: { sessionID: input["sessionID"], shellID: input["shellID"] },
+    query: { cursor: input["cursor"], limit: input["limit"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ShellRemoveRequest = Parameters<RawClient["shell"]["shell.remove"]>[0]
+type ShellRemoveInput = {
+  readonly sessionID: ShellRemoveRequest["params"]["sessionID"]
+  readonly shellID: ShellRemoveRequest["params"]["shellID"]
+}
+const EndpointShellRemove = (raw: RawClient["shell"]) => (input: ShellRemoveInput) =>
+  raw["shell.remove"]({ params: { sessionID: input["sessionID"], shellID: input["shellID"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupShell = (raw: RawClient["shell"]) => ({
+  list: EndpointShellList(raw),
+  output: EndpointShellOutput(raw),
+  remove: EndpointShellRemove(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   event: adaptGroupEvent(raw["event"]),
   model: adaptGroupModel(raw["model"]),
   session: adaptGroupSession(raw["session"]),
+  shell: adaptGroupShell(raw["shell"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

@@ -2,12 +2,14 @@ export * as ChatAtoms from "./atoms.js"
 
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session-message"
+import type { Shell } from "@ren/schema/shell"
 import { Effect, Option, Queue, Stream, SubscriptionRef } from "effect"
 import type { HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 import { ChatSession } from "./chat-session.js"
 import { ChatState } from "./chat-state.js"
 import { Projection } from "./projection.js"
+import { ShellOutput } from "./shell-output.js"
 import type { TimelineDetail } from "./timeline-detail.js"
 
 export type Lifecycle = "foreground" | "online"
@@ -15,6 +17,11 @@ export type Lifecycle = "foreground" | "online"
 export interface View {
   readonly root: Session.ID
   readonly sessionID: Session.ID
+}
+
+export interface ShellView extends View {
+  readonly shellID: Shell.ID
+  readonly running: boolean
 }
 
 export interface Options<R, ER> {
@@ -118,6 +125,36 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     Atom.make((get) => Effect.flatMap(get.result(session(sessionID)), (opened) => opened.models)),
   )
 
+  const shellRunning = Atom.family((view: { readonly root: Session.ID; readonly shellID: Shell.ID }) =>
+    Atom.make((get) =>
+      Option.match(AsyncResult.value(get(state(view.root))), {
+        onNone: () => false,
+        onSome: (current) => ChatState.shellRunning(current, view.shellID),
+      }),
+    ),
+  )
+
+  const shells = ShellOutput.make()
+
+  const shellOutput = Atom.family((view: ShellView) =>
+    Atom.make((get) => {
+      const running = view.running || get(shellRunning({ root: view.root, shellID: view.shellID }))
+      return Stream.unwrap(
+        Effect.map(get.result(session(view.root)), (opened) =>
+          shells.follow({
+            id: view.shellID,
+            running,
+            load: (cursor) =>
+              opened.shellOutput(view.sessionID, view.shellID, cursor).pipe(
+                Effect.map(Option.some),
+                Effect.catchTag("NotFoundError", () => Effect.succeedNone),
+              ),
+          }),
+        ),
+      )
+    }),
+  )
+
   return {
     session,
     state,
@@ -125,6 +162,8 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     timeline,
     child,
     models,
+    shellRunning,
+    shellOutput,
     run,
   }
 }

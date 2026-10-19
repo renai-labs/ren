@@ -74,6 +74,10 @@ export type FormExternalField = { key: string; type: "external"; url: string; ti
 
 export type FormValue = string | number | boolean | Array<string>
 
+export type ShellID = string
+
+export type ShellTime = { started: number; completed?: number }
+
 export type SessionModelVariant = { id: string }
 
 export type SessionCapabilitiesInfo = {
@@ -120,6 +124,8 @@ export type SessionMessageToolRunning = {
   input: { [x: string]: JsonValue }
   metadata: { [x: string]: JsonValue }
 }
+
+export type ShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
 
 export type SessionEventSessionAgentSelected = {
   id: string
@@ -689,6 +695,24 @@ export type FormMultiselectField = {
 
 export type FormAnswer = { [x: string]: FormValue }
 
+export type SessionEventShellExited = {
+  id: string
+  created: number
+  type: "shell.exited"
+  data: { id: ShellID; exit?: number; status: "running" | "exited" | "timeout" | "killed" }
+}
+
+export type SessionEventShellDeleted = { id: string; created: number; type: "shell.deleted"; data: { id: ShellID } }
+
+export type ShellInfo = {
+  id: ShellID
+  sessionID: SessionID
+  status: "running" | "exited" | "timeout" | "killed"
+  command: string
+  exit?: number
+  time: ShellTime
+}
+
 export type SessionModelInfo = {
   id: string
   providerID: string
@@ -812,6 +836,8 @@ export type SessionEventFormReplied = {
   data: { id: FormID; sessionID: string; answer: FormAnswer }
 }
 
+export type SessionEventShellCreated = { id: string; created: number; type: "shell.created"; data: { info: ShellInfo } }
+
 export type SessionStatusInfo = SessionStatusIdle | SessionStatusBusy | SessionStatusRetry
 
 export type SessionInboxItem =
@@ -831,7 +857,13 @@ export type SessionInboxUser = {
 export type SessionMessageToolState =
   SessionMessageToolStreaming | SessionMessageToolRunning | SessionMessageToolCompleted | SessionMessageToolError
 
-export type FormInfo = { id: FormID; sessionID: string; title: string; fields: [FormField, ...Array<FormField>] }
+export type FormInfo = {
+  id: FormID
+  sessionID: string
+  title: string
+  kind?: string
+  fields: [FormField, ...Array<FormField>]
+}
 
 export type SessionStatusFamily = { [x: string]: SessionStatusInfo }
 
@@ -906,6 +938,9 @@ export type SessionEventEvent =
   | SessionEventFormCreated
   | SessionEventFormReplied
   | SessionEventFormCancelled
+  | SessionEventShellCreated
+  | SessionEventShellExited
+  | SessionEventShellDeleted
 
 export type SessionMessageAssistant = {
   id: SessionMessageID
@@ -1097,3 +1132,23 @@ export type SessionFormCancelInput = {
 }
 
 export type SessionFormCancelOutput = void
+
+export type ShellListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type ShellListOutput = Array<ShellInfo>
+
+export type ShellOutputInput = {
+  readonly sessionID: { readonly sessionID: string; readonly shellID: string }["sessionID"]
+  readonly shellID: { readonly sessionID: string; readonly shellID: string }["shellID"]
+  readonly cursor?: { readonly cursor?: number | undefined; readonly limit?: number | undefined }["cursor"]
+  readonly limit?: { readonly cursor?: number | undefined; readonly limit?: number | undefined }["limit"]
+}
+
+export type ShellOutputOutput = ShellOutput
+
+export type ShellRemoveInput = {
+  readonly sessionID: { readonly sessionID: string; readonly shellID: string }["sessionID"]
+  readonly shellID: { readonly sessionID: string; readonly shellID: string }["shellID"]
+}
+
+export type ShellRemoveOutput = void

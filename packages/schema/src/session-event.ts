@@ -9,6 +9,7 @@ import { SessionInbox } from "./session-inbox.js"
 import { SessionInfo } from "./session-info.js"
 import { SessionMessage } from "./session-message.js"
 import { SessionModel } from "./session-model.js"
+import { Shell } from "./shell.js"
 
 const define = <const Type extends string, const Fields extends Schema.Struct.Fields>(type: Type, fields: Fields) =>
   Schema.Struct({
@@ -24,8 +25,8 @@ const part = { ...step, ordinal: Schema.Int }
 const tool = { ...step, id: Schema.String }
 const inbox = { ...base, inboxID: SessionMessage.ID }
 
-export interface Shell extends Schema.Schema.Type<typeof Shell> {}
-export const Shell = Schema.Struct({
+export interface ShellRun extends Schema.Schema.Type<typeof ShellRun> {}
+export const ShellRun = Schema.Struct({
   id: Schema.String,
   status: SessionMessage.ShellStatus,
   command: Schema.String,
@@ -95,8 +96,12 @@ export const SkillActivated = define("session.skill.activated", {
   name: Schema.String,
   text: Schema.String,
 })
-export const ShellStarted = define("session.shell.started", { ...base, shell: Shell })
-export const ShellEnded = define("session.shell.ended", { ...base, shell: Shell, output: SessionMessage.ShellOutput })
+export const ShellStarted = define("session.shell.started", { ...base, shell: ShellRun })
+export const ShellEnded = define("session.shell.ended", {
+  ...base,
+  shell: ShellRun,
+  output: SessionMessage.ShellOutput,
+})
 
 export const StepStarted = define("session.step.started", {
   ...step,
@@ -198,6 +203,14 @@ export const FormCreated = define("form.created", { form: Form.Info })
 export const FormReplied = define("form.replied", { id: Form.ID, sessionID: Schema.String, answer: Form.Answer })
 export const FormCancelled = define("form.cancelled", { id: Form.ID, sessionID: Schema.String })
 
+export const ShellCreated = define("shell.created", { info: Shell.Info })
+export const ShellExited = define("shell.exited", {
+  id: Shell.ID,
+  exit: Schema.optionalKey(Schema.Finite),
+  status: SessionMessage.ShellStatus,
+})
+export const ShellDeleted = define("shell.deleted", { id: Shell.ID })
+
 export const definitions = [
   Created,
   AgentSelected,
@@ -247,6 +260,9 @@ export const definitions = [
   FormCreated,
   FormReplied,
   FormCancelled,
+  ShellCreated,
+  ShellExited,
+  ShellDeleted,
 ] as const
 
 export const Event = Schema.Union(definitions).annotate({ identifier: "SessionEvent.Event" })

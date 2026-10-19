@@ -1,4 +1,4 @@
-import type { ChatState } from "@ren/chat"
+import { type ChatState, Family } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { Button } from "@ren/ui/button"
@@ -13,7 +13,7 @@ const failed = (title: string) => (error: unknown) =>
 export function SessionRequests(props: { sessionID: Session.ID; state: ChatState.State }) {
   const [sending, setSending] = useState(false)
   const permission = Object.values(props.state.permissions).flat().at(0)
-  const form = Object.values(props.state.forms).flat().at(0)
+  const form = Family.form(props.state, props.sessionID)
   const replyPermission = ChatReact.useAction(
     props.sessionID,
     (opened, reply: Parameters<typeof opened.replyPermission>) => opened.replyPermission(...reply),

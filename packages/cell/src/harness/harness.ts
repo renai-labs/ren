@@ -11,6 +11,7 @@ import type { SessionInfo } from "@ren/schema/session-info"
 import type { SessionMessage } from "@ren/schema/session-message"
 import type { SessionModel } from "@ren/schema/session-model"
 import type { SessionStatus } from "@ren/schema/session-status"
+import type { Shell } from "@ren/schema/shell"
 import { Context, Effect, Exit, Layer, type Option, Schema, Scope, type Stream } from "effect"
 import { Lease } from "../lease.js"
 import type { Reconcile } from "../reconcile.js"
@@ -84,6 +85,13 @@ export interface Chat {
     answer: Form.Answer,
   ) => Effect.Effect<void, NotFound | Conflict | Rejected>
   readonly cancelForm: (sessionId: Session.ID, formId: Form.ID) => Effect.Effect<void, NotFound | Conflict>
+  readonly shells: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Shell.Info>, NotFound>
+  readonly shellOutput: (
+    sessionId: Session.ID,
+    shellId: Shell.ID,
+    page: { readonly cursor?: number; readonly limit?: number },
+  ) => Effect.Effect<Shell.Output, NotFound>
+  readonly removeShell: (sessionId: Session.ID, shellId: Shell.ID) => Effect.Effect<void, NotFound>
 }
 
 export interface Instance {

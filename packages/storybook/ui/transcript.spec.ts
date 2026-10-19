@@ -15,6 +15,21 @@ story("opens a tool call to show its input and output", async ({ visit }) => {
   await expect(root.getByRole("region", { name: "Output" })).toContainText("enterprise,Q3,1200000")
 })
 
+story("follows a running command's output to its latest line, until the reader scrolls back", async ({ visit }) => {
+  const root = await visit("ui-transcript--tool-command-live")
+  const output = root.getByRole("region", { name: "Output" })
+  const more = root.getByRole("button", { name: "Print more" })
+  const atEnd = () => output.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight < 2)
+  await more.click()
+  await more.click()
+  await expect(output).toContainText("test 40 passed")
+  expect(await atEnd()).toBe(true)
+  await output.evaluate((element) => element.scrollTo({ top: 0 }))
+  await more.click()
+  await expect(output).toContainText("test 60 passed")
+  expect(await atEnd()).toBe(false)
+})
+
 story("marks a failed tool call and shows its error", async ({ visit }) => {
   const root = await visit("ui-transcript--tool-failed")
   await expect(root.getByText("File not found", { exact: true })).toBeVisible()

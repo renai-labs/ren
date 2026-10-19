@@ -96,6 +96,34 @@ const completed = (name: string, files: ReadonlyArray<typeof SessionMessage.Json
   time: { created: DateTime.makeUnsafe(1), completed: DateTime.makeUnsafe(2) },
 })
 
+describe("live shell output", () => {
+  const shell = (state: SessionMessage.ToolState): SessionMessage.Tool => ({
+    type: "tool",
+    id: "tool_shell",
+    name: "shell",
+    state,
+    time,
+  })
+  const content = [{ type: "text", text: "done" }] as const
+
+  test("follows a shell's output until its saved snapshot ended it", () => {
+    expect<string | undefined>(
+      ToolState.liveShellID(shell({ status: "running", input: {}, metadata: { shellID: "sh_live" } })),
+    ).toBe("sh_live")
+    expect<string | undefined>(
+      ToolState.liveShellID(
+        shell({ status: "completed", input: {}, content, metadata: { status: "running", shellID: "sh_background" } }),
+      ),
+    ).toBe("sh_background")
+    expect(
+      ToolState.liveShellID(
+        shell({ status: "completed", input: {}, content, metadata: { status: "exited", shellID: "sh_saved" } }),
+      ),
+    ).toBeUndefined()
+    expect(ToolState.liveShellID(shell({ status: "running", input: {}, metadata: {} }))).toBeUndefined()
+  })
+})
+
 describe("current content default open", () => {
   test("uses the shell disclosure preference", () => {
     expect(ToolState.defaultOpen(completed("shell"), true, false)).toBe(true)

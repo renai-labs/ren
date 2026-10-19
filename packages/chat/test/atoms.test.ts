@@ -1,10 +1,13 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
+import { SessionID } from "@opencode/schema/session-id"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
+import { Shell } from "@ren/schema/shell"
 import { DateTime, Effect, Layer, Option, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 import { ChatAtoms } from "../src/atoms.js"
+import { ChatState } from "../src/chat-state.js"
 import { TimelineRow } from "../src/timeline-row.js"
 
 setDefaultTimeout(60_000)
@@ -111,4 +114,37 @@ test("the child atom of a subagent session reads its transcript through the root
       (value) => AsyncResult.isSuccess(value) && value.value.rows.some((row) => row._tag === "AssistantPart"),
     )
     expect(AsyncResult.isSuccess(rows) && rows.value.rows.map((row) => row._tag)).toContain("UserMessage")
+  }).pipe(Effect.scoped, Effect.runPromise))
+
+test("the shell output atom reads a shell's output through the root session", () =>
+  Effect.gen(function* () {
+    const made = yield* setup
+    const brain = made.brain
+    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(made.atoms.state(brain.id))))
+    yield* made.until(
+      made.atoms.status(brain.id),
+      (value) => AsyncResult.isSuccess(value) && value.value === "connected",
+    )
+    yield* brain.opencode.session.shell({ sessionID: SessionID.make(brain.id), command: "printf 'hello world'" })
+    const state = yield* made.until(
+      made.atoms.state(brain.id),
+      (value) =>
+        AsyncResult.isSuccess(value) &&
+        ChatState.messages(value.value, brain.id).some(
+          (message) => message.type === "shell" && message.status !== "running",
+        ),
+    )
+    const ran = AsyncResult.isSuccess(state)
+      ? ChatState.messages(state.value, brain.id).find((message) => message.type === "shell")
+      : undefined
+    if (ran?.type !== "shell") return yield* Effect.die(new Error("No shell message"))
+    const output = made.atoms.shellOutput({
+      root: brain.id,
+      sessionID: brain.id,
+      shellID: Shell.ID.make(ran.shellID),
+      running: false,
+    })
+    yield* Effect.addFinalizer(() => Effect.sync(made.registry.mount(output)))
+    const read = yield* made.until(output, AsyncResult.isSuccess)
+    expect(AsyncResult.isSuccess(read) && read.value).toBe("hello world")
   }).pipe(Effect.scoped, Effect.runPromise))

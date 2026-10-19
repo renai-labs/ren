@@ -9,8 +9,10 @@ import { SessionInfo } from "@ren/schema/session-info"
 import type { SessionMessage } from "@ren/schema/session-message"
 import { SessionModel } from "@ren/schema/session-model"
 import type { SessionStatus } from "@ren/schema/session-status"
+import type { Shell } from "@ren/schema/shell"
 import { Effect, Option, Schema, Stream } from "effect"
 import { Harness } from "../harness.js"
+import type { Host } from "./host.js"
 import { OpenCodeEvents } from "./events.js"
 import { Translate } from "./translate.js"
 
@@ -52,7 +54,8 @@ const decodeCompaction = Schema.decodeUnknownOption(SessionInbox.Compaction)
 
 const decodeRevert = Schema.decodeUnknownOption(SessionInfo.Revert)
 
-export const make = (fetch: (request: Request) => Promise<Response>): Harness.Chat => {
+export const make = (host: Pick<Host.Instance, "fetch" | "shells">): Harness.Chat => {
+  const fetch = host.fetch
   const call = Effect.fnUntraced(function* (
     method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
@@ -289,6 +292,26 @@ export const make = (fetch: (request: Request) => Promise<Response>): Harness.Ch
       call("DELETE", `/api/session/${sessionId}/form/${formId}`).pipe(
         Effect.asVoid,
         Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
+      ),
+    shells: (sessionId) =>
+      host
+        .shells(sessionId, (shell) => shell.list())
+        .pipe(Effect.flatMap((all) => list({ data: all }, Translate.shell))),
+    shellOutput: (sessionId, shellId, page) =>
+      host
+        .shells(sessionId, (shell) =>
+          shell
+            .output(shellId, page)
+            .pipe(
+              Effect.catchTag("Shell.NotFoundError", () =>
+                Effect.fail(new Harness.NotFound({ message: `Shell ${shellId} is not running or kept` })),
+              ),
+            ),
+        )
+        .pipe(Effect.map((output): Shell.Output => output)),
+    removeShell: (sessionId, shellId) =>
+      host.shells(sessionId, (shell) =>
+        shell.remove(shellId).pipe(Effect.catchTag("Shell.NotFoundError", () => Effect.void)),
       ),
   }
 }

@@ -111,41 +111,43 @@ Ren additions to the copied shapes:
 
 ## 4. Brain: `ChatApi`
 
-Defined in `@ren/protocol/chat` (C14) as three groups (`event`, `model`, `session`), all under `/chat/*`. Served by the brain for its session and that session's children. The worker lets a `client`-scope token reach `/chat/*` only, answers CORS for it, and passes the token's `sub` (the member) to the brain, which records it as the message's sender. Raw OpenCode routes are for `server`-scope tokens only. Replaces the OpenCode deny-list in `cell/src/harness/opencode/routes.ts`. "Slice" ships in §9 steps 1–6; "B" ships with its inventory area.
+Defined in `@ren/protocol/chat` (C14) as four groups (`event`, `model`, `session`, `shell`), all under `/chat/*`. Served by the brain for its session and that session's children. The worker lets a `client`-scope token reach `/chat/*` only, answers CORS for it, and passes the token's `sub` (the member) to the brain, which records it as the message's sender. Raw OpenCode routes are for `server`-scope tokens only. Replaces the OpenCode deny-list in `cell/src/harness/opencode/routes.ts`. "Slice" ships in §9 steps 1–6; "B" ships with its inventory area.
 
 Reads (C17):
 
-| Endpoint                                   | Purpose                                                                                                   | OpenCode call             | When  |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------- | ----- |
-| `event.subscribe` (SSE)                    | `server.connected` first, keepalive every 15 s, allowlisted events for the session family, `stream.ended` | `event.subscribe`         | Slice |
-| `session.get`                              | Title, cost, tokens, status, revert boundary, capabilities                                                | `session.get`             | Slice |
-| `session.status`                           | Which sessions of the family run; re-read on every connect                                                | `session.active`          | Slice |
-| `session.messages`                         | A page of messages, newest first, with a cursor                                                           | `session.messages`        | Slice |
-| `session.message`                          | One message, re-read after a model switch (SYNC-103)                                                      | `session.message`         | B     |
-| `session.children`                         | Subagent sessions                                                                                         | `session.list` by parent  | B     |
-| `session.inbox.list`                       | Pending and queued inputs                                                                                 | `session.inbox.list`      | Slice |
-| `session.permission.list`                  | Open permission requests                                                                                  | `session.permission.list` | Slice |
-| `session.form.list`                        | Open questions                                                                                            | `session.form.list`       | Slice |
-| `model.list`                               | Models the session may use, with their variants. Only the models Ren configured for this brain.           | `model.list`              | Slice |
-| `shell.output`                             | Live output of a shell tool, by cursor (RND-136, RND-137)                                                 | `shell.output`            | B     |
-| `command.list`, `agent.list`, `skill.list` | Composer lists for `/` and `@`                                                                            | same                      | B     |
+| Endpoint                                   | Purpose                                                                                                   | OpenCode call                            | When  |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ----- |
+| `event.subscribe` (SSE)                    | `server.connected` first, keepalive every 15 s, allowlisted events for the session family, `stream.ended` | `event.subscribe`                        | Slice |
+| `session.get`                              | Title, cost, tokens, status, revert boundary, capabilities                                                | `session.get`                            | Slice |
+| `session.status`                           | Which sessions of the family run; re-read on every connect                                                | `session.active`                         | Slice |
+| `session.messages`                         | A page of messages, newest first, with a cursor                                                           | `session.messages`                       | Slice |
+| `session.message`                          | One message, re-read after a model switch (SYNC-103)                                                      | `session.message`                        | B     |
+| `session.children`                         | Subagent sessions                                                                                         | `session.list` by parent                 | B     |
+| `session.inbox.list`                       | Pending and queued inputs                                                                                 | `session.inbox.list`                     | Slice |
+| `session.permission.list`                  | Open permission requests                                                                                  | `session.permission.list`                | Slice |
+| `session.form.list`                        | Open questions                                                                                            | `session.form.list`                      | Slice |
+| `model.list`                               | Models the session may use, with their variants. Only the models Ren configured for this brain.           | `model.list`                             | Slice |
+| `shell.list`                               | Shell commands that still run where the session works (SES-117)                                           | `Shell.list` in the session's instance   | B     |
+| `shell.output`                             | Live output of a shell tool, by cursor (RND-136, RND-137)                                                 | `Shell.output` in the session's instance | B     |
+| `command.list`, `agent.list`, `skill.list` | Composer lists for `/` and `@`                                                                            | same                                     | B     |
 
 Writes:
 
-| Endpoint                                                                | Purpose                                                                      | OpenCode call         | When                  |
-| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------- | --------------------- |
-| `session.prompt`                                                        | `{ id, text, delivery: steer \| queue, mentions }`; idempotent by message ID | `session.prompt`      | Slice (files: step 8) |
-| `session.interrupt`                                                     | Stop the turn                                                                | `session.interrupt`   | Slice                 |
-| `session.model.switch`                                                  | `{ model, variant? }`, any number of times (C18)                             | `session.switchModel` | Slice                 |
-| `session.permission.reply`                                              | `once \| always \| reject`                                                   | same                  | Slice                 |
-| `session.form.reply`, `session.form.cancel`                             | Answer or dismiss a question                                                 | same                  | Slice                 |
-| `session.inbox.update`, `session.inbox.cancel`                          | Steer or queue a pending input, or cancel it (queue edit, reorder, undo)     | same                  | B                     |
-| `session.rename`                                                        | Change the title; sync carries it to Ren (C19)                               | `session.update`      | B                     |
-| `session.command`, `session.shell`, `session.compact`                   | `/` commands, `!` shell, compaction                                          | same                  | B                     |
-| `session.revert.stage`, `session.revert.clear`, `session.revert.commit` | Undo, redo, and commit before the next prompt                                | same                  | B                     |
-| `session.background`                                                    | Move running work to the background                                          | same                  | B                     |
+| Endpoint                                                                | Purpose                                                                      | OpenCode call                            | When                  |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------- | --------------------- |
+| `session.prompt`                                                        | `{ id, text, delivery: steer \| queue, mentions }`; idempotent by message ID | `session.prompt`                         | Slice (files: step 8) |
+| `session.interrupt`                                                     | Stop the turn                                                                | `session.interrupt`                      | Slice                 |
+| `session.model.switch`                                                  | `{ model, variant? }`, any number of times (C18)                             | `session.switchModel`                    | Slice                 |
+| `session.permission.reply`                                              | `once \| always \| reject`                                                   | same                                     | Slice                 |
+| `session.form.reply`, `session.form.cancel`                             | Answer or dismiss a question                                                 | same                                     | Slice                 |
+| `session.inbox.update`, `session.inbox.cancel`                          | Steer or queue a pending input, or cancel it (queue edit, reorder, undo)     | same                                     | B                     |
+| `session.rename`                                                        | Change the title; sync carries it to Ren (C19)                               | `session.update`                         | B                     |
+| `session.command`, `session.shell`, `session.compact`                   | `/` commands, `!` shell, compaction                                          | same                                     | B                     |
+| `session.revert.stage`, `session.revert.clear`, `session.revert.commit` | Undo, redo, and commit before the next prompt                                | same                                     | B                     |
+| `session.background`                                                    | Move running work to the background                                          | same                                     | B                     |
+| `shell.remove`                                                          | Stop a background shell from the running menu (SES-109)                      | `Shell.remove` in the session's instance | B                     |
 
-Not exposed: `switchAgent` (server-only, agents X15), session create, remove, import, export, move and environment (Ren owns the session), synthetic, `permission.create` and `form.create` (harness-internal), wait, generate, log, stats, skill (internal or experimental), and everything outside one session (config, provider, mcp, pty, fs, vcs, worktree, location, project, credential, integration). `diff`, `context`, `view` and `shell.remove` come back only if the review panel, unread state or the running menu needs them.
+Not exposed: `switchAgent` (server-only, agents X15), session create, remove, import, export, move and environment (Ren owns the session), synthetic, `permission.create` and `form.create` (harness-internal), wait, generate, log, stats, skill (internal or experimental), and everything outside one session (config, provider, mcp, pty, fs, vcs, worktree, location, project, credential, integration). `diff`, `context` and `view` come back only if the review panel or unread state needs them.
 
 The model switch (C18): the brain checks the model and variant against its model list (agents X14), calls `switchModel`, and stores the choice as the session layer of its in-memory settings plan and in the host's storage, so a later settings pull or a restart does not undo it. A `model-switched` event then arrives on the stream. The composer awaits the switch before it sends a steer (CMP-94), so the next turn uses the new model. Reporting the choice to Ren's `overrides` comes later.
 

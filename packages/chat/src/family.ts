@@ -58,7 +58,17 @@ export const permission = (
 ) => first(state, state.permissions, sessionID, include)
 
 export const form = (state: ChatState.State, sessionID: string): Form.Info | undefined =>
-  first(state, state.forms, sessionID, () => true)
+  first(state, state.forms, sessionID, (item) => item.kind === "question" || item.kind === "websearch.provider")
+
+export const webSearch = (state: ChatState.State, sessionID: string) => {
+  const found = form(state, sessionID)
+  return found?.kind === "websearch.provider" ? found : undefined
+}
+
+export const question = (state: ChatState.State, sessionID: string) => {
+  const found = form(state, sessionID)
+  return found?.kind === "question" ? found : undefined
+}
 
 export const ancestors = (state: ChatState.State, sessionID: string): ReadonlyArray<string> => {
   const walk = (id: string | undefined, seen: ReadonlySet<string>): ReadonlyArray<string> =>
@@ -145,8 +155,19 @@ export const background = (state: ChatState.State, sessionID: string): Backgroun
       return []
     return [{ id: info.id, type: "subagent", label: info.title ?? info.id }]
   })
+  const live = ChatState.shells(state, sessionID).flatMap((shell): ReadonlyArray<Task> => {
+    if (shell.status !== "running") return []
+    if (
+      blocking.some(
+        (item) =>
+          item.type === "shell" && (item.id === shell.id || (Boolean(item.label) && shell.command === item.label)),
+      )
+    )
+      return []
+    return [{ id: shell.id, type: "shell", label: shell.command }]
+  })
   return {
     blocking,
-    tasks: [...new Map([...subagents, ...active, ...shells].map((task) => [task.id, task])).values()],
+    tasks: [...new Map([...subagents, ...active, ...shells, ...live].map((task) => [task.id, task])).values()],
   }
 }

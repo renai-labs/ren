@@ -1,6 +1,7 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
 import { SessionMessage } from "@ren/schema/session-message"
+import { Shell } from "@ren/schema/shell"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
 import { DateTime, Effect, Layer, Option, type Scope, Stream, SubscriptionRef } from "effect"
@@ -432,6 +433,41 @@ test("a subagent's session, transcript and title read through the root session",
       expect(Family.ancestors(done, childID)).toEqual([brain.id])
       yield* until(chat.state, settled(brain.id))
       expect(Family.childTitle(yield* SubscriptionRef.get(chat.state), childID, "Session")).toBe("Look around")
+    }),
+  ))
+
+test("a running shell shows as background work, its output reads from a cursor, and stopping it ends it", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const sessionID = SessionID.make(brain.id)
+      yield* brain.opencode.session.shell({ sessionID, command: "printf 'hello world'" })
+      const printed = yield* until(chat.state, (state) =>
+        ChatState.messages(state, brain.id).some((message) => message.type === "shell" && message.status !== "running"),
+      )
+      const ran = ChatState.messages(printed, brain.id).find((message) => message.type === "shell")
+      if (ran?.type !== "shell") return yield* Effect.die(new Error("No shell message"))
+      const shellID = Shell.ID.make(ran.shellID)
+      expect(yield* chat.shellOutput(brain.id, shellID, 0)).toMatchObject({ output: "hello world", cursor: 11 })
+      expect(yield* chat.shellOutput(brain.id, shellID, 6)).toMatchObject({ output: "world", cursor: 11 })
+
+      yield* brain.opencode.session.shell({ sessionID, command: "sleep 30" }).pipe(Effect.forkScoped)
+      const running = yield* until(chat.state, (state) => ChatState.shells(state, brain.id).length > 0)
+      const [sleeping] = ChatState.shells(running, brain.id)
+      if (!sleeping) return yield* Effect.die(new Error("No running shell"))
+      expect(Family.background(running, brain.id).tasks).toEqual([
+        { id: sleeping.id, type: "shell", label: "sleep 30" },
+      ])
+      const fresh = yield* open(brain)
+      yield* fresh.open(brain.id)
+      expect(ChatState.shellRunning(yield* SubscriptionRef.get(fresh.state), sleeping.id)).toBe(true)
+      yield* chat.stopShell(brain.id, sleeping.id)
+      expect(ChatState.shells(yield* SubscriptionRef.get(chat.state), brain.id)).toEqual([])
+      expect((yield* chat.shellOutput(brain.id, sleeping.id, 0).pipe(Effect.flip))._tag).toBe("NotFoundError")
     }),
   ))
 

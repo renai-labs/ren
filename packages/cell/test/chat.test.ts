@@ -173,9 +173,11 @@ test("a client answers a permission request and a question through the Chat API"
           }).marker,
         },
       })
-      yield* events.until("form.created")
+      const asked = yield* events.until("form.created")
+      expect(asked.at(-1)).toMatchObject({ data: { form: { kind: "question" } } })
       const [form] = yield* brain.chat.session["session.form.list"]({ params })
       if (!form) return yield* Effect.die(new Error("No question"))
+      expect(form.kind).toBe("question")
       const field = form.fields[0]
       yield* brain.chat.session["session.form.reply"]({
         params: { ...params, formID: form.id },

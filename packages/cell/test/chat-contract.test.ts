@@ -3,6 +3,7 @@ import { Form } from "@opencode/schema/form"
 import { Permission } from "@opencode/schema/permission"
 import { SessionID } from "@opencode/schema/session-id"
 import { SessionMessage } from "@opencode/schema/session-message"
+import { Shell } from "@opencode/schema/shell"
 import { Session } from "@ren/schema/session"
 import { SessionEvent } from "@ren/schema/session-event"
 import { Effect, Option, Queue, Schema, Stream } from "effect"
@@ -28,6 +29,8 @@ const FormCreated = Schema.Struct({
     }),
   }),
 })
+
+const ShellCreated = Schema.Struct({ data: Schema.Struct({ info: Schema.Struct({ id: Schema.String }) }) })
 
 const PermissionAsked = Schema.Struct({ data: Schema.Struct({ id: Schema.String }) })
 
@@ -153,6 +156,11 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
 
     yield* brain.opencode.session.shell({ sessionID, command: "echo shell" })
     yield* brain.opencode.session.wait({ sessionID })
+    const shell = Schema.decodeUnknownSync(ShellCreated)(yield* until("shell.created")).data.info
+    yield* until("shell.exited")
+    const location = { directory: (yield* brain.opencode.session.get({ sessionID })).location.directory }
+    yield* brain.opencode.shell.remove({ id: Shell.ID.make(shell.id), location })
+    yield* until("shell.deleted")
 
     yield* brain.opencode.session.update({ sessionID, title: "Renamed" })
     const summarized = { summary: "## Objective\n- the summary" }

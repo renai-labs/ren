@@ -126,6 +126,7 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
   return yield* OpenCodeHarness.make(
     {
       fetch,
+      shells: () => Effect.die(new Error("The tool parity host has no shells")),
       credentials: Context.get(services, Credential.Service),
       sessions: Context.get(services, OpenCodeSession.Service),
       workspaces: Context.get(services, Workspace.Service),

@@ -107,6 +107,9 @@ export const Info = Schema.Struct({
   id: ID,
   sessionID: Schema.String,
   title: Schema.String,
+  kind: Schema.optionalKey(Schema.String).annotate({
+    description: "What asks: `question` for the question tool, `websearch.provider` for web-search consent",
+  }),
   fields: Schema.NonEmptyArray(Field),
 }).annotate({ identifier: "Form.Info" })
 

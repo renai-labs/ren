@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import type { SessionMessage } from "@ren/schema/session-message"
+import { Shell } from "@ren/schema/shell"
 import { Schema } from "effect"
 import { ChatState } from "../src/chat-state.js"
 import { Family } from "../src/family.js"
@@ -17,8 +18,16 @@ const sessions = (list: ReadonlyArray<{ readonly id: string; readonly parentID?:
 const permission = (id: string, sessionID: string) =>
   Schema.decodeUnknownSync(Permission.Request)({ id, sessionID, action: "webfetch", resources: [] })
 
-const question = (id: string, sessionID: string) =>
-  Schema.decodeUnknownSync(Form.Info)({ id, sessionID, title: "Questions", fields: [{ key: "q0", type: "string" }] })
+const question = (id: string, sessionID: string, kind = "question") =>
+  Schema.decodeUnknownSync(Form.Info)({
+    id,
+    sessionID,
+    title: "Questions",
+    kind,
+    fields: [{ key: "q0", type: "string" }],
+  })
+
+const search = (id: string, sessionID: string) => question(id, sessionID, "websearch.provider")
 
 describe("sessionTreeIDs", () => {
   test("returns only the current session and its descendants", () => {
@@ -78,9 +87,39 @@ describe("sessionFormRequest", () => {
       "frm_root",
     ],
     ["returns a nested child question", { ses_grand: [question("frm_grand", "ses_grand")] }, "frm_grand"],
+    ["skips unsupported forms", { ses_root: [question("frm_form", "ses_root", "integration")] }, undefined],
+    [
+      "finds web search consent in a nested child session",
+      { ses_child: [search("frm_search", "ses_child")] },
+      "frm_search",
+    ],
+    [
+      "keeps web search ahead of a later question",
+      { ses_root: [search("frm_search", "ses_root"), question("frm_q", "ses_root")] },
+      "frm_search",
+    ],
+    [
+      "keeps a question ahead of a later web search",
+      { ses_root: [question("frm_q", "ses_root"), search("frm_search", "ses_root")] },
+      "frm_q",
+    ],
+    [
+      "keeps the current session ahead of a child question",
+      { ses_root: [search("frm_search", "ses_root")], ses_child: [question("frm_q", "ses_child")] },
+      "frm_search",
+    ],
   ] as const)("%s", (_name, forms, id) => {
     expect<string | undefined>(Family.form({ ...tree, forms }, "ses_root")?.id).toBe(id)
   })
+})
+
+test("a web-search consent form takes the dock from a question, and only a question shows as one", () => {
+  const consent = { ...tree, forms: { ses_root: [search("frm_search", "ses_root"), question("frm_q", "ses_root")] } }
+  expect<string | undefined>(Family.webSearch(consent, "ses_root")?.id).toBe("frm_search")
+  expect(Family.question(consent, "ses_root")).toBeUndefined()
+  const asked = { ...tree, forms: { ses_child: [question("frm_q", "ses_child")] } }
+  expect<string | undefined>(Family.question(asked, "ses_root")?.id).toBe("frm_q")
+  expect(Family.webSearch(asked, "ses_root")).toBeUndefined()
 })
 
 test("walks the ancestors from the root, and stops at a cycle", () => {
@@ -178,4 +217,26 @@ test("background work leaves out what a completion notice reports, and blocking 
     { id: "ses_child_bg", type: "subagent", label: "Background" },
     { id: "ses_child_live", type: "subagent", label: "Live" },
   ])
+})
+
+test("a running shell outside the transcript is background work, unless the open reply waits for it", () => {
+  const shell = (id: string, command: string, sessionID = "ses_root") =>
+    Schema.decodeUnknownSync(Shell.Info)({ id, sessionID, status: "running", command, time: { started: 1 } })
+  const loaded = transcript(sessions([{ id: "ses_root" }]), "ses_root", [
+    assistant("msg_a", [
+      {
+        type: "tool",
+        id: "call_shell",
+        name: "shell",
+        state: { status: "running", input: { command: "bun test" }, metadata: { shellID: "sh_blocking" } },
+        time: { created: 1 },
+      },
+    ]),
+  ])
+  const live = Hydrate.shells(loaded, [
+    shell("sh_blocking", "bun test"),
+    shell("sh_dev", "bun dev"),
+    shell("sh_other", "bun lint", "ses_other"),
+  ])
+  expect(Family.background(live, "ses_root").tasks).toEqual([{ id: "sh_dev", type: "shell", label: "bun dev" }])
 })

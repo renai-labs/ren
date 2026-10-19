@@ -7,6 +7,7 @@ import { SessionInfo } from "@ren/schema/session-info"
 import { SessionMessage } from "@ren/schema/session-message"
 import { SessionModel } from "@ren/schema/session-model"
 import { SessionStatus } from "@ren/schema/session-status"
+import { Shell } from "@ren/schema/shell"
 import { Schema, SchemaGetter } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "./errors.js"
@@ -49,6 +50,11 @@ export const InterruptQuery = Schema.Struct({
     ),
   ),
 }).annotate({ identifier: "Chat.InterruptQuery" })
+
+export const ShellOutputQuery = Schema.Struct({
+  cursor: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
+  limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThan(0))),
+}).annotate({ identifier: "Chat.ShellOutputQuery" })
 
 export const EventGroup = HttpApiGroup.make("event")
   .add(
@@ -368,10 +374,57 @@ export const SessionGroup = HttpApiGroup.make("session")
   )
   .annotateMerge(OpenApi.annotations({ title: "session" }))
 
+export const ShellGroup = HttpApiGroup.make("shell")
+  .add(
+    HttpApiEndpoint.get("shell.list", "/chat/session/:sessionID/shell", {
+      params,
+      success: Schema.Array(Shell.Info),
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "shell.list",
+        summary: "List running shell commands",
+        description:
+          "Return the shell commands that still run where the session works, each with the session that started it. Commands that ended are left out.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("shell.output", "/chat/session/:sessionID/shell/:shellID/output", {
+      params: { ...params, shellID: Shell.ID },
+      query: ShellOutputQuery,
+      success: Shell.Output,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "shell.output",
+        summary: "Read shell output",
+        description:
+          "Return the output of a shell command that runs where the session works, from a byte `cursor` on. Read again from the returned `cursor` while it is below `size` or the command runs. A command the session no longer keeps is not found.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("shell.remove", "/chat/session/:sessionID/shell/:shellID", {
+      params: { ...params, shellID: Shell.ID },
+      success: HttpApiSchema.NoContent,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "shell.remove",
+        summary: "Stop a shell command",
+        description:
+          "Stop a shell command that runs where the session works, and drop its output. A command that is already gone is left alone.",
+      }),
+    ),
+  )
+  .annotateMerge(OpenApi.annotations({ title: "shell" }))
+
 export const ChatApi = HttpApi.make("chat")
   .add(EventGroup)
   .add(ModelGroup)
   .add(SessionGroup)
+  .add(ShellGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Chat API",
