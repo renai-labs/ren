@@ -107,7 +107,7 @@ it.live("refuses a spawn whose output file cannot be made, and starts no process
     const error = yield* executor
       .spawn(brain, { command: "touch", arguments: [marker], outputFile: join(blocker, "sh_1.out") })
       .pipe(Effect.flip)
-    expect([error._tag, existsSync(marker)]).toEqual(["OperationFailedError", false])
+    expect([error._tag, existsSync(marker)]).toEqual(["SpawnFailedError", false])
   }),
 )
 
@@ -430,7 +430,7 @@ it.live("refuses stdin after it was closed", () =>
     const process = yield* run({ command: "sh", arguments: ["-c", "cat; sleep 0.5"], hasStdin: true })
     yield* process.executor.writeStdin(brain, process.id, encoder.encode("a"), true)
     const error = yield* process.executor.writeStdin(brain, process.id, encoder.encode("b"), false).pipe(Effect.flip)
-    expect(error._tag).toBe("OperationFailedError")
+    expect(error._tag).toBe("StdinClosedError")
     expect((yield* collect(process.events)).stdout).toBe("a")
   }),
 )
@@ -463,7 +463,7 @@ it.live("fails to spawn a command that does not exist", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
     const error = yield* executor.spawn(brain, { command: "ren-no-such-command", arguments: [] }).pipe(Effect.flip)
-    expect(error._tag).toBe("OperationFailedError")
+    expect(error._tag).toBe("SpawnFailedError")
   }),
 )
 
@@ -510,7 +510,7 @@ it.live("fails to spawn in a directory that does not exist, and leaves no proces
     const marker = `ren-f5-${crypto.randomUUID()}`
     const sleeping = (directory: string) => ({ command: "sh", arguments: ["-c", "sleep 30; true", marker], directory })
     const error = yield* executor.spawn(brain, sleeping("no-such-directory")).pipe(Effect.flip)
-    expect(error._tag).toBe("OperationFailedError")
+    expect(error._tag).toBe("SpawnFailedError")
     expect(Processes.matching(marker)).toEqual([])
     const control = yield* executor.spawn(brain, sleeping("."))
     expect(Processes.matching(marker)).not.toEqual([])
@@ -545,9 +545,9 @@ it.live("fails with a typed error for an argument of 1 MiB or with a NUL byte, a
   Effect.gen(function* () {
     const executor = yield* Executor.Service
     const huge = yield* executor.spawn(brain, { command: "echo", arguments: ["a".repeat(mebibyte)] }).pipe(Effect.flip)
-    expect(huge._tag).toBe("OperationFailedError")
+    expect(huge._tag).toBe("SpawnFailedError")
     const nul = yield* executor.spawn(brain, { command: "echo", arguments: ["a\0b"] }).pipe(Effect.flip)
-    expect(nul._tag).toBe("OperationFailedError")
+    expect(nul._tag).toBe("SpawnFailedError")
     const process = yield* run({ command: "echo", arguments: ["still serving"] })
     expect((yield* collect(process.events)).stdout).toBe("still serving\n")
   }),
@@ -582,7 +582,7 @@ it.live("fails to spawn a command file with no execute permission with a typed e
     const error = yield* executor
       .spawn(brain, { command: join(workspace, "no-execute.sh"), arguments: [] })
       .pipe(Effect.flip)
-    expect(error._tag).toBe("OperationFailedError")
+    expect(error._tag).toBe("SpawnFailedError")
     expect(error.message).toContain("PermissionDenied")
   }),
 )
@@ -592,7 +592,7 @@ it.live("refuses stdin for a process that was started without stdin", () =>
     const process = yield* run({ command: "sleep", arguments: ["30"] })
     for (const end of [false, true]) {
       const error = yield* process.executor.writeStdin(brain, process.id, encoder.encode("x"), end).pipe(Effect.flip)
-      expect(error._tag).toBe("OperationFailedError")
+      expect(error._tag).toBe("StdinClosedError")
     }
     yield* process.executor.kill(brain, process.id, "SIGKILL")
   }),
@@ -611,7 +611,7 @@ it.live("refuses stdin at once for a process that exited", () =>
         }),
       { concurrency: 1 },
     )
-    expect(errors).toEqual(Array(30).fill("OperationFailedError"))
+    expect(errors).toEqual(Array(30).fill("StdinClosedError"))
   }),
 )
 
@@ -1098,10 +1098,10 @@ if (process.getuid?.() !== 0)
       yield* executor.write("secret.txt", encoder.encode("secret"))
       yield* Effect.promise(() => chmod(join(workspace, "secret.txt"), 0o000))
       const whole = yield* executor.read("secret.txt").pipe(Effect.flip)
-      expect(whole._tag).toBe("OperationFailedError")
-      expect(whole._tag === "OperationFailedError" && whole.message).toContain("EACCES")
+      expect(whole._tag).toBe("FileSystemError")
+      expect(whole._tag === "FileSystemError" && whole.message).toContain("EACCES")
       expect((yield* executor.read("secret.txt", { offset: 0, length: 3 }).pipe(Effect.flip))._tag).toBe(
-        "OperationFailedError",
+        "FileSystemError",
       )
       expect((yield* executor.stat("secret.txt")).sizeBytes).toBe(6)
     }),
@@ -1140,7 +1140,7 @@ it.live(
       expect(decoder.decode((yield* executor.read("g7/two")).bytes)).toBe("target")
       expect((yield* executor.stat("g7/two")).type).toBe("symlink")
       const loop = yield* executor.read("g7/loop-a").pipe(Effect.flip)
-      expect(loop._tag === "OperationFailedError" && loop.message).toContain("ELOOP")
+      expect(loop._tag === "FileSystemError" && loop.message).toContain("ELOOP")
       expect((yield* executor.stat("g7/loop-a")).type).toBe("symlink")
       expect((yield* executor.read("g7/dangling").pipe(Effect.flip))._tag).toBe("FileNotFoundError")
       expect((yield* executor.stat("g7/dangling")).type).toBe("symlink")
@@ -1214,7 +1214,7 @@ if (process.platform === "linux" ? existsSync("/dev/shm") : process.platform ===
         const failure = Exit.isFailure(moved)
           ? moved.cause.reasons.flatMap((reason) => (reason._tag === "Fail" ? [reason.error] : []))
           : []
-        expect(failure.map((error) => error._tag)).toEqual(["OperationFailedError"])
+        expect(failure.map((error) => error._tag)).toEqual(["FileSystemError"])
         expect(decoder.decode((yield* executor.read("g10/file.txt")).bytes)).toBe("across")
         expect((yield* executor.stat(join(volume, "file.txt")).pipe(Effect.flip))._tag).toBe("FileNotFoundError")
       }

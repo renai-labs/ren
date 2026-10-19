@@ -6,15 +6,17 @@ import type {
   FileNotFoundError,
   FileTooLargeError,
   Hello,
-  OperationFailedError,
+  FileSystemError,
   OutputWindow,
   ProcessEvent,
   ProcessID,
   ProcessNotFoundError,
   Range,
   ReadResult,
+  SpawnFailedError,
   SpawnInput,
   SpawnResult,
+  StdinClosedError,
   StdinFullError,
   WrongKindError,
 } from "@ren/hand-api/executor-api"
@@ -24,7 +26,7 @@ import { Context, type Effect, type Stream } from "effect"
 
 export interface Interface {
   readonly hello: Hello
-  readonly spawn: (brain: Brain.ID, input: SpawnInput) => Effect.Effect<SpawnResult, OperationFailedError>
+  readonly spawn: (brain: Brain.ID, input: SpawnInput) => Effect.Effect<SpawnResult, SpawnFailedError>
   readonly output: (
     brain: Brain.ID,
     id: ProcessID,
@@ -36,7 +38,7 @@ export interface Interface {
     id: ProcessID,
     data: Uint8Array,
     end: boolean,
-  ) => Effect.Effect<void, ProcessNotFoundError | StdinFullError | OperationFailedError>
+  ) => Effect.Effect<void, ProcessNotFoundError | StdinFullError | StdinClosedError>
   readonly heartbeat: (brain: Brain.ID, id: ProcessID) => Effect.Effect<void, ProcessNotFoundError>
   readonly kill: (
     brain: Brain.ID,
@@ -47,15 +49,15 @@ export interface Interface {
   readonly read: (
     path: string,
     range?: Range,
-  ) => Effect.Effect<ReadResult, FileNotFoundError | WrongKindError | FileTooLargeError | OperationFailedError>
-  readonly write: (path: string, bytes: Uint8Array) => Effect.Effect<void, FileTooLargeError | OperationFailedError>
-  readonly stat: (path: string) => Effect.Effect<FileInfo, FileNotFoundError | OperationFailedError>
+  ) => Effect.Effect<ReadResult, FileNotFoundError | WrongKindError | FileTooLargeError | FileSystemError>
+  readonly write: (path: string, bytes: Uint8Array) => Effect.Effect<void, FileTooLargeError | FileSystemError>
+  readonly stat: (path: string) => Effect.Effect<FileInfo, FileNotFoundError | FileSystemError>
   readonly list: (
     path: string,
-  ) => Effect.Effect<ReadonlyArray<DirectoryEntry>, FileNotFoundError | WrongKindError | OperationFailedError>
-  readonly remove: (path: string) => Effect.Effect<void, OperationFailedError>
-  readonly move: (from: string, to: string) => Effect.Effect<void, FileNotFoundError | OperationFailedError>
-  readonly mkdir: (path: string) => Effect.Effect<void, OperationFailedError>
+  ) => Effect.Effect<ReadonlyArray<DirectoryEntry>, FileNotFoundError | WrongKindError | FileSystemError>
+  readonly remove: (path: string) => Effect.Effect<void, FileSystemError>
+  readonly move: (from: string, to: string) => Effect.Effect<void, FileNotFoundError | FileSystemError>
+  readonly mkdir: (path: string) => Effect.Effect<void, FileSystemError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/executor/Executor") {}

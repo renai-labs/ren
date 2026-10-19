@@ -6,7 +6,7 @@ import {
   type FileNotFoundError,
   FileTooLargeError,
   maxFileBytes,
-  type OperationFailedError,
+  type FileSystemError,
   orphanAfter,
   type OutputWindow,
   pingEvery,
@@ -259,24 +259,18 @@ export interface Files {
   readonly read: (
     path: string,
     range?: Range,
-  ) => Effect.Effect<
-    ReadResult,
-    FileNotFoundError | WrongKindError | FileTooLargeError | OperationFailedError | Unreached
-  >
+  ) => Effect.Effect<ReadResult, FileNotFoundError | WrongKindError | FileTooLargeError | FileSystemError | Unreached>
   readonly write: (
     path: string,
     bytes: Uint8Array,
-  ) => Effect.Effect<void, FileTooLargeError | OperationFailedError | Unreached>
-  readonly stat: (path: string) => Effect.Effect<FileInfo, FileNotFoundError | OperationFailedError | Unreached>
+  ) => Effect.Effect<void, FileTooLargeError | FileSystemError | Unreached>
+  readonly stat: (path: string) => Effect.Effect<FileInfo, FileNotFoundError | FileSystemError | Unreached>
   readonly list: (
     path: string,
-  ) => Effect.Effect<
-    ReadonlyArray<DirectoryEntry>,
-    FileNotFoundError | WrongKindError | OperationFailedError | Unreached
-  >
-  readonly remove: (path: string) => Effect.Effect<void, OperationFailedError | Unreached>
-  readonly move: (from: string, to: string) => Effect.Effect<void, FileNotFoundError | OperationFailedError | Unreached>
-  readonly mkdir: (path: string) => Effect.Effect<void, OperationFailedError | Unreached>
+  ) => Effect.Effect<ReadonlyArray<DirectoryEntry>, FileNotFoundError | WrongKindError | FileSystemError | Unreached>
+  readonly remove: (path: string) => Effect.Effect<void, FileSystemError | Unreached>
+  readonly move: (from: string, to: string) => Effect.Effect<void, FileNotFoundError | FileSystemError | Unreached>
+  readonly mkdir: (path: string) => Effect.Effect<void, FileSystemError | Unreached>
 }
 
 export interface SessionHand {
