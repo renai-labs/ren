@@ -5,7 +5,8 @@ import { EnvironmentToken } from "@ren/hand-api/environment-token"
 import { Signature } from "@ren/hand-api/signature"
 import type { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
-import { ConfigProvider, DateTime, Effect, Layer, Schema } from "effect"
+import type { Hand } from "@ren/schema/hand"
+import { ConfigProvider, DateTime, Effect, Layer, Redacted, Schema } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { Machine } from "../../src/machine.js"
 import { Server } from "../../src/server.js"
@@ -47,15 +48,16 @@ export const access = Effect.fnUntraced(function* (options: {
 }) {
   const expiresAt = DateTime.makeUnsafe((options.issuedAt ?? Date.now()) + (options.lifetimeMs ?? 600_000))
   return {
-    environmentId: options.environmentId,
     directory: options.directory,
     url: options.url,
-    token: yield* EnvironmentToken.sign(keys.privateKey, {
-      env: options.environmentId,
-      brain: options.brain,
-      exp: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000),
-    }),
+    token: Redacted.make(
+      yield* EnvironmentToken.sign(keys.privateKey, {
+        env: options.environmentId,
+        brain: options.brain,
+        exp: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000),
+      }),
+    ),
     expiresAt,
     generation: options.generation ?? 1,
-  }
+  } satisfies Hand.Access
 })

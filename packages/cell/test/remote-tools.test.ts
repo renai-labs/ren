@@ -105,7 +105,7 @@ const sendTo = (
 const restart = (
   harness: Harness.Instance,
   sessionId: Session.ID,
-  environment?: Environment.Location,
+  directory?: string,
   agent?: string,
   initialMessage?: Session.StartInput["initialMessage"],
 ) =>
@@ -114,16 +114,10 @@ const restart = (
     harness: "opencode",
     instructions: {},
     interactive: false,
-    ...(environment && { environment }),
+    ...(directory && { directory }),
     ...(agent && { agent }),
     ...(initialMessage && { initialMessage }),
   })
-
-const locationOf = (sessionId: Session.ID, capabilities?: ReadonlyArray<Environment.Capability>) => ({
-  environmentId,
-  directory: Environment.sessionDirectory(sessionId),
-  ...(capabilities && { capabilities }),
-})
 
 const begin = Effect.fnUntraced(function* (
   opened: Opened,
@@ -131,19 +125,13 @@ const begin = Effect.fnUntraced(function* (
     readonly onEnvironment?: boolean
     readonly agent?: string
     readonly url?: string
-    readonly capabilities?: ReadonlyArray<Environment.Capability>
   } = {},
 ) {
   const sessionId = Session.ID.create()
   const onEnvironment = options.onEnvironment ?? true
   if (onEnvironment)
     yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* Sandbox.url), sessionId))
-  yield* restart(
-    opened.harness,
-    sessionId,
-    onEnvironment ? locationOf(sessionId, options.capabilities) : undefined,
-    options.agent,
-  )
+  yield* restart(opened.harness, sessionId, onEnvironment ? folder(sessionId) : undefined, options.agent)
   const send = (script: StubModel.Script) => sendTo(opened.harness, sessionId, script)
   return {
     sessionId,
@@ -327,56 +315,25 @@ test.each<[string, boolean, string | undefined]>([
     ),
 )
 
-test.each<[string, Array<Environment.Capability>, Array<string>, string]>([
-  ["files only", ["files"], ["read", "write", "edit", "glob", "grep"], "runs no commands, so the shell tool is off"],
-  ["commands only", ["processes"], ["shell"], "gives no file access, so the read, write, edit"],
-])(
-  "a sandbox with %s gets only its tools, also after a later start that names no environment",
-  (_name, capabilities, offered, note) =>
-    live(
-      Effect.gen(function* () {
-        const opened = yield* open()
-        const session = yield* begin(opened, { capabilities })
-        const first = yield* session.turn(stub.script(), 1)
-        yield* restart(opened.harness, session.sessionId)
-        const later = yield* session.turn(stub.script(), 1)
-        expect([first, later].map((call) => fileTools.filter((tool) => call.tools.includes(tool)))).toEqual([
-          offered,
-          offered,
-        ])
-        expect(JSON.stringify(later.body.messages)).toContain(note)
-        expect(yield* opened.opens).toBe(0)
-      }),
-    ),
-)
-
 it.live("keeps a session's environment when a later start does not name one", () =>
   Effect.gen(function* () {
     const opened = yield* open()
     const session = yield* begin(opened)
     yield* restart(opened.harness, session.sessionId)
-    yield* restart(opened.harness, session.sessionId, locationOf(session.sessionId))
+    yield* restart(opened.harness, session.sessionId, folder(session.sessionId))
     yield* session.turn(stub.script(shell("echo kept > kept.txt")))
     expect(yield* text(join(folder(session.sessionId), "kept.txt"))).toBe("kept\n")
   }),
 )
 
-it.live("refuses an environment for a session that started without one, or a folder other than its own", () =>
+it.live("refuses an environment for a session that started without one", () =>
   Effect.gen(function* () {
     const opened = yield* open()
     const session = yield* begin(opened, { onEnvironment: false })
-    const later = yield* restart(opened.harness, session.sessionId, locationOf(session.sessionId)).pipe(Effect.flip)
+    const later = yield* restart(opened.harness, session.sessionId, folder(session.sessionId)).pipe(Effect.flip)
     expect(later.message).toBe(`Session ${session.sessionId} cannot change its environment: not supported yet`)
     const call = yield* session.turn(stub.script(), 1)
     expect(fileTools.filter((tool) => call.tools.includes(tool))).toEqual([])
-    const elsewhere = Session.ID.create()
-    const wrong = yield* restart(opened.harness, elsewhere, { environmentId, directory: "/workspace" }).pipe(
-      Effect.flip,
-    )
-    expect(wrong.message).toBe(`Session ${elsewhere} works in /workspace/${elsewhere} on its sandbox, not /workspace`)
-    expect((yield* sendTo(opened.harness, elsewhere, stub.script()).pipe(Effect.flip))._tag).toBe(
-      "SessionNotStartedError",
-    )
   }),
 )
 
@@ -386,10 +343,7 @@ it.live("the same start twice makes one session", () =>
     const sessionId = Session.ID.create()
     yield* opened.memory.set(sessionId, yield* accessTo(yield* Sandbox.url, sessionId))
     yield* Effect.all(
-      [
-        restart(opened.harness, sessionId, locationOf(sessionId)),
-        restart(opened.harness, sessionId, locationOf(sessionId)),
-      ],
+      [restart(opened.harness, sessionId, folder(sessionId)), restart(opened.harness, sessionId, folder(sessionId))],
       {
         concurrency: "unbounded",
       },
@@ -405,7 +359,7 @@ it.live("a new session started with a first message runs that first turn on the 
     const sessionId = Session.ID.create()
     yield* opened.memory.set(sessionId, yield* accessTo(yield* Sandbox.url, sessionId))
     const script = stub.script(shell("echo first > first.txt"))
-    yield* restart(opened.harness, sessionId, locationOf(sessionId), undefined, {
+    yield* restart(opened.harness, sessionId, folder(sessionId), undefined, {
       messageId: Session.MessageID.create(),
       prompt: { text: `${script.marker} use the tool` },
       sender: { userId: "user_1" },
@@ -426,7 +380,7 @@ it.live(
       const fileSession = Session.ID.create()
       yield* Effect.promise(() => Bun.write(folder(fileSession), "a file, not a folder"))
       yield* opened.memory.set(fileSession, yield* accessTo(yield* Sandbox.url, fileSession))
-      yield* restart(opened.harness, fileSession, locationOf(fileSession))
+      yield* restart(opened.harness, fileSession, folder(fileSession))
       const fileTurn = yield* refusedTurn({
         sessionId: fileSession,
         turn: (script) =>
@@ -434,7 +388,7 @@ it.live(
       })
       expect([fileTurn.ran, fileTurn.result]).toEqual([false, expect.stringContaining("Could not make the folder")])
       const missing = Session.ID.create()
-      yield* restart(opened.harness, missing, locationOf(missing))
+      yield* restart(opened.harness, missing, folder(missing))
       const missingTurn = yield* refusedTurn({
         sessionId: missing,
         turn: (script) =>
@@ -817,26 +771,4 @@ it.live("destroying the ren workspace leaves the sandbox's folder and Ren untouc
     expect(yield* text(join(folder(session.sessionId), "kept.txt"))).toBe("kept\n")
     expect(yield* opened.opens).toBe(1)
   }),
-)
-
-it.live(
-  "a start with a first message that names another folder creates no session, accepts no message and calls no model",
-  () =>
-    Effect.gen(function* () {
-      const opened = yield* open()
-      const sessionId = Session.ID.create()
-      const script = stub.script()
-      yield* opened.memory.set(sessionId, yield* accessTo(yield* Sandbox.url, sessionId))
-      const error = yield* restart(opened.harness, sessionId, { environmentId, directory: "/workspace" }, undefined, {
-        messageId: Session.MessageID.create(),
-        prompt: { text: `${script.marker} hello` },
-        sender: { userId: "user_1" },
-      }).pipe(Effect.flip)
-      expect(error.message).toBe(`Session ${sessionId} works in /workspace/${sessionId} on its sandbox, not /workspace`)
-      expect((yield* opened.harness.sessions).filter((state) => String(state.id) === sessionId)).toEqual([])
-      expect((yield* sendTo(opened.harness, sessionId, stub.script()).pipe(Effect.flip))._tag).toBe(
-        "SessionNotStartedError",
-      )
-      expect([script.calls, yield* opened.opens]).toEqual([[], 0])
-    }),
 )

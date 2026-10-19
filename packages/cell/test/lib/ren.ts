@@ -9,7 +9,7 @@ import {
 } from "@ren/brain-api/errors"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Auth } from "@ren/schema/auth"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import type { Session } from "@ren/schema/session"
 import { Effect, Layer, Option, Redacted } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
@@ -17,7 +17,7 @@ import { HttpApiBuilder } from "effect/http-api"
 import { TestToken } from "./token.js"
 
 export type Answer =
-  | { readonly type: "access"; readonly access: Environment.Access }
+  | { readonly type: "access"; readonly access: Hand.Access }
   | { readonly type: "not_found" }
   | { readonly type: "unavailable"; readonly message: string }
   | { readonly type: "hold" }

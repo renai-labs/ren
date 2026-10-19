@@ -15,6 +15,9 @@ import type {
   EnvironmentCreateInput,
   EnvironmentUpdateInput,
   EnvironmentArchiveInput,
+  SpaceEnvironmentListInput,
+  SpaceEnvironmentCreateInput,
+  SpaceEnvironmentArchiveInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -172,6 +175,35 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["handProvider", "list"] as const,
             queryFn: (context) => client["handProvider"]["list"]({ signal: context.signal }),
+          }),
+      },
+    },
+    "space-environment": {
+      list: {
+        queryKey: (input?: SpaceEnvironmentListInput) =>
+          input === undefined
+            ? (["space-environment", "list"] as const)
+            : (["space-environment", "list", input] as const),
+        queryOptions: (input: SpaceEnvironmentListInput) =>
+          queryOptions({
+            queryKey: ["space-environment", "list", input] as const,
+            queryFn: (context) => client["space-environment"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["space-environment", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-environment", "create"] as const,
+            mutationFn: (input: SpaceEnvironmentCreateInput) => client["space-environment"]["create"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["space-environment", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-environment", "archive"] as const,
+            mutationFn: (input: SpaceEnvironmentArchiveInput) => client["space-environment"]["archive"](input),
           }),
       },
     },

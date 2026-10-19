@@ -6,6 +6,7 @@ import { HandConnections } from "@ren/brain/hand-connections"
 import { Sandbox, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -20,10 +21,7 @@ const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "workspace-driver-")))
 const it = testEffect(Sandbox.layer({ environmentId, workspace }))
 
-const sessionFor = Effect.fnUntraced(function* (
-  accesses: ReadonlyMap<Session.ID, Environment.Access>,
-  sessionId: Session.ID,
-) {
+const sessionFor = Effect.fnUntraced(function* (accesses: ReadonlyMap<Session.ID, Hand.Access>, sessionId: Session.ID) {
   const environments = yield* Layer.build(
     HandConnections.layer.pipe(Layer.provide(TestAccess.fixed(accesses)), Layer.provide(FetchHttpClient.layer)),
   ).pipe(Effect.map((context) => Context.get(context, HandConnections.Service)))
@@ -45,7 +43,7 @@ it.live("maps file operations and their errors to OpenCode's, under the session'
   Effect.gen(function* () {
     const subject = yield* bound
     const files = subject.driver.overrides
-    const root = Environment.sessionDirectory(subject.sessionId)
+    const root = join(workspace, subject.sessionId)
     yield* files.mkdir(`${root}/tree/a`)
     yield* files.write(`${root}/tree/a/file.txt`, new TextEncoder().encode("hello world"))
     expect(yield* Effect.promise(() => Bun.file(join(workspace, subject.sessionId, "tree/a/file.txt")).text())).toBe(
@@ -97,7 +95,7 @@ it.live("a file or shell call with no access, or on a sandbox that does not answ
             url: "http://127.0.0.1:9",
             environmentId,
             brain: Brain.ofSession(sessionId),
-            directory: Environment.sessionDirectory(sessionId),
+            directory: join(workspace, sessionId),
           }),
         ],
       ]),
@@ -113,7 +111,7 @@ it.live(
   () =>
     Effect.gen(function* () {
       const subject = yield* bound
-      const root = Environment.sessionDirectory(subject.sessionId)
+      const root = join(workspace, subject.sessionId)
       yield* subject.driver.overrides.mkdir(root)
       yield* Effect.promise(() =>
         writeFile(join(workspace, subject.sessionId, "large.bin"), "").then(() =>

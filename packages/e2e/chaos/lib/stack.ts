@@ -2,7 +2,6 @@ export * as Stack from "./stack.js"
 
 import { Shared, Wrangler } from "@ren/cell/testing"
 import { Brain } from "@ren/schema/brain"
-import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
 import { ExecutorAdapter } from "./adapters/executor.js"
@@ -103,12 +102,9 @@ export const start = async () => {
       const granted = options.models === undefined ? access() : options.models
       const hostToken = options.hostToken === false ? undefined : (options.hostToken ?? (await issuer.issue(sessionId)))
       if (granted) await expectStatus(await driver.configureModels(granted, hostToken), 204, "PUT /ren/models")
-      const environment = options.hand && {
-        environmentId: options.hand.instance.environmentId,
-        directory: Environment.sessionDirectory(sessionId),
-      }
+      const directory = options.hand && `/workspace/${sessionId}`
       if (options.start !== false)
-        await expectStatus(await driver.start({ ...options.start, ...(environment && { environment }) }), 200, "start")
+        await expectStatus(await driver.start({ ...options.start, ...(directory && { directory }) }), 200, "start")
       return driver
     },
     hand: async (label: string) => attach(await ExecutorAdapter.localProcess({ label })),

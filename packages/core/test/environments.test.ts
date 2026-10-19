@@ -2,6 +2,7 @@ import { describe, expect } from "bun:test"
 import { Signature } from "@ren/hand-api/signature"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { ConfigProvider, Effect, Layer, Ref, Schema } from "effect"
 import { Access } from "../src/access.js"
@@ -9,6 +10,7 @@ import { Environments } from "../src/environments.js"
 import { HandProvider } from "../src/hand-provider.js"
 import { Hands } from "../src/hands.js"
 import { Space } from "../src/space.js"
+import { SpaceEnvironment } from "../src/space/environment.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/hand-provider.js"
@@ -19,7 +21,7 @@ const probe = await Effect.runPromise(TestProvider.make())
 const key = await Effect.runPromise(Signature.generate("environments"))
 
 const it = testEffect(
-  Layer.mergeAll(Environments.layer, Hands.layer, Space.layer, SpaceProvisioning.layer).pipe(
+  Layer.mergeAll(Environments.layer, SpaceEnvironment.layer, Hands.layer, Space.layer, SpaceProvisioning.layer).pipe(
     Layer.provideMerge(HandProvider.layer([Effect.succeed(probe.provider)])),
     Layer.provideMerge(Access.layer),
     Layer.provideMerge(Testing.layer),
@@ -49,34 +51,33 @@ const team = Effect.fnUntraced(function* () {
   const spaces = yield* Space.Service
   const organizationId = yield* Seed.organization()
   const ada = yield* user(organizationId)
+  const admin = yield* user(organizationId, "admin")
   const space = yield* spaces.create(ada, { name: "Team" })
-  return { organizationId, ada, space }
+  return { organizationId, ada, admin, space }
 })
 
-const input = { name: "Python", provider: "test", config: { label: "python" }, sessionsPerHand: 2 }
+const input = {
+  name: "Python",
+  provider: Hand.ProviderID.make("test"),
+  config: { label: "python" },
+  sessionsPerHand: 2,
+}
 
 describe("Environments", () => {
-  it.live("a member makes an environment in their space; the provider checks the config and keeps its own form", () =>
+  it.live("an admin makes an org environment; the provider checks the config and keeps its own form", () =>
     Effect.gen(function* () {
       const environments = yield* Environments.Service
       const setup = yield* team()
-      const made = yield* environments.create(setup.ada, {
-        ...input,
-        spaceId: setup.space.id,
-        config: { label: "python", extra: "dropped" },
-      })
+      const made = yield* environments.create(setup.admin, { ...input, config: { label: "python", extra: "dropped" } })
       expect(made).toMatchObject({
-        spaceId: setup.space.id,
         name: "Python",
         provider: "test",
         config: { label: "python" },
         sessionsPerHand: 2,
-        canUpdate: true,
-        canArchive: true,
         archivedAt: null,
       })
-      expect(yield* environments.get(setup.ada, made.id)).toEqual(made)
-      expect((yield* environments.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([made])
+      expect(yield* environments.get(setup.admin, made.id)).toEqual(made)
+      expect((yield* environments.list(setup.admin, page)).items).toEqual([made])
     }),
   )
 
@@ -85,53 +86,92 @@ describe("Environments", () => {
       const environments = yield* Environments.Service
       const setup = yield* team()
       const unknown = yield* environments
-        .create(setup.ada, { ...input, spaceId: setup.space.id, provider: "e2b" })
+        .create(setup.admin, { ...input, provider: Hand.ProviderID.make("e2b") })
         .pipe(Effect.flip)
       expect(unknown).toMatchObject({ _tag: "Primitive.Invalid", field: "provider" })
-      const refused = yield* environments
-        .create(setup.ada, { ...input, spaceId: setup.space.id, config: { label: "" } })
-        .pipe(Effect.flip)
+      const refused = yield* environments.create(setup.admin, { ...input, config: { label: "" } }).pipe(Effect.flip)
       expect(refused).toMatchObject({ _tag: "Primitive.Invalid", field: "config" })
-      const made = yield* environments.create(setup.ada, { ...input, spaceId: setup.space.id })
-      const update = yield* environments.update(setup.ada, made.id, { config: { label: 3 } }).pipe(Effect.flip)
+      const made = yield* environments.create(setup.admin, input)
+      const update = yield* environments.update(setup.admin, made.id, { config: { label: 3 } }).pipe(Effect.flip)
       expect(update).toMatchObject({ _tag: "Primitive.Invalid", field: "config" })
-      expect((yield* environments.update(setup.ada, made.id, { config: { label: "new" } })).config).toEqual({
+      expect((yield* environments.update(setup.admin, made.id, { config: { label: "new" } })).config).toEqual({
         label: "new",
       })
     }),
   )
 
-  it.live("someone outside the space cannot see or make its environments; an admin can, without joining", () =>
+  it.live("every member sees the org's environments; only admins change them; another org sees none", () =>
     Effect.gen(function* () {
       const environments = yield* Environments.Service
       const setup = yield* team()
-      const grace = yield* user(setup.organizationId)
-      const admin = yield* user(setup.organizationId, "admin")
-      const made = yield* environments.create(setup.ada, { ...input, spaceId: setup.space.id })
-      expect((yield* environments.get(grace, made.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-      expect((yield* environments.list(grace, page)).items).toEqual([])
-      expect((yield* environments.create(grace, { ...input, spaceId: setup.space.id }).pipe(Effect.flip))._tag).toBe(
+      const made = yield* environments.create(setup.admin, input)
+      expect(yield* environments.get(setup.ada, made.id)).toEqual(made)
+      expect((yield* environments.create(setup.ada, input).pipe(Effect.flip))._tag).toBe("Primitive.Forbidden")
+      expect((yield* environments.update(setup.ada, made.id, { name: "Mine" }).pipe(Effect.flip))._tag).toBe(
         "Primitive.Forbidden",
       )
-      expect((yield* environments.get(admin, made.id)).canUpdate).toBe(true)
+      expect((yield* environments.archive(setup.ada, made.id).pipe(Effect.flip))._tag).toBe("Primitive.Forbidden")
       expect((yield* environments.list(yield* user(yield* Seed.organization()), page)).items).toEqual([])
+    }),
+  )
+
+  it.live("a member of a space links an org environment to it; archiving the link ends its sessions' access", () =>
+    Effect.gen(function* () {
+      const environments = yield* Environments.Service
+      const links = yield* SpaceEnvironment.Service
+      const hands = yield* Hands.Service
+      const setup = yield* team()
+      const grace = yield* user(setup.organizationId)
+      const made = yield* environments.create(setup.admin, input)
+      const link = { spaceId: setup.space.id, environmentId: made.id }
+      expect((yield* links.create(grace, link).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+      const linked = yield* links.create(setup.ada, link)
+      expect((yield* links.create(setup.ada, link).pipe(Effect.flip))._tag).toBe("Primitive.Conflict")
+      expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([linked])
+      expect((yield* links.list(grace, { ...page, spaceId: setup.space.id })).items).toEqual([])
+      const session = { brainId: Session.ID.create(), organizationId: setup.organizationId, spaceId: setup.space.id }
+      yield* hands.bind(session, made.id)
+      yield* hands.access(session)
+      expect((yield* links.archive(setup.ada, linked.id)).archivedAt).not.toBeNull()
+      expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([])
+      expect((yield* hands.access(session).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
+    }),
+  )
+
+  it.live("a space cannot link another organization's environment", () =>
+    Effect.gen(function* () {
+      const environments = yield* Environments.Service
+      const links = yield* SpaceEnvironment.Service
+      const setup = yield* team()
+      const elsewhere = yield* team()
+      const foreign = yield* environments.create(elsewhere.admin, input)
+      expect(
+        (yield* links.create(setup.admin, { spaceId: setup.space.id, environmentId: foreign.id }).pipe(Effect.flip))
+          ._tag,
+      ).toBe("Primitive.NotFound")
+      expect(
+        (yield* links.create(elsewhere.admin, { spaceId: setup.space.id, environmentId: foreign.id }).pipe(Effect.flip))
+          ._tag,
+      ).toBe("Primitive.NotFound")
     }),
   )
 
   it.live("archiving hides an environment, ends its sessions' access and destroys its hands", () =>
     Effect.gen(function* () {
       const environments = yield* Environments.Service
+      const links = yield* SpaceEnvironment.Service
       const hands = yield* Hands.Service
       const setup = yield* team()
-      const made = yield* environments.create(setup.ada, { ...input, spaceId: setup.space.id })
-      const session = { brainId: Session.ID.create(), organizationId: setup.organizationId }
+      const made = yield* environments.create(setup.admin, input)
+      yield* links.create(setup.ada, { spaceId: setup.space.id, environmentId: made.id })
+      const session = { brainId: Session.ID.create(), organizationId: setup.organizationId, spaceId: setup.space.id }
       yield* hands.bind(session, made.id)
       yield* hands.access(session)
       const handId = (yield* Ref.get(probe.provisions)).at(-1)
-      const archived = yield* environments.archive(setup.ada, made.id)
+      const archived = yield* environments.archive(setup.admin, made.id)
       expect(archived.archivedAt).not.toBeNull()
-      expect(yield* environments.archive(setup.ada, made.id)).toEqual(archived)
-      expect((yield* environments.get(setup.ada, made.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+      expect(yield* environments.archive(setup.admin, made.id)).toEqual(archived)
+      expect((yield* environments.get(setup.admin, made.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
       expect((yield* hands.access(session).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
       expect((yield* Ref.get(probe.destroyed)).at(-1)).toBe(handId)
     }),
@@ -142,10 +182,9 @@ describe("Environments", () => {
       const environments = yield* Environments.Service
       expect(yield* environments.providers).toEqual([
         {
-          id: "test",
+          id: Hand.ProviderID.make("test"),
           title: "Test",
           description: "Hands that live in the test’s memory.",
-          capabilities: ["files", "processes"],
           configSchema: {
             dialect: "draft-2020-12",
             schema: {

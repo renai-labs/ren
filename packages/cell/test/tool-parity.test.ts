@@ -151,30 +151,20 @@ const sendTo = (
     sender: { userId: "user_1" },
   })
 
-const restart = (
-  harness: Harness.Instance,
-  sessionId: Session.ID,
-  environment?: Environment.Location,
-  modelId?: string,
-) =>
+const restart = (harness: Harness.Instance, sessionId: Session.ID, directory?: string, modelId?: string) =>
   harness.start({
     sessionId,
     harness: "opencode",
     instructions: {},
     interactive: false,
-    ...(environment && { environment }),
+    ...(directory && { directory }),
     ...(modelId && { model: { endpointId: "stub", modelId } }),
   })
 
 const begin = Effect.fnUntraced(function* (opened: Opened, url?: string, modelId?: string) {
   const sessionId = Session.ID.create()
   yield* opened.memory.set(sessionId, yield* accessTo(url ?? (yield* Sandbox.url), sessionId))
-  yield* restart(
-    opened.harness,
-    sessionId,
-    { environmentId, directory: Environment.sessionDirectory(sessionId) },
-    modelId,
-  )
+  yield* restart(opened.harness, sessionId, folder(sessionId), modelId)
   return {
     sessionId,
     send: (script: StubModel.Script) => sendTo(opened.harness, sessionId, script),
@@ -268,15 +258,14 @@ const both = Effect.fnUntraced(function* (
     local: [] as Array<string>,
     answers: { remote: [] as Array<StubModel.Call>, local: [] as Array<StubModel.Call> },
   }
-  const normalize = (text: string, real: string) =>
-    text.replaceAll(real, "<dir>").replaceAll(`/workspace/${remote.sessionId}`, "<dir>")
+  const normalize = (text: string, real: string) => text.replaceAll(real, "<dir>")
   for (const step of steps) {
     if ("act" in step) {
       yield* Effect.promise(() => step.act(realRemote))
       yield* Effect.promise(() => step.act(reference_.directory))
       continue
     }
-    const remoteCall = yield* remote.turn(stub.script({ tool: step.tool(`/workspace/${remote.sessionId}`) }))
+    const remoteCall = yield* remote.turn(stub.script({ tool: step.tool(realRemote) }))
     const localCall = yield* reference_.turn(stub.script({ tool: step.tool(reference_.directory) }))
     results.answers.remote.push(remoteCall)
     results.answers.local.push(localCall)
@@ -829,7 +818,7 @@ test.todo("J51 a session reads another session's file by that session's /workspa
       const second = yield* begin(opened)
       yield* first.turn(stub.script(shell("echo shared > f.txt")))
       const answer = yield* second.turn(
-        stub.script({ tool: { name: "read", input: { path: `/workspace/${first.sessionId}/f.txt` } } }),
+        stub.script({ tool: { name: "read", input: { path: `${folder(first.sessionId)}/f.txt` } } }),
       )
       expect(lastToolResult(answer)).toContain("1: shared")
     }),
@@ -960,7 +949,7 @@ it.live(
       const driver = RenWorkspaceDriver.session(opened.environments, sessionId)
       const realLocal = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-files-"))))
       const subjects = {
-        remote: { files: driver.overrides, root: Environment.sessionDirectory(sessionId), real: folder(sessionId) },
+        remote: { files: driver.overrides, root: folder(sessionId), real: folder(sessionId) },
         local: { files: localFiles(driver.spawner), root: realLocal, real: realLocal },
       }
       yield* Effect.promise(() => mkdir(subjects.remote.real, { recursive: true }))

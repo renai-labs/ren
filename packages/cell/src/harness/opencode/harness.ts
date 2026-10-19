@@ -7,8 +7,8 @@ import { HandConnections } from "@ren/brain/hand-connections"
 import type { SessionCreateInput, SessionListInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
 import type { Models } from "@ren/schema/models"
-import { Environment } from "@ren/schema/environment"
-import type { SendInput, StartInput } from "@ren/schema/session"
+import type { StartBody } from "@ren/brain-api/brain-api"
+import type { SendInput } from "@ren/schema/session"
 import { Clock, Effect, Layer, Option, Semaphore, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Cell } from "../../cell.js"
@@ -21,37 +21,17 @@ import { InstructionEntries } from "./instruction-entries.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 
-const toolsByCapability: Readonly<Record<Environment.Capability, ReadonlyArray<string>>> = {
-  files: ["read", "edit", "glob", "grep"],
-  processes: ["shell"],
-}
-
-const environmentActions = Environment.capabilities.flatMap((capability) => toolsByCapability[capability])
-
-interface Placement {
-  readonly isOnEnvironment: boolean
-  readonly capabilities: ReadonlyArray<Environment.Capability>
-}
-
-const missingNotes: Readonly<Record<Environment.Capability, string>> = {
-  files: "The sandbox gives no file access, so the read, write, edit, patch, glob and grep tools are off.",
-  processes: "The sandbox runs no commands, so the shell tool is off.",
-}
+const environmentActions = ["read", "edit", "glob", "grep", "shell"]
 
 const environmentInstruction = "ren.environment"
 
 const notSupported = (sessionId: string) =>
   new BrainRejectedError({ message: `Session ${sessionId} cannot change its environment: not supported yet` })
 
-const environmentInstructions = (host: Host.Instance, sessionId: StartInput["sessionId"], placement: Placement) => {
-  if (placement.isOnEnvironment)
+const environmentInstructions = (host: Host.Instance, folder: Option.Option<string>) => {
+  if (Option.isSome(folder))
     return {
-      [environmentInstruction]: [
-        `Your file and shell tools run on a sandbox, in ${Environment.sessionDirectory(sessionId)}. You have full access to the sandbox.`,
-        ...Environment.capabilities
-          .filter((capability) => !placement.capabilities.includes(capability))
-          .map((capability) => missingNotes[capability]),
-      ].join(" "),
+      [environmentInstruction]: `Your file and shell tools run on a sandbox, in ${folder.value}. You have full access to the sandbox.`,
     }
   if (!host.hasHandConnections) return {}
   return {
@@ -60,23 +40,10 @@ const environmentInstructions = (host: Host.Instance, sessionId: StartInput["ses
   }
 }
 
-const deniedActions = (host: Host.Instance, input: StartInput, placement: Placement) => [
+const deniedActions = (host: Host.Instance, input: StartBody, folder: Option.Option<string>) => [
   ...(input.interactive ? [] : ["question"]),
-  ...(host.hasHandConnections && !placement.isOnEnvironment ? environmentActions : []),
-  ...(placement.isOnEnvironment
-    ? Environment.capabilities
-        .filter((capability) => !placement.capabilities.includes(capability))
-        .flatMap((capability) => toolsByCapability[capability])
-    : []),
+  ...(host.hasHandConnections && Option.isNone(folder) ? environmentActions : []),
 ]
-
-const keptCapabilities = (session: Session.Info) =>
-  Environment.capabilities.filter(
-    (capability) =>
-      !toolsByCapability[capability].every((action) =>
-        (session.permissions ?? []).some((rule) => rule.action === action && rule.effect === "deny"),
-      ),
-  )
 
 const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
   client.session.get({ sessionID }).pipe(
@@ -87,7 +54,7 @@ const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
 
 const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(function* (
   client: OpenCodeClient,
-  input: StartInput,
+  input: StartBody,
 ) {
   const agent = input.agent
   if (agent && !(yield* client.agent.list().pipe(Effect.orDie)).data.some((item) => item.id === agent))
@@ -105,11 +72,12 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
 const create = Effect.fn("OpenCodeHarness.create")(function* (
   client: OpenCodeClient,
   host: Host.Instance,
-  input: StartInput,
+  input: StartBody,
   directory: AbsolutePath,
+  folder: Option.Option<string>,
   session: Pick<SessionCreateInput, "title" | "agent" | "model" | "permissions"> & { readonly id: Session.ID },
 ) {
-  if (!input.environment)
+  if (Option.isNone(folder))
     return yield* client.session.create({ ...session, location: { directory } }).pipe(Effect.orDie)
   const workspaceID = yield* host.workspaces
     .create({
@@ -124,38 +92,30 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
       ...(session.agent && { agent: session.agent }),
       ...(session.model && { model: session.model }),
       ...(session.permissions && { permissions: session.permissions }),
-      location: Location.Ref.make({ directory: AbsolutePath.make(input.environment.directory), workspaceID }),
+      location: Location.Ref.make({ directory: AbsolutePath.make(folder.value), workspaceID }),
     })
     .pipe(Effect.orDie)
 })
 
 const checkEnvironment = Effect.fn("OpenCodeHarness.checkEnvironment")(function* (
   host: Host.Instance,
-  input: StartInput,
+  input: StartBody,
   session: Option.Option<Session.Info>,
-) {
-  const requested = input.environment
+): Effect.fn.Return<Option.Option<string>, BrainRejectedError> {
   if (Option.isSome(session)) {
-    const isOnEnvironment = Boolean(
-      (yield* host.sessions.get(session.value.id).pipe(Effect.orDie)).location.workspaceID,
-    )
-    if (requested && !isOnEnvironment) return yield* notSupported(input.sessionId)
-    return isOnEnvironment
+    const location = (yield* host.sessions.get(session.value.id).pipe(Effect.orDie)).location
+    if (input.directory && !location.workspaceID) return yield* notSupported(input.sessionId)
+    return location.workspaceID ? Option.some(location.directory) : Option.none()
   }
-  if (!requested) return false
+  if (!input.directory) return Option.none()
   if (!host.hasHandConnections) return yield* new BrainRejectedError({ message: "This brain cannot use environments" })
-  const folder = Environment.sessionDirectory(input.sessionId)
-  if (requested.directory !== folder)
-    return yield* new BrainRejectedError({
-      message: `Session ${input.sessionId} works in ${folder} on its sandbox, not ${requested.directory}`,
-    })
-  return true
+  return Option.some(input.directory)
 })
 
 const start = Effect.fn("OpenCodeHarness.start")(function* (
   client: OpenCodeClient,
   host: Host.Instance,
-  input: StartInput,
+  input: StartBody,
   directory: AbsolutePath,
 ) {
   yield* rejectUnknownModel(client, input)
@@ -167,20 +127,14 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const sessionID = Session.ID.make(input.sessionId)
   const session = yield* findSession(client, sessionID)
-  const isOnEnvironment = yield* checkEnvironment(host, input, session)
-  const placement = {
-    isOnEnvironment,
-    capabilities:
-      input.environment?.capabilities ??
-      Option.match(session, { onNone: () => Environment.capabilities, onSome: keptCapabilities }),
-  }
-  const permissions = deniedActions(host, input, placement).map((action) => ({
+  const folder = yield* checkEnvironment(host, input, session)
+  const permissions = deniedActions(host, input, folder).map((action) => ({
     action,
     resource: "*",
     effect: "deny" as const,
   }))
   if (Option.isNone(session))
-    yield* create(client, host, input, directory, {
+    yield* create(client, host, input, directory, folder, {
       id: sessionID,
       title: input.title,
       agent,
@@ -195,7 +149,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    { ...input.instructions, ...environmentInstructions(host, input.sessionId, placement) },
+    { ...input.instructions, ...environmentInstructions(host, folder) },
   )
   yield* Effect.forEach(
     changes.put,
@@ -286,7 +240,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   return {
     fetch: host.fetch,
     configure: (next: ReadonlyArray<Models.Endpoint>) => mutations.withPermit(configure(next)),
-    start: (input: StartInput) => mutations.withPermit(start(client, host, input, directory)),
+    start: (input: StartBody) => mutations.withPermit(start(client, host, input, directory)),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
     sessions: Effect.gen(function* () {
       const roots = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>

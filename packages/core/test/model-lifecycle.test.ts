@@ -5,6 +5,7 @@ import { Shared, TestCell, TestToken, Wrangler } from "@ren/cell/testing"
 import type { Celld } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { Effect, Layer, Schedule, Schema } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { BrainHost } from "../src/brain-host.js"
@@ -122,7 +123,10 @@ const start = (
   withHost(
     keys,
     BrainHost.Service.use((brain) =>
-      brain.start({ sessionId, harness: "opencode", instructions: {}, interactive: true, ...input }, organizationId),
+      brain.start(
+        { sessionId, harness: "opencode", instructions: {}, interactive: true, ...input },
+        { organizationId, spaceId: Space.ID.create() },
+      ),
     ),
   )
 

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { Effect, Layer, ManagedRuntime, Ref } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { BrainHost } from "../src/brain-host.js"
@@ -80,7 +81,7 @@ describe("model refresh", () => {
             sender: { userId: "user_1" },
           },
         },
-        organizationId,
+        { organizationId, spaceId: Space.ID.create() },
       )
       const call = yield* Effect.promise(() => script.called())
       expect([call.authorization, (yield* Ref.get(granted)) - before]).toEqual([`Bearer sk-granted-${before + 2}`, 2])

@@ -1,6 +1,6 @@
 export * as HandAccess from "./hand-access.js"
 
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import { Context, type Effect, Schema } from "effect"
 
@@ -15,7 +15,7 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("HandAccess.U
 }) {}
 
 export interface Interface {
-  readonly open: (sessionId: Session.ID) => Effect.Effect<Environment.Access, NotFound | Unavailable>
+  readonly open: (sessionId: Session.ID) => Effect.Effect<Hand.Access, NotFound | Unavailable>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/brain/HandAccess") {}

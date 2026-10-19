@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test"
+import { expect } from "bun:test"
 import { TestAccess } from "./lib/access.js"
 import { BunServices } from "@effect/platform-bun"
 import type { SpawnResult } from "@ren/hand-api/executor-api"
@@ -217,24 +217,6 @@ it.live("runs a shell script in a shell the machine has, and leaves other comman
   }),
 )
 
-test.each([
-  { from: "/workspace", to: "/home/ren/project", path: "/workspace", expected: "/home/ren/project" },
-  { from: "/workspace", to: "/home/ren/project", path: "/workspace/src/a.ts", expected: "/home/ren/project/src/a.ts" },
-  { from: "/workspace", to: "/home/ren/project", path: "/workspaces/other", expected: "/workspaces/other" },
-  { from: "/workspace", to: "/home/ren/project", path: "/tmp/out", expected: "/tmp/out" },
-  { from: "/workspace", to: "/home/ren/project", path: "relative/a.ts", expected: "relative/a.ts" },
-  { from: "/workspace/", to: "/home/ren/project", path: "/workspace", expected: "/home/ren/project" },
-  { from: "/workspace/", to: "/home/ren/project", path: "/workspace/src/a.ts", expected: "/home/ren/project/src/a.ts" },
-  { from: "/workspace", to: "/home/ren/project/", path: "/workspace", expected: "/home/ren/project" },
-  { from: "/workspace", to: "/home/ren/project/", path: "/workspace/a.ts", expected: "/home/ren/project/a.ts" },
-  { from: "/", to: "/home/ren/project", path: "/", expected: "/home/ren/project" },
-  { from: "/", to: "/home/ren/project", path: "/a.ts", expected: "/home/ren/project/a.ts" },
-  { from: "/workspace", to: "/", path: "/workspace", expected: "/" },
-  { from: "/workspace", to: "/", path: "/workspace/a.ts", expected: "/a.ts" },
-])("maps $path from $from onto $to", (row) => {
-  expect(Hand.physicalPath(row.from, row.to)(row.path)).toBe(row.expected)
-})
-
 // oxlint-disable-next-line ren/no-comments -- Ren sends no change notices, so the brain finds the replacement when it refreshes a short token.
 const replaceable = Effect.gen(function* () {
   const access = yield* Sandbox.access({
@@ -252,7 +234,7 @@ const replaceable = Effect.gen(function* () {
     Effect.flatMap((built) => Effect.provide(Sandbox.url, built)),
   )
   return {
-    hand: Hand.session(environments, sessionId, Environment.sessionDirectory(sessionId), killed),
+    hand: Hand.session(environments, sessionId, killed),
     replace: Context.get(context, TestAccess.Memory)
       .set(sessionId, { ...access, url: next, generation: 2 })
       .pipe(
@@ -291,10 +273,10 @@ it.live(
       const environments = yield* environmentsWith(
         TestAccess.fixed(new Map([[sessionId, yield* accessAt(yield* Sandbox.url)]])),
       )
-      const hand = Hand.session(environments, sessionId, Environment.sessionDirectory(sessionId), killed)
+      const hand = Hand.session(environments, sessionId, killed)
       const name = `${crypto.randomUUID()}.out`
       const handle = yield* hand
-        .spawnerWith({ outputFile: `${Environment.sessionDirectory(sessionId)}/${name}` })
+        .spawnerWith({ outputFile: join(workspace, sessionId, name) })
         .spawn(ChildProcess.make("sh", ["-c", "echo written"]))
       expect(yield* text(handle.stdout)).toBe("written\n")
       expect(yield* Effect.promise(() => Bun.file(join(workspace, sessionId, name)).text())).toBe("written\n")

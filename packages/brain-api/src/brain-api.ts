@@ -10,12 +10,22 @@ export const ModelsBody = Schema.Struct({
 }).annotate({ identifier: "Brain.ModelsBody" })
 export type ModelsBody = typeof ModelsBody.Type
 
+export const StartBody = Session.StartInput.mapFields((fields) => ({
+  ...Struct.omit(fields, ["environmentId"]),
+  directory: Schema.optionalKey(
+    Schema.String.check(Schema.isStartingWith("/")).annotate({
+      description: "The session’s folder on its hand. Only a session with an environment has one.",
+    }),
+  ),
+})).annotate({ identifier: "Brain.StartBody" })
+export type StartBody = typeof StartBody.Type
+
 const SendBody = Session.SendInput.mapFields(Struct.omit(["sessionId"])).annotate({ identifier: "Brain.SendBody" })
 
 const BrainGroup = HttpApiGroup.make("brain")
   .add(
     HttpApiEndpoint.post("brain.start", "/ren/sessions", {
-      payload: Session.StartInput,
+      payload: StartBody,
       success: Session.Started,
       error: [ForbiddenError, BrainRejectedError, ModelsNotConfiguredError],
     }).annotateMerge(

@@ -35,7 +35,6 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
         expect(bindings[1]).toEqual(bindings[0])
         yield* Effect.addFinalizer(() => provider.destroy(bindings[0]).pipe(Effect.ignore))
         const endpoint = yield* provider.connect(bindings[0])
-        expect(endpoint.workspace).toBe("/workspace")
         const token = yield* EnvironmentToken.sign(Sandbox.keys.privateKey, {
           env: input.environmentId,
           brain: Brain.ID.create(),
@@ -43,7 +42,7 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
         })
         const client = yield* ExecutorClient.make({ url: endpoint.url, token: Effect.succeed(token) })
         const hello = yield* client["executor.hello"]()
-        expect([hello.environmentId, hello.workspaceDirectory]).toEqual([input.environmentId, "/workspace"])
+        expect(hello.environmentId).toBe(input.environmentId)
         yield* provider.destroy(bindings[0])
         yield* provider.destroy(bindings[0])
         expect((yield* provider.connect(bindings[0]).pipe(Effect.flip))._tag).toBe("HandProvider.Gone")

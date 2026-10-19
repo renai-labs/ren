@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "d1d4fb3f-efc6-45b8-9151-d668b5871219",
+  "id": "87f185c8-1b67-4bfb-89d8-6611bb14232b",
   "prevIds": [
     "f6003c57-ea8c-42f2-bd9d-006dcc41cae9"
   ],
@@ -63,6 +63,12 @@
     {
       "isRlsEnabled": false,
       "name": "session_environment",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "space_environment",
       "entityType": "tables",
       "schema": "public"
     },
@@ -820,19 +826,6 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "space_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "environment"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
       "name": "name",
       "entityType": "columns",
       "schema": "public",
@@ -1002,7 +995,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "organization_id",
+      "name": "space_id",
       "entityType": "columns",
       "schema": "public",
       "table": "session_environment"
@@ -1058,6 +1051,71 @@
       "entityType": "columns",
       "schema": "public",
       "table": "session_environment"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "space_environment"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "space_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "space_environment"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "environment_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "space_environment"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "space_environment"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "archived_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "space_environment"
     },
     {
       "type": "text",
@@ -1480,7 +1538,7 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "space_id",
+          "value": "organization_id",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -1506,7 +1564,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "environment_space_id_created_at_id_idx",
+      "name": "environment_organization_id_created_at_id_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "environment"
@@ -1559,6 +1617,55 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "session_environment"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "space_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "environment_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "(\"archived_at\" is null)",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "space_environment_space_id_environment_id_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "space_environment"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "environment_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "space_environment_environment_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "space_environment"
     },
     {
       "nameExplicit": true,
@@ -1815,23 +1922,6 @@
     {
       "nameExplicit": false,
       "columns": [
-        "space_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "space",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "environment_space_id_space_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "environment"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
         "environment_id"
       ],
       "schemaTo": "public",
@@ -1849,16 +1939,16 @@
     {
       "nameExplicit": false,
       "columns": [
-        "organization_id"
+        "space_id"
       ],
       "schemaTo": "public",
-      "tableTo": "organization",
+      "tableTo": "space",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "session_environment_organization_id_organization_id_fkey",
+      "name": "session_environment_space_id_space_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "session_environment"
@@ -1896,6 +1986,40 @@
       "entityType": "fks",
       "schema": "public",
       "table": "session_environment"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "space_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "space",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "space_environment_space_id_space_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "space_environment"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "environment_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "environment",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "space_environment_environment_id_environment_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "space_environment"
     },
     {
       "nameExplicit": false,
@@ -2063,6 +2187,16 @@
       "name": "session_environment_pkey",
       "schema": "public",
       "table": "session_environment",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "space_environment_pkey",
+      "schema": "public",
+      "table": "space_environment",
       "entityType": "pks"
     },
     {

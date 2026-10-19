@@ -15,7 +15,7 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 
 - Ren signs environment tokens; the executor only verifies them with `BRAIN_PUBLIC_KEYS`. It holds no secrets.
 - `Machine.layer` needs a `ChildProcessSpawner`; the composition root (`main.ts`, the tests) provides it. File operations stay on `node:fs` for `lstat` and typed `readdir`.
-- `hello` lists the capabilities `processes` and `files`, and the machine's shells (`shells`, by absolute path, its default first).
+- `hello` lists the machine's shells (`shells`, by absolute path, its default first).
 - A process's output is a log, like OpenCode's terminals (`pty.ts`):
   - Each `stdout` and `stderr` event carries its `offset`, the byte position at which it starts. stdout and stderr share one count.
   - `process.output` takes a `cursor` and replays the log from there, so a reader that lost its connection asks again from the last byte it got. Every reader reads on its own.

@@ -1,5 +1,5 @@
 import type { Auth } from "@ren/schema/auth"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import type { Session } from "@ren/schema/session"
 import { Context, Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
@@ -52,7 +52,7 @@ const ModelsGroup = HttpApiGroup.make("models")
 const EnvironmentsGroup = HttpApiGroup.make("environments")
   .add(
     HttpApiEndpoint.post("environments.access", "/brain/environment/access", {
-      success: Environment.Access,
+      success: Hand.Access,
       error: [EnvironmentNotFoundError, EnvironmentUnavailableError],
     }).annotateMerge(
       OpenApi.annotations({

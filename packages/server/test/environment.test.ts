@@ -22,7 +22,6 @@ describe("environments over HTTP", () => {
     expect(await response.json()).toEqual([
       expect.objectContaining({
         id: "docker",
-        capabilities: ["files", "processes"],
         configSchema: expect.objectContaining({
           schema: expect.objectContaining({ required: ["image"] }),
         }),
@@ -30,12 +29,9 @@ describe("environments over HTTP", () => {
     ])
   })
 
-  test("a config the provider refuses is a 400 that names the field; a good one makes the environment", async () => {
+  test("a config the provider refuses is a 400 that names the field; a good one makes an environment a space can link", async () => {
     const cookie = sessionCookie(await signUp(app, "environments@gmail.com", "Ada"))
-    const spaces = await (await call(cookie, "GET", "/spaces")).json()
-    const spaceId = spaces.items[0].id
     const refused = await call(cookie, "POST", "/environments", {
-      spaceId,
       name: "Python",
       provider: "docker",
       config: { cpus: 1 },
@@ -43,15 +39,21 @@ describe("environments over HTTP", () => {
     expect(refused.status).toBe(400)
     expect(await refused.json()).toMatchObject({ _tag: "InvalidRequestError", field: "config" })
     const made = await call(cookie, "POST", "/environments", {
-      spaceId,
       name: "Python",
       provider: "docker",
       config: { image: "ren-executor:latest" },
     })
     expect(made.status).toBe(200)
     const environment = await made.json()
-    expect(environment).toMatchObject({ spaceId, provider: "docker", sessionsPerHand: 8 })
-    const listed = await (await call(cookie, "GET", `/environments?spaceId=${spaceId}`)).json()
-    expect(listed.items.map((each: { readonly id: string }) => each.id)).toEqual([environment.id])
+    expect(environment).toMatchObject({ provider: "docker", sessionsPerHand: 8 })
+    const spaces = await (await call(cookie, "GET", "/spaces")).json()
+    const spaceId = spaces.items[0].id
+    const linked = await call(cookie, "POST", "/space-environments", { spaceId, environmentId: environment.id })
+    expect(linked.status).toBe(200)
+    const link = await linked.json()
+    const listed = await (await call(cookie, "GET", `/space-environments?spaceId=${spaceId}`)).json()
+    expect(listed.items.map((each: { readonly environmentId: string }) => each.environmentId)).toEqual([environment.id])
+    expect((await call(cookie, "DELETE", `/space-environments/${link.id}`)).status).toBe(200)
+    expect((await (await call(cookie, "GET", `/space-environments?spaceId=${spaceId}`)).json()).items).toEqual([])
   })
 })

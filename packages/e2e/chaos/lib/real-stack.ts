@@ -14,6 +14,7 @@ import { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
+import { SpaceEnvironment } from "@ren/schema/space-environment"
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import os from "node:os"
@@ -43,7 +44,6 @@ const encodedKey = (key: Signature.PrivateKey) => ({
 
 export interface EnvironmentOptions {
   readonly label: string
-  readonly capabilities?: ReadonlyArray<Environment.Capability>
 }
 
 export interface Sandbox {
@@ -116,7 +116,7 @@ export const start = async (options: {
         Object.fromEntries(
           sandboxes.map((sandbox) => [
             sandbox.container.environmentId,
-            { url: sandbox.state.proxy.url, workspace: "/workspace", generation: sandbox.state.generation },
+            { url: sandbox.state.proxy.url, generation: sandbox.state.generation },
           ]),
         ),
       ),
@@ -134,11 +134,19 @@ export const start = async (options: {
               sandboxes.map((sandbox) => ({
                 id: sandbox.container.environmentId,
                 organization_id: organizationId,
-                space_id: spaceId,
                 name: sandbox.environment.label,
-                provider: ChaosHands.providerId(sandbox.environment.capabilities),
+                provider: ChaosHands.providerId,
                 config: {},
                 sessions_per_hand: Environment.maximumSessionsPerHand,
+              })),
+            ),
+          ),
+          Effect.andThen(
+            service.db.insert(Database.Schema.space_environment).values(
+              sandboxes.map((sandbox) => ({
+                id: SpaceEnvironment.ID.create(),
+                space_id: spaceId,
+                environment_id: sandbox.container.environmentId,
               })),
             ),
           ),
@@ -272,14 +280,11 @@ export const start = async (options: {
             interactive: startOptions.interactive ?? false,
             ...(environment &&
               !startOptions.withoutEnvironment && {
-                environment: {
-                  environmentId: environment.environmentId,
-                  directory: Environment.sessionDirectory(sessionId),
-                },
+                environmentId: environment.environmentId,
               }),
             ...(startOptions.model && { model: startOptions.model }),
           },
-          organizationId,
+          { organizationId, spaceId },
         ),
       )
     await startSession(sessionOptions.start)

@@ -5,6 +5,7 @@ import { HealthGroup } from "./groups/health.js"
 import { InvitationGroup } from "./groups/invitation.js"
 import { MeGroup } from "./groups/me.js"
 import { SpaceGroup } from "./groups/space.js"
+import { SpaceEnvironmentGroup } from "./groups/space-environment.js"
 import { SpaceMemberGroup } from "./groups/space-member.js"
 
 export const Api = HttpApi.make("server")
@@ -15,6 +16,7 @@ export const Api = HttpApi.make("server")
   .add(SpaceMemberGroup)
   .add(EnvironmentGroup)
   .add(HandProviderGroup)
+  .add(SpaceEnvironmentGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren API",

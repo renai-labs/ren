@@ -20,6 +20,7 @@ import {
   Fiber,
   Layer,
   Option,
+  Redacted,
   Ref,
   Stream,
 } from "effect"
@@ -37,7 +38,15 @@ import { Probe } from "./lib/probe.js"
 const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environments-")))
 const elsewhere = await realpath(await mkdtemp(join(tmpdir(), "ren-environments-elsewhere-")))
+await writeFile(join(workspace, "which"), workspace)
+await writeFile(join(elsewhere, "which"), elsewhere)
 const it = testEffect(Sandbox.layer({ environmentId, workspace }))
+
+const which = (connection: HandConnections.Connection) =>
+  connection.client["files.read"]({ path: "which" }).pipe(
+    Effect.orDie,
+    Effect.map((result) => new TextDecoder().decode(result.bytes)),
+  )
 
 const sessionId = Session.ID.create()
 const brain = Brain.ofSession(sessionId)
@@ -101,7 +110,7 @@ const build = (options: { readonly failures: number; readonly gate?: Deferred.De
       Effect.gen(function* () {
         if (options.gate) yield* Deferred.await(options.gate)
         const count = yield* Ref.getAndUpdate(opens, (value) => value + 1)
-        return count < options.failures ? { ...access, token: "invalid" } : access
+        return count < options.failures ? { ...access, token: Redacted.make("invalid") } : access
       }),
     )
     const environments = yield* Layer.build(HandConnections.layer.pipe(Layer.provide(host), Layer.provide(http))).pipe(
@@ -140,7 +149,7 @@ it.live(
       expect((yield* Effect.flip(connect(subject.environments))).reason).toBe("token_refused")
       expect((yield* Effect.flip(connect(subject.environments))).reason).toBe("token_refused")
       const connection = yield* connect(subject.environments)
-      expect([connection.hello.environmentId, connection.directory]).toEqual([environmentId, folder()])
+      expect(connection.hello.environmentId).toBe(environmentId)
       expect((yield* Effect.promise(() => stat(folder()))).isDirectory()).toBe(true)
       expect(yield* Ref.get(subject.opens)).toBe(5)
       expect(yield* connect(subject.environments)).toBe(connection)
@@ -159,13 +168,16 @@ it.live("a session without access fails with no access", () =>
   }),
 )
 
-it.live("refuses an executor that serves another environment than the access names", () =>
+it.live("an executor that serves another environment refuses the token, and the call fails with token refused", () =>
   Effect.gen(function* () {
-    const access = yield* accessAt(yield* Sandbox.url)
-    const environments = yield* environmentsWith(
-      TestAccess.fixed(new Map([[sessionId, { ...access, environmentId: Environment.ID.create() }]])),
-    )
-    expect((yield* connect(environments).pipe(Effect.flip)).reason).toBe("incompatible")
+    const access = yield* Sandbox.access({
+      url: yield* Sandbox.url,
+      environmentId: Environment.ID.create(),
+      brain,
+      directory: folder(),
+    })
+    const environments = yield* environmentsWith(TestAccess.fixed(new Map([[sessionId, access]])))
+    expect((yield* connect(environments).pipe(Effect.flip)).reason).toBe("token_refused")
   }),
 )
 
@@ -335,7 +347,7 @@ it.live(
       expect(ExecutorClient.isNoAnswer(failed)).toBe(true)
       expect(yield* Ref.get(opens)).toBe(1)
       const next = yield* connect(environments)
-      expect([next.directory, yield* Ref.get(opens)]).toEqual([folder(elsewhere), 2])
+      expect([yield* which(next), yield* Ref.get(opens)]).toEqual([elsewhere, 2])
     }),
 )
 
@@ -383,7 +395,7 @@ it.live("keeps a connection when only its token changes", () =>
   }),
 )
 
-const controlled = Effect.fnUntraced(function* (initial: Environment.Access) {
+const controlled = Effect.fnUntraced(function* (initial: Effect.Success<ReturnType<HandAccess.Interface["open"]>>) {
   const current = yield* Ref.make(initial)
   const gate = yield* Ref.make(
     Option.none<{ readonly entered: Deferred.Deferred<void>; readonly release: Deferred.Deferred<void> }>(),
@@ -416,10 +428,7 @@ const controlled = Effect.fnUntraced(function* (initial: Environment.Access) {
   }
 })
 
-const where = (environments: HandConnections.Interface) =>
-  Effect.scoped(Effect.flatMap(connect(environments), (connection) => connection.client["executor.hello"]())).pipe(
-    Effect.map((hello) => hello.workspaceDirectory),
-  )
+const where = (environments: HandConnections.Interface) => Effect.scoped(Effect.flatMap(connect(environments), which))
 
 it.effect("moves to the new sandbox when a renewed access names a new address, with no change notice", () =>
   Effect.gen(function* () {
@@ -446,7 +455,6 @@ const reporting = (hello: Partial<Pick<Hello, "protocol">>) =>
           protocol: hello.protocol ?? executor.hello.protocol,
           version: executor.hello.version,
           environmentId: executor.hello.environmentId,
-          workspaceDirectory: executor.hello.workspaceDirectory,
           os: executor.hello.os,
           arch: executor.hello.arch,
         },
@@ -652,7 +660,7 @@ it.live(
       )
       const error = yield* Effect.scoped(connect(environments)).pipe(Effect.flip)
       expect([error.reason, yield* Ref.get(opens)]).toEqual(["token_refused", 2])
-      expect(error.message).not.toContain(ahead.token)
+      expect(error.message).not.toContain(Redacted.value(ahead.token))
     }),
 )
 
@@ -721,7 +729,7 @@ it.effect("a refresh that ends after a failed call closed the connection leaves 
     yield* Deferred.succeed(gate.release, undefined)
     yield* Fiber.join(refresh)
     expect(yield* connect(subject.environments)).toBe(fresh)
-    expect((yield* fresh.client["executor.hello"]()).workspaceDirectory).toBe(elsewhere)
+    expect(yield* which(fresh)).toBe(elsewhere)
   }),
 )
 

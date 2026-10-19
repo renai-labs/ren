@@ -102,12 +102,12 @@ const connect = async () => {
   const sessionId = Session.ID.make(opened.id)
   const configure = async () =>
     expect((await opened.models(Shared.access(), await FakeRen.hostToken(sessionId))).status).toBe(204)
-  const start = (onEnvironment: boolean) =>
+  const start = (target: Sandbox | undefined) =>
     opened.brain("/ren/sessions", {
       sessionId,
       harness: "opencode",
       interactive: false,
-      ...(onEnvironment && { environment: { environmentId, directory: Environment.sessionDirectory(sessionId) } }),
+      ...(target && { directory: join(target.directory, sessionId) }),
     })
   const send = async (script: StubModel.Script) => {
     const sent = await opened.brain(`/ren/sessions/${sessionId}/messages`, {
@@ -134,7 +134,7 @@ const begin = async (onEnvironment = true, target: Sandbox = first) => {
   const session = await connect()
   if (onEnvironment) await place(session.sessionId, target)
   await session.configure()
-  expect((await session.start(onEnvironment)).status).toBe(200)
+  expect((await session.start(onEnvironment ? target : undefined)).status).toBe(200)
   return session
 }
 
@@ -260,14 +260,14 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
       const session = await connect()
       await place(session.sessionId, first)
       await session.configure()
-      const starting = session.start(true).catch(() => undefined)
+      const starting = session.start(first).catch(() => undefined)
       // ast-grep-ignore: no-test-sleep -- the crash must land at each point of the start
       await Bun.sleep(delay)
       await cell.crash()
       await starting
       await cell.start()
       await session.configure()
-      const retried = await session.start(true)
+      const retried = await session.start(first)
       const pwd = await pwdOf(session)
       return [...done, `${delay}ms:${retried.status}:${pwd.includes(session.sessionId) ? "sandbox" : pwd}`]
     }, Promise.resolve([]))
@@ -314,7 +314,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     const session = await connect()
     await place(session.sessionId, first, { lifetimeMs: 20_000 })
     await session.configure()
-    expect((await session.start(true)).status).toBe(200)
+    expect((await session.start(first)).status).toBe(200)
     expect(await pwdOf(session)).toContain(session.sessionId)
     await session.opened.until((state) => Bun.deepEquals(state, TestCell.closed), 30_000)
     // ast-grep-ignore: no-test-sleep -- the real environment token must expire while the cell sleeps
@@ -327,7 +327,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     const session = await connect()
     await place(session.sessionId, first, { lifetimeMs: 20_000 })
     await session.configure()
-    expect((await session.start(true)).status).toBe(200)
+    expect((await session.start(first)).status).toBe(200)
     expect(await pwdOf(session)).toContain(session.sessionId)
     await cell.crash()
     // ast-grep-ignore: no-test-sleep -- the real environment token must expire while the cell is down
@@ -371,7 +371,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     )
     ren.answer(session.sessionId, () => (calls.count++ === 0 ? { type: "hold" } : { type: "access", access }))
     await session.configure()
-    expect((await session.start(true)).status).toBe(200)
+    expect((await session.start(first)).status).toBe(200)
     await session.send(stub.script(shell("pwd")))
     await ren.reached(session.sessionId)
     await cell.crash()
@@ -437,7 +437,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     const session = await connect()
     ren.answer(session.sessionId, () => ({ type: "unavailable", message: "Ren is restarting" }))
     await session.configure()
-    expect((await session.start(true)).status).toBe(200)
+    expect((await session.start(first)).status).toBe(200)
     expect(await pwdOf(session)).toContain("Ren is restarting")
     await place(session.sessionId, first)
     await cell.crash()
@@ -460,7 +460,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
           sessionId: victimId,
           harness: "opencode",
           interactive: false,
-          environment: { environmentId, directory: Environment.sessionDirectory(victimId) },
+          directory: join(first.directory, victimId),
         })
       ).status,
     ).toBe(200)
@@ -484,9 +484,9 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     expect((await session.opened.models(Shared.access(), await FakeRen.hostToken(session.sessionId, 60))).status).toBe(
       204,
     )
-    expect((await session.start(true)).status).toBe(409)
+    expect((await session.start(first)).status).toBe(409)
     await session.configure()
-    expect((await session.start(true)).status).toBe(200)
+    expect((await session.start(first)).status).toBe(200)
     expect(await pwdOf(session)).toContain(join(first.directory, session.sessionId))
   })
 
@@ -512,7 +512,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     const old = await begin(false)
     await old.turn(stub.script(), 1)
     await place(old.sessionId, first)
-    const refused = await old.start(true)
+    const refused = await old.start(first)
     expect(refused.status).not.toBe(200)
     expect(await refused.text()).toContain("not supported yet")
     const fresh = await begin()

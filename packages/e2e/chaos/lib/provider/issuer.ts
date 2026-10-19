@@ -4,7 +4,7 @@ import { ModelsBody } from "@ren/brain-api/brain-api"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { TestToken } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
-import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Effect, Option, Schema } from "effect"
@@ -17,7 +17,7 @@ interface Call {
 
 type Reply = { readonly type: "grant"; readonly access: Models.Access } | { readonly type: "unavailable" }
 
-type Environments = (sessionId: Session.ID) => Promise<Environment.Access | undefined>
+type Environments = (sessionId: Session.ID) => Promise<Hand.Access | undefined>
 
 export interface Instance {
   readonly url: string
@@ -31,7 +31,7 @@ export interface Instance {
 
 const encodeModels = Schema.encodeSync(ModelsBody)
 
-const encodeAccess = Schema.encodeSync(Schema.toCodecJson(Environment.Access))
+const encodeAccess = Schema.encodeSync(Schema.toCodecJson(Hand.Access))
 
 const organizationId = Auth.OrganizationID.create()
 

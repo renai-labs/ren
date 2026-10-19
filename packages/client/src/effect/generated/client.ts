@@ -112,14 +112,13 @@ const adaptGroupSpaceMember = (raw: RawClient["space-member"]) => ({
 
 type EnvironmentListRequest = Parameters<RawClient["environment"]["environment.list"]>[0]
 type EnvironmentListInput = {
-  readonly spaceId?: EnvironmentListRequest["query"]["spaceId"]
   readonly page: EnvironmentListRequest["query"]["page"]
   readonly pageSize: EnvironmentListRequest["query"]["pageSize"]
 }
 const EndpointEnvironmentList = (raw: RawClient["environment"]) => (input: EnvironmentListInput) =>
-  raw["environment.list"]({
-    query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-  }).pipe(Effect.mapError(mapClientError))
+  raw["environment.list"]({ query: { page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 type EnvironmentGetRequest = Parameters<RawClient["environment"]["environment.get"]>[0]
 type EnvironmentGetInput = { readonly idOrSlug: EnvironmentGetRequest["params"]["idOrSlug"] }
@@ -128,7 +127,6 @@ const EndpointEnvironmentGet = (raw: RawClient["environment"]) => (input: Enviro
 
 type EnvironmentCreateRequest = Parameters<RawClient["environment"]["environment.create"]>[0]
 type EnvironmentCreateInput = {
-  readonly spaceId: EnvironmentCreateRequest["payload"]["spaceId"]
   readonly name: EnvironmentCreateRequest["payload"]["name"]
   readonly description?: EnvironmentCreateRequest["payload"]["description"]
   readonly provider: EnvironmentCreateRequest["payload"]["provider"]
@@ -138,7 +136,6 @@ type EnvironmentCreateInput = {
 const EndpointEnvironmentCreate = (raw: RawClient["environment"]) => (input: EnvironmentCreateInput) =>
   raw["environment.create"]({
     payload: {
-      spaceId: input["spaceId"],
       name: input["name"],
       description: input["description"],
       provider: input["provider"],
@@ -184,6 +181,39 @@ const EndpointHandProviderList = (raw: RawClient["handProvider"]) => () =>
 
 const adaptGroupHandProvider = (raw: RawClient["handProvider"]) => ({ list: EndpointHandProviderList(raw) })
 
+type SpaceEnvironmentListRequest = Parameters<RawClient["space-environment"]["space-environment.list"]>[0]
+type SpaceEnvironmentListInput = {
+  readonly spaceId: SpaceEnvironmentListRequest["query"]["spaceId"]
+  readonly page: SpaceEnvironmentListRequest["query"]["page"]
+  readonly pageSize: SpaceEnvironmentListRequest["query"]["pageSize"]
+}
+const EndpointSpaceEnvironmentList = (raw: RawClient["space-environment"]) => (input: SpaceEnvironmentListInput) =>
+  raw["space-environment.list"]({
+    query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SpaceEnvironmentCreateRequest = Parameters<RawClient["space-environment"]["space-environment.create"]>[0]
+type SpaceEnvironmentCreateInput = {
+  readonly spaceId: SpaceEnvironmentCreateRequest["payload"]["spaceId"]
+  readonly environmentId: SpaceEnvironmentCreateRequest["payload"]["environmentId"]
+}
+const EndpointSpaceEnvironmentCreate = (raw: RawClient["space-environment"]) => (input: SpaceEnvironmentCreateInput) =>
+  raw["space-environment.create"]({
+    payload: { spaceId: input["spaceId"], environmentId: input["environmentId"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SpaceEnvironmentArchiveRequest = Parameters<RawClient["space-environment"]["space-environment.archive"]>[0]
+type SpaceEnvironmentArchiveInput = { readonly id: SpaceEnvironmentArchiveRequest["params"]["id"] }
+const EndpointSpaceEnvironmentArchive =
+  (raw: RawClient["space-environment"]) => (input: SpaceEnvironmentArchiveInput) =>
+    raw["space-environment.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSpaceEnvironment = (raw: RawClient["space-environment"]) => ({
+  list: EndpointSpaceEnvironmentList(raw),
+  create: EndpointSpaceEnvironmentCreate(raw),
+  archive: EndpointSpaceEnvironmentArchive(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -192,6 +222,7 @@ const adaptClient = (raw: RawClient) => ({
   "space-member": adaptGroupSpaceMember(raw["space-member"]),
   environment: adaptGroupEnvironment(raw["environment"]),
   handProvider: adaptGroupHandProvider(raw["handProvider"]),
+  "space-environment": adaptGroupSpaceEnvironment(raw["space-environment"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

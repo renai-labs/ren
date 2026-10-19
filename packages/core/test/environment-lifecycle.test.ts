@@ -7,10 +7,11 @@ import { Testing } from "@ren/db/testing"
 import { Sandbox } from "@ren/executor/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
-import type { Hand } from "@ren/schema/hand"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
+import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
-import { Effect, Layer, ManagedRuntime, Schema } from "effect"
+import { Effect, Layer, ManagedRuntime, Redacted, Schema } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -110,7 +111,7 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
         placed.set(handId, on)
         return disposed.has(on.url)
           ? Effect.fail(new HandProvider.Gone({ message: `the sandbox of hand ${handId} is gone` }))
-          : Effect.succeed({ url: on.url, workspace: on.directory })
+          : Effect.succeed({ url: on.url })
       },
     }),
   )
@@ -132,6 +133,7 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
 let cell: Wrangler.Instance
 let first: Sandbox
 let organizationId: Auth.OrganizationID
+let spaceId: Space.ID
 let current: CoreConfig
 
 const startCore = async (config: CoreConfig) => {
@@ -143,7 +145,7 @@ const startCore = async (config: CoreConfig) => {
         : effect.pipe(
             Effect.tap((value) =>
               Effect.sync(() => {
-                if (Schema.is(Environment.Access)(value)) core.issued.push(value.token)
+                if (Schema.is(Hand.Access)(value)) core.issued.push(Redacted.value(value.token))
               }),
             ),
           ),
@@ -174,10 +176,10 @@ const start = (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) =
           harness: "opencode",
           instructions: {},
           interactive: false,
-          environment: { environmentId, directory: Environment.sessionDirectory(sessionId) },
+          environmentId,
           ...input,
         },
-        organizationId,
+        { organizationId, spaceId },
       ),
     ),
   )
@@ -214,6 +216,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     first = await sandbox("sandbox-a")
     organizationId = await database.runPromise(Seed.organization())
     await database.runPromise(Seed.environment(organizationId, { id: environmentId, sessionsPerHand: 1 }))
+    spaceId = await database.runPromise(Seed.team(organizationId))
     await startCore({ target: first, lifetime: "20 seconds" })
     cell = await Wrangler.make({ ...Shared.vars(stub.url), REN_URL: `http://127.0.0.1:${port}` })
   }, 240_000)

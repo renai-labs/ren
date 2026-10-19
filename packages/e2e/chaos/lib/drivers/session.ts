@@ -3,7 +3,6 @@ export * as SessionDriver from "./session.js"
 import type { OpenCodeClient, OpenCodeEvent, SessionMessageInfo } from "@opencode/client"
 import { ModelsBody } from "@ren/brain-api/brain-api"
 import { TestCell } from "@ren/cell/testing"
-import type { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Schema } from "effect"
@@ -11,7 +10,7 @@ import type { ModelProvider } from "../provider/model.js"
 import { Wait } from "../wait.js"
 
 export interface StartOptions {
-  readonly environment?: Environment.Location
+  readonly directory?: string
   readonly interactive?: boolean
   readonly model?: Session.Model
   readonly instructions?: Readonly<Record<string, string>>
@@ -82,7 +81,7 @@ export const make = async (url: string, provider?: ModelProvider.Instance, repai
         sessionId: cell.id,
         harness: "opencode",
         interactive: options.interactive ?? false,
-        ...(options.environment && { environment: options.environment }),
+        ...(options.directory && { directory: options.directory }),
         ...(options.model && { model: options.model }),
         ...(options.instructions && { instructions: options.instructions }),
         ...(options.initialMessage && {

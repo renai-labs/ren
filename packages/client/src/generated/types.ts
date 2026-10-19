@@ -16,9 +16,9 @@ export type SpaceAssignmentID = string
 
 export type EnvironmentID = string
 
-export type EnvironmentProviderID = string
+export type HandProviderID = string
 
-export type EnvironmentCapability = "processes" | "files"
+export type SpaceEnvironmentID = string
 
 export type HealthInfo = { status: HealthStatus; version: string }
 
@@ -77,25 +77,25 @@ export type SpaceMemberPending = {
 
 export type EnvironmentInfo = {
   id: EnvironmentID
-  spaceId: SpaceID
+  organizationId: AuthOrganizationID
   name: string
   description: string | null
-  provider: EnvironmentProviderID
+  provider: HandProviderID
   config: JsonValue
   sessionsPerHand: number
-  canUpdate: boolean
-  canArchive: boolean
   createdAt: string
   updatedAt: string
   archivedAt: string | null
 }
 
-export type EnvironmentProviderInfo = {
-  id: EnvironmentProviderID
-  title: string
-  description: string
-  capabilities: Array<EnvironmentCapability>
-  configSchema: JsonValue
+export type HandProviderInfo = { id: HandProviderID; title: string; description: string; configSchema: JsonValue }
+
+export type SpaceEnvironmentInfo = {
+  id: SpaceEnvironmentID
+  spaceId: SpaceID
+  environmentId: EnvironmentID
+  createdAt: string
+  archivedAt: string | null
 }
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
@@ -106,7 +106,9 @@ export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
 
 export type EnvironmentPage = { items: Array<EnvironmentInfo>; page: number; pageSize: number; total: number }
 
-export type EnvironmentProviders = Array<EnvironmentProviderInfo>
+export type HandProviders = Array<HandProviderInfo>
+
+export type SpaceEnvironmentPage = { items: Array<SpaceEnvironmentInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
@@ -233,17 +235,8 @@ export type SpaceMemberArchiveInput = { readonly id: { readonly id: string | str
 export type SpaceMemberArchiveOutput = SpaceMemberInfo
 
 export type EnvironmentListInput = {
-  readonly spaceId?: {
-    readonly spaceId?: string | undefined
-    readonly page: number
-    readonly pageSize: number
-  }["spaceId"]
-  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: {
-    readonly spaceId?: string | undefined
-    readonly page: number
-    readonly pageSize: number
-  }["pageSize"]
+  readonly page: { readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: { readonly page: number; readonly pageSize: number }["pageSize"]
 }
 
 export type EnvironmentListOutput = EnvironmentPage
@@ -253,16 +246,7 @@ export type EnvironmentGetInput = { readonly idOrSlug: { readonly idOrSlug: stri
 export type EnvironmentGetOutput = EnvironmentInfo
 
 export type EnvironmentCreateInput = {
-  readonly spaceId: {
-    readonly spaceId: string
-    readonly name: string
-    readonly description?: string | null
-    readonly provider: string
-    readonly config: JsonValue
-    readonly sessionsPerHand?: number
-  }["spaceId"]
   readonly name: {
-    readonly spaceId: string
     readonly name: string
     readonly description?: string | null
     readonly provider: string
@@ -270,7 +254,6 @@ export type EnvironmentCreateInput = {
     readonly sessionsPerHand?: number
   }["name"]
   readonly description?: {
-    readonly spaceId: string
     readonly name: string
     readonly description?: string | null
     readonly provider: string
@@ -278,7 +261,6 @@ export type EnvironmentCreateInput = {
     readonly sessionsPerHand?: number
   }["description"]
   readonly provider: {
-    readonly spaceId: string
     readonly name: string
     readonly description?: string | null
     readonly provider: string
@@ -286,7 +268,6 @@ export type EnvironmentCreateInput = {
     readonly sessionsPerHand?: number
   }["provider"]
   readonly config: {
-    readonly spaceId: string
     readonly name: string
     readonly description?: string | null
     readonly provider: string
@@ -294,7 +275,6 @@ export type EnvironmentCreateInput = {
     readonly sessionsPerHand?: number
   }["config"]
   readonly sessionsPerHand: {
-    readonly spaceId: string
     readonly name: string
     readonly description?: string | null
     readonly provider: string
@@ -339,4 +319,23 @@ export type EnvironmentArchiveInput = { readonly id: { readonly id: string }["id
 
 export type EnvironmentArchiveOutput = EnvironmentInfo
 
-export type HandProviderListOutput = EnvironmentProviders
+export type HandProviderListOutput = HandProviders
+
+export type SpaceEnvironmentListInput = {
+  readonly spaceId: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["spaceId"]
+  readonly page: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["pageSize"]
+}
+
+export type SpaceEnvironmentListOutput = SpaceEnvironmentPage
+
+export type SpaceEnvironmentCreateInput = {
+  readonly spaceId: { readonly spaceId: string; readonly environmentId: string }["spaceId"]
+  readonly environmentId: { readonly spaceId: string; readonly environmentId: string }["environmentId"]
+}
+
+export type SpaceEnvironmentCreateOutput = SpaceEnvironmentInfo
+
+export type SpaceEnvironmentArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type SpaceEnvironmentArchiveOutput = SpaceEnvironmentInfo
