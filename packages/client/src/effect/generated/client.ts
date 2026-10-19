@@ -131,11 +131,12 @@ type SessionCreateInput = {
   readonly id: SessionCreateRequest["payload"]["id"]
   readonly spaceId: SessionCreateRequest["payload"]["spaceId"]
   readonly message?: SessionCreateRequest["payload"]["message"]
+  readonly model?: SessionCreateRequest["payload"]["model"]
 }
 const EndpointSessionCreate = (raw: RawClient["session"]) => (input: SessionCreateInput) =>
-  raw["session.create"]({ payload: { id: input["id"], spaceId: input["spaceId"], message: input["message"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["session.create"]({
+    payload: { id: input["id"], spaceId: input["spaceId"], message: input["message"], model: input["model"] },
+  }).pipe(Effect.mapError(mapClientError))
 
 type SessionArchiveRequest = Parameters<RawClient["session"]["session.archive"]>[0]
 type SessionArchiveInput = { readonly id: SessionArchiveRequest["params"]["id"] }
@@ -154,6 +155,11 @@ type ChatAccessInput = { readonly id: ChatAccessRequest["params"]["id"] }
 const EndpointChatAccess = (raw: RawClient["chat"]) => (input: ChatAccessInput) =>
   raw["chat.access"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
+type ChatModelsRequest = Parameters<RawClient["chat"]["chat.models"]>[0]
+type ChatModelsInput = { readonly id: ChatModelsRequest["params"]["id"] }
+const EndpointChatModels = (raw: RawClient["chat"]) => (input: ChatModelsInput) =>
+  raw["chat.models"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
 type ChatForkRequest = Parameters<RawClient["chat"]["chat.fork"]>[0]
 type ChatForkInput = {
   readonly sessionId: ChatForkRequest["params"]["sessionId"]
@@ -166,7 +172,11 @@ const EndpointChatFork = (raw: RawClient["chat"]) => (input: ChatForkInput) =>
     payload: { id: input["id"], messageId: input["messageId"] },
   }).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupChat = (raw: RawClient["chat"]) => ({ access: EndpointChatAccess(raw), fork: EndpointChatFork(raw) })
+const adaptGroupChat = (raw: RawClient["chat"]) => ({
+  access: EndpointChatAccess(raw),
+  models: EndpointChatModels(raw),
+  fork: EndpointChatFork(raw),
+})
 
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),

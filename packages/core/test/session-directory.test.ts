@@ -43,6 +43,7 @@ const it = testEffect(
       Layer.mergeAll(SessionDirectory.layer, Space.layer, SpaceProvisioning.layer).pipe(
         Layer.provideMerge(Session.layer),
         Layer.provideMerge(Host.layer(settings, models)),
+        Layer.provideMerge(models),
         Layer.provideMerge(Access.layer),
         Layer.provideMerge(Testing.layer),
       ),
@@ -100,6 +101,40 @@ describe("SessionDirectory", () => {
           fetch(`${access.url}/chat/session/${id}`, { headers: { authorization: TestToken.basic(access.token) } }),
         )
         expect(read.status).toBe(200)
+      }),
+  )
+
+  it.live(
+    "a member lists the models a new chat may use, the chat starts with the one picked, and an unlisted one is refused",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* SessionDirectory.Service
+        const spaces = yield* Space.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* member(organizationId)
+        const spaceId = (yield* spaces.list(ada, page)).items.at(0)?.id
+        if (!spaceId) return yield* Effect.die(new Error("Ada has no space"))
+        const id = Session.ID.create()
+        expect(yield* sessions.models(ada, id)).toEqual([
+          { id: "stub-model", providerID: "stub", name: "Stub", variants: [] },
+          { id: "stub-other", providerID: "stub", name: "Stub Other", variants: [] },
+        ])
+        const script = stub.script()
+        yield* sessions.create(ada, {
+          id,
+          spaceId,
+          model: { providerID: "stub", id: "stub-other" },
+          message: { id: SessionMessage.ID.create(), text: script.marker },
+        })
+        expect((yield* Effect.promise(() => script.called())).body.model).toBe("stub-other")
+        const unlisted = yield* sessions
+          .create(ada, {
+            id: Session.ID.create(),
+            spaceId,
+            model: { providerID: "stub", id: "stub-other", variant: "max" },
+          })
+          .pipe(Effect.flip)
+        expect(unlisted).toMatchObject({ _tag: "Primitive.NotFound", message: "Model not found." })
       }),
   )
 

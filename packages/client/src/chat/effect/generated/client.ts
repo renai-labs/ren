@@ -83,11 +83,19 @@ type SessionPromptInput = {
   readonly id: SessionPromptRequest["payload"]["id"]
   readonly text: SessionPromptRequest["payload"]["text"]
   readonly delivery: SessionPromptRequest["payload"]["delivery"]
+  readonly agents?: SessionPromptRequest["payload"]["agents"]
+  readonly skills?: SessionPromptRequest["payload"]["skills"]
 }
 const EndpointSessionPrompt = (raw: RawClient["session"]) => (input: SessionPromptInput) =>
   raw["session.prompt"]({
     params: { sessionID: input["sessionID"] },
-    payload: { id: input["id"], text: input["text"], delivery: input["delivery"] },
+    payload: {
+      id: input["id"],
+      text: input["text"],
+      delivery: input["delivery"],
+      agents: input["agents"],
+      skills: input["skills"],
+    },
   }).pipe(Effect.mapError(mapClientError))
 
 type SessionCompactRequest = Parameters<RawClient["session"]["session.compact"]>[0]
@@ -156,6 +164,39 @@ const EndpointSessionInboxCancel = (raw: RawClient["session"]) => (input: Sessio
     Effect.mapError(mapClientError),
   )
 
+type SessionInboxUpdateRequest = Parameters<RawClient["session"]["session.inbox.update"]>[0]
+type SessionInboxUpdateInput = {
+  readonly sessionID: SessionInboxUpdateRequest["params"]["sessionID"]
+  readonly inboxID: SessionInboxUpdateRequest["params"]["inboxID"]
+  readonly delivery: SessionInboxUpdateRequest["payload"]["delivery"]
+}
+const EndpointSessionInboxUpdate = (raw: RawClient["session"]) => (input: SessionInboxUpdateInput) =>
+  raw["session.inbox.update"]({
+    params: { sessionID: input["sessionID"], inboxID: input["inboxID"] },
+    payload: { delivery: input["delivery"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SessionCommandRequest = Parameters<RawClient["session"]["session.command"]>[0]
+type SessionCommandInput = {
+  readonly sessionID: SessionCommandRequest["params"]["sessionID"]
+  readonly name: SessionCommandRequest["payload"]["name"]
+  readonly text: SessionCommandRequest["payload"]["text"]
+  readonly delivery: SessionCommandRequest["payload"]["delivery"]
+  readonly agents?: SessionCommandRequest["payload"]["agents"]
+  readonly skills?: SessionCommandRequest["payload"]["skills"]
+}
+const EndpointSessionCommand = (raw: RawClient["session"]) => (input: SessionCommandInput) =>
+  raw["session.command"]({
+    params: { sessionID: input["sessionID"] },
+    payload: {
+      name: input["name"],
+      text: input["text"],
+      delivery: input["delivery"],
+      agents: input["agents"],
+      skills: input["skills"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
 type SessionModelSwitchRequest = Parameters<RawClient["session"]["session.model.switch"]>[0]
 type SessionModelSwitchInput = {
   readonly sessionID: SessionModelSwitchRequest["params"]["sessionID"]
@@ -206,7 +247,11 @@ const adaptGroupSession = (raw: RawClient["session"]) => ({
   messages: EndpointSessionMessages(raw),
   message: EndpointSessionMessage(raw),
   children: EndpointSessionChildren(raw),
-  inbox: { list: EndpointSessionInboxList(raw), cancel: EndpointSessionInboxCancel(raw) },
+  inbox: {
+    list: EndpointSessionInboxList(raw),
+    cancel: EndpointSessionInboxCancel(raw),
+    update: EndpointSessionInboxUpdate(raw),
+  },
   permission: { list: EndpointSessionPermissionList(raw), reply: EndpointSessionPermissionReply(raw) },
   form: {
     list: EndpointSessionFormList(raw),
@@ -223,6 +268,7 @@ const adaptGroupSession = (raw: RawClient["session"]) => ({
     clear: EndpointSessionRevertClear(raw),
     commit: EndpointSessionRevertCommit(raw),
   },
+  command: EndpointSessionCommand(raw),
   model: { switch: EndpointSessionModelSwitch(raw) },
 })
 
@@ -260,11 +306,51 @@ const adaptGroupShell = (raw: RawClient["shell"]) => ({
   remove: EndpointShellRemove(raw),
 })
 
+type AgentListRequest = Parameters<RawClient["agent"]["agent.list"]>[0]
+type AgentListInput = { readonly sessionID: AgentListRequest["params"]["sessionID"] }
+const EndpointAgentList = (raw: RawClient["agent"]) => (input: AgentListInput) =>
+  raw["agent.list"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupAgent = (raw: RawClient["agent"]) => ({ list: EndpointAgentList(raw) })
+
+type SkillListRequest = Parameters<RawClient["skill"]["skill.list"]>[0]
+type SkillListInput = { readonly sessionID: SkillListRequest["params"]["sessionID"] }
+const EndpointSkillList = (raw: RawClient["skill"]) => (input: SkillListInput) =>
+  raw["skill.list"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSkill = (raw: RawClient["skill"]) => ({ list: EndpointSkillList(raw) })
+
+type CommandListRequest = Parameters<RawClient["command"]["command.list"]>[0]
+type CommandListInput = { readonly sessionID: CommandListRequest["params"]["sessionID"] }
+const EndpointCommandList = (raw: RawClient["command"]) => (input: CommandListInput) =>
+  raw["command.list"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupCommand = (raw: RawClient["command"]) => ({ list: EndpointCommandList(raw) })
+
+type FileSearchRequest = Parameters<RawClient["file"]["file.search"]>[0]
+type FileSearchInput = {
+  readonly sessionID: FileSearchRequest["params"]["sessionID"]
+  readonly query: FileSearchRequest["query"]["query"]
+  readonly type?: FileSearchRequest["query"]["type"]
+  readonly limit?: FileSearchRequest["query"]["limit"]
+}
+const EndpointFileSearch = (raw: RawClient["file"]) => (input: FileSearchInput) =>
+  raw["file.search"]({
+    params: { sessionID: input["sessionID"] },
+    query: { query: input["query"], type: input["type"], limit: input["limit"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupFile = (raw: RawClient["file"]) => ({ search: EndpointFileSearch(raw) })
+
 const adaptClient = (raw: RawClient) => ({
   event: adaptGroupEvent(raw["event"]),
   model: adaptGroupModel(raw["model"]),
   session: adaptGroupSession(raw["session"]),
   shell: adaptGroupShell(raw["shell"]),
+  agent: adaptGroupAgent(raw["agent"]),
+  skill: adaptGroupSkill(raw["skill"]),
+  command: adaptGroupCommand(raw["command"]),
+  file: adaptGroupFile(raw["file"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

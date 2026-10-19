@@ -15,6 +15,7 @@ import type {
   SessionCreateInput,
   SessionArchiveInput,
   ChatAccessInput,
+  ChatModelsInput,
   ChatForkInput,
 } from "../../generated/index.js"
 
@@ -165,6 +166,15 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["chat", "access"] as const,
             mutationFn: (input: ChatAccessInput) => client["chat"]["access"](input),
+          }),
+      },
+      models: {
+        queryKey: (input?: ChatModelsInput) =>
+          input === undefined ? (["chat", "models"] as const) : (["chat", "models", input] as const),
+        queryOptions: (input: ChatModelsInput) =>
+          queryOptions({
+            queryKey: ["chat", "models", input] as const,
+            queryFn: (context) => client["chat"]["models"](input, { signal: context.signal }),
           }),
       },
       fork: {

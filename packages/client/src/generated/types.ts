@@ -38,6 +38,8 @@ export type SessionMessageID = string
 
 export type SessionClientAccess = { url: string; token: string; expiresAt: string }
 
+export type SessionModelVariant = { id: string }
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -94,6 +96,8 @@ export type SpaceMemberPending = {
 }
 
 export type SessionForkSource = { sessionId: SessionID; messageId: SessionMessageID }
+
+export type SessionModelChoice = { id: string; providerID: string; name: string; variants: Array<SessionModelVariant> }
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
@@ -258,17 +262,26 @@ export type SessionCreateInput = {
     readonly id: string
     readonly spaceId: string
     readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
   }["id"]
   readonly spaceId: {
     readonly id: string
     readonly spaceId: string
     readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
   }["spaceId"]
   readonly message?: {
     readonly id: string
     readonly spaceId: string
     readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
   }["message"]
+  readonly model?: {
+    readonly id: string
+    readonly spaceId: string
+    readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+  }["model"]
 }
 
 export type SessionCreateOutput = SessionInfo
@@ -280,6 +293,10 @@ export type SessionArchiveOutput = SessionInfo
 export type ChatAccessInput = { readonly id: { readonly id: string }["id"] }
 
 export type ChatAccessOutput = SessionClientAccess
+
+export type ChatModelsInput = { readonly id: { readonly id: string }["id"] }
+
+export type ChatModelsOutput = Array<SessionModelChoice>
 
 export type ChatForkInput = {
   readonly sessionId: { readonly sessionId: string }["sessionId"]

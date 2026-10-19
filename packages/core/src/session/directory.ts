@@ -3,12 +3,14 @@ export * as SessionDirectory from "./directory.js"
 import { Database } from "@ren/db/database"
 import type { Session as SessionSchema } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session-capabilities"
+import type { SessionModel } from "@ren/schema/session-model"
 import { Space } from "@ren/schema/space"
 import { and, count, desc, eq, isNull, sql, type SQL } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "../access.js"
 import type { Actor } from "../actor.js"
 import { BrainHost } from "../brain-host.js"
+import { Models } from "../models.js"
 import { Primitive } from "../primitive.js"
 import { Session } from "../session.js"
 import { SpacePolicy } from "../space/policy.js"
@@ -17,6 +19,7 @@ import { OpenCodeStore } from "./opencode-store.js"
 
 export type Interface = Primitive.Interface<typeof SessionSchema.definition> & {
   readonly access: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionSchema.ClientAccess, Primitive.NotFound>
+  readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
   readonly fork: (
     actor: Actor.Info,
     id: Session.ID,
@@ -67,6 +70,8 @@ const toInfo = (row: Row): SessionSchema.Info => ({
 
 const messageNotFound = new Primitive.NotFound({ message: "Message not found." })
 
+const modelNotFound = new Primitive.NotFound({ message: "Model not found." })
+
 const forkConflict = new Primitive.Conflict({ message: "A session with this ID already exists." })
 
 const spaceGet = Primitive.action(Space.definition, "get")
@@ -79,6 +84,22 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const sessions = yield* Session.Service
     const brain = yield* BrainHost.Service
+    const catalog = yield* Models.Service
+
+    const models = (actor: Actor.Info, id: Session.ID) =>
+      catalog.catalog({ brainId: id, organizationId: actor.organizationId }).pipe(
+        Effect.orDie,
+        Effect.map((found) =>
+          found.endpoints.flatMap((endpoint) =>
+            endpoint.models.map((model): SessionModel.Choice => ({
+              id: model.id,
+              providerID: endpoint.id,
+              name: model.name ?? model.id,
+              variants: (model.efforts ?? []).map((effort) => ({ id: effort })),
+            })),
+          ),
+        ),
+      )
 
     const visibleTo = (actor: Actor.Info) =>
       and(
@@ -152,11 +173,29 @@ export const layer = Layer.effect(
             ),
         )
         if (space.length === 0) return yield* spaceNotFound
+        const model = input.model
+        if (
+          model &&
+          !(yield* models(actor, input.id)).some(
+            (item) =>
+              item.id === model.id &&
+              item.providerID === model.providerID &&
+              (!model.variant || item.variants.some((variant) => variant.id === model.variant)),
+          )
+        )
+          return yield* modelNotFound
         const start: SessionSchema.StartInput = {
           sessionId: input.id,
           harness: "opencode",
           instructions: {},
           interactive: true,
+          ...(model && {
+            model: {
+              endpointId: model.providerID,
+              modelId: model.id,
+              ...(model.variant && { variant: model.variant }),
+            },
+          }),
           ...(input.message && {
             initialMessage: {
               messageId: Session.MessageID.make(input.message.id),
@@ -196,6 +235,7 @@ export const layer = Layer.effect(
           }),
         )
       }),
+      models: Effect.fn("SessionDirectory.models")(models),
       access: Effect.fn("SessionDirectory.access")(function* (actor: Actor.Info, id: Session.ID) {
         yield* read(actor, id)
         return yield* brain.access(id, actor.userId)

@@ -29,6 +29,8 @@ import type {
   SessionArchiveOutput,
   ChatAccessInput,
   ChatAccessOutput,
+  ChatModelsInput,
+  ChatModelsOutput,
   ChatForkInput,
   ChatForkOutput,
 } from "./types.js"
@@ -273,7 +275,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/sessions`,
-            body: { id: input["id"], spaceId: input["spaceId"], message: input["message"] },
+            body: { id: input["id"], spaceId: input["spaceId"], message: input["message"], model: input["model"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,
@@ -300,6 +302,17 @@ export function make(options: ClientOptions) {
             path: `/sessions/${encodeURIComponent(input.id)}/chat`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      models: (input: ChatModelsInput, requestOptions?: RequestOptions) =>
+        request<ChatModelsOutput>(
+          {
+            method: "GET",
+            path: `/sessions/${encodeURIComponent(input.id)}/models`,
+            successStatus: 200,
+            declaredStatuses: [401, 403],
             empty: false,
           },
           requestOptions,

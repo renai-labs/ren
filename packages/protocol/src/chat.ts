@@ -1,6 +1,7 @@
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { Session } from "@ren/schema/session"
+import { SessionCatalog } from "@ren/schema/session-catalog"
 import { SessionEvent } from "@ren/schema/session-event"
 import { SessionInbox } from "@ren/schema/session-inbox"
 import { SessionInfo } from "@ren/schema/session-info"
@@ -14,12 +15,41 @@ import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } fro
 
 const params = { sessionID: Session.ID }
 
+export interface PromptSkill extends Schema.Schema.Type<typeof PromptSkill> {}
+export const PromptSkill = Schema.Struct({
+  id: Schema.String,
+  mention: Schema.optionalKey(SessionMessage.Mention),
+}).annotate({ identifier: "Chat.PromptSkill" })
+
+const mentions = {
+  agents: Schema.optional(Schema.Array(SessionMessage.AgentAttachment)).annotate({
+    description: "Subagents the text mentions, from `agent.list`.",
+  }),
+  skills: Schema.optional(Schema.Array(PromptSkill)).annotate({
+    description: "Skills the text mentions, from `skill.list`.",
+  }),
+}
+
 export interface PromptInput extends Schema.Schema.Type<typeof PromptInput> {}
 export const PromptInput = Schema.Struct({
   id: SessionMessage.ID,
   text: Schema.NonEmptyString,
   delivery: SessionInbox.Delivery,
+  ...mentions,
 }).annotate({ identifier: "Chat.PromptInput" })
+
+export interface CommandInput extends Schema.Schema.Type<typeof CommandInput> {}
+export const CommandInput = Schema.Struct({
+  name: Schema.NonEmptyString,
+  text: Schema.String.annotate({ description: "The arguments after the command name." }),
+  delivery: SessionInbox.Delivery,
+  ...mentions,
+}).annotate({ identifier: "Chat.CommandInput" })
+
+export interface InboxUpdateInput extends Schema.Schema.Type<typeof InboxUpdateInput> {}
+export const InboxUpdateInput = Schema.Struct({ delivery: SessionInbox.Delivery }).annotate({
+  identifier: "Chat.InboxUpdateInput",
+})
 
 export interface Accepted extends Schema.Schema.Type<typeof Accepted> {}
 export const Accepted = Schema.Struct({ id: SessionMessage.ID }).annotate({ identifier: "Chat.Accepted" })
@@ -50,6 +80,12 @@ export const InterruptQuery = Schema.Struct({
     ),
   ),
 }).annotate({ identifier: "Chat.InterruptQuery" })
+
+export const FileSearchQuery = Schema.Struct({
+  query: Schema.String,
+  type: Schema.optional(SessionCatalog.FileType),
+  limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 200 }))),
+}).annotate({ identifier: "Chat.FileSearchQuery" })
 
 export const ShellOutputQuery = Schema.Struct({
   cursor: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
@@ -308,12 +344,43 @@ export const SessionGroup = HttpApiGroup.make("session")
     HttpApiEndpoint.delete("session.inbox.cancel", "/chat/session/:sessionID/inbox/:inboxID", {
       params: { ...params, inboxID: SessionMessage.ID },
       success: HttpApiSchema.NoContent,
-      error: NotFoundError,
+      error: [NotFoundError, ConflictError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "session.inbox.cancel",
         summary: "Withdraw pending input",
-        description: "Withdraw input the session has not taken yet. Input it already took is left alone.",
+        description:
+          "Withdraw input the session has not taken yet. Input the session took before the withdrawal is left alone and answers a conflict, so the client keeps its message.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.patch("session.inbox.update", "/chat/session/:sessionID/inbox/:inboxID", {
+      params: { ...params, inboxID: SessionMessage.ID },
+      payload: InboxUpdateInput,
+      success: HttpApiSchema.NoContent,
+      error: [NotFoundError, ConflictError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.inbox.update",
+        summary: "Steer or queue pending input",
+        description:
+          "Change how pending input reaches the session: `steer` sends it into the running turn, or starts a turn when the session is idle; `queue` holds it until the turn ends. Input the session already took answers a conflict. The order of queued input does not change.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("session.command", "/chat/session/:sessionID/command", {
+      params,
+      payload: CommandInput,
+      success: HttpApiSchema.NoContent,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.command",
+        summary: "Run a command",
+        description:
+          "Run a command from `command.list` with its arguments. The command sends its prompt to the session like `session.prompt`, under an ID the session picks. A command the session does not know is not found.",
       }),
     ),
   )
@@ -420,11 +487,70 @@ export const ShellGroup = HttpApiGroup.make("shell")
   )
   .annotateMerge(OpenApi.annotations({ title: "shell" }))
 
+const catalog = <const Name extends "agent" | "skill" | "command", S extends Schema.Top>(
+  name: Name,
+  item: S,
+  summary: string,
+  description: string,
+) =>
+  HttpApiGroup.make(name)
+    .add(
+      HttpApiEndpoint.get(`${name}.list`, `/chat/session/:sessionID/${name}`, {
+        params,
+        success: Schema.Array(item),
+        error: NotFoundError,
+      }).annotateMerge(OpenApi.annotations({ identifier: `${name}.list`, summary, description })),
+    )
+    .annotateMerge(OpenApi.annotations({ title: name }))
+
+export const AgentGroup = catalog(
+  "agent",
+  SessionCatalog.Agent,
+  "List agents",
+  "Return the agents where the session works. A composer offers the ones that are not hidden and not `primary` as `@` mentions.",
+)
+
+export const SkillGroup = catalog(
+  "skill",
+  SessionCatalog.Skill,
+  "List skills",
+  "Return the skills where the session works, for `@` mentions.",
+)
+
+export const CommandGroup = catalog(
+  "command",
+  SessionCatalog.Command,
+  "List commands",
+  "Return the commands where the session works, for `/` in the composer. `session.command` runs one.",
+)
+
+export const FileGroup = HttpApiGroup.make("file")
+  .add(
+    HttpApiEndpoint.get("file.search", "/chat/session/:sessionID/file", {
+      params,
+      query: FileSearchQuery,
+      success: Schema.Array(SessionCatalog.File),
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "file.search",
+        summary: "Search files",
+        description:
+          "Return files and folders where the session works whose path matches `query`, best match first, for `@` mentions. Paths are relative to the session’s folder; a folder ends with `/`.",
+      }),
+    ),
+  )
+  .annotateMerge(OpenApi.annotations({ title: "file" }))
+
 export const ChatApi = HttpApi.make("chat")
   .add(EventGroup)
   .add(ModelGroup)
   .add(SessionGroup)
   .add(ShellGroup)
+  .add(AgentGroup)
+  .add(SkillGroup)
+  .add(CommandGroup)
+  .add(FileGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Chat API",

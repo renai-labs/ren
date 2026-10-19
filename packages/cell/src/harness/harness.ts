@@ -6,6 +6,7 @@ import type { Models } from "@ren/schema/models"
 import type { Permission } from "@ren/schema/permission"
 import type { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session-event"
+import type { SessionCatalog } from "@ren/schema/session-catalog"
 import type { SessionInbox } from "@ren/schema/session-inbox"
 import type { SessionInfo } from "@ren/schema/session-info"
 import type { SessionMessage } from "@ren/schema/session-message"
@@ -31,11 +32,22 @@ export class Rejected extends Schema.TaggedError<Rejected>()("Harness.Rejected",
 
 export class Conflict extends Schema.TaggedError<Conflict>()("Harness.Conflict", { message: Schema.String }) {}
 
-interface Prompt {
+interface Mentions {
+  readonly agents?: ReadonlyArray<SessionMessage.AgentAttachment>
+  readonly skills?: ReadonlyArray<{ readonly id: string; readonly mention?: SessionMessage.Mention }>
+}
+
+interface Prompt extends Mentions {
   readonly id: SessionMessage.ID
   readonly text: string
   readonly delivery: SessionInbox.Delivery
   readonly sender: Option.Option<SessionMessage.Sender>
+}
+
+interface Command extends Mentions {
+  readonly name: string
+  readonly text: string
+  readonly delivery: SessionInbox.Delivery
 }
 
 export interface Chat {
@@ -72,7 +84,20 @@ export interface Chat {
     readonly clear: (sessionId: Session.ID) => Effect.Effect<void, NotFound | Conflict>
     readonly commit: (sessionId: Session.ID) => Effect.Effect<void, NotFound | Conflict>
   }
-  readonly cancelInbox: (sessionId: Session.ID, inboxId: SessionMessage.ID) => Effect.Effect<void, NotFound>
+  readonly cancelInbox: (sessionId: Session.ID, inboxId: SessionMessage.ID) => Effect.Effect<void, NotFound | Conflict>
+  readonly updateInbox: (
+    sessionId: Session.ID,
+    inboxId: SessionMessage.ID,
+    delivery: SessionInbox.Delivery,
+  ) => Effect.Effect<void, NotFound | Conflict>
+  readonly command: (sessionId: Session.ID, command: Command) => Effect.Effect<void, NotFound>
+  readonly agents: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Agent>, NotFound>
+  readonly skills: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Skill>, NotFound>
+  readonly commands: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<SessionCatalog.Command>, NotFound>
+  readonly files: (
+    sessionId: Session.ID,
+    search: { readonly query: string; readonly type?: SessionCatalog.FileType; readonly limit?: number },
+  ) => Effect.Effect<ReadonlyArray<SessionCatalog.File>, NotFound>
   readonly switchModel: (sessionId: Session.ID, model: SessionModel.Ref) => Effect.Effect<void, NotFound | Rejected>
   readonly replyPermission: (
     sessionId: Session.ID,

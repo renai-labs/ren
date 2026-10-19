@@ -54,7 +54,9 @@ const decodeCompaction = Schema.decodeUnknownOption(SessionInbox.Compaction)
 
 const decodeRevert = Schema.decodeUnknownOption(SessionInfo.Revert)
 
-export const make = (host: Pick<Host.Instance, "fetch" | "shells">): Harness.Chat => {
+export const make = (
+  host: Pick<Host.Instance, "fetch" | "shells" | "agents" | "skills" | "commands" | "findFiles">,
+): Harness.Chat => {
   const fetch = host.fetch
   const call = Effect.fnUntraced(function* (
     method: "GET" | "POST" | "PATCH" | "DELETE",
@@ -202,6 +204,8 @@ export const make = (host: Pick<Host.Instance, "fetch" | "shells">): Harness.Cha
         id: prompt.id,
         text: prompt.text,
         delivery: prompt.delivery,
+        ...(prompt.agents && { agents: prompt.agents }),
+        ...(prompt.skills && { skills: prompt.skills }),
         ...Option.match(prompt.sender, {
           onNone: () => ({}),
           onSome: (sender) => ({ metadata: { userID: sender.userId } }),
@@ -265,7 +269,36 @@ export const make = (host: Pick<Host.Instance, "fetch" | "shells">): Harness.Cha
         ),
     },
     cancelInbox: (sessionId, inboxId) =>
-      notFoundOnly(call("DELETE", `/api/session/${sessionId}/inbox/${inboxId}`)).pipe(Effect.asVoid),
+      Effect.gen(function* () {
+        yield* notFoundOnly(call("DELETE", `/api/session/${sessionId}/inbox/${inboxId}`))
+        const delivered = yield* notFoundOnly(call("GET", `/api/session/${sessionId}/message/${inboxId}`)).pipe(
+          Effect.as(true),
+          Effect.catchTag("Harness.NotFound", () => Effect.succeed(false)),
+        )
+        if (delivered)
+          return yield* new Harness.Conflict({ message: `The session took input ${inboxId} before it was withdrawn` })
+      }),
+    updateInbox: (sessionId, inboxId, delivery) =>
+      call("PATCH", `/api/session/${sessionId}/inbox/${inboxId}`, { delivery }).pipe(
+        Effect.asVoid,
+        Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
+      ),
+    command: (sessionId, command) =>
+      notFoundOnly(
+        call("POST", `/api/session/${sessionId}/command`, {
+          name: command.name,
+          text: command.text,
+          delivery: command.delivery,
+          ...(command.agents && { agents: command.agents }),
+          ...(command.skills && { skills: command.skills }),
+        }),
+      ).pipe(Effect.asVoid),
+    agents: (sessionId) => host.agents(sessionId).pipe(Effect.flatMap((all) => list({ data: all }, Translate.agent))),
+    skills: (sessionId) => host.skills(sessionId).pipe(Effect.flatMap((all) => list({ data: all }, Translate.skill))),
+    commands: (sessionId) =>
+      host.commands(sessionId).pipe(Effect.flatMap((all) => list({ data: all }, Translate.command))),
+    files: (sessionId, search) =>
+      host.findFiles(sessionId, search).pipe(Effect.flatMap((all) => list({ data: all }, Translate.file))),
     switchModel: (sessionId, model) =>
       Effect.gen(function* () {
         const known = (yield* models).find(

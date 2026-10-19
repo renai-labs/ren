@@ -127,6 +127,21 @@ export type SessionMessageToolRunning = {
 
 export type ShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
 
+export type SessionCatalogAgent = {
+  id: string
+  name: string
+  description?: string
+  mode: "subagent" | "primary" | "all"
+  hidden: boolean
+  color?: string
+}
+
+export type SessionCatalogSkill = { id: string; name: string; description?: string }
+
+export type SessionCatalogCommand = { name: string; description?: string }
+
+export type SessionCatalogFileType = "file" | "directory"
+
 export type SessionEventSessionAgentSelected = {
   id: string
   created: number
@@ -730,6 +745,8 @@ export type SessionStatusRetry = {
   next: number
 }
 
+export type SessionCatalogFile = { path: string; type: SessionCatalogFileType }
+
 export type SessionInboxUserPayload = {
   text: string
   files?: Array<SessionMessageFileAttachment>
@@ -1045,9 +1062,91 @@ export type SessionFormListOutput = Array<FormInfo>
 
 export type SessionPromptInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly id: { readonly id: string; readonly text: string; readonly delivery: "steer" | "queue" }["id"]
-  readonly text: { readonly id: string; readonly text: string; readonly delivery: "steer" | "queue" }["text"]
-  readonly delivery: { readonly id: string; readonly text: string; readonly delivery: "steer" | "queue" }["delivery"]
+  readonly id: {
+    readonly id: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["id"]
+  readonly text: {
+    readonly id: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["text"]
+  readonly delivery: {
+    readonly id: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["delivery"]
+  readonly agents?: {
+    readonly id: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["agents"]
+  readonly skills?: {
+    readonly id: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["skills"]
 }
 
 export type SessionPromptOutput = ChatAccepted
@@ -1098,6 +1197,105 @@ export type SessionInboxCancelInput = {
 }
 
 export type SessionInboxCancelOutput = void
+
+export type SessionInboxUpdateInput = {
+  readonly sessionID: { readonly sessionID: string; readonly inboxID: string }["sessionID"]
+  readonly inboxID: { readonly sessionID: string; readonly inboxID: string }["inboxID"]
+  readonly delivery: { readonly delivery: "steer" | "queue" }["delivery"]
+}
+
+export type SessionInboxUpdateOutput = void
+
+export type SessionCommandInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly name: {
+    readonly name: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["name"]
+  readonly text: {
+    readonly name: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["text"]
+  readonly delivery: {
+    readonly name: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["delivery"]
+  readonly agents?: {
+    readonly name: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["agents"]
+  readonly skills?: {
+    readonly name: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["skills"]
+}
+
+export type SessionCommandOutput = void
 
 export type SessionModelSwitchInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -1152,3 +1350,36 @@ export type ShellRemoveInput = {
 }
 
 export type ShellRemoveOutput = void
+
+export type AgentListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type AgentListOutput = Array<SessionCatalogAgent>
+
+export type SkillListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type SkillListOutput = Array<SessionCatalogSkill>
+
+export type CommandListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type CommandListOutput = Array<SessionCatalogCommand>
+
+export type FileSearchInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly query: {
+    readonly query: string
+    readonly type?: ("file" | "directory") | undefined
+    readonly limit?: number | undefined
+  }["query"]
+  readonly type?: {
+    readonly query: string
+    readonly type?: ("file" | "directory") | undefined
+    readonly limit?: number | undefined
+  }["type"]
+  readonly limit?: {
+    readonly query: string
+    readonly type?: ("file" | "directory") | undefined
+    readonly limit?: number | undefined
+  }["limit"]
+}
+
+export type FileSearchOutput = Array<SessionCatalogFile>

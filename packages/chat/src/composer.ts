@@ -97,7 +97,7 @@ const sameModel = (left: SessionModel.Ref, right: SessionModel.Ref | undefined) 
 export const model = (
   draft: Draft,
   current: SessionModel.Ref | undefined,
-  models: ReadonlyArray<SessionModel.Info>,
+  models: ReadonlyArray<SessionModel.Choice>,
 ): SessionModel.Ref | undefined => {
   const listed = (ref: SessionModel.Ref | undefined) =>
     ref && models.some((item) => SessionModel.key(item) === SessionModel.key(ref)) ? ref : undefined

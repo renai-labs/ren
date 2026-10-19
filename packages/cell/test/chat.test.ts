@@ -2,6 +2,7 @@ import { expect, setDefaultTimeout, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
 import { ChatApi } from "@ren/protocol/chat"
 import { Session } from "@ren/schema/session"
+import { SessionCatalog } from "@ren/schema/session-catalog"
 import type { SessionEvent } from "@ren/schema/session-event"
 import { SessionMessage } from "@ren/schema/session-message"
 import { Effect, Exit, Fiber, Queue, type Scope, Stream } from "effect"
@@ -316,6 +317,100 @@ test("a client withdraws queued input, and a stop with resume goes on with the s
       expect(page.items.find((message) => message.type === "assistant")).toMatchObject({
         content: [{ type: "text", text: "after the stop" }],
       })
+    }),
+  ))
+
+test("a client steers queued input into the running turn and queues it back, and input the session took cannot change or be withdrawn", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const held = stub.script({ hold: true })
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: held.marker, delivery: "steer" },
+      })
+      yield* Effect.promise(() => held.called())
+      const queued = SessionMessage.ID.create()
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: queued, text: stub.script().marker, delivery: "queue" },
+      })
+      const inbox = { ...params, inboxID: queued }
+      yield* brain.chat.session["session.inbox.update"]({ params: inbox, payload: { delivery: "steer" } })
+      expect(yield* brain.chat.session["session.inbox.list"]({ params })).toMatchObject([
+        { id: queued, delivery: "steer" },
+      ])
+      yield* brain.chat.session["session.inbox.update"]({ params: inbox, payload: { delivery: "queue" } })
+      expect(yield* brain.chat.session["session.inbox.list"]({ params })).toMatchObject([
+        { id: queued, delivery: "queue" },
+      ])
+      held.release()
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      const changed = yield* brain.chat.session["session.inbox.update"]({
+        params: inbox,
+        payload: { delivery: "steer" },
+      }).pipe(Effect.flip)
+      expect(changed._tag).toBe("ConflictError")
+      expect((yield* brain.chat.session["session.inbox.cancel"]({ params: inbox }).pipe(Effect.flip))._tag).toBe(
+        "ConflictError",
+      )
+      expect(yield* brain.chat.session["session.message"]({ params: { ...params, messageID: queued } })).toMatchObject({
+        id: queued,
+        type: "user",
+      })
+    }),
+  ))
+
+test("a client lists the agents, skills and commands where the session works, finds its files, mentions them and runs a command", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      yield* Effect.promise(() => Bun.write(`${brain.directory}/notes/release-plan.md`, "# Plan"))
+      const params = { sessionID: brain.id }
+      const agents = yield* brain.chat.agent["agent.list"]({ params })
+      expect(SessionCatalog.mentionable(agents).map((agent) => agent.id)).toEqual(["general", "explore"])
+      expect((yield* brain.chat.skill["skill.list"]({ params })).map((skill) => skill.id)).toContain("opencode")
+      expect((yield* brain.chat.command["command.list"]({ params })).map((command) => command.name)).toContain("review")
+      expect(yield* brain.chat.file["file.search"]({ params, query: { query: "release" } })).toEqual([
+        { path: "notes/release-plan.md", type: "file" },
+      ])
+      const id = SessionMessage.ID.create()
+      const mentioned = stub.script()
+      const text = `@general and @opencode ${mentioned.marker}`
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: {
+          id,
+          text,
+          delivery: "steer",
+          agents: [{ name: "general", mention: { start: 0, end: 8, text: "@general" } }],
+          skills: [{ id: "opencode", mention: { start: 13, end: 22, text: "@opencode" } }],
+        },
+      })
+      yield* Effect.promise(() => mentioned.called())
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      expect(yield* brain.chat.session["session.message"]({ params: { ...params, messageID: id } })).toMatchObject({
+        agents: [{ name: "general" }],
+        skills: [{ id: "opencode" }],
+      })
+      const reviewed = stub.script()
+      yield* brain.chat.session["session.command"]({
+        params,
+        payload: { name: "review", text: reviewed.marker, delivery: "steer" },
+      })
+      expect((yield* Effect.promise(() => reviewed.called())).text).toContain(reviewed.marker)
+      const unknown = yield* brain.chat.session["session.command"]({
+        params,
+        payload: { name: "missing", text: "", delivery: "steer" },
+      }).pipe(Effect.flip)
+      expect(unknown._tag).toBe("NotFoundError")
+      const outside = yield* brain.chat.agent["agent.list"]({ params: { sessionID: Session.ID.create() } }).pipe(
+        Effect.flip,
+      )
+      expect(outside._tag).toBe("NotFoundError")
     }),
   ))
 

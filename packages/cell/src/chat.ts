@@ -126,6 +126,8 @@ const handlers = Layer.mergeAll(
                 id: request.payload.id,
                 text: request.payload.text,
                 delivery: request.payload.delivery,
+                ...(request.payload.agents && { agents: request.payload.agents }),
+                ...(request.payload.skills && { skills: request.payload.skills }),
                 sender: yield* sender,
               })
               return { id: request.payload.id }
@@ -190,7 +192,35 @@ const handlers = Layer.mergeAll(
         )
         .handle("session.inbox.cancel", (request) =>
           run((chat) =>
-            chat.cancelInbox(request.params.sessionID, request.params.inboxID).pipe(Effect.mapError(notFound)),
+            chat.cancelInbox(request.params.sessionID, request.params.inboxID).pipe(
+              Effect.catchTags({
+                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
+                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
+              }),
+            ),
+          ),
+        )
+        .handle("session.inbox.update", (request) =>
+          run((chat) =>
+            chat.updateInbox(request.params.sessionID, request.params.inboxID, request.payload.delivery).pipe(
+              Effect.catchTags({
+                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
+                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
+              }),
+            ),
+          ),
+        )
+        .handle("session.command", (request) =>
+          run((chat) =>
+            chat
+              .command(request.params.sessionID, {
+                name: request.payload.name,
+                text: request.payload.text,
+                delivery: request.payload.delivery,
+                ...(request.payload.agents && { agents: request.payload.agents }),
+                ...(request.payload.skills && { skills: request.payload.skills }),
+              })
+              .pipe(Effect.mapError(notFound)),
           ),
         )
         .handle("session.model.switch", (request) =>
@@ -258,6 +288,52 @@ const handlers = Layer.mergeAll(
           ),
         )
     }),
+  ),
+  HttpApiBuilder.group(ChatApi, "agent", (group) =>
+    Effect.map(Effect.context<Services>(), (context) =>
+      group.handle("agent.list", (request) =>
+        Effect.flatMap(Cell.acquire, (harness) => harness.chat.agents(request.params.sessionID)).pipe(
+          Effect.mapError(notFound),
+          Effect.scoped,
+          Effect.provide(context),
+        ),
+      ),
+    ),
+  ),
+  HttpApiBuilder.group(ChatApi, "skill", (group) =>
+    Effect.map(Effect.context<Services>(), (context) =>
+      group.handle("skill.list", (request) =>
+        Effect.flatMap(Cell.acquire, (harness) => harness.chat.skills(request.params.sessionID)).pipe(
+          Effect.mapError(notFound),
+          Effect.scoped,
+          Effect.provide(context),
+        ),
+      ),
+    ),
+  ),
+  HttpApiBuilder.group(ChatApi, "command", (group) =>
+    Effect.map(Effect.context<Services>(), (context) =>
+      group.handle("command.list", (request) =>
+        Effect.flatMap(Cell.acquire, (harness) => harness.chat.commands(request.params.sessionID)).pipe(
+          Effect.mapError(notFound),
+          Effect.scoped,
+          Effect.provide(context),
+        ),
+      ),
+    ),
+  ),
+  HttpApiBuilder.group(ChatApi, "file", (group) =>
+    Effect.map(Effect.context<Services>(), (context) =>
+      group.handle("file.search", (request) =>
+        Effect.flatMap(Cell.acquire, (harness) =>
+          harness.chat.files(request.params.sessionID, {
+            query: request.query.query,
+            ...(request.query.type && { type: request.query.type }),
+            ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
+          }),
+        ).pipe(Effect.mapError(notFound), Effect.scoped, Effect.provide(context)),
+      ),
+    ),
   ),
 )
 

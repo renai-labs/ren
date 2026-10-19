@@ -1,5 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
+import { SessionCatalog } from "@ren/schema/session-catalog"
 import { SessionMessage } from "@ren/schema/session-message"
 import { Shell } from "@ren/schema/shell"
 import { Shared } from "@ren/cell/testing"
@@ -366,6 +367,83 @@ test("reverting an undelivered prompt withdraws it from the inbox and leaves the
       const done = yield* until(chat.state, settled(brain.id))
       expect(ChatState.revertMessageID(done, brain.id)).toBeUndefined()
       expect(userIDs(done, brain.id)).not.toContain(queued)
+    }),
+  ))
+
+test("a queued prompt is withdrawn at once, and one the session took meanwhile stays and answers a conflict", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const held = stub.script({ hold: true })
+      yield* chat.prompt({ text: held.marker })
+      yield* Effect.promise(() => held.called())
+      const withdrawn = yield* chat.prompt({ text: stub.script().marker, delivery: "queue" })
+      yield* chat.cancelInput(withdrawn)
+      const after = yield* SubscriptionRef.get(chat.state)
+      expect(ChatState.pending(after, brain.id)).toEqual([])
+      expect(userIDs(after, brain.id)).not.toContain(withdrawn)
+      const taken = yield* chat.prompt({ text: stub.script({ reply: "taken" }).marker, delivery: "queue" })
+      held.release()
+      yield* until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "taken"))
+      expect((yield* chat.cancelInput(taken).pipe(Effect.flip))._tag).toBe("ConflictError")
+      expect(userIDs(yield* SubscriptionRef.get(chat.state), brain.id)).toContain(taken)
+    }),
+  ))
+
+test("a queued prompt steers into the running turn and goes back to the queue", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const held = stub.script({ hold: true })
+      yield* chat.prompt({ text: held.marker })
+      yield* Effect.promise(() => held.called())
+      const queued = yield* chat.prompt({ text: stub.script({ reply: "queued" }).marker, delivery: "queue" })
+      const delivery = (state: ChatState.State) =>
+        ChatState.pending(state, brain.id).find((item) => item.id === queued)?.delivery
+      yield* chat.steerInput(queued)
+      expect(delivery(yield* SubscriptionRef.get(chat.state))).toBe("steer")
+      yield* chat.queueInput(queued)
+      expect(delivery(yield* SubscriptionRef.get(chat.state))).toBe("queue")
+      expect(yield* brain.chat.session["session.inbox.list"]({ params: { sessionID: brain.id } })).toMatchObject([
+        { id: queued, delivery: "queue" },
+      ])
+      held.release()
+      yield* until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "queued"))
+      expect((yield* chat.steerInput(queued).pipe(Effect.flip))._tag).toBe("ConflictError")
+    }),
+  ))
+
+test("the composer lists come from where the session works, a mention shows at once, and a command runs", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      yield* Effect.promise(() => Bun.write(`${brain.directory}/release-plan.md`, "# Plan"))
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      expect(SessionCatalog.mentionable(yield* chat.agents).map((agent) => agent.id)).toContain("general")
+      expect((yield* chat.skills).map((skill) => skill.id)).toContain("opencode")
+      expect((yield* chat.commands).map((command) => command.name)).toContain("review")
+      expect(yield* chat.searchFiles("release", "file")).toEqual([{ path: "release-plan.md", type: "file" }])
+      const agents = [{ name: "general", mention: { start: 0, end: 8, text: "@general" } }]
+      const mentioned = stub.script({ reply: "mentioned" })
+      const id = yield* chat.prompt({ text: `@general ${mentioned.marker}`, agents })
+      expect(ChatState.messages(yield* SubscriptionRef.get(chat.state), brain.id).at(-1)).toMatchObject({ id, agents })
+      yield* until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "mentioned"))
+      const reviewed = stub.script()
+      yield* chat.command({ name: "review", text: reviewed.marker })
+      yield* until(chat.state, (state) =>
+        ChatState.userMessages(state, brain.id).some((message) => message.text.includes(reviewed.marker)),
+      )
     }),
   ))
 

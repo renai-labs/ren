@@ -74,7 +74,14 @@ const setup = Effect.gen(function* () {
   const fetch = () => Promise.resolve(new Response(null))
   const instance: Harness.Instance = {
     fetch,
-    chat: OpenCodeChat.make({ fetch, shells: () => Effect.die(new Error("alarm must not read shells")) }),
+    chat: OpenCodeChat.make({
+      fetch,
+      shells: () => Effect.die(new Error("alarm must not read shells")),
+      agents: () => Effect.die(new Error("alarm must not read agents")),
+      skills: () => Effect.die(new Error("alarm must not read skills")),
+      commands: () => Effect.die(new Error("alarm must not read commands")),
+      findFiles: () => Effect.die(new Error("alarm must not search files")),
+    }),
     configure: () => Effect.die(new Error("alarm must not configure models")),
     start: () => Effect.die(new Error("alarm must not start sessions")),
     send: () => Effect.die(new Error("alarm must not send messages")),

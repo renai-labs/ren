@@ -187,7 +187,7 @@ export const removePending = (state: ChatState.State, sessionID: string, inboxID
   }
 }
 
-const updateDelivery = (
+export const updateDelivery = (
   state: ChatState.State,
   sessionID: string,
   inboxID: string,

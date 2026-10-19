@@ -4,6 +4,7 @@ import { Ren } from "@ren/client/chat/effect"
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import type { Session } from "@ren/schema/session"
+import type { SessionCatalog } from "@ren/schema/session-catalog"
 import type { SessionEvent } from "@ren/schema/session-event"
 import type { SessionInbox } from "@ren/schema/session-inbox"
 import { SessionMessage } from "@ren/schema/session-message"
@@ -40,10 +41,22 @@ export interface Options {
 
 type Client = Effect.Success<ReturnType<typeof Ren.make>>
 
-export interface PromptInput {
+export interface Mentions {
+  readonly agents?: ReadonlyArray<SessionMessage.AgentAttachment>
+  readonly skills?: ReadonlyArray<{ readonly id: string; readonly mention?: SessionMessage.Mention }>
+}
+
+export interface PromptInput extends Mentions {
   readonly text: string
   readonly delivery?: SessionInbox.Delivery
   readonly id?: SessionMessage.ID
+  readonly model?: SessionModel.Ref
+}
+
+export interface CommandInput extends Mentions {
+  readonly name: string
+  readonly text: string
+  readonly delivery?: SessionInbox.Delivery
   readonly model?: SessionModel.Ref
 }
 
@@ -354,6 +367,20 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       )
     })
 
+  const applySelection = Effect.fnUntraced(function* (
+    model: SessionModel.Ref | undefined,
+    delivery: SessionInbox.Delivery,
+  ) {
+    const api = yield* client
+    const staged = ChatState.revertMessageID(yield* SubscriptionRef.get(state), root)
+    if (staged) {
+      yield* api.session.revert.commit({ sessionID: root })
+      yield* update((current) => Reducer.commitRevert(current, root, staged))
+    }
+    if (model && delivery === "steer") yield* api.session.model.switch({ sessionID: root, model })
+    return api
+  })
+
   const prompt = Effect.fnUntraced(function* (input: PromptInput) {
     const id = input.id ?? SessionMessage.ID.create()
     const delivery = input.delivery ?? "steer"
@@ -362,22 +389,29 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     yield* update((current) =>
       Outbox.admit(
         current,
-        { sessionID: root, id, text: input.text, delivery, ...(options.sender && { sender: options.sender }) },
+        {
+          sessionID: root,
+          id,
+          text: input.text,
+          delivery,
+          ...(options.sender && { sender: options.sender }),
+          ...(input.agents && { agents: input.agents }),
+        },
         now,
       ),
     )
     yield* connection.wake
     yield* send(
       Effect.gen(function* () {
-        const api = yield* client
-        const staged = ChatState.revertMessageID(yield* SubscriptionRef.get(state), root)
-        if (staged) {
-          yield* api.session.revert.commit({ sessionID: root })
-          yield* update((current) => Reducer.commitRevert(current, root, staged))
-        }
-        if (input.model && delivery === "steer")
-          yield* api.session.model.switch({ sessionID: root, model: input.model })
-        return yield* api.session.prompt({ sessionID: root, id, text: input.text, delivery })
+        const api = yield* applySelection(input.model, delivery)
+        return yield* api.session.prompt({
+          sessionID: root,
+          id,
+          text: input.text,
+          delivery,
+          ...(input.agents && { agents: input.agents }),
+          ...(input.skills && { skills: input.skills }),
+        })
       }),
     ).pipe(Effect.tapError(() => (fresh ? update((current) => Outbox.rollback(current, root, id)) : Effect.void)))
     const echoed = yield* SubscriptionRef.modify(state, (current) => [
@@ -387,6 +421,47 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     if (!echoed) yield* execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })
     return id
   })
+
+  const command = Effect.fnUntraced(function* (input: CommandInput) {
+    const delivery = input.delivery ?? "steer"
+    yield* connection.wake
+    yield* send(
+      Effect.gen(function* () {
+        const api = yield* applySelection(input.model, delivery)
+        return yield* api.session.command({
+          sessionID: root,
+          name: input.name,
+          text: input.text,
+          delivery,
+          ...(input.agents && { agents: input.agents }),
+          ...(input.skills && { skills: input.skills }),
+        })
+      }),
+    )
+    yield* execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })
+  })
+
+  const cancelInput = (inboxID: SessionMessage.ID) =>
+    connection.wake.pipe(
+      Effect.andThen(send(Effect.flatMap(client, (api) => api.session.inbox.cancel({ sessionID: root, inboxID })))),
+      Effect.andThen(
+        update((current) =>
+          ChatState.hasInput(current, root, inboxID)
+            ? Reducer.retract(Outbox.acknowledge(current, inboxID), root, inboxID)
+            : current,
+        ),
+      ),
+      Effect.ensuring(execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })),
+    )
+
+  const redirect = (inboxID: SessionMessage.ID, delivery: SessionInbox.Delivery) =>
+    connection.wake.pipe(
+      Effect.andThen(
+        send(Effect.flatMap(client, (api) => api.session.inbox.update({ sessionID: root, inboxID, delivery }))),
+      ),
+      Effect.andThen(update((current) => Reducer.updateDelivery(current, root, inboxID, delivery))),
+      Effect.ensuring(execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })),
+    )
 
   const compaction = (id: SessionMessage.ID, model: SessionModel.Ref | undefined) =>
     send(
@@ -580,10 +655,19 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     undo,
     redo,
     rename,
+    command,
+    cancelInput,
+    steerInput: (inboxID: SessionMessage.ID) => redirect(inboxID, "steer"),
+    queueInput: (inboxID: SessionMessage.ID) => redirect(inboxID, "queue"),
     wake: connection.wake,
     resync: connection.resync,
     foreground: connection.foreground,
     models: Effect.flatMap(client, (api) => api.model.list()),
+    agents: Effect.flatMap(client, (api) => api.agent.list({ sessionID: root })),
+    skills: Effect.flatMap(client, (api) => api.skill.list({ sessionID: root })),
+    commands: Effect.flatMap(client, (api) => api.command.list({ sessionID: root })),
+    searchFiles: (query: string, type?: SessionCatalog.FileType) =>
+      Effect.flatMap(client, (api) => api.file.search({ sessionID: root, query, ...(type && { type }) })),
     interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root, resume: true })),
     stop: (sessionID: Session.ID) => Effect.flatMap(client, (api) => api.session.interrupt({ sessionID })),
     background: Effect.flatMap(client, (api) => api.session.background({ sessionID: root })),

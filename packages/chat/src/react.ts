@@ -39,6 +39,14 @@ export const useShellOutput = (view: ChatAtoms.ShellView) => useAtomValue(useAto
 
 export const useModels = (sessionID: Session.ID) => useAtomValue(useAtoms().models(sessionID))
 
+export const useAgents = (sessionID: Session.ID) => useAtomValue(useAtoms().agents(sessionID))
+
+export const useSkills = (sessionID: Session.ID) => useAtomValue(useAtoms().skills(sessionID))
+
+export const useCommands = (sessionID: Session.ID) => useAtomValue(useAtoms().commands(sessionID))
+
+export const useFiles = (search: ChatAtoms.FileQuery) => useAtomValue(useAtoms().files(search))
+
 export const useAction = <A, E, Args extends ReadonlyArray<unknown>>(
   sessionID: Session.ID,
   action: (opened: ChatSession.ChatSession, ...args: Args) => Effect.Effect<A, E>,

@@ -4,6 +4,7 @@ import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { SessionEvent } from "@ren/schema/session-event"
 import type { SessionCapabilities } from "@ren/schema/session-capabilities"
+import { SessionCatalog } from "@ren/schema/session-catalog"
 import { SessionInbox } from "@ren/schema/session-inbox"
 import { SessionInfo } from "@ren/schema/session-info"
 import { SessionMessage } from "@ren/schema/session-message"
@@ -86,3 +87,11 @@ export const shell = (raw: unknown) => decodeShell(withOwner(raw))
 
 export const session = (raw: unknown, capabilities: SessionCapabilities.Info) =>
   Predicate.isObject(raw) ? decodeSession({ ...raw, capabilities }) : Option.none()
+
+export const agent = Schema.decodeUnknownOption(SessionCatalog.Agent)
+
+export const skill = Schema.decodeUnknownOption(SessionCatalog.Skill)
+
+export const command = Schema.decodeUnknownOption(SessionCatalog.Command)
+
+export const file = Schema.decodeUnknownOption(SessionCatalog.File)

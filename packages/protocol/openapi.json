@@ -1083,6 +1083,67 @@
         "summary": "Open a session’s chat"
       }
     },
+    "/sessions/{id}/models": {
+      "get": {
+        "tags": ["chat"],
+        "operationId": "chat.models",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionModel.Choice"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the models and variants a session with this ID may start with, before it exists. Pass one as `model` to `session.create`. Once the session runs, `model.list` in the Chat API lists them.",
+        "summary": "List models for a new session"
+      }
+    },
     "/sessions/{sessionId}/fork": {
       "post": {
         "tags": ["chat"],
@@ -1459,6 +1520,17 @@
                 "type": "null"
               }
             ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionModel.Ref"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model and variant the session starts with, from `chat.models`. Without it the brain picks one."
           }
         },
         "required": ["id", "spaceId"],
@@ -1689,6 +1761,54 @@
         "type": "string",
         "pattern": "^msg_",
         "description": "The fork starts with the source’s messages before this one."
+      },
+      "SessionModel.Choice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "providerID": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionModel.Variant"
+            }
+          }
+        },
+        "required": ["id", "providerID", "name", "variants"],
+        "additionalProperties": false
+      },
+      "SessionModel.Ref": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "providerID": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "providerID"],
+        "additionalProperties": false
+      },
+      "SessionModel.Variant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
       },
       "Space.AssignmentID": {
         "type": "string",

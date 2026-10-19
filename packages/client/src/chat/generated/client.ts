@@ -34,6 +34,10 @@ import type {
   SessionRevertCommitOutput,
   SessionInboxCancelInput,
   SessionInboxCancelOutput,
+  SessionInboxUpdateInput,
+  SessionInboxUpdateOutput,
+  SessionCommandInput,
+  SessionCommandOutput,
   SessionModelSwitchInput,
   SessionModelSwitchOutput,
   SessionPermissionReplyInput,
@@ -48,6 +52,14 @@ import type {
   ShellOutputOutput,
   ShellRemoveInput,
   ShellRemoveOutput,
+  AgentListInput,
+  AgentListOutput,
+  SkillListInput,
+  SkillListOutput,
+  CommandListInput,
+  CommandListOutput,
+  FileSearchInput,
+  FileSearchOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -275,7 +287,19 @@ export function make(options: ClientOptions) {
               method: "DELETE",
               path: `/chat/session/${encodeURIComponent(input.sessionID)}/inbox/${encodeURIComponent(input.inboxID)}`,
               successStatus: 204,
-              declaredStatuses: [404],
+              declaredStatuses: [404, 409],
+              empty: true,
+            },
+            requestOptions,
+          ),
+        update: (input: SessionInboxUpdateInput, requestOptions?: RequestOptions) =>
+          request<SessionInboxUpdateOutput>(
+            {
+              method: "PATCH",
+              path: `/chat/session/${encodeURIComponent(input.sessionID)}/inbox/${encodeURIComponent(input.inboxID)}`,
+              body: { delivery: input["delivery"] },
+              successStatus: 204,
+              declaredStatuses: [404, 409],
               empty: true,
             },
             requestOptions,
@@ -347,7 +371,13 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/chat/session/${encodeURIComponent(input.sessionID)}/prompt`,
-            body: { id: input["id"], text: input["text"], delivery: input["delivery"] },
+            body: {
+              id: input["id"],
+              text: input["text"],
+              delivery: input["delivery"],
+              agents: input["agents"],
+              skills: input["skills"],
+            },
             successStatus: 200,
             declaredStatuses: [403, 404, 409],
             empty: false,
@@ -437,6 +467,24 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+      command: (input: SessionCommandInput, requestOptions?: RequestOptions) =>
+        request<SessionCommandOutput>(
+          {
+            method: "POST",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/command`,
+            body: {
+              name: input["name"],
+              text: input["text"],
+              delivery: input["delivery"],
+              agents: input["agents"],
+              skills: input["skills"],
+            },
+            successStatus: 204,
+            declaredStatuses: [404],
+            empty: true,
+          },
+          requestOptions,
+        ),
       model: {
         switch: (input: SessionModelSwitchInput, requestOptions?: RequestOptions) =>
           request<SessionModelSwitchOutput>(
@@ -484,6 +532,59 @@ export function make(options: ClientOptions) {
             successStatus: 204,
             declaredStatuses: [404],
             empty: true,
+          },
+          requestOptions,
+        ),
+    },
+    agent: {
+      list: (input: AgentListInput, requestOptions?: RequestOptions) =>
+        request<AgentListOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/agent`,
+            successStatus: 200,
+            declaredStatuses: [404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    skill: {
+      list: (input: SkillListInput, requestOptions?: RequestOptions) =>
+        request<SkillListOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/skill`,
+            successStatus: 200,
+            declaredStatuses: [404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    command: {
+      list: (input: CommandListInput, requestOptions?: RequestOptions) =>
+        request<CommandListOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/command`,
+            successStatus: 200,
+            declaredStatuses: [404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    file: {
+      search: (input: FileSearchInput, requestOptions?: RequestOptions) =>
+        request<FileSearchOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/file`,
+            query: { query: input["query"], type: input["type"], limit: input["limit"] },
+            successStatus: 200,
+            declaredStatuses: [404],
+            empty: false,
           },
           requestOptions,
         ),

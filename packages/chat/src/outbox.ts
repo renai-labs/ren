@@ -15,6 +15,7 @@ export interface Prompt {
   readonly text: string
   readonly delivery: SessionInbox.Delivery
   readonly sender?: SessionMessage.Sender
+  readonly agents?: ReadonlyArray<SessionMessage.AgentAttachment>
 }
 
 export const isFresh = (state: ChatState.State, sessionID: string, id: string) =>
@@ -31,7 +32,11 @@ export const admit = (state: ChatState.State, prompt: Prompt, now: DateTime.Utc)
       time: { created: now },
       type: "user",
       delivery: prompt.delivery,
-      payload: { text: prompt.text, ...(prompt.sender && { sender: prompt.sender }) },
+      payload: {
+        text: prompt.text,
+        ...(prompt.sender && { sender: prompt.sender }),
+        ...(prompt.agents && { agents: prompt.agents }),
+      },
     },
   )
 }

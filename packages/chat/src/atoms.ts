@@ -1,6 +1,7 @@
 export * as ChatAtoms from "./atoms.js"
 
 import type { Session } from "@ren/schema/session"
+import type { SessionCatalog } from "@ren/schema/session-catalog"
 import type { SessionMessage } from "@ren/schema/session-message"
 import type { Shell } from "@ren/schema/shell"
 import { Effect, Option, Queue, Stream, SubscriptionRef } from "effect"
@@ -17,6 +18,12 @@ export type Lifecycle = "foreground" | "online"
 export interface View {
   readonly root: Session.ID
   readonly sessionID: Session.ID
+}
+
+export interface FileQuery {
+  readonly root: Session.ID
+  readonly query: string
+  readonly type?: SessionCatalog.FileType
 }
 
 export interface ShellView extends View {
@@ -125,6 +132,24 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     Atom.make((get) => Effect.flatMap(get.result(session(sessionID)), (opened) => opened.models)),
   )
 
+  const agents = Atom.family((sessionID: Session.ID) =>
+    Atom.make((get) => Effect.flatMap(get.result(session(sessionID)), (opened) => opened.agents)),
+  )
+
+  const skills = Atom.family((sessionID: Session.ID) =>
+    Atom.make((get) => Effect.flatMap(get.result(session(sessionID)), (opened) => opened.skills)),
+  )
+
+  const commands = Atom.family((sessionID: Session.ID) =>
+    Atom.make((get) => Effect.flatMap(get.result(session(sessionID)), (opened) => opened.commands)),
+  )
+
+  const files = Atom.family((search: FileQuery) =>
+    Atom.make((get) =>
+      Effect.flatMap(get.result(session(search.root)), (opened) => opened.searchFiles(search.query, search.type)),
+    ),
+  )
+
   const shellRunning = Atom.family((view: { readonly root: Session.ID; readonly shellID: Shell.ID }) =>
     Atom.make((get) =>
       Option.match(AsyncResult.value(get(state(view.root))), {
@@ -162,6 +187,10 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     timeline,
     child,
     models,
+    agents,
+    skills,
+    commands,
+    files,
     shellRunning,
     shellOutput,
     run,

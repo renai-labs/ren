@@ -90,16 +90,17 @@ Layering additions for root `AGENTS.md`:
 
 New modules in `@ren/schema`, copied from `@opencode/schema` 2.0.27 and renamed to Ren identifiers:
 
-| Module                                          | Holds                                                                                                                                                              | OpenCode source                |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| `session-message`                               | Message union (user, synthetic, system, skill, shell, assistant, compaction, idle, agent- and model-switched), content (text, reasoning, tool and its four states) | `session-message.js`           |
-| `session-inbox`                                 | Pending input: delivery `steer \| queue`, admitted items                                                                                                           | `session-inbox.js`             |
-| `session-event`                                 | The allowlisted event union and the stream envelope (`server.connected`, heartbeat, `stream.ended`)                                                                | `session-event.js`, `event.js` |
-| `session-status`                                | `idle \| busy \| retry`, read per session family. Not an event: OpenCode v2 does not emit `session.status`. "Parked" is a client state after `stream.ended`.       | `session-status-event.js`      |
-| `permission` (add to the agents module), `form` | Permission request and reply; form (question) fields, state and reply                                                                                              | `permission.js`, `form.js`     |
-| `session-capabilities`                          | The capability flags (C6)                                                                                                                                          | new                            |
-| `session-info`, `session-model`                 | The harness view of a session (title, cost, tokens, revert, capabilities); model references and the `model.list` item                                              | `session.js`, `model.js`       |
-| `session-error`                                 | `{ type, message, status? }`                                                                                                                                       | `session-error.js`             |
+| Module                                          | Holds                                                                                                                                                              | OpenCode source                                       |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `session-message`                               | Message union (user, synthetic, system, skill, shell, assistant, compaction, idle, agent- and model-switched), content (text, reasoning, tool and its four states) | `session-message.js`                                  |
+| `session-inbox`                                 | Pending input: delivery `steer \| queue`, admitted items                                                                                                           | `session-inbox.js`                                    |
+| `session-event`                                 | The allowlisted event union and the stream envelope (`server.connected`, heartbeat, `stream.ended`)                                                                | `session-event.js`, `event.js`                        |
+| `session-status`                                | `idle \| busy \| retry`, read per session family. Not an event: OpenCode v2 does not emit `session.status`. "Parked" is a client state after `stream.ended`.       | `session-status-event.js`                             |
+| `permission` (add to the agents module), `form` | Permission request and reply; form (question) fields, state and reply                                                                                              | `permission.js`, `form.js`                            |
+| `session-capabilities`                          | The capability flags (C6)                                                                                                                                          | new                                                   |
+| `session-info`, `session-model`                 | The harness view of a session (title, cost, tokens, revert, capabilities); model references and the `model.list` item                                              | `session.js`, `model.js`                              |
+| `session-error`                                 | `{ type, message, status? }`                                                                                                                                       | `session-error.js`                                    |
+| `session-catalog`                               | Agents, skills and commands where the session works, and file search results, for `@` and `/` (no prompts, paths or skill content)                                 | `agent.js`, `skill.js`, `command.js`, `filesystem.js` |
 
 Ren additions to the copied shapes:
 
@@ -111,25 +112,26 @@ Ren additions to the copied shapes:
 
 ## 4. Brain: `ChatApi`
 
-Defined in `@ren/protocol/chat` (C14) as four groups (`event`, `model`, `session`, `shell`), all under `/chat/*`. Served by the brain for its session and that session's children. The worker lets a `client`-scope token reach `/chat/*` only, answers CORS for it, and passes the token's `sub` (the member) to the brain, which records it as the message's sender. Raw OpenCode routes are for `server`-scope tokens only. Replaces the OpenCode deny-list in `cell/src/harness/opencode/routes.ts`. "Slice" ships in §9 steps 1–6; "B" ships with its inventory area.
+Defined in `@ren/protocol/chat` (C14) as groups `event`, `model`, `session`, `shell`, `agent`, `skill`, `command` and `file`, all under `/chat/*`. Served by the brain for its session and that session's children. The worker lets a `client`-scope token reach `/chat/*` only, answers CORS for it, and passes the token's `sub` (the member) to the brain, which records it as the message's sender. Raw OpenCode routes are for `server`-scope tokens only. Replaces the OpenCode deny-list in `cell/src/harness/opencode/routes.ts`. "Slice" ships in §9 steps 1–6; "B" ships with its inventory area.
 
 Reads (C17):
 
-| Endpoint                                   | Purpose                                                                                                   | OpenCode call                            | When  |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ----- |
-| `event.subscribe` (SSE)                    | `server.connected` first, keepalive every 15 s, allowlisted events for the session family, `stream.ended` | `event.subscribe`                        | Slice |
-| `session.get`                              | Title, cost, tokens, status, revert boundary, capabilities                                                | `session.get`                            | Slice |
-| `session.status`                           | Which sessions of the family run; re-read on every connect                                                | `session.active`                         | Slice |
-| `session.messages`                         | A page of messages, newest first, with a cursor                                                           | `session.messages`                       | Slice |
-| `session.message`                          | One message, re-read after a model switch (SYNC-103)                                                      | `session.message`                        | B     |
-| `session.children`                         | Subagent sessions                                                                                         | `session.list` by parent                 | B     |
-| `session.inbox.list`                       | Pending and queued inputs                                                                                 | `session.inbox.list`                     | Slice |
-| `session.permission.list`                  | Open permission requests                                                                                  | `session.permission.list`                | Slice |
-| `session.form.list`                        | Open questions                                                                                            | `session.form.list`                      | Slice |
-| `model.list`                               | Models the session may use, with their variants. Only the models Ren configured for this brain.           | `model.list`                             | Slice |
-| `shell.list`                               | Shell commands that still run where the session works (SES-117)                                           | `Shell.list` in the session's instance   | B     |
-| `shell.output`                             | Live output of a shell tool, by cursor (RND-136, RND-137)                                                 | `Shell.output` in the session's instance | B     |
-| `command.list`, `agent.list`, `skill.list` | Composer lists for `/` and `@`                                                                            | same                                     | B     |
+| Endpoint                                   | Purpose                                                                                                   | OpenCode call                                | When  |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----- |
+| `event.subscribe` (SSE)                    | `server.connected` first, keepalive every 15 s, allowlisted events for the session family, `stream.ended` | `event.subscribe`                            | Slice |
+| `session.get`                              | Title, cost, tokens, status, revert boundary, capabilities                                                | `session.get`                                | Slice |
+| `session.status`                           | Which sessions of the family run; re-read on every connect                                                | `session.active`                             | Slice |
+| `session.messages`                         | A page of messages, newest first, with a cursor                                                           | `session.messages`                           | Slice |
+| `session.message`                          | One message, re-read after a model switch (SYNC-103)                                                      | `session.message`                            | B     |
+| `session.children`                         | Subagent sessions                                                                                         | `session.list` by parent                     | B     |
+| `session.inbox.list`                       | Pending and queued inputs                                                                                 | `session.inbox.list`                         | Slice |
+| `session.permission.list`                  | Open permission requests                                                                                  | `session.permission.list`                    | Slice |
+| `session.form.list`                        | Open questions                                                                                            | `session.form.list`                          | Slice |
+| `model.list`                               | Models the session may use, with their variants. Only the models Ren configured for this brain.           | `model.list`                                 | Slice |
+| `shell.list`                               | Shell commands that still run where the session works (SES-117)                                           | `Shell.list` in the session's instance       | B     |
+| `shell.output`                             | Live output of a shell tool, by cursor (RND-136, RND-137)                                                 | `Shell.output` in the session's instance     | B     |
+| `command.list`, `agent.list`, `skill.list` | Composer lists for `/` and `@`                                                                            | same                                         | B     |
+| `file.search`                              | Files and folders where the session works, for `@`                                                        | `FileSystemSearch` in the session's instance | B     |
 
 Writes:
 
@@ -165,6 +167,7 @@ A `session` group in `Api` (exposure `sdk`). Wire `Session.layer` and `BrainHost
 | `session.access`  | `{ url, token, expiresAt }` for the brain; called again before the token expires                                                 | Slice     |
 | `session.archive` | Hide a session                                                                                                                   | Slice     |
 | `session.fork`    | `{ sessionId, messageId }` → a new session (C20)                                                                                 | §9 step 9 |
+| `chat.models`     | Models a new session may use before its brain exists, from `Models.Service.catalog`; `session.create` takes one as `model`       | B         |
 
 ## 6. `@ren/chat`: the shared runtime
 

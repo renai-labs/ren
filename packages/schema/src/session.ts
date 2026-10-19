@@ -8,6 +8,7 @@ import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 import { SessionCapabilities } from "./session-capabilities.js"
 import { SessionMessage } from "./session-message.js"
+import { SessionModel } from "./session-model.js"
 import { Space } from "./space.js"
 
 const encoder = new TextEncoder()
@@ -181,6 +182,9 @@ export const CreateInput = Schema.Struct({
   id: ID,
   spaceId: Space.ID,
   message: Schema.optional(FirstMessage),
+  model: Schema.optional(SessionModel.Ref).annotate({
+    description: "The model and variant the session starts with, from `chat.models`. Without it the brain picks one.",
+  }),
 }).annotate({ identifier: "Session.CreateInput" })
 
 export interface ForkInput extends Schema.Schema.Type<typeof ForkInput> {}

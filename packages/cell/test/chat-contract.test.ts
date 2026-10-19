@@ -85,6 +85,11 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
       yield* brain.opencode.session.wait({ sessionID })
     })
 
+    expect(yield* read("agent", "/api/agent", Translate.agent)).not.toHaveLength(0)
+    expect(yield* read("skill", "/api/skill", Translate.skill)).not.toHaveLength(0)
+    expect(yield* read("command", "/api/command", Translate.command)).not.toHaveLength(0)
+    expect(yield* read("file", "/api/fs/find?query=package", Translate.file)).not.toHaveLength(0)
+
     yield* turn(stub.script({ reasoning: "thinking it over", reply: "a plain answer" }))
     yield* turn(stub.script({ tool: { name: "skill", input: { name: "missing" } } }))
     yield* turn(stub.script({ status: 400 }))
