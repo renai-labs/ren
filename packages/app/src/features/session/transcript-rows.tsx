@@ -1,12 +1,14 @@
-import { type ChatState, Projection, TimelineRow } from "@ren/chat"
+import { type ChatState, Projection, type TimelineDetail, TimelineRow } from "@ren/chat"
 import type { ChatAtoms } from "@ren/chat"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session-message"
 import { Transcript } from "@ren/ui/transcript"
-import { type PendingAction, type Timeline, TranscriptRow } from "./session-transcript.js"
+import { type PendingAction, type Person, type Timeline, TranscriptRow } from "./session-transcript.js"
 import { TranscriptTurn } from "./transcript-turn.js"
 
 const none: ReadonlySet<string> = new Set()
+
+const nobody: ReadonlyMap<string, Person> = new Map()
 
 const rowMessage = (row: TimelineRow.Row) => {
   if (row._tag === "UserMessage") return row.userMessageID
@@ -32,6 +34,9 @@ export function transcriptRows(props: {
   onPending?: (action: PendingAction, message: SessionMessage.User) => void
   onOpenChild: (sessionID: Session.ID) => void
   onOpenSession?: (sessionID: string) => void
+  detail?: TimelineDetail.Detail | undefined
+  viewer?: string
+  people?: ReadonlyMap<string, Person>
 }) {
   const timeline: Timeline = {
     view: props.view,
@@ -50,6 +55,9 @@ export function transcriptRows(props: {
     onPending: props.onPending,
     onOpenChild: props.onOpenChild,
     onOpenSession: props.onOpenSession,
+    detail: props.detail,
+    viewer: props.viewer,
+    people: props.people ?? nobody,
   }
   return {
     items: props.rows.filter((row) => row._tag !== "TurnGap"),

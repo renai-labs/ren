@@ -110,24 +110,31 @@ export const make = Effect.fnUntraced(function* (
   )
   const web = Context.get(yield* Layer.build(Brain.layer.pipe(Layer.provide(Layer.succeedContext(cell)))), Cell.Brain)
   const chatWeb = Context.get(yield* Layer.build(Chat.layer.pipe(Layer.provide(Layer.succeedContext(cell)))), Cell.Chat)
-  const chatFetch = (path: string, init: RequestInit = {}, user: string | undefined = "user_1") => {
+  const chatFetch = (path: string, init: RequestInit = {}, user: string | undefined = "user_1", name?: string) => {
     const request = new Request(`http://cell${path}`, init)
-    if (user) request.headers.set(Chat.userHeader, user)
+    Chat.setMember(request.headers, { ...(user && { sub: user }), ...(name && { name }) })
     return chatWeb.fetch(request)
   }
-  const chat = yield* HttpApiClient.make(ChatApi, { baseUrl: "http://cell" }).pipe(
-    Effect.provide(FetchHttpClient.layer),
-    Effect.provideService(
-      FetchHttpClient.Fetch,
-      Object.assign(
-        (input: string | URL | Request, init?: RequestInit) => {
-          const url = new URL(input instanceof Request ? input.url : String(input))
-          return chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}))
-        },
-        { preconnect: fetch.preconnect },
+  const chatAs = (user: string, name?: string) =>
+    HttpApiClient.make(ChatApi, { baseUrl: "http://cell" }).pipe(
+      Effect.provide(FetchHttpClient.layer),
+      Effect.provideService(
+        FetchHttpClient.Fetch,
+        Object.assign(
+          (input: string | URL | Request, init?: RequestInit) => {
+            const url = new URL(input instanceof Request ? input.url : String(input))
+            return chatFetch(
+              `${url.pathname}${url.search}`,
+              input instanceof Request ? input : (init ?? {}),
+              user,
+              name,
+            )
+          },
+          { preconnect: fetch.preconnect },
+        ),
       ),
-    ),
-  )
+    )
+  const chat = yield* chatAs("user_1")
   const opencode = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.provideService(
@@ -160,6 +167,7 @@ export const make = Effect.fnUntraced(function* (
     opencode,
     harness: host.fetch,
     chat,
+    chatAs,
     chatFetch,
     credentials: host.credentials,
     start: (input: Partial<Session.StartInput> = {}) =>

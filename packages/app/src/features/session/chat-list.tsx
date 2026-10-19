@@ -39,7 +39,7 @@ export function ChatList() {
       label={SessionTitle.display(chat.title, SessionTitle.untitled)}
       trailing={
         <Suspense fallback={null}>
-          <ChatListStatus sessionID={Session.ID.make(chat.id)} />
+          <ChatListStatus sessionID={Session.ID.make(chat.id)} busy={chat.status === "busy"} />
         </Suspense>
       }
       render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}

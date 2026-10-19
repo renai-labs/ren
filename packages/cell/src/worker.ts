@@ -43,8 +43,7 @@ const forward = (request: Request, env: Bindings, isChat: boolean) =>
       if (claims.value.scope !== "server" && !isChat) return new Response(null, { status: 403 })
       const headers = new Headers(request.headers)
       headers.delete("authorization")
-      headers.delete(Chat.userHeader)
-      if (claims.value.sub) headers.set(Chat.userHeader, claims.value.sub)
+      Chat.setMember(headers, claims.value)
       const oversized = Number(headers.get("content-length")) > Session.maxBodyBytes
       const chunks: Array<Uint8Array<ArrayBuffer>> = []
       const reader: ReadableStreamDefaultReader<Uint8Array> | undefined = request.body?.getReader()

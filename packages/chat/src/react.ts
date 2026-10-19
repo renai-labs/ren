@@ -47,6 +47,9 @@ export const useCommands = (sessionID: Session.ID) => useAtomValue(useAtoms().co
 
 export const useFiles = (search: ChatAtoms.FileQuery) => useAtomValue(useAtoms().files(search))
 
+export const useWebSearchProviders = (root: Session.ID, sessionID: Session.ID) =>
+  useAtomValue(useAtoms().webSearchProviders({ root, sessionID }))
+
 export const useAction = <A, E, Args extends ReadonlyArray<unknown>>(
   sessionID: Session.ID,
   action: (opened: ChatSession.ChatSession, ...args: Args) => Effect.Effect<A, E>,

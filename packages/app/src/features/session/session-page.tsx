@@ -19,6 +19,9 @@ export function SessionPage() {
         <SessionChat
           key={params.sessionId}
           sessionID={Session.ID.make(params.sessionId)}
+          viewer={context.me.user.id}
+          organizationId={context.me.organization?.id}
+          detail={chat.detail}
           message={search.message}
           part={search.part}
           child={search.child}

@@ -3,7 +3,8 @@ export * as Chat from "./chat.js"
 import { ChatApi } from "@ren/protocol/chat"
 import { ConflictError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
 import type { SessionEvent } from "@ren/schema/session-event"
-import { Clock, Effect, Layer, Option, Predicate, Ref, Stream } from "effect"
+import { Clock, Effect, Layer, Option, Predicate, Ref, Result, Stream } from "effect"
+import { Base64Url } from "effect/encoding"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
@@ -13,7 +14,17 @@ type Services = Cell.Info | Cell.Activity | Harness.Service
 
 const prefix = "/chat"
 
-export const userHeader = "ren-user"
+const userHeader = "ren-user"
+
+const userNameHeader = "ren-user-name"
+
+export const setMember = (headers: Headers, member: { readonly sub?: string; readonly name?: string }) => {
+  headers.delete(userHeader)
+  headers.delete(userNameHeader)
+  if (!member.sub) return
+  headers.set(userHeader, member.sub)
+  if (member.name) headers.set(userNameHeader, Base64Url.encode(member.name))
+}
 
 export const owns = (pathname: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
 
@@ -59,7 +70,13 @@ const events = Stream.unwrap(
 )
 
 const sender = Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
-  Option.map(Option.fromNullishOr(request.headers[userHeader]), (userId) => ({ userId })),
+  Option.map(Option.fromNullishOr(request.headers[userHeader]), (userId): Harness.Sender => {
+    const name = Option.fromNullishOr(request.headers[userNameHeader]).pipe(
+      Option.flatMap((encoded) => Result.getSuccess(Base64Url.decodeString(encoded))),
+      Option.filter((decoded) => decoded.trim().length > 0),
+    )
+    return { userId, ...(Option.isSome(name) && { name: name.value }) }
+  }),
 )
 
 const handlers = Layer.mergeAll(
@@ -126,6 +143,7 @@ const handlers = Layer.mergeAll(
                 id: request.payload.id,
                 text: request.payload.text,
                 delivery: request.payload.delivery,
+                ...(Predicate.isBoolean(request.payload.resume) && { resume: request.payload.resume }),
                 ...(request.payload.agents && { agents: request.payload.agents }),
                 ...(request.payload.skills && { skills: request.payload.skills }),
                 sender: yield* sender,
@@ -236,7 +254,12 @@ const handlers = Layer.mergeAll(
         .handle("session.permission.reply", (request) =>
           run((chat) =>
             chat
-              .replyPermission(request.params.sessionID, request.params.requestID, request.payload.reply)
+              .replyPermission(
+                request.params.sessionID,
+                request.params.requestID,
+                request.payload.reply,
+                request.payload.message,
+              )
               .pipe(Effect.mapError(notFound)),
           ),
         )
@@ -332,6 +355,17 @@ const handlers = Layer.mergeAll(
             ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
           }),
         ).pipe(Effect.mapError(notFound), Effect.scoped, Effect.provide(context)),
+      ),
+    ),
+  ),
+  HttpApiBuilder.group(ChatApi, "websearch", (group) =>
+    Effect.map(Effect.context<Services>(), (context) =>
+      group.handle("websearch.providers", (request) =>
+        Effect.flatMap(Cell.acquire, (harness) => harness.chat.webSearchProviders(request.params.sessionID)).pipe(
+          Effect.mapError(notFound),
+          Effect.scoped,
+          Effect.provide(context),
+        ),
       ),
     ),
   ),

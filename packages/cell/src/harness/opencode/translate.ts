@@ -11,14 +11,20 @@ import { SessionMessage } from "@ren/schema/session-message"
 import { Shell } from "@ren/schema/shell"
 import { Option, Predicate, pipe, Schema } from "effect"
 
-const UserID = Schema.Struct({ metadata: Schema.Struct({ userID: Schema.String }) })
+const UserID = Schema.Struct({
+  metadata: Schema.Struct({ userID: Schema.String, displayText: Schema.optionalKey(Schema.String) }),
+})
 const decodeUserID = Schema.decodeUnknownOption(UserID)
 
 const withSender = (value: unknown): unknown => {
   if (!Predicate.isObject(value)) return value
   return Option.match(decodeUserID(value), {
     onNone: () => value,
-    onSome: (found) => ({ ...value, sender: { userId: found.metadata.userID } }),
+    onSome: (found) => ({
+      ...value,
+      ...(Predicate.isString(found.metadata.displayText) && { text: found.metadata.displayText }),
+      sender: { userId: found.metadata.userID },
+    }),
   })
 }
 

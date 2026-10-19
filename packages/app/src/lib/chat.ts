@@ -1,36 +1,48 @@
 export * as Chat from "./chat.js"
 
-import { scheduleTask, useAtomValue } from "@effect/atom-react"
+import { scheduleTask, useAtomRefresh, useAtomValue } from "@effect/atom-react"
 import { ChatAtoms } from "@ren/chat"
+import type { TimelineDetail } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Ren } from "@ren/client/effect"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session-message"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Stream, SubscriptionRef } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 import type { Platform } from "../platform/platform.js"
+import { ChatPreferences } from "./chat-preferences.js"
 
 export interface Chat {
   readonly atoms: ChatAtoms.ChatAtoms
   readonly registry: AtomRegistry.AtomRegistry
+  readonly detail: TimelineDetail.Detail | undefined
 }
 
 const made = new Map<string, Chat>()
 
+export function forget() {
+  for (const chat of made.values()) chat.registry.dispose()
+  made.clear()
+}
+
 export function forUser(platform: Platform.Info, userId: string) {
   const found = made.get(userId)
   if (found) return found
-  for (const chat of made.values()) chat.registry.dispose()
-  made.clear()
-  const chat = { atoms: atomsFor(platform, userId), registry: AtomRegistry.make({ scheduleTask, defaultIdleTTL: 400 }) }
+  forget()
+  const detail = ChatPreferences.detailValue(ChatPreferences.detail.read(platform.storage))
+  const chat = {
+    atoms: atomsFor(platform, userId, detail),
+    registry: AtomRegistry.make({ scheduleTask, defaultIdleTTL: 400 }),
+    detail,
+  }
   made.set(userId, chat)
   return chat
 }
 
 const untraced = Layer.succeed(HttpClient.TracerPropagationEnabled, false)
 
-function atomsFor(platform: Platform.Info, userId: string) {
+function atomsFor(platform: Platform.Info, userId: string, detail: TimelineDetail.Detail | undefined) {
   const server = Layer.mergeAll(
     FetchHttpClient.layer,
     untraced,
@@ -39,6 +51,7 @@ function atomsFor(platform: Platform.Info, userId: string) {
   return ChatAtoms.make({
     runtime: Atom.runtime(FetchHttpClient.layer),
     sender: { userId },
+    ...(detail && { detail }),
     ...(platform.onLifecycle && { lifecycle: platform.onLifecycle }),
     access: (sessionID: Session.ID) =>
       Ren.make({ baseUrl: platform.serverUrl }).pipe(
@@ -48,15 +61,19 @@ function atomsFor(platform: Platform.Info, userId: string) {
   })
 }
 
-const reveals = new WeakMap<
-  ChatAtoms.ChatAtoms,
-  (key: string) => Atom.Atom<AsyncResult.AsyncResult<boolean, unknown>>
->()
+const perAtoms = <K, A>(make: (atoms: ChatAtoms.ChatAtoms) => (key: K) => A) => {
+  const made = new WeakMap<ChatAtoms.ChatAtoms, (key: K) => A>()
+  return (atoms: ChatAtoms.ChatAtoms) => {
+    const found = made.get(atoms)
+    if (found) return found
+    const family = make(atoms)
+    made.set(atoms, family)
+    return family
+  }
+}
 
-const revealFamily = (atoms: ChatAtoms.ChatAtoms) => {
-  const found = reveals.get(atoms)
-  if (found) return found
-  const family = Atom.family((key: string) => {
+const revealFamily = perAtoms((atoms) =>
+  Atom.family((key: string) => {
     const parts = key.split(" ")
     const root = Session.ID.make(parts.at(0) ?? "")
     const sessionID = Session.ID.make(parts.at(1) ?? "")
@@ -68,12 +85,30 @@ const revealFamily = (atoms: ChatAtoms.ChatAtoms) => {
           )
         : Effect.succeed(false),
     )
-  })
-  reveals.set(atoms, family)
-  return family
-}
+  }),
+)
+
+const autoApproveFamily = perAtoms((atoms) =>
+  Atom.family((sessionID: Session.ID) =>
+    Atom.make((get) =>
+      Stream.unwrap(
+        Effect.map(get.result(atoms.session(sessionID)), (opened) => SubscriptionRef.changes(opened.autoApprove)),
+      ),
+    ),
+  ),
+)
 
 export function useReveal(root: Session.ID, sessionID: Session.ID, messageID: string | undefined) {
   const result = useAtomValue(revealFamily(ChatReact.useAtoms())(`${root} ${sessionID} ${messageID ?? ""}`))
   return AsyncResult.isSuccess(result) ? result.value : undefined
 }
+
+export function useAutoApprove(sessionID: Session.ID) {
+  const result = useAtomValue(autoApproveFamily(ChatReact.useAtoms())(sessionID))
+  const set = ChatReact.useAction(sessionID, (opened, enabled: boolean) =>
+    SubscriptionRef.set(opened.autoApprove, enabled),
+  )
+  return { enabled: AsyncResult.isSuccess(result) && result.value, set }
+}
+
+export const useRetry = (sessionID: Session.ID) => useAtomRefresh(ChatReact.useAtoms().session(sessionID))

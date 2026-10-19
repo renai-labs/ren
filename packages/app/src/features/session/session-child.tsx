@@ -8,6 +8,7 @@ import { StateMessage } from "@ren/ui/state-message"
 import { Toast } from "@ren/ui/toast"
 import { AsyncResult } from "effect/reactivity"
 import { useRef } from "react"
+import { Chat } from "../../lib/chat.js"
 import { ChildHeader } from "./session-header.js"
 import { SessionRequests } from "./session-requests.js"
 import { SessionTitle } from "./session-title.js"
@@ -26,6 +27,7 @@ export function SessionChild(props: {
   const result = ChatReact.useChild(props.root, props.sessionID)
   const timeline = AsyncResult.isSuccess(result) ? result.value : undefined
   const scroller = useRef<ConversationShell.TimelineHandle>(null)
+  const retry = Chat.useRetry(props.root)
   const loadMore = ChatReact.useAction(props.root, (opened) => opened.loadMore(props.sessionID))
   const messages = ChatState.messages(props.state, props.sessionID)
   const title = childName(props.state, props.sessionID)
@@ -43,7 +45,7 @@ export function SessionChild(props: {
         populated={messages.length > 0}
         placeholder={
           AsyncResult.isFailure(result) ? (
-            <StateMessage state="failed" title="Could not load this subagent" />
+            <StateMessage state="failed" title="Could not load this subagent" onRetry={retry} />
           ) : (
             <StateMessage state="empty" title="No messages yet" />
           )

@@ -131,6 +131,7 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
       skills: () => Effect.die(new Error("The tool parity host has no skills")),
       commands: () => Effect.die(new Error("The tool parity host has no commands")),
       findFiles: () => Effect.die(new Error("The tool parity host has no file search")),
+      webSearchProviders: () => Effect.die(new Error("The tool parity host has no web search")),
       credentials: Context.get(services, Credential.Service),
       sessions: Context.get(services, OpenCodeSession.Service),
       workspaces: Context.get(services, Workspace.Service),

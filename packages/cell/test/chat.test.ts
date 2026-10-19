@@ -99,6 +99,84 @@ test("sending the same message id again sends nothing new", () =>
     }),
   ))
 
+test("the session learns who speaks when another member sends a message, and the transcript keeps what each typed", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const ada = yield* brain.chatAs("user_1", "Ada (ada@example.com)")
+      const grace = yield* brain.chatAs("user_2", "Grace Hopper")
+      const turns = [
+        { chat: ada, note: "" },
+        { chat: grace, note: '\n\n<message_from user="Grace Hopper" user_id="user_2" />' },
+        { chat: grace, note: "" },
+        { chat: ada, note: '\n\n<message_from user="Ada (ada@example.com)" user_id="user_1" />' },
+      ]
+      const typed = yield* Effect.forEach(turns, (turn) =>
+        Effect.gen(function* () {
+          const script = stub.script()
+          const text = `hello ${script.marker}`
+          yield* turn.chat.session["session.prompt"]({
+            params,
+            payload: { id: SessionMessage.ID.create(), text, delivery: "steer" },
+          })
+          expect((yield* Effect.promise(() => script.called())).text).toBe(`${text}${turn.note}`)
+          yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+          return text
+        }),
+      )
+      const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
+      expect(
+        page.items.flatMap((message) => (message.type === "user" ? [[message.text, message.sender?.userId]] : [])),
+      ).toEqual([
+        [typed[3], "user_1"],
+        [typed[2], "user_2"],
+        [typed[1], "user_2"],
+        [typed[0], "user_1"],
+      ])
+    }),
+  ))
+
+test("a prompt sent with resume false waits in the inbox of an idle session until another prompt starts the turn", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const waiting = SessionMessage.ID.create()
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: waiting, text: "first, in order", delivery: "queue", resume: false },
+      })
+      expect(yield* brain.chat.session["session.inbox.list"]({ params })).toMatchObject([
+        { id: waiting, delivery: "queue" },
+      ])
+      expect(yield* brain.chat.session["session.status"]()).toEqual({})
+      const script = stub.script()
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" },
+      })
+      yield* Effect.promise(() => script.called())
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+    }),
+  ))
+
+test("a client lists the web search providers where the session works", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const providers = yield* brain.chat.websearch["websearch.providers"]({ params: { sessionID: brain.id } })
+      expect(providers.map((provider) => provider.id)).toContain("exa")
+      const outside = yield* brain.chat.websearch["websearch.providers"]({
+        params: { sessionID: Session.ID.create() },
+      }).pipe(Effect.flip)
+      expect(outside._tag).toBe("NotFoundError")
+    }),
+  ))
+
 test("a member switches the model from the list, an unknown model is refused, and Ren's unchanged model does not undo the switch", () =>
   live(
     Effect.gen(function* () {
@@ -131,7 +209,7 @@ test("a member switches the model from the list, an unknown model is refused, an
     }),
   ))
 
-test("a client answers a permission request and a question through the Chat API", () =>
+test("a client answers a permission request, a rejection tells the session what to do instead, and a client answers a question", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
@@ -142,22 +220,22 @@ test("a client answers a permission request and a question through the Chat API"
         sessionID: SessionID.make(brain.id),
         permissions: [{ action: "webfetch", resource: "*", effect: "ask" }],
       })
+      const fetched = stub.script({ tool: { name: "webfetch", input: { url: "https://example.com" } } })
       yield* brain.chat.session["session.prompt"]({
         params,
-        payload: {
-          id: SessionMessage.ID.create(),
-          delivery: "steer",
-          text: stub.script({ tool: { name: "webfetch", input: { url: "https://example.com" } } }).marker,
-        },
+        payload: { id: SessionMessage.ID.create(), delivery: "steer", text: fetched.marker },
       })
       yield* events.until("permission.asked")
       const [request] = yield* brain.chat.session["session.permission.list"]({ params })
       if (!request) return yield* Effect.die(new Error("No permission request"))
       yield* brain.chat.session["session.permission.reply"]({
         params: { ...params, requestID: request.id },
-        payload: { reply: "reject" },
+        payload: { reply: "reject", message: "Read the cached copy instead" },
       })
       yield* events.until("permission.replied")
+      expect(JSON.stringify((yield* Effect.promise(() => fetched.called(2))).body)).toContain(
+        "Read the cached copy instead",
+      )
       yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
       yield* brain.chat.session["session.prompt"]({
         params,

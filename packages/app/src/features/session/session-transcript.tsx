@@ -1,7 +1,18 @@
-import { type ChatAtoms, ChatState, Family, Projection, TimelineRow, TimelineText, ToolDisplay } from "@ren/chat"
+import {
+  type ChatAtoms,
+  ChatState,
+  Family,
+  Projection,
+  type TimelineDetail,
+  TimelineOpen,
+  TimelineRow,
+  TimelineText,
+  ToolDisplay,
+} from "@ren/chat"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session-message"
 import type { SessionModel } from "@ren/schema/session-model"
+import { Avatar } from "@ren/ui/avatar"
 import { Button } from "@ren/ui/button"
 import { ConversationShell } from "@ren/ui/conversation-shell"
 import { CopyButton } from "@ren/ui/copy-button"
@@ -20,6 +31,11 @@ import { TranscriptTurn } from "./transcript-turn.js"
 
 export type PendingAction = "queue" | "cancel"
 
+export interface Person {
+  readonly name: string
+  readonly image: string | undefined
+}
+
 export interface Timeline {
   readonly view: ChatAtoms.View | undefined
   readonly state: ChatState.State
@@ -37,6 +53,9 @@ export interface Timeline {
   readonly onPending: ((action: PendingAction, message: SessionMessage.User) => void) | undefined
   readonly onOpenChild: (sessionID: Session.ID) => void
   readonly onOpenSession: ((sessionID: string) => void) | undefined
+  readonly detail: TimelineDetail.Detail | undefined
+  readonly viewer: string | undefined
+  readonly people: ReadonlyMap<string, Person>
 }
 
 const isSubagent = (tool: SessionMessage.Tool) => tool.name === "subagent" || tool.name === "task"
@@ -62,7 +81,13 @@ function Subagent(props: { timeline: Timeline; tool: SessionMessage.Tool }) {
 
 function Tool(props: { timeline: Timeline; tool: SessionMessage.Tool }) {
   if (isSubagent(props.tool)) return <Subagent timeline={props.timeline} tool={props.tool} />
-  return <TranscriptTool tool={props.tool} view={props.timeline.view} open={props.timeline.part === props.tool.id} />
+  return (
+    <TranscriptTool
+      tool={props.tool}
+      view={props.timeline.view}
+      open={props.timeline.part === props.tool.id || TimelineOpen.defaultOpen(props.tool, props.timeline.detail)}
+    />
+  )
 }
 
 const reasoningDuration = (content: SessionMessage.Reasoning) =>
@@ -72,9 +97,10 @@ const reasoningDuration = (content: SessionMessage.Reasoning) =>
       )
     : undefined
 
-function Reasoning(props: { content: SessionMessage.Reasoning; streaming: boolean }) {
+function Reasoning(props: { content: SessionMessage.Reasoning; streaming: boolean; open?: boolean }) {
   return (
     <Transcript.Reasoning
+      defaultOpen={props.open ?? false}
       content={props.content.text}
       streaming={props.streaming}
       heading={Projection.reasoningHeading(props.content.text)}
@@ -141,7 +167,11 @@ function Part(props: { timeline: Timeline; turnID: string; reference: TimelineRo
   if (content?.type === "reasoning")
     return (
       <List.Root>
-        <Reasoning content={content} streaming={streaming && !content.time?.completed} />
+        <Reasoning
+          content={content}
+          streaming={streaming && !content.time?.completed}
+          open={TimelineOpen.defaultOpen(content, props.timeline.detail)}
+        />
       </List.Root>
     )
   if (content?.type === "tool")
@@ -337,6 +367,22 @@ function UserActions(props: { timeline: Timeline; message: SessionMessage.User; 
   )
 }
 
+const senderOf = (timeline: Timeline, message: SessionMessage.User) => {
+  const userId = message.sender?.userId
+  if (!userId || userId === timeline.viewer) return
+  return timeline.people.get(userId) ?? { name: "Member", image: undefined }
+}
+
+const identity = (timeline: Timeline, message: SessionMessage.User) => {
+  const sender = senderOf(timeline, message)
+  return sender
+    ? {
+        sender: sender.name,
+        avatar: <Avatar.Root name={sender.name} image={sender.image} size="medium" tone="inverse" decorative />,
+      }
+    : {}
+}
+
 function UserMessage(props: { timeline: Timeline; message: SessionMessage.Info | undefined }) {
   const platform = Platform.usePlatform()
   const message = props.message
@@ -348,6 +394,7 @@ function UserMessage(props: { timeline: Timeline; message: SessionMessage.Info |
   return (
     <ConversationShell.Message
       author="user"
+      {...identity(props.timeline, message)}
       actions={actionable ? <UserActions timeline={props.timeline} message={message} pending={pending} /> : undefined}
     >
       <ConversationShell.Bubble>

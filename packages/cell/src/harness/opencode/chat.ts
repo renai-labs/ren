@@ -10,7 +10,7 @@ import type { SessionMessage } from "@ren/schema/session-message"
 import { SessionModel } from "@ren/schema/session-model"
 import type { SessionStatus } from "@ren/schema/session-status"
 import type { Shell } from "@ren/schema/shell"
-import { Effect, Option, Schema, Stream } from "effect"
+import { Effect, Option, Predicate, Schema, Stream } from "effect"
 import { Harness } from "../harness.js"
 import type { Host } from "./host.js"
 import { OpenCodeEvents } from "./events.js"
@@ -54,8 +54,17 @@ const decodeCompaction = Schema.decodeUnknownOption(SessionInbox.Compaction)
 
 const decodeRevert = Schema.decodeUnknownOption(SessionInfo.Revert)
 
+const Speaker = Schema.Struct({
+  metadata: Schema.optionalKey(Schema.Struct({ userID: Schema.optionalKey(Schema.String) })),
+})
+const decodeSpoken = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.Literal("user"), ...Speaker.fields }))
+const decodeQueued = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.Literal("user"), payload: Speaker }))
+
+const attribution = (name: string, userId: string) =>
+  `<message_from user=${JSON.stringify(name)} user_id=${JSON.stringify(userId)} />`
+
 export const make = (
-  host: Pick<Host.Instance, "fetch" | "shells" | "agents" | "skills" | "commands" | "findFiles">,
+  host: Pick<Host.Instance, "fetch" | "shells" | "agents" | "skills" | "commands" | "findFiles" | "webSearchProviders">,
 ): Harness.Chat => {
   const fetch = host.fetch
   const call = Effect.fnUntraced(function* (
@@ -135,6 +144,21 @@ export const make = (
     ),
   )
 
+  const lastSpeaker = (sessionId: Session.ID) =>
+    Effect.gen(function* () {
+      const read = (path: string) =>
+        notFoundOnly(call("GET", path)).pipe(
+          Effect.flatMap((raw) => Schema.decodeUnknownEffect(Data)(raw).pipe(Effect.orDie)),
+        )
+      const inbox = yield* read(`/api/session/${sessionId}/inbox`)
+      const queued = inbox.data.map((item) => decodeQueued(item)).findLast(Option.isSome)
+      if (queued) return Option.fromNullishOr(queued.value.payload.metadata?.userID)
+      const latest = yield* read(`/api/session/${sessionId}/message?type=user&limit=1&order=desc`)
+      return Option.fromNullishOr(
+        latest.data.map((item) => decodeSpoken(item)).find(Option.isSome)?.value.metadata?.userID,
+      )
+    })
+
   const active = call("GET", "/api/session/active").pipe(
     Effect.orDie,
     Effect.flatMap(Schema.decodeUnknownEffect(Active)),
@@ -200,16 +224,33 @@ export const make = (
         Effect.flatMap((raw) => list(raw, Translate.form)),
       ),
     prompt: (sessionId, prompt) =>
-      call("POST", `/api/session/${sessionId}/prompt`, {
-        id: prompt.id,
-        text: prompt.text,
-        delivery: prompt.delivery,
-        ...(prompt.agents && { agents: prompt.agents }),
-        ...(prompt.skills && { skills: prompt.skills }),
-        ...Option.match(prompt.sender, {
-          onNone: () => ({}),
-          onSome: (sender) => ({ metadata: { userID: sender.userId } }),
-        }),
+      Effect.gen(function* () {
+        const note = yield* Option.match(prompt.sender, {
+          onNone: () => Effect.succeedNone,
+          onSome: (sender) => {
+            const name = sender.name
+            if (!name) return Effect.succeedNone
+            return Effect.map(lastSpeaker(sessionId), (last) =>
+              Option.isSome(last) && last.value !== sender.userId
+                ? Option.some(attribution(name, sender.userId))
+                : Option.none(),
+            )
+          },
+        })
+        return yield* call("POST", `/api/session/${sessionId}/prompt`, {
+          id: prompt.id,
+          text: Option.match(note, { onNone: () => prompt.text, onSome: (line) => `${prompt.text}\n\n${line}` }),
+          delivery: prompt.delivery,
+          ...(Predicate.isBoolean(prompt.resume) && { resume: prompt.resume }),
+          ...(prompt.agents && { agents: prompt.agents }),
+          ...(prompt.skills && { skills: prompt.skills }),
+          ...Option.match(prompt.sender, {
+            onNone: () => ({}),
+            onSome: (sender) => ({
+              metadata: { userID: sender.userId, ...(Option.isSome(note) && { displayText: prompt.text }) },
+            }),
+          }),
+        })
       }).pipe(
         Effect.asVoid,
         Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
@@ -299,6 +340,10 @@ export const make = (
       host.commands(sessionId).pipe(Effect.flatMap((all) => list({ data: all }, Translate.command))),
     files: (sessionId, search) =>
       host.findFiles(sessionId, search).pipe(Effect.flatMap((all) => list({ data: all }, Translate.file))),
+    webSearchProviders: (sessionId) =>
+      host
+        .webSearchProviders(sessionId)
+        .pipe(Effect.map((all) => all.map((provider) => ({ id: provider.id, name: provider.name })))),
     switchModel: (sessionId, model) =>
       Effect.gen(function* () {
         const known = (yield* models).find(
@@ -315,10 +360,13 @@ export const make = (
           Effect.catchTag("Harness.Conflict", (error) => Effect.die(new Error(error.message))),
         )
       }),
-    replyPermission: (sessionId, requestId: Permission.RequestID, reply) =>
-      notFoundOnly(call("POST", `/api/session/${sessionId}/permission/${requestId}/reply`, { decision: reply })).pipe(
-        Effect.asVoid,
-      ),
+    replyPermission: (sessionId, requestId: Permission.RequestID, reply, message) =>
+      notFoundOnly(
+        call("POST", `/api/session/${sessionId}/permission/${requestId}/reply`, {
+          decision: reply,
+          ...(message && { message }),
+        }),
+      ).pipe(Effect.asVoid),
     replyForm: (sessionId, formId: Form.ID, answer) =>
       call("POST", `/api/session/${sessionId}/form/${formId}/reply`, { answer }).pipe(Effect.asVoid),
     cancelForm: (sessionId, formId) =>

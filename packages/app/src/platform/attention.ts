@@ -27,7 +27,7 @@ export function useNotify(input: Activity & { readonly title: string }) {
   const notify = useEffectEvent((next: Activity) => {
     const found = signal(previous.current, next)
     previous.current = next
-    if (found && document.visibilityState === "hidden") void platform.notify(input.title, copy[found])
+    if (found) void platform.notify(input.title, copy[found])
   })
   useEffect(() => notify({ running: input.running, asking: input.asking }), [input.running, input.asking])
 }

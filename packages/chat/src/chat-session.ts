@@ -3,21 +3,35 @@ export * as ChatSession from "./chat-session.js"
 import { Ren } from "@ren/client/chat/effect"
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
-import type { Session } from "@ren/schema/session"
+import { Session } from "@ren/schema/session"
 import type { SessionCatalog } from "@ren/schema/session-catalog"
 import type { SessionEvent } from "@ren/schema/session-event"
 import type { SessionInbox } from "@ren/schema/session-inbox"
 import { SessionMessage } from "@ren/schema/session-message"
 import type { SessionModel } from "@ren/schema/session-model"
 import type { Shell } from "@ren/schema/shell"
-import { Clock, Data, DateTime, Deferred, Effect, Fiber, Option, Semaphore, Stream, SubscriptionRef } from "effect"
+import {
+  Clock,
+  Data,
+  DateTime,
+  Deferred,
+  Effect,
+  Fiber,
+  Option,
+  PubSub,
+  Semaphore,
+  Stream,
+  SubscriptionRef,
+} from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { ChatState } from "./chat-state.js"
 import { Connection } from "./connection.js"
 import { Hydrate } from "./hydrate.js"
 import { Outbox } from "./outbox.js"
+import { QueueRewrite } from "./queue-rewrite.js"
 import { Reads } from "./reads.js"
 import { Reducer } from "./reducer.js"
+import { WebSearch } from "./websearch.js"
 
 export const messagePageLimit = 20
 export const olderPageLimit = 200
@@ -57,7 +71,12 @@ export interface PromptInput extends Mentions {
   readonly delivery?: SessionInbox.Delivery
   readonly id?: SessionMessage.ID
   readonly model?: SessionModel.Ref
+  readonly resume?: boolean
 }
+
+export class QueueRefused extends Data.TaggedError("ChatSession.QueueRefused")<{
+  readonly reason: QueueRewrite.Refusal | "reverted"
+}> {}
 
 export interface CommandInput extends Mentions {
   readonly name: string
@@ -115,6 +134,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       : ChatState.empty,
   )
   const status = yield* SubscriptionRef.make<Connection.Status>("connecting")
+  const events = yield* PubSub.unbounded<SessionEvent.Event>()
   const reads = yield* Reads.make<unknown>()
   const accessLock = yield* Semaphore.make(1)
   const wanted = new Map<string, Reducer.Read>()
@@ -324,6 +344,13 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       })
       if (frames.some((frame) => frame.type === "server.connected")) yield* reread
       yield* Effect.forEach(commands, execute, { discard: true })
+      yield* PubSub.publishAll(
+        events,
+        frames.filter(
+          (frame): frame is SessionEvent.Event =>
+            frame.type !== "server.connected" && frame.type !== "server.heartbeat" && frame.type !== "stream.ended",
+        ),
+      )
     })
 
   const connection = yield* Connection.make({
@@ -430,6 +457,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
           id,
           text: input.text,
           delivery,
+          ...(input.resume === false && { resume: false }),
           ...(input.agents && { agents: input.agents }),
           ...(input.skills && { skills: input.skills }),
         })
@@ -483,6 +511,66 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       Effect.andThen(update((current) => Reducer.updateDelivery(current, root, inboxID, delivery))),
       Effect.ensuring(execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })),
     )
+
+  const reorderInput = (inboxIDs: ReadonlyArray<SessionMessage.ID>) =>
+    Effect.gen(function* () {
+      if (ChatState.revertMessageID(yield* SubscriptionRef.get(state), root))
+        return yield* new QueueRefused({ reason: "reverted" })
+      yield* connection.wake
+      const cancelled = yield* send(
+        Effect.gen(function* () {
+          const api = yield* client
+          const plan = QueueRewrite.plan(yield* api.session.inbox.list({ sessionID: root }), inboxIDs, options.sender)
+          if (plan._tag === "Refused") return yield* new QueueRefused({ reason: plan.reason })
+          if (plan._tag === "Unchanged") return []
+          const admitted: Array<SessionMessage.ID> = []
+          yield* Effect.forEach(
+            plan.readmit,
+            (item) =>
+              Effect.suspend(() => {
+                const id = SessionMessage.ID.create()
+                admitted.push(id)
+                return api.session.prompt({
+                  sessionID: root,
+                  id,
+                  text: item.payload.text,
+                  delivery: "queue",
+                  resume: false,
+                  ...(item.payload.agents && { agents: item.payload.agents }),
+                  ...(item.payload.skills && {
+                    skills: item.payload.skills.map((skill) => ({
+                      id: skill.id,
+                      ...(skill.mention && { mention: skill.mention }),
+                    })),
+                  }),
+                })
+              }),
+            { discard: true },
+          ).pipe(
+            Effect.tapError(() =>
+              Effect.forEach(
+                admitted,
+                (inboxID) => api.session.inbox.cancel({ sessionID: root, inboxID }).pipe(Effect.ignore),
+                { discard: true },
+              ),
+            ),
+          )
+          yield* Effect.forEach(plan.cancel, (inboxID) => api.session.inbox.cancel({ sessionID: root, inboxID }), {
+            discard: true,
+          })
+          return plan.cancel
+        }),
+      )
+      yield* update((current) =>
+        cancelled.reduce(
+          (next, inboxID) =>
+            ChatState.hasInput(next, root, inboxID)
+              ? Reducer.retract(Outbox.acknowledge(next, inboxID), root, inboxID)
+              : next,
+          current,
+        ),
+      )
+    }).pipe(Effect.ensuring(execute({ _tag: "Revalidate", read: { _tag: "Pending", sessionID: root } })))
 
   const compaction = (id: SessionMessage.ID, model: SessionModel.Ref | undefined) =>
     send(
@@ -612,8 +700,20 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       ),
     ).pipe(Effect.andThen(execute({ _tag: "Refresh", read: { _tag: "Forms", sessionID } })))
 
-  const replyPermission = (sessionID: Session.ID, requestID: Permission.RequestID, reply: Permission.Reply) =>
-    Effect.flatMap(client, (api) => api.session.permission.reply({ sessionID, requestID, reply })).pipe(
+  const replyPermission = (
+    sessionID: Session.ID,
+    requestID: Permission.RequestID,
+    reply: Permission.Reply,
+    message?: string,
+  ) =>
+    Effect.flatMap(client, (api) =>
+      api.session.permission.reply({
+        sessionID,
+        requestID,
+        reply,
+        ...(message?.trim() && { message: message.trim() }),
+      }),
+    ).pipe(
       Effect.catchTag("NotFoundError", () => Effect.void),
       Effect.andThen(removePermission(sessionID, requestID)),
     )
@@ -680,6 +780,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     cancelInput,
     steerInput: (inboxID: SessionMessage.ID) => redirect(inboxID, "steer"),
     queueInput: (inboxID: SessionMessage.ID) => redirect(inboxID, "queue"),
+    reorderInput,
     wake: connection.wake,
     resync: connection.resync,
     foreground: connection.foreground,
@@ -696,6 +797,22 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       send(Effect.flatMap(client, (api) => api.session.model.switch({ sessionID: root, model }))),
     autoApprove,
     replyPermission,
+    webSearchProviders: (sessionID: Session.ID) =>
+      Effect.flatMap(client, (api) => api.websearch.providers({ sessionID })),
+    replyWebSearch: (form: Form.Info, selection: string | false) =>
+      connection.wake.pipe(
+        Effect.andThen(
+          WebSearch.reply({
+            form,
+            selection,
+            events,
+            reply: (target, answer) =>
+              Effect.flatMap(client, (api) =>
+                api.session.form.reply({ sessionID: Session.ID.make(target.sessionID), formID: target.id, answer }),
+              ).pipe(Effect.andThen(removeForm(Session.ID.make(target.sessionID), target.id))),
+          }),
+        ),
+      ),
     replyForm: (sessionID: Session.ID, formID: Form.ID, answer: Form.Answer) =>
       Effect.flatMap(client, (api) => api.session.form.reply({ sessionID, formID, answer })).pipe(
         Effect.catchTags({ NotFoundError: () => Effect.void, ConflictError: () => Effect.void }),

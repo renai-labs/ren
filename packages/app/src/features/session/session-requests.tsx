@@ -8,6 +8,7 @@ import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
 import { useState } from "react"
 import type { ReactNode } from "react"
+import { Chat } from "../../lib/chat.js"
 import { FormProgress } from "./form-progress.js"
 import { Requests } from "./requests.js"
 import { SessionTitle } from "./session-title.js"
@@ -50,7 +51,8 @@ export function SessionRequests(props: {
   onAnswered: () => void
 }) {
   const [sending, setSending] = useState<string>()
-  const permission = Family.permission(props.state, props.sessionID)
+  const approving = Chat.useAutoApprove(props.root).enabled
+  const permission = approving ? undefined : Family.permission(props.state, props.sessionID)
   const form = Family.form(props.state, props.sessionID)
   const replyPermission = ChatReact.useAction(props.root, (opened, reply: Parameters<typeof opened.replyPermission>) =>
     opened.replyPermission(...reply),

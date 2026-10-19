@@ -89,6 +89,8 @@ export type ToolKind = "command" | "file" | "edit" | "search" | "web" | "agent" 
 
 export type ToolStatus = "running" | "completed" | "failed"
 
+export type ToolEntrance = "none" | "animated"
+
 const toolGlyphs: Record<ToolKind, Glyph> = {
   command: "Code",
   file: "FileText",
@@ -106,6 +108,7 @@ export type ToolProps = {
   status: ToolStatus
   failure?: string | undefined
   defaultOpen?: boolean
+  entrance?: ToolEntrance
   children?: ReactNode
 }
 
@@ -149,6 +152,7 @@ export function Tool(props: ToolProps) {
       }
       label={`${props.title}${props.subtitle ? ` ${props.subtitle}` : ""}, ${props.status === "failed" ? (props.failure ?? "Failed").toLowerCase() : props.status}`}
       defaultOpen={props.defaultOpen ?? false}
+      entrance={props.entrance ?? "none"}
     >
       <Surface.Well depth="recessed" radius="container">
         <div className="flex flex-col gap-3 p-3">{props.children}</div>

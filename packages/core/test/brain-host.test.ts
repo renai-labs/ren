@@ -6,6 +6,7 @@ import { Testing } from "@ren/db/testing"
 import { Environment } from "@ren/schema/environment"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
+import { SessionMessage } from "@ren/schema/session-message"
 import {
   Cause,
   Clock,
@@ -358,6 +359,33 @@ describe("BrainHost", () => {
         const response = yield* surface(yield* brain.access(sessionId), `/chat/session/${sessionId}`)
         expect(response.status).toBe(200)
         expect(yield* Effect.promise(() => response.json())).toMatchObject({ id: sessionId })
+      }),
+    )
+
+    it.live("its token names the member, so the session learns who speaks after another member", () =>
+      Effect.gen(function* () {
+        const brain = yield* BrainHost.Service
+        const sessionId = Session.ID.create()
+        yield* start(sessionId)
+        const say = Effect.fnUntraced(function* (member: { readonly userId: Auth.UserID; readonly name: string }) {
+          const script = stub.script()
+          const access = yield* brain.access(sessionId, member)
+          const response = yield* Effect.promise(() =>
+            fetch(`${access.url}/chat/session/${sessionId}/prompt`, {
+              method: "POST",
+              headers: { authorization: TestToken.basic(access.token), "content-type": "application/json" },
+              body: JSON.stringify({ id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" }),
+            }),
+          )
+          expect(response.status).toBe(200)
+          return (yield* Effect.promise(() => script.called())).text
+        })
+        const ada = { userId: Auth.UserID.create(), name: "Ada Lovelace (ada@example.com)" }
+        const grace = { userId: Auth.UserID.create(), name: "Grace Hopper" }
+        expect(yield* say(ada)).not.toContain("<message_from")
+        expect(yield* say(grace)).toContain(
+          `<message_from user="Grace Hopper" user_id=${JSON.stringify(grace.userId)} />`,
+        )
       }),
     )
   })

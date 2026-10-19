@@ -15,6 +15,7 @@ import { Toast } from "@ren/ui/toast"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useState } from "react"
+import { Chat } from "../../lib/chat.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { SessionTitle } from "./session-title.js"
@@ -94,6 +95,7 @@ function Actions(props: {
   const write = platform.writeClipboardText
   const archive = useMutation(context.api.session.archive.mutationOptions())
   const [confirming, setConfirming] = useState(false)
+  const approval = Chat.useAutoApprove(props.sessionID)
   const capabilities = props.state.info[props.sessionID]?.capabilities
   const reverted = ChatState.revertMessageID(props.state, props.sessionID) !== undefined
   const prompted = ChatState.visibleUserMessages(props.state, props.sessionID).length > 0
@@ -122,6 +124,17 @@ function Actions(props: {
             <Menu.Item icon={<Icon glyph="Minimize2" />} disabled={!prompted} onSelect={props.onCompact}>
               Compact chat
             </Menu.Item>
+          )}
+          {capabilities?.permissions === false ? null : (
+            <Menu.CheckboxItem
+              icon={<Icon glyph="BadgeCheck" />}
+              checked={approval.enabled}
+              onCheckedChange={(enabled) =>
+                void approval.set(enabled).catch(failed("Could not change automatic approval"))
+              }
+            >
+              Approve every request automatically
+            </Menu.CheckboxItem>
           )}
           {write ? (
             <Menu.Item

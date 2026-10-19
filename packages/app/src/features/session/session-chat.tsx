@@ -1,12 +1,14 @@
-import { ChatState, Family, TimelineSearch, ToolState, Working } from "@ren/chat"
+import { ChatState, Family, SessionTasks, type TimelineDetail, TimelineSearch, ToolState, Working } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
+import type { SessionInfo } from "@ren/schema/session-info"
 import type { SessionMessage } from "@ren/schema/session-message"
 import { Button } from "@ren/ui/button"
 import { ConversationShell } from "@ren/ui/conversation-shell"
 import { FindBar } from "@ren/ui/find-bar"
 import { Notice } from "@ren/ui/notice"
 import { StateMessage } from "@ren/ui/state-message"
+import { TaskProgress, type TaskStatus } from "@ren/ui/task-progress"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
 import { useQuery } from "@tanstack/react-query"
@@ -14,8 +16,10 @@ import { Option } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useDeferredValue, useRef, useState } from "react"
 import type { RefObject } from "react"
+import { Auth } from "../../lib/auth.js"
 import { Chat } from "../../lib/chat.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { SessionCache } from "../../lib/session-cache.js"
 import { Attention } from "../../platform/attention.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { Platform } from "../../platform/platform.js"
@@ -67,16 +71,35 @@ function useShortcuts(input: {
   })
 }
 
+const taskStatus: Readonly<Record<SessionTasks.Status, TaskStatus>> = {
+  pending: "pending",
+  in_progress: "in-progress",
+  completed: "completed",
+  cancelled: "cancelled",
+}
+
+function Tasks(props: { messages: ReadonlyArray<SessionMessage.Info>; running: boolean }) {
+  const tasks = SessionTasks.latest(props.messages)
+  if (tasks.length === 0 || !(props.running || SessionTasks.unfinished(tasks))) return null
+  return (
+    <TaskProgress
+      tasks={tasks.map((task) => ({ id: task.id, content: task.content, status: taskStatus[task.status] }))}
+    />
+  )
+}
+
 function SessionInteraction(props: {
   sessionID: Session.ID
   state: ChatState.State
   reconnecting: boolean
+  running: boolean
   onRedo: () => void
   onOpen: (sessionID: Session.ID) => void
   onAnswered: () => void
 }) {
   return (
     <>
+      <Tasks messages={ChatState.messages(props.state, props.sessionID)} running={props.running} />
       {props.reconnecting ? (
         <output>
           <Text purpose="caption" tone="secondary">
@@ -119,8 +142,8 @@ const read = (session: ReturnType<typeof ChatReact.useSession>) => {
   }
 }
 
-const blocked = (state: ChatState.State, sessionID: Session.ID) =>
-  Boolean(Family.permission(state, sessionID) ?? Family.form(state, sessionID))
+const blocked = (state: ChatState.State, sessionID: Session.ID, approving: boolean) =>
+  Boolean((approving ? undefined : Family.permission(state, sessionID)) ?? Family.form(state, sessionID))
 
 interface Find {
   readonly value: string
@@ -242,11 +265,37 @@ function useRevert(sessionID: Session.ID, restore: (message: Option.Option<Sessi
   }
 }
 
+function usePeople(organizationId: string | undefined, viewer: string, messages: ReadonlyArray<SessionMessage.Info>) {
+  const context = RouterContext.useRouterContext()
+  const shared = messages.some(
+    (message) => message.type === "user" && message.sender !== undefined && message.sender.userId !== viewer,
+  )
+  const members = useQuery({
+    ...Auth.organizationOptions(context.auth, organizationId ?? ""),
+    enabled: shared && organizationId !== undefined,
+    select: (organization) => organization.members,
+  })
+  return new Map(
+    (members.data ?? []).map((member) => [
+      member.userId,
+      { name: member.user.name || member.user.email || "Member", image: member.user.image ?? undefined },
+    ]),
+  )
+}
+
+const liveOf = (info: SessionInfo.Info | undefined, running: boolean): SessionCache.Live => {
+  if (!info) return { title: undefined, status: undefined }
+  return { title: SessionTitle.display(info.title, "") || undefined, status: running ? "busy" : "idle" }
+}
+
 const modelNamesOf = (models: ReturnType<typeof ChatReact.useModels>) =>
   new Map(AsyncResult.getOrElse(models, () => []).map((model) => [model.id, model.name]))
 
 export function SessionChat(props: {
   sessionID: Session.ID
+  viewer: string
+  organizationId: string | undefined
+  detail: TimelineDetail.Detail | undefined
   message: SessionMessage.ID | undefined
   part: string | undefined
   child: Session.ID | undefined
@@ -299,6 +348,11 @@ export function SessionChat(props: {
     setRestored((count) => count + 1)
   }
   const reverter = useRevert(props.sessionID, restore)
+  const retry = Chat.useRetry(props.sessionID)
+  const approving = Chat.useAutoApprove(props.sessionID).enabled
+  const people = usePeople(props.organizationId, props.viewer, messages)
+
+  SessionCache.useLive(props.sessionID, liveOf(info, running))
 
   Attention.useNotify({ running, asking, title })
 
@@ -318,7 +372,7 @@ export function SessionChat(props: {
       hidden={props.child !== undefined}
       placeholder={
         AsyncResult.isFailure(session.state) ? (
-          <StateMessage state="failed" title="Could not open this chat" />
+          <StateMessage state="failed" title="Could not open this chat" onRetry={retry} />
         ) : undefined
       }
       header={
@@ -368,6 +422,9 @@ export function SessionChat(props: {
               onRevert: reverter.onRevert,
             }),
             onOpenChild: props.onChild,
+            detail: props.detail,
+            viewer: props.viewer,
+            people,
           })}
         />
       }
@@ -376,13 +433,14 @@ export function SessionChat(props: {
           sessionID={props.sessionID}
           state={state}
           reconnecting={view.reconnecting}
+          running={running}
           onRedo={() => void redo().catch(failed("Could not restore the undone messages"))}
           onOpen={props.onChild}
           onAnswered={() => scroller.current?.resume()}
         />
       }
       composer={
-        blocked(state, props.sessionID) ? undefined : (
+        blocked(state, props.sessionID, approving) ? undefined : (
           <SessionComposer
             key={`${props.sessionID}:${restored}`}
             sessionID={props.sessionID}

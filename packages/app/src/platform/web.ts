@@ -37,10 +37,17 @@ export function createWebPlatform(): Platform.Info {
     },
     notify: async (title, body) => {
       if (!("Notification" in window)) return
+      if (document.visibilityState === "visible" && document.hasFocus()) return
       const permission =
-        Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission
+        Notification.permission === "default"
+          ? await Notification.requestPermission().catch(() => "denied" as const)
+          : Notification.permission
       if (permission !== "granted") return
-      new Notification(title, body === undefined ? undefined : { body })
+      const notification = new Notification(title, body === undefined ? undefined : { body })
+      notification.addEventListener("click", () => {
+        window.focus()
+        notification.close()
+      })
     },
     writeClipboardText: (text) => navigator.clipboard.writeText(text),
     onLifecycle: (listener) => {

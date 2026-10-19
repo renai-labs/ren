@@ -35,6 +35,10 @@ export const PromptInput = Schema.Struct({
   id: SessionMessage.ID,
   text: Schema.NonEmptyString,
   delivery: SessionInbox.Delivery,
+  resume: Schema.optional(Schema.Boolean).annotate({
+    description:
+      "With `false`, the message waits in the inbox and does not start a turn on an idle session, so a client can put queued messages back in another order. Defaults to `true`.",
+  }),
   ...mentions,
 }).annotate({ identifier: "Chat.PromptInput" })
 
@@ -45,6 +49,14 @@ export const CommandInput = Schema.Struct({
   delivery: SessionInbox.Delivery,
   ...mentions,
 }).annotate({ identifier: "Chat.CommandInput" })
+
+export interface PermissionReplyInput extends Schema.Schema.Type<typeof PermissionReplyInput> {}
+export const PermissionReplyInput = Schema.Struct({
+  reply: Permission.Reply,
+  message: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())).annotate({
+    description: "With `reject`, what the session should do instead. The session reads it and goes on.",
+  }),
+}).annotate({ identifier: "Chat.PermissionReplyInput" })
 
 export interface InboxUpdateInput extends Schema.Schema.Type<typeof InboxUpdateInput> {}
 export const InboxUpdateInput = Schema.Struct({ delivery: SessionInbox.Delivery }).annotate({
@@ -236,7 +248,7 @@ export const SessionGroup = HttpApiGroup.make("session")
         identifier: "session.prompt",
         summary: "Send a message",
         description:
-          "Send a message to the session. `steer` reaches the running turn; `queue` waits for the turn to end. Sending the same `id` again returns the same answer and sends nothing new.",
+          "Send a message to the session. `steer` reaches the running turn; `queue` waits for the turn to end. Sending the same `id` again returns the same answer and sends nothing new. When another member spoke last, the session is told who sends the message.",
       }),
     ),
   )
@@ -401,14 +413,15 @@ export const SessionGroup = HttpApiGroup.make("session")
   .add(
     HttpApiEndpoint.post("session.permission.reply", "/chat/session/:sessionID/permission/:requestID/reply", {
       params: { ...params, requestID: Permission.RequestID },
-      payload: Schema.Struct({ reply: Permission.Reply }),
+      payload: PermissionReplyInput,
       success: HttpApiSchema.NoContent,
       error: NotFoundError,
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "session.permission.reply",
         summary: "Answer a permission request",
-        description: "Allow the request once, allow it always, or reject it.",
+        description:
+          "Allow the request once, allow it always, or reject it. A rejection with a `message` tells the session what to do instead.",
       }),
     ),
   )
@@ -542,6 +555,23 @@ export const FileGroup = HttpApiGroup.make("file")
   )
   .annotateMerge(OpenApi.annotations({ title: "file" }))
 
+export const WebSearchGroup = HttpApiGroup.make("websearch")
+  .add(
+    HttpApiEndpoint.get("websearch.providers", "/chat/session/:sessionID/websearch/provider", {
+      params,
+      success: Schema.Array(SessionCatalog.WebSearchProvider),
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "websearch.providers",
+        summary: "List web search providers",
+        description:
+          "Return the web search providers where the session works, for a question of kind `websearch.provider` that lets the member pick one.",
+      }),
+    ),
+  )
+  .annotateMerge(OpenApi.annotations({ title: "websearch" }))
+
 export const ChatApi = HttpApi.make("chat")
   .add(EventGroup)
   .add(ModelGroup)
@@ -551,6 +581,7 @@ export const ChatApi = HttpApi.make("chat")
   .add(SkillGroup)
   .add(CommandGroup)
   .add(FileGroup)
+  .add(WebSearchGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Chat API",

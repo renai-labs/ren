@@ -11,6 +11,7 @@ export const Claims = Schema.Union([
     sid: Session.ID,
     scope: Schema.Literals(["server", "client"]),
     sub: Schema.optionalKey(Schema.String),
+    name: Schema.optionalKey(Schema.String),
     exp: Schema.Int,
   }),
   Schema.Struct({

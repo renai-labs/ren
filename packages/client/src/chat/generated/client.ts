@@ -60,6 +60,8 @@ import type {
   CommandListOutput,
   FileSearchInput,
   FileSearchOutput,
+  WebsearchProvidersInput,
+  WebsearchProvidersOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -322,7 +324,7 @@ export function make(options: ClientOptions) {
             {
               method: "POST",
               path: `/chat/session/${encodeURIComponent(input.sessionID)}/permission/${encodeURIComponent(input.requestID)}/reply`,
-              body: { reply: input["reply"] },
+              body: { reply: input["reply"], message: input["message"] },
               successStatus: 204,
               declaredStatuses: [404],
               empty: true,
@@ -375,6 +377,7 @@ export function make(options: ClientOptions) {
               id: input["id"],
               text: input["text"],
               delivery: input["delivery"],
+              resume: input["resume"],
               agents: input["agents"],
               skills: input["skills"],
             },
@@ -582,6 +585,19 @@ export function make(options: ClientOptions) {
             method: "GET",
             path: `/chat/session/${encodeURIComponent(input.sessionID)}/file`,
             query: { query: input["query"], type: input["type"], limit: input["limit"] },
+            successStatus: 200,
+            declaredStatuses: [404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    websearch: {
+      providers: (input: WebsearchProvidersInput, requestOptions?: RequestOptions) =>
+        request<WebsearchProvidersOutput>(
+          {
+            method: "GET",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/websearch/provider`,
             successStatus: 200,
             declaredStatuses: [404],
             empty: false,

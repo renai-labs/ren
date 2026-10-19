@@ -96,7 +96,12 @@ describe("SessionDirectory", () => {
           "Primitive.NotFound",
         )
         const access = yield* sessions.access(ada, id)
-        expect(claims(access.token)).toMatchObject({ sid: id, scope: "client", sub: ada.userId })
+        expect(claims(access.token)).toMatchObject({
+          sid: id,
+          scope: "client",
+          sub: ada.userId,
+          name: `Ada (${ada.userId.toLowerCase()}@example.com)`,
+        })
         const read = yield* Effect.promise(() =>
           fetch(`${access.url}/chat/session/${id}`, { headers: { authorization: TestToken.basic(access.token) } }),
         )

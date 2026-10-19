@@ -41,7 +41,12 @@ interface Prompt extends Mentions {
   readonly id: SessionMessage.ID
   readonly text: string
   readonly delivery: SessionInbox.Delivery
-  readonly sender: Option.Option<SessionMessage.Sender>
+  readonly resume?: boolean
+  readonly sender: Option.Option<Sender>
+}
+
+export interface Sender extends SessionMessage.Sender {
+  readonly name?: string
 }
 
 interface Command extends Mentions {
@@ -98,11 +103,15 @@ export interface Chat {
     sessionId: Session.ID,
     search: { readonly query: string; readonly type?: SessionCatalog.FileType; readonly limit?: number },
   ) => Effect.Effect<ReadonlyArray<SessionCatalog.File>, NotFound>
+  readonly webSearchProviders: (
+    sessionId: Session.ID,
+  ) => Effect.Effect<ReadonlyArray<SessionCatalog.WebSearchProvider>, NotFound>
   readonly switchModel: (sessionId: Session.ID, model: SessionModel.Ref) => Effect.Effect<void, NotFound | Rejected>
   readonly replyPermission: (
     sessionId: Session.ID,
     requestId: Permission.RequestID,
     reply: Permission.Reply,
+    message?: string,
   ) => Effect.Effect<void, NotFound>
   readonly replyForm: (
     sessionId: Session.ID,

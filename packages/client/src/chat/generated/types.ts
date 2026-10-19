@@ -142,6 +142,8 @@ export type SessionCatalogCommand = { name: string; description?: string }
 
 export type SessionCatalogFileType = "file" | "directory"
 
+export type SessionCatalogWebSearchProvider = { id: string; name: string }
+
 export type SessionEventSessionAgentSelected = {
   id: string
   created: number
@@ -1066,6 +1068,7 @@ export type SessionPromptInput = {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
+    readonly resume?: boolean | undefined
     readonly agents?:
       | ReadonlyArray<{
           readonly name: string
@@ -1083,6 +1086,7 @@ export type SessionPromptInput = {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
+    readonly resume?: boolean | undefined
     readonly agents?:
       | ReadonlyArray<{
           readonly name: string
@@ -1100,6 +1104,7 @@ export type SessionPromptInput = {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
+    readonly resume?: boolean | undefined
     readonly agents?:
       | ReadonlyArray<{
           readonly name: string
@@ -1113,10 +1118,29 @@ export type SessionPromptInput = {
         }>
       | undefined
   }["delivery"]
+  readonly resume?: {
+    readonly id: string
+    readonly text: string
+    readonly delivery: "steer" | "queue"
+    readonly resume?: boolean | undefined
+    readonly agents?:
+      | ReadonlyArray<{
+          readonly name: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+    readonly skills?:
+      | ReadonlyArray<{
+          readonly id: string
+          readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+        }>
+      | undefined
+  }["resume"]
   readonly agents?: {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
+    readonly resume?: boolean | undefined
     readonly agents?:
       | ReadonlyArray<{
           readonly name: string
@@ -1134,6 +1158,7 @@ export type SessionPromptInput = {
     readonly id: string
     readonly text: string
     readonly delivery: "steer" | "queue"
+    readonly resume?: boolean | undefined
     readonly agents?:
       | ReadonlyArray<{
           readonly name: string
@@ -1309,7 +1334,8 @@ export type SessionModelSwitchOutput = void
 export type SessionPermissionReplyInput = {
   readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
   readonly requestID: { readonly sessionID: string; readonly requestID: string }["requestID"]
-  readonly reply: { readonly reply: "once" | "always" | "reject" }["reply"]
+  readonly reply: { readonly reply: "once" | "always" | "reject"; readonly message?: string | undefined }["reply"]
+  readonly message?: { readonly reply: "once" | "always" | "reject"; readonly message?: string | undefined }["message"]
 }
 
 export type SessionPermissionReplyOutput = void
@@ -1383,3 +1409,7 @@ export type FileSearchInput = {
 }
 
 export type FileSearchOutput = Array<SessionCatalogFile>
+
+export type WebsearchProvidersInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type WebsearchProvidersOutput = Array<SessionCatalogWebSearchProvider>

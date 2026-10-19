@@ -81,6 +81,7 @@ const setup = Effect.gen(function* () {
       skills: () => Effect.die(new Error("alarm must not read skills")),
       commands: () => Effect.die(new Error("alarm must not read commands")),
       findFiles: () => Effect.die(new Error("alarm must not search files")),
+      webSearchProviders: () => Effect.die(new Error("alarm must not read web search providers")),
     }),
     configure: () => Effect.die(new Error("alarm must not configure models")),
     start: () => Effect.die(new Error("alarm must not start sessions")),

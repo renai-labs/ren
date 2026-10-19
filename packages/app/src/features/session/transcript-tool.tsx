@@ -108,6 +108,7 @@ function ToolRow(props: {
   return (
     <>
       <Transcript.Tool
+        entrance={ToolDisplay.kind(tool) === "command" && tool.state.status === "streaming" ? "animated" : "none"}
         kind={ToolDisplay.kind(tool)}
         title={ToolDisplay.label(tool)}
         subtitle={subtitleOf(tool)}

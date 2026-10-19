@@ -12,6 +12,7 @@ import { Session } from "@opencode/core/session"
 import { Shell } from "@opencode/core/shell"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { Skill } from "@opencode/core/skill"
+import { WebSearch } from "@opencode/core/websearch"
 import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
@@ -103,6 +104,8 @@ export const make = Effect.fn("Host.make")(function* (
     commands: (sessionId) => located(sessionId, Command.Service).pipe(Effect.flatMap((commands) => commands.list())),
     findFiles: (sessionId, input) =>
       located(sessionId, FileSystemSearch.Service).pipe(Effect.flatMap((search) => search.find(input))),
+    webSearchProviders: (sessionId) =>
+      located(sessionId, WebSearch.Service).pipe(Effect.flatMap((websearch) => websearch.providers())),
     credentials: Context.get(services, Credential.Service),
     sessions,
     workspaces: Context.get(services, Workspace.Service),
@@ -128,6 +131,7 @@ export interface Instance {
     sessionId: string,
     input: FileSystem.FindInput,
   ) => Effect.Effect<ReadonlyArray<FileSystem.Entry>, Harness.NotFound>
+  readonly webSearchProviders: (sessionId: string) => Effect.Effect<ReadonlyArray<WebSearch.Provider>, Harness.NotFound>
   readonly credentials: Credential.Interface
   readonly sessions: Session.Interface
   readonly workspaces: Workspace.Interface

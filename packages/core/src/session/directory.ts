@@ -238,7 +238,16 @@ export const layer = Layer.effect(
       models: Effect.fn("SessionDirectory.models")(models),
       access: Effect.fn("SessionDirectory.access")(function* (actor: Actor.Info, id: Session.ID) {
         yield* read(actor, id)
-        return yield* brain.access(id, actor.userId)
+        const user = (yield* database.transaction((transaction) =>
+          transaction
+            .select({ name: Database.Schema.user.name, email: Database.Schema.user.email })
+            .from(Database.Schema.user)
+            .where(eq(Database.Schema.user.id, actor.userId)),
+        )).at(0)
+        return yield* brain.access(id, {
+          userId: actor.userId,
+          ...(user && { name: user.name.trim() ? `${user.name.trim()} (${user.email})` : user.email }),
+        })
       }),
       fork: Effect.fn("SessionDirectory.fork")(function* (
         actor: Actor.Info,

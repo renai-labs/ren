@@ -12,7 +12,9 @@ import { Effect, Predicate, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useRef, useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
+import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Debounce } from "../../lib/debounce.js"
+import { DraftStore } from "../../platform/draft-store.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
@@ -20,7 +22,6 @@ import { ComposerKeys } from "./composer-keys.js"
 import { ComposerModelPicker } from "./composer-model-picker.js"
 import { SessionDrafts } from "./session-drafts.js"
 
-const behavior = "steer"
 const historyKey = "history"
 const fileSearchDelay = 150
 
@@ -227,6 +228,7 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
   const platform = Platform.usePlatform()
   const mobile = Viewport.useMobile()
   const key = SessionDrafts.key(props.sessionID)
+  const behavior = ChatPreferences.followUp.read(platform.storage)
   const [draft, setDraft] = useState(() => Composer.decode(platform.drafts?.get(key)))
   const [history, setHistory] = useState(() => ComposerHistory.decode(platform.drafts?.get(historyKey)))
   const [browsing, setBrowsing] = useState(ComposerHistory.idle)
@@ -234,6 +236,12 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
   const [picked, setPicked] = useState<ReadonlyArray<Mentions.Item>>([])
   const [moving, setMoving] = useState(false)
   const input = useRef<HTMLTextAreaElement>(null)
+  DraftStore.useElsewhere({
+    drafts: platform.drafts,
+    key,
+    editor: input,
+    onChange: (value) => setDraft(Composer.decode(value)),
+  })
   const prompt = ChatReact.useAction(props.sessionID, (opened, request: ChatSession.PromptInput) =>
     opened.prompt(request).pipe(
       Effect.retry({ times: 1 }),

@@ -5,7 +5,7 @@ import { SessionMessage } from "@ren/schema/session-message"
 import { Shell } from "@ren/schema/shell"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
-import { DateTime, Effect, Layer, Option, type Scope, Stream, SubscriptionRef } from "effect"
+import { DateTime, Effect, Layer, Option, Predicate, type Scope, Stream, SubscriptionRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChatSession } from "../src/chat-session.js"
 import { ChatState } from "../src/chat-state.js"
@@ -418,6 +418,48 @@ test("a queued prompt steers into the running turn and goes back to the queue", 
       held.release()
       yield* until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "queued"))
       expect((yield* chat.steerInput(queued).pipe(Effect.flip))._tag).toBe("ConflictError")
+    }),
+  ))
+
+test("dragging reorders queued prompts", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const held = stub.script({ hold: true })
+      yield* chat.prompt({ text: held.marker })
+      yield* Effect.promise(() => held.called())
+      const order = ["first queued prompt", "second queued prompt", "third queued prompt"]
+      const ids = yield* Effect.forEach(order, (text) => chat.prompt({ text, delivery: "queue" }))
+      const texts = (state: ChatState.State) =>
+        ChatState.pending(state, brain.id).flatMap((item) => (item.type === "user" ? [item.payload.text] : []))
+      yield* until(chat.state, (state) => texts(state).length === 3)
+      yield* chat.reorderInput([ids[1], ids[2], ids[0]].filter(Predicate.isNotUndefined))
+      const reordered = ["second queued prompt", "third queued prompt", "first queued prompt"]
+      const inbox = yield* brain.chat.session["session.inbox.list"]({ params: { sessionID: brain.id } })
+      expect(inbox.flatMap((item) => (item.type === "user" ? [item.payload.text] : []))).toEqual(reordered)
+      expect(inbox.some((item) => ids.includes(item.id))).toBe(false)
+      yield* until(chat.state, (state) => texts(state).join() === reordered.join())
+      held.release()
+    }),
+  ))
+
+test("a staged revert refuses a queue reorder, whose admission would commit it", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const first = yield* turn(chat, "first")
+      yield* chat.undo
+      const refused = yield* chat.reorderInput([first]).pipe(Effect.flip)
+      expect(refused).toMatchObject({ _tag: "ChatSession.QueueRefused", reason: "reverted" })
+      expect(ChatState.revertMessageID(yield* SubscriptionRef.get(chat.state), brain.id)).toBe(first)
     }),
   ))
 

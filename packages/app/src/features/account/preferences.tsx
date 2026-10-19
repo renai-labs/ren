@@ -2,6 +2,7 @@ import { Button } from "@ren/ui/button"
 import { Field } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
 import { PageShell } from "@ren/ui/page-shell"
+import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { Theme } from "@ren/ui/theme"
 import { ThemeSelector } from "@ren/ui/theme-selector"
@@ -9,9 +10,64 @@ import { Toast } from "@ren/ui/toast"
 import { useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { Auth } from "../../lib/auth.js"
+import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Forms } from "../../lib/forms.js"
 import { RouterContext } from "../../lib/router-context.js"
+import { Platform } from "../../platform/platform.js"
 import { PasswordDialog } from "./password-dialog.js"
+
+const detailOptions: ReadonlyArray<Select.Option<ChatPreferences.Detail>> = [
+  { value: "standard", label: "Standard" },
+  { value: "everything", label: "Everything" },
+  { value: "detailed", label: "Detailed" },
+  { value: "compact", label: "Compact" },
+  { value: "quiet", label: "Quiet" },
+  { value: "text-only", label: "Text only" },
+]
+
+const followUpOptions: ReadonlyArray<Select.Option<ChatPreferences.FollowUp>> = [
+  { value: "steer", label: "Steer the current turn" },
+  { value: "queue", label: "Queue for the next turn" },
+]
+
+function ChatSettings() {
+  const platform = Platform.usePlatform()
+  const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
+  const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
+  return (
+    <PageShell.Section title="Chats" frame="divided">
+      <Field.Root label="Detail" description="How much of Ren’s work a chat shows." orientation="horizontal">
+        <Select.Root
+          value={detail}
+          options={detailOptions}
+          appearance="filled"
+          size="small"
+          onValueChange={(next) => {
+            ChatPreferences.detail.write(platform.storage, next)
+            setDetail(next)
+            void import("../../lib/chat.js").then((loaded) => loaded.Chat.forget())
+          }}
+        />
+      </Field.Root>
+      <Field.Root
+        label="Messages sent while Ren works"
+        description="Steering adds them to the current turn. Queued messages wait for it to finish."
+        orientation="horizontal"
+      >
+        <Select.Root
+          value={followUp}
+          options={followUpOptions}
+          appearance="filled"
+          size="small"
+          onValueChange={(next) => {
+            ChatPreferences.followUp.write(platform.storage, next)
+            setFollowUp(next)
+          }}
+        />
+      </Field.Root>
+    </PageShell.Section>
+  )
+}
 
 export function Preferences(props: { user: { name: string; email: string } }) {
   const context = RouterContext.useRouterContext()
@@ -55,6 +111,7 @@ export function Preferences(props: { user: { name: string; email: string } }) {
           <ThemeSelector value={theme.preference} onValueChange={theme.setPreference} />
         </Field.Root>
       </PageShell.Section>
+      <ChatSettings />
       <PageShell.Section title="Security" frame="divided">
         <Field.Root label="Password" orientation="row">
           <Button appearance="outline" size="small" onClick={() => setChangingPassword(true)}>

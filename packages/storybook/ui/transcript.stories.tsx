@@ -70,6 +70,10 @@ export const ToolCommand: Story = {
     ),
   },
 }
+export const ToolCommandEntering: Story = {
+  decorators: inList,
+  args: { kind: "command", title: "Running", subtitle: "Writing command…", status: "running", entrance: "animated" },
+}
 function LiveCommand() {
   const [lines, setLines] = useState(["$ bun test --watch"])
   return (

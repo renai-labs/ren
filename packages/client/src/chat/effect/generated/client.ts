@@ -83,6 +83,7 @@ type SessionPromptInput = {
   readonly id: SessionPromptRequest["payload"]["id"]
   readonly text: SessionPromptRequest["payload"]["text"]
   readonly delivery: SessionPromptRequest["payload"]["delivery"]
+  readonly resume?: SessionPromptRequest["payload"]["resume"]
   readonly agents?: SessionPromptRequest["payload"]["agents"]
   readonly skills?: SessionPromptRequest["payload"]["skills"]
 }
@@ -93,6 +94,7 @@ const EndpointSessionPrompt = (raw: RawClient["session"]) => (input: SessionProm
       id: input["id"],
       text: input["text"],
       delivery: input["delivery"],
+      resume: input["resume"],
       agents: input["agents"],
       skills: input["skills"],
     },
@@ -212,11 +214,12 @@ type SessionPermissionReplyInput = {
   readonly sessionID: SessionPermissionReplyRequest["params"]["sessionID"]
   readonly requestID: SessionPermissionReplyRequest["params"]["requestID"]
   readonly reply: SessionPermissionReplyRequest["payload"]["reply"]
+  readonly message?: SessionPermissionReplyRequest["payload"]["message"]
 }
 const EndpointSessionPermissionReply = (raw: RawClient["session"]) => (input: SessionPermissionReplyInput) =>
   raw["session.permission.reply"]({
     params: { sessionID: input["sessionID"], requestID: input["requestID"] },
-    payload: { reply: input["reply"] },
+    payload: { reply: input["reply"], message: input["message"] },
   }).pipe(Effect.mapError(mapClientError))
 
 type SessionFormReplyRequest = Parameters<RawClient["session"]["session.form.reply"]>[0]
@@ -342,6 +345,13 @@ const EndpointFileSearch = (raw: RawClient["file"]) => (input: FileSearchInput) 
 
 const adaptGroupFile = (raw: RawClient["file"]) => ({ search: EndpointFileSearch(raw) })
 
+type WebsearchProvidersRequest = Parameters<RawClient["websearch"]["websearch.providers"]>[0]
+type WebsearchProvidersInput = { readonly sessionID: WebsearchProvidersRequest["params"]["sessionID"] }
+const EndpointWebsearchProviders = (raw: RawClient["websearch"]) => (input: WebsearchProvidersInput) =>
+  raw["websearch.providers"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupWebsearch = (raw: RawClient["websearch"]) => ({ providers: EndpointWebsearchProviders(raw) })
+
 const adaptClient = (raw: RawClient) => ({
   event: adaptGroupEvent(raw["event"]),
   model: adaptGroupModel(raw["model"]),
@@ -351,6 +361,7 @@ const adaptClient = (raw: RawClient) => ({
   skill: adaptGroupSkill(raw["skill"]),
   command: adaptGroupCommand(raw["command"]),
   file: adaptGroupFile(raw["file"]),
+  websearch: adaptGroupWebsearch(raw["websearch"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>
