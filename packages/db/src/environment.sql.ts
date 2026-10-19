@@ -105,7 +105,7 @@ export const environmentRelations = defineRelationsPart(
   (r) => ({
     environment: {
       organization: r.one.organization({ from: r.environment.organization_id, to: r.organization.id }),
-      spaces: r.many.space_environment({ from: r.environment.id, to: r.space_environment.environment_id }),
+      spaceEnvironments: r.many.space_environment({ from: r.environment.id, to: r.space_environment.environment_id }),
       hands: r.many.hand({ from: r.environment.id, to: r.hand.environment_id }),
     },
     space_environment: {

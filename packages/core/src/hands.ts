@@ -51,15 +51,15 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Ha
 const environments = Database.Schema.environment
 const hands = Database.Schema.hand
 const sessions = Database.Schema.session_environment
-const links = Database.Schema.space_environment
+const spaceEnvironments = Database.Schema.space_environment
 const spaces = Database.Schema.space
 
-const isLinked = (spaceId: SQLWrapper, environmentId: SQLWrapper) =>
+const isEnvironmentOfSpace = (spaceId: SQLWrapper, environmentId: SQLWrapper) =>
   exists(
-    sql`(select 1 from ${links} inner join ${spaces} on ${spaces.id} = ${links.space_id} where ${and(
-      eq(links.space_id, spaceId),
-      eq(links.environment_id, environmentId),
-      isNull(links.archived_at),
+    sql`(select 1 from ${spaceEnvironments} inner join ${spaces} on ${spaces.id} = ${spaceEnvironments.space_id} where ${and(
+      eq(spaceEnvironments.space_id, spaceId),
+      eq(spaceEnvironments.environment_id, environmentId),
+      isNull(spaceEnvironments.archived_at),
       isNull(spaces.archived_at),
     )})`,
   )
@@ -96,7 +96,7 @@ export const layer = Layer.effect(
             eq(environments.id, environmentId),
             eq(environments.organization_id, placement.organizationId),
             isNull(environments.archived_at),
-            isLinked(sql`${placement.spaceId}`, environments.id),
+            isEnvironmentOfSpace(sql`${placement.spaceId}`, environments.id),
           ),
         )
         .pipe(Effect.orDie)
@@ -128,7 +128,7 @@ export const layer = Layer.effect(
               and(
                 eq(environments.id, session.environmentId),
                 isNull(environments.archived_at),
-                isLinked(sql`${session.spaceId}`, environments.id),
+                isEnvironmentOfSpace(sql`${session.spaceId}`, environments.id),
               ),
             )
             .for("update", { of: environments })
@@ -270,7 +270,7 @@ export const layer = Layer.effect(
               eq(sessions.session_id, subject.brainId),
               eq(environments.organization_id, subject.organizationId),
               isNull(environments.archived_at),
-              isLinked(sessions.space_id, sessions.environment_id),
+              isEnvironmentOfSpace(sessions.space_id, sessions.environment_id),
             ),
           )
           .pipe(Effect.orDie)
