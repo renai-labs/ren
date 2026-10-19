@@ -87,7 +87,7 @@ it.live("gives a reader with a window only the last bytes it keeps, and counts t
     const sent = data.reduce((bytes, event) => bytes + event.bytes.length, 0)
     const newlines = (bytes: Uint8Array) => bytes.filter((byte) => byte === 10).length
     expect({
-      bytes: skips.reduce((bytes, skip) => bytes + skip.bytes, 0) + sent,
+      bytes: skips.reduce((bytes, skip) => bytes + skip.length, 0) + sent,
       newlines:
         skips.reduce((count, skip) => count + skip.newlines, 0) +
         data.reduce((count, event) => count + newlines(event.bytes), 0),

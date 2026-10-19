@@ -289,7 +289,7 @@ it.live("a spawner with a window gets only the last output and counts the bytes 
     const handle = yield* Hand.spawner(yield* connect, killed, {
       window: { maxBytes: 1000, intervalMs: 100 },
       onSkip: (skip) => {
-        skipped.bytes += skip.bytes
+        skipped.bytes += skip.length
         skipped.newlines += skip.newlines
       },
     }).spawn(ChildProcess.make("seq", ["1", "100000"]))

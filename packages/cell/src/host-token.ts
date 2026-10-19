@@ -2,7 +2,7 @@ export * as HostToken from "./host-token.js"
 
 import { HostApi } from "@ren/brain-api/host-api"
 import { SessionToken } from "@ren/brain-api/session-token"
-import { Clock, Context, Duration, Effect, Layer, Option, Semaphore } from "effect"
+import { Clock, Context, Duration, Effect, Layer, Option, Redacted, Semaphore } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { ModelStore } from "./model-store.js"
@@ -68,7 +68,7 @@ export const layer = (url: string | undefined, keys: ReadonlyArray<SessionToken.
             return yield* host.value.host["host.refresh"]().pipe(
               withToken(stored.value),
               Effect.timeout(renAnswersWithin),
-              Effect.flatMap((body) => store.writeHostTokenIfUnchanged(stored.value, body.hostToken)),
+              Effect.flatMap((body) => store.writeHostTokenIfUnchanged(stored.value, Redacted.value(body.hostToken))),
               Effect.andThen(store.readHostToken),
               Effect.catchTag("ForbiddenError", () =>
                 store.removeHostTokenIfUnchanged(stored.value).pipe(Effect.as(Option.none<string>())),

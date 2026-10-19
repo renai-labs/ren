@@ -1,7 +1,7 @@
 export * as ModelRefresh from "./model-refresh.js"
 
 import type { Models } from "@ren/schema/models"
-import { Context, DateTime, Duration, Effect, Layer, Option, Semaphore } from "effect"
+import { Context, DateTime, Duration, Effect, Layer, Option, Redacted, Semaphore } from "effect"
 import type { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
@@ -36,7 +36,10 @@ const make = Effect.fn("ModelRefresh.make")(function* (url: string | undefined) 
           Effect.timeout(HostToken.renAnswersWithin),
           Effect.tapErrorTag("ForbiddenError", () => store.removeHostTokenIfUnchanged(token.value)),
         )
-        if (!(yield* store.writeIfUnchanged(token.value, body.access, body.hostToken))) return Option.none()
+        if (
+          !(yield* store.writeIfUnchanged(token.value, body.access, body.hostToken && Redacted.value(body.hostToken)))
+        )
+          return Option.none()
         return Option.fromNullishOr(body.access.endpoints.find((endpoint) => endpoint.id === endpointId)?.apiKey)
       }).pipe(
         Effect.catch((error) =>

@@ -1,13 +1,13 @@
 export * as TestIssuer from "./issuer.js"
 
-import { ModelsBody } from "@ren/brain-api/brain-api"
+import { Brain } from "@ren/schema/brain"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { TestToken } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Hand } from "@ren/schema/hand"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Option, Redacted, Schema } from "effect"
 
 interface Call {
   readonly endpoint: "models.refresh" | "hands.access" | "host.refresh"
@@ -29,7 +29,7 @@ export interface Instance {
   readonly stop: () => Promise<void>
 }
 
-const encodeModels = Schema.encodeSync(ModelsBody)
+const encodeModels = Schema.encodeSync(Brain.ModelGrant)
 
 const encodeAccess = Schema.encodeSync(Schema.toCodecJson(Hand.Access))
 
@@ -85,7 +85,7 @@ export const start = (): Instance => {
     const reply = state.reply()
     if (reply.type === "unavailable")
       return answer(endpoint, 503, { _tag: "ModelsUnavailableError", message: "The issuer is unavailable" }, presented)
-    return answer(endpoint, 200, encodeModels({ access: reply.access, hostToken: next }), presented)
+    return answer(endpoint, 200, encodeModels({ access: reply.access, hostToken: Redacted.make(next) }), presented)
   }
   const endpoints: Readonly<Record<string, Call["endpoint"]>> = {
     "/brain/models/refresh": "models.refresh",

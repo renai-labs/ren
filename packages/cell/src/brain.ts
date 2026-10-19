@@ -2,7 +2,7 @@ export * as Brain from "./brain.js"
 
 import { BrainApi } from "@ren/brain-api/brain-api"
 import { ForbiddenError, ModelsNotConfiguredError } from "@ren/brain-api/errors"
-import { DateTime, Effect, Layer, Option } from "effect"
+import { DateTime, Effect, Layer, Option, Redacted } from "effect"
 import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
@@ -70,7 +70,10 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
           return yield* activity.configuring.withPermit(
             Effect.gen(function* () {
               // oxlint-disable-next-line ren/no-comments -- Writing before checking whether the harness is open guarantees that either a later open reads this configuration or this request applies it to the open instance.
-              yield* store.write(request.payload.access, request.payload.hostToken)
+              yield* store.write(
+                request.payload.access,
+                request.payload.hostToken && Redacted.value(request.payload.hostToken),
+              )
               if ((yield* host.state).isOpen) {
                 const harness = yield* Cell.acquire
                 yield* harness.configure(request.payload.access.endpoints)

@@ -1,9 +1,10 @@
 import type { Auth } from "@ren/schema/auth"
+import { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
 import type { Session } from "@ren/schema/session"
-import { Context, Schema } from "effect"
+import { Context } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
-import { ModelsBody } from "./brain-api.js"
+import { Host } from "./host.js"
 import { HandNotFoundError, HandUnavailableError, ForbiddenError, ModelsUnavailableError } from "./errors.js"
 
 export class CurrentHost extends Context.Service<
@@ -23,15 +24,10 @@ export class HostAuthentication extends HttpApiMiddleware.Service<HostAuthentica
   },
 ) {}
 
-export const HostTokenBody = Schema.Struct({ hostToken: Schema.NonEmptyString }).annotate({
-  identifier: "Host.HostTokenBody",
-})
-export type HostTokenBody = typeof HostTokenBody.Type
-
 const ModelsGroup = HttpApiGroup.make("models")
   .add(
     HttpApiEndpoint.post("models.refresh", "/brain/models/refresh", {
-      success: ModelsBody,
+      success: Brain.ModelGrant,
       error: ModelsUnavailableError,
     }).annotateMerge(
       OpenApi.annotations({
@@ -73,7 +69,7 @@ const HandsGroup = HttpApiGroup.make("hands")
 
 const HostGroup = HttpApiGroup.make("host")
   .add(
-    HttpApiEndpoint.post("host.refresh", "/brain/host/refresh", { success: HostTokenBody }).annotateMerge(
+    HttpApiEndpoint.post("host.refresh", "/brain/host/refresh", { success: Host.Refreshed }).annotateMerge(
       OpenApi.annotations({
         identifier: "host.refresh",
         summary: "Refresh a host token",

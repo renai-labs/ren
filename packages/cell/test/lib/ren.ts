@@ -91,7 +91,7 @@ export const start = () => {
             const host = yield* CurrentHost
             record("host.refresh", host.sessionId, 200)
             yield* Effect.promise(() => state.refreshGate?.() ?? Promise.resolve())
-            return { hostToken: yield* Effect.promise(() => hostToken(host.sessionId)) }
+            return { hostToken: Redacted.make(yield* Effect.promise(() => hostToken(host.sessionId))) }
           }),
         ),
       ),

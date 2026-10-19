@@ -15,7 +15,7 @@ const answerWithinFor: Readonly<Record<string, Duration.Duration>> = {
   "executor.hello": Duration.seconds(10),
   "process.heartbeat": Duration.seconds(5),
   "process.kill": Duration.seconds(5),
-}
+} satisfies Partial<Record<RpcGroup.Rpcs<typeof ExecutorApi>["_tag"], Duration.Duration>>
 
 const isUnauthorizedResponse = (error: unknown) =>
   error instanceof RpcClientError.RpcClientError &&

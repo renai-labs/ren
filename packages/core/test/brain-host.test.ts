@@ -368,7 +368,9 @@ describe("BrainHost", () => {
         )
         expect(host).toEqual({ sessionId: sid, organizationId })
         const refreshed = yield* brain.refreshModels(host)
-        expect(claims(refreshed.hostToken ?? "").exp).toBe(Duration.toSeconds("5 hours"))
+        expect(claims(refreshed.hostToken ? Redacted.value(refreshed.hostToken) : "").exp).toBe(
+          Duration.toSeconds("5 hours"),
+        )
       }).pipe(Effect.provide(host(settings, expiring))),
     )
   })
@@ -609,7 +611,7 @@ describe("BrainHost", () => {
         const brain = yield* hostWith("http://127.0.0.1:9")
         const host = { sessionId: Session.ID.create(), organizationId }
         const body = yield* brain.refreshHostToken(host)
-        const refreshed = claims(body.hostToken)
+        const refreshed = claims(Redacted.value(body.hostToken))
         expect(refreshed).toMatchObject({ sid: host.sessionId, scope: "host", org: organizationId })
         expect(refreshed.exp * 1000 - Date.now()).toBeGreaterThan(Duration.toMillis(Duration.hours(2)) - 5_000)
       }),

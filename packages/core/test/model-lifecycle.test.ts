@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
-import { ModelsBody } from "@ren/brain-api/brain-api"
+import { Brain } from "@ren/schema/brain"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Shared, TestCell, TestToken, Wrangler } from "@ren/cell/testing"
 import type { Celld } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { Effect, Layer, Schedule, Schema } from "effect"
+import { Effect, Layer, Redacted, Schedule, Schema } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { BrainHost } from "../src/brain-host.js"
 import { Models } from "../src/models.js"
@@ -158,7 +158,12 @@ const put = (sessionId: Session.ID, granted: Models.Access, presented?: string) 
       fetch(`${cell.url}/ren/models`, {
         method: "PUT",
         headers: { authorization: header, "content-type": "application/json" },
-        body: JSON.stringify(Schema.encodeSync(ModelsBody)({ access: granted, ...(hostToken && { hostToken }) })),
+        body: JSON.stringify(
+          Schema.encodeSync(Brain.ModelGrant)({
+            access: granted,
+            ...(hostToken && { hostToken: Redacted.make(hostToken) }),
+          }),
+        ),
       }),
     )
     expect(response.status).toBe(204)

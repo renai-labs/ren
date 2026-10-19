@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { Effect, Option, Schema } from "effect"
 import { TestClock } from "effect/testing"
-import type { JWTPayload } from "jose"
+import { SignJWT } from "jose"
 import { Signature } from "../src/signature.js"
 
 const active = await Effect.runPromise(Signature.generate("active"))
@@ -10,7 +10,8 @@ const keys = [active.publicKey, retiring.publicKey]
 const now = 1_800_000_000
 const Claims = Schema.Struct({ kid: Schema.String, sub: Schema.String, exp: Schema.Int })
 const claims = { sub: "subject", exp: now + 60 }
-const sign = (key = active.privateKey, payload: JWTPayload = claims) => Effect.runPromise(Signature.sign(key, payload))
+const sign = (key = active.privateKey, payload: Parameters<typeof Signature.sign>[1] = claims) =>
+  Effect.runPromise(Signature.sign(key, payload))
 const verify = (token: string, millis = now * 1000) =>
   Effect.runPromise(
     TestClock.setTime(millis).pipe(
@@ -63,7 +64,11 @@ test("expires exactly at the claimed expiry", async () => {
 })
 
 test("rejects a token without an expiry", async () => {
-  expect(await verify(await sign(active.privateKey, { sub: "subject" }))).toEqual(Option.none())
+  const subtle = await crypto.subtle.importKey("pkcs8", new Uint8Array(active.privateKey.key), "Ed25519", false, [
+    "sign",
+  ])
+  const token = await new SignJWT({ sub: "subject" }).setProtectedHeader({ alg: "EdDSA", kid: "active" }).sign(subtle)
+  expect(await verify(token)).toEqual(Option.none())
 })
 
 test("round-trips generated keys through their variables", () => {

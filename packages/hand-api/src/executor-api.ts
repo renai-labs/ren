@@ -59,6 +59,8 @@ export const maxWindowBytes = 1024 * 1024
 
 const Offset = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
+const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+
 export interface OutputWindow extends Schema.Schema.Type<typeof OutputWindow> {}
 export const OutputWindow = Schema.Struct({
   maxBytes: Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(maxWindowBytes)),
@@ -75,7 +77,7 @@ export const ProcessEvent = Schema.Union([
   Schema.Struct({ type: Schema.Literal("exit"), exitCode: Schema.Int, signal: Schema.Null }),
   Schema.Struct({ type: Schema.Literal("exit"), exitCode: Schema.Null, signal: Signal.Name }),
   Schema.Struct({ type: Schema.Literal("ping") }),
-  Schema.Struct({ type: Schema.Literal("skip"), offset: Offset, bytes: Offset, newlines: Offset }).annotate({
+  Schema.Struct({ type: Schema.Literal("skip"), offset: Offset, length: Count, newlines: Count }).annotate({
     description: "Output from offset that a reader with a window does not get: its length and its newlines",
   }),
 ]).annotate({ identifier: "Executor.ProcessEvent" })

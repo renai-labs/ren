@@ -1,6 +1,6 @@
 export * as ModelsTest from "./models.js"
 
-import { ModelsBody } from "@ren/brain-api/brain-api"
+import { Brain } from "@ren/schema/brain"
 import { Deferred, Effect, Layer, Queue, Schema } from "effect"
 import { ModelStore } from "../../src/model-store.js"
 
@@ -23,7 +23,7 @@ export const storage = (stored = new Map<string, string>()) =>
     ),
   )
 
-export const granted = (body: ModelsBody) => Response.json(Schema.encodeSync(ModelsBody)(body))
+export const granted = (body: Brain.ModelGrant) => Response.json(Schema.encodeSync(Brain.ModelGrant)(body))
 
 export const issuer = Effect.gen(function* () {
   const exchanges = yield* Queue.unbounded<Exchange>()
