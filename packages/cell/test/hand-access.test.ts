@@ -72,9 +72,9 @@ it.live("asks Ren once for the session of its host token and gives the access Re
     const hostToken = yield* Effect.promise(() => FakeRen.hostToken(subject.sessionId))
     yield* subject.configure(hostToken)
     const opened = yield* subject.access.open(subject.sessionId)
-    expect([opened.directory, opened.url, opened.generation, DateTime.toEpochMillis(opened.expiresAt)]).toEqual([
+    expect([opened.directory, opened.url.href, opened.generation, DateTime.toEpochMillis(opened.expiresAt)]).toEqual([
       access.directory,
-      access.url,
+      access.url.href,
       access.generation,
       DateTime.toEpochMillis(access.expiresAt),
     ])
@@ -234,9 +234,9 @@ it.live(
       ])
       expect(yield* subject.store.readHostToken).toEqual(Option.none())
       yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.sessionId)))
-      expect([yield* subject.hostToken.isValid, (yield* subject.access.open(subject.sessionId)).url]).toEqual([
+      expect([yield* subject.hostToken.isValid, (yield* subject.access.open(subject.sessionId)).url.href]).toEqual([
         true,
-        access.url,
+        access.url.href,
       ])
     }),
 )

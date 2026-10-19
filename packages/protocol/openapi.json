@@ -1151,11 +1151,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Hand.Providers",
+            "description": "HandProvider.Infos",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Hand.Providers"
+                  "$ref": "#/components/schemas/HandProvider.Infos"
                 }
               }
             }
@@ -1560,7 +1560,7 @@
             ]
           },
           "provider": {
-            "$ref": "#/components/schemas/Hand.ProviderID"
+            "$ref": "#/components/schemas/HandProvider.ID"
           },
           "config": {
             "description": "The settings of the provider. Its schema is in the provider list."
@@ -1601,7 +1601,7 @@
             ]
           },
           "provider": {
-            "$ref": "#/components/schemas/Hand.ProviderID"
+            "$ref": "#/components/schemas/HandProvider.ID"
           },
           "config": {},
           "sessionsPerHand": {
@@ -1695,7 +1695,9 @@
           },
           "config": {
             "anyOf": [
-              {},
+              {
+                "description": "Applies to hands made after the change. Running hands keep their config."
+              },
               {
                 "type": "null"
               }
@@ -1730,15 +1732,15 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
-      "Hand.ProviderID": {
+      "HandProvider.ID": {
         "type": "string",
         "minLength": 1
       },
-      "Hand.ProviderInfo": {
+      "HandProvider.Info": {
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/Hand.ProviderID"
+            "$ref": "#/components/schemas/HandProvider.ID"
           },
           "title": {
             "type": "string"
@@ -1753,10 +1755,10 @@
         "required": ["id", "title", "description", "configSchema"],
         "additionalProperties": false
       },
-      "Hand.Providers": {
+      "HandProvider.Infos": {
         "type": "array",
         "items": {
-          "$ref": "#/components/schemas/Hand.ProviderInfo"
+          "$ref": "#/components/schemas/HandProvider.Info"
         }
       },
       "Health.Info": {

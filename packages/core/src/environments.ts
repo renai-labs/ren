@@ -2,17 +2,17 @@ export * as Environments from "./environments.js"
 
 import { Database } from "@ren/db/database"
 import { Environment } from "@ren/schema/environment"
-import type { Hand } from "@ren/schema/hand"
+import type { HandProvider } from "@ren/schema/hand-provider"
 import { and, asc, count, eq, isNotNull, isNull, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
-import { HandProvider } from "./hand-provider.js"
+import { HandProviders } from "./hand-providers.js"
 import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 
 export type Interface = Primitive.Interface<typeof Environment.definition> & {
-  readonly providers: Effect.Effect<ReadonlyArray<Hand.ProviderInfo>>
+  readonly providers: Effect.Effect<ReadonlyArray<HandProvider.Info>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Environments") {}
@@ -47,7 +47,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const access = yield* Access.Service
-    const registry = yield* HandProvider.Registry
+    const registry = yield* HandProviders.Registry
 
     const isAllowed = (actor: Actor.Info, action: string) =>
       access.isAllowed({ actor, action, resource: SpacePolicy.organization })
@@ -55,7 +55,7 @@ export const layer = Layer.effect(
     const inOrganization = (actor: Actor.Info) =>
       and(eq(table.organization_id, actor.organizationId), isNull(table.archived_at))
 
-    const checked = Effect.fnUntraced(function* (provider: Hand.ProviderID, config: unknown) {
+    const checked = Effect.fnUntraced(function* (provider: HandProvider.ID, config: unknown) {
       const found = registry.get(provider)
       if (Option.isNone(found))
         return yield* new Primitive.Invalid({
@@ -81,7 +81,7 @@ export const layer = Layer.effect(
     })
 
     const destroyHands = Effect.fn("Environments.destroyHands")(function* (
-      provider: Hand.ProviderID,
+      provider: HandProvider.ID,
       environmentId: Environment.ID,
     ) {
       const hands = yield* database.db

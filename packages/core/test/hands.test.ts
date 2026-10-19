@@ -10,7 +10,7 @@ import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { eq, sql } from "drizzle-orm"
 import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
-import { HandProvider } from "../src/hand-provider.js"
+import { HandProviders } from "../src/hand-providers.js"
 import { Hands } from "../src/hands.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/hand-provider.js"
@@ -34,7 +34,7 @@ const handsWith = Effect.fnUntraced(function* (
   const probe = yield* TestProvider.make(options)
   const context = yield* Layer.build(
     Layer.fresh(Hands.layer).pipe(
-      Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
+      Layer.provide(HandProviders.layer([Effect.succeed(probe.provider)])),
       Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ENVIRONMENT_KEYS: signingKeys, ...config }))),
     ),
   )
@@ -128,7 +128,7 @@ describe("Hands", () => {
         const provisions = yield* Ref.get(subject.probe.provisions)
         expect(provisions.length).toBe(1)
         expect([access.directory, access.generation]).toEqual([`/workspace/${session.brainId}`, 1])
-        expect(again.url).toBe(access.url)
+        expect(again.url.href).toBe(access.url.href)
         const claims = yield* EnvironmentToken.verify([keys[0].publicKey], Redacted.value(access.token))
         expect(Option.map(claims, (found) => [found.kid, found.env, found.brain])).toEqual(
           Option.some(["new", environmentId, Brain.ofSession(session.brainId)]),
@@ -178,8 +178,8 @@ describe("Hands", () => {
       yield* Ref.set(subject.probe.gone, new Set([lost]))
       const replaced = yield* Effect.forEach(sessions, (session) => subject.hands.access(session))
       expect(replaced.map((access) => access.generation)).toEqual([2, 2])
-      expect(replaced.at(0)?.url).not.toBe(first.at(0)?.url)
-      expect(replaced.at(1)?.url).toBe(replaced.at(0)?.url)
+      expect(replaced.at(0)?.url.href).not.toBe(first.at(0)?.url.href)
+      expect(replaced.at(1)?.url.href).toBe(replaced.at(0)?.url.href)
       expect((yield* handsOf(environmentId)).length).toBe(1)
     }),
   )

@@ -33,8 +33,8 @@ export const refreshBefore = Duration.minutes(5)
 
 export const retryRenAfter = Duration.seconds(30)
 
-const isSameSandbox = (held: Hand.Access, fresh: Hand.Access) =>
-  fresh.url === held.url && fresh.generation === held.generation && fresh.directory === held.directory
+const isSameHand = (held: Hand.Access, fresh: Hand.Access) =>
+  fresh.url.href === held.url.href && fresh.generation === held.generation && fresh.directory === held.directory
 
 export interface Connection {
   readonly hello: Hello
@@ -68,7 +68,7 @@ export const layer = Layer.effect(
         Effect.tap(() => Effect.sync(() => failures.delete(sessionId))),
         Effect.mapError((error) =>
           error._tag === "HandAccess.NotFound"
-            ? new Unavailable({ sessionId, reason: "no_access", message: `No access to a sandbox: ${error.message}` })
+            ? new Unavailable({ sessionId, reason: "no_access", message: `No access to a hand: ${error.message}` })
             : new Unavailable({
                 sessionId,
                 reason: "ren_unavailable",
@@ -112,7 +112,7 @@ export const layer = Layer.effect(
                 return latest
               return yield* ask(sessionId).pipe(
                 Effect.flatMap((fresh) =>
-                  isSameSandbox(latest, fresh) ? Effect.succeed(fresh) : invalidateSelf.pipe(Effect.as(latest)),
+                  isSameHand(latest, fresh) ? Effect.succeed(fresh) : invalidateSelf.pipe(Effect.as(latest)),
                 ),
                 Effect.catch((error) =>
                   error.reason === "no_access"
@@ -145,12 +145,12 @@ export const layer = Layer.effect(
               ? new Unavailable({
                   sessionId,
                   reason: "token_refused",
-                  message: `The sandbox at ${access.url} refused the access token from Ren`,
+                  message: `The hand at ${access.url} refused the access token from Ren`,
                 })
               : new Unavailable({
                   sessionId,
                   reason: "unreachable",
-                  message: `The sandbox at ${access.url} does not answer: ${cause.message}`,
+                  message: `The hand at ${access.url} does not answer: ${cause.message}`,
                 })
           const hello = yield* client["executor.hello"]().pipe(Effect.mapError(noAnswer))
           if (hello.protocol !== protocol)
@@ -165,7 +165,7 @@ export const layer = Layer.effect(
                 ? new Unavailable({
                     sessionId,
                     reason: "unusable",
-                    message: `Could not make the folder ${access.directory} on the sandbox: ${error.message}`,
+                    message: `Could not make the directory ${access.directory} on the hand: ${error.message}`,
                   })
                 : noAnswer(error),
             ),
@@ -180,7 +180,7 @@ export const layer = Layer.effect(
                   new Unavailable({
                     sessionId,
                     reason: "ren_unavailable",
-                    message: "The access to the sandbox expired",
+                    message: "The access to the hand expired",
                   }),
                 ),
               onSome: (failed) => Effect.fail(failed.error),

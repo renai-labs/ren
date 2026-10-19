@@ -163,7 +163,7 @@ it.live("a session without access fails with no access", () =>
     const error = yield* connect(environments).pipe(Effect.flip)
     expect([error.reason, error.message]).toEqual([
       "no_access",
-      `No access to a sandbox: Session ${sessionId} has no access to an environment`,
+      `No access to a hand: Session ${sessionId} has no access to an environment`,
     ])
   }),
 )
@@ -191,7 +191,7 @@ it.live("a session folder that is a file on the sandbox fails the first contact 
     )
     const error = yield* connect(environments).pipe(Effect.flip)
     expect(error.reason).toBe("unusable")
-    expect(error.message).toContain(`Could not make the folder ${join(root, sessionId)} on the sandbox`)
+    expect(error.message).toContain(`Could not make the directory ${join(root, sessionId)} on the hand`)
   }),
 )
 
@@ -324,7 +324,7 @@ it.effect(
       yield* TestClock.adjust(Duration.minutes(7))
       yield* connection.client["executor.hello"]()
       const error = yield* connect(environments).pipe(Effect.flip)
-      expect([error.reason, error.message]).toEqual(["no_access", "No access to a sandbox: no binding"])
+      expect([error.reason, error.message]).toEqual(["no_access", "No access to a hand: no binding"])
     }),
 )
 
@@ -376,7 +376,7 @@ it.effect("a call to a sandbox that accepts the request and never answers ends i
     yield* Deferred.await(statArrived)
     yield* TestClock.adjust(ExecutorClient.answerWithin)
     const error = yield* Fiber.join(call)
-    expect(error.message).toContain("The sandbox did not answer files.stat within 30s")
+    expect(error.message).toContain("The hand did not answer files.stat within 30s")
     yield* connect(environments)
     expect(yield* Ref.get(opens)).toBe(2)
   }),

@@ -49,7 +49,7 @@ export const access = Effect.fnUntraced(function* (options: {
   const expiresAt = DateTime.makeUnsafe((options.issuedAt ?? Date.now()) + (options.lifetimeMs ?? 600_000))
   return {
     directory: options.directory,
-    url: options.url,
+    url: new URL(options.url),
     token: Redacted.make(
       yield* EnvironmentToken.sign(keys.privateKey, {
         env: options.environmentId,

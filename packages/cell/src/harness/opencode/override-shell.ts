@@ -20,7 +20,7 @@ import type { EnvironmentFiles } from "@opencode/core/environment/files"
 import type { ChildProcessSpawner } from "effect/process"
 import type { Hand } from "@ren/brain/hand"
 
-export interface Sandbox {
+export interface ShellHand {
   readonly spawnerWith: (options: Hand.SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
   readonly overrides: EnvironmentFiles.FilesImpl
 }
@@ -55,7 +55,7 @@ const keepLast = (tail: Uint8Array, chunk: Uint8Array, limit: number) => {
 
 const countNewlines = (chunk: Uint8Array) => chunk.reduce((count, byte) => (byte === 10 ? count + 1 : count), 0)
 
-const layer = (sandboxOf: (sessionId: Session.ID) => Sandbox) =>
+const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
   Layer.effect(
     Service,
     Effect.gen(function* () {
@@ -68,8 +68,8 @@ const layer = (sandboxOf: (sessionId: Session.ID) => Sandbox) =>
       const commands = new Map<Shell.ID, Command>()
       const exitOrder: Array<Shell.ID> = []
       const outputDir = path.join(global.data, DIRECTORY, location.project.id)
-      const sandbox = Option.map(Option.fromNullishOr(location.workspaceID), (workspaceID) =>
-        sandboxOf(Session.ID.make(`ses_${workspaceID.slice(workspaceID.indexOf("_") + 1)}`)),
+      const hand = Option.map(Option.fromNullishOr(location.workspaceID), (workspaceID) =>
+        handOf(Session.ID.make(`ses_${workspaceID.slice(workspaceID.indexOf("_") + 1)}`)),
       )
       const limits = Effect.map(config.entries(), (entries) => {
         const configured = Config.latest(entries, "tool_output")
@@ -98,8 +98,8 @@ const layer = (sandboxOf: (sessionId: Session.ID) => Sandbox) =>
         commands.delete(id)
         if (command.timeoutFiber) yield* Fiber.interrupt(command.timeoutFiber)
         yield* Deferred.fail(command.done, new NotFoundError({ id }))
-        // oxlint-disable-next-line ren/no-comments -- A frozen sandbox must not hold up an interrupt, so the file is deleted in the background.
-        if (Option.isSome(sandbox)) runFork(sandbox.value.overrides.remove(command.file).pipe(Effect.ignore))
+        // oxlint-disable-next-line ren/no-comments -- A frozen hand must not hold up an interrupt, so the file is deleted in the background.
+        if (Option.isSome(hand)) runFork(hand.value.overrides.remove(command.file).pipe(Effect.ignore))
       })
       const wait = Effect.fn("Shell.wait")(function* (id: Shell.ID) {
         return yield* Deferred.await((yield* require(id)).done)
@@ -112,8 +112,8 @@ const layer = (sandboxOf: (sessionId: Session.ID) => Sandbox) =>
           return { output: "", cursor: command.output.size, size: command.output.size, truncated: false }
         const start = Math.max(0, cursor)
         const length = Math.min(limit, command.output.size - start)
-        const bytes = Option.isSome(sandbox)
-          ? yield* sandbox.value.overrides.read(command.file, { offset: start, length }).pipe(
+        const bytes = Option.isSome(hand)
+          ? yield* hand.value.overrides.read(command.file, { offset: start, length }).pipe(
               Effect.map((read) => read.bytes),
               Effect.orElseSucceed(() => new Uint8Array()),
             )
@@ -163,10 +163,10 @@ const layer = (sandboxOf: (sessionId: Session.ID) => Sandbox) =>
           shell: input.shell ?? (yield* shell.resolve({ priority: "config" })),
           env: { TERM: "xterm-256color", OPENCODE_TERMINAL: "1" },
         }
-        if (Option.isNone(sandbox))
+        if (Option.isNone(hand))
           return yield* new AppProcess.AppProcessError({
             command: invocation.command,
-            cause: new Error("This session has no sandbox, so it cannot run commands"),
+            cause: new Error("This session has no hand, so it cannot run commands"),
           })
         yield* hooks.trigger("shell", "create.before", invocation)
         if (before) yield* before(invocation)
@@ -188,7 +188,7 @@ const layer = (sandboxOf: (sessionId: Session.ID) => Sandbox) =>
         runFork(
           Effect.scoped(
             Effect.gen(function* () {
-              const handle = yield* sandbox.value
+              const handle = yield* hand.value
                 .spawnerWith({
                   outputFile: file,
                   window: { maxBytes: keep, intervalMs: readEvery },
@@ -325,10 +325,10 @@ const layer = (sandboxOf: (sessionId: Session.ID) => Sandbox) =>
     }),
   )
 
-export const node = (sandboxOf: (sessionId: Session.ID) => Sandbox) =>
+export const node = (handOf: (sessionId: Session.ID) => ShellHand) =>
   LayerNode.make({
     service: Service,
     tag: tags.values.location,
-    layer: layer(sandboxOf),
+    layer: layer(handOf),
     deps: [Location.node, Global.node, ShellSelect.node, PluginHooks.node, Config.node],
   })

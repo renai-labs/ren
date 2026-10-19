@@ -7,6 +7,8 @@ import { Authentication, ExecutorApi, UnauthorizedError } from "./executor-api.j
 
 export const path = "/v1/rpc"
 
+export const rpcUrl = (url: URL) => `${url.href.replace(/\/$/u, "")}${path}`
+
 export const answerWithin = Duration.seconds(30)
 
 const answerWithinFor: Readonly<Record<string, Duration.Duration>> = {
@@ -28,7 +30,7 @@ export const isNoAnswer = (error: unknown) =>
 export type Client = RpcClient.RpcClient<RpcGroup.Rpcs<typeof ExecutorApi>, RpcClientError.RpcClientError>
 
 export interface Options {
-  readonly url: string
+  readonly url: URL
   readonly token: Effect.Effect<string>
   readonly onNoAnswer?: Effect.Effect<void>
 }
@@ -53,7 +55,7 @@ const layer = (options: Options) =>
                 Effect.fail(
                   new RpcClientError.RpcClientError({
                     reason: new RpcClientError.RpcClientDefect({
-                      message: `The sandbox did not answer ${call.rpc._tag} within ${Duration.format(duration)}`,
+                      message: `The hand did not answer ${call.rpc._tag} within ${Duration.format(duration)}`,
                       cause: undefined,
                     }),
                   }),
@@ -74,7 +76,7 @@ const layer = (options: Options) =>
       Effect.flatMap(HttpClient.HttpClient, (client) =>
         RpcClient.makeProtocolHttp(
           client.pipe(
-            HttpClient.mapRequest(HttpClientRequest.prependUrl(options.url + path)),
+            HttpClient.mapRequest(HttpClientRequest.prependUrl(rpcUrl(options.url))),
             HttpClient.mapRequestEffect((request) =>
               Effect.map(options.token, (token) => HttpClientRequest.bearerToken(request, token)),
             ),

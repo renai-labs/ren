@@ -1,4 +1,4 @@
-import { Space } from "@ren/schema/space"
+import { Primitive } from "@ren/schema/primitive"
 import { Dialog } from "@ren/ui/dialog"
 import { Form } from "@ren/ui/form"
 import { Notice } from "@ren/ui/notice"
@@ -8,7 +8,7 @@ import { Schema } from "effect"
 import { RouterContext } from "../../lib/router-context.js"
 
 const schema = Schema.toStandardSchemaV1(
-  Schema.Struct({ name: Schema.Trim.pipe(Schema.decodeTo(Space.Name)), description: Schema.String }),
+  Schema.Struct({ name: Schema.Trim.pipe(Schema.decodeTo(Primitive.Name)), description: Schema.String }),
 )
 
 export function CreateSpaceDialog(props: { onClose: () => void }) {

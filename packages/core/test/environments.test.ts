@@ -2,12 +2,12 @@ import { describe, expect } from "bun:test"
 import { Signature } from "@ren/hand-api/signature"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
-import { Hand } from "@ren/schema/hand"
+import { HandProvider } from "@ren/schema/hand-provider"
 import { Session } from "@ren/schema/session"
 import { ConfigProvider, Effect, Layer, Ref, Schema } from "effect"
 import { Access } from "../src/access.js"
 import { Environments } from "../src/environments.js"
-import { HandProvider } from "../src/hand-provider.js"
+import { HandProviders } from "../src/hand-providers.js"
 import { Hands } from "../src/hands.js"
 import { Space } from "../src/space.js"
 import { SpaceEnvironment } from "../src/space/environment.js"
@@ -22,7 +22,7 @@ const key = await Effect.runPromise(Signature.generate("environments"))
 
 const it = testEffect(
   Layer.mergeAll(Environments.layer, SpaceEnvironment.layer, Hands.layer, Space.layer, SpaceProvisioning.layer).pipe(
-    Layer.provideMerge(HandProvider.layer([Effect.succeed(probe.provider)])),
+    Layer.provideMerge(HandProviders.layer([Effect.succeed(probe.provider)])),
     Layer.provideMerge(Access.layer),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
@@ -58,7 +58,7 @@ const team = Effect.fnUntraced(function* () {
 
 const input = {
   name: "Python",
-  provider: Hand.ProviderID.make("test"),
+  provider: HandProvider.ID.make("test"),
   config: { label: "python" },
   sessionsPerHand: 2,
 }
@@ -86,7 +86,7 @@ describe("Environments", () => {
       const environments = yield* Environments.Service
       const setup = yield* team()
       const unknown = yield* environments
-        .create(setup.admin, { ...input, provider: Hand.ProviderID.make("e2b") })
+        .create(setup.admin, { ...input, provider: HandProvider.ID.make("e2b") })
         .pipe(Effect.flip)
       expect(unknown).toMatchObject({ _tag: "Primitive.Invalid", field: "provider" })
       const refused = yield* environments.create(setup.admin, { ...input, config: { label: "" } }).pipe(Effect.flip)
@@ -182,7 +182,7 @@ describe("Environments", () => {
       const environments = yield* Environments.Service
       expect(yield* environments.providers).toEqual([
         {
-          id: Hand.ProviderID.make("test"),
+          id: HandProvider.ID.make("test"),
           title: "Test",
           description: "Hands that live in the test’s memory.",
           configSchema: {

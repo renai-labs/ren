@@ -17,7 +17,7 @@ import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { BrainHost } from "../src/brain-host.js"
-import { HandProvider } from "../src/hand-provider.js"
+import { HandProviders } from "../src/hand-providers.js"
 import { Hands } from "../src/hands.js"
 import { Models } from "../src/models.js"
 import { TestProvider } from "./lib/hand-provider.js"
@@ -110,8 +110,8 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
         const on = placed.get(handId) ?? config.target
         placed.set(handId, on)
         return disposed.has(on.url)
-          ? Effect.fail(new HandProvider.Gone({ message: `the sandbox of hand ${handId} is gone` }))
-          : Effect.succeed({ url: on.url })
+          ? Effect.fail(new HandProviders.Gone({ message: `the sandbox of hand ${handId} is gone` }))
+          : Effect.succeed({ url: new URL(on.url) })
       },
     }),
   )
@@ -124,7 +124,7 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
     },
     models,
     Hands.layer.pipe(
-      Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
+      Layer.provide(HandProviders.layer([Effect.succeed(probe.provider)])),
       Layer.provide(Layer.succeedContext(context)),
     ),
   )
@@ -322,7 +322,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     await restartCore({ ...config, present: false })
     await cell.crash()
     await cell.start()
-    expect(await turn(sessionId, "echo after")).toContain("No access to a sandbox")
+    expect(await turn(sessionId, "echo after")).toContain("No access to a hand")
     const chat = stub.script({ reply: "still here" })
     await send(sessionId, chat)
     await chat.called(1)

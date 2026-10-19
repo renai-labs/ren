@@ -1,8 +1,10 @@
 import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import type { Hand } from "@ren/schema/hand"
+import type { HandProvider } from "@ren/schema/hand-provider"
+import { Primitive } from "@ren/schema/primitive"
 import type { Session } from "@ren/schema/session"
-import { Space } from "@ren/schema/space"
+import type { Space } from "@ren/schema/space"
 import type { SpaceEnvironment } from "@ren/schema/space-environment"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
 import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
@@ -22,7 +24,7 @@ export const environment = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text().notNull(),
     description: text(),
-    provider: text().$type<Hand.ProviderID>().notNull(),
+    provider: text().$type<HandProvider.ID>().notNull(),
     config: jsonb().$type<Schema.Json>().notNull(),
     sessions_per_hand: integer().notNull(),
     created_at: timestamp().defaultNow().notNull(),
@@ -33,7 +35,7 @@ export const environment = pgTable(
     index("environment_organization_id_created_at_id_idx").on(table.organization_id, table.created_at, table.id),
     check(
       "environment_name_length_check",
-      sql`char_length(${table.name}) between 1 and ${sql.raw(String(Space.maximumNameLength))}`,
+      sql`char_length(${table.name}) between 1 and ${sql.raw(String(Primitive.maximumNameLength))}`,
     ),
     check(
       "environment_sessions_per_hand_check",
