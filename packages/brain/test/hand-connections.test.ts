@@ -190,7 +190,7 @@ it.live("a session folder that is a file on the sandbox fails the first contact 
       TestAccess.fixed(new Map([[sessionId, yield* accessAt(url, { root })]])),
     )
     const error = yield* connect(environments).pipe(Effect.flip)
-    expect(error.reason).toBe("unusable")
+    expect(error.reason).toBe("directory_failed")
     expect(error.message).toContain(`Could not make the directory ${join(root, sessionId)} on the hand`)
   }),
 )
