@@ -19,10 +19,10 @@ import { ChildProcess } from "effect/process"
 import path from "node:path"
 import type { EnvironmentFiles } from "@opencode/core/environment/files"
 import type { ChildProcessSpawner } from "effect/process"
-import type { Hand } from "@ren/brain/hand"
+import type { HandSession } from "@ren/brain/hand-session"
 
 export interface ShellHand {
-  readonly spawnerWith: (options: Hand.SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
+  readonly spawnerWith: (options: HandSession.SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
   readonly overrides: EnvironmentFiles.FilesImpl
 }
 

@@ -1,4 +1,4 @@
-export * as Hand from "./hand.js"
+export * as HandSession from "./hand-session.js"
 
 import {
   type DirectoryEntry,
@@ -60,7 +60,7 @@ const runnable = (shells: ReadonlyArray<string> = [], command: string, args: Rea
   return shells.at(0) ?? command
 }
 
-class OutputInterrupted extends Schema.TaggedError<OutputInterrupted>()("Hand.OutputInterrupted", {
+class OutputInterrupted extends Schema.TaggedError<OutputInterrupted>()("HandSession.OutputInterrupted", {
   message: Schema.String,
 }) {}
 
@@ -273,17 +273,17 @@ export interface Files {
   readonly mkdir: (path: string) => Effect.Effect<void, FileSystemError | Unreached>
 }
 
-export interface SessionHand {
+export interface Interface {
   readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]
   readonly spawnerWith: (options: SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
   readonly files: Files
 }
 
-export const session = (
+export const make = (
   connections: HandConnections.Interface,
   sessionId: Session.ID,
   killedBySignal: KilledBySignal,
-): SessionHand => {
+): Interface => {
   const withConnection = <A, E>(use: (connection: HandConnections.Connection) => Effect.Effect<A, E>) =>
     connections.connect(sessionId).pipe(Effect.flatMap(use), Effect.scoped)
   const sessionSpawner = (options: SpawnOptions = {}) =>
