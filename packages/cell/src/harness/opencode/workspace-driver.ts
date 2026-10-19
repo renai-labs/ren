@@ -10,7 +10,7 @@ import type { LayerNode } from "@opencode/util/effect/layer-node"
 import { FileNotFoundError, FileTooLargeError, WrongKindError } from "@ren/hand-api/executor-api"
 import type { Signal } from "@ren/hand-api/signal"
 import type { HandConnections } from "@ren/brain/hand-connections"
-import { Hand } from "@ren/brain/hand"
+import { HandSession } from "@ren/brain/hand-session"
 import { Identifier } from "@ren/schema/identifier"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer, Schema } from "effect"
@@ -22,7 +22,7 @@ export const workspaceId = (sessionId: Session.ID) => Workspace.ID.make(`wrk_${I
 
 const killedBySignal = (signal: Signal.Name) => new CrossSpawnSpawner.KilledBySignal(signal)
 
-const files = (hand: Hand.Files): EnvironmentFiles.FilesImpl => {
+const files = (hand: HandSession.Files): EnvironmentFiles.FilesImpl => {
   const fileError = (path: string) => (cause: unknown) =>
     new EnvironmentFiles.Failed({
       path,
@@ -72,7 +72,7 @@ const files = (hand: Hand.Files): EnvironmentFiles.FilesImpl => {
 }
 
 export const session = (connections: HandConnections.Interface, sessionId: Session.ID) => {
-  const hand = Hand.session(connections, sessionId, killedBySignal)
+  const hand = HandSession.make(connections, sessionId, killedBySignal)
   return { spawner: hand.spawner, spawnerWith: hand.spawnerWith, overrides: files(hand.files) }
 }
 

@@ -1,6 +1,6 @@
 import { TestAccess } from "@ren/brain/testing"
 import { HandConnections } from "@ren/brain/hand-connections"
-import { Hand } from "@ren/brain/hand"
+import { HandSession } from "@ren/brain/hand-session"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Stream } from "effect"
@@ -252,7 +252,7 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
             ),
             HandConnections.Service,
           )
-          const hands = Hand.session(environments, sessionId, (signal) => signal)
+          const hands = HandSession.make(environments, sessionId, (signal) => signal)
           const handle = yield* hands.spawner.spawn(ChildProcess.make("/bin/zsh", ["-c", "echo $((6 * 7))"]))
           return yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString)
         }).pipe(Effect.scoped),

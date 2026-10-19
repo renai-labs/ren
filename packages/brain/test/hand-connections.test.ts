@@ -32,7 +32,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { HandConnections } from "../src/hand-connections.js"
 import { HandAccess } from "../src/hand-access.js"
-import { spawner } from "../src/hand.js"
+import { HandSession } from "../src/hand-session.js"
 import { Probe } from "./lib/probe.js"
 
 const handId = Hand.ID.create()
@@ -598,7 +598,7 @@ it.effect("a connection outlives its token and still reaches the processes it st
       ),
     )
     const connection = yield* environments.connect(sessionId)
-    const handle = yield* spawner(connection, (signal) => new Error(`Killed by ${signal}`)).spawn(
+    const handle = yield* HandSession.spawner(connection, (signal) => new Error(`Killed by ${signal}`)).spawn(
       ChildProcess.make("cat", []),
     )
     yield* Probe.advance(Duration.minutes(11))

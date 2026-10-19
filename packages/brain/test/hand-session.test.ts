@@ -4,7 +4,7 @@ import { BunServices } from "@effect/platform-bun"
 import type { SpawnResult } from "@ren/hand-api/executor-api"
 import { Sandbox, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { ID } from "@ren/schema/hand"
+import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import {
   Clock,
@@ -29,10 +29,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { HandAccess } from "../src/hand-access.js"
 import { HandConnections } from "../src/hand-connections.js"
-import { Hand } from "../src/hand.js"
+import { HandSession } from "../src/hand-session.js"
 import { Probe } from "./lib/probe.js"
 
-const handId = ID.create()
+const handId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-hand-")))
 const it = testEffect(Sandbox.layer({ handId, workspace }))
 
@@ -66,12 +66,12 @@ const connect = Effect.flatMap(Sandbox.url, connectTo)
 
 const throughRelay = Effect.gen(function* () {
   const relay = yield* Relay.make(Relay.portOf(yield* Sandbox.url))
-  return { relay, spawner: Hand.spawner(yield* connectTo(relay.url), killed) }
+  return { relay, spawner: HandSession.spawner(yield* connectTo(relay.url), killed) }
 })
 
 it.live("fails the exit code with the host's signal error", () =>
   Effect.gen(function* () {
-    const spawner = Hand.spawner(yield* connect, killed)
+    const spawner = HandSession.spawner(yield* connect, killed)
     const handle = yield* spawner.spawn(ChildProcess.make("sleep", ["30"]))
     yield* handle.kill({ killSignal: "SIGTERM" })
     const error = yield* handle.exitCode.pipe(Effect.flip)
@@ -81,7 +81,7 @@ it.live("fails the exit code with the host's signal error", () =>
 
 it.live("feeds stdin that outruns the sandbox's stdin queue without losing a byte", () =>
   Effect.gen(function* () {
-    const spawner = Hand.spawner(yield* connect, killed)
+    const spawner = HandSession.spawner(yield* connect, killed)
     const chunk = new Uint8Array(64 * 1024).fill(97)
     const handle = yield* spawner.spawn(
       ChildProcess.make("sh", ["-c", "sleep 0.3; wc -c"], {
@@ -100,7 +100,7 @@ const firstLine = (stream: Stream.Stream<Uint8Array, unknown>) =>
 
 it.live("runs a command and gives its output and exit code", () =>
   Effect.gen(function* () {
-    const spawner = Hand.spawner(yield* connect, killed)
+    const spawner = HandSession.spawner(yield* connect, killed)
     const handle = yield* spawner.spawn(ChildProcess.make("sh", ["-c", "echo out; echo err >&2; exit 3"]))
     expect(yield* text(handle.stdout)).toBe("out\n")
     expect(yield* text(handle.stderr)).toBe("err\n")
@@ -110,7 +110,7 @@ it.live("runs a command and gives its output and exit code", () =>
 
 it.live("feeds a stdin stream and closes it when the stream ends", () =>
   Effect.gen(function* () {
-    const spawner = Hand.spawner(yield* connect, killed)
+    const spawner = HandSession.spawner(yield* connect, killed)
     const handle = yield* spawner.spawn(
       ChildProcess.make("cat", [], {
         stdin: Stream.make(new TextEncoder().encode("one "), new TextEncoder().encode("two")),
@@ -123,7 +123,7 @@ it.live("feeds a stdin stream and closes it when the stream ends", () =>
 
 it.live("ends stdin when a stream run into the stdin sink ends, as Effect's spawner does", () =>
   Effect.gen(function* () {
-    const spawner = Hand.spawner(yield* connect, killed)
+    const spawner = HandSession.spawner(yield* connect, killed)
     const handle = yield* spawner.spawn(ChildProcess.make("cat", []))
     yield* Stream.make(new TextEncoder().encode("sink")).pipe(Stream.run(handle.stdin))
     expect(Number(yield* handle.exitCode.pipe(Effect.timeout(2_000)))).toBe(0)
@@ -180,7 +180,7 @@ it.live("notes how much output was lost when the executor no longer has it", () 
 
 it.live("keeps the output and exit code of two commands running at once apart", () =>
   Effect.gen(function* () {
-    const spawner = Hand.spawner(yield* connect, killed)
+    const spawner = HandSession.spawner(yield* connect, killed)
     const run = (name: string, code: number) =>
       Effect.gen(function* () {
         const handle = yield* spawner.spawn(
@@ -206,7 +206,7 @@ it.live("keeps the output and exit code of two commands running at once apart", 
 
 it.live("runs a shell script in a shell the machine has, and leaves other commands alone", () =>
   Effect.gen(function* () {
-    const spawner = Hand.spawner(yield* connect, killed)
+    const spawner = HandSession.spawner(yield* connect, killed)
     const lacking = yield* spawner.spawn(ChildProcess.make("/no/such/dir/ksh", ["-c", "echo $((6 * 7))"]))
     expect(yield* text(lacking.stdout)).toBe("42\n")
     expect(Number(yield* lacking.exitCode)).toBe(0)
@@ -234,7 +234,7 @@ const replaceable = Effect.gen(function* () {
     Effect.flatMap((built) => Effect.provide(Sandbox.url, built)),
   )
   return {
-    hand: Hand.session(environments, sessionId, killed),
+    hand: HandSession.make(environments, sessionId, killed),
     replace: Context.get(context, TestAccess.Memory)
       .set(sessionId, { ...access, url: new URL(next), generation: 2 })
       .pipe(
@@ -273,7 +273,7 @@ it.live(
       const environments = yield* environmentsWith(
         TestAccess.fixed(new Map([[sessionId, yield* accessAt(yield* Sandbox.url)]])),
       )
-      const hand = Hand.session(environments, sessionId, killed)
+      const hand = HandSession.make(environments, sessionId, killed)
       const name = `${crypto.randomUUID()}.out`
       const handle = yield* hand
         .spawnerWith({ outputFile: join(workspace, sessionId, name) })
@@ -286,7 +286,7 @@ it.live(
 it.live("a spawner with a window gets only the last output and counts the bytes and newlines it skipped", () =>
   Effect.gen(function* () {
     const skipped = { bytes: 0, newlines: 0 }
-    const handle = yield* Hand.spawner(yield* connect, killed, {
+    const handle = yield* HandSession.spawner(yield* connect, killed, {
       window: { maxBytes: 1000, intervalMs: 100 },
       onSkip: (skip) => {
         skipped.bytes += skip.length
@@ -321,7 +321,7 @@ const local = Layer.build(BunServices.layer).pipe(
 
 const bothSpawners = Effect.gen(function* () {
   return [
-    { name: "ren", spawner: Hand.spawner(yield* connect, killed) },
+    { name: "ren", spawner: HandSession.spawner(yield* connect, killed) },
     { name: "local", spawner: yield* local },
   ] as const
 })
@@ -367,7 +367,7 @@ it.live("leaves stdin open when endOnDone is false, as Effect's spawner does", (
 
 it.live("refuses a piped command with a clear cause", () =>
   Effect.gen(function* () {
-    const spawner = Hand.spawner(yield* connect, killed)
+    const spawner = HandSession.spawner(yield* connect, killed)
     const error = yield* spawner
       .spawn(ChildProcess.pipeTo(ChildProcess.make("echo", ["x"]), ChildProcess.make("cat")))
       .pipe(Effect.flip)
@@ -454,7 +454,7 @@ it.live("gives a command with stdin ignore no input, so cat exits at once, as Ef
 
 it.live("stops with SIGKILL a command that ignores SIGTERM when its scope closes", () =>
   Effect.gen(function* () {
-    const spawner = Hand.spawner(yield* connect, killed)
+    const spawner = HandSession.spawner(yield* connect, killed)
     const scope = yield* Scope.make()
     const handle = yield* spawner
       .spawn(ChildProcess.make("sh", ["-c", "trap '' TERM; echo ready; while :; do sleep 0.1; done"]))
@@ -513,7 +513,7 @@ it.effect("a heartbeat that the executor refuses as expired gets a new token, an
       ),
     )
     const connection = yield* environments.connect(sessionId)
-    const handle = yield* Hand.spawner(connection, killed).spawn(ChildProcess.make("cat", []))
+    const handle = yield* HandSession.spawner(connection, killed).spawn(ChildProcess.make("cat", []))
     yield* Probe.advance(Duration.seconds(55))
     expect(yield* Ref.get(opens)).toBe(1)
     const before = yield* Ref.get(sandbox.heartbeats)
@@ -530,7 +530,9 @@ it.effect("a command with no output for 2 minutes is not reported as silent, bec
   Effect.gen(function* () {
     const { sandbox, url } = yield* startSandbox()
     const link = yield* Probe.link
-    const handle = yield* Hand.spawner(yield* connectTo(url, link.layer), killed).spawn(ChildProcess.make("cat", []))
+    const handle = yield* HandSession.spawner(yield* connectTo(url, link.layer), killed).spawn(
+      ChildProcess.make("cat", []),
+    )
     yield* Probe.advance(Duration.minutes(2))
     expect(yield* Ref.get(sandbox.pings)).toBeGreaterThanOrEqual(20)
     expect((yield* Ref.get(link.requests)).filter((request) => request.rpc === "process.output")).toHaveLength(1)
@@ -550,7 +552,7 @@ it.effect(
         afterSpawn: (result) => Deferred.succeed(spawned, result).pipe(Effect.andThen(Effect.never)),
       })
       const scope = yield* Scope.make()
-      const request = yield* Hand.spawner(yield* connectTo(url), killed)
+      const request = yield* HandSession.spawner(yield* connectTo(url), killed)
         .spawn(ChildProcess.make("sleep", ["300"]))
         .pipe(Scope.provide(scope), Effect.forkScoped)
       const command = yield* Deferred.await(spawned)
@@ -566,7 +568,7 @@ it.effect("stops heartbeating when the command exits", () =>
   Effect.gen(function* () {
     const { sandbox, url } = yield* startSandbox()
     const connection = yield* connectTo(url)
-    const handle = yield* Hand.spawner(connection, killed).spawn(ChildProcess.make("cat", []))
+    const handle = yield* HandSession.spawner(connection, killed).spawn(ChildProcess.make("cat", []))
     yield* Probe.advanceUntil(Ref.get(sandbox.heartbeats).pipe(Effect.map((count) => count >= 3)))
     yield* Stream.make(encoder.encode("x")).pipe(Stream.run(handle.stdin))
     expect(Number(yield* handle.exitCode)).toBe(0)
@@ -579,7 +581,7 @@ it.effect("leaves no heartbeat and no output stream after 50 commands have run",
   Effect.gen(function* () {
     const { sandbox, url } = yield* startSandbox()
     const connection = yield* connectTo(url)
-    const spawner = Hand.spawner(connection, killed)
+    const spawner = HandSession.spawner(connection, killed)
     const exits = yield* Effect.forEach(
       Array.from({ length: 50 }, (_, index) => index),
       (index) =>
@@ -603,7 +605,7 @@ it.effect(
       const { sandbox, url } = yield* startSandbox()
       const connection = yield* connectTo(url)
       const started = yield* Deferred.make<number>()
-      const run = Hand.spawner(connection, killed)
+      const run = HandSession.spawner(connection, killed)
         .spawn(ChildProcess.make("cat", []))
         .pipe(
           Effect.flatMap((handle) =>
@@ -626,7 +628,7 @@ const lossy = Effect.fnUntraced(function* (command: ChildProcess.Command) {
   const { sandbox, url } = yield* startSandbox()
   const relay = yield* Relay.make(Relay.portOf(url))
   const link = yield* Probe.link
-  const handle = yield* Hand.spawner(yield* connectTo(relay.url, link.layer), killed).spawn(command)
+  const handle = yield* HandSession.spawner(yield* connectTo(relay.url, link.layer), killed).spawn(command)
   yield* Probe.advanceUntil(
     Effect.zipWith(
       Ref.get(sandbox.pings),
@@ -730,7 +732,7 @@ it.effect(
     Effect.gen(function* () {
       const relay = yield* Relay.make(Relay.portOf(yield* Probe.start({ handId, workspace })))
       const link = yield* Probe.link
-      const spawner = Hand.spawner(yield* connectTo(relay.url, link.layer), killed)
+      const spawner = HandSession.spawner(yield* connectTo(relay.url, link.layer), killed)
       const forgotten = yield* spawner.spawn(ChildProcess.make("cat", []))
       yield* relay.target(Relay.portOf(yield* Probe.start({ handId, workspace })))
       yield* relay.cut
