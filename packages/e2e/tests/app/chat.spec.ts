@@ -68,6 +68,36 @@ test("a member renames a chat, reverts a message into the composer and restores 
   await expect(page.getByRole("button", { name: "Restore messages" })).toHaveCount(0)
 })
 
+test("a member opens the model picker with its shortcut and undoes the last message with a command from the + menu", async ({
+  page,
+}) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  await page.goto("/app/")
+  const start = page.getByRole("form", { name: "Start a chat" })
+  await start.getByRole("textbox", { name: "Message" }).fill("Draft the memo")
+  await start.getByRole("button", { name: "Send" }).click()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
+
+  const composer = page.getByRole("form", { name: "Message Ren" })
+  const message = composer.getByRole("textbox", { name: "Message" })
+  await message.press("ControlOrMeta+'")
+  await expect(page.getByRole("menu")).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("menu")).toHaveCount(0)
+  await expect(message).toBeFocused()
+
+  await composer.getByRole("button", { name: "Add to this chat" }).click()
+  await page.getByRole("menuitem", { name: "Run a command" }).click()
+  await expect(message).toHaveValue("/")
+  await message.pressSequentially("und")
+  await page
+    .getByRole("listbox", { name: "Commands" })
+    .getByRole("option", { name: /^\/undo/ })
+    .click()
+  await expect(message).toHaveValue("Draft the memo")
+  await expect(page.getByRole("button", { name: "Restore messages" })).toBeVisible()
+})
+
 test("a member finds text in a chat and closes find with Escape", async ({ page }) => {
   await createOrganization(page.request, { name: "Katherine Johnson" })
   await page.goto("/app/")

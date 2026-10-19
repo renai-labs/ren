@@ -145,20 +145,23 @@ describe("web search desktop consent", () => {
       }),
     ))
 
-  test.each(["cancel", "other-client", "abort"])("ends a pending handoff on %s", (action) =>
+  test.each(["cancel", "other-client", "abort", "disconnect"])("ends a pending handoff on %s", (action) =>
     run(
       Effect.gen(function* () {
         const input = yield* fixture
+        const lost = yield* Deferred.make<void>()
         const pending = yield* WebSearch.reply({
           form: consent,
           selection: "exa",
           reply: input.record,
           events: input.events,
+          lost: Deferred.await(lost),
         }).pipe(Effect.forkChild)
         yield* Deferred.await(input.chose)
         if (action === "cancel") yield* input.cancel(consent.id)
         if (action === "other-client") yield* input.answer(consent.id, { choice: "disable" })
         if (action === "abort") yield* Fiber.interrupt(pending)
+        if (action === "disconnect") yield* Deferred.succeed(lost, undefined)
         yield* Fiber.await(pending)
         yield* input.create()
         expect(input.replies).toHaveLength(1)

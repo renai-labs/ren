@@ -30,3 +30,16 @@ story("cannot open while models load", async ({ visit }) => {
   const root = await visit("ui-model-picker--loading")
   await expect(root.getByRole("button", { name: "Model: Loading…" })).toBeDisabled()
 })
+
+story("opens from a command and takes the keyboard", async ({ visit, page }) => {
+  const root = await visit("ui-model-picker--open-from-command")
+  await root.getByRole("button", { name: "Choose model" }).click()
+  await expect(page.getByRole("menu")).toBeVisible()
+  await expect(page.getByRole("menu")).toBeFocused()
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("Enter")
+  await expect(root.getByRole("status", { name: "Selection" })).toHaveText("openai/gpt")
+  await expect(page.getByRole("menu")).toHaveCount(0)
+})

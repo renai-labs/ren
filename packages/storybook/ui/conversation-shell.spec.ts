@@ -94,6 +94,15 @@ story("an adaptive composer moves its controls below the text once the text wrap
   await expect.poll(placement).toBe("beside")
 })
 
+story("scrolls crowded inline controls so each one stays reachable", async ({ visit }) => {
+  const root = await visit("ui-conversation-shell--crowded-inline-composer")
+  const send = root.getByRole("button", { name: "Send" })
+  await expect(send).not.toBeInViewport({ ratio: 1 })
+  await send.focus()
+  await expect(send).toBeInViewport({ ratio: 1 })
+  await expect(root.getByRole("button", { name: "Claude Sonnet 4.5 · High" })).not.toBeInViewport({ ratio: 1 })
+})
+
 story("stops a running turn from an empty composer", async ({ visit }) => {
   const root = await visit("ui-conversation-shell--running")
   await expect(root.getByRole("button", { name: "Send" })).toHaveCount(0)
@@ -129,6 +138,34 @@ story("lists queued messages with their actions", async ({ visit }) => {
   await expect(root.getByRole("textbox", { name: "Message" })).toHaveValue("Then email the report to finance.")
   await root.getByRole("region", { name: "1 queued" }).getByRole("button", { name: "Remove" }).click()
   await expect(root.getByRole("region", { name: /queued/ })).toHaveCount(0)
+})
+
+story("moves a queued message with its reorder menu", async ({ visit, page }) => {
+  const root = await visit("ui-conversation-shell--queued-messages")
+  const rows = root.getByRole("region", { name: "2 queued" }).getByRole("listitem")
+  await rows.first().getByRole("button", { name: "Reorder" }).click()
+  await expect(page.getByRole("menuitem", { name: "Move up" })).toBeDisabled()
+  await page.getByRole("menuitem", { name: "Move down" }).click()
+  await expect(rows).toHaveText(["Then email the report to finance.", "Add a chart of monthly revenue."])
+})
+
+story("drags a queued message to a new place", async ({ visit, page }) => {
+  const root = await visit("ui-conversation-shell--long-queue")
+  const rows = root.getByRole("region", { name: "5 queued" }).getByRole("listitem")
+  const row = await rows.first().boundingBox()
+  const target = await rows.nth(2).boundingBox()
+  if (!row || !target) throw new Error("The queue rows are not laid out")
+  await page.mouse.move(row.x + 12, row.y + row.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(row.x + 12, target.y + target.height * 0.75, { steps: 8 })
+  await page.mouse.up()
+  await expect(rows).toHaveText([
+    "Then email the report to finance.",
+    "Split revenue by region.",
+    "Add a chart of monthly revenue.",
+    "Add last year for comparison.",
+    "Highlight the enterprise plan.",
+  ])
 })
 
 story("names a long queue and keeps it scrollable", async ({ visit }) => {

@@ -237,7 +237,7 @@ export function UserText(props: UserTextProps) {
   )
 }
 
-export type SubagentStatus = "delegating" | "running" | "completed" | "failed"
+export type SubagentStatus = "delegating" | "running" | "completed" | "failed" | "denied"
 
 export type SubagentProps = {
   title: string
@@ -246,25 +246,36 @@ export type SubagentProps = {
   background?: boolean
   needsInput?: boolean
   failure?: string | undefined
+  retry?: string | undefined
   tools?: number
   activity?: string | undefined
   onOpen?: (() => void) | undefined
+}
+
+const subagentProblems: Partial<Record<SubagentStatus, string>> = { failed: "Failed", denied: "Denied" }
+
+function SubagentState(props: SubagentProps) {
+  if (props.needsInput === true)
+    return (
+      <Badge size="small" shape="pill">
+        Needs input
+      </Badge>
+    )
+  const failed = subagentProblems[props.status]
+  const label = failed ?? (props.retry ? "Retrying" : undefined)
+  if (!label) return null
+  return (
+    <Text purpose="body" tone="danger" element="span" title={failed ? (props.failure ?? failed) : props.retry}>
+      {label}
+    </Text>
+  )
 }
 
 function SubagentTrailing(props: SubagentProps) {
   const tools = props.tools ?? 0
   return (
     <>
-      {props.needsInput === true ? (
-        <Badge size="small" shape="pill">
-          Needs input
-        </Badge>
-      ) : null}
-      {props.needsInput !== true && props.status === "failed" ? (
-        <Text purpose="body" tone="danger" element="span" title={props.failure}>
-          Failed
-        </Text>
-      ) : null}
+      <SubagentState {...props} />
       {tools > 0 ? (
         <Text purpose="caption" tone="inherit" element="span">
           {tools} {tools === 1 ? "tool call" : "tool calls"}

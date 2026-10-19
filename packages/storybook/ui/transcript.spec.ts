@@ -129,6 +129,15 @@ story("opens a subagent and names its state", async ({ visit }) => {
   await expect(root.getByText("└ grep revenue")).toBeVisible()
 })
 
+story("says when the member denied a subagent and when a subagent retries", async ({ visit }) => {
+  const denied = await visit("ui-transcript--subagent-denied")
+  await expect(denied.getByText("Denied", { exact: true })).toBeVisible()
+  await expect(denied.getByText("Failed")).toHaveCount(0)
+  const retrying = await visit("ui-transcript--subagent-retrying")
+  await expect(retrying.getByText("Retrying", { exact: true })).toBeVisible()
+  await expect(retrying.getByText("2 tool calls")).toBeVisible()
+})
+
 story("lists the first ten links and focuses the next one when shown", async ({ visit }) => {
   const root = await visit("ui-transcript--links")
   const results = root.getByRole("navigation", { name: "Search results" })

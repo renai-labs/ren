@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { useState } from "react"
+import { Button } from "@ren/ui/button"
 import { ModelPicker } from "@ren/ui/model-picker"
 import type { Selection } from "@ren/ui/model-picker"
 
@@ -43,3 +44,18 @@ export const Default: Story = {}
 export const WithEffort: Story = { args: { value: { model: "anthropic/claude-sonnet", variant: "high" } } }
 export const Loading: Story = { args: { loading: true } }
 export const Disabled: Story = { args: { disabled: true } }
+export const OpenFromCommand: Story = {
+  render: function Render(args) {
+    const [value, setValue] = useState<Selection | undefined>(args.value)
+    const [open, setOpen] = useState(false)
+    return (
+      <div className="flex flex-col items-start gap-2 pt-60">
+        <ModelPicker {...args} value={value} onValueChange={setValue} open={open} onOpenChange={setOpen} />
+        <Button appearance="secondary" size="small" onClick={() => setOpen(true)}>
+          Choose model
+        </Button>
+        <output aria-label="Selection">{value ? [value.model, value.variant].filter(Boolean).join(" ") : ""}</output>
+      </div>
+    )
+  },
+}

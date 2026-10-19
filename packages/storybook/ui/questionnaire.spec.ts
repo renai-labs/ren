@@ -40,11 +40,11 @@ story("moves between the choices and the typed answer with the arrow keys", asyn
   await page.keyboard.type("Use the dev script")
   await page.keyboard.press("Enter")
   await expect(root.getByRole("status").filter({ hasText: "Answer sent" })).toContainText(
-    "permission: Use the dev script",
+    "instructions: Use the dev script",
   )
 })
 
-story("sends a typed answer in place of a choice", async ({ visit }) => {
+story("sends a typed answer in place of a choice, under its own name", async ({ visit }) => {
   const root = await visit("ui-questionnaire--permission")
   await root.getByRole("radio", { name: "Allow once" }).click()
   await root
@@ -53,7 +53,7 @@ story("sends a typed answer in place of a choice", async ({ visit }) => {
   await expect(root.getByRole("radio", { name: "Allow once" })).not.toBeChecked()
   await root.getByRole("button", { name: "Continue" }).click()
   await expect(root.getByRole("status").filter({ hasText: "Answer sent" })).toContainText(
-    "permission: Run only the questionnaire spec",
+    "instructions: Run only the questionnaire spec",
   )
 })
 

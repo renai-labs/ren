@@ -14,6 +14,8 @@ export type ModelPickerProps = {
   onValueChange: (value: Selection) => void
   disabled?: boolean
   loading?: boolean
+  open?: boolean | undefined
+  onOpenChange?: ((open: boolean) => void) | undefined
 }
 
 const defaultVariant = "default"
@@ -36,7 +38,7 @@ export function ModelPicker(props: ModelPickerProps) {
       : (selected.variants.find((variant) => variant.value === props.value?.variant)?.label ?? "Default")
   const groups = [...new Set(props.models.map((model) => model.group))]
   return (
-    <Menu.Root>
+    <Menu.Root open={props.open} onOpenChange={props.onOpenChange}>
       <Menu.Trigger
         render={
           <Select.Button

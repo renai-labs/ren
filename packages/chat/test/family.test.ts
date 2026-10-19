@@ -342,3 +342,36 @@ test("a subagent card reads its child's state, tools and requests", () => {
   expect(waiting).toMatchObject({ status: "completed", needsInput: true })
   expect(waiting.activity).toBeUndefined()
 })
+
+test("a subagent card tells a denied call from a failed one, and shows the child's retry while it runs", () => {
+  const family = sessions([{ id: "ses_root" }, { id: "ses_child", parentID: "ses_root" }])
+  const failed = (message: string) =>
+    Schema.decodeUnknownSync(SessionMessage.Tool)({
+      type: "tool",
+      id: "call_1",
+      name: "subagent",
+      state: { status: "error", input: { description: "Inspect the code" }, error: { type: "tool", message } },
+      time: { created: 1 },
+    })
+  expect(Family.subagent(family, "ses_root", failed("Subagent denied: explore")).status).toBe("denied")
+  expect(Family.subagent(family, "ses_root", failed("The model is unreachable")).status).toBe("failed")
+  const retrying = transcript(family, "ses_child", [
+    Fixture.message({
+      id: "msg_c",
+      type: "assistant",
+      agent: "explore",
+      model: Fixture.model,
+      content: [],
+      retry: { attempt: 2, at: 5, error: { type: "api", message: "Rate limited" } },
+      time: { created: 1 },
+    }),
+  ])
+  const running = Schema.decodeUnknownSync(SessionMessage.Tool)(
+    subagent("call_1", "running", { sessionID: "ses_child" }, { description: "Inspect the code" }),
+  )
+  expect(Family.subagent(retrying, "ses_root", running).retry).toBe("Rate limited")
+  const done = Schema.decodeUnknownSync(SessionMessage.Tool)(
+    subagent("call_1", "completed", { sessionID: "ses_child" }, { description: "Inspect the code" }),
+  )
+  expect(Family.subagent(retrying, "ses_root", done).retry).toBeUndefined()
+})

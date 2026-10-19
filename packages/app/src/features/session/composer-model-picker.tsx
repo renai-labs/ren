@@ -8,6 +8,8 @@ export function ComposerModelPicker(props: {
   selected: SessionModel.Ref | undefined
   loading: boolean
   disabled: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   onChange: (model: SessionModel.Ref) => void
 }) {
   const selected = props.selected
@@ -22,6 +24,8 @@ export function ComposerModelPicker(props: {
       value={selected && { model: SessionModel.key(selected), ...(selected.variant && { variant: selected.variant }) }}
       loading={props.loading}
       disabled={props.disabled}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
       onValueChange={(value) => {
         const model = props.models.find((item) => SessionModel.key(item) === value.model)
         if (model)

@@ -203,7 +203,7 @@ export const attention = (state: ChatState.State, sessionID: string): Attention 
   return working ? "running" : "idle"
 }
 
-export type SubagentStatus = "delegating" | "running" | "completed" | "failed"
+export type SubagentStatus = "delegating" | "running" | "completed" | "failed" | "denied"
 
 export interface Subagent {
   readonly child: string | undefined
@@ -214,12 +214,24 @@ export interface Subagent {
   readonly needsInput: boolean
   readonly tools: number
   readonly activity?: string
+  readonly retry?: string
 }
+
+const denial = /^(Subagent|Permission) denied\b/
 
 const subagentStatus = (tool: SessionMessage.Tool, running: boolean): SubagentStatus => {
   if (tool.state.status === "streaming") return "delegating"
   if (tool.state.status === "running" || running) return "running"
+  if (tool.state.status === "error" && denial.test(tool.state.error.message)) return "denied"
   return ToolState.failed(tool) ? "failed" : "completed"
+}
+
+const isAssistant = (message: SessionMessage.Info): message is SessionMessage.Assistant => message.type === "assistant"
+
+const retrying = (state: ChatState.State, sessionID: string | undefined, status: SubagentStatus) => {
+  const latest =
+    sessionID && status === "running" ? ChatState.messages(state, sessionID).findLast(isAssistant) : undefined
+  return latest && !latest.time.completed ? latest.retry?.error.message : undefined
 }
 
 const toolsOf = (state: ChatState.State, sessionID: string | undefined) =>
@@ -239,6 +251,7 @@ export const subagent = (state: ChatState.State, parentID: string, tool: Session
   const status = subagentStatus(tool, background || (child ? ChatState.activity(state, child) === "running" : false))
   const tools = toolsOf(state, child)
   const current = status === "running" ? tools.findLast((item) => item.state.status !== "streaming") : undefined
+  const retry = retrying(state, child, status)
   return {
     child,
     title: agent ? agent.slice(0, 1).toUpperCase() + agent.slice(1) : "Subagent",
@@ -248,5 +261,6 @@ export const subagent = (state: ChatState.State, parentID: string, tool: Session
     needsInput: child ? Boolean(permission(state, child) ?? form(state, child)) : false,
     tools: tools.length,
     ...(current && { activity: [ToolDisplay.name(current), ToolDisplay.subtitle(current)].filter(Boolean).join(" ") }),
+    ...(retry && { retry }),
   }
 }

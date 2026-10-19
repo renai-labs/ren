@@ -1,4 +1,4 @@
-import { ChatState, Composer, ComposerHistory, Mentions } from "@ren/chat"
+import { ChatState, ClientCommand, Composer, ComposerHistory, Mentions } from "@ren/chat"
 import type { ChatSession } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
@@ -18,11 +18,14 @@ import { DraftStore } from "../../platform/draft-store.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
+import { ComposerAddMenu } from "./composer-add-menu.js"
 import { ComposerKeys } from "./composer-keys.js"
 import { ComposerModelPicker } from "./composer-model-picker.js"
+import { ComposerQueue } from "./composer-queue.js"
 import { SessionDrafts } from "./session-drafts.js"
 
 const historyKey = "history"
+const trailingSpace = /\s$/
 const fileSearchDelay = 150
 
 const describe = (error: unknown) => (error instanceof Error ? error.message : String(error))
@@ -47,6 +50,17 @@ const press = (event: KeyboardEvent<HTMLTextAreaElement>): ComposerKeys.Press =>
   isComposing: event.nativeEvent.isComposing,
 })
 
+const clientCommands = (state: ChatState.State, sessionID: Session.ID) => {
+  const capabilities = state.info[sessionID]?.capabilities
+  const prompted = ChatState.visibleUserMessages(state, sessionID).length > 0
+  return ClientCommand.offered({
+    "model.choose": capabilities?.model !== false,
+    "session.compact": capabilities?.compact !== false && prompted,
+    "session.undo": capabilities?.revert !== false && prompted,
+    "session.redo": capabilities?.revert !== false && ChatState.revertMessageID(state, sessionID) !== undefined,
+  })
+}
+
 const sessionStatus = (state: ChatState.State, sessionID: Session.ID) => {
   const info = state.info[sessionID]
   const running = ChatState.activity(state, sessionID) === "running"
@@ -61,12 +75,14 @@ const sessionStatus = (state: ChatState.State, sessionID: Session.ID) => {
 }
 
 const commandSuggestions = (
-  commands: ReadonlyArray<SessionCatalog.Command>,
-  query: string,
+  commands: ReadonlyArray<ClientCommand.Suggestion>,
 ): ReadonlyArray<ConversationShell.Suggestion> =>
-  commands
-    .filter((item) => item.name.toLowerCase().includes(query.toLowerCase()))
-    .map((item) => ({ value: item.name, kind: "command", label: `/${item.name}`, description: item.description }))
+  commands.map((item) => ({
+    value: item.value,
+    kind: "command",
+    label: `/${item.trigger}`,
+    description: item.description,
+  }))
 
 const mentionSuggestions = (items: ReadonlyArray<Mentions.Item>): ReadonlyArray<ConversationShell.Suggestion> =>
   items.map((item) => ({
@@ -75,6 +91,8 @@ const mentionSuggestions = (items: ReadonlyArray<Mentions.Item>): ReadonlyArray<
     label: item.label,
     description: item.description,
   }))
+
+const commandQuery = (trigger: Composer.Trigger | undefined) => (trigger?.kind === "command" ? trigger.query : "")
 
 interface Suggesting {
   readonly trigger: Composer.Trigger
@@ -94,6 +112,7 @@ function useMentionCatalog(sessionID: Session.ID, query: string) {
 function useSuggestions(input: {
   sessionID: Session.ID
   commands: boolean
+  client: ReadonlyArray<ClientCommand.Command>
   suggesting: Suggesting | undefined
   picked: ReadonlyArray<Mentions.Item>
 }) {
@@ -102,14 +121,15 @@ function useSuggestions(input: {
   const catalog = useMentionCatalog(input.sessionID, query ?? "")
   const listedCommands = Composer.offeredCommands(listed(ChatReact.useCommands(input.sessionID)))
   const commands = input.commands ? listedCommands : []
+  const runnable = ClientCommand.suggestions(input.client, commands, commandQuery(trigger))
   const mentionable = query === undefined ? [] : Mentions.suggest({ ...catalog, query })
-  const suggestions =
-    trigger?.kind === "command" ? commandSuggestions(commands, trigger.query) : mentionSuggestions(mentionable)
+  const suggestions = trigger?.kind === "command" ? commandSuggestions(runnable) : mentionSuggestions(mentionable)
   const ids = suggestions.map((item) => item.value)
   return {
     trigger,
     label: trigger?.kind === "command" ? "Commands" : "Mentions",
     commands,
+    runnable,
     mentionable,
     suggestions,
     ids,
@@ -123,6 +143,8 @@ function SessionModelPicker(props: {
   draft: Composer.Draft
   current: SessionModel.Ref | undefined
   disabled: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onChange: (model: SessionModel.Ref) => void
 }) {
   const models = ChatReact.useModels(props.sessionID)
@@ -133,45 +155,10 @@ function SessionModelPicker(props: {
       selected={Composer.model(props.draft, props.current, list)}
       loading={list.length === 0 && !AsyncResult.isFailure(models)}
       disabled={props.disabled}
+      open={props.open}
+      onOpenChange={props.onOpenChange}
       onChange={props.onChange}
     />
-  )
-}
-
-function QueuedMessages(props: {
-  sessionID: Session.ID
-  queued: ReadonlyArray<Composer.Queued>
-  running: boolean
-  moving: boolean
-  onMove: (item: Composer.Queued) => void
-}) {
-  const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set())
-  const steerInput = ChatReact.useAction(props.sessionID, (opened, id: SessionMessage.ID) => opened.steerInput(id))
-  const cancelInput = ChatReact.useAction(props.sessionID, (opened, id: SessionMessage.ID) => opened.cancelInput(id))
-  const track = (id: string, work: () => Promise<unknown>) => {
-    if (busy.has(id)) return
-    setBusy((current) => new Set([...current, id]))
-    void work().finally(() => setBusy((current) => new Set([...current].filter((item) => item !== id))))
-  }
-  if (props.queued.length === 0) return null
-  return (
-    <ConversationShell.Queue label={`${props.queued.length} queued`} count={props.queued.length}>
-      {props.queued.map((item, index) => (
-        <ConversationShell.QueueItem
-          key={item.id}
-          text={item.text}
-          {...(item.attachments > 0 && { detail: item.attachments === 1 ? "1 file" : `${item.attachments} files` })}
-          actions={index === 0 && !props.running ? "visible" : "on-hover"}
-          busy={props.moving || busy.has(item.id)}
-          sendLabel={props.running ? "Send now" : "Send"}
-          onSend={() => track(item.id, () => steerInput(item.id).catch(failed("Could not send the queued message")))}
-          onMove={() => props.onMove(item)}
-          onRemove={() =>
-            track(item.id, () => cancelInput(item.id).catch(failed("Could not remove the queued message")))
-          }
-        />
-      ))}
-    </ConversationShell.Queue>
   )
 }
 
@@ -224,7 +211,14 @@ function Controls(props: {
   )
 }
 
-export function SessionComposer(props: { sessionID: Session.ID; state: ChatState.State; unavailable: boolean }) {
+export function SessionComposer(props: {
+  sessionID: Session.ID
+  state: ChatState.State
+  unavailable: boolean
+  onUndo: () => void
+  onRedo: () => void
+  onCompact: () => void
+}) {
   const platform = Platform.usePlatform()
   const mobile = Viewport.useMobile()
   const key = SessionDrafts.key(props.sessionID)
@@ -235,6 +229,7 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
   const [suggesting, setSuggesting] = useState<Suggesting>()
   const [picked, setPicked] = useState<ReadonlyArray<Mentions.Item>>([])
   const [moving, setMoving] = useState(false)
+  const [picking, setPicking] = useState(false)
   const input = useRef<HTMLTextAreaElement>(null)
   DraftStore.useElsewhere({
     drafts: platform.drafts,
@@ -266,6 +261,7 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
   const suggested = useSuggestions({
     sessionID: props.sessionID,
     commands: status.commands,
+    client: clientCommands(props.state, props.sessionID),
     suggesting,
     picked,
   })
@@ -372,12 +368,52 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
     setSuggesting(trigger && { trigger })
     change(Composer.withText(draft, text))
   }
+  const runClient = (id: ClientCommand.ID) => {
+    const run: Readonly<Record<ClientCommand.ID, () => void>> = {
+      "model.choose": () => setPicking(true),
+      "session.compact": props.onCompact,
+      "session.undo": props.onUndo,
+      "session.redo": props.onRedo,
+    }
+    run[id]()
+  }
+  const addMenu = (
+    <ComposerAddMenu
+      disabled={readOnly}
+      populated={content}
+      commands={suggested.runnable}
+      onCommands={() => {
+        setSuggesting({ trigger: { kind: "command", query: "" } })
+        change(Composer.withText(draft, "/"))
+        caret(1, "/")
+      }}
+      onCommand={(found) => {
+        if (found.client) return runClient(found.client)
+        const text = `/${found.trigger} ${draft.text.trim()}`
+        change(Composer.withText(draft, text))
+        caret(text.length, text)
+      }}
+      onMention={() => {
+        const cursor = input.current?.selectionStart ?? draft.text.length
+        const before = draft.text.slice(0, cursor)
+        const inserted = Composer.insert(draft.text, before === "" || trailingSpace.test(before) ? "@" : " @", cursor)
+        retype(inserted.text, inserted.cursor)
+        caret(inserted.cursor, inserted.text)
+      }}
+    />
+  )
   const choose = (value: string) => {
     const trigger = suggested.trigger
     setSuggesting(undefined)
     setBrowsing(ComposerHistory.idle)
     if (trigger?.kind === "command") {
-      const text = `/${value} `
+      const found = suggested.runnable.find((item) => item.value === value)
+      if (found?.client) {
+        change(Composer.withText(draft, ""))
+        runClient(found.client)
+        return
+      }
+      const text = `/${found?.trigger ?? value} `
       change(Composer.withText(draft, text))
       caret(text.length, text)
       return
@@ -395,12 +431,11 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
     caret(inserted.cursor, inserted.text)
   }
   const pick = (pressed: ComposerKeys.Press) => {
-    const picking =
-      suggested.ids.length > 0 ? Composer.suggestionKey(pressed, suggested.ids, suggested.active) : undefined
-    if (picking?.type === "close") setSuggesting(undefined)
-    if (picking?.type === "move") setSuggesting((current) => current && { ...current, active: picking.active })
-    if (picking?.type === "select") choose(picking.id)
-    return picking !== undefined
+    const key = suggested.ids.length > 0 ? Composer.suggestionKey(pressed, suggested.ids, suggested.active) : undefined
+    if (key?.type === "close") setSuggesting(undefined)
+    if (key?.type === "move") setSuggesting((current) => current && { ...current, active: key.active })
+    if (key?.type === "select") choose(key.id)
+    return key !== undefined
   }
   const unmention = (node: HTMLTextAreaElement, pressed: string) => {
     const removed = readOnly
@@ -416,6 +451,7 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
     return true
   }
   const act = (intent: ComposerKeys.Intent | undefined, node: HTMLTextAreaElement) => {
+    if (intent === "model") return false
     if (intent === "up" || intent === "down") return browse(node, intent)
     const first = queued.at(0)
     if (intent === "edit" && first) move(first)
@@ -425,6 +461,11 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
   }
 
   Keyboard.useKeyDown((event) => {
+    if (!event.defaultPrevented && status.picker && !readOnly && ComposerKeys.intent(event, running) === "model") {
+      event.preventDefault()
+      setPicking(true)
+      return
+    }
     if (event.defaultPrevented || !Keyboard.fromPage(event)) return
     if (ComposerKeys.intent(event, running) === "stop") {
       event.preventDefault()
@@ -448,6 +489,11 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
             draft={draft}
             current={status.model}
             disabled={props.unavailable}
+            open={picking}
+            onOpenChange={(open) => {
+              setPicking(open)
+              if (!open) requestAnimationFrame(() => input.current?.focus())
+            }}
             onChange={(model) => {
               change(Composer.withModel(draft, model))
               requestAnimationFrame(() => input.current?.focus())
@@ -477,7 +523,7 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
         ) : undefined
       }
       queue={
-        <QueuedMessages sessionID={props.sessionID} queued={queued} running={running} moving={moving} onMove={move} />
+        <ComposerQueue sessionID={props.sessionID} queued={queued} running={running} moving={moving} onMove={move} />
       }
       attachments={
         draft.pasted.length > 0 ? (
@@ -493,6 +539,8 @@ export function SessionComposer(props: { sessionID: Session.ID; state: ChatState
           />
         ) : undefined
       }
+      leading={addMenu}
+      footerLeading={addMenu}
       trailing={controls}
       footerTrailing={controls}
     >

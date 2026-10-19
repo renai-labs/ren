@@ -72,6 +72,7 @@ function Subagent(props: { timeline: Timeline; tool: SessionMessage.Tool }) {
       background={card.background}
       needsInput={card.needsInput}
       failure={ToolDisplay.error(props.tool)}
+      retry={card.retry}
       tools={card.tools}
       activity={card.activity}
       onOpen={child?.startsWith("ses_") ? () => openChild(Session.ID.make(child)) : undefined}

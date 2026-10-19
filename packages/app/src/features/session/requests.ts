@@ -1,10 +1,13 @@
 export * as Requests from "./requests.js"
 
+import { WebSearch } from "@ren/chat"
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import type { QuestionnaireQuestion } from "@ren/ui/questionnaire"
 
 export const permissionField = "permission"
+
+export const permissionInstructionsField = "permission-instructions"
 
 const replies: ReadonlyArray<Permission.Reply> = ["once", "always", "reject"]
 
@@ -23,12 +26,21 @@ export function permissionQuestion(request: Permission.Request): QuestionnaireQu
       },
       { value: "reject", label: "Deny" },
     ],
+    customAnswer: {
+      name: permissionInstructionsField,
+      label: "Deny and tell Ren what to do instead",
+      placeholder: "Deny and tell Ren what to do instead…",
+    },
   }
 }
 
-export function readPermissionReply(data: FormData) {
+export function readPermissionReply(data: FormData): { reply: Permission.Reply; message?: string } | undefined {
+  const typed = data.get(permissionInstructionsField)
+  const message = typeof typed === "string" ? typed.trim() : ""
+  if (message) return { reply: "reject", message }
   const value = data.get(permissionField)
-  return replies.find((reply) => reply === value)
+  const reply = replies.find((item) => item === value)
+  return reply && { reply }
 }
 
 type QuestionField = Form.StringField | Form.MultiselectField
@@ -64,4 +76,38 @@ export function readFormAnswer(form: Form.Info, data: FormData): Form.Answer {
       return [[field.key, field.type === "multiselect" ? values : (values.at(0) ?? "")]]
     }),
   )
+}
+
+export interface WebSearchChoice {
+  readonly owner: string
+  readonly formID: string
+  readonly value: string
+  readonly failed: boolean
+}
+
+export interface WebSearchSending {
+  readonly form: Form.Info
+  readonly owner: string
+  readonly connection: number
+}
+
+export function webSearchRequest(
+  sending: WebSearchSending | undefined,
+  live: Form.Info | undefined,
+  owner: string,
+  connection: number,
+) {
+  const held = sending?.owner === owner && sending.connection === connection ? sending.form : undefined
+  return { form: held ?? live, sending: held !== undefined }
+}
+
+export function webSearchSelection(
+  choice: WebSearchChoice | undefined,
+  owner: string,
+  form: Form.Info,
+  sending: boolean,
+) {
+  const kept =
+    choice?.owner === owner && (choice.formID === form.id || sending || WebSearch.providerField(form) !== undefined)
+  return kept ? { value: choice.value, failed: choice.failed } : { value: "random", failed: false }
 }

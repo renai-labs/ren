@@ -16,7 +16,12 @@ const answer = `The report is ready. Revenue grew **12%** this quarter, led by t
 - Churn fell from 3.1% to 2.4%
 - Expansion revenue doubled in the EMEA region`
 
-function Composer(props: { layout?: ConversationShell.ComposerLayout; disabled?: boolean; dropping?: boolean }) {
+function Composer(props: {
+  layout?: ConversationShell.ComposerLayout
+  disabled?: boolean
+  dropping?: boolean
+  crowded?: boolean
+}) {
   const [draft, setDraft] = useState("")
   const [sent, setSent] = useState<ReadonlyArray<string>>([])
   return (
@@ -30,9 +35,18 @@ function Composer(props: { layout?: ConversationShell.ComposerLayout; disabled?:
           setDraft("")
         }}
         trailing={
-          <IconButton type="submit" appearance="primary" shape="circle" size="medium" label="Send">
-            <Icon glyph="ArrowUp" />
-          </IconButton>
+          <>
+            {props.crowded
+              ? ["Claude Sonnet 4.5 · High", "Queue ⌘↵", "Steer ⌘⇧↵"].map((label) => (
+                  <Button key={label} appearance="ghost" size="small">
+                    {label}
+                  </Button>
+                ))
+              : null}
+            <IconButton type="submit" appearance="primary" shape="circle" size="medium" label="Send">
+              <Icon glyph="ArrowUp" />
+            </IconButton>
+          </>
         }
         footerTrailing={
           <IconButton
@@ -71,6 +85,11 @@ function LiveComposer(props: {
   const [events, setEvents] = useState<ReadonlyArray<string>>([])
   const [queued, setQueued] = useState(props.queued ?? [])
   const log = (event: string) => setEvents((current) => [...current, event])
+  const reorder = (from: number, to: number) =>
+    setQueued((current) => {
+      const rest = current.filter((_, index) => index !== from)
+      return [...rest.slice(0, to), ...current.slice(from, from + 1), ...rest.slice(to)]
+    })
   const content = draft.trim().length > 0 || Boolean(pasted)
   const running = props.running ?? false
   const submit = (
@@ -116,7 +135,7 @@ function LiveComposer(props: {
         }
         queue={
           queued.length > 0 ? (
-            <ConversationShell.Queue label={`${queued.length} queued`} count={queued.length}>
+            <ConversationShell.Queue label={`${queued.length} queued`} count={queued.length} onReorder={reorder}>
               {queued.map((text, index) => (
                 <ConversationShell.QueueItem
                   key={text}
@@ -128,6 +147,8 @@ function LiveComposer(props: {
                     setQueued((current) => current.filter((item) => item !== text))
                     setDraft(text)
                   }}
+                  onMoveUp={index > 0 ? () => reorder(index, index - 1) : undefined}
+                  onMoveDown={index < queued.length - 1 ? () => reorder(index, index + 1) : undefined}
                   onRemove={() => setQueued((current) => current.filter((item) => item !== text))}
                 />
               ))}
@@ -396,6 +417,16 @@ export const Interaction: Story = {
   },
 }
 export const InlineComposer: Story = { args: { composer: <Composer layout="inline" /> } }
+export const CrowdedInlineComposer: Story = {
+  args: { composer: <Composer layout="inline" crowded /> },
+  decorators: [
+    (Story) => (
+      <div className="flex h-180 w-120 flex-col overflow-hidden">
+        <Story />
+      </div>
+    ),
+  ],
+}
 export const DisabledSend: Story = { args: { composer: <Composer disabled /> } }
 export const Dropping: Story = { args: { composer: <Composer dropping /> } }
 export const Hidden: Story = {

@@ -10,7 +10,7 @@ export interface Press {
   readonly isComposing: boolean
 }
 
-export type Intent = "alternate" | "swallow" | "stop" | "up" | "down" | "edit"
+export type Intent = "alternate" | "swallow" | "stop" | "up" | "down" | "edit" | "model"
 
 const chords: Readonly<Record<string, Intent>> = {
   "Meta+Enter": "alternate",
@@ -21,6 +21,8 @@ const chords: Readonly<Record<string, Intent>> = {
   ArrowDown: "down",
   "Meta+ArrowUp": "edit",
   "Ctrl+ArrowUp": "edit",
+  "Meta+'": "model",
+  "Ctrl+'": "model",
 }
 
 export function intent(press: Press, running: boolean): Intent | undefined {
@@ -29,5 +31,6 @@ export function intent(press: Press, running: boolean): Intent | undefined {
   const found = chords[[...modifiers.filter(Boolean), press.key].join("+")]
   if (found === "alternate" && press.repeat) return "swallow"
   if (found === "stop" && !running) return undefined
+  if (found === "model" && press.repeat) return undefined
   return found
 }

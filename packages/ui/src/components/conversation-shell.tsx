@@ -1,8 +1,18 @@
 export * as ConversationShell from "./conversation-shell.js"
 
 import { cva } from "class-variance-authority"
-import { createContext, Fragment, use, useEffect, useId, useLayoutEffect, useRef, useState } from "react"
-import type { ComponentPropsWithoutRef, KeyboardEvent, ReactNode, Ref, UIEvent } from "react"
+import {
+  createContext,
+  Fragment,
+  use,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
+import type { ComponentPropsWithoutRef, KeyboardEvent, PointerEvent, ReactNode, Ref, UIEvent } from "react"
 import { composeClasses } from "../lib/compose-classes.js"
 import { assignRef, ShellContext } from "../lib/conversation-context.js"
 import { JumpToLatest } from "../lib/conversation-timeline.js"
@@ -13,6 +23,7 @@ import { Icon } from "./icon.js"
 import type { Glyph } from "./icon.js"
 import { IconButton } from "./icon-button.js"
 import { KeyboardKey } from "./keyboard-key.js"
+import { Menu } from "./menu.js"
 import { Surface } from "./surface.js"
 import { Text } from "./text.js"
 
@@ -408,9 +419,7 @@ function ComposerForm(props: Omit<ComposerProps, "layout"> & { layout: ResolvedL
         {props.children}
         {props.status ? <div className={composeClasses("absolute z-10", classes.status)}>{props.status}</div> : null}
       </div>
-      {inline && props.trailing ? (
-        <div className="flex min-w-0 items-center gap-2 self-end pr-2 pb-2">{props.trailing}</div>
-      ) : null}
+      {inline && props.trailing ? <InlineControls>{props.trailing}</InlineControls> : null}
       {inline ? null : <ComposerFooter leading={props.footerLeading} trailing={props.footerTrailing} />}
       {props.dropIndicator ? (
         <output
@@ -421,6 +430,44 @@ function ComposerForm(props: Omit<ComposerProps, "layout"> & { layout: ResolvedL
         </output>
       ) : null}
     </form>
+  )
+}
+
+function InlineControls(props: { children: ReactNode }) {
+  const viewport = useRef<HTMLDivElement>(null)
+  const [overflow, setOverflow] = useState({ start: false, end: false })
+  const measure = () => {
+    const node = viewport.current
+    if (!node) return
+    const offset = Math.abs(node.scrollLeft)
+    const start = offset > 1
+    const end = node.scrollWidth - node.clientWidth - offset > 1
+    setOverflow((previous) => (previous.start === start && previous.end === end ? previous : { start, end }))
+  }
+  const onResize = useEffectEvent(measure)
+  useEffect(() => {
+    const node = viewport.current
+    if (!node) return
+    const observer = new ResizeObserver(() => onResize())
+    observer.observe(node)
+    if (node.firstElementChild) observer.observe(node.firstElementChild)
+    return () => observer.disconnect()
+  }, [])
+  return (
+    <div
+      ref={viewport}
+      data-slot="composer-controls"
+      data-overflow-start={overflow.start ? "" : undefined}
+      data-overflow-end={overflow.end ? "" : undefined}
+      onScroll={measure}
+      className={composeClasses(
+        "-mt-1 -ml-1 flex min-w-0 scrollbar-none self-end overflow-x-auto overscroll-x-contain pt-1 pr-2 pb-2 pl-1",
+        "ltr:data-overflow-start:mask-l-from-[calc(100%-var(--ren-spacing-4))] rtl:data-overflow-start:mask-r-from-[calc(100%-var(--ren-spacing-4))]",
+        "ltr:data-overflow-end:mask-r-from-[calc(100%-var(--ren-spacing-4))] rtl:data-overflow-end:mask-l-from-[calc(100%-var(--ren-spacing-4))]",
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2">{props.children}</div>
+    </div>
   )
 }
 
@@ -817,32 +864,120 @@ export function ComposerAlternate(props: ComposerAlternateProps) {
 export type QueueProps = {
   label: string
   count: number
+  onReorder?: ((from: number, to: number) => void) | undefined
   children: ReactNode
 }
 
+type QueueDrag = { id: string; order: readonly string[]; from: number; to: number }
+
+type QueuePointer = {
+  id: string
+  pointer: number
+  origin: number
+  scroll: number
+  order: readonly string[]
+  from: number
+  middles: readonly number[]
+  active: boolean
+}
+
+const QueueContext = createContext<{
+  drag: QueueDrag | undefined
+  start: ((id: string, event: PointerEvent<HTMLElement>) => void) | undefined
+  move: (event: PointerEvent<HTMLElement>) => void
+  end: (event: PointerEvent<HTMLElement>, drop: boolean) => void
+}>({ drag: undefined, start: undefined, move: () => undefined, end: () => undefined })
+
+const queueActivation = 4
+const queueEdge = 0.05
+const queueScrollStep = 8
+
+const moved = (order: readonly string[], from: number, to: number) => {
+  const item = order[from]
+  if (item === undefined) return order
+  const rest = order.filter((_, index) => index !== from)
+  return [...rest.slice(0, to), item, ...rest.slice(to)]
+}
+
 export function Queue(props: QueueProps) {
+  const list = useRef<HTMLUListElement>(null)
+  const pointer = useRef<QueuePointer | undefined>(undefined)
+  const [drag, setDrag] = useState<QueueDrag>()
+  const onReorder = props.onReorder
+  const start = (id: string, event: PointerEvent<HTMLElement>) => {
+    const node = list.current
+    if (!node || event.button !== 0) return
+    const rows = [...node.querySelectorAll<HTMLElement>("[data-queue-item]")]
+    const order = rows.map((row) => row.dataset.queueItem ?? "")
+    const from = order.indexOf(id)
+    if (from < 0) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    pointer.current = {
+      id,
+      pointer: event.pointerId,
+      origin: event.clientY,
+      scroll: node.scrollTop,
+      order,
+      from,
+      middles: rows.map((row) => {
+        const box = row.getBoundingClientRect()
+        return box.top + box.height / 2
+      }),
+      active: false,
+    }
+  }
+  const move = (event: PointerEvent<HTMLElement>) => {
+    const current = pointer.current
+    const node = list.current
+    if (!current || !node || current.pointer !== event.pointerId) return
+    if (!current.active && Math.abs(event.clientY - current.origin) < queueActivation) return
+    current.active = true
+    const box = node.getBoundingClientRect()
+    const edge = box.height * queueEdge
+    if (event.clientY < box.top + edge) node.scrollBy(0, -queueScrollStep)
+    if (event.clientY > box.bottom - edge) node.scrollBy(0, queueScrollStep)
+    const y = event.clientY + node.scrollTop - current.scroll
+    const to = current.middles.filter((middle, index) => index !== current.from && middle < y).length
+    setDrag((previous) =>
+      previous?.to === to ? previous : { id: current.id, order: current.order, from: current.from, to },
+    )
+  }
+  const end = (event: PointerEvent<HTMLElement>, drop: boolean) => {
+    const current = pointer.current
+    if (!current || current.pointer !== event.pointerId) return
+    pointer.current = undefined
+    setDrag(undefined)
+    const node = list.current
+    if (!drop || !current.active || !node) return
+    const y = event.clientY + node.scrollTop - current.scroll
+    const to = current.middles.filter((middle, index) => index !== current.from && middle < y).length
+    if (to !== current.from) onReorder?.(current.from, to)
+  }
   return (
-    <section
-      aria-label={props.label}
-      data-slot="composer-queue"
-      className="flex min-w-0 flex-col rounded-t-container border border-b-0 border-border-primary bg-background-secondary pb-6"
-    >
-      {props.count > 3 ? (
-        <div className="px-3 pt-2">
-          <Text purpose="caption" tone="secondary" element="span">
-            {props.label}
-          </Text>
-        </div>
-      ) : null}
-      <ul
-        className={composeClasses(
-          "flex min-w-0 flex-col py-1",
-          props.count > 4 && "max-h-37 overflow-y-auto overscroll-contain mask-b-from-80%",
-        )}
+    <QueueContext value={{ drag, start: onReorder ? start : undefined, move, end }}>
+      <section
+        aria-label={props.label}
+        data-slot="composer-queue"
+        className="flex min-w-0 flex-col rounded-t-container border border-b-0 border-border-primary bg-background-secondary pb-6"
       >
-        {props.children}
-      </ul>
-    </section>
+        {props.count > 3 ? (
+          <div className="px-3 pt-2">
+            <Text purpose="caption" tone="secondary" element="span">
+              {props.label}
+            </Text>
+          </div>
+        ) : null}
+        <ul
+          ref={list}
+          className={composeClasses(
+            "flex min-w-0 flex-col py-1",
+            props.count > 4 && "max-h-37 overflow-y-auto overscroll-contain mask-b-from-80%",
+          )}
+        >
+          {props.children}
+        </ul>
+      </section>
+    </QueueContext>
   )
 }
 
@@ -855,12 +990,112 @@ export type QueueItemProps = {
   onSend?: () => void
   onMove?: () => void
   onRemove?: () => void
+  onMoveUp?: (() => void) | undefined
+  onMoveDown?: (() => void) | undefined
+}
+
+function QueueReorder(props: {
+  busy: boolean
+  onMoveUp: (() => void) | undefined
+  onMoveDown: (() => void) | undefined
+}) {
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        render={
+          <IconButton label="Reorder" size="compact" disabled={props.busy}>
+            <Icon glyph="SortArrows" />
+          </IconButton>
+        }
+      />
+      <Menu.Popup placement="top" alignment="end">
+        <Menu.Item
+          icon={<Icon glyph="ArrowUp" />}
+          disabled={!props.onMoveUp}
+          {...(props.onMoveUp && { onSelect: props.onMoveUp })}
+        >
+          Move up
+        </Menu.Item>
+        <Menu.Item
+          icon={<Icon glyph="ArrowDown" />}
+          disabled={!props.onMoveDown}
+          {...(props.onMoveDown && { onSelect: props.onMoveDown })}
+        >
+          Move down
+        </Menu.Item>
+      </Menu.Popup>
+    </Menu.Root>
+  )
+}
+
+function QueueHandle(props: { id: string; busy: boolean }) {
+  const queue = use(QueueContext)
+  return (
+    <span
+      aria-hidden="true"
+      data-slot="composer-queue-handle"
+      onPointerDown={(event) => {
+        if (!props.busy) queue.start?.(props.id, event)
+      }}
+      onPointerMove={queue.move}
+      onPointerUp={(event) => queue.end(event, true)}
+      onPointerCancel={(event) => queue.end(event, false)}
+      className="-ml-1 flex shrink-0 cursor-grab touch-none items-center text-text-secondary active:cursor-grabbing"
+    >
+      <Icon glyph="GripVertical" />
+    </span>
+  )
+}
+
+function QueueActions(props: QueueItemProps) {
+  const visible = props.actions === "visible"
+  return (
+    <span
+      className={composeClasses(
+        "flex shrink-0 items-center gap-1 transition-standard",
+        visible
+          ? "opacity-100"
+          : "opacity-0 group-focus-within/queue:opacity-100 group-hover/queue:opacity-100 has-data-popup-open:opacity-100 [@media(hover:none)]:opacity-100",
+        props.busy && "pointer-events-none",
+      )}
+    >
+      {props.onSend ? (
+        <IconButton label={props.sendLabel ?? "Send now"} size="compact" disabled={props.busy} onClick={props.onSend}>
+          <Icon glyph="ArrowUp" />
+        </IconButton>
+      ) : null}
+      {props.onMove ? (
+        <IconButton label="Move to composer" size="compact" disabled={props.busy} onClick={props.onMove}>
+          <Icon glyph="Restore" />
+        </IconButton>
+      ) : null}
+      {props.onMoveUp || props.onMoveDown ? (
+        <QueueReorder busy={props.busy === true} onMoveUp={props.onMoveUp} onMoveDown={props.onMoveDown} />
+      ) : null}
+      {props.onRemove ? (
+        <IconButton label="Remove" size="compact" disabled={props.busy} onClick={props.onRemove}>
+          <Icon glyph="X" />
+        </IconButton>
+      ) : null}
+    </span>
+  )
 }
 
 export function QueueItem(props: QueueItemProps) {
-  const visible = props.actions === "visible"
+  const id = useId()
+  const queue = use(QueueContext)
+  const drag = queue.drag
+  const position = drag ? moved(drag.order, drag.from, drag.to).indexOf(id) : -1
+  const dragging = drag?.id === id
   return (
-    <li data-slot="composer-queue-item" className="group/queue flex min-h-8 min-w-0 items-center gap-2 px-3">
+    <li
+      data-slot="composer-queue-item"
+      data-queue-item={id}
+      data-dragging={dragging ? "" : undefined}
+      style={position < 0 ? undefined : { order: position }}
+      className="group/queue flex min-h-8 min-w-0 items-center gap-2 px-3 data-dragging:opacity-disabled"
+    >
+      {queue.start ? <QueueHandle id={id} busy={props.busy === true} /> : null}
       <span className="min-w-0 flex-1">
         <Text purpose="body" truncation="single-line" element="span">
           {props.text}
@@ -871,31 +1106,7 @@ export function QueueItem(props: QueueItemProps) {
           {props.detail}
         </Text>
       ) : null}
-      <span
-        className={composeClasses(
-          "flex shrink-0 items-center gap-1 transition-standard",
-          visible
-            ? "opacity-100"
-            : "opacity-0 group-focus-within/queue:opacity-100 group-hover/queue:opacity-100 [@media(hover:none)]:opacity-100",
-          props.busy && "pointer-events-none",
-        )}
-      >
-        {props.onSend ? (
-          <IconButton label={props.sendLabel ?? "Send now"} size="compact" disabled={props.busy} onClick={props.onSend}>
-            <Icon glyph="ArrowUp" />
-          </IconButton>
-        ) : null}
-        {props.onMove ? (
-          <IconButton label="Move to composer" size="compact" disabled={props.busy} onClick={props.onMove}>
-            <Icon glyph="Restore" />
-          </IconButton>
-        ) : null}
-        {props.onRemove ? (
-          <IconButton label="Remove" size="compact" disabled={props.busy} onClick={props.onRemove}>
-            <Icon glyph="X" />
-          </IconButton>
-        ) : null}
-      </span>
+      <QueueActions {...props} />
     </li>
   )
 }

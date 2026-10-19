@@ -21,6 +21,7 @@ export const reply = <E>(input: {
   readonly selection: string | false
   readonly reply: (form: Form.Info, answer: Form.Answer) => Effect.Effect<void, E>
   readonly events: PubSub.PubSub<SessionEvent.Event>
+  readonly lost?: Effect.Effect<void>
 }) =>
   Effect.gen(function* () {
     const selection = input.selection
@@ -52,4 +53,4 @@ export const reply = <E>(input: {
     if (Option.isNone(found)) return
     if (!providerField(found.value)?.options?.some((option) => option.value === selection)) return
     return yield* input.reply(found.value, { provider: selection })
-  }).pipe(Effect.scoped)
+  }).pipe(Effect.scoped, Effect.raceFirst(input.lost ?? Effect.never))

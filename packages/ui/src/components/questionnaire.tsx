@@ -30,7 +30,7 @@ export type QuestionnaireQuestion = {
   required?: boolean
   multiple?: boolean
   choices: ReadonlyArray<QuestionnaireChoice>
-  customAnswer?: { label: string; placeholder: string } | null
+  customAnswer?: { label: string; placeholder: string; name?: string } | null
 }
 
 export type QuestionnaireAnswer = { choices: ReadonlyArray<string>; custom: string; skipped: boolean }
@@ -305,7 +305,7 @@ function Item(props: {
               )}
               aria-label={props.question.customAnswer.label}
               placeholder={props.question.customAnswer.placeholder}
-              name={props.answer.typed ? props.question.name : undefined}
+              name={props.answer.typed ? (props.question.customAnswer.name ?? props.question.name) : undefined}
               value={props.answer.custom}
               onValueChange={(value) => props.onType(value)}
               readOnly={props.pending}

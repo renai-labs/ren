@@ -228,6 +228,31 @@ export const SubagentRunning: Story = {
     />
   ),
 }
+export const SubagentDenied: Story = {
+  decorators: inList,
+  render: () => (
+    <Transcript.Subagent
+      title="Explore"
+      description="Find where revenue is computed"
+      status="denied"
+      failure="Subagent denied: explore"
+      onOpen={() => undefined}
+    />
+  ),
+}
+export const SubagentRetrying: Story = {
+  decorators: inList,
+  render: () => (
+    <Transcript.Subagent
+      title="Explore"
+      description="Find where revenue is computed"
+      status="running"
+      retry="The provider is rate limiting requests"
+      tools={2}
+      onOpen={() => undefined}
+    />
+  ),
+}
 
 export const Links: Story = {
   render: () => (

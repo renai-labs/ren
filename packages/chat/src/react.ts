@@ -1,6 +1,6 @@
 export * as ChatReact from "./react.js"
 
-import { RegistryContext, useAtomMount, useAtomValue } from "@effect/atom-react"
+import { RegistryContext, useAtomMount, useAtomRefresh, useAtomValue } from "@effect/atom-react"
 import type { Session } from "@ren/schema/session"
 import type { Shell } from "@ren/schema/shell"
 import { Effect } from "effect"
@@ -47,8 +47,12 @@ export const useCommands = (sessionID: Session.ID) => useAtomValue(useAtoms().co
 
 export const useFiles = (search: ChatAtoms.FileQuery) => useAtomValue(useAtoms().files(search))
 
-export const useWebSearchProviders = (root: Session.ID, sessionID: Session.ID) =>
-  useAtomValue(useAtoms().webSearchProviders({ root, sessionID }))
+export const useStatus = (sessionID: Session.ID) => useAtomValue(useAtoms().status(sessionID))
+
+export const useWebSearchProviders = (root: Session.ID, sessionID: Session.ID) => {
+  const atom = useAtoms().webSearchProviders({ root, sessionID })
+  return { result: useAtomValue(atom), retry: useAtomRefresh(atom) }
+}
 
 export const useAction = <A, E, Args extends ReadonlyArray<unknown>>(
   sessionID: Session.ID,

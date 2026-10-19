@@ -40,6 +40,13 @@ describe("Composer keys", () => {
     expect(ComposerKeys.intent(key("ArrowDown", { shiftKey: true }), false)).toBeUndefined()
   })
 
+  test("Mod+' opens the model picker", () => {
+    expect(ComposerKeys.intent(key("'", { metaKey: true }), false)).toBe("model")
+    expect(ComposerKeys.intent(key("'", { ctrlKey: true }), true)).toBe("model")
+    expect(ComposerKeys.intent(key("'"), false)).toBeUndefined()
+    expect(ComposerKeys.intent(key("'", { metaKey: true, repeat: true }), false)).toBeUndefined()
+  })
+
   test("Mod+ArrowUp moves the first queued message back to the text field", () => {
     expect(ComposerKeys.intent(key("ArrowUp", { metaKey: true }), false)).toBe("edit")
     expect(ComposerKeys.intent(key("ArrowUp", { ctrlKey: true }), true)).toBe("edit")

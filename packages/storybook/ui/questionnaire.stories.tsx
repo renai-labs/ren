@@ -16,6 +16,7 @@ const permission: QuestionnaireQuestion = {
     { value: "Deny", label: "Deny" },
   ],
   customAnswer: {
+    name: "instructions",
     label: "Deny and tell Ren what to do instead",
     placeholder: "Deny and tell Ren what to do instead…",
   },

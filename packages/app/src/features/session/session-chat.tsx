@@ -348,6 +348,9 @@ export function SessionChat(props: {
     setRestored((count) => count + 1)
   }
   const reverter = useRevert(props.sessionID, restore)
+  const onUndo = () => void undo().then(restore, failed("Could not undo the last message"))
+  const onRedo = () => void redo().catch(failed("Could not restore the undone messages"))
+  const onCompact = () => void compact().catch(failed("Could not compact the chat"))
   const retry = Chat.useRetry(props.sessionID)
   const approving = Chat.useAutoApprove(props.sessionID).enabled
   const people = usePeople(props.organizationId, props.viewer, messages)
@@ -382,9 +385,9 @@ export function SessionChat(props: {
             sessionID={props.sessionID}
             fallbackTitle={stored.data ?? undefined}
             onOpen={props.onChild}
-            onUndo={() => void undo().then(restore, failed("Could not undo the last message"))}
-            onRedo={() => void redo().catch(failed("Could not restore the undone messages"))}
-            onCompact={() => void compact().catch(failed("Could not compact the chat"))}
+            onUndo={onUndo}
+            onRedo={onRedo}
+            onCompact={onCompact}
             onArchived={props.onArchived}
           />
           {finder.bar}
@@ -434,7 +437,7 @@ export function SessionChat(props: {
           state={state}
           reconnecting={view.reconnecting}
           running={running}
-          onRedo={() => void redo().catch(failed("Could not restore the undone messages"))}
+          onRedo={onRedo}
           onOpen={props.onChild}
           onAnswered={() => scroller.current?.resume()}
         />
@@ -446,6 +449,9 @@ export function SessionChat(props: {
             sessionID={props.sessionID}
             state={state}
             unavailable={AsyncResult.isFailure(session.state)}
+            onUndo={onUndo}
+            onRedo={onRedo}
+            onCompact={onCompact}
           />
         )
       }

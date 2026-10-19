@@ -52,6 +52,65 @@ describe("form answers", () => {
 })
 
 test("a permission reply is read only from the three known choices", () => {
-  expect(Requests.readPermissionReply(data([[Requests.permissionField, "always"]]))).toBe("always")
+  expect(Requests.readPermissionReply(data([[Requests.permissionField, "always"]]))).toEqual({ reply: "always" })
   expect(Requests.readPermissionReply(data([[Requests.permissionField, "everything"]]))).toBeUndefined()
+})
+
+test("typed instructions deny the request and tell Ren what to do instead, even when they spell a choice", () => {
+  expect(
+    Requests.readPermissionReply(data([[Requests.permissionInstructionsField, "  Use the staging database  "]])),
+  ).toEqual({ reply: "reject", message: "Use the staging database" })
+  expect(Requests.readPermissionReply(data([[Requests.permissionInstructionsField, "always"]]))).toEqual({
+    reply: "reject",
+    message: "always",
+  })
+  expect(Requests.readPermissionReply(data([[Requests.permissionInstructionsField, "   "]]))).toBeUndefined()
+})
+
+describe("web search request state", () => {
+  const consent = Schema.decodeUnknownSync(Form.Info)({
+    id: "frm_consent",
+    sessionID: "ses_child",
+    title: "Web Search",
+    kind: "websearch.provider",
+    fields: [{ key: "choice", type: "string", required: true, custom: false }],
+  })
+  const provider = Schema.decodeUnknownSync(Form.Info)({
+    ...consent,
+    id: "frm_provider",
+    fields: [
+      { key: "provider", type: "string", required: true, custom: false, options: [{ value: "exa", label: "Exa" }] },
+    ],
+  })
+  const sending = { form: consent, owner: "ses_root", connection: 1 }
+
+  test("holds the card across both forms and prevents duplicate submissions", () => {
+    expect(Requests.webSearchRequest(sending, undefined, "ses_root", 1)).toEqual({ form: consent, sending: true })
+    expect(Requests.webSearchRequest(undefined, provider, "ses_root", 1)).toEqual({ form: provider, sending: false })
+  })
+
+  test.each([
+    ["navigate", "ses_other", 1],
+    ["disconnect", "ses_root", 2],
+  ] as const)("stops automatic replies on %s", (_, owner, connection) => {
+    expect(Requests.webSearchRequest(sending, undefined, owner, connection)).toEqual({
+      form: undefined,
+      sending: false,
+    })
+  })
+
+  test("keeps the selected provider after failure and retries only the provider form", () => {
+    const failed = { owner: "ses_root", formID: consent.id, value: "exa", failed: true }
+    expect(Requests.webSearchSelection(failed, "ses_root", provider, false)).toEqual({ value: "exa", failed: true })
+  })
+
+  test("a new consent form or another owner starts from any provider, unless the choice is still sending", () => {
+    const chosen = { owner: "ses_root", formID: "frm_old", value: "exa", failed: true }
+    expect(Requests.webSearchSelection(chosen, "ses_root", consent, false)).toEqual({ value: "random", failed: false })
+    expect(Requests.webSearchSelection(chosen, "ses_root", consent, true)).toEqual({ value: "exa", failed: true })
+    expect(Requests.webSearchSelection(chosen, "ses_other", provider, false)).toEqual({
+      value: "random",
+      failed: false,
+    })
+  })
 })

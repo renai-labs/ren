@@ -806,6 +806,12 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             form,
             selection,
             events,
+            lost: SubscriptionRef.changes(status).pipe(
+              Stream.drop(1),
+              Stream.filter((next) => next === "reconnecting" || next === "parked"),
+              Stream.runHead,
+              Effect.asVoid,
+            ),
             reply: (target, answer) =>
               Effect.flatMap(client, (api) =>
                 api.session.form.reply({ sessionID: Session.ID.make(target.sessionID), formID: target.id, answer }),
