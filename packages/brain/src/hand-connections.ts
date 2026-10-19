@@ -5,6 +5,8 @@ import { ExecutorClient } from "@ren/hand-api/executor-client"
 import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import {
+  Cache,
+  Cause,
   Clock,
   Context,
   DateTime,
@@ -25,7 +27,14 @@ import { HandAccess } from "./hand-access.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("HandConnections.Unavailable", {
   sessionId: Session.ID,
-  reason: Schema.Literals(["no_access", "ren_unavailable", "unreachable", "token_refused", "incompatible", "unusable"]),
+  reason: Schema.Literals([
+    "no_access",
+    "ren_unavailable",
+    "unreachable",
+    "token_refused",
+    "incompatible",
+    "directory_failed",
+  ]),
   message: Schema.String,
 }) {}
 
@@ -50,7 +59,7 @@ export class Service extends Context.Service<Service, Interface>()("@ren/brain/H
 
 interface Entry {
   readonly connection: Connection
-  readonly ready: Effect.Effect<void, Unavailable>
+  readonly checkAccess: Effect.Effect<void, Unavailable>
 }
 
 export const layer = Layer.effect(
@@ -58,29 +67,31 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const handAccess = yield* HandAccess.Service
     const http = yield* HttpClient.HttpClient
-    const accesses = new Map<Session.ID, SynchronizedRef.SynchronizedRef<Hand.Access>>()
-    const failures = new Map<Session.ID, { readonly error: Unavailable; readonly retryAtMs: number }>()
-
-    const ask = Effect.fn("HandConnections.ask")(function* (sessionId: Session.ID) {
-      const now = yield* Clock.currentTimeMillis
-      const failed = failures.get(sessionId)
-      if (failed?.error.reason === "ren_unavailable" && now < failed.retryAtMs) return yield* failed.error
-      return yield* handAccess.open(sessionId).pipe(
-        Effect.tap(() => Effect.sync(() => failures.delete(sessionId))),
-        Effect.mapError((error) =>
-          error._tag === "HandAccess.NotFound"
-            ? new Unavailable({ sessionId, reason: "no_access", message: `No access to a hand: ${error.message}` })
-            : new Unavailable({
-                sessionId,
-                reason: "ren_unavailable",
-                message: `Ren does not answer: ${error.message}`,
-              }),
-        ),
-        Effect.tapError((error) =>
-          Effect.sync(() => failures.set(sessionId, { error, retryAtMs: now + Duration.toMillis(retryRenAfter) })),
-        ),
-      )
-    })
+    const liveEntries = new Map<Session.ID, SynchronizedRef.SynchronizedRef<Hand.Access>>()
+    const lastFailures = yield* Cache.makeWith(
+      Effect.fn("HandConnections.openAccess")(function* (sessionId: Session.ID) {
+        return yield* handAccess.open(sessionId).pipe(
+          Effect.mapError((error) =>
+            error._tag === "HandAccess.NotFound"
+              ? new Unavailable({ sessionId, reason: "no_access", message: `No access to a hand: ${error.message}` })
+              : new Unavailable({
+                  sessionId,
+                  reason: "ren_unavailable",
+                  message: `Ren does not answer: ${error.message}`,
+                }),
+          ),
+        )
+      }),
+      {
+        capacity: Number.POSITIVE_INFINITY,
+        timeToLive: (exit) =>
+          Exit.isFailure(exit) &&
+          Option.exists(Cause.findErrorOption(exit.cause), (error) => error.reason === "ren_unavailable")
+            ? retryRenAfter
+            : Duration.zero,
+      },
+    )
+    const openAccess = (sessionId: Session.ID) => Cache.get(lastFailures, sessionId)
 
     const connections: RcMap.RcMap<Session.ID, Entry, Unavailable> = yield* RcMap.make({
       idleTimeToLive: Duration.infinity,
@@ -88,30 +99,30 @@ export const layer = Layer.effect(
         const entryScope = yield* Effect.scope
         const attempt = yield* Scope.fork(entryScope)
         return yield* Effect.gen(function* () {
-          const access = yield* ask(sessionId)
+          const access = yield* openAccess(sessionId)
           const receivedAtMs = yield* Clock.currentTimeMillis
-          const window = Duration.min(
+          const refreshWindow = Duration.min(
             refreshBefore,
             Duration.millis((DateTime.toEpochMillis(access.expiresAt) - receivedAtMs) / 3),
           )
-          const current = yield* SynchronizedRef.make(access)
-          accesses.set(sessionId, current)
+          const storedAccess = yield* SynchronizedRef.make(access)
+          liveEntries.set(sessionId, storedAccess)
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => {
-              if (accesses.get(sessionId) === current) accesses.delete(sessionId)
+              if (liveEntries.get(sessionId) === storedAccess) liveEntries.delete(sessionId)
             }),
           )
           const invalidateSelf = Effect.suspend(() =>
-            accesses.get(sessionId) === current ? RcMap.invalidate(connections, sessionId) : Effect.void,
+            liveEntries.get(sessionId) === storedAccess ? RcMap.invalidate(connections, sessionId) : Effect.void,
           )
           const refusedToken = yield* Ref.make<string | undefined>(undefined)
-          const held = SynchronizedRef.updateAndGetEffect(current, (latest) =>
+          const freshAccess = SynchronizedRef.updateAndGetEffect(storedAccess, (latest) =>
             Effect.gen(function* () {
               const isRefused = (yield* Ref.get(refusedToken)) === Redacted.value(latest.token)
               const now = yield* Clock.currentTimeMillis
-              if (!isRefused && DateTime.toEpochMillis(latest.expiresAt) - now > Duration.toMillis(window))
+              if (!isRefused && DateTime.toEpochMillis(latest.expiresAt) - now > Duration.toMillis(refreshWindow))
                 return latest
-              return yield* ask(sessionId).pipe(
+              return yield* openAccess(sessionId).pipe(
                 Effect.flatMap((fresh) =>
                   isSameHand(latest, fresh) ? Effect.succeed(fresh) : invalidateSelf.pipe(Effect.as(latest)),
                 ),
@@ -127,21 +138,11 @@ export const layer = Layer.effect(
           )
           const client = yield* ExecutorClient.make({
             url: access.url,
-            token: Effect.map(held, (latest) => Redacted.value(latest.token)),
+            token: Effect.map(freshAccess, (latest) => Redacted.value(latest.token)),
             onNoAnswer: invalidateSelf,
-          }).pipe(
-            Effect.provideService(
-              HttpClient.HttpClient,
-              HttpClient.transform(http, (response, request) =>
-                Effect.tap(response, (received) =>
-                  received.status === 401
-                    ? Ref.set(refusedToken, request.headers.authorization?.replace(/^Bearer /, ""))
-                    : Effect.void,
-                ),
-              ),
-            ),
-          )
-          const noAnswer = (cause: { readonly _tag: string; readonly message: string }) =>
+            onRefused: (token) => Ref.set(refusedToken, token),
+          }).pipe(Effect.provideService(HttpClient.HttpClient, http))
+          const unreachableBecause = (cause: { readonly _tag: string; readonly message: string }) =>
             cause._tag === "UnauthorizedError"
               ? new Unavailable({
                   sessionId,
@@ -153,7 +154,7 @@ export const layer = Layer.effect(
                   reason: "unreachable",
                   message: `The hand at ${access.url} does not answer: ${cause.message}`,
                 })
-          const hello = yield* client["executor.hello"]().pipe(Effect.mapError(noAnswer))
+          const hello = yield* client["executor.hello"]().pipe(Effect.mapError(unreachableBecause))
           if (hello.protocol !== protocol)
             return yield* new Unavailable({
               sessionId,
@@ -165,29 +166,24 @@ export const layer = Layer.effect(
               error._tag === "FileSystemError"
                 ? new Unavailable({
                     sessionId,
-                    reason: "unusable",
+                    reason: "directory_failed",
                     message: `Could not make the directory ${access.directory} on the hand: ${error.message}`,
                   })
-                : noAnswer(error),
+                : unreachableBecause(error),
             ),
           )
-          const ready: Effect.Effect<void, Unavailable> = Effect.gen(function* () {
-            const latest = yield* held
+          const checkAccess: Effect.Effect<void, Unavailable> = Effect.gen(function* () {
+            const latest = yield* freshAccess
             if (DateTime.toEpochMillis(latest.expiresAt) > (yield* Clock.currentTimeMillis)) return
             yield* invalidateSelf
-            return yield* Option.match(Option.fromNullishOr(failures.get(sessionId)), {
-              onNone: () =>
-                Effect.fail(
-                  new Unavailable({
-                    sessionId,
-                    reason: "ren_unavailable",
-                    message: "The access to the hand expired",
-                  }),
-                ),
-              onSome: (failed) => Effect.fail(failed.error),
+            yield* Cache.getOption(lastFailures, sessionId)
+            return yield* new Unavailable({
+              sessionId,
+              reason: "ren_unavailable",
+              message: "The access to the hand expired",
             })
           })
-          return { connection: { hello, client }, ready }
+          return { connection: { hello, client }, checkAccess }
         }).pipe(
           Scope.provide(attempt),
           Effect.onError(() => Scope.close(attempt, Exit.void)),
@@ -199,7 +195,7 @@ export const layer = Layer.effect(
         const entry = yield* RcMap.get(connections, sessionId).pipe(
           Effect.tapError(() => RcMap.invalidate(connections, sessionId)),
         )
-        yield* entry.ready
+        yield* entry.checkAccess
         return entry.connection
       }),
       release: Effect.fn("HandConnections.release")(function* (sessionId: Session.ID) {

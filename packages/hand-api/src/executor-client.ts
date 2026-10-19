@@ -33,6 +33,7 @@ export interface Options {
   readonly url: URL
   readonly token: Effect.Effect<string>
   readonly onNoAnswer?: Effect.Effect<void>
+  readonly onRefused?: (token: string) => Effect.Effect<void>
 }
 
 const unauthorized = () => Effect.fail(new UnauthorizedError({ message: "Authentication required" }))
@@ -79,6 +80,13 @@ const layer = (options: Options) =>
             HttpClient.mapRequest(HttpClientRequest.prependUrl(rpcUrl(options.url))),
             HttpClient.mapRequestEffect((request) =>
               Effect.map(options.token, (token) => HttpClientRequest.bearerToken(request, token)),
+            ),
+            HttpClient.transform((response, request) =>
+              Effect.tap(response, (received) =>
+                received.status === 401 && options.onRefused
+                  ? options.onRefused(request.headers.authorization?.replace(/^Bearer /u, "") ?? "")
+                  : Effect.void,
+              ),
             ),
             HttpClient.filterStatusOk,
           ),

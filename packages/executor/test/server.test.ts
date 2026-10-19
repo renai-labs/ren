@@ -377,7 +377,7 @@ it.live(
       const bearer = `Bearer ${yield* token()}`
       const address = new URL(yield* Sandbox.url)
       const startedAt = Date.now()
-      const stalled = (trickle: boolean) =>
+      const stalled = (options: { readonly trickle: boolean }) =>
         Effect.promise(
           () =>
             new Promise<number>((resolve) => {
@@ -385,15 +385,15 @@ it.live(
                 socket.write(
                   `POST ${ExecutorClient.path} HTTP/1.1\r\nHost: ${address.host}\r\nAuthorization: ${bearer}\r\nContent-Type: application/ndjson\r\nContent-Length: 1000\r\n\r\n{"_tag":"Request"`,
                 )
-                const timer = trickle ? setInterval(() => socket.write(" "), 4000) : undefined
+                const timer = options.trickle ? setInterval(() => socket.write(" "), 4000) : undefined
                 socket.on("close", () => clearInterval(timer))
               })
               socket.on("close", () => resolve(Date.now() - startedAt))
               socket.on("error", () => socket.destroy())
             }),
         ).pipe(Effect.forkScoped)
-      const silent = yield* stalled(false)
-      const slow = yield* stalled(true)
+      const silent = yield* stalled({ trickle: false })
+      const slow = yield* stalled({ trickle: true })
       expect((yield* post(rpc("executor.hello", null), bearer)).status).toBe(200)
       const released = yield* Effect.all([Fiber.join(silent), Fiber.join(slow)]).pipe(
         Effect.timeoutOption(Duration.seconds(20)),

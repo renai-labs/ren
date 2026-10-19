@@ -14,8 +14,8 @@ const members: Member[] = [
   { id: "alan", name: "Alan Turing", email: "alan@example.com", role: "Member", seats: "1" },
 ]
 
-const columns = (sortable: boolean): TableColumn<Member>[] => [
-  { key: "name", header: "Name", width: "fill", sortable, cell: (row) => row.name },
+const columns = (options: { readonly sortable: boolean }): TableColumn<Member>[] => [
+  { key: "name", header: "Name", width: "fill", sortable: options.sortable, cell: (row) => row.name },
   { key: "email", header: "Email", width: "third", visibility: "wide-screens", cell: (row) => row.email },
   { key: "role", header: "Role", width: "medium", cell: (row) => row.role },
   { key: "seats", header: "Seats", width: "small", alignment: "end", cell: (row) => row.seats },
@@ -33,7 +33,7 @@ function Members(props: { root: Props; sortable?: boolean }) {
   return (
     <Table
       {...props.root}
-      columns={columns(props.sortable === true)}
+      columns={columns({ sortable: props.sortable === true })}
       rows={rows}
       rowKey={(row) => row.id}
       sort={props.sortable ? { column: "name", direction, onChange: (_, next) => setDirection(next) } : undefined}
@@ -73,7 +73,7 @@ export const Failed: Story = {
 export const Empty: Story = {
   render: () => (
     <Table
-      columns={columns(false)}
+      columns={columns({ sortable: false })}
       rows={[]}
       rowKey={(row) => row.id}
       emptyMessage="No members yet."
