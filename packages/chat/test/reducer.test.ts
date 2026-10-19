@@ -237,6 +237,30 @@ describe("revert", () => {
     expect(ChatState.pending(committed, sessionID).map((item) => item.id)).toEqual(Fixture.ids("msg_0"))
     expect(ChatState.messages(committed, sessionID).map((item) => item.id)).toEqual(Fixture.ids("msg_1"))
   })
+
+  test("a commit keeps the prompt the member sends after it, which the echo has not reached yet", () => {
+    const reverted = Hydrate.messages(
+      Hydrate.info(ChatState.empty, [Fixture.session(sessionID, { revert: { messageID: "msg_2" } })]),
+      sessionID,
+      Fixture.page([Fixture.user("msg_2", 2), Fixture.user("msg_1", 1)]),
+    )
+    const sent = Outbox.admit(
+      reverted,
+      { sessionID, id: SessionMessage.ID.make("msg_3"), text: "next", delivery: "steer" },
+      Fixture.at(3),
+    )
+    const committed = Reducer.apply(
+      sent,
+      Fixture.event({
+        id: "evt_commit",
+        created: 4,
+        type: "session.revert.committed",
+        data: { sessionID, to: "msg_2" },
+      }),
+    ).state
+    expect(ChatState.messages(committed, sessionID).map((item) => item.id)).toEqual(Fixture.ids("msg_1", "msg_3"))
+    expect(ChatState.pending(committed, sessionID).map((item) => item.id)).toEqual(Fixture.ids("msg_3"))
+  })
 })
 
 describe("compaction", () => {

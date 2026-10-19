@@ -87,6 +87,7 @@ export const Synthetic = define("session.synthetic", {
   ...base,
   text: Schema.String,
   description: Schema.optionalKey(Schema.String),
+  metadata: Schema.optionalKey(SessionMessage.SyntheticMetadata),
 })
 export const SkillActivated = define("session.skill.activated", {
   ...base,

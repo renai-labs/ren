@@ -29,6 +29,8 @@ export const useSession = (sessionID: Session.ID) => {
   }
 }
 
+export const useChild = (root: Session.ID, sessionID: Session.ID) => useAtomValue(useAtoms().child({ root, sessionID }))
+
 export const useModels = (sessionID: Session.ID) => useAtomValue(useAtoms().models(sessionID))
 
 export const useAction = <A, E, Args extends ReadonlyArray<unknown>>(

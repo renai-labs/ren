@@ -148,7 +148,50 @@ const handlers = Layer.mergeAll(
           ),
         )
         .handle("session.interrupt", (request) =>
-          run((chat) => chat.interrupt(request.params.sessionID).pipe(Effect.mapError(notFound))),
+          run((chat) =>
+            chat.interrupt(request.params.sessionID, request.query.resume === true).pipe(Effect.mapError(notFound)),
+          ),
+        )
+        .handle("session.background", (request) =>
+          run((chat) => chat.background(request.params.sessionID).pipe(Effect.mapError(notFound))),
+        )
+        .handle("session.rename", (request) =>
+          run((chat) => chat.rename(request.params.sessionID, request.payload.title).pipe(Effect.mapError(notFound))),
+        )
+        .handle("session.revert.stage", (request) =>
+          run((chat) =>
+            chat.revert.stage(request.params.sessionID, request.payload.messageID).pipe(
+              Effect.catchTags({
+                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
+                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
+              }),
+            ),
+          ),
+        )
+        .handle("session.revert.clear", (request) =>
+          run((chat) =>
+            chat.revert.clear(request.params.sessionID).pipe(
+              Effect.catchTags({
+                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
+                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
+              }),
+            ),
+          ),
+        )
+        .handle("session.revert.commit", (request) =>
+          run((chat) =>
+            chat.revert.commit(request.params.sessionID).pipe(
+              Effect.catchTags({
+                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
+                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
+              }),
+            ),
+          ),
+        )
+        .handle("session.inbox.cancel", (request) =>
+          run((chat) =>
+            chat.cancelInbox(request.params.sessionID, request.params.inboxID).pipe(Effect.mapError(notFound)),
+          ),
         )
         .handle("session.model.switch", (request) =>
           run((chat) =>

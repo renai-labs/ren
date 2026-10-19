@@ -76,7 +76,7 @@ test("a prompt streams the turn as it happens, and the reads show the same turn 
       })
       expect(yield* brain.chat.session["session.get"]({ params })).toMatchObject({
         id: brain.id,
-        capabilities: { steer: true, fork: true },
+        capabilities: { steer: true, fork: true, revert: true, rename: true, compact: true },
       })
       expect(yield* brain.chat.session["session.status"]()).toEqual({})
     }),
@@ -219,6 +219,100 @@ test("a client compacts the session through the Chat API and reads the summary",
       expect(page.items.find((message) => message.type === "compaction")).toMatchObject({
         status: "completed",
         summary: expect.stringContaining("the summary"),
+      })
+    }),
+  ))
+
+test("a client renames the session through the Chat API", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const events = yield* follow(brain)
+      yield* events.until("server.connected")
+      const params = { sessionID: brain.id }
+      yield* brain.chat.session["session.rename"]({ params, payload: { title: "Release notes" } })
+      const renamed = yield* events.until("session.renamed")
+      expect(renamed.at(-1)).toMatchObject({ data: { sessionID: brain.id, title: "Release notes" } })
+      expect(yield* brain.chat.session["session.get"]({ params })).toMatchObject({ title: "Release notes" })
+      const blank = yield* brain.chat.session["session.rename"]({ params, payload: { title: " " } }).pipe(Effect.exit)
+      expect(Exit.isFailure(blank)).toBe(true)
+    }),
+  ))
+
+test("a revert stops the running turn, redo brings the messages back, and a commit drops them", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const first = SessionMessage.ID.create()
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: first, text: stub.script({ reply: "first answer" }).marker, delivery: "steer" },
+      })
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      const held = stub.script({ hold: true })
+      const second = SessionMessage.ID.create()
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: second, text: held.marker, delivery: "steer" },
+      })
+      yield* Effect.promise(() => held.called())
+      const events = yield* follow(brain)
+      yield* events.until("server.connected")
+      expect(
+        yield* brain.chat.session["session.revert.stage"]({ params, payload: { messageID: second } }),
+      ).toMatchObject({ messageID: second })
+      held.release()
+      const staged = yield* events.until("session.revert.staged")
+      expect(staged.some((frame) => frame.type === "session.execution.interrupted")).toBe(true)
+      expect(yield* brain.chat.session["session.get"]({ params })).toMatchObject({ revert: { messageID: second } })
+      yield* brain.chat.session["session.revert.clear"]({ params })
+      yield* events.until("session.revert.cleared")
+      expect((yield* brain.chat.session["session.get"]({ params })).revert).toBeUndefined()
+      yield* brain.chat.session["session.revert.stage"]({ params, payload: { messageID: second } })
+      yield* brain.chat.session["session.revert.commit"]({ params })
+      const committed = yield* events.until("session.revert.committed")
+      expect(committed.at(-1)).toMatchObject({ data: { sessionID: brain.id, to: second } })
+      const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
+      expect(page.items.some((message) => message.id === second)).toBe(false)
+      expect(page.items.some((message) => message.id === first)).toBe(true)
+    }),
+  ))
+
+test("a client withdraws queued input, and a stop with resume goes on with the steered input", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const held = stub.script({ hold: true })
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: held.marker, delivery: "steer" },
+      })
+      yield* Effect.promise(() => held.called())
+      const queued = SessionMessage.ID.create()
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: queued, text: stub.script().marker, delivery: "queue" },
+      })
+      yield* brain.chat.session["session.inbox.cancel"]({ params: { ...params, inboxID: queued } })
+      expect(yield* brain.chat.session["session.inbox.list"]({ params })).toEqual([])
+      const steered = stub.script({ reply: "after the stop" })
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: steered.marker, delivery: "steer" },
+      })
+      yield* brain.chat.session["session.interrupt"]({ params, query: { resume: true } })
+      held.release()
+      yield* Effect.promise(() => steered.called())
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
+      expect(page.items.some((message) => message.id === queued)).toBe(false)
+      expect(page.items.find((message) => message.type === "assistant")).toMatchObject({
+        content: [{ type: "text", text: "after the stop" }],
       })
     }),
   ))

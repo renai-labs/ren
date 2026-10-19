@@ -101,9 +101,60 @@ const EndpointSessionCompact = (raw: RawClient["session"]) => (input: SessionCom
   )
 
 type SessionInterruptRequest = Parameters<RawClient["session"]["session.interrupt"]>[0]
-type SessionInterruptInput = { readonly sessionID: SessionInterruptRequest["params"]["sessionID"] }
+type SessionInterruptInput = {
+  readonly sessionID: SessionInterruptRequest["params"]["sessionID"]
+  readonly resume?: SessionInterruptRequest["query"]["resume"]
+}
 const EndpointSessionInterrupt = (raw: RawClient["session"]) => (input: SessionInterruptInput) =>
-  raw["session.interrupt"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+  raw["session.interrupt"]({ params: { sessionID: input["sessionID"] }, query: { resume: input["resume"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SessionBackgroundRequest = Parameters<RawClient["session"]["session.background"]>[0]
+type SessionBackgroundInput = { readonly sessionID: SessionBackgroundRequest["params"]["sessionID"] }
+const EndpointSessionBackground = (raw: RawClient["session"]) => (input: SessionBackgroundInput) =>
+  raw["session.background"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+type SessionRenameRequest = Parameters<RawClient["session"]["session.rename"]>[0]
+type SessionRenameInput = {
+  readonly sessionID: SessionRenameRequest["params"]["sessionID"]
+  readonly title: SessionRenameRequest["payload"]["title"]
+}
+const EndpointSessionRename = (raw: RawClient["session"]) => (input: SessionRenameInput) =>
+  raw["session.rename"]({ params: { sessionID: input["sessionID"] }, payload: { title: input["title"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SessionRevertStageRequest = Parameters<RawClient["session"]["session.revert.stage"]>[0]
+type SessionRevertStageInput = {
+  readonly sessionID: SessionRevertStageRequest["params"]["sessionID"]
+  readonly messageID: SessionRevertStageRequest["payload"]["messageID"]
+}
+const EndpointSessionRevertStage = (raw: RawClient["session"]) => (input: SessionRevertStageInput) =>
+  raw["session.revert.stage"]({
+    params: { sessionID: input["sessionID"] },
+    payload: { messageID: input["messageID"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SessionRevertClearRequest = Parameters<RawClient["session"]["session.revert.clear"]>[0]
+type SessionRevertClearInput = { readonly sessionID: SessionRevertClearRequest["params"]["sessionID"] }
+const EndpointSessionRevertClear = (raw: RawClient["session"]) => (input: SessionRevertClearInput) =>
+  raw["session.revert.clear"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+type SessionRevertCommitRequest = Parameters<RawClient["session"]["session.revert.commit"]>[0]
+type SessionRevertCommitInput = { readonly sessionID: SessionRevertCommitRequest["params"]["sessionID"] }
+const EndpointSessionRevertCommit = (raw: RawClient["session"]) => (input: SessionRevertCommitInput) =>
+  raw["session.revert.commit"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
+
+type SessionInboxCancelRequest = Parameters<RawClient["session"]["session.inbox.cancel"]>[0]
+type SessionInboxCancelInput = {
+  readonly sessionID: SessionInboxCancelRequest["params"]["sessionID"]
+  readonly inboxID: SessionInboxCancelRequest["params"]["inboxID"]
+}
+const EndpointSessionInboxCancel = (raw: RawClient["session"]) => (input: SessionInboxCancelInput) =>
+  raw["session.inbox.cancel"]({ params: { sessionID: input["sessionID"], inboxID: input["inboxID"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 type SessionModelSwitchRequest = Parameters<RawClient["session"]["session.model.switch"]>[0]
 type SessionModelSwitchInput = {
@@ -155,7 +206,7 @@ const adaptGroupSession = (raw: RawClient["session"]) => ({
   messages: EndpointSessionMessages(raw),
   message: EndpointSessionMessage(raw),
   children: EndpointSessionChildren(raw),
-  inbox: { list: EndpointSessionInboxList(raw) },
+  inbox: { list: EndpointSessionInboxList(raw), cancel: EndpointSessionInboxCancel(raw) },
   permission: { list: EndpointSessionPermissionList(raw), reply: EndpointSessionPermissionReply(raw) },
   form: {
     list: EndpointSessionFormList(raw),
@@ -165,6 +216,13 @@ const adaptGroupSession = (raw: RawClient["session"]) => ({
   prompt: EndpointSessionPrompt(raw),
   compact: EndpointSessionCompact(raw),
   interrupt: EndpointSessionInterrupt(raw),
+  background: EndpointSessionBackground(raw),
+  rename: EndpointSessionRename(raw),
+  revert: {
+    stage: EndpointSessionRevertStage(raw),
+    clear: EndpointSessionRevertClear(raw),
+    commit: EndpointSessionRevertCommit(raw),
+  },
   model: { switch: EndpointSessionModelSwitch(raw) },
 })
 

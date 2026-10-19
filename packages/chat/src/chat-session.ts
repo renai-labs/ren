@@ -43,6 +43,35 @@ export interface PromptInput {
   readonly text: string
   readonly delivery?: SessionInbox.Delivery
   readonly id?: SessionMessage.ID
+  readonly model?: SessionModel.Ref
+}
+
+export const leadingTurnPageDelay = "200 millis"
+export const leadingTurnPageLimit = 3
+
+export const enrichLeadingTurn = <E>(input: {
+  readonly messages: Effect.Effect<ReadonlyArray<SessionMessage.Info>>
+  readonly more: Effect.Effect<boolean>
+  readonly loading: Effect.Effect<boolean>
+  readonly loadMore: Effect.Effect<void, E>
+  readonly pause: Effect.Effect<void>
+  readonly maxPages: number
+}) => {
+  const needed = Effect.zipWith(input.messages, input.more, (messages, more) => {
+    const assistant = messages.findIndex((message) => message.type === "assistant")
+    const boundary = messages.findIndex((message) => message.type === "user" || message.type === "shell")
+    return more && assistant !== -1 && (boundary === -1 || assistant < boundary)
+  })
+  const load = (pages: number): Effect.Effect<void, E> =>
+    Effect.gen(function* () {
+      if (pages >= input.maxPages || !(yield* needed)) return
+      yield* input.pause
+      if (!(yield* needed)) return
+      if (yield* input.loading) return yield* load(pages)
+      yield* input.loadMore
+      return yield* load(pages + 1)
+    })
+  return load(0)
 }
 
 export const make = Effect.fnUntraced(function* (options: Options) {
@@ -333,7 +362,17 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     )
     yield* connection.wake
     yield* send(
-      Effect.flatMap(client, (api) => api.session.prompt({ sessionID: root, id, text: input.text, delivery })),
+      Effect.gen(function* () {
+        const api = yield* client
+        const staged = ChatState.revertMessageID(yield* SubscriptionRef.get(state), root)
+        if (staged) {
+          yield* api.session.revert.commit({ sessionID: root })
+          yield* update((current) => Reducer.commitRevert(current, root, staged))
+        }
+        if (input.model && delivery === "steer")
+          yield* api.session.model.switch({ sessionID: root, model: input.model })
+        return yield* api.session.prompt({ sessionID: root, id, text: input.text, delivery })
+      }),
     ).pipe(Effect.tapError(() => (fresh ? update((current) => Outbox.rollback(current, root, id)) : Effect.void)))
     const echoed = yield* SubscriptionRef.modify(state, (current) => [
       !current.outbox.has(id),
@@ -385,6 +424,73 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         return yield* Deferred.await(done)
       })
     })
+
+  const stage = (message: SessionMessage.User) =>
+    connection.wake.pipe(
+      Effect.andThen(
+        send(
+          Effect.gen(function* () {
+            const api = yield* client
+            if (ChatState.hasInput(yield* SubscriptionRef.get(state), root, message.id)) {
+              yield* api.session.inbox.cancel({ sessionID: root, inboxID: message.id })
+              return yield* update((current) =>
+                Reducer.retract(Outbox.acknowledge(current, message.id), root, message.id),
+              )
+            }
+            const boundary = yield* api.session.revert.stage({ sessionID: root, messageID: message.id })
+            yield* update((current) => Hydrate.revert(current, root, boundary))
+          }),
+        ),
+      ),
+      Effect.as(Option.some(message)),
+    )
+
+  const revert = (messageID: SessionMessage.ID) =>
+    Effect.flatMap(SubscriptionRef.get(state), (current) => {
+      const message = ChatState.userMessages(current, root).find((item) => item.id === messageID)
+      return message ? stage(message) : Effect.succeed(Option.none<SessionMessage.User>())
+    })
+
+  const undo = Effect.flatMap(SubscriptionRef.get(state), (current) => {
+    const message = ChatState.visibleUserMessages(current, root).at(-1)
+    return message ? stage(message) : Effect.succeed(Option.none<SessionMessage.User>())
+  })
+
+  const redo = Effect.gen(function* () {
+    if (!ChatState.revertMessageID(yield* SubscriptionRef.get(state), root)) return
+    yield* connection.wake
+    yield* send(Effect.flatMap(client, (api) => api.session.revert.clear({ sessionID: root })))
+    yield* update((current) => Hydrate.revert(current, root, undefined))
+  })
+
+  const rename = (title: string) =>
+    Effect.gen(function* () {
+      const trimmed = title.trim()
+      if (!trimmed || (yield* SubscriptionRef.get(state)).info[root]?.title === trimmed) return
+      yield* Effect.flatMap(client, (api) => api.session.rename({ sessionID: root, title: trimmed }))
+      yield* update((current) => Hydrate.rename(current, root, trimmed))
+    })
+
+  const reveal = (sessionID: Session.ID, messageID: SessionMessage.ID): Effect.Effect<boolean, unknown> =>
+    Effect.gen(function* () {
+      const current = yield* SubscriptionRef.get(state)
+      if (ChatState.messages(current, sessionID).some((item) => item.id === messageID)) return true
+      if (!ChatState.more(current, sessionID)) return false
+      yield* loadMore(sessionID)
+      return yield* reveal(sessionID, messageID)
+    })
+
+  const enrich = (sessionID: Session.ID) => {
+    const select = <A>(f: (current: ChatState.State) => A) => Effect.map(SubscriptionRef.get(state), f)
+    return enrichLeadingTurn({
+      messages: select((current) => ChatState.messages(current, sessionID)),
+      more: select((current) => ChatState.more(current, sessionID)),
+      loading: select((current) => ChatState.loadingHistory(current, sessionID)),
+      loadMore: loadMore(sessionID),
+      pause: Effect.sleep(leadingTurnPageDelay),
+      maxPages: leadingTurnPageLimit,
+    })
+  }
 
   const removePermission = (sessionID: Session.ID, requestID: Permission.RequestID) =>
     update((current) =>
@@ -459,14 +565,22 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     state,
     status,
     open,
+    enrich,
     loadMore,
+    reveal,
     prompt,
     compact,
+    revert,
+    undo,
+    redo,
+    rename,
     wake: connection.wake,
     resync: connection.resync,
     foreground: connection.foreground,
     models: Effect.flatMap(client, (api) => api.model.list()),
-    interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root })),
+    interrupt: Effect.flatMap(client, (api) => api.session.interrupt({ sessionID: root, resume: true })),
+    stop: (sessionID: Session.ID) => Effect.flatMap(client, (api) => api.session.interrupt({ sessionID })),
+    background: Effect.flatMap(client, (api) => api.session.background({ sessionID: root })),
     switchModel: (model: SessionModel.Ref) =>
       send(Effect.flatMap(client, (api) => api.session.model.switch({ sessionID: root, model }))),
     autoApprove,

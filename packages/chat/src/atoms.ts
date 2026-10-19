@@ -12,6 +12,11 @@ import type { TimelineDetail } from "./timeline-detail.js"
 
 export type Lifecycle = "foreground" | "online"
 
+export interface View {
+  readonly root: Session.ID
+  readonly sessionID: Session.ID
+}
+
 export interface Options<R, ER> {
   readonly runtime: Atom.AtomRuntime<R | HttpClient.HttpClient, ER>
   readonly access: (sessionID: Session.ID) => Effect.Effect<Session.ClientAccess, unknown, R>
@@ -32,6 +37,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
             ...(options.sender && { sender: options.sender }),
           })
           yield* opened.open(sessionID).pipe(
+            Effect.andThen(opened.enrich(sessionID)),
             Effect.catch((error) => Effect.logWarning("The chat could not load the session", error)),
             Effect.forkScoped,
           )
@@ -68,22 +74,38 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const status = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.status))
 
+  const project = (get: Atom.AtomContext, view: View) =>
+    AsyncResult.map(get(state(view.root)), (current): Projection.Projection => {
+      const previous = Option.flatMap(get.self<AsyncResult.AsyncResult<Projection.Projection>>(), AsyncResult.value)
+      return Projection.project({
+        messages: ChatState.visible(current, view.sessionID),
+        busy: ChatState.activity(current, view.sessionID) === "running",
+        pendingInputIDs: new Set(ChatState.inputs(current, view.sessionID)),
+        queuedCompactionIDs: ChatState.pending(current, view.sessionID).flatMap((item) =>
+          item.type === "compaction" ? [item.id] : [],
+        ),
+        ...(options.detail && { detail: options.detail }),
+        ...(Option.isSome(previous) && { previous: previous.value.rows }),
+      })
+    })
+
   const timeline = Atom.family((sessionID: Session.ID) =>
+    Atom.make((get) => project(get, { root: sessionID, sessionID })),
+  )
+
+  const reader = Atom.family((view: View) =>
     Atom.make((get) =>
-      AsyncResult.map(get(state(sessionID)), (current): Projection.Projection => {
-        const previous = Option.flatMap(get.self<AsyncResult.AsyncResult<Projection.Projection>>(), AsyncResult.value)
-        return Projection.project({
-          messages: ChatState.messages(current, sessionID),
-          busy: ChatState.activity(current, sessionID) === "running",
-          pendingInputIDs: new Set(ChatState.inputs(current, sessionID)),
-          queuedCompactionIDs: ChatState.pending(current, sessionID).flatMap((item) =>
-            item.type === "compaction" ? [item.id] : [],
-          ),
-          ...(options.detail && { detail: options.detail }),
-          ...(Option.isSome(previous) && { previous: previous.value.rows }),
-        })
-      }),
+      Effect.flatMap(get.result(session(view.root)), (opened) =>
+        opened.open(view.sessionID).pipe(Effect.andThen(opened.enrich(view.sessionID))),
+      ),
     ),
+  )
+
+  const child = Atom.family((view: View) =>
+    Atom.make((get) => {
+      get.mount(reader(view))
+      return project(get, view)
+    }),
   )
 
   const run = <A, E>(
@@ -101,6 +123,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     state,
     status,
     timeline,
+    child,
     models,
     run,
   }

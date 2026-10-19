@@ -32,7 +32,7 @@ export type SessionMessageSender = { userId: string }
 
 export type SessionInboxDelivery = "steer" | "queue"
 
-export type SessionInboxSyntheticPayload = { text: string; description?: string }
+export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
 
 export type SessionErrorInfo = { type: string; message: string; status?: number; response?: { body: string } }
 
@@ -161,13 +161,6 @@ export type SessionEventSessionExecutionInterrupted = {
   created: number
   type: "session.execution.interrupted"
   data: { sessionID: SessionID; reason: "user" | "shutdown" | "superseded" | "inactivity" }
-}
-
-export type SessionEventSessionSynthetic = {
-  id: string
-  created: number
-  type: "session.synthetic"
-  data: { sessionID: SessionID; text: string; description?: string }
 }
 
 export type SessionEventSessionSkillActivated = {
@@ -390,14 +383,6 @@ export type SessionMessageModelSwitched = {
   previous?: SessionModelRef
 }
 
-export type SessionMessageSynthetic = {
-  id: SessionMessageID
-  time: { created: number }
-  type: "synthetic"
-  text: string
-  description?: string
-}
-
 export type SessionMessageSystem = {
   id: SessionMessageID
   time: { created: number }
@@ -469,13 +454,26 @@ export type SessionInboxCompaction = {
   delivery: SessionInboxDelivery
 }
 
-export type SessionInboxSynthetic = {
+export type SessionInboxSyntheticPayload = {
+  text: string
+  description?: string
+  metadata?: SessionMessageSyntheticMetadata
+}
+
+export type SessionEventSessionSynthetic = {
+  id: string
+  created: number
+  type: "session.synthetic"
+  data: { sessionID: SessionID; text: string; description?: string; metadata?: SessionMessageSyntheticMetadata }
+}
+
+export type SessionMessageSynthetic = {
   id: SessionMessageID
-  sessionID: SessionID
   time: { created: number }
   type: "synthetic"
-  payload: SessionInboxSyntheticPayload
-  delivery: SessionInboxDelivery
+  text: string
+  description?: string
+  metadata?: SessionMessageSyntheticMetadata
 }
 
 export type SessionEventSessionExecutionFailed = {
@@ -725,6 +723,15 @@ export type SessionMessageUser = {
   skills?: Array<SessionMessageSkillAttachment>
   type: "user"
   sender?: SessionMessageSender
+}
+
+export type SessionInboxSynthetic = {
+  id: SessionMessageID
+  sessionID: SessionID
+  time: { created: number }
+  type: "synthetic"
+  payload: SessionInboxSyntheticPayload
+  delivery: SessionInboxDelivery
 }
 
 export type SessionMessageCompaction =
@@ -1017,9 +1024,45 @@ export type SessionCompactInput = {
 
 export type SessionCompactOutput = SessionInboxCompaction
 
-export type SessionInterruptInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+export type SessionInterruptInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly resume?: { readonly resume?: boolean | undefined }["resume"]
+}
 
 export type SessionInterruptOutput = void
+
+export type SessionBackgroundInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type SessionBackgroundOutput = void
+
+export type SessionRenameInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly title: { readonly title: string }["title"]
+}
+
+export type SessionRenameOutput = void
+
+export type SessionRevertStageInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly messageID: { readonly messageID: string }["messageID"]
+}
+
+export type SessionRevertStageOutput = SessionInfoRevert
+
+export type SessionRevertClearInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type SessionRevertClearOutput = void
+
+export type SessionRevertCommitInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type SessionRevertCommitOutput = void
+
+export type SessionInboxCancelInput = {
+  readonly sessionID: { readonly sessionID: string; readonly inboxID: string }["sessionID"]
+  readonly inboxID: { readonly sessionID: string; readonly inboxID: string }["inboxID"]
+}
+
+export type SessionInboxCancelOutput = void
 
 export type SessionModelSwitchInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]

@@ -361,25 +361,26 @@ const compactionFailed = (state: ChatState.State, event: Of<"session.compaction.
   )
 }
 
-const revertCommitted = (state: ChatState.State, event: Of<"session.revert.committed">): Result => {
-  const data = event.data
-  const info = state.info[data.sessionID]
-  const cleared = info ? { ...state, info: set(state.info, data.sessionID, Struct.omit(info, ["revert"])) } : state
+export const commitRevert = (state: ChatState.State, sessionID: string, to: string): ChatState.State => {
+  const info = state.info[sessionID]
+  const cleared = info ? { ...state, info: set(state.info, sessionID, Struct.omit(info, ["revert"])) } : state
   const pruned = {
     ...cleared,
     pending: set(
       cleared.pending,
-      data.sessionID,
-      ChatState.pending(cleared, data.sessionID).filter((item) => item.id < data.to),
+      sessionID,
+      ChatState.pending(cleared, sessionID).filter((item) => item.id < to || state.outbox.has(item.id)),
     ),
   }
-  return done(
-    withMessages(pruned, data.sessionID, (messages) => {
-      const position = messages.findIndex((item) => item.id >= data.to)
-      return position < 0 ? messages : messages.slice(0, position)
-    }),
-  )
+  return withMessages(pruned, sessionID, (messages) => {
+    const position = messages.findIndex((item) => item.id >= to && !state.outbox.has(item.id))
+    if (position < 0) return messages
+    return [...messages.slice(0, position), ...messages.slice(position).filter((item) => state.outbox.has(item.id))]
+  })
 }
+
+const revertCommitted = (state: ChatState.State, event: Of<"session.revert.committed">): Result =>
+  done(commitRevert(state, event.data.sessionID, event.data.to))
 
 const editInfo = (
   state: ChatState.State,
@@ -526,6 +527,7 @@ const handlers: Handlers = {
         type: "synthetic",
         text: event.data.text,
         ...(event.data.description && { description: event.data.description }),
+        ...(event.data.metadata && { metadata: event.data.metadata }),
         time: { created: time(event.created) },
       }),
     ),

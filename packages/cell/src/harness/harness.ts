@@ -60,7 +60,18 @@ export interface Chat {
     sessionId: Session.ID,
     id: SessionMessage.ID,
   ) => Effect.Effect<SessionInbox.Compaction, NotFound | Conflict>
-  readonly interrupt: (sessionId: Session.ID) => Effect.Effect<void, NotFound>
+  readonly interrupt: (sessionId: Session.ID, resume: boolean) => Effect.Effect<void, NotFound>
+  readonly background: (sessionId: Session.ID) => Effect.Effect<void, NotFound>
+  readonly rename: (sessionId: Session.ID, title: string) => Effect.Effect<void, NotFound>
+  readonly revert: {
+    readonly stage: (
+      sessionId: Session.ID,
+      messageId: SessionMessage.ID,
+    ) => Effect.Effect<SessionInfo.Revert, NotFound | Conflict>
+    readonly clear: (sessionId: Session.ID) => Effect.Effect<void, NotFound | Conflict>
+    readonly commit: (sessionId: Session.ID) => Effect.Effect<void, NotFound | Conflict>
+  }
+  readonly cancelInbox: (sessionId: Session.ID, inboxId: SessionMessage.ID) => Effect.Effect<void, NotFound>
   readonly switchModel: (sessionId: Session.ID, model: SessionModel.Ref) => Effect.Effect<void, NotFound | Rejected>
   readonly replyPermission: (
     sessionId: Session.ID,

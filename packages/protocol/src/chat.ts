@@ -7,7 +7,7 @@ import { SessionInfo } from "@ren/schema/session-info"
 import { SessionMessage } from "@ren/schema/session-message"
 import { SessionModel } from "@ren/schema/session-model"
 import { SessionStatus } from "@ren/schema/session-status"
-import { Schema } from "effect"
+import { Schema, SchemaGetter } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "./errors.js"
 
@@ -26,10 +26,29 @@ export const Accepted = Schema.Struct({ id: SessionMessage.ID }).annotate({ iden
 export interface CompactInput extends Schema.Schema.Type<typeof CompactInput> {}
 export const CompactInput = Schema.Struct({ id: SessionMessage.ID }).annotate({ identifier: "Chat.CompactInput" })
 
+export interface RenameInput extends Schema.Schema.Type<typeof RenameInput> {}
+export const RenameInput = Schema.Struct({ title: Schema.Trimmed.check(Schema.isNonEmpty()) }).annotate({
+  identifier: "Chat.RenameInput",
+})
+
+export interface RevertInput extends Schema.Schema.Type<typeof RevertInput> {}
+export const RevertInput = Schema.Struct({ messageID: SessionMessage.ID }).annotate({ identifier: "Chat.RevertInput" })
+
 export const MessagesQuery = Schema.Struct({
   limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isBetween({ minimum: 1, maximum: 200 }))),
   cursor: Schema.optional(Schema.String),
 }).annotate({ identifier: "Chat.MessagesQuery" })
+
+export const InterruptQuery = Schema.Struct({
+  resume: Schema.optional(
+    Schema.Literals(["true", "false"]).pipe(
+      Schema.decodeTo(Schema.Boolean, {
+        decode: SchemaGetter.transform((value) => value === "true"),
+        encode: SchemaGetter.transform((value): "true" | "false" => (value ? "true" : "false")),
+      }),
+    ),
+  ),
+}).annotate({ identifier: "Chat.InterruptQuery" })
 
 export const EventGroup = HttpApiGroup.make("event")
   .add(
@@ -197,13 +216,98 @@ export const SessionGroup = HttpApiGroup.make("session")
   .add(
     HttpApiEndpoint.post("session.interrupt", "/chat/session/:sessionID/interrupt", {
       params,
+      query: InterruptQuery,
       success: HttpApiSchema.NoContent,
       error: NotFoundError,
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "session.interrupt",
         summary: "Stop the turn",
-        description: "Stop the running turn of the session.",
+        description:
+          "Stop the running turn of the session or of a subagent session. With `resume=true` the session goes on with the steered input that waits, while queued input stays queued.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("session.background", "/chat/session/:sessionID/background", {
+      params,
+      success: HttpApiSchema.NoContent,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.background",
+        summary: "Move work to the background",
+        description:
+          "Let the running shell commands and subagents of the turn go on in the background, so the turn can end. An idle session is left alone.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.patch("session.rename", "/chat/session/:sessionID", {
+      params,
+      payload: RenameInput,
+      success: HttpApiSchema.NoContent,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.rename",
+        summary: "Rename the session",
+        description: "Change the title of the session. Ren receives the new title with the next sync.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("session.revert.stage", "/chat/session/:sessionID/revert", {
+      params,
+      payload: RevertInput,
+      success: SessionInfo.Revert,
+      error: [NotFoundError, ConflictError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.revert.stage",
+        summary: "Undo up to a message",
+        description:
+          "Stop the running turn, wait for it to end, then hide the message and everything after it, and undo their file changes. `session.revert.clear` brings them back; `session.revert.commit` drops them.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("session.revert.clear", "/chat/session/:sessionID/revert", {
+      params,
+      success: HttpApiSchema.NoContent,
+      error: [NotFoundError, ConflictError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.revert.clear",
+        summary: "Redo",
+        description: "Bring back every message the staged revert hides, with their file changes.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("session.revert.commit", "/chat/session/:sessionID/revert/commit", {
+      params,
+      success: HttpApiSchema.NoContent,
+      error: [NotFoundError, ConflictError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.revert.commit",
+        summary: "Drop the reverted messages",
+        description:
+          "Delete the messages the staged revert hides, and the input queued after them. Send it before the next prompt.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.delete("session.inbox.cancel", "/chat/session/:sessionID/inbox/:inboxID", {
+      params: { ...params, inboxID: SessionMessage.ID },
+      success: HttpApiSchema.NoContent,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.inbox.cancel",
+        summary: "Withdraw pending input",
+        description: "Withdraw input the session has not taken yet. Input it already took is left alone.",
       }),
     ),
   )

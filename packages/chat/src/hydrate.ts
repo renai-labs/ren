@@ -8,6 +8,7 @@ import type { SessionInbox } from "@ren/schema/session-inbox"
 import type { SessionInfo } from "@ren/schema/session-info"
 import type { SessionMessage } from "@ren/schema/session-message"
 import type { SessionStatus } from "@ren/schema/session-status"
+import { Struct } from "effect"
 import { ChatState } from "./chat-state.js"
 import { Reducer } from "./reducer.js"
 
@@ -39,6 +40,23 @@ export const rename = (state: ChatState.State, sessionID: string, title: string)
   const info = state.info[sessionID]
   if (!info || info.title === title) return state
   return { ...state, info: ChatState.set(state.info, sessionID, { ...info, title }) }
+}
+
+export const revert = (
+  state: ChatState.State,
+  sessionID: string,
+  boundary: SessionInfo.Revert | undefined,
+): ChatState.State => {
+  const info = state.info[sessionID]
+  if (!info) return state
+  return {
+    ...state,
+    info: ChatState.set(
+      state.info,
+      sessionID,
+      boundary ? { ...info, revert: boundary } : Struct.omit(info, ["revert"]),
+    ),
+  }
 }
 
 export const startPending = (state: ChatState.State, sessionID: string): ChatState.State => ({

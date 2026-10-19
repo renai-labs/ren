@@ -1,11 +1,14 @@
-import { expect, setDefaultTimeout, test } from "bun:test"
+import { describe, expect, setDefaultTimeout, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
+import { SessionMessage } from "@ren/schema/session-message"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
 import { DateTime, Effect, Layer, Option, type Scope, Stream, SubscriptionRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChatSession } from "../src/chat-session.js"
 import { ChatState } from "../src/chat-state.js"
+import { Family } from "../src/family.js"
+import { Fixture } from "./lib/fixture.js"
 
 setDefaultTimeout(60_000)
 
@@ -292,3 +295,192 @@ test("a rename reaches the chat after its session read, so a stale read cannot u
       expect(renamed.info[brain.id]?.title).toBe("Renamed live")
     }),
   ))
+
+const answered = (state: ChatState.State, sessionID: string, text: string) =>
+  ChatState.messages(state, sessionID).some(
+    (message) =>
+      message.type === "assistant" && message.content.some((part) => part.type === "text" && part.text === text),
+  )
+
+const turn = (chat: ChatSession.ChatSession, reply: string) =>
+  chat
+    .prompt({ text: stub.script({ reply }).marker })
+    .pipe(
+      Effect.tap(() =>
+        until(chat.state, (state) => settled(chat.sessionID)(state) && answered(state, chat.sessionID, reply)),
+      ),
+    )
+
+const userIDs = (state: ChatState.State, sessionID: string) =>
+  ChatState.userMessages(state, sessionID).map((message): string => message.id)
+
+test("undo hides the last turn, redo brings it back, and the next prompt commits the revert", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const first = yield* turn(chat, "first")
+      const second = yield* turn(chat, "second")
+      expect(Option.map(yield* chat.undo, (message): string => message.id)).toEqual(Option.some(second))
+      const staged = yield* SubscriptionRef.get(chat.state)
+      expect(ChatState.revertMessageID(staged, brain.id)).toBe(second)
+      expect(ChatState.visible(staged, brain.id).some((message) => message.id >= second)).toBe(false)
+      yield* chat.redo
+      expect(ChatState.revertMessageID(yield* SubscriptionRef.get(chat.state), brain.id)).toBeUndefined()
+      yield* chat.undo
+      const third = yield* turn(chat, "third")
+      const done = yield* SubscriptionRef.get(chat.state)
+      expect(ChatState.revertMessageID(done, brain.id)).toBeUndefined()
+      expect(userIDs(done, brain.id)).toEqual([first, third])
+      const fresh = yield* open(brain)
+      yield* fresh.open(brain.id)
+      expect(shape(ChatState.messages(yield* SubscriptionRef.get(fresh.state), brain.id))).toEqual(
+        shape(ChatState.messages(done, brain.id)),
+      )
+    }),
+  ))
+
+test("reverting an undelivered prompt withdraws it from the inbox and leaves the running turn alone", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const held = stub.script({ hold: true })
+      yield* chat.prompt({ text: held.marker })
+      yield* Effect.promise(() => held.called())
+      yield* until(chat.state, (state) => ChatState.activity(state, brain.id) === "running")
+      const queued = yield* chat.prompt({ text: stub.script().marker, delivery: "queue" })
+      expect(Option.map(yield* chat.revert(queued), (message): string => message.id)).toEqual(Option.some(queued))
+      const withdrawn = yield* SubscriptionRef.get(chat.state)
+      expect(ChatState.pending(withdrawn, brain.id)).toEqual([])
+      expect(userIDs(withdrawn, brain.id)).not.toContain(queued)
+      expect(ChatState.activity(withdrawn, brain.id)).toBe("running")
+      held.release()
+      const done = yield* until(chat.state, settled(brain.id))
+      expect(ChatState.revertMessageID(done, brain.id)).toBeUndefined()
+      expect(userIDs(done, brain.id)).not.toContain(queued)
+    }),
+  ))
+
+test("a rename shows at once and reaches the session", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* chat.rename("  Release notes  ")
+      expect((yield* SubscriptionRef.get(chat.state)).info[brain.id]?.title).toBe("Release notes")
+      expect(yield* brain.chat.session["session.get"]({ params: { sessionID: brain.id } })).toMatchObject({
+        title: "Release notes",
+      })
+    }),
+  ))
+
+test("a link to an older message loads pages until the message is in the transcript", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const writer = yield* open(brain)
+      yield* writer.open(brain.id)
+      yield* until(writer.status, (status) => status === "connected")
+      const first = yield* turn(writer, "first")
+      yield* turn(writer, "second")
+      yield* turn(writer, "third")
+      const reader = yield* ChatSession.make({ sessionID: brain.id, access, initialMessageLimit: 2 }).pipe(
+        Effect.provide(http(brain)),
+      )
+      yield* reader.open(brain.id)
+      expect(userIDs(yield* SubscriptionRef.get(reader.state), brain.id)).not.toContain(first)
+      expect(yield* reader.reveal(brain.id, first)).toBe(true)
+      const revealed = yield* SubscriptionRef.get(reader.state)
+      expect(userIDs(revealed, brain.id)).toContain(first)
+      expect(yield* reader.reveal(brain.id, SessionMessage.ID.create())).toBe(false)
+      expect(ChatState.more(yield* SubscriptionRef.get(reader.state), brain.id)).toBe(false)
+    }),
+  ))
+
+test("a subagent's session, transcript and title read through the root session", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const child = stub.script({ reply: "child answer" })
+      yield* chat.prompt({
+        text: stub.script({
+          tool: { name: "subagent", input: { agent: "general", description: "Look around", prompt: child.marker } },
+        }).marker,
+      })
+      const spawned = yield* until(chat.state, (state) =>
+        Object.values(state.info).some((info) => info.parentID === brain.id),
+      )
+      const childID = Object.values(spawned.info).find((info) => info.parentID === brain.id)?.id
+      if (!childID) return yield* Effect.die(new Error("No subagent session"))
+      expect(Family.tree(spawned, brain.id)).toEqual([brain.id, childID])
+      yield* chat.open(childID)
+      const done = yield* until(chat.state, (state) => answered(state, childID, "child answer"))
+      expect(Family.ancestors(done, childID)).toEqual([brain.id])
+      yield* until(chat.state, settled(brain.id))
+      expect(Family.childTitle(yield* SubscriptionRef.get(chat.state), childID, "Session")).toBe("Look around")
+    }),
+  ))
+
+describe("timeline model", () => {
+  const user = (id: string) => Fixture.user(id, 1)
+  const assistant = (id: string) =>
+    Fixture.message({ id, type: "assistant", agent: "build", model: Fixture.model, content: [], time: { created: 1 } })
+
+  test.each([
+    ["caps background pages when the parent remains outside the window", [assistant("msg_latest")], 3],
+    ["does not load before a leading user turn", [user("msg_user"), assistant("msg_latest")], 0],
+    ["does not load without an assistant turn", [user("msg_user")], 0],
+  ] as const)("%s", (_name, messages, expected) =>
+    Effect.gen(function* () {
+      const loads = { count: 0 }
+      yield* ChatSession.enrichLeadingTurn({
+        messages: Effect.succeed(messages),
+        more: Effect.succeed(true),
+        loading: Effect.succeed(false),
+        loadMore: Effect.sync(() => {
+          loads.count += 1
+        }),
+        pause: Effect.void,
+        maxPages: 3,
+      })
+      expect(loads.count).toBe(expected)
+    }).pipe(Effect.runPromise),
+  )
+
+  test("pauses between history pages and stops once the leading turn has its parent", () =>
+    Effect.gen(function* () {
+      const pages = [[assistant("msg_older")], [user("msg_parent")], [user("msg_earlier")]]
+      const messages = { current: [assistant("msg_latest"), user("msg_next")] }
+      const calls: Array<string> = []
+      yield* ChatSession.enrichLeadingTurn({
+        messages: Effect.sync(() => messages.current),
+        more: Effect.sync(() => pages.length > 0),
+        loading: Effect.succeed(false),
+        loadMore: Effect.sync(() => {
+          const page = pages.shift() ?? []
+          messages.current = [...page, ...messages.current]
+          calls.push(`load:${page[0]?.id}`)
+        }),
+        pause: Effect.sync(() => {
+          calls.push("pause")
+        }),
+        maxPages: 3,
+      })
+      expect(calls).toEqual(["pause", "load:msg_older", "pause", "load:msg_parent"])
+      expect(pages).toHaveLength(1)
+    }).pipe(Effect.runPromise))
+})

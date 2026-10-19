@@ -17,6 +17,7 @@ export interface SyntheticPayload extends Schema.Schema.Type<typeof SyntheticPay
 export const SyntheticPayload = Schema.Struct({
   text: Schema.String,
   description: Schema.optionalKey(Schema.String),
+  metadata: Schema.optionalKey(SessionMessage.SyntheticMetadata),
 }).annotate({ identifier: "SessionInbox.SyntheticPayload" })
 
 const UserItem = Schema.Struct({ type: Schema.tag("user"), payload: UserPayload, delivery: Delivery })

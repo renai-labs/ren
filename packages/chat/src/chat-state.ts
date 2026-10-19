@@ -91,6 +91,47 @@ export const pendingStatus = (state: State, sessionID: string, inboxID: string):
     : "starting"
 }
 
+export const visibleMessages = (
+  list: ReadonlyArray<SessionMessage.Info>,
+  inbox: ReadonlyArray<SessionInbox.Info>,
+  revertMessageID?: string,
+): ReadonlyArray<SessionMessage.Info> => {
+  const queued = new Set(inbox.flatMap((item) => (item.type === "user" && item.delivery === "queue" ? [item.id] : [])))
+  const inputs = new Set(
+    inbox.flatMap((item) =>
+      (item.type === "user" && item.delivery === "steer") || item.type === "synthetic" ? [item.id] : [],
+    ),
+  )
+  if (queued.size === 0 && inputs.size === 0 && !revertMessageID) return list
+  const visible = list.filter((item) => !queued.has(item.id) && (!revertMessageID || item.id < revertMessageID))
+  if (inputs.size === 0) return visible
+  const sink = (items: ReadonlyArray<SessionMessage.Info>) => [
+    ...items.filter((item) => !inputs.has(item.id)),
+    ...items.filter((item) => inputs.has(item.id)),
+  ]
+  const tail = visible.at(-1)
+  if (tail?.type !== "idle" || tail.outcome !== "failed") return sink(visible)
+  const rest = visible.slice(0, -1)
+  const turn = rest.slice(rest.findLastIndex((item) => item.type === "idle") + 1)
+  return turn.some((item) => inputs.has(item.id)) && !turn.some((item) => item.type === "assistant")
+    ? [...sink(rest), tail]
+    : sink(visible)
+}
+
+export const revertMessageID = (state: State, sessionID: string) => state.info[sessionID]?.revert?.messageID
+
+export const visible = (state: State, sessionID: string) =>
+  visibleMessages(messages(state, sessionID), pending(state, sessionID), revertMessageID(state, sessionID))
+
+export const userMessages = (state: State, sessionID: string) =>
+  messages(state, sessionID).filter((item): item is SessionMessage.User => item.type === "user")
+
+export const visibleUserMessages = (state: State, sessionID: string) => {
+  const boundary = revertMessageID(state, sessionID)
+  const users = userMessages(state, sessionID)
+  return boundary ? users.filter((item) => item.id < boundary) : users
+}
+
 export const cost = (state: State, sessionID: string) => {
   const session = state.info[sessionID]
   if (!session) return 0

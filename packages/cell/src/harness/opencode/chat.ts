@@ -5,6 +5,7 @@ import type { Permission } from "@ren/schema/permission"
 import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session-capabilities"
 import { SessionInbox } from "@ren/schema/session-inbox"
+import { SessionInfo } from "@ren/schema/session-info"
 import type { SessionMessage } from "@ren/schema/session-message"
 import { SessionModel } from "@ren/schema/session-model"
 import type { SessionStatus } from "@ren/schema/session-status"
@@ -48,6 +49,8 @@ const failure = (status: number, message: string): Option.Option<Failure> => {
 const ErrorBody = Schema.Struct({ message: Schema.String })
 
 const decodeCompaction = Schema.decodeUnknownOption(SessionInbox.Compaction)
+
+const decodeRevert = Schema.decodeUnknownOption(SessionInfo.Revert)
 
 export const make = (fetch: (request: Request) => Promise<Response>): Harness.Chat => {
   const call = Effect.fnUntraced(function* (
@@ -227,7 +230,39 @@ export const make = (fetch: (request: Request) => Promise<Response>): Harness.Ch
           }),
         ),
       ),
-    interrupt: (sessionId) => notFoundOnly(call("POST", `/api/session/${sessionId}/interrupt`)).pipe(Effect.asVoid),
+    interrupt: (sessionId, resume) =>
+      notFoundOnly(call("POST", `/api/session/${sessionId}/interrupt${resume ? "?resume=true" : ""}`)).pipe(
+        Effect.asVoid,
+      ),
+    background: (sessionId) => notFoundOnly(call("POST", `/api/session/${sessionId}/background`)).pipe(Effect.asVoid),
+    rename: (sessionId, title) =>
+      notFoundOnly(call("PATCH", `/api/session/${sessionId}`, { title })).pipe(Effect.asVoid),
+    revert: {
+      stage: (sessionId, messageId) =>
+        Effect.gen(function* () {
+          yield* notFoundOnly(call("POST", `/api/session/${sessionId}/interrupt`))
+          yield* notFoundOnly(call("POST", `/api/experimental/session/${sessionId}/wait`))
+          const raw = yield* call("POST", `/api/session/${sessionId}/revert/stage`, { messageID: messageId }).pipe(
+            Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
+          )
+          return yield* Option.match(Option.flatMap(unwrap(raw), decodeRevert), {
+            onNone: () => Effect.die(new Error(`The brain cannot read the revert of session ${sessionId}`)),
+            onSome: Effect.succeed,
+          })
+        }),
+      clear: (sessionId) =>
+        call("DELETE", `/api/session/${sessionId}/revert`).pipe(
+          Effect.asVoid,
+          Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
+        ),
+      commit: (sessionId) =>
+        call("POST", `/api/session/${sessionId}/revert/commit`).pipe(
+          Effect.asVoid,
+          Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
+        ),
+    },
+    cancelInbox: (sessionId, inboxId) =>
+      notFoundOnly(call("DELETE", `/api/session/${sessionId}/inbox/${inboxId}`)).pipe(Effect.asVoid),
     switchModel: (sessionId, model) =>
       Effect.gen(function* () {
         const known = (yield* models).find(

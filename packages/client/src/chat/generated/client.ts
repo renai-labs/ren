@@ -22,6 +22,18 @@ import type {
   SessionCompactOutput,
   SessionInterruptInput,
   SessionInterruptOutput,
+  SessionBackgroundInput,
+  SessionBackgroundOutput,
+  SessionRenameInput,
+  SessionRenameOutput,
+  SessionRevertStageInput,
+  SessionRevertStageOutput,
+  SessionRevertClearInput,
+  SessionRevertClearOutput,
+  SessionRevertCommitInput,
+  SessionRevertCommitOutput,
+  SessionInboxCancelInput,
+  SessionInboxCancelOutput,
   SessionModelSwitchInput,
   SessionModelSwitchOutput,
   SessionPermissionReplyInput,
@@ -251,6 +263,17 @@ export function make(options: ClientOptions) {
             },
             requestOptions,
           ),
+        cancel: (input: SessionInboxCancelInput, requestOptions?: RequestOptions) =>
+          request<SessionInboxCancelOutput>(
+            {
+              method: "DELETE",
+              path: `/chat/session/${encodeURIComponent(input.sessionID)}/inbox/${encodeURIComponent(input.inboxID)}`,
+              successStatus: 204,
+              declaredStatuses: [404],
+              empty: true,
+            },
+            requestOptions,
+          ),
       },
       permission: {
         list: (input: SessionPermissionListInput, requestOptions?: RequestOptions) =>
@@ -342,12 +365,72 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/chat/session/${encodeURIComponent(input.sessionID)}/interrupt`,
+            query: { resume: input["resume"] },
             successStatus: 204,
             declaredStatuses: [404],
             empty: true,
           },
           requestOptions,
         ),
+      background: (input: SessionBackgroundInput, requestOptions?: RequestOptions) =>
+        request<SessionBackgroundOutput>(
+          {
+            method: "POST",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}/background`,
+            successStatus: 204,
+            declaredStatuses: [404],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      rename: (input: SessionRenameInput, requestOptions?: RequestOptions) =>
+        request<SessionRenameOutput>(
+          {
+            method: "PATCH",
+            path: `/chat/session/${encodeURIComponent(input.sessionID)}`,
+            body: { title: input["title"] },
+            successStatus: 204,
+            declaredStatuses: [404],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      revert: {
+        stage: (input: SessionRevertStageInput, requestOptions?: RequestOptions) =>
+          request<SessionRevertStageOutput>(
+            {
+              method: "POST",
+              path: `/chat/session/${encodeURIComponent(input.sessionID)}/revert`,
+              body: { messageID: input["messageID"] },
+              successStatus: 200,
+              declaredStatuses: [404, 409],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        clear: (input: SessionRevertClearInput, requestOptions?: RequestOptions) =>
+          request<SessionRevertClearOutput>(
+            {
+              method: "DELETE",
+              path: `/chat/session/${encodeURIComponent(input.sessionID)}/revert`,
+              successStatus: 204,
+              declaredStatuses: [404, 409],
+              empty: true,
+            },
+            requestOptions,
+          ),
+        commit: (input: SessionRevertCommitInput, requestOptions?: RequestOptions) =>
+          request<SessionRevertCommitOutput>(
+            {
+              method: "POST",
+              path: `/chat/session/${encodeURIComponent(input.sessionID)}/revert/commit`,
+              successStatus: 204,
+              declaredStatuses: [404, 409],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
       model: {
         switch: (input: SessionModelSwitchInput, requestOptions?: RequestOptions) =>
           request<SessionModelSwitchOutput>(

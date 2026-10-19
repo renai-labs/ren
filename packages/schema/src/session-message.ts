@@ -129,12 +129,21 @@ export const User = Schema.Struct({
   sender: Schema.optionalKey(Sender),
 }).annotate({ identifier: "SessionMessage.User" })
 
+export interface SyntheticMetadata extends Schema.Schema.Type<typeof SyntheticMetadata> {}
+export const SyntheticMetadata = Schema.Struct({
+  source: Schema.optionalKey(Schema.String),
+  childID: Schema.optionalKey(Schema.String),
+  shellID: Schema.optionalKey(Schema.String),
+  jobID: Schema.optionalKey(Schema.String),
+}).annotate({ identifier: "SessionMessage.SyntheticMetadata" })
+
 export interface Synthetic extends Schema.Schema.Type<typeof Synthetic> {}
 export const Synthetic = Schema.Struct({
   ...Base,
   type: Schema.tag("synthetic"),
   text: Schema.String,
   description: Schema.optionalKey(Schema.String),
+  metadata: Schema.optionalKey(SyntheticMetadata),
 }).annotate({ identifier: "SessionMessage.Synthetic" })
 
 export interface System extends Schema.Schema.Type<typeof System> {}
