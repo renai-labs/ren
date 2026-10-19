@@ -1,7 +1,5 @@
-import { Session } from "@ren/schema/session"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, lazyRouteComponent } from "@tanstack/react-router"
 import { RouteError } from "../../../../../components/error-page.js"
-import { SessionChat } from "../../../../../features/session/session-chat.js"
 
 export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
   loader: (options) =>
@@ -10,10 +8,5 @@ export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
     ),
   head: (options) => ({ meta: [{ title: `${options.loaderData?.title ?? "Chat"} · Ren` }] }),
   errorComponent: (props) => <RouteError error={props.error} />,
-  component: SessionRoute,
+  component: lazyRouteComponent(() => import("../../../../../features/session/session-page.js"), "SessionPage"),
 })
-
-function SessionRoute() {
-  const params = Route.useParams()
-  return <SessionChat key={params.sessionId} sessionID={Session.ID.make(params.sessionId)} />
-}

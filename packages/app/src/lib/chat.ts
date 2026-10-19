@@ -1,23 +1,29 @@
 export * as Chat from "./chat.js"
 
+import { scheduleTask } from "@effect/atom-react"
 import { ChatAtoms } from "@ren/chat"
 import { Ren } from "@ren/client/effect"
 import type { Session } from "@ren/schema/session"
 import { Effect, Layer } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
-import { Atom } from "effect/reactivity"
+import { Atom, AtomRegistry } from "effect/reactivity"
 import type { Platform } from "../platform/platform.js"
 
-export function make(platform: Platform.Info) {
-  const made = new Map<string, ChatAtoms.ChatAtoms>()
-  return (userId: string) => {
-    const found = made.get(userId)
-    if (found) return found
-    const atoms = atomsFor(platform, userId)
-    made.clear()
-    made.set(userId, atoms)
-    return atoms
-  }
+interface Chat {
+  readonly atoms: ChatAtoms.ChatAtoms
+  readonly registry: AtomRegistry.AtomRegistry
+}
+
+const made = new Map<string, Chat>()
+
+export function forUser(platform: Platform.Info, userId: string) {
+  const found = made.get(userId)
+  if (found) return found
+  made.forEach((chat) => chat.registry.dispose())
+  made.clear()
+  const chat = { atoms: atomsFor(platform, userId), registry: AtomRegistry.make({ scheduleTask, defaultIdleTTL: 400 }) }
+  made.set(userId, chat)
+  return chat
 }
 
 const untraced = Layer.succeed(HttpClient.TracerPropagationEnabled, false)
