@@ -87,6 +87,8 @@ describe("SessionDirectory", () => {
         expect((yield* Effect.promise(() => script.called())).text).toContain(script.marker)
         expect((yield* sessions.list(ada, { spaceId: team.id, ...page })).items.map((item) => item.id)).toEqual([id])
         expect(yield* sessions.list(grace, { spaceId: team.id, ...page })).toMatchObject({ items: [], total: 0 })
+        expect((yield* sessions.list(ada, page)).items.map((item) => item.id)).toEqual([id])
+        expect(yield* sessions.list(grace, page)).toMatchObject({ items: [], total: 0 })
         expect((yield* Effect.flip(sessions.get(grace, id)))._tag).toBe("Primitive.NotFound")
         expect((yield* Effect.flip(sessions.access(grace, id)))._tag).toBe("Primitive.NotFound")
         expect((yield* Effect.flip(sessions.create(grace, { id: Session.ID.create(), spaceId: team.id })))._tag).toBe(

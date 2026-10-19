@@ -155,7 +155,7 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Space.ID,
+  spaceId: Schema.optional(Space.ID),
   ...Pagination.fields(50),
 }).annotate({ identifier: "Session.ListInput" })
 

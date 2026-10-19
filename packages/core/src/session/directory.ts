@@ -94,7 +94,9 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             const where = and(
               visibleTo(actor),
-              eq(Database.Schema.agent_session.space_id, input.spaceId),
+              input.spaceId
+                ? eq(Database.Schema.agent_session.space_id, input.spaceId)
+                : eq(Database.Schema.agent_session.created_by, actor.userId),
               isNull(Database.Schema.agent_session.archived_at),
             )
             const rows = yield* select(transaction, actor)

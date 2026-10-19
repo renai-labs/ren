@@ -1,8 +1,11 @@
+import { RegistryProvider } from "@effect/atom-react"
+import { ChatReact } from "@ren/chat/react"
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
 import { AppBoot } from "../components/app-boot.js"
 import { Auth } from "../lib/auth.js"
 
 export const Route = createFileRoute("/_authed")({
+  head: () => ({ meta: [{ title: "Ren" }] }),
   beforeLoad: async (options) => {
     const context = options.context
     const session = await context.queryClient.query(Auth.sessionOptions(context.auth))
@@ -17,5 +20,16 @@ export const Route = createFileRoute("/_authed")({
     throw new Error("Could not load your organization")
   },
   pendingComponent: AppBoot,
-  component: Outlet,
+  component: Authed,
 })
+
+function Authed() {
+  const context = Route.useRouteContext()
+  return (
+    <RegistryProvider key={context.me.user.id}>
+      <ChatReact.Provider atoms={context.chat(context.me.user.id)}>
+        <Outlet />
+      </ChatReact.Provider>
+    </RegistryProvider>
+  )
+}

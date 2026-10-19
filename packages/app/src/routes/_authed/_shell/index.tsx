@@ -1,12 +1,12 @@
-import { PageShell } from "@ren/ui/page-shell"
 import { createFileRoute } from "@tanstack/react-router"
+import { NewChat } from "../../../features/session/new-chat.js"
 
 export const Route = createFileRoute("/_authed/_shell/")({
   head: () => ({ meta: [{ title: "New chat · Ren" }] }),
-  component: NewChat,
+  component: NewChatRoute,
 })
 
-function NewChat() {
+function NewChatRoute() {
   const context = Route.useRouteContext()
-  return <PageShell.Root title={`Welcome, ${context.me.user.name}`}>{null}</PageShell.Root>
+  return <NewChat name={context.me.user.name} />
 }

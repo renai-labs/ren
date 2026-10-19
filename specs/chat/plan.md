@@ -155,14 +155,14 @@ Stream lifetime: an open stream holds the harness. The brain ends the stream (`s
 
 A `session` group in `Api` (exposure `sdk`). Wire `Session.layer` and `BrainHost.layer` into `server/src/routes.ts`, then `bun run generate`.
 
-| Endpoint          | Purpose                                                                                            | When      |
-| ----------------- | -------------------------------------------------------------------------------------------------- | --------- |
-| `session.create`  | Create a session in a space, optionally with its first message. The client mints the ID (SYNC-82). | Slice     |
-| `session.list`    | Sidebar list for a space, paged: title, status, updated time. From Postgres.                       | Slice     |
-| `session.get`     | Ren's data for one session: space, creator, harness, capabilities, status                          | Slice     |
-| `session.access`  | `{ url, token, expiresAt }` for the brain; called again before the token expires                   | Slice     |
-| `session.archive` | Hide a session                                                                                     | Slice     |
-| `session.fork`    | `{ sessionId, messageId }` → a new session (C20)                                                   | §9 step 9 |
+| Endpoint          | Purpose                                                                                                                          | When      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `session.create`  | Create a session in a space, optionally with its first message. The client mints the ID (SYNC-82).                               | Slice     |
+| `session.list`    | Sidebar list, paged: title, status, updated time. From Postgres. Without `spaceId`, the chats the member started, across spaces. | Slice     |
+| `session.get`     | Ren's data for one session: space, creator, harness, capabilities, status                                                        | Slice     |
+| `session.access`  | `{ url, token, expiresAt }` for the brain; called again before the token expires                                                 | Slice     |
+| `session.archive` | Hide a session                                                                                                                   | Slice     |
+| `session.fork`    | `{ sessionId, messageId }` → a new session (C20)                                                                                 | §9 step 9 |
 
 ## 6. `@ren/chat`: the shared runtime
 
@@ -220,7 +220,7 @@ t3code normalizes on its server, as Ren will. Its problems come from how it stor
 3. **Ren session group and clients.** The "Slice" endpoints of §5 and wiring. Extend `packages/client/script/generate.ts` for `ChatApi` (§2.1), then `bun run generate`.
 4. **`@ren/chat` core.** Connection, reads, reducer, outbox, atoms, with the OpenCode tests ported first.
 5. **UI slice.** Minimal rows, composer and docks in `@ren/ui` with stories.
-6. **App slice.** Route, feature, sidebar list. This meets the roadmap's "done when".
+6. **App slice.** Route, feature, sidebar list. This meets the roadmap's "done when". The e2e stack (`packages/e2e/script/serve.ts`) runs celld with the stub model, and `tests/app/chat.spec.ts` is the journey. The transcript rows compose `@ren/ui` parts in `features/session/session-transcript.tsx`; streaming pacing, scroll follow and the remaining row kinds come with step 7.
 7. **Inventory, area by area.** Each area adds its "B" endpoints from §4. Streaming and rendering quality (RND-53 to RND-164), timeline and scroll (SES-01 to SES-86), docks (SES-87 to SES-102), composer and platform (CMP-\*, PLT-\*), revert and subagents (SES-103 to SES-107, SES-109 to SES-120), notifications, shortcuts and mobile (SES-121 to SES-155), then the `todo` and `rethink` rows of 05. Rows about OpenCode-only surfaces (multi-server, directories, worktrees, MCP catalogs, desktop sidecar) are set to `n/a` when their area is reached.
 8. **Uploads (own PR).** How files reach the session and its environment: upload path, size limits, inline versus path, progress and cancel (CMP-33 to CMP-47, V1-82 to V1-87). Today `Session.File` is a data URL of at most 10 MB.
 9. **Fork (last).** `session.fork` on the Ren server (C20). Ren flushes the source session (`BrainHost.flush`), creates the new session in the same space with a link to its source, and starts the new brain from the source's synced messages before `messageId` (the restore of synced session trees on start). The client then opens the new session with the forked prompt in the composer (SES-108).

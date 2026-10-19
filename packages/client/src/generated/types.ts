@@ -229,9 +229,17 @@ export type SpaceMemberArchiveInput = { readonly id: { readonly id: string | str
 export type SpaceMemberArchiveOutput = SpaceMemberInfo
 
 export type SessionListInput = {
-  readonly spaceId: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["spaceId"]
-  readonly page: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["pageSize"]
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
 }
 
 export type SessionListOutput = SessionPage

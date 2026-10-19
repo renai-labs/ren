@@ -69,7 +69,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       )
         return cached.current.value.client
       const access = yield* options.access.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
-      const authorized = HttpClient.mapRequest(http, HttpClientRequest.basicAuth("ren", access.token))
+      const authorized = HttpClient.mapRequest(http, HttpClientRequest.basicAuth("ren", access.token)).pipe(
+        HttpClient.transform((request) => Effect.provideService(request, HttpClient.TracerPropagationEnabled, false)),
+      )
       const made = yield* Ren.make({ baseUrl: access.url }).pipe(
         Effect.provideService(HttpClient.HttpClient, authorized),
       )

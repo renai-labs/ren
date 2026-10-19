@@ -24,6 +24,7 @@ import { Route as AuthedShellSettingsAdminRouteImport } from "./routes/_authed/_
 import { Route as AuthedShellSettingsPreferencesRouteImport } from "./routes/_authed/_shell/settings/preferences"
 import { Route as AuthedShellSpacesIndexRouteImport } from "./routes/_authed/_shell/spaces/index"
 import { Route as AuthedShellSpacesSpaceIdRouteRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/route"
+import { Route as AuthedShellSessionsSessionIdIndexRouteImport } from "./routes/_authed/_shell/sessions/$sessionId/index"
 import { Route as AuthedShellSettingsAdminGeneralRouteImport } from "./routes/_authed/_shell/settings/_admin/general"
 import { Route as AuthedShellSpacesSpaceIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/index"
 import { Route as AuthedShellSpacesSpaceIdMembersRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/members"
@@ -106,6 +107,12 @@ const AuthedShellSpacesSpaceIdRouteRoute =
     path: "/spaces/$spaceId",
     getParentRoute: () => AuthedShellRoute,
   } as any)
+const AuthedShellSessionsSessionIdIndexRoute =
+  AuthedShellSessionsSessionIdIndexRouteImport.update({
+    id: "/sessions/$sessionId/",
+    path: "/sessions/$sessionId/",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSettingsAdminGeneralRoute =
   AuthedShellSettingsAdminGeneralRouteImport.update({
     id: "/general",
@@ -147,6 +154,7 @@ export interface FileRoutesByFullPath {
   "/spaces/": typeof AuthedShellSpacesIndexRoute
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
+  "/sessions/$sessionId/": typeof AuthedShellSessionsSessionIdIndexRoute
   "/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
   "/settings/members/": typeof AuthedShellSettingsAdminMembersIndexRoute
 }
@@ -164,6 +172,7 @@ export interface FileRoutesByTo {
   "/spaces": typeof AuthedShellSpacesIndexRoute
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
+  "/sessions/$sessionId": typeof AuthedShellSessionsSessionIdIndexRoute
   "/spaces/$spaceId": typeof AuthedShellSpacesSpaceIdIndexRoute
   "/settings/members": typeof AuthedShellSettingsAdminMembersIndexRoute
 }
@@ -186,6 +195,7 @@ export interface FileRoutesById {
   "/_authed/_shell/spaces/": typeof AuthedShellSpacesIndexRoute
   "/_authed/_shell/settings/_admin/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/_authed/_shell/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
+  "/_authed/_shell/sessions/$sessionId/": typeof AuthedShellSessionsSessionIdIndexRoute
   "/_authed/_shell/spaces/$spaceId/": typeof AuthedShellSpacesSpaceIdIndexRoute
   "/_authed/_shell/settings/_admin/members/": typeof AuthedShellSettingsAdminMembersIndexRoute
 }
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | "/spaces/"
     | "/settings/general"
     | "/spaces/$spaceId/members"
+    | "/sessions/$sessionId/"
     | "/spaces/$spaceId/"
     | "/settings/members/"
   fileRoutesByTo: FileRoutesByTo
@@ -224,6 +235,7 @@ export interface FileRouteTypes {
     | "/spaces"
     | "/settings/general"
     | "/spaces/$spaceId/members"
+    | "/sessions/$sessionId"
     | "/spaces/$spaceId"
     | "/settings/members"
   id:
@@ -245,6 +257,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/spaces/"
     | "/_authed/_shell/settings/_admin/general"
     | "/_authed/_shell/spaces/$spaceId/members"
+    | "/_authed/_shell/sessions/$sessionId/"
     | "/_authed/_shell/spaces/$spaceId/"
     | "/_authed/_shell/settings/_admin/members/"
   fileRoutesById: FileRoutesById
@@ -366,6 +379,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSpacesSpaceIdRouteRouteImport
       parentRoute: typeof AuthedShellRoute
     }
+    "/_authed/_shell/sessions/$sessionId/": {
+      id: "/_authed/_shell/sessions/$sessionId/"
+      path: "/sessions/$sessionId"
+      fullPath: "/sessions/$sessionId/"
+      preLoaderRoute: typeof AuthedShellSessionsSessionIdIndexRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
     "/_authed/_shell/settings/_admin/general": {
       id: "/_authed/_shell/settings/_admin/general"
       path: "/general"
@@ -438,6 +458,7 @@ interface AuthedShellRouteChildren {
   AuthedShellSettingsPreferencesRoute: typeof AuthedShellSettingsPreferencesRoute
   AuthedShellSettingsIndexRoute: typeof AuthedShellSettingsIndexRoute
   AuthedShellSpacesIndexRoute: typeof AuthedShellSpacesIndexRoute
+  AuthedShellSessionsSessionIdIndexRoute: typeof AuthedShellSessionsSessionIdIndexRoute
 }
 
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
@@ -449,6 +470,8 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
   AuthedShellSettingsIndexRoute: AuthedShellSettingsIndexRoute,
   AuthedShellSpacesIndexRoute: AuthedShellSpacesIndexRoute,
+  AuthedShellSessionsSessionIdIndexRoute:
+    AuthedShellSessionsSessionIdIndexRoute,
 }
 
 const AuthedShellRouteWithChildren = AuthedShellRoute._addFileChildren(

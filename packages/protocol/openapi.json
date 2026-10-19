@@ -728,9 +728,16 @@
             "name": "spaceId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Space.ID"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
-            "required": true
+            "required": false
           },
           {
             "name": "page",

@@ -23,6 +23,8 @@
       "name": "@ren/app",
       "version": "0.0.0",
       "dependencies": {
+        "@effect/atom-react": "catalog:",
+        "@ren/chat": "workspace:*",
         "@ren/client": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/ui": "workspace:*",

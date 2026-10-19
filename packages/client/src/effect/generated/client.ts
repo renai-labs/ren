@@ -112,7 +112,7 @@ const adaptGroupSpaceMember = (raw: RawClient["space-member"]) => ({
 
 type SessionListRequest = Parameters<RawClient["session"]["session.list"]>[0]
 type SessionListInput = {
-  readonly spaceId: SessionListRequest["query"]["spaceId"]
+  readonly spaceId?: SessionListRequest["query"]["spaceId"]
   readonly page: SessionListRequest["query"]["page"]
   readonly pageSize: SessionListRequest["query"]["pageSize"]
 }
