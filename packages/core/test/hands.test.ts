@@ -7,8 +7,9 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { eq, sql } from "drizzle-orm"
-import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Ref, Schema } from "effect"
+import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
 import { HandProvider } from "../src/hand-provider.js"
 import { Hands } from "../src/hands.js"
 import { testEffect } from "./lib/effect.js"
@@ -40,9 +41,8 @@ const handsWith = Effect.fnUntraced(function* (
   return { hands: Context.get(context, Hands.Service), probe }
 })
 
-const subjectIn = (organizationId: Auth.OrganizationID) => ({
-  brainId: Session.ID.create(),
-  organizationId,
+const subjectIn = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
+  return { brainId: Session.ID.create(), organizationId, spaceId: yield* Seed.team(organizationId) }
 })
 
 const handsOf = Effect.fnUntraced(function* (environmentId: Environment.ID) {
@@ -57,18 +57,15 @@ const handsOf = Effect.fnUntraced(function* (environmentId: Environment.ID) {
 })
 
 describe("Hands", () => {
-  it.live("binds a session to its organization's environment, with the provider's capabilities and no hand yet", () =>
+  it.live("binds a session to its organization's environment, with no hand yet", () =>
     Effect.gen(function* () {
-      const subject = yield* handsWith({}, { capabilities: ["files"] })
+      const subject = yield* handsWith()
       const organizationId = yield* Seed.organization()
       const environmentId = yield* Seed.environment(organizationId)
-      const session = subjectIn(organizationId)
+      const session = yield* subjectIn(organizationId)
       const binding = yield* subject.hands.bind(session, environmentId)
-      expect(binding).toEqual({
-        location: { environmentId, directory: `/workspace/${session.brainId}`, capabilities: ["files"] },
-        isNew: true,
-      })
-      expect(yield* subject.hands.find(session)).toEqual(Option.some(binding.location))
+      expect(binding).toEqual({ directory: `/workspace/${session.brainId}`, isNew: true })
+      expect(yield* subject.hands.find(session)).toEqual(Option.some(binding.directory))
       expect(yield* subject.hands.find({ ...session, organizationId: yield* Seed.organization() })).toEqual(
         Option.none(),
       )
@@ -83,14 +80,36 @@ describe("Hands", () => {
       const environmentId = yield* Seed.environment(organizationId)
       const other = yield* Seed.environment(organizationId)
       const foreign = yield* Seed.environment(yield* Seed.organization())
-      const session = subjectIn(organizationId)
+      const session = yield* subjectIn(organizationId)
       yield* subject.hands.bind(session, environmentId)
       expect((yield* subject.hands.bind(session, environmentId)).isNew).toBe(false)
       expect((yield* subject.hands.bind(session, other).pipe(Effect.flip))._tag).toBe("Hands.Changed")
-      expect((yield* subject.hands.bind(subjectIn(organizationId), foreign).pipe(Effect.flip))._tag).toBe(
+      expect((yield* subject.hands.bind(yield* subjectIn(organizationId), foreign).pipe(Effect.flip))._tag).toBe(
         "Hands.NotFound",
       )
-      expect((yield* subject.hands.access(subjectIn(organizationId)).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
+      expect((yield* subject.hands.access(yield* subjectIn(organizationId)).pipe(Effect.flip))._tag).toBe(
+        "Hands.NotFound",
+      )
+    }),
+  )
+
+  it.live("a session uses only an environment linked to its space, and loses it when the link goes", () =>
+    Effect.gen(function* () {
+      const subject = yield* handsWith()
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const environmentId = yield* Seed.environment(organizationId)
+      const session = yield* subjectIn(organizationId)
+      const elsewhere = { ...session, brainId: Session.ID.create(), spaceId: Space.ID.create() }
+      expect((yield* subject.hands.bind(elsewhere, environmentId).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
+      yield* subject.hands.bind(session, environmentId)
+      yield* subject.hands.access(session)
+      yield* database.db
+        .update(Database.Schema.space_environment)
+        .set({ archived_at: new Date() })
+        .where(eq(Database.Schema.space_environment.environment_id, environmentId))
+      expect((yield* subject.hands.access(session).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
+      expect(yield* subject.hands.find(session)).toEqual(Option.none())
     }),
   )
 
@@ -101,20 +120,16 @@ describe("Hands", () => {
         const subject = yield* handsWith()
         const organizationId = yield* Seed.organization()
         const environmentId = yield* Seed.environment(organizationId)
-        const session = subjectIn(organizationId)
+        const session = yield* subjectIn(organizationId)
         yield* subject.hands.bind(session, environmentId)
         const before = Date.now()
         const access = yield* subject.hands.access(session)
         const again = yield* subject.hands.access(session)
         const provisions = yield* Ref.get(subject.probe.provisions)
         expect(provisions.length).toBe(1)
-        expect([access.environmentId, access.directory, access.generation]).toEqual([
-          environmentId,
-          `/workspace/${session.brainId}`,
-          1,
-        ])
+        expect([access.directory, access.generation]).toEqual([`/workspace/${session.brainId}`, 1])
         expect(again.url).toBe(access.url)
-        const claims = yield* EnvironmentToken.verify([keys[0].publicKey], access.token)
+        const claims = yield* EnvironmentToken.verify([keys[0].publicKey], Redacted.value(access.token))
         expect(Option.map(claims, (found) => [found.kid, found.env, found.brain])).toEqual(
           Option.some(["new", environmentId, Brain.ofSession(session.brainId)]),
         )
@@ -127,7 +142,7 @@ describe("Hands", () => {
     Effect.gen(function* () {
       const subject = yield* handsWith({ ENVIRONMENT_TOKEN_LIFETIME: "20 seconds" })
       const organizationId = yield* Seed.organization()
-      const session = subjectIn(organizationId)
+      const session = yield* subjectIn(organizationId)
       yield* subject.hands.bind(session, yield* Seed.environment(organizationId))
       const before = Date.now()
       const access = yield* subject.hands.access(session)
@@ -141,7 +156,7 @@ describe("Hands", () => {
       const subject = yield* handsWith()
       const organizationId = yield* Seed.organization()
       const environmentId = yield* Seed.environment(organizationId, { sessionsPerHand: 2 })
-      const sessions = Array.from({ length: 5 }, () => subjectIn(organizationId))
+      const sessions = yield* Effect.all(Array.from({ length: 5 }, () => subjectIn(organizationId)))
       yield* Effect.forEach(sessions, (session) => subject.hands.bind(session, environmentId), { discard: true })
       yield* Effect.forEach(sessions, (session) => subject.hands.access(session), { concurrency: "unbounded" })
       const made = yield* handsOf(environmentId)
@@ -155,7 +170,7 @@ describe("Hands", () => {
       const subject = yield* handsWith()
       const organizationId = yield* Seed.organization()
       const environmentId = yield* Seed.environment(organizationId)
-      const sessions = [subjectIn(organizationId), subjectIn(organizationId)]
+      const sessions = yield* Effect.all([subjectIn(organizationId), subjectIn(organizationId)])
       yield* Effect.forEach(sessions, (session) => subject.hands.bind(session, environmentId), { discard: true })
       const first = yield* Effect.forEach(sessions, (session) => subject.hands.access(session))
       const lost = (yield* Ref.get(subject.probe.provisions))[0]
@@ -163,8 +178,8 @@ describe("Hands", () => {
       yield* Ref.set(subject.probe.gone, new Set([lost]))
       const replaced = yield* Effect.forEach(sessions, (session) => subject.hands.access(session))
       expect(replaced.map((access) => access.generation)).toEqual([2, 2])
-      expect(replaced[0]?.url).not.toBe(first[0]?.url)
-      expect(replaced[1]?.url).toBe(replaced[0]?.url)
+      expect(replaced.at(0)?.url).not.toBe(first.at(0)?.url)
+      expect(replaced.at(1)?.url).toBe(replaced.at(0)?.url)
       expect((yield* handsOf(environmentId)).length).toBe(1)
     }),
   )
@@ -173,7 +188,7 @@ describe("Hands", () => {
     Effect.gen(function* () {
       const subject = yield* handsWith()
       const organizationId = yield* Seed.organization()
-      const session = subjectIn(organizationId)
+      const session = yield* subjectIn(organizationId)
       yield* subject.hands.bind(session, yield* Seed.environment(organizationId))
       yield* Ref.set(subject.probe.failing, true)
       const failed = yield* subject.hands.access(session).pipe(Effect.flip)
@@ -192,7 +207,7 @@ describe("Hands", () => {
       const subject = yield* handsWith()
       const organizationId = yield* Seed.organization()
       const environmentId = yield* Seed.environment(organizationId)
-      const session = subjectIn(organizationId)
+      const session = yield* subjectIn(organizationId)
       yield* subject.hands.bind(session, environmentId)
       yield* database.db
         .update(Database.Schema.environment)
@@ -200,7 +215,7 @@ describe("Hands", () => {
         .where(eq(Database.Schema.environment.id, environmentId))
       expect((yield* subject.hands.access(session).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
       const elsewhere = yield* Seed.environment(organizationId, { provider: "e2b" })
-      expect((yield* subject.hands.bind(subjectIn(organizationId), elsewhere).pipe(Effect.flip))._tag).toBe(
+      expect((yield* subject.hands.bind(yield* subjectIn(organizationId), elsewhere).pipe(Effect.flip))._tag).toBe(
         "Hands.NotFound",
       )
     }),

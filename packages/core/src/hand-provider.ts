@@ -22,14 +22,12 @@ interface ProvisionInput<Config> {
 
 export interface Endpoint {
   readonly url: string
-  readonly workspace: string
 }
 
 interface Definition<Config, Binding> {
-  readonly id: string
+  readonly id: Hand.ProviderID
   readonly title: string
   readonly description: string
-  readonly capabilities: ReadonlyArray<Environment.Capability>
   readonly config: Schema.Codec<Config, unknown>
   readonly binding: Schema.Codec<Binding, unknown>
   readonly provision: (input: ProvisionInput<Config>) => Effect.Effect<Binding, Failed>
@@ -38,7 +36,7 @@ interface Definition<Config, Binding> {
 }
 
 export interface Provider {
-  readonly info: Environment.ProviderInfo
+  readonly info: Hand.ProviderInfo
   readonly check: (config: unknown) => Effect.Effect<Schema.Json, InvalidConfig>
   readonly provision: (input: ProvisionInput<Schema.Json>) => Effect.Effect<Schema.Json, Failed>
   readonly connect: (binding: Schema.Json) => Effect.Effect<Endpoint, Gone | Failed>
@@ -57,7 +55,6 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
       id: definition.id,
       title: definition.title,
       description: definition.description,
-      capabilities: definition.capabilities,
       configSchema: Schema.decodeUnknownSync(Schema.Json)(Schema.toJsonSchemaDocument(definition.config)),
     },
     check: (value) =>
@@ -77,7 +74,7 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
 
 export class Registry extends Context.Service<
   Registry,
-  { readonly providers: ReadonlyArray<Provider>; readonly get: (id: string) => Option.Option<Provider> }
+  { readonly providers: ReadonlyArray<Provider>; readonly get: (id: Hand.ProviderID) => Option.Option<Provider> }
 >()("@ren/core/HandProvider/Registry") {}
 
 export const layer = <E, R>(providers: ReadonlyArray<Effect.Effect<Provider, E, R>>) =>

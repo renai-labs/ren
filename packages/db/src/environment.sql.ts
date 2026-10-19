@@ -3,11 +3,14 @@ import { Environment } from "@ren/schema/environment"
 import type { Hand } from "@ren/schema/hand"
 import type { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { defineRelationsPart, sql } from "drizzle-orm"
-import { check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import type { SpaceEnvironment } from "@ren/schema/space-environment"
+import { defineRelationsPart, isNull, sql } from "drizzle-orm"
+import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import type { Schema } from "effect"
 import { organization } from "./auth.sql.js"
 import { space } from "./space.sql.js"
+
+export const spaceEnvironmentConstraint = "space_environment_space_id_environment_id_uidx"
 
 export const environment = pgTable(
   "environment",
@@ -17,13 +20,9 @@ export const environment = pgTable(
       .$type<Auth.OrganizationID>()
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    space_id: text()
-      .$type<Space.ID>()
-      .notNull()
-      .references(() => space.id, { onDelete: "cascade" }),
     name: text().notNull(),
     description: text(),
-    provider: text().notNull(),
+    provider: text().$type<Hand.ProviderID>().notNull(),
     config: jsonb().$type<Schema.Json>().notNull(),
     sessions_per_hand: integer().notNull(),
     created_at: timestamp().defaultNow().notNull(),
@@ -31,7 +30,7 @@ export const environment = pgTable(
     archived_at: timestamp(),
   },
   (table) => [
-    index("environment_space_id_created_at_id_idx").on(table.space_id, table.created_at, table.id),
+    index("environment_organization_id_created_at_id_idx").on(table.organization_id, table.created_at, table.id),
     check(
       "environment_name_length_check",
       sql`char_length(${table.name}) between 1 and ${sql.raw(String(Space.maximumNameLength))}`,
@@ -40,6 +39,27 @@ export const environment = pgTable(
       "environment_sessions_per_hand_check",
       sql`${table.sessions_per_hand} between 1 and ${sql.raw(String(Environment.maximumSessionsPerHand))}`,
     ),
+  ],
+)
+
+export const space_environment = pgTable(
+  "space_environment",
+  {
+    id: text().$type<SpaceEnvironment.ID>().primaryKey(),
+    space_id: text()
+      .$type<Space.ID>()
+      .notNull()
+      .references(() => space.id, { onDelete: "cascade" }),
+    environment_id: text()
+      .$type<Environment.ID>()
+      .notNull()
+      .references(() => environment.id, { onDelete: "cascade" }),
+    created_at: timestamp().defaultNow().notNull(),
+    archived_at: timestamp(),
+  },
+  (table) => [
+    uniqueIndex(spaceEnvironmentConstraint).on(table.space_id, table.environment_id).where(isNull(table.archived_at)),
+    index("space_environment_environment_id_idx").on(table.environment_id),
   ],
 )
 
@@ -61,10 +81,10 @@ export const session_environment = pgTable(
   "session_environment",
   {
     session_id: text().$type<Session.ID>().primaryKey(),
-    organization_id: text()
-      .$type<Auth.OrganizationID>()
+    space_id: text()
+      .$type<Space.ID>()
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => space.id, { onDelete: "cascade" }),
     environment_id: text()
       .$type<Environment.ID>()
       .notNull()
@@ -79,18 +99,22 @@ export const session_environment = pgTable(
 )
 
 export const environmentRelations = defineRelationsPart(
-  { organization, space, environment, hand, session_environment },
+  { organization, space, environment, space_environment, hand, session_environment },
   (r) => ({
     environment: {
       organization: r.one.organization({ from: r.environment.organization_id, to: r.organization.id }),
-      space: r.one.space({ from: r.environment.space_id, to: r.space.id }),
+      spaces: r.many.space_environment({ from: r.environment.id, to: r.space_environment.environment_id }),
       hands: r.many.hand({ from: r.environment.id, to: r.hand.environment_id }),
+    },
+    space_environment: {
+      space: r.one.space({ from: r.space_environment.space_id, to: r.space.id }),
+      environment: r.one.environment({ from: r.space_environment.environment_id, to: r.environment.id }),
     },
     hand: {
       environment: r.one.environment({ from: r.hand.environment_id, to: r.environment.id }),
     },
     session_environment: {
-      organization: r.one.organization({ from: r.session_environment.organization_id, to: r.organization.id }),
+      space: r.one.space({ from: r.session_environment.space_id, to: r.space.id }),
       environment: r.one.environment({ from: r.session_environment.environment_id, to: r.environment.id }),
       hand: r.one.hand({ from: r.session_environment.hand_id, to: r.hand.id }),
     },

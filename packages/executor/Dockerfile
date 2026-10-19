@@ -6,7 +6,7 @@ RUN apt-get update \
 
 COPY executor.js /opt/ren/executor.js
 
-ENV PORT=4100 EXECUTOR_WORKSPACE=/workspace
+ENV PORT=4100
 WORKDIR /workspace
 EXPOSE 4100
 

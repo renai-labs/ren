@@ -11,7 +11,6 @@ import { FileNotFoundError, FileTooLargeError, WrongKindError } from "@ren/hand-
 import type { Signal } from "@ren/hand-api/signal"
 import type { HandConnections } from "@ren/brain/hand-connections"
 import { Hand } from "@ren/brain/hand"
-import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer, Schema } from "effect"
 import { OverrideShell } from "./override-shell.js"
@@ -73,7 +72,7 @@ const files = (hand: Hand.Files): EnvironmentFiles.FilesImpl => {
 }
 
 export const session = (connections: HandConnections.Interface, sessionId: Session.ID) => {
-  const hand = Hand.session(connections, sessionId, Environment.sessionDirectory(sessionId), killedBySignal)
+  const hand = Hand.session(connections, sessionId, killedBySignal)
   return { spawner: hand.spawner, spawnerWith: hand.spawnerWith, overrides: files(hand.files) }
 }
 

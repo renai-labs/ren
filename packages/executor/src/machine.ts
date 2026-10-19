@@ -304,7 +304,6 @@ export const layer = Layer.effect(
         protocol,
         version: manifest.version,
         environmentId: config.environmentId,
-        workspaceDirectory: workspace,
         os: process.platform,
         arch: process.arch,
         shells,

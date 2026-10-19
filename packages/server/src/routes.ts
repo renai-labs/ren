@@ -7,6 +7,7 @@ import { Environments } from "@ren/core/environments"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Space } from "@ren/core/space"
+import { SpaceEnvironment } from "@ren/core/space/environment"
 import { SpaceMember } from "@ren/core/space/member"
 import { Effect, Layer } from "effect"
 import { HttpEffect, HttpMiddleware, HttpRouter } from "effect/http"
@@ -21,6 +22,7 @@ import { HostEnvironmentsHandler } from "./handlers/host-environments.js"
 import { HostHandler } from "./handlers/host.js"
 import { ModelsHandler } from "./handlers/models.js"
 import { SpaceHandler } from "./handlers/space.js"
+import { SpaceEnvironmentHandler } from "./handlers/space-environment.js"
 import { SpaceMemberHandler } from "./handlers/space-member.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
@@ -55,9 +57,17 @@ export const layer = Layer.mergeAll(
       SpaceMemberHandler,
       EnvironmentHandler,
       HandProviderHandler,
+      SpaceEnvironmentHandler,
     ]),
     Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
-    Layer.provide([Health.layer, Invitation.layer, Space.layer, SpaceMember.layer, Environments.layer]),
+    Layer.provide([
+      Health.layer,
+      Invitation.layer,
+      Space.layer,
+      SpaceMember.layer,
+      Environments.layer,
+      SpaceEnvironment.layer,
+    ]),
   ),
   HttpApiBuilder.layer(HostApi).pipe(
     Layer.provide([ModelsHandler, HostEnvironmentsHandler, HostHandler]),

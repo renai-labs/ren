@@ -5,7 +5,7 @@ import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Signature } from "@ren/hand-api/signature"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
-import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Stream } from "effect"
+import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Redacted, Stream } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { RpcClientError } from "effect/rpc"
 import { TestClock } from "effect/testing"
@@ -25,8 +25,9 @@ const it = testEffect(Sandbox.layer({ environmentId, workspace }).pipe(Layer.pro
 const token = Effect.fnUntraced(function* (
   claims: { readonly environmentId?: Environment.ID; readonly brain?: Brain.ID } = {},
 ) {
-  return (yield* Sandbox.access({ url: yield* Sandbox.url, environmentId, brain, directory: workspace, ...claims }))
-    .token
+  return Redacted.value(
+    (yield* Sandbox.access({ url: yield* Sandbox.url, environmentId, brain, directory: workspace, ...claims })).token,
+  )
 })
 
 const connect = Effect.fnUntraced(function* (bearer: string) {
@@ -80,7 +81,7 @@ const refused = Effect.fnUntraced(function* () {
     },
     {
       name: "an expired token",
-      authorization: `Bearer ${(yield* Sandbox.access({ url: yield* Sandbox.url, environmentId, brain, directory: workspace, issuedAt: Date.now() - 3_600_000 })).token}`,
+      authorization: `Bearer ${Redacted.value((yield* Sandbox.access({ url: yield* Sandbox.url, environmentId, brain, directory: workspace, issuedAt: Date.now() - 3_600_000 })).token)}`,
     },
     { name: "another scheme", authorization: `Basic ${valid}` },
   ]
@@ -272,7 +273,7 @@ it.effect("keeps streaming output to a reader whose token expires, and refuses t
       issuedAt: 0,
       lifetimeMs: 60_000,
     })
-    const reader = yield* connect(expiring.token)
+    const reader = yield* connect(Redacted.value(expiring.token))
     const writer = yield* client()
     const spawned = yield* writer["process.spawn"]({ command: "cat", arguments: [], hasStdin: true })
     const first = yield* Deferred.make<void>()

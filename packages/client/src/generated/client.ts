@@ -30,6 +30,12 @@ import type {
   EnvironmentArchiveInput,
   EnvironmentArchiveOutput,
   HandProviderListOutput,
+  SpaceEnvironmentListInput,
+  SpaceEnvironmentListOutput,
+  SpaceEnvironmentCreateInput,
+  SpaceEnvironmentCreateOutput,
+  SpaceEnvironmentArchiveInput,
+  SpaceEnvironmentArchiveOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -249,7 +255,7 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/environments`,
-            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            query: { page: input["page"], pageSize: input["pageSize"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
             empty: false,
@@ -273,7 +279,6 @@ export function make(options: ClientOptions) {
             method: "POST",
             path: `/environments`,
             body: {
-              spaceId: input["spaceId"],
               name: input["name"],
               description: input["description"],
               provider: input["provider"],
@@ -319,6 +324,43 @@ export function make(options: ClientOptions) {
       list: (requestOptions?: RequestOptions) =>
         request<HandProviderListOutput>(
           { method: "GET", path: `/hand-providers`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
+          requestOptions,
+        ),
+    },
+    "space-environment": {
+      list: (input: SpaceEnvironmentListInput, requestOptions?: RequestOptions) =>
+        request<SpaceEnvironmentListOutput>(
+          {
+            method: "GET",
+            path: `/space-environments`,
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: SpaceEnvironmentCreateInput, requestOptions?: RequestOptions) =>
+        request<SpaceEnvironmentCreateOutput>(
+          {
+            method: "POST",
+            path: `/space-environments`,
+            body: { spaceId: input["spaceId"], environmentId: input["environmentId"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: SpaceEnvironmentArchiveInput, requestOptions?: RequestOptions) =>
+        request<SpaceEnvironmentArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/space-environments/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
           requestOptions,
         ),
     },

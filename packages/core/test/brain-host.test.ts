@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { Shared, TestToken } from "@ren/cell/testing"
+import { StartBody } from "@ren/brain-api/brain-api"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Signature } from "@ren/hand-api/signature"
 import { Testing } from "@ren/db/testing"
 import { Environment } from "@ren/schema/environment"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import {
   Cause,
   Clock,
@@ -69,7 +71,7 @@ const start = Effect.fnUntraced(function* (sessionId: Session.ID, input: Partial
   const brain = yield* BrainHost.Service
   return yield* brain.start(
     { sessionId, harness: "opencode", instructions: {}, interactive: true, ...input },
-    organizationId,
+    { organizationId, spaceId: Space.ID.create() },
   )
 })
 
@@ -482,11 +484,11 @@ describe("BrainHost", () => {
 
   describe("environments", () => {
     const recordingCell = Effect.fnUntraced(function* (status = 200) {
-      const starts: Array<Session.StartInput> = []
+      const starts: Array<StartBody> = []
       const server = yield* serve(async (request) => {
         const url = new URL(request.url)
         if (url.pathname === "/ren/models") return new Response(null, { status: 204 })
-        const payload = Schema.decodeUnknownSync(Session.StartInput)(await request.json())
+        const payload = Schema.decodeUnknownSync(StartBody)(await request.json())
         starts.push(payload)
         return status === 200
           ? Response.json({ sessionId: payload.sessionId, harness: "opencode" })
@@ -496,7 +498,7 @@ describe("BrainHost", () => {
     })
     const hostWith = Effect.fnUntraced(function* (cellUrl: string) {
       const keys = yield* Signature.generate("env")
-      const probe = yield* TestProvider.make({ capabilities: ["files"] })
+      const probe = yield* TestProvider.make()
       const context = yield* Layer.build(
         Host.layerWith(
           { CELL_URL: cellUrl, CELL_KEYS: settings.CELL_KEYS },
@@ -522,37 +524,38 @@ describe("BrainHost", () => {
     })
     const environmentIt = testEffect(Testing.layer)
     const startOn = (brain: BrainHost.Interface, sessionId: Session.ID, org: Auth.OrganizationID, id: Environment.ID) =>
-      brain.start(
-        {
-          sessionId,
-          harness: "opencode",
-          instructions: {},
-          interactive: true,
-          environment: { environmentId: id, directory: "/anywhere" },
-        },
-        org,
+      Effect.flatMap(Seed.team(org), (spaceId) =>
+        brain.start(
+          {
+            sessionId,
+            harness: "opencode",
+            instructions: {},
+            interactive: true,
+            environmentId: id,
+          },
+          { organizationId: org, spaceId },
+        ),
       )
 
-    environmentIt.live(
-      "start gives the cell the session's folder and its environment's capabilities, also on a later start that names none",
-      () =>
-        Effect.gen(function* () {
-          const cell = yield* recordingCell()
-          const brain = yield* hostWith(cell.url)
-          const org = yield* Seed.organization()
-          const environmentId = yield* Seed.environment(org)
-          const sessionId = Session.ID.create()
-          yield* startOn(brain, sessionId, org, environmentId)
-          yield* brain.start({ sessionId, harness: "opencode", instructions: {}, interactive: true }, org)
-          const location: Environment.Location = {
-            environmentId,
-            directory: `/workspace/${sessionId}`,
-            capabilities: ["files"],
-          }
-          expect(cell.starts.map((input) => input.environment)).toEqual([location, location])
-          const access = yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org })
-          expect(access.environmentId).toBe(environmentId)
-        }),
+    environmentIt.live("start gives the cell the session's environment, also on a later start that names none", () =>
+      Effect.gen(function* () {
+        const cell = yield* recordingCell()
+        const brain = yield* hostWith(cell.url)
+        const org = yield* Seed.organization()
+        const environmentId = yield* Seed.environment(org)
+        const sessionId = Session.ID.create()
+        yield* startOn(brain, sessionId, org, environmentId)
+        yield* brain.start(
+          { sessionId, harness: "opencode", instructions: {}, interactive: true },
+          { organizationId: org, spaceId: yield* Seed.team(org) },
+        )
+        expect(cell.starts.map((input) => input.directory)).toEqual([
+          `/workspace/${sessionId}`,
+          `/workspace/${sessionId}`,
+        ])
+        const access = yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org })
+        expect(access.directory).toBe(`/workspace/${sessionId}`)
+      }),
     )
 
     environmentIt.live("Ren refuses an unknown environment, or a change of environment, before it calls the cell", () =>
@@ -600,7 +603,7 @@ describe("BrainHost", () => {
           { concurrency: "unbounded" },
         )
         expect(exits.map(Exit.isSuccess)).toEqual([true, false])
-        expect(cell.starts.map((input) => input.environment?.environmentId)).toEqual([environmentId])
+        expect(cell.starts.length).toBe(1)
       }),
     )
 

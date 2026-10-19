@@ -3,7 +3,10 @@ export * as Seed from "./seed.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
+import { Hand } from "@ren/schema/hand"
 import { Space } from "@ren/schema/space"
+import { SpaceEnvironment } from "@ren/schema/space-environment"
+import { and, eq } from "drizzle-orm"
 import { Effect } from "effect"
 
 export const organization = Effect.fnUntraced(function* () {
@@ -63,8 +66,14 @@ export const invitation = Effect.fnUntraced(function* (input: {
   return id
 })
 
-const space = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
+export const team = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
   const database = yield* Database.Service
+  const existing = yield* database.db
+    .select({ id: Database.Schema.space.id })
+    .from(Database.Schema.space)
+    .where(and(eq(Database.Schema.space.organization_id, organizationId), eq(Database.Schema.space.name, "Team")))
+  const found = existing.at(0)
+  if (found) return found.id
   const id = Space.ID.create()
   yield* database.db.insert(Database.Schema.space).values({ id, organization_id: organizationId, name: "Team" })
   return id
@@ -79,11 +88,15 @@ export const environment = Effect.fnUntraced(function* (
   yield* database.db.insert(Database.Schema.environment).values({
     id,
     organization_id: organizationId,
-    space_id: yield* space(organizationId),
     name: "Sandbox",
-    provider: options.provider ?? "test",
+    provider: Hand.ProviderID.make(options.provider ?? "test"),
     config: { label: "seeded" },
-    sessions_per_hand: options.sessionsPerHand ?? Environment.defaultSessionsPerHand,
+    sessions_per_hand: options.sessionsPerHand ?? 8,
+  })
+  yield* database.db.insert(Database.Schema.space_environment).values({
+    id: SpaceEnvironment.ID.create(),
+    space_id: yield* team(organizationId),
+    environment_id: id,
   })
   return id
 })

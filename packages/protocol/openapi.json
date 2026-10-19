@@ -755,21 +755,6 @@
         "operationId": "environment.list",
         "parameters": [
           {
-            "name": "spaceId",
-            "in": "query",
-            "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Space.ID"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false
-          },
-          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -1166,11 +1151,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Environment.Providers",
+            "description": "Hand.Providers",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Environment.Providers"
+                  "$ref": "#/components/schemas/Hand.Providers"
                 }
               }
             }
@@ -1198,6 +1183,237 @@
         },
         "description": "Return the hand providers this deployment has, each with a JSON Schema of the config that an environment of that provider takes.",
         "summary": "List hand providers"
+      }
+    },
+    "/space-environments": {
+      "get": {
+        "tags": ["space-environment"],
+        "operationId": "space-environment.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceEnvironment.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceEnvironment.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the space-environments that the caller can see.",
+        "summary": "List space-environments"
+      },
+      "post": {
+        "tags": ["space-environment"],
+        "operationId": "space-environment.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceEnvironment.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceEnvironment.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one space-environment.",
+        "summary": "Create space-environment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpaceEnvironment.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/space-environments/{id}": {
+      "delete": {
+        "tags": ["space-environment"],
+        "operationId": "space-environment.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/SpaceEnvironment.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceEnvironment.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceEnvironment.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one space-environment and return it. Archiving an archived space-environment returns it unchanged.",
+        "summary": "Archive space-environment"
       }
     }
   },
@@ -1324,16 +1540,9 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
-      "Environment.Capability": {
-        "type": "string",
-        "enum": ["processes", "files"]
-      },
       "Environment.CreateInput": {
         "type": "object",
         "properties": {
-          "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
-          },
           "name": {
             "type": "string",
             "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
@@ -1351,7 +1560,7 @@
             ]
           },
           "provider": {
-            "$ref": "#/components/schemas/Environment.ProviderID"
+            "$ref": "#/components/schemas/Hand.ProviderID"
           },
           "config": {
             "description": "The settings of the provider. Its schema is in the provider list."
@@ -1362,7 +1571,7 @@
             "maximum": 100
           }
         },
-        "required": ["spaceId", "name", "provider", "config"],
+        "required": ["name", "provider", "config"],
         "additionalProperties": false
       },
       "Environment.ID": {
@@ -1375,8 +1584,8 @@
           "id": {
             "$ref": "#/components/schemas/Environment.ID"
           },
-          "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+          "organizationId": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
           },
           "name": {
             "type": "string"
@@ -1392,17 +1601,11 @@
             ]
           },
           "provider": {
-            "$ref": "#/components/schemas/Environment.ProviderID"
+            "$ref": "#/components/schemas/Hand.ProviderID"
           },
           "config": {},
           "sessionsPerHand": {
             "type": "integer"
-          },
-          "canUpdate": {
-            "type": "boolean"
-          },
-          "canArchive": {
-            "type": "boolean"
           },
           "createdAt": {
             "type": "string"
@@ -1423,14 +1626,12 @@
         },
         "required": [
           "id",
-          "spaceId",
+          "organizationId",
           "name",
           "description",
           "provider",
           "config",
           "sessionsPerHand",
-          "canUpdate",
-          "canArchive",
           "createdAt",
           "updatedAt",
           "archivedAt"
@@ -1458,41 +1659,6 @@
         },
         "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
-      },
-      "Environment.ProviderID": {
-        "type": "string",
-        "pattern": "^[a-z][a-z0-9-]*$"
-      },
-      "Environment.ProviderInfo": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/Environment.ProviderID"
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "capabilities": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Environment.Capability"
-            }
-          },
-          "configSchema": {
-            "description": "A JSON Schema document (draft 2020-12) of the provider’s config."
-          }
-        },
-        "required": ["id", "title", "description", "capabilities", "configSchema"],
-        "additionalProperties": false
-      },
-      "Environment.Providers": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/Environment.ProviderInfo"
-        }
       },
       "Environment.UpdateInput": {
         "type": "object",
@@ -1563,6 +1729,35 @@
         },
         "required": ["_tag", "message"],
         "additionalProperties": false
+      },
+      "Hand.ProviderID": {
+        "type": "string",
+        "minLength": 1
+      },
+      "Hand.ProviderInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Hand.ProviderID"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "configSchema": {
+            "description": "A JSON Schema document (draft 2020-12) of the provider’s config."
+          }
+        },
+        "required": ["id", "title", "description", "configSchema"],
+        "additionalProperties": false
+      },
+      "Hand.Providers": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Hand.ProviderInfo"
+        }
       },
       "Health.Info": {
         "type": "object",
@@ -1878,6 +2073,74 @@
         },
         "additionalProperties": false
       },
+      "SpaceEnvironment.CreateInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "environmentId": {
+            "$ref": "#/components/schemas/Environment.ID"
+          }
+        },
+        "required": ["spaceId", "environmentId"],
+        "additionalProperties": false
+      },
+      "SpaceEnvironment.ID": {
+        "type": "string",
+        "pattern": "^spe_"
+      },
+      "SpaceEnvironment.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SpaceEnvironment.ID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "environmentId": {
+            "$ref": "#/components/schemas/Environment.ID"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "spaceId", "environmentId", "createdAt", "archivedAt"],
+        "additionalProperties": false
+      },
+      "SpaceEnvironment.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpaceEnvironment.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
       "SpaceMember.Active": {
         "type": "object",
         "properties": {
@@ -2089,6 +2352,9 @@
     },
     {
       "name": "handProvider"
+    },
+    {
+      "name": "space-environment"
     }
   ]
 }

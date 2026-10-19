@@ -37,24 +37,9 @@ import {
   Stream,
   Struct,
 } from "effect"
-import { ChildProcess, ChildProcessSpawner } from "effect/process"
+import { ChildProcessSpawner } from "effect/process"
 import type { RpcClientError } from "effect/rpc"
 import type { HandConnections } from "./hand-connections.js"
-
-const withoutTrailingSlash = (path: string) => path.replace(/(?<=.)\/+$/, "")
-
-export const physicalPath = (sessionDirectory: string, directory: string) => {
-  const from = withoutTrailingSlash(sessionDirectory)
-  const to = withoutTrailingSlash(directory)
-  const prefix = from === "/" ? from : `${from}/`
-  const root = to === "/" ? to : `${to}/`
-  return (path: string) => {
-    if (from === to) return path
-    if (withoutTrailingSlash(path) === from) return to
-    if (!path.startsWith(prefix)) return path
-    return `${root}${path.slice(prefix.length)}`
-  }
-}
 
 const disconnectedNotice = new TextEncoder().encode("\n[environment disconnected: the command did not finish]\n")
 
@@ -303,34 +288,15 @@ export interface SessionHand {
 export const session = (
   connections: HandConnections.Interface,
   sessionId: Session.ID,
-  sessionDirectory: string,
   killedBySignal: KilledBySignal,
 ): SessionHand => {
-  const withConnection = <A, E>(
-    use: (connection: HandConnections.Connection, physical: (path: string) => string) => Effect.Effect<A, E>,
-  ) =>
-    connections.connect(sessionId).pipe(
-      Effect.flatMap((connection) => use(connection, physicalPath(sessionDirectory, connection.directory))),
-      Effect.scoped,
-    )
+  const withConnection = <A, E>(use: (connection: HandConnections.Connection) => Effect.Effect<A, E>) =>
+    connections.connect(sessionId).pipe(Effect.flatMap(use), Effect.scoped)
   const sessionSpawner = (options: SpawnOptions = {}) =>
     ChildProcessSpawner.make((command) =>
       connections.connect(sessionId).pipe(
         Effect.mapError(childProcessError("spawn")),
-        Effect.flatMap((connection) => {
-          const physical = physicalPath(sessionDirectory, connection.directory)
-          return spawner(connection, killedBySignal, {
-            ...options,
-            ...(options.outputFile && { outputFile: physical(options.outputFile) }),
-          }).spawn(
-            command._tag === "StandardCommand"
-              ? ChildProcess.make(command.command, command.args, {
-                  ...command.options,
-                  ...(command.options.cwd && { cwd: physical(command.options.cwd) }),
-                })
-              : command,
-          )
-        }),
+        Effect.flatMap((connection) => spawner(connection, killedBySignal, options).spawn(command)),
       ),
     )
   return {
@@ -338,25 +304,16 @@ export const session = (
     spawnerWith: sessionSpawner,
     files: {
       read: (path, range) =>
-        withConnection((connection, physical) =>
-          connection.client["files.read"]({ path: physical(path), ...(range && { range }) }),
-        ),
+        withConnection((connection) => connection.client["files.read"]({ path, ...(range && { range }) })),
       write: (path, bytes) =>
         bytes.length > maxFileBytes
           ? Effect.fail(new FileTooLargeError({ path, sizeBytes: bytes.length, maxBytes: maxFileBytes }))
-          : withConnection((connection, physical) => connection.client["files.write"]({ path: physical(path), bytes })),
-      stat: (path) =>
-        withConnection((connection, physical) => connection.client["files.stat"]({ path: physical(path) })),
-      list: (path) =>
-        withConnection((connection, physical) => connection.client["files.list"]({ path: physical(path) })),
-      remove: (path) =>
-        withConnection((connection, physical) => connection.client["files.remove"]({ path: physical(path) })),
-      move: (from, to) =>
-        withConnection((connection, physical) =>
-          connection.client["files.move"]({ from: physical(from), to: physical(to) }),
-        ),
-      mkdir: (path) =>
-        withConnection((connection, physical) => connection.client["files.mkdir"]({ path: physical(path) })),
+          : withConnection((connection) => connection.client["files.write"]({ path, bytes })),
+      stat: (path) => withConnection((connection) => connection.client["files.stat"]({ path })),
+      list: (path) => withConnection((connection) => connection.client["files.list"]({ path })),
+      remove: (path) => withConnection((connection) => connection.client["files.remove"]({ path })),
+      move: (from, to) => withConnection((connection) => connection.client["files.move"]({ from, to })),
+      mkdir: (path) => withConnection((connection) => connection.client["files.mkdir"]({ path })),
     },
   }
 }

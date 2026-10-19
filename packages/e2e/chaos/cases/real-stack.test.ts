@@ -31,7 +31,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
 
     beforeAll(async () => {
       lane.stack = await RealStack.start({
-        environments: [{ label: "full" }, { label: "second" }, { label: "files", capabilities: ["files"] }],
+        environments: [{ label: "full" }, { label: "second" }],
         tokenLifetime: "20 seconds",
       })
     }, 600_000)
@@ -84,16 +84,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       ]).toEqual([true, false, true, false])
     }, 600_000)
 
-    test("an environment with only files offers no shell, and a session with no environment has no tools", async () => {
-      const files = await stack().session({ environment: stack().sandbox("files") })
-      const onFiles = stack().provider.script([ModelProvider.text("ok")])
-      await files.send(`work ${onFiles.marker}`)
-      const offered = (await onFiles.called(1, 60_000)).tools
-      expect([offered.includes("read"), offered.includes("edit"), offered.includes("shell")]).toEqual([
-        true,
-        true,
-        false,
-      ])
+    test("a session with no environment has no file or shell tools", async () => {
       const none = await stack().session({ environment: false })
       const onNone = stack().provider.script([ModelProvider.text("ok")])
       await none.send(`work ${onNone.marker}`)

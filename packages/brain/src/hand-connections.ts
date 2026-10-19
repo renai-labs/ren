@@ -2,7 +2,7 @@ export * as HandConnections from "./hand-connections.js"
 
 import { type Hello, protocol } from "@ren/hand-api/executor-api"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import {
   Clock,
@@ -14,6 +14,7 @@ import {
   Layer,
   Option,
   RcMap,
+  Redacted,
   Ref,
   Schema,
   Scope,
@@ -32,13 +33,12 @@ export const refreshBefore = Duration.minutes(5)
 
 export const retryRenAfter = Duration.seconds(30)
 
-const isSameSandbox = (held: Environment.Access, fresh: Environment.Access) =>
+const isSameSandbox = (held: Hand.Access, fresh: Hand.Access) =>
   fresh.url === held.url && fresh.generation === held.generation && fresh.directory === held.directory
 
 export interface Connection {
   readonly hello: Hello
   readonly client: ExecutorClient.Client
-  readonly directory: string
 }
 
 export interface Interface {
@@ -57,7 +57,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const handAccess = yield* HandAccess.Service
     const http = yield* HttpClient.HttpClient
-    const accesses = new Map<Session.ID, SynchronizedRef.SynchronizedRef<Environment.Access>>()
+    const accesses = new Map<Session.ID, SynchronizedRef.SynchronizedRef<Hand.Access>>()
     const failures = new Map<Session.ID, { readonly error: Unavailable; readonly retryAtMs: number }>()
 
     const ask = Effect.fn("HandConnections.ask")(function* (sessionId: Session.ID) {
@@ -106,7 +106,7 @@ export const layer = Layer.effect(
           const refusedToken = yield* Ref.make<string | undefined>(undefined)
           const held = SynchronizedRef.updateAndGetEffect(current, (latest) =>
             Effect.gen(function* () {
-              const isRefused = (yield* Ref.get(refusedToken)) === latest.token
+              const isRefused = (yield* Ref.get(refusedToken)) === Redacted.value(latest.token)
               const now = yield* Clock.currentTimeMillis
               if (!isRefused && DateTime.toEpochMillis(latest.expiresAt) - now > Duration.toMillis(window))
                 return latest
@@ -126,7 +126,7 @@ export const layer = Layer.effect(
           )
           const client = yield* ExecutorClient.make({
             url: access.url,
-            token: Effect.map(held, (latest) => latest.token),
+            token: Effect.map(held, (latest) => Redacted.value(latest.token)),
             onNoAnswer: invalidateSelf,
           }).pipe(
             Effect.provideService(
@@ -159,12 +159,6 @@ export const layer = Layer.effect(
               reason: "incompatible",
               message: `The executor is not compatible: it speaks protocol ${hello.protocol}, not ${protocol}`,
             })
-          if (hello.environmentId !== access.environmentId)
-            return yield* new Unavailable({
-              sessionId,
-              reason: "incompatible",
-              message: `The executor is not compatible: it serves environment ${hello.environmentId}, not ${access.environmentId}`,
-            })
           yield* client["files.mkdir"]({ path: access.directory }).pipe(
             Effect.mapError((error) =>
               error._tag === "OperationFailedError"
@@ -192,7 +186,7 @@ export const layer = Layer.effect(
               onSome: (failed) => Effect.fail(failed.error),
             })
           })
-          return { connection: { hello, client, directory: access.directory }, ready }
+          return { connection: { hello, client }, ready }
         }).pipe(
           Scope.provide(attempt),
           Effect.onError(() => Scope.close(attempt, Exit.void)),

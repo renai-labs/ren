@@ -26,7 +26,6 @@ export const Hello = Schema.Struct({
   protocol: Schema.Int,
   version: Schema.String,
   environmentId: Environment.ID,
-  workspaceDirectory: Schema.String,
   os: Schema.String,
   arch: Schema.String,
   shells: Schema.optionalKey(

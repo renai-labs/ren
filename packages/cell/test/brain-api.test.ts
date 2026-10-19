@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
+import type { StartBody } from "@ren/brain-api/brain-api"
 import {
   BrainRejectedError,
   ForbiddenError,
@@ -7,7 +8,6 @@ import {
   SessionNotStartedError,
 } from "@ren/brain-api/errors"
 import { testEffect } from "@ren/executor/testing"
-import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Cause, Effect, type Scope } from "effect"
@@ -171,13 +171,10 @@ it.live("a token-session mismatch fails before acquiring the harness", () =>
   }),
 )
 
-test.each<[string, Partial<Session.StartInput>]>([
+test.each<[string, Partial<StartBody>]>([
   ["an unknown agent", { agent: "nobody" }],
   ["an unknown model", { model: { endpointId: "stub", modelId: "missing" } }],
-  [
-    "an environment in a brain that cannot use environments",
-    { environment: { environmentId: Environment.ID.create(), directory: "/workspace" } },
-  ],
+  ["an environment in a brain that cannot use environments", { directory: "/workspace/ses_1" }],
 ])("start rejects %s, creates no session and submits no initial message", (_name, input) =>
   live(
     Effect.gen(function* () {

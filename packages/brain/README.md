@@ -4,8 +4,8 @@ Brain code that is the same on every host and every harness. A host (the cell in
 
 ## What belongs here
 
-- `src/hand-access.ts`: `HandAccess`, how a brain gets the access of a session (`{ environmentId, directory, url, token, expiresAt, generation }`) `open` fails with `NotFound` (Ren says the session has no access) or `Unavailable` (Ren does not answer, or cannot give a sandbox). The cell's Host API layer is the production one; `@ren/brain/testing` has fixed and in-memory layers for tests.
-- `src/hand-connections.ts`: `HandConnections`, the executor connection of each session. Nothing connects before the first file or shell call. The first contact checks `hello` (protocol, and that the executor serves the environment the access names) and makes the session's folder.
+- `src/hand-access.ts`: `HandAccess`, how a brain gets a session's `Hand.Access` (`{ directory, url, token, expiresAt, generation }`). `open` fails with `NotFound` (Ren says the session has no access) or `Unavailable` (Ren does not answer, or cannot give a sandbox). The cell's Host API layer is the production one; `@ren/brain/testing` has fixed and in-memory layers for tests.
+- `src/hand-connections.ts`: `HandConnections`, the executor connection of each session. Nothing connects before the first file or shell call. The first contact checks the executor's protocol in `hello` and makes the session's folder. An executor of another environment refuses the token, so the call fails with "token refused".
 - `src/hand.ts`: `Hand`, harness-neutral tool plumbing: `spawner` runs processes through the Executor API, `Files` reads and changes files through it, `session` gives a session's spawner and files, and `physicalPath` maps the harness's folder onto the access's folder. A harness adapter maps `Files` errors to its own; it never sees the RPC client.
 
 ## Notes

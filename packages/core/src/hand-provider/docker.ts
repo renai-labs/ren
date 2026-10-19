@@ -2,6 +2,7 @@ export * as Docker from "./docker.js"
 
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Signature } from "@ren/hand-api/signature"
+import { Hand } from "@ren/schema/hand"
 import { Duration, Effect, Schedule, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
@@ -26,8 +27,6 @@ const Config = Schema.Struct({
 const Binding = Schema.Struct({ containerId: Schema.NonEmptyString })
 
 const executorPort = "4100/tcp"
-
-const workspace = "/workspace"
 
 const readyWithin = Duration.seconds(30)
 
@@ -84,10 +83,9 @@ export const provider = Effect.gen(function* () {
     )
 
   return HandProvider.make({
-    id: "docker",
+    id: Hand.ProviderID.make("docker"),
     title: "Docker",
     description: "A container on the machine that runs Ren, made from an image that runs Ren’s executor.",
-    capabilities: ["files", "processes"],
     config: Config,
     binding: Binding,
     provision: Effect.fn("Docker.provision")(function* (input) {
@@ -106,8 +104,6 @@ export const provider = Effect.gen(function* () {
         `127.0.0.1::${executorPort}`,
         "--env",
         `EXECUTOR_ENVIRONMENT_ID=${input.environmentId}`,
-        "--env",
-        `EXECUTOR_WORKSPACE=${workspace}`,
         "--env",
         `BRAIN_PUBLIC_KEYS=${Schema.encodeSync(Signature.PublicKeys)(input.publicKeys)}`,
         ...(input.config.cpus ? ["--cpus", String(input.config.cpus)] : []),
@@ -144,7 +140,7 @@ export const provider = Effect.gen(function* () {
         })
       const url = `http://127.0.0.1:${port}`
       yield* ready(url)
-      return { url, workspace }
+      return { url }
     }),
     destroy: Effect.fn("Docker.destroy")(function* (binding) {
       const removed = yield* docker(["rm", "--force", binding.containerId])

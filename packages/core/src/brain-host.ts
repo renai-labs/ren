@@ -1,6 +1,6 @@
 export * as BrainHost from "./brain-host.js"
 
-import { BrainApi, type ModelsBody } from "@ren/brain-api/brain-api"
+import { BrainApi, type ModelsBody, type StartBody } from "@ren/brain-api/brain-api"
 import {
   BrainRejectedError,
   EnvironmentNotFoundError,
@@ -12,8 +12,9 @@ import {
 } from "@ren/brain-api/errors"
 import { SessionToken } from "@ren/brain-api/session-token"
 import type { Auth } from "@ren/schema/auth"
-import type { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
+import type { Space } from "@ren/schema/space"
 import {
   Array,
   ByteSize,
@@ -50,10 +51,15 @@ export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("Br
   cause: Schema.Defect(),
 }) {}
 
+export interface Owner {
+  readonly organizationId: Auth.OrganizationID
+  readonly spaceId: Space.ID
+}
+
 export interface Interface {
   readonly start: (
     input: Session.StartInput,
-    organizationId: Auth.OrganizationID,
+    owner: Owner,
   ) => Effect.Effect<Session.Started, BrainUnavailable | BrainRejectedError>
   readonly send: (
     input: Session.SendInput,
@@ -69,7 +75,7 @@ export interface Interface {
   readonly refreshHostToken: (host: CurrentHost["Service"]) => Effect.Effect<HostTokenBody>
   readonly accessEnvironment: (
     host: CurrentHost["Service"],
-  ) => Effect.Effect<Environment.Access, EnvironmentNotFoundError | EnvironmentUnavailableError>
+  ) => Effect.Effect<Hand.Access, EnvironmentNotFoundError | EnvironmentUnavailableError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
@@ -212,21 +218,21 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, organizationId: Auth.OrganizationID) {
+      start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, owner: Owner) {
         if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
-        const subject = { brainId: input.sessionId, organizationId }
-        const requested = input.environment
+        const subject = { brainId: input.sessionId, organizationId: owner.organizationId }
+        const requested = input.environmentId
         const binding = requested
           ? Option.some(
               yield* hands
-                .bind(subject, requested.environmentId)
+                .bind({ ...subject, spaceId: owner.spaceId }, requested)
                 .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
             )
-          : Option.map(yield* hands.find(subject), (location) => ({ location, isNew: false }))
-        const payload = Option.match(binding, {
-          onNone: () => input,
-          onSome: (found) => Struct.assign(input, { environment: found.location }),
-        })
+          : Option.map(yield* hands.find(subject), (directory) => ({ directory, isNew: false }))
+        const payload = {
+          ...Struct.omit(input, ["environmentId"]),
+          ...Option.match(binding, { onNone: () => ({}), onSome: (found) => ({ directory: found.directory }) }),
+        } satisfies StartBody
         return yield* withModels(subject, call(input.sessionId, brain.brain["brain.start"]({ payload }))).pipe(
           Effect.tapErrorTag("BrainRejectedError", () =>
             Option.exists(binding, (found) => found.isNew) ? hands.unbind(input.sessionId) : Effect.void,

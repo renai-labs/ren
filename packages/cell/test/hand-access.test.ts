@@ -6,7 +6,7 @@ import { Sandbox, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Effect, Fiber, Layer, Option, Schema } from "effect"
+import { Context, DateTime, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { Cell } from "../src/cell.js"
@@ -31,7 +31,7 @@ const accessFor = (sessionId: Session.ID) =>
     url: "http://127.0.0.1:9",
     environmentId,
     brain: Brain.ofSession(sessionId),
-    directory: Environment.sessionDirectory(sessionId),
+    directory: `/workspace/${sessionId}`,
     lifetimeMs: 900_000,
   })
 
@@ -258,7 +258,7 @@ it.effect("20 file calls on a Ren that never answers all end in 10 seconds, on o
     const driver = RenWorkspaceDriver.session(environments, subject.sessionId)
     const calls = yield* Effect.forEach(
       Array.from({ length: 20 }),
-      () => driver.overrides.stat(`${Environment.sessionDirectory(subject.sessionId)}/a.ts`).pipe(Effect.flip),
+      () => driver.overrides.stat(`/workspace/${subject.sessionId}/a.ts`).pipe(Effect.flip),
       { concurrency: "unbounded" },
     ).pipe(Effect.forkScoped)
     yield* Effect.promise(() => ren.reached(subject.sessionId))
@@ -282,6 +282,6 @@ it.live("the cell's own storage holds only the models and the host token, never 
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.sessionId, 120)))
     yield* subject.access.open(subject.sessionId)
     expect([...stored.keys()].toSorted()).toEqual(["ren:host-token", "ren:models"])
-    expect([...stored.values()].filter((value) => value.includes(access.environmentId))).toEqual([])
+    expect([...stored.values()].filter((value) => value.includes(Redacted.value(access.token)))).toEqual([])
   }),
 )
