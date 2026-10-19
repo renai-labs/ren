@@ -30,6 +30,7 @@ const textVariants = cva("", {
     wrapping: {
       normal: "",
       anywhere: "wrap-anywhere",
+      preserved: "wrap-break-word whitespace-pre-wrap",
       none: "whitespace-nowrap",
       balanced: "text-balance",
     },
@@ -67,7 +68,7 @@ export type TextProps = Omit<HTMLAttributes<HTMLElement>, "className" | "style" 
   tone?: TextTone
   weight?: "regular" | "medium"
   truncation?: "none" | "single-line" | "two-lines" | "three-lines"
-  wrapping?: "normal" | "anywhere" | "none" | "balanced"
+  wrapping?: "normal" | "anywhere" | "preserved" | "none" | "balanced"
   alignment?: "start" | "center" | "end"
   numerals?: "proportional" | "tabular"
   activity?: "none" | "active" | "shimmer"
