@@ -67,8 +67,8 @@ test("rejects a token without an expiry", async () => {
 })
 
 test("round-trips generated keys through their variables", () => {
-  const signing = Schema.encodeSync(Signature.SigningKey)(active.privateKey)
+  const signing = Schema.encodeSync(Signature.PrivateKeys)([active.privateKey])
   const published = Schema.encodeSync(Signature.PublicKeys)([active.publicKey])
-  expect(Schema.decodeUnknownSync(Signature.SigningKey)(signing)).toEqual(active.privateKey)
+  expect(Schema.decodeUnknownSync(Signature.PrivateKeys)(signing)).toEqual([active.privateKey])
   expect(Schema.decodeUnknownSync(Signature.PublicKeys)(published)).toEqual([active.publicKey])
 })

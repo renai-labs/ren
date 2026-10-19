@@ -88,7 +88,7 @@ export const create = async (options: {
   const forget = Process.onInterrupt(remove)
   await configure(created.sandboxID, created.envdAccessToken, {
     EXECUTOR_HAND_ID: options.handId,
-    BRAIN_PUBLIC_KEYS: ExecutorAdapter.publicKeys,
+    HAND_PUBLIC_KEYS: ExecutorAdapter.publicKeys,
     PORT: String(executorPort),
   })
   return {

@@ -13,7 +13,7 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 
 ## Notes
 
-- Ren signs hand tokens; the executor only verifies them with `BRAIN_PUBLIC_KEYS`. It holds no secrets.
+- Ren signs hand tokens; the executor only verifies them with `HAND_PUBLIC_KEYS`. It holds no secrets.
 - `Machine.layer` needs a `ChildProcessSpawner`; the composition root (`main.ts`, the tests) provides it. File operations stay on `node:fs` for `lstat` and typed `readdir`.
 - `hello` lists the machine's shells (`shells`, by absolute path, its default first).
 - A process's output is a log, like OpenCode's terminals (`pty.ts`):
@@ -27,7 +27,7 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 - A process gets the executor's own environment variables with the request's `env` on top. OpenCode sends a workspace session no base environment.
 - File operations follow OpenCode's local environment: `read` and `list` follow a final symlink, `stat` does not. Errors name the path the caller gave.
 - File paths are not confined to `EXECUTOR_WORKSPACE`: an absolute path, or one with `..`, reaches anywhere the executor's user can. A process can already do so, so the workspace is where relative paths start, not a boundary.
-- The executor reads `BRAIN_PUBLIC_KEYS` once, at start. Restart it after Ren adds a signing key, or tokens signed with that key are refused.
+- The executor reads `HAND_PUBLIC_KEYS` once, at start. Restart it after Ren adds a signing key, or tokens signed with that key are refused.
 - The machine needs `rg` on its `PATH`: OpenCode's grep and glob run it through the executor.
 
 ## Configuration
@@ -36,7 +36,7 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 | -------------------- | ----------------------------------------------------------- |
 | `EXECUTOR_HAND_ID`   | The hand this executor is. Tokens must name it.             |
 | `EXECUTOR_WORKSPACE` | The directory relative paths resolve against. Default: cwd. |
-| `BRAIN_PUBLIC_KEYS`  | Ren's public keys, from `bun run keys` in `hand-api`.       |
+| `HAND_PUBLIC_KEYS`   | Ren's public keys, from `bun run keys` in `hand-api`.       |
 | `PORT`               | Default 4100.                                               |
 
 ## Dependencies

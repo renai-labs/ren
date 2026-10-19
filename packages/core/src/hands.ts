@@ -22,10 +22,6 @@ interface Placement extends Subject {
   readonly spaceId: Space.ID
 }
 
-const SigningKeys = Schema.fromJsonString(Schema.NonEmptyArray(Signature.PrivateKey)).annotate({
-  identifier: "Hands.SigningKeys",
-})
-
 export class NotFound extends Schema.TaggedError<NotFound>()("Hands.NotFound", { message: Schema.String }) {}
 
 export class Changed extends Schema.TaggedError<Changed>()("Hands.Changed", { message: Schema.String }) {}
@@ -69,7 +65,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.all({
-      keys: Config.option(Config.schema(Schema.RedactedFromValue(SigningKeys), "HAND_KEYS")),
+      keys: Config.option(Config.schema(Schema.RedactedFromValue(Signature.PrivateKeys), "HAND_KEYS")),
       lifetime: Config.Duration("HAND_TOKEN_LIFETIME").pipe(Config.withDefault(Duration.minutes(15))),
       directory: Config.String("HAND_DIRECTORY").pipe(Config.withDefault("/workspace")),
     })

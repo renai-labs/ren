@@ -106,7 +106,7 @@ export const provider = Effect.gen(function* () {
         "--env",
         `EXECUTOR_HAND_ID=${input.handId}`,
         "--env",
-        `BRAIN_PUBLIC_KEYS=${Schema.encodeSync(Signature.PublicKeys)(input.publicKeys)}`,
+        `HAND_PUBLIC_KEYS=${Schema.encodeSync(Signature.PublicKeys)(input.publicKeys)}`,
         ...(input.config.cpus ? ["--cpus", String(input.config.cpus)] : []),
         ...(input.config.memoryMiB ? ["--memory", `${input.config.memoryMiB}m`] : []),
         input.config.image,

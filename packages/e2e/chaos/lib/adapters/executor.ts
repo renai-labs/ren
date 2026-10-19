@@ -103,7 +103,7 @@ export const localProcess = async (options: {
         PORT: String(state.port),
         EXECUTOR_HAND_ID: handId,
         EXECUTOR_WORKSPACE: workspace,
-        BRAIN_PUBLIC_KEYS: publicKeys,
+        HAND_PUBLIC_KEYS: publicKeys,
       },
       stdin: "ignore",
       stdout: log,
@@ -189,7 +189,7 @@ export const dockerContainer = async (options: {
       "--env",
       `EXECUTOR_HAND_ID=${state.handId}`,
       "--env",
-      `BRAIN_PUBLIC_KEYS=${publicKeys}`,
+      `HAND_PUBLIC_KEYS=${publicKeys}`,
       tag,
     ])
     await published()
