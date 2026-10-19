@@ -5,20 +5,24 @@ import { OpenCode } from "@opencode/client"
 import { Signature } from "@ren/hand-api/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { BrainHost } from "@ren/core/brain-host"
-import { Environments } from "@ren/core/environments"
+import { HandProvider } from "@ren/core/hand-provider"
+import { Hands } from "@ren/core/hands"
 import { Models } from "@ren/core/models"
 import { Database } from "@ren/db/database"
 import { Sandbox } from "@ren/executor/testing"
 import { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
+import os from "node:os"
 import path from "node:path"
 import { ExecutorAdapter } from "./adapters/executor.js"
 import { SessionDriver } from "./drivers/session.js"
 import { FaultProxy } from "./faults/proxy.js"
 import { Process } from "./process.js"
+import { ChaosHands } from "./provider/hands.js"
 import { ModelProvider } from "./provider/model.js"
 import { Wait } from "./wait.js"
 
@@ -104,22 +108,43 @@ export const start = async (options: {
       return { environment, container, state, retired }
     }),
   )
-  const environments = () =>
-    JSON.stringify(
-      sandboxes.map((sandbox) => ({
-        id: sandbox.container.environmentId,
-        capacity: 100,
-        ...(sandbox.environment.capabilities && { capabilities: sandbox.environment.capabilities }),
-        sandboxes: [
-          {
-            id: "sandbox-a",
-            url: sandbox.state.proxy.url,
-            generation: sandbox.state.generation,
-            workspace: "/workspace",
-          },
-        ],
-      })),
+  const handsFile = path.join(os.tmpdir(), `${name}-hands.json`)
+  const writeHands = () =>
+    Bun.write(
+      handsFile,
+      JSON.stringify(
+        Object.fromEntries(
+          sandboxes.map((sandbox) => [
+            sandbox.container.environmentId,
+            { url: sandbox.state.proxy.url, workspace: "/workspace", generation: sandbox.state.generation },
+          ]),
+        ),
+      ),
     )
+  await writeHands()
+  const spaceId = Space.ID.create()
+  await databaseRuntime.runPromise(
+    Database.Service.use((service) =>
+      service.db
+        .insert(Database.Schema.space)
+        .values({ id: spaceId, organization_id: organizationId, name: "Real stack" })
+        .pipe(
+          Effect.andThen(
+            service.db.insert(Database.Schema.environment).values(
+              sandboxes.map((sandbox) => ({
+                id: sandbox.container.environmentId,
+                organization_id: organizationId,
+                space_id: spaceId,
+                name: sandbox.environment.label,
+                provider: ChaosHands.providerId(sandbox.environment.capabilities),
+                config: {},
+                sessions_per_hand: Environment.maximumSessionsPerHand,
+              })),
+            ),
+          ),
+        ),
+    ),
+  )
 
   const serverPort = await freePort()
   const renProxy = await FaultProxy.make(`http://127.0.0.1:${serverPort}`)
@@ -133,8 +158,8 @@ export const start = async (options: {
   }
   const server = { child: undefined as Bun.Subprocess | undefined, log: "" }
   const startServer = async () => {
-    const child = Bun.spawn(["bun", "run", "src/main.ts"], {
-      cwd: path.join(root, "server"),
+    const child = Bun.spawn(["bun", "run", path.join(import.meta.dir, "server-main.ts")], {
+      cwd: path.join(root, "e2e"),
       env: {
         ...process.env,
         ...keys,
@@ -149,7 +174,7 @@ export const start = async (options: {
         GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
         SIGNUP_MX_CHECK: "false",
         CELL_URL: cell.url,
-        ENVIRONMENTS: environments(),
+        [ChaosHands.fileVariable]: handsFile,
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -189,11 +214,16 @@ export const start = async (options: {
         Effect.provide(
           Layer.fresh(BrainHost.layer).pipe(
             Layer.provide(models),
-            Layer.provide(Environments.layer.pipe(Layer.provide(Layer.succeedContext(databaseContext)))),
+            Layer.provide(
+              Hands.layer.pipe(
+                Layer.provide(HandProvider.layer(ChaosHands.providers)),
+                Layer.provide(Layer.succeedContext(databaseContext)),
+              ),
+            ),
             Layer.provide(FetchHttpClient.layer),
             Layer.provide(
               ConfigProvider.layer(
-                ConfigProvider.fromUnknown({ ...keys, CELL_URL: cell.url, ENVIRONMENTS: environments() }),
+                ConfigProvider.fromUnknown({ ...keys, CELL_URL: cell.url, [ChaosHands.fileVariable]: handsFile }),
               ),
             ),
           ),
@@ -214,6 +244,7 @@ export const start = async (options: {
       entry.retired.push(entry.state.proxy)
       entry.state.proxy = await FaultProxy.make(entry.container.url())
       entry.state.generation += 1
+      await writeHands()
       await stopServer()
       await startServer()
     },
@@ -221,6 +252,7 @@ export const start = async (options: {
       await entry.container.replace()
       entry.state.proxy.target(entry.container.url())
       entry.state.generation += 1
+      await writeHands()
       await stopServer()
       await startServer()
     },

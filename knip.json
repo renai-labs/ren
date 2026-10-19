@@ -29,6 +29,7 @@
         "tests/**/*.spec.ts",
         "chaos/cases/*.test.ts",
         "chaos/lib/preload.ts",
+        "chaos/lib/server-main.ts",
         "script/**/*.ts",
         "playwright.config.ts"
       ],

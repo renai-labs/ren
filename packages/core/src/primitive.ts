@@ -12,6 +12,11 @@ export class Forbidden extends Schema.TaggedError<Forbidden>()("Primitive.Forbid
 
 export class Conflict extends Schema.TaggedError<Conflict>()("Primitive.Conflict", { message: Schema.String }) {}
 
+export class Invalid extends Schema.TaggedError<Invalid>()("Primitive.Invalid", {
+  message: Schema.String,
+  field: Schema.optional(Schema.String),
+}) {}
+
 type Input<Operation> = Operation extends { readonly input: Schema.Top } ? Operation["input"]["Type"] : never
 
 type Result<Operation> = Operation extends { readonly result: Schema.Top } ? Operation["result"]["Type"] : never
@@ -24,12 +29,12 @@ interface Methods<D extends Primitive.Definition> {
   readonly create: (
     actor: Actor.Info,
     input: Input<D["create"]>,
-  ) => Effect.Effect<Result<D["create"]>, NotFound | Forbidden | Conflict>
+  ) => Effect.Effect<Result<D["create"]>, NotFound | Forbidden | Conflict | Invalid>
   readonly update: (
     actor: Actor.Info,
     id: D["id"]["Type"],
     input: Input<D["update"]>,
-  ) => Effect.Effect<Result<D["update"]>, NotFound | Forbidden | Conflict>
+  ) => Effect.Effect<Result<D["update"]>, NotFound | Forbidden | Conflict | Invalid>
   readonly archive: (actor: Actor.Info, id: D["id"]["Type"]) => Effect.Effect<D["info"]["Type"], NotFound | Forbidden>
 }
 

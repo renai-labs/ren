@@ -6,6 +6,7 @@ const exceptions = new Map([
   ["health", "Server status for clients and load balancers."],
   ["me", "The signed-in user and their active organization."],
   ["invitation", "Invitation preview before the invitee signs in."],
+  ["handProvider", "The hand providers of the deployment and the config schema of each, for the environment form."],
 ])
 
 const operations = [

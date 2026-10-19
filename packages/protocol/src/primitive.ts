@@ -4,7 +4,7 @@ import { Primitive } from "@ren/schema/primitive"
 import { Context, Schema } from "effect"
 import type { NonEmptyReadonlyArray } from "effect/Array"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
-import { ConflictError, ForbiddenError, NotFoundError } from "./errors.js"
+import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "./errors.js"
 import { Exposure } from "./exposure.js"
 import { ActiveOrganization } from "./middleware/active-organization.js"
 import { Authentication } from "./middleware/authentication.js"
@@ -72,7 +72,7 @@ export const create = <
   return HttpApiEndpoint.post(identifier, `/${definition.plural}`, {
     payload: definition.create.input,
     success: definition.create.result,
-    error: [NotFoundError, ForbiddenError, ConflictError],
+    error: [NotFoundError, ForbiddenError, ConflictError, InvalidRequestError],
   }).annotateMerge(
     OpenApi.annotations({
       identifier,
@@ -96,7 +96,7 @@ export const update = <
     params: { id: definition.id },
     payload: definition.update.input,
     success: definition.update.result,
-    error: [NotFoundError, ForbiddenError, ConflictError],
+    error: [NotFoundError, ForbiddenError, ConflictError, InvalidRequestError],
   }).annotateMerge(
     OpenApi.annotations({
       identifier,

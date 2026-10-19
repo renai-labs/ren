@@ -7,15 +7,19 @@ import { Testing } from "@ren/db/testing"
 import { Sandbox } from "@ren/executor/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
+import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
+import { eq } from "drizzle-orm"
 import { Effect, Layer, ManagedRuntime, Schema } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { BrainHost } from "../src/brain-host.js"
-import { Environments } from "../src/environments.js"
+import { HandProvider } from "../src/hand-provider.js"
+import { Hands } from "../src/hands.js"
 import { Models } from "../src/models.js"
+import { TestProvider } from "./lib/hand-provider.js"
 import { HostApiTest } from "./lib/host-api.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
@@ -73,31 +77,55 @@ const core = {
 }
 
 interface CoreConfig {
-  readonly sandboxes: ReadonlyArray<{
-    readonly id: string
-    readonly url: string
-    readonly generation: number
-    readonly workspace: string
-  }>
+  readonly target: Sandbox
   readonly lifetime?: string
   readonly keys?: ReadonlyArray<Signature.PrivateKey>
   readonly present?: boolean
 }
 
-const environmentsConfig = (config: CoreConfig) => ({
-  ENVIRONMENTS: JSON.stringify(
-    config.present === false ? [] : [{ id: environmentId, capacity: 100, sandboxes: config.sandboxes }],
-  ),
-  ENVIRONMENT_KEYS: JSON.stringify((config.keys ?? [Sandbox.keys.privateKey]).map(encodedKey)),
-  ...(config.lifetime && { ENVIRONMENT_TOKEN_LIFETIME: config.lifetime }),
-})
+const placed = new Map<Hand.ID, Sandbox>()
+
+const disposed = new Set<string>()
+
+const dispose = async (each: Sandbox) => {
+  disposed.add(each.url)
+  await each.dispose()
+}
 
 const brainHost = async (cellUrl: string, config: CoreConfig) => {
   const context = await database.runPromise(Effect.context<Database.Service>())
+  await database.runPromise(
+    Effect.gen(function* () {
+      const db = yield* Database.Service
+      yield* db.db
+        .update(Database.Schema.environment)
+        .set({ archived_at: config.present === false ? new Date() : null })
+        .where(eq(Database.Schema.environment.id, environmentId))
+    }),
+  )
+  const probe = await Effect.runPromise(
+    TestProvider.make({
+      endpoint: (handId) => {
+        const on = placed.get(handId) ?? config.target
+        placed.set(handId, on)
+        return disposed.has(on.url)
+          ? Effect.fail(new HandProvider.Gone({ message: `the sandbox of hand ${handId} is gone` }))
+          : Effect.succeed({ url: on.url, workspace: on.directory })
+      },
+    }),
+  )
   return Host.layerWith(
-    { CELL_URL: cellUrl, CELL_KEYS: TestToken.vars.CELL_KEYS, ...environmentsConfig(config) },
+    {
+      CELL_URL: cellUrl,
+      CELL_KEYS: TestToken.vars.CELL_KEYS,
+      ENVIRONMENT_KEYS: JSON.stringify((config.keys ?? [Sandbox.keys.privateKey]).map(encodedKey)),
+      ...(config.lifetime && { ENVIRONMENT_TOKEN_LIFETIME: config.lifetime }),
+    },
     models,
-    Environments.layer.pipe(Layer.provide(Layer.succeedContext(context))),
+    Hands.layer.pipe(
+      Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
+      Layer.provide(Layer.succeedContext(context)),
+    ),
   )
 }
 
@@ -185,10 +213,8 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
   beforeAll(async () => {
     first = await sandbox("sandbox-a")
     organizationId = await database.runPromise(Seed.organization())
-    await startCore({
-      sandboxes: [{ id: first.id, url: first.url, generation: 1, workspace: first.directory }],
-      lifetime: "20 seconds",
-    })
+    await database.runPromise(Seed.environment(organizationId, { id: environmentId, sessionsPerHand: 1 }))
+    await startCore({ target: first, lifetime: "20 seconds" })
     cell = await Wrangler.make({ ...Shared.vars(stub.url), REN_URL: `http://127.0.0.1:${port}` })
   }, 240_000)
 
@@ -254,26 +280,20 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     expect(core.issued.length - before).toBeGreaterThanOrEqual(1)
   })
 
-  test("a sandbox that Ren replaces is reached after one failed call, and an old one is not used again", async () => {
+  test("a hand that is gone is replaced after one failed call, and the old sandbox is not used again", async () => {
     const original = await sandbox("sandbox-b")
     const replacement = await sandbox("sandbox-b")
     const config = current
-    await restartCore({
-      ...config,
-      sandboxes: [{ id: "sandbox-b", url: original.url, generation: 1, workspace: original.directory }],
-    })
+    await restartCore({ ...config, target: original })
     const sessionId = Session.ID.create()
     await start(sessionId)
     expect(await turn(sessionId, "pwd")).toContain(original.directory)
-    await original.dispose()
-    await restartCore({
-      ...config,
-      sandboxes: [{ id: "sandbox-b", url: replacement.url, generation: 2, workspace: replacement.directory }],
-    })
+    await dispose(original)
+    await restartCore({ ...config, target: replacement })
     expect(await turn(sessionId, "pwd")).toContain("does not answer")
     expect(await turn(sessionId, "pwd")).toContain(join(replacement.directory, sessionId))
     await restartCore(config)
-    await replacement.dispose()
+    await dispose(replacement)
   })
 
   test("Ren down during a turn: tools work until the token expires, then Ren does not answer, then it works again", async () => {
@@ -291,7 +311,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     expect(await turn(sessionId, "echo back")).toBe(JSON.stringify("back\n"))
   })
 
-  test("an environment removed from Ren's configuration gives no access to the next tool call, and the chat goes on", async () => {
+  test("an archived environment gives no access to the next tool call, and the chat goes on", async () => {
     const sessionId = Session.ID.create()
     await start(sessionId)
     expect(await turn(sessionId, "echo before")).toBe(JSON.stringify("before\n"))
@@ -311,22 +331,16 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     const old = await sandbox("sandbox-old")
     const config = current
     const signedByNewer = { lifetime: "20 seconds", keys: [newer.privateKey, Sandbox.keys.privateKey] }
-    await restartCore({
-      ...signedByNewer,
-      sandboxes: [{ id: knowing.id, url: knowing.url, generation: 1, workspace: knowing.directory }],
-    })
+    await restartCore({ ...signedByNewer, target: knowing })
     const onKnowing = Session.ID.create()
     await start(onKnowing)
     expect(await turn(onKnowing, "echo knows")).toBe(JSON.stringify("knows\n"))
-    await restartCore({
-      ...signedByNewer,
-      sandboxes: [{ id: old.id, url: old.url, generation: 1, workspace: old.directory }],
-    })
+    await restartCore({ ...signedByNewer, target: old })
     const onOld = Session.ID.create()
     await start(onOld)
     expect(await turn(onOld, "echo old")).toContain("refused the access token")
     await restartCore(config)
-    await Promise.all([knowing.dispose(), old.dispose()])
+    await Promise.all([dispose(knowing), dispose(old)])
   })
 
   test("no environment token issued in this suite is in the cell's logs or a model request", async () => {

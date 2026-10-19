@@ -3,6 +3,7 @@ export * as Routes from "./routes.js"
 import { HostApi } from "@ren/brain-api/host-api"
 import { Access } from "@ren/core/access"
 import { BrainHost } from "@ren/core/brain-host"
+import { Environments } from "@ren/core/environments"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Space } from "@ren/core/space"
@@ -15,7 +16,8 @@ import { Auth } from "./auth.js"
 import { HealthHandler } from "./handlers/health.js"
 import { InvitationHandler } from "./handlers/invitation.js"
 import { MeHandler } from "./handlers/me.js"
-import { EnvironmentsHandler } from "./handlers/environments.js"
+import { EnvironmentHandler, HandProviderHandler } from "./handlers/environment.js"
+import { HostEnvironmentsHandler } from "./handlers/host-environments.js"
 import { HostHandler } from "./handlers/host.js"
 import { ModelsHandler } from "./handlers/models.js"
 import { SpaceHandler } from "./handlers/space.js"
@@ -45,12 +47,20 @@ const Cors = HttpRouter.middleware(
 
 export const layer = Layer.mergeAll(
   HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
-    Layer.provide([HealthHandler, MeHandler, InvitationHandler, SpaceHandler, SpaceMemberHandler]),
+    Layer.provide([
+      HealthHandler,
+      MeHandler,
+      InvitationHandler,
+      SpaceHandler,
+      SpaceMemberHandler,
+      EnvironmentHandler,
+      HandProviderHandler,
+    ]),
     Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
-    Layer.provide([Health.layer, Invitation.layer, Space.layer, SpaceMember.layer]),
+    Layer.provide([Health.layer, Invitation.layer, Space.layer, SpaceMember.layer, Environments.layer]),
   ),
   HttpApiBuilder.layer(HostApi).pipe(
-    Layer.provide([ModelsHandler, EnvironmentsHandler, HostHandler]),
+    Layer.provide([ModelsHandler, HostEnvironmentsHandler, HostHandler]),
     Layer.provide(BrainHost.hostAuthentication),
   ),
   AuthRoute,
