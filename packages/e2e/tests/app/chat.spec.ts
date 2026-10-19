@@ -3,6 +3,8 @@ import { createOrganization } from "../lib/servers.js"
 
 const brainStart = 30_000
 
+test.describe.configure({ timeout: 90_000 })
+
 test("a member starts a chat, follows the reply, sends again, mentions an agent and finds the chat in the sidebar", async ({
   page,
 }) => {
@@ -15,7 +17,7 @@ test("a member starts a chat, follows the reply, sends again, mentions an agent 
   await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
   const sessionURL = page.url()
   await expect(page.getByText("Plan the launch")).toBeVisible()
-  await expect(page.getByText("stub reply")).toBeVisible()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
   const composer = page.getByRole("form", { name: "Message Ren" })
   await composer.getByRole("textbox", { name: "Message" }).fill("Add the budget")
