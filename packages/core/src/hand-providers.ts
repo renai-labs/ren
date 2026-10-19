@@ -1,17 +1,18 @@
-export * as HandProvider from "./hand-provider.js"
+export * as HandProviders from "./hand-providers.js"
 
 import type { Signature } from "@ren/hand-api/signature"
 import type { Environment } from "@ren/schema/environment"
 import type { Hand } from "@ren/schema/hand"
+import type { HandProvider } from "@ren/schema/hand-provider"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 
-class InvalidConfig extends Schema.TaggedError<InvalidConfig>()("HandProvider.InvalidConfig", {
+class InvalidConfig extends Schema.TaggedError<InvalidConfig>()("HandProviders.InvalidConfig", {
   message: Schema.String,
 }) {}
 
-export class Gone extends Schema.TaggedError<Gone>()("HandProvider.Gone", { message: Schema.String }) {}
+export class Gone extends Schema.TaggedError<Gone>()("HandProviders.Gone", { message: Schema.String }) {}
 
-export class Failed extends Schema.TaggedError<Failed>()("HandProvider.Failed", { message: Schema.String }) {}
+export class Failed extends Schema.TaggedError<Failed>()("HandProviders.Failed", { message: Schema.String }) {}
 
 interface ProvisionInput<Config> {
   readonly handId: Hand.ID
@@ -21,11 +22,11 @@ interface ProvisionInput<Config> {
 }
 
 export interface Endpoint {
-  readonly url: string
+  readonly url: URL
 }
 
 interface Definition<Config, Binding> {
-  readonly id: Hand.ProviderID
+  readonly id: HandProvider.ID
   readonly title: string
   readonly description: string
   readonly config: Schema.Codec<Config, unknown>
@@ -36,7 +37,7 @@ interface Definition<Config, Binding> {
 }
 
 export interface Provider {
-  readonly info: Hand.ProviderInfo
+  readonly info: HandProvider.Info
   readonly check: (config: unknown) => Effect.Effect<Schema.Json, InvalidConfig>
   readonly provision: (input: ProvisionInput<Schema.Json>) => Effect.Effect<Schema.Json, Failed>
   readonly connect: (binding: Schema.Json) => Effect.Effect<Endpoint, Gone | Failed>
@@ -74,8 +75,8 @@ export const make = <Config, Binding>(definition: Definition<Config, Binding>): 
 
 export class Registry extends Context.Service<
   Registry,
-  { readonly providers: ReadonlyArray<Provider>; readonly get: (id: Hand.ProviderID) => Option.Option<Provider> }
->()("@ren/core/HandProvider/Registry") {}
+  { readonly providers: ReadonlyArray<Provider>; readonly get: (id: HandProvider.ID) => Option.Option<Provider> }
+>()("@ren/core/HandProviders/Registry") {}
 
 export const layer = <E, R>(providers: ReadonlyArray<Effect.Effect<Provider, E, R>>) =>
   Layer.effect(

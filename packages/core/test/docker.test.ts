@@ -8,7 +8,7 @@ import { Environment } from "@ren/schema/environment"
 import { Hand } from "@ren/schema/hand"
 import { Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
-import { Docker } from "../src/hand-provider/docker.js"
+import { Docker } from "../src/hand-providers/docker.js"
 import { testEffect } from "./lib/effect.js"
 
 const hasDocker = Bun.spawnSync(["docker", "info"], { stdout: "ignore", stderr: "ignore" }).exitCode === 0
@@ -45,7 +45,7 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
         expect(hello.environmentId).toBe(input.environmentId)
         yield* provider.destroy(bindings[0])
         yield* provider.destroy(bindings[0])
-        expect((yield* provider.connect(bindings[0]).pipe(Effect.flip))._tag).toBe("HandProvider.Gone")
+        expect((yield* provider.connect(bindings[0]).pipe(Effect.flip))._tag).toBe("HandProviders.Gone")
       }),
     180_000,
   )
@@ -53,7 +53,7 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
   it.live("refuses a config without an image, and says so for the form", () =>
     Effect.gen(function* () {
       const provider = yield* Docker.provider
-      expect((yield* provider.check({ cpus: 1 }).pipe(Effect.flip))._tag).toBe("HandProvider.InvalidConfig")
+      expect((yield* provider.check({ cpus: 1 }).pipe(Effect.flip))._tag).toBe("HandProviders.InvalidConfig")
       expect(provider.info.configSchema).toMatchObject({
         schema: { required: ["image"], properties: { image: { title: "Image" } } },
       })

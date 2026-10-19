@@ -28,10 +28,10 @@ const environmentInstruction = "ren.environment"
 const notSupported = (sessionId: string) =>
   new BrainRejectedError({ message: `Session ${sessionId} cannot change its environment: not supported yet` })
 
-const environmentInstructions = (host: Host.Instance, folder: Option.Option<string>) => {
-  if (Option.isSome(folder))
+const environmentInstructions = (host: Host.Instance, handDirectory: Option.Option<string>) => {
+  if (Option.isSome(handDirectory))
     return {
-      [environmentInstruction]: `Your file and shell tools run on a sandbox, in ${folder.value}. You have full access to the sandbox.`,
+      [environmentInstruction]: `Your file and shell tools run on a separate machine, in ${handDirectory.value}. You have full access to that machine.`,
     }
   if (!host.hasHandConnections) return {}
   return {
@@ -40,9 +40,9 @@ const environmentInstructions = (host: Host.Instance, folder: Option.Option<stri
   }
 }
 
-const deniedActions = (host: Host.Instance, input: StartBody, folder: Option.Option<string>) => [
+const deniedActions = (host: Host.Instance, input: StartBody, handDirectory: Option.Option<string>) => [
   ...(input.interactive ? [] : ["question"]),
-  ...(host.hasHandConnections && Option.isNone(folder) ? environmentActions : []),
+  ...(host.hasHandConnections && Option.isNone(handDirectory) ? environmentActions : []),
 ]
 
 const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
@@ -74,10 +74,10 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
   host: Host.Instance,
   input: StartBody,
   directory: AbsolutePath,
-  folder: Option.Option<string>,
+  handDirectory: Option.Option<string>,
   session: Pick<SessionCreateInput, "title" | "agent" | "model" | "permissions"> & { readonly id: Session.ID },
 ) {
-  if (Option.isNone(folder))
+  if (Option.isNone(handDirectory))
     return yield* client.session.create({ ...session, location: { directory } }).pipe(Effect.orDie)
   const workspaceID = yield* host.workspaces
     .create({
@@ -92,7 +92,7 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
       ...(session.agent && { agent: session.agent }),
       ...(session.model && { model: session.model }),
       ...(session.permissions && { permissions: session.permissions }),
-      location: Location.Ref.make({ directory: AbsolutePath.make(folder.value), workspaceID }),
+      location: Location.Ref.make({ directory: AbsolutePath.make(handDirectory.value), workspaceID }),
     })
     .pipe(Effect.orDie)
 })
@@ -127,14 +127,14 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const sessionID = Session.ID.make(input.sessionId)
   const session = yield* findSession(client, sessionID)
-  const folder = yield* checkEnvironment(host, input, session)
-  const permissions = deniedActions(host, input, folder).map((action) => ({
+  const handDirectory = yield* checkEnvironment(host, input, session)
+  const permissions = deniedActions(host, input, handDirectory).map((action) => ({
     action,
     resource: "*",
     effect: "deny" as const,
   }))
   if (Option.isNone(session))
-    yield* create(client, host, input, directory, folder, {
+    yield* create(client, host, input, directory, handDirectory, {
       id: sessionID,
       title: input.title,
       agent,
@@ -149,7 +149,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    { ...input.instructions, ...environmentInstructions(host, folder) },
+    { ...input.instructions, ...environmentInstructions(host, handDirectory) },
   )
   yield* Effect.forEach(
     changes.put,

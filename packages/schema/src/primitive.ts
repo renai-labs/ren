@@ -4,6 +4,14 @@ import { Schema } from "effect"
 import { Pagination } from "./pagination.js"
 import { WriteResult } from "./write-result.js"
 
+export const maximumNameLength = 256
+
+export const Name = Schema.String.check(
+  Schema.isTrimmed({ message: "Remove spaces at the start and end." }),
+  Schema.isNonEmpty({ message: "Name is required." }),
+  Schema.isMaxLength(maximumNameLength, { message: `Use ${maximumNameLength} characters or fewer.` }),
+)
+
 export interface List {
   readonly input: Schema.Top
   readonly page: Schema.Top

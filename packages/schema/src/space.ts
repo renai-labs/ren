@@ -15,14 +15,6 @@ export type MembershipID = typeof MembershipID.Type
 export const AssignmentID = Identifier.make("spp", "Space.AssignmentID")
 export type AssignmentID = typeof AssignmentID.Type
 
-export const maximumNameLength = 256
-
-export const Name = Schema.String.check(
-  Schema.isTrimmed({ message: "Remove spaces at the start and end." }),
-  Schema.isNonEmpty({ message: "Name is required." }),
-  Schema.isMaxLength(maximumNameLength, { message: `Use ${maximumNameLength} characters or fewer.` }),
-)
-
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -50,13 +42,13 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Space.Page" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  name: Name,
+  name: Primitive.Name,
   description: Schema.optional(Schema.String),
 }).annotate({ identifier: "Space.CreateInput" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
-  name: Schema.optional(Name),
+  name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
 }).annotate({ identifier: "Space.UpdateInput" })
 

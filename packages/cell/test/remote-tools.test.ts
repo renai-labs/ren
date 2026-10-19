@@ -309,7 +309,7 @@ test.each<[string, boolean, string | undefined]>([
         expect(call.tools).toContain("webfetch")
         expect(call.tools).not.toContain("question")
         expect(JSON.stringify(call.body.messages)).toContain(
-          onEnvironment ? "Your file and shell tools run on a sandbox" : "This session has no environment",
+          onEnvironment ? "Your file and shell tools run on a separate machine" : "This session has no environment",
         )
       }),
     ),
@@ -386,7 +386,7 @@ it.live(
         turn: (script) =>
           sendTo(opened.harness, fileSession, script).pipe(Effect.andThen(Effect.promise(() => script.called(2)))),
       })
-      expect([fileTurn.ran, fileTurn.result]).toEqual([false, expect.stringContaining("Could not make the folder")])
+      expect([fileTurn.ran, fileTurn.result]).toEqual([false, expect.stringContaining("Could not make the directory")])
       const missing = Session.ID.create()
       yield* restart(opened.harness, missing, folder(missing))
       const missingTurn = yield* refusedTurn({
@@ -394,7 +394,7 @@ it.live(
         turn: (script) =>
           sendTo(opened.harness, missing, script).pipe(Effect.andThen(Effect.promise(() => script.called(2)))),
       })
-      expect([missingTurn.ran, missingTurn.result]).toEqual([false, expect.stringContaining("No access to a sandbox")])
+      expect([missingTurn.ran, missingTurn.result]).toEqual([false, expect.stringContaining("No access to a hand")])
     }),
 )
 
@@ -508,7 +508,7 @@ it.live("V2 the execute.after hook runs for a subagent's tool call: its failed s
         },
       }),
     )
-    expect(lastToolResult(yield* Effect.promise(() => child.called(2)))).toContain("No access to a sandbox")
+    expect(lastToolResult(yield* Effect.promise(() => child.called(2)))).toContain("No access to a hand")
   }),
 )
 
@@ -552,21 +552,19 @@ it.live(
       const finished = lastToolResult(yield* Effect.promise(() => running.called(2)))
       const refused = yield* refusedTurn(session).pipe(
         Effect.repeat({
-          until: (attempt) => attempt.result.includes("No access to a sandbox"),
+          until: (attempt) => attempt.result.includes("No access to a hand"),
           schedule: Schedule.spaced(500),
         }),
         Effect.timeout("15 seconds"),
       )
       yield* opened.memory.set(session.sessionId, access)
       const back = lastToolResult(yield* session.turn(stub.script(shell("echo back"))))
-      expect({ finished, ran: refused.ran, noAccess: refused.result.includes("No access to a sandbox"), back }).toEqual(
-        {
-          finished: JSON.stringify("finished\n"),
-          ran: false,
-          noAccess: true,
-          back: JSON.stringify("back\n"),
-        },
-      )
+      expect({ finished, ran: refused.ran, noAccess: refused.result.includes("No access to a hand"), back }).toEqual({
+        finished: JSON.stringify("finished\n"),
+        ran: false,
+        noAccess: true,
+        back: JSON.stringify("back\n"),
+      })
     }),
 )
 

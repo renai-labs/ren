@@ -1,6 +1,6 @@
 # @ren/hand-api
 
-The Hand API: the internal contract between a brain and the executor on its hand (a sandbox, a laptop, a phone). A brain (`packages/brain`) calls it; an executor (`packages/executor`) serves it; Ren (`packages/core`) signs the token that lets one brain use one environment's executor.
+The Hand API: the internal contract between a brain and the executor on its hand (a container, a laptop, a phone). A brain (`packages/brain`) calls it; an executor (`packages/executor`) serves it; Ren (`packages/core`) signs the token that lets one brain use one environment's executor.
 
 ## What belongs here
 

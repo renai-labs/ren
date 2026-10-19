@@ -84,9 +84,9 @@ it.live("a file or shell call with no access, or on a sandbox that does not answ
     const sessionId = Session.ID.create()
     const none = yield* sessionFor(new Map(), sessionId)
     const read = yield* none.overrides.read("/workspace/a.ts").pipe(Effect.flip)
-    expect(read instanceof EnvironmentFiles.Failed && String(read.cause)).toContain("No access to a sandbox")
+    expect(read instanceof EnvironmentFiles.Failed && String(read.cause)).toContain("No access to a hand")
     const spawned = yield* none.spawner.spawn(ChildProcess.make("true", [])).pipe(Effect.flip)
-    expect(spawned.message).toContain("No access to a sandbox")
+    expect(spawned.message).toContain("No access to a hand")
     const dead = yield* sessionFor(
       new Map([
         [

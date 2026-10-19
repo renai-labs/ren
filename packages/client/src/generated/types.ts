@@ -106,7 +106,7 @@ export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
 
 export type EnvironmentPage = { items: Array<EnvironmentInfo>; page: number; pageSize: number; total: number }
 
-export type HandProviders = Array<HandProviderInfo>
+export type HandProviderInfos = Array<HandProviderInfo>
 
 export type SpaceEnvironmentPage = { items: Array<SpaceEnvironmentInfo>; page: number; pageSize: number; total: number }
 
@@ -319,7 +319,7 @@ export type EnvironmentArchiveInput = { readonly id: { readonly id: string }["id
 
 export type EnvironmentArchiveOutput = EnvironmentInfo
 
-export type HandProviderListOutput = HandProviders
+export type HandProviderListOutput = HandProviderInfos
 
 export type SpaceEnvironmentListInput = {
   readonly spaceId: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["spaceId"]

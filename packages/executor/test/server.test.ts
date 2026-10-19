@@ -31,7 +31,7 @@ const token = Effect.fnUntraced(function* (
 })
 
 const connect = Effect.fnUntraced(function* (bearer: string) {
-  return yield* ExecutorClient.make({ url: yield* Sandbox.url, token: Effect.succeed(bearer) })
+  return yield* ExecutorClient.make({ url: new URL(yield* Sandbox.url), token: Effect.succeed(bearer) })
 })
 
 const client = Effect.fnUntraced(function* (claims: { readonly brain?: Brain.ID } = {}) {

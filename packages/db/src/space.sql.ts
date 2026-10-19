@@ -1,5 +1,6 @@
 import { Auth } from "@ren/schema/auth"
-import { Space } from "@ren/schema/space"
+import { Primitive } from "@ren/schema/primitive"
+import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
 import { check, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { organization, user } from "./auth.sql.js"
@@ -26,7 +27,7 @@ export const space = pgTable(
     index("space_organization_id_created_at_id_idx").on(table.organization_id, table.created_at, table.id),
     check(
       "space_name_length_check",
-      sql`char_length(${table.name}) between 1 and ${sql.raw(String(Space.maximumNameLength))}`,
+      sql`char_length(${table.name}) between 1 and ${sql.raw(String(Primitive.maximumNameLength))}`,
     ),
   ],
 )

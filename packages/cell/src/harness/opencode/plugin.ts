@@ -24,7 +24,7 @@ const never = Number.MAX_SAFE_INTEGER
 const environmentFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
   if (value instanceof HandConnections.Unavailable) return value
   if (ExecutorClient.isNoAnswer(value) && value instanceof Error)
-    return { message: `The sandbox does not answer: ${value.message}` }
+    return { message: `The hand does not answer: ${value.message}` }
   if (depth > 8 || !Predicate.isObject(value)) return undefined
   return ["cause", "error", "reason"]
     .map((key) => (Predicate.hasProperty(value, key) ? environmentFailure(value[key], depth + 1) : undefined))

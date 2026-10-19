@@ -1,4 +1,4 @@
-import { Hand } from "@ren/schema/hand"
+import { HandProvider } from "@ren/schema/hand-provider"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
@@ -7,7 +7,7 @@ import { Authentication } from "../middleware/authentication.js"
 export const HandProviderGroup = HttpApiGroup.make("handProvider")
   .add(
     HttpApiEndpoint.get("handProvider.list", "/hand-providers", {
-      success: Hand.Providers,
+      success: HandProvider.Infos,
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "handProvider.list",

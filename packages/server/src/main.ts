@@ -1,7 +1,7 @@
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
 import { BrainHost } from "@ren/core/brain-host"
-import { HandProvider } from "@ren/core/hand-provider"
-import { Docker } from "@ren/core/hand-provider/docker"
+import { HandProviders } from "@ren/core/hand-providers"
+import { Docker } from "@ren/core/hand-providers/docker"
 import { Hands } from "@ren/core/hands"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
@@ -16,7 +16,7 @@ import { Routes } from "./routes.js"
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([BrainHost.layer, Mailer.layer, SignupGuard.layer]),
   Layer.provide([Models.layerNone, Hands.layer]),
-  Layer.provide(HandProvider.layer([Docker.provider])),
+  Layer.provide(HandProviders.layer([Docker.provider])),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
   Layer.provide(BunHttpServer.layerConfig({ port: Config.Port("PORT").pipe(Config.withDefault(4000)) })),

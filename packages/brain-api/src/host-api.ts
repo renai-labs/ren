@@ -57,9 +57,9 @@ const EnvironmentsGroup = HttpApiGroup.make("environments")
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "environments.access",
-        summary: "Get access to a session’s sandbox",
+        summary: "Get access to a session’s hand",
         description:
-          "Name the sandbox and folder of the session named by a host token, with a fresh environment token. The request has no session field: the session comes only from the host token.",
+          "Name the hand and directory of the session named by a host token, with a fresh environment token. The request has no session field: the session comes only from the host token.",
       }),
     ),
   )
@@ -88,6 +88,6 @@ export const HostApi = HttpApi.make("host")
       title: "Ren Host API",
       version: "0.0.0",
       description:
-        "Internal API a session host calls with its host token: to refresh its brain’s models, to get access to its session’s sandbox and to refresh the host token.",
+        "Internal API a session host calls with its host token: to refresh its brain’s models, to get access to its session’s hand and to refresh the host token.",
     }),
   )

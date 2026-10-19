@@ -29,7 +29,7 @@ import {
 import { Base64Url } from "effect/encoding"
 import { TestClock } from "effect/testing"
 import { BrainHost } from "../src/brain-host.js"
-import { HandProvider } from "../src/hand-provider.js"
+import { HandProviders } from "../src/hand-providers.js"
 import { Hands } from "../src/hands.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
@@ -504,7 +504,7 @@ describe("BrainHost", () => {
           { CELL_URL: cellUrl, CELL_KEYS: settings.CELL_KEYS },
           fixed,
           Layer.fresh(Hands.layer).pipe(
-            Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
+            Layer.provide(HandProviders.layer([Effect.succeed(probe.provider)])),
             Layer.provide(
               ConfigProvider.layer(
                 ConfigProvider.fromUnknown({

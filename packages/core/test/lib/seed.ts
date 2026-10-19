@@ -3,7 +3,7 @@ export * as Seed from "./seed.js"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
-import { Hand } from "@ren/schema/hand"
+import { HandProvider } from "@ren/schema/hand-provider"
 import { Space } from "@ren/schema/space"
 import { SpaceEnvironment } from "@ren/schema/space-environment"
 import { and, eq } from "drizzle-orm"
@@ -89,7 +89,7 @@ export const environment = Effect.fnUntraced(function* (
     id,
     organization_id: organizationId,
     name: "Sandbox",
-    provider: Hand.ProviderID.make(options.provider ?? "test"),
+    provider: HandProvider.ID.make(options.provider ?? "test"),
     config: { label: "seeded" },
     sessions_per_hand: options.sessionsPerHand ?? 8,
   })

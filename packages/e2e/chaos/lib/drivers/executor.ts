@@ -17,7 +17,7 @@ export const connect = async (url: string, token: string) => {
   const runtime = ManagedRuntime.make(FetchHttpClient.layer)
   const scope = Effect.runSync(Scope.make())
   const client = await runtime.runPromise(
-    ExecutorClient.make({ url, token: Effect.succeed(token) }).pipe(Scope.provide(scope)),
+    ExecutorClient.make({ url: new URL(url), token: Effect.succeed(token) }).pipe(Scope.provide(scope)),
   )
   const run = <A, E>(effect: Effect.Effect<A, E>) => runtime.runPromiseExit(effect)
   const ok = async <A, E>(effect: Effect.Effect<A, E>) => {

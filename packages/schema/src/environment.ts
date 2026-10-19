@@ -2,11 +2,10 @@ export * as Environment from "./environment.js"
 
 import { Effect, Schema } from "effect"
 import { Auth } from "./auth.js"
-import { Hand } from "./hand.js"
+import { HandProvider } from "./hand-provider.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
-import { Space } from "./space.js"
 
 export const ID = Identifier.make("env", "Environment.ID")
 export type ID = typeof ID.Type
@@ -28,7 +27,7 @@ export const Info = Schema.Struct({
   organizationId: Auth.OrganizationID,
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
-  provider: Hand.ProviderID,
+  provider: HandProvider.ID,
   config: Schema.Json,
   sessionsPerHand: Schema.Int,
   createdAt: Schema.DateTimeUtc,
@@ -45,18 +44,20 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Environment.Page" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
-  name: Space.Name,
+  name: Primitive.Name,
   description: Schema.optional(Schema.String),
-  provider: Hand.ProviderID,
+  provider: HandProvider.ID,
   config: Schema.Json.annotate({ description: "The settings of the provider. Its schema is in the provider list." }),
   sessionsPerHand: SessionsPerHand.pipe(Schema.withDecodingDefaultKey(Effect.succeed(defaultSessionsPerHand))),
 }).annotate({ identifier: "Environment.CreateInput" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
-  name: Schema.optional(Space.Name),
+  name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
-  config: Schema.optional(Schema.Json),
+  config: Schema.optional(
+    Schema.Json.annotate({ description: "Applies to hands made after the change. Running hands keep their config." }),
+  ),
   sessionsPerHand: Schema.optional(SessionsPerHand),
 }).annotate({ identifier: "Environment.UpdateInput" })
 

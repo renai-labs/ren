@@ -1,15 +1,15 @@
 export * as ChaosHands from "./hands.js"
 
-import { HandProvider } from "@ren/core/hand-provider"
+import { HandProviders } from "@ren/core/hand-providers"
 import { Environment } from "@ren/schema/environment"
-import { Hand } from "@ren/schema/hand"
+import { HandProvider } from "@ren/schema/hand-provider"
 import { Config, Effect, Schema } from "effect"
 
 const File = Schema.Record(Schema.String, Schema.Struct({ url: Schema.String, generation: Schema.Int }))
 
 export const fileVariable = "CHAOS_HANDS_FILE"
 
-export const providerId = Hand.ProviderID.make("chaos")
+export const providerId = HandProvider.ID.make("chaos")
 
 const provider = Effect.gen(function* () {
   const path = yield* Config.String(fileVariable)
@@ -17,7 +17,7 @@ const provider = Effect.gen(function* () {
     Effect.flatMap(Schema.decodeUnknownEffect(File)),
     Effect.orDie,
   )
-  return HandProvider.make({
+  return HandProviders.make({
     id: providerId,
     title: "Chaos",
     description: "The chaos lane’s containers, behind its fault proxies.",
@@ -32,9 +32,9 @@ const provider = Effect.gen(function* () {
       Effect.flatMap(read, (file) => {
         const entry = file[binding.environmentId]
         return entry && entry.generation === binding.generation
-          ? Effect.succeed({ url: entry.url })
+          ? Effect.succeed({ url: new URL(entry.url) })
           : Effect.fail(
-              new HandProvider.Gone({ message: `The chaos container of ${binding.environmentId} was replaced` }),
+              new HandProviders.Gone({ message: `The chaos container of ${binding.environmentId} was replaced` }),
             )
       }),
     destroy: () => Effect.void,

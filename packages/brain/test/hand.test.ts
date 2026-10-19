@@ -236,7 +236,7 @@ const replaceable = Effect.gen(function* () {
   return {
     hand: Hand.session(environments, sessionId, killed),
     replace: Context.get(context, TestAccess.Memory)
-      .set(sessionId, { ...access, url: next, generation: 2 })
+      .set(sessionId, { ...access, url: new URL(next), generation: 2 })
       .pipe(
         Effect.andThen(
           Effect.scoped(environments.connect(sessionId)).pipe(

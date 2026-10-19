@@ -14,7 +14,7 @@ export const StartBody = Session.StartInput.mapFields((fields) => ({
   ...Struct.omit(fields, ["environmentId"]),
   directory: Schema.optionalKey(
     Schema.String.check(Schema.isStartingWith("/")).annotate({
-      description: "The session’s folder on its hand. Only a session with an environment has one.",
+      description: "The session’s directory on its hand. Only a session with an environment has one.",
     }),
   ),
 })).annotate({ identifier: "Brain.StartBody" })
