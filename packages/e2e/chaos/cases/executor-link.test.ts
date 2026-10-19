@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import type { ProcessID } from "@ren/brain-api/executor-api"
+import type { ProcessID } from "@ren/hand-api/executor-api"
 import { Brain } from "@ren/schema/brain"
 import { Effect, Exit, Stream } from "effect"
 import path from "node:path"

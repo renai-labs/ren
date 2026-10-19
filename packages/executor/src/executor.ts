@@ -17,8 +17,8 @@ import type {
   SpawnResult,
   StdinFullError,
   WrongKindError,
-} from "@ren/brain-api/executor-api"
-import type { Signal } from "@ren/brain-api/signal"
+} from "@ren/hand-api/executor-api"
+import type { Signal } from "@ren/hand-api/signal"
 import type { Brain } from "@ren/schema/brain"
 import { Context, type Effect, type Stream } from "effect"
 

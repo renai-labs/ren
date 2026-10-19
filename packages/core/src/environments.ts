@@ -1,7 +1,7 @@
 export * as Environments from "./environments.js"
 
-import { EnvironmentToken } from "@ren/brain-api/environment-token"
-import { Signature } from "@ren/brain-api/signature"
+import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { Signature } from "@ren/hand-api/signature"
 import { Database } from "@ren/db/database"
 import { Brain } from "@ren/schema/brain"
 import type { Auth } from "@ren/schema/auth"

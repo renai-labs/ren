@@ -1,9 +1,9 @@
 export * as Server from "./server.js"
 
-import { EnvironmentToken } from "@ren/brain-api/environment-token"
-import { Authentication, Caller, ExecutorApi, UnauthorizedError } from "@ren/brain-api/executor-api"
-import { ExecutorClient } from "@ren/brain-api/executor-client"
-import { Signature } from "@ren/brain-api/signature"
+import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { Authentication, Caller, ExecutorApi, UnauthorizedError } from "@ren/hand-api/executor-api"
+import { ExecutorClient } from "@ren/hand-api/executor-client"
+import { Signature } from "@ren/hand-api/signature"
 import { Config, Effect, Layer, Option, Schema, Stream } from "effect"
 import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { RpcSerialization, RpcServer } from "effect/rpc"

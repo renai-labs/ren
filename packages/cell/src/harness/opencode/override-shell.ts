@@ -1,4 +1,4 @@
-export * as RenShell from "./ren-shell.js"
+export * as OverrideShell from "./override-shell.js"
 
 import { Config } from "@opencode/core/config"
 import { Location } from "@opencode/core/location"

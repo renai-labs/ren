@@ -3,7 +3,7 @@ export * as OpenCodeHarness from "./harness.js"
 import { AbsolutePath, Agent, Model, OpenCode, Provider, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
-import { Environments } from "@ren/brain/environments"
+import { Hands } from "@ren/brain/hands"
 import type { SessionCreateInput, SessionListInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
 import type { Models } from "@ren/schema/models"
@@ -19,7 +19,7 @@ import { Credentials } from "./credentials.js"
 import { Host } from "./host.js"
 import { InstructionEntries } from "./instruction-entries.js"
 import { ModelCredentials } from "./model-credentials.js"
-import { RenWorkspaceDriver } from "./ren-workspace-driver.js"
+import { RenWorkspaceDriver } from "./workspace-driver.js"
 
 const toolsByCapability: Readonly<Record<Environment.Capability, ReadonlyArray<string>>> = {
   files: ["read", "edit", "glob", "grep"],
@@ -53,7 +53,7 @@ const environmentInstructions = (host: Host.Instance, sessionId: StartInput["ses
           .map((capability) => missingNotes[capability]),
       ].join(" "),
     }
-  if (!host.hasEnvironments) return {}
+  if (!host.hasHands) return {}
   return {
     [environmentInstruction]:
       "This session has no environment, so it has no file or shell tools. The other tools work as usual.",
@@ -62,7 +62,7 @@ const environmentInstructions = (host: Host.Instance, sessionId: StartInput["ses
 
 const deniedActions = (host: Host.Instance, input: StartInput, placement: Placement) => [
   ...(input.interactive ? [] : ["question"]),
-  ...(host.hasEnvironments && !placement.isOnEnvironment ? environmentActions : []),
+  ...(host.hasHands && !placement.isOnEnvironment ? environmentActions : []),
   ...(placement.isOnEnvironment
     ? Environment.capabilities
         .filter((capability) => !placement.capabilities.includes(capability))
@@ -143,7 +143,7 @@ const checkEnvironment = Effect.fn("OpenCodeHarness.checkEnvironment")(function*
     return isOnEnvironment
   }
   if (!requested) return false
-  if (!host.hasEnvironments) return yield* new BrainRejectedError({ message: "This brain cannot use environments" })
+  if (!host.hasHands) return yield* new BrainRejectedError({ message: "This brain cannot use environments" })
   const folder = Environment.sessionDirectory(input.sessionId)
   if (requested.directory !== folder)
     return yield* new BrainRejectedError({
@@ -245,9 +245,9 @@ const open = Effect.fn("OpenCodeHarness.open")(function* (
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  environments: Option.Option<Environments.Interface>,
+  hands: Option.Option<Hands.Interface>,
 ) {
-  return yield* make(yield* Host.open(storage, config, endpoints, refreshKey, environments), endpoints)
+  return yield* make(yield* Host.open(storage, config, endpoints, refreshKey, hands), endpoints)
 })
 
 export const layer = (storage: DurableObjectStorage) =>
@@ -256,11 +256,11 @@ export const layer = (storage: DurableObjectStorage) =>
       const cell = yield* Cell.Info
       const store = yield* ModelStore.Service
       const refreshKey = yield* ModelRefresh.Service
-      const environments = yield* Effect.serviceOption(Environments.Service)
+      const hands = yield* Effect.serviceOption(Hands.Service)
       return Harness.layer(
         store.read.pipe(
           Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
-          Effect.flatMap((endpoints) => open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey, environments)),
+          Effect.flatMap((endpoints) => open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey, hands)),
         ),
       )
     }),

@@ -1,9 +1,9 @@
-export * as Sandbox from "./sandbox.js"
+export * as Probe from "./probe.js"
 
-import type { SpawnResult } from "@ren/brain-api/executor-api"
+import type { SpawnResult } from "@ren/hand-api/executor-api"
 import { Executor } from "@ren/executor/executor"
-import { NodeCompatible } from "@ren/executor/node-compatible"
-import { Machine } from "@ren/executor/testing"
+import { Machine } from "@ren/executor/machine"
+import { Sandbox } from "@ren/executor/testing"
 import { Clock, Duration, Effect, Layer, Ref, Stream } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientError } from "effect/http"
 import { TestClock } from "effect/testing"
@@ -13,10 +13,10 @@ export interface Probe {
   readonly pings: Ref.Ref<number>
   readonly spawns: Ref.Ref<number>
   readonly outputsOpen: Ref.Ref<number>
-  readonly layer: NonNullable<Parameters<typeof Machine.layer>[0]["executor"]>
+  readonly layer: NonNullable<Parameters<typeof Sandbox.layer>[0]["executor"]>
 }
 
-export const probe = (options: { readonly afterSpawn?: (result: SpawnResult) => Effect.Effect<void> } = {}) =>
+export const make = (options: { readonly afterSpawn?: (result: SpawnResult) => Effect.Effect<void> } = {}) =>
   Effect.gen(function* () {
     const heartbeats = yield* Ref.make(0)
     const pings = yield* Ref.make(0)
@@ -48,13 +48,13 @@ export const probe = (options: { readonly afterSpawn?: (result: SpawnResult) => 
             ),
         }),
       ),
-    ).pipe(Layer.provide(NodeCompatible.layer))
+    ).pipe(Layer.provide(Machine.layer))
     return { heartbeats, pings, spawns, outputsOpen, layer } satisfies Probe
   })
 
-export const start = (options: Parameters<typeof Machine.layer>[0]) =>
-  Layer.build(Layer.fresh(Machine.layer(options))).pipe(
-    Effect.flatMap((context) => Effect.provide(Machine.url, context)),
+export const start = (options: Parameters<typeof Sandbox.layer>[0]) =>
+  Layer.build(Layer.fresh(Sandbox.layer(options))).pipe(
+    Effect.flatMap((context) => Effect.provide(Sandbox.url, context)),
   )
 
 const letSocketsRun = Effect.promise(() => Bun.sleep(2))

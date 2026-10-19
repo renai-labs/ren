@@ -2,8 +2,8 @@ import { expect } from "bun:test"
 import { TestAccess } from "@ren/brain/testing"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
-import { Environments } from "@ren/brain/environments"
-import { Machine, testEffect } from "@ren/executor/testing"
+import { Hands } from "@ren/brain/hands"
+import { Sandbox, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -13,27 +13,27 @@ import { ChildProcess } from "effect/process"
 import { mkdtemp, realpath, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { maxFileBytes } from "@ren/brain-api/executor-api"
-import { RenWorkspaceDriver } from "../src/harness/opencode/ren-workspace-driver.js"
+import { maxFileBytes } from "@ren/hand-api/executor-api"
+import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 
 const environmentId = Environment.ID.create()
-const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-workspace-driver-")))
-const it = testEffect(Machine.layer({ environmentId, workspace }))
+const workspace = await realpath(await mkdtemp(join(tmpdir(), "workspace-driver-")))
+const it = testEffect(Sandbox.layer({ environmentId, workspace }))
 
 const sessionFor = Effect.fnUntraced(function* (
   accesses: ReadonlyMap<Session.ID, Environment.Access>,
   sessionId: Session.ID,
 ) {
   const environments = yield* Layer.build(
-    Environments.layer.pipe(Layer.provide(TestAccess.fixed(accesses)), Layer.provide(FetchHttpClient.layer)),
-  ).pipe(Effect.map((context) => Context.get(context, Environments.Service)))
+    Hands.layer.pipe(Layer.provide(TestAccess.fixed(accesses)), Layer.provide(FetchHttpClient.layer)),
+  ).pipe(Effect.map((context) => Context.get(context, Hands.Service)))
   return RenWorkspaceDriver.session(environments, sessionId)
 })
 
 const bound = Effect.gen(function* () {
   const sessionId = Session.ID.create()
-  const access = yield* Machine.access({
-    url: yield* Machine.url,
+  const access = yield* Sandbox.access({
+    url: yield* Sandbox.url,
     environmentId,
     brain: Brain.ofSession(sessionId),
     directory: join(workspace, sessionId),
@@ -93,7 +93,7 @@ it.live("a file or shell call with no access, or on a sandbox that does not answ
       new Map([
         [
           sessionId,
-          yield* Machine.access({
+          yield* Sandbox.access({
             url: "http://127.0.0.1:9",
             environmentId,
             brain: Brain.ofSession(sessionId),

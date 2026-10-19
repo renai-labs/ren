@@ -1,8 +1,8 @@
 export * as ExecutorAdapter from "./executor.js"
 
-import { EnvironmentToken } from "@ren/brain-api/environment-token"
-import { Signature } from "@ren/brain-api/signature"
-import { Machine } from "@ren/executor/testing"
+import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { Signature } from "@ren/hand-api/signature"
+import { Sandbox } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Effect, Schema } from "effect"
@@ -12,14 +12,14 @@ import path from "node:path"
 import { Process } from "../process.js"
 import { Wait } from "../wait.js"
 
-export const publicKeys = Schema.encodeSync(Signature.PublicKeys)([Machine.keys.publicKey])
+export const publicKeys = Schema.encodeSync(Signature.PublicKeys)([Sandbox.keys.publicKey])
 
 export const token = (env: Environment.ID, brain: Brain.ID, lifetimeMs = 600_000) =>
   Effect.runPromise(
-    EnvironmentToken.sign(Machine.keys.privateKey, { env, brain, exp: Math.floor((Date.now() + lifetimeMs) / 1000) }),
+    EnvironmentToken.sign(Sandbox.keys.privateKey, { env, brain, exp: Math.floor((Date.now() + lifetimeMs) / 1000) }),
   )
 
-export const access = (options: Parameters<typeof Machine.access>[0]) => Effect.runPromise(Machine.access(options))
+export const access = (options: Parameters<typeof Sandbox.access>[0]) => Effect.runPromise(Sandbox.access(options))
 
 export const mainPath = path.resolve(
   path.dirname(Bun.resolveSync("@ren/executor/testing", import.meta.dir)),

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ren/hand-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "keys": "bun run script/keys.ts",
+    "test": "bun test --only-failures",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@ren/schema": "workspace:*",
+    "effect": "catalog:",
+    "jose": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}

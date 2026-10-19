@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { ExecutorClient } from "@ren/brain-api/executor-client"
+import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { E2BHand } from "../lib/adapters/e2b.js"

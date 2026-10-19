@@ -1,10 +1,10 @@
 import { expect } from "bun:test"
 import { TestAccess } from "./lib/access.js"
-import type { Hello } from "@ren/brain-api/executor-api"
+import type { Hello } from "@ren/hand-api/executor-api"
 import { Executor } from "@ren/executor/executor"
-import { NodeCompatible } from "@ren/executor/node-compatible"
-import { ExecutorClient } from "@ren/brain-api/executor-client"
-import { Machine, Relay, testEffect } from "@ren/executor/testing"
+import { Machine } from "@ren/executor/machine"
+import { ExecutorClient } from "@ren/hand-api/executor-client"
+import { Sandbox, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -29,15 +29,15 @@ import { TestClock } from "effect/testing"
 import { mkdtemp, realpath, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Environments } from "../src/environments.js"
+import { Hands } from "../src/hands.js"
 import { EnvironmentAccess } from "../src/environment-access.js"
 import { Hand } from "../src/hand.js"
-import { Sandbox } from "./lib/sandbox.js"
+import { Probe } from "./lib/probe.js"
 
 const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environments-")))
 const elsewhere = await realpath(await mkdtemp(join(tmpdir(), "ren-environments-elsewhere-")))
-const it = testEffect(Machine.layer({ environmentId, workspace }))
+const it = testEffect(Sandbox.layer({ environmentId, workspace }))
 
 const sessionId = Session.ID.create()
 const brain = Brain.ofSession(sessionId)
@@ -52,7 +52,7 @@ const accessAt = (
     readonly generation?: number
   } = {},
 ) =>
-  Machine.access({
+  Sandbox.access({
     url,
     environmentId,
     brain,
@@ -66,27 +66,27 @@ const environmentsWith = (
   access: Layer.Layer<EnvironmentAccess.Service>,
   http: Layer.Layer<HttpClient.HttpClient> = FetchHttpClient.layer,
 ) =>
-  Layer.build(Environments.layer.pipe(Layer.provide(access), Layer.provide(http))).pipe(
-    Effect.map((context) => Context.get(context, Environments.Service)),
+  Layer.build(Hands.layer.pipe(Layer.provide(access), Layer.provide(http))).pipe(
+    Effect.map((context) => Context.get(context, Hands.Service)),
   )
 
 const opening = (open: EnvironmentAccess.Interface["open"]) =>
   Layer.succeed(EnvironmentAccess.Service, EnvironmentAccess.Service.of({ open }))
 
-const machine = (options: Parameters<typeof Machine.layer>[0]) =>
-  Layer.build(Layer.fresh(Machine.layer(options))).pipe(
-    Effect.flatMap((context) => Effect.provide(Machine.url, context)),
+const machine = (options: Parameters<typeof Sandbox.layer>[0]) =>
+  Layer.build(Layer.fresh(Sandbox.layer(options))).pipe(
+    Effect.flatMap((context) => Effect.provide(Sandbox.url, context)),
   )
 
 const renDown = (id: Session.ID) => new EnvironmentAccess.Unavailable({ sessionId: id, message: "connection refused" })
 
 const noAccess = (id: Session.ID) => new EnvironmentAccess.NotFound({ sessionId: id, message: "no binding" })
 
-const connect = (environments: Environments.Interface) => environments.connect(sessionId)
+const connect = (environments: Hands.Interface) => environments.connect(sessionId)
 
 const build = (options: { readonly failures: number; readonly gate?: Deferred.Deferred<void> }) =>
   Effect.gen(function* () {
-    const access = yield* accessAt(yield* Machine.url)
+    const access = yield* accessAt(yield* Sandbox.url)
     const opens = yield* Ref.make(0)
     const requests = yield* Ref.make(0)
     const http = Layer.effect(
@@ -104,8 +104,8 @@ const build = (options: { readonly failures: number; readonly gate?: Deferred.De
         return count < options.failures ? { ...access, token: "invalid" } : access
       }),
     )
-    const environments = yield* Layer.build(Environments.layer.pipe(Layer.provide(host), Layer.provide(http))).pipe(
-      Effect.map((context) => Context.get(context, Environments.Service)),
+    const environments = yield* Layer.build(Hands.layer.pipe(Layer.provide(host), Layer.provide(http))).pipe(
+      Effect.map((context) => Context.get(context, Hands.Service)),
     )
     return { environments, opens, requests }
   })
@@ -125,7 +125,7 @@ it.live("concurrent failing connects share one failure and one renewal", () =>
       { concurrency: "unbounded" },
     )
     const errors = exits.map((exit) => (Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined))
-    expect(errors[0]).toBeInstanceOf(Environments.Unavailable)
+    expect(errors[0]).toBeInstanceOf(Hands.Unavailable)
     expect(new Set(errors).size).toBe(1)
     expect(yield* Ref.get(subject.opens)).toBe(2)
     expect(yield* Ref.get(subject.requests)).toBe(2)
@@ -161,7 +161,7 @@ it.live("a session without access fails with no access", () =>
 
 it.live("refuses an executor that serves another environment than the access names", () =>
   Effect.gen(function* () {
-    const access = yield* accessAt(yield* Machine.url)
+    const access = yield* accessAt(yield* Sandbox.url)
     const environments = yield* environmentsWith(
       TestAccess.fixed(new Map([[sessionId, { ...access, environmentId: Environment.ID.create() }]])),
     )
@@ -185,7 +185,7 @@ it.live("a session folder that is a file on the sandbox fails the first contact 
 
 it.effect("refreshes a token in its last five minutes, once for many concurrent calls, and keeps the connection", () =>
   Effect.gen(function* () {
-    const url = yield* Machine.url
+    const url = yield* Sandbox.url
     const opens = yield* Ref.make(0)
     const environments = yield* environmentsWith(
       opening(() =>
@@ -213,7 +213,7 @@ it.effect("refreshes a token in its last five minutes, once for many concurrent 
 
 it.effect("a 20-second token refreshes in its last third, not on every call", () =>
   Effect.gen(function* () {
-    const url = yield* Machine.url
+    const url = yield* Sandbox.url
     const opens = yield* Ref.make(0)
     const environments = yield* environmentsWith(
       opening(() =>
@@ -234,7 +234,7 @@ it.effect("a 20-second token refreshes in its last third, not on every call", ()
 
 it.effect("keeps using a token it could not refresh while Ren does not answer, and asks Ren once in 30 seconds", () =>
   Effect.gen(function* () {
-    const url = yield* Machine.url
+    const url = yield* Sandbox.url
     const opens = yield* Ref.make(0)
     const environments = yield* environmentsWith(
       opening((id) =>
@@ -267,7 +267,7 @@ it.effect(
   "fails clearly once a token expires while Ren is down, and works again on the first try after the backoff",
   () =>
     Effect.gen(function* () {
-      const url = yield* Machine.url
+      const url = yield* Sandbox.url
       const isDown = yield* Ref.make(false)
       const environments = yield* environmentsWith(
         opening((id) =>
@@ -293,7 +293,7 @@ it.effect(
   "a refresh that Ren answers with no access closes the connection at once, and the next call has no access",
   () =>
     Effect.gen(function* () {
-      const url = yield* Machine.url
+      const url = yield* Sandbox.url
       const opens = yield* Ref.make(0)
       const environments = yield* environmentsWith(
         opening((id) =>
@@ -320,7 +320,7 @@ it.live(
   "a sandbox that does not answer fails the call once, and the next call asks Ren and reaches the new sandbox",
   () =>
     Effect.gen(function* () {
-      const relay = yield* Relay.make(Relay.portOf(yield* Machine.url))
+      const relay = yield* Relay.make(Relay.portOf(yield* Sandbox.url))
       const second = yield* machine({ environmentId, workspace: elsewhere })
       const current = yield* Ref.make(yield* accessAt(relay.url))
       const opens = yield* Ref.make(0)
@@ -349,7 +349,7 @@ const frozen = Layer.effect(
       stat: () => Deferred.succeed(statArrived, undefined).pipe(Effect.andThen(Effect.never)),
     }),
   ),
-).pipe(Layer.provide(NodeCompatible.layer))
+).pipe(Layer.provide(Machine.layer))
 
 it.effect("a call to a sandbox that accepts the request and never answers ends in its time limit", () =>
   Effect.gen(function* () {
@@ -372,7 +372,7 @@ it.effect("a call to a sandbox that accepts the request and never answers ends i
 
 it.live("keeps a connection when only its token changes", () =>
   Effect.gen(function* () {
-    const url = yield* Machine.url
+    const url = yield* Sandbox.url
     const first = yield* accessAt(url)
     const context = yield* Layer.build(TestAccess.memory(new Map([[sessionId, first]])))
     const memory = Context.get(context, TestAccess.Memory)
@@ -416,7 +416,7 @@ const controlled = Effect.fnUntraced(function* (initial: Environment.Access) {
   }
 })
 
-const where = (environments: Environments.Interface) =>
+const where = (environments: Hands.Interface) =>
   Effect.scoped(Effect.flatMap(connect(environments), (connection) => connection.client["executor.hello"]())).pipe(
     Effect.map((hello) => hello.workspaceDirectory),
   )
@@ -424,7 +424,7 @@ const where = (environments: Environments.Interface) =>
 it.effect("moves to the new sandbox when a renewed access names a new address, with no change notice", () =>
   Effect.gen(function* () {
     const second = yield* machine({ environmentId, workspace: elsewhere })
-    const subject = yield* controlled(yield* accessAt(yield* Machine.url, { issuedAt: yield* Clock.currentTimeMillis }))
+    const subject = yield* controlled(yield* accessAt(yield* Sandbox.url, { issuedAt: yield* Clock.currentTimeMillis }))
     expect(yield* where(subject.environments)).toBe(workspace)
     yield* TestClock.adjust(Duration.minutes(7))
     yield* Ref.set(
@@ -452,7 +452,7 @@ const reporting = (hello: Partial<Pick<Hello, "protocol">>) =>
         },
       }),
     ),
-  ).pipe(Layer.provide(NodeCompatible.layer))
+  ).pipe(Layer.provide(Machine.layer))
 
 it.live("refuses an executor that speaks another protocol", () =>
   Effect.gen(function* () {
@@ -470,9 +470,9 @@ it.live("refuses an executor that speaks another protocol", () =>
 
 it.live("gets a new access once when the executor refuses one the brain still thinks is valid, and does not loop", () =>
   Effect.gen(function* () {
-    const url = yield* Machine.url
+    const url = yield* Sandbox.url
     const opens = yield* Ref.make(0)
-    const refusedToken = (yield* Machine.access({
+    const refusedToken = (yield* Sandbox.access({
       url,
       environmentId: Environment.ID.create(),
       brain,
@@ -526,14 +526,14 @@ it.live("many first connects of one session share one lookup, one hello and one 
 
 it.live("a session that has no access or a dead sandbox leaves the connection of another session", () =>
   Effect.gen(function* () {
-    const relay = yield* Relay.make(Relay.portOf(yield* Machine.url))
+    const relay = yield* Relay.make(Relay.portOf(yield* Sandbox.url))
     const dead = Session.ID.create()
     const missing = Session.ID.create()
     const accesses = new Map([
       [
         sessionId,
-        yield* Machine.access({
-          url: yield* Machine.url,
+        yield* Sandbox.access({
+          url: yield* Sandbox.url,
           environmentId,
           brain,
           directory: folder(),
@@ -541,7 +541,7 @@ it.live("a session that has no access or a dead sandbox leaves the connection of
       ],
       [
         dead,
-        yield* Machine.access({
+        yield* Sandbox.access({
           url: relay.url,
           environmentId,
           brain: Brain.ofSession(dead),
@@ -577,8 +577,8 @@ it.live("a session that has no access or a dead sandbox leaves the connection of
 
 it.effect("a connection outlives its token and still reaches the processes it started", () =>
   Effect.gen(function* () {
-    const sandbox = yield* Sandbox.probe()
-    const url = yield* Sandbox.start({ environmentId, workspace, executor: sandbox.layer })
+    const sandbox = yield* Probe.make()
+    const url = yield* Probe.start({ environmentId, workspace, executor: sandbox.layer })
     const opens = yield* Ref.make(0)
     const environments = yield* environmentsWith(
       opening(() =>
@@ -592,7 +592,7 @@ it.effect("a connection outlives its token and still reaches the processes it st
     const handle = yield* Hand.spawner(connection, (signal) => new Error(`Killed by ${signal}`)).spawn(
       ChildProcess.make("cat", []),
     )
-    yield* Sandbox.advance(Duration.minutes(11))
+    yield* Probe.advance(Duration.minutes(11))
     expect(yield* Ref.get(opens)).toBeGreaterThan(1)
     expect(yield* environments.connect(sessionId)).toBe(connection)
     yield* Stream.make(new TextEncoder().encode("still here")).pipe(Stream.run(handle.stdin))
@@ -604,12 +604,10 @@ it.effect("a connection outlives its token and still reaches the processes it st
 it.live("a command sent to a sandbox that then stops answering is started once at most, and never sent again", () =>
   Effect.gen(function* () {
     const arrived = yield* Deferred.make<void>()
-    const old = yield* Sandbox.probe({
+    const old = yield* Probe.make({
       afterSpawn: () => Deferred.succeed(arrived, undefined).pipe(Effect.andThen(Effect.never)),
     })
-    const relay = yield* Relay.make(
-      Relay.portOf(yield* Sandbox.start({ environmentId, workspace, executor: old.layer })),
-    )
+    const relay = yield* Relay.make(Relay.portOf(yield* Probe.start({ environmentId, workspace, executor: old.layer })))
     const access = yield* accessAt(relay.url)
     const environments = yield* environmentsWith(opening(() => Effect.succeed(access)))
     const connection = yield* connect(environments)
@@ -641,7 +639,7 @@ it.live(
   "an executor whose clock is 20 minutes ahead refuses the renewed token too, and the call fails with token refused",
   () =>
     Effect.gen(function* () {
-      const url = yield* Machine.url
+      const url = yield* Sandbox.url
       const now = yield* Clock.currentTimeMillis
       const opens = yield* Ref.make(0)
       const ahead = yield* accessAt(url, { issuedAt: now - 20 * 60_000, lifetimeMs: 10 * 60_000 })
@@ -665,7 +663,7 @@ const skewed = Effect.fnUntraced(function* (url: string, issuedAt: number) {
 
 it.effect("10 calls that the executor refuses at the same time cause one renewal, and all succeed after it", () =>
   Effect.gen(function* () {
-    const url = yield* Machine.url
+    const url = yield* Sandbox.url
     const opens = yield* Ref.make(0)
     const environments = yield* environmentsWith(
       opening(() =>
@@ -692,12 +690,10 @@ it.effect("10 calls that the executor refuses at the same time cause one renewal
 it.effect("a refresh that ends after a failed call closed the connection leaves the new connection alone", () =>
   Effect.gen(function* () {
     const arrived = yield* Deferred.make<void>()
-    const old = yield* Sandbox.probe({
+    const old = yield* Probe.make({
       afterSpawn: () => Deferred.succeed(arrived, undefined).pipe(Effect.andThen(Effect.never)),
     })
-    const relay = yield* Relay.make(
-      Relay.portOf(yield* Sandbox.start({ environmentId, workspace, executor: old.layer })),
-    )
+    const relay = yield* Relay.make(Relay.portOf(yield* Probe.start({ environmentId, workspace, executor: old.layer })))
     const next = yield* machine({ environmentId, workspace: elsewhere })
     const subject = yield* controlled(
       yield* accessAt(relay.url, { issuedAt: yield* Clock.currentTimeMillis, lifetimeMs: 900_000 }),
@@ -731,7 +727,7 @@ it.effect("a refresh that ends after a failed call closed the connection leaves 
 
 it.effect("a subagent shares its parent's session: two calls during a refresh cause one refresh and both succeed", () =>
   Effect.gen(function* () {
-    const url = yield* Machine.url
+    const url = yield* Sandbox.url
     const opens = yield* Ref.make(0)
     const entered = yield* Deferred.make<void>()
     const release = yield* Deferred.make<void>()
@@ -767,8 +763,8 @@ it.effect("a subagent shares its parent's session: two calls during a refresh ca
 
 it.effect("a call at the second a token expires works with a new token, with no refused request", () =>
   Effect.gen(function* () {
-    const url = yield* Machine.url
-    const link = yield* Sandbox.link
+    const url = yield* Sandbox.url
+    const link = yield* Probe.link
     const opens = yield* Ref.make(0)
     const environments = yield* environmentsWith(
       opening(() =>

@@ -3,9 +3,9 @@ import { TestAccess } from "@ren/brain/testing"
 import { AbsolutePath, OpenCode, SessionMessage } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { Environments } from "@ren/brain/environments"
+import { Hands } from "@ren/brain/hands"
 import { EnvironmentAccess } from "@ren/brain/environment-access"
-import { Machine, Processes, Relay, testEffect } from "@ren/executor/testing"
+import { Sandbox, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -19,7 +19,7 @@ import { Env } from "../src/env.js"
 import type { Harness } from "../src/harness/harness.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { Host } from "../src/harness/opencode/host.js"
-import { RenWorkspaceDriver } from "../src/harness/opencode/ren-workspace-driver.js"
+import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 import { Pid } from "./lib/pid.js"
 import { Shared } from "./lib/shared.js"
 import type { StubModel } from "./lib/stub-model.js"
@@ -32,7 +32,7 @@ const local = await realpath(await mkdtemp(join(tmpdir(), "ren-local-")))
 const stub = Shared.stub()
 const fileTools = ["read", "write", "edit", "glob", "grep", "shell"]
 
-const served = Machine.layer({ environmentId, workspace })
+const served = Sandbox.layer({ environmentId, workspace })
 
 const it = testEffect(served)
 
@@ -42,7 +42,7 @@ const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof served> | Sco
 const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
 const accessTo = (url: string, sessionId: Session.ID) =>
-  Machine.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
+  Sandbox.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
 const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effect.void) {
   const context = yield* Layer.build(TestAccess.memory(new Map()))
@@ -59,8 +59,8 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
     }),
   )
   const environments = Context.get(
-    yield* Layer.build(Environments.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
-    Environments.Service,
+    yield* Layer.build(Hands.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
+    Hands.Service,
   )
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url))
   const endpoints = Shared.access(undefined, stub.url).endpoints
@@ -137,7 +137,7 @@ const begin = Effect.fnUntraced(function* (
   const sessionId = Session.ID.create()
   const onEnvironment = options.onEnvironment ?? true
   if (onEnvironment)
-    yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* Machine.url), sessionId))
+    yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* Sandbox.url), sessionId))
   yield* restart(
     opened.harness,
     sessionId,
@@ -384,7 +384,7 @@ it.live("the same start twice makes one session", () =>
   Effect.gen(function* () {
     const opened = yield* open()
     const sessionId = Session.ID.create()
-    yield* opened.memory.set(sessionId, yield* accessTo(yield* Machine.url, sessionId))
+    yield* opened.memory.set(sessionId, yield* accessTo(yield* Sandbox.url, sessionId))
     yield* Effect.all(
       [
         restart(opened.harness, sessionId, locationOf(sessionId)),
@@ -403,7 +403,7 @@ it.live("a new session started with a first message runs that first turn on the 
   Effect.gen(function* () {
     const opened = yield* open()
     const sessionId = Session.ID.create()
-    yield* opened.memory.set(sessionId, yield* accessTo(yield* Machine.url, sessionId))
+    yield* opened.memory.set(sessionId, yield* accessTo(yield* Sandbox.url, sessionId))
     const script = stub.script(shell("echo first > first.txt"))
     yield* restart(opened.harness, sessionId, locationOf(sessionId), undefined, {
       messageId: Session.MessageID.create(),
@@ -425,7 +425,7 @@ it.live(
       expect([deadTurn.ran, deadTurn.result]).toEqual([false, expect.stringContaining("does not answer")])
       const fileSession = Session.ID.create()
       yield* Effect.promise(() => Bun.write(folder(fileSession), "a file, not a folder"))
-      yield* opened.memory.set(fileSession, yield* accessTo(yield* Machine.url, fileSession))
+      yield* opened.memory.set(fileSession, yield* accessTo(yield* Sandbox.url, fileSession))
       yield* restart(opened.harness, fileSession, locationOf(fileSession))
       const fileTurn = yield* refusedTurn({
         sessionId: fileSession,
@@ -579,11 +579,11 @@ it.live(
     Effect.gen(function* () {
       const opened = yield* open()
       const session = yield* begin(opened)
-      const access = yield* accessTo(yield* Machine.url, session.sessionId)
+      const access = yield* accessTo(yield* Sandbox.url, session.sessionId)
       yield* opened.memory.set(
         session.sessionId,
-        yield* Machine.access({
-          url: yield* Machine.url,
+        yield* Sandbox.access({
+          url: yield* Sandbox.url,
           environmentId,
           brain: Brain.ofSession(session.sessionId),
           directory: folder(session.sessionId),
@@ -618,7 +618,7 @@ it.live(
 
 it.live("a tool call fails clearly while the sandbox is down, and the next one works once it is back", () =>
   Effect.gen(function* () {
-    const relay = yield* Relay.make(Relay.portOf(yield* Machine.url))
+    const relay = yield* Relay.make(Relay.portOf(yield* Sandbox.url))
     const opened = yield* open()
     const session = yield* begin(opened, { url: relay.url })
     yield* session.turn(stub.script(shell("echo warm")))
@@ -637,7 +637,7 @@ it.live("a tool call fails clearly while the sandbox is down, and the next one w
 )
 
 const frozenSandbox = Effect.gen(function* () {
-  const machinePort = Relay.portOf(yield* Machine.url)
+  const machinePort = Relay.portOf(yield* Sandbox.url)
   const relay = yield* Relay.make(machinePort)
   const sockets = new Set<Socket>()
   const hole = yield* Effect.acquireRelease(
@@ -826,7 +826,7 @@ it.live(
       const opened = yield* open()
       const sessionId = Session.ID.create()
       const script = stub.script()
-      yield* opened.memory.set(sessionId, yield* accessTo(yield* Machine.url, sessionId))
+      yield* opened.memory.set(sessionId, yield* accessTo(yield* Sandbox.url, sessionId))
       const error = yield* restart(opened.harness, sessionId, { environmentId, directory: "/workspace" }, undefined, {
         messageId: Session.MessageID.create(),
         prompt: { text: `${script.marker} hello` },

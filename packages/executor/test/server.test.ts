@@ -1,8 +1,8 @@
 import { expect } from "bun:test"
-import { EnvironmentToken } from "@ren/brain-api/environment-token"
-import { FileTooLargeError, ProcessID } from "@ren/brain-api/executor-api"
-import { ExecutorClient } from "@ren/brain-api/executor-client"
-import { Signature } from "@ren/brain-api/signature"
+import { EnvironmentToken } from "@ren/hand-api/environment-token"
+import { FileTooLargeError, ProcessID } from "@ren/hand-api/executor-api"
+import { ExecutorClient } from "@ren/hand-api/executor-client"
+import { Signature } from "@ren/hand-api/signature"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Stream } from "effect"
@@ -14,23 +14,23 @@ import { Socket } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { testEffect } from "./lib/effect.js"
-import { Machine } from "./lib/machine.js"
+import { Sandbox } from "./lib/sandbox.js"
 import { Processes } from "./lib/process.js"
 
 const environmentId = Environment.ID.create()
 const brain = Brain.ID.create()
 const workspace = await mkdtemp(join(tmpdir(), "ren-executor-"))
-const it = testEffect(Machine.layer({ environmentId, workspace }).pipe(Layer.provideMerge(FetchHttpClient.layer)))
+const it = testEffect(Sandbox.layer({ environmentId, workspace }).pipe(Layer.provideMerge(FetchHttpClient.layer)))
 
 const token = Effect.fnUntraced(function* (
   claims: { readonly environmentId?: Environment.ID; readonly brain?: Brain.ID } = {},
 ) {
-  return (yield* Machine.access({ url: yield* Machine.url, environmentId, brain, directory: workspace, ...claims }))
+  return (yield* Sandbox.access({ url: yield* Sandbox.url, environmentId, brain, directory: workspace, ...claims }))
     .token
 })
 
 const connect = Effect.fnUntraced(function* (bearer: string) {
-  return yield* ExecutorClient.make({ url: yield* Machine.url, token: Effect.succeed(bearer) })
+  return yield* ExecutorClient.make({ url: yield* Sandbox.url, token: Effect.succeed(bearer) })
 })
 
 const client = Effect.fnUntraced(function* (claims: { readonly brain?: Brain.ID } = {}) {
@@ -45,7 +45,7 @@ const rpc = (tag: string, payload: object | null) =>
 
 const post = Effect.fnUntraced(function* (body: string | Uint8Array, authorization?: string) {
   const http = yield* HttpClient.HttpClient
-  const request = HttpClientRequest.post(`${yield* Machine.url}${ExecutorClient.path}`).pipe(
+  const request = HttpClientRequest.post(`${yield* Sandbox.url}${ExecutorClient.path}`).pipe(
     typeof body === "string"
       ? HttpClientRequest.bodyText(body, "application/ndjson")
       : HttpClientRequest.bodyUint8Array(body, "application/ndjson"),
@@ -59,7 +59,7 @@ const post = Effect.fnUntraced(function* (body: string | Uint8Array, authorizati
 const refused = Effect.fnUntraced(function* () {
   const valid = yield* token()
   const other = yield* Signature.generate("other")
-  const impostor = yield* Signature.generate(Machine.keys.publicKey.id)
+  const impostor = yield* Signature.generate(Sandbox.keys.publicKey.id)
   const claims = { env: environmentId, brain, exp: Math.floor(Date.now() / 1000) + 600 }
   return [
     {
@@ -72,7 +72,7 @@ const refused = Effect.fnUntraced(function* () {
     },
     {
       name: "another token type",
-      authorization: `Bearer ${yield* Signature.sign(Machine.keys.privateKey, { ...claims, typ: "host" })}`,
+      authorization: `Bearer ${yield* Signature.sign(Sandbox.keys.privateKey, { ...claims, typ: "host" })}`,
     },
     {
       name: "a token for another environment",
@@ -80,7 +80,7 @@ const refused = Effect.fnUntraced(function* () {
     },
     {
       name: "an expired token",
-      authorization: `Bearer ${(yield* Machine.access({ url: yield* Machine.url, environmentId, brain, directory: workspace, issuedAt: Date.now() - 3_600_000 })).token}`,
+      authorization: `Bearer ${(yield* Sandbox.access({ url: yield* Sandbox.url, environmentId, brain, directory: workspace, issuedAt: Date.now() - 3_600_000 })).token}`,
     },
     { name: "another scheme", authorization: `Basic ${valid}` },
   ]
@@ -89,7 +89,7 @@ const refused = Effect.fnUntraced(function* () {
 it.live("answers a bad token before it decodes the payload", () =>
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient
-    const invalidSpawn = HttpClientRequest.post(`${yield* Machine.url}${ExecutorClient.path}`).pipe(
+    const invalidSpawn = HttpClientRequest.post(`${yield* Sandbox.url}${ExecutorClient.path}`).pipe(
       HttpClientRequest.bodyText(
         `${JSON.stringify({ _tag: "Request", id: "1", tag: "process.spawn", payload: { command: 42 }, headers: [] })}\n`,
         "application/ndjson",
@@ -264,8 +264,8 @@ it.live("refuses an Authorization header with no token, two tokens or 64 KiB of 
 
 it.effect("keeps streaming output to a reader whose token expires, and refuses that token afterwards", () =>
   Effect.gen(function* () {
-    const expiring = yield* Machine.access({
-      url: yield* Machine.url,
+    const expiring = yield* Sandbox.access({
+      url: yield* Sandbox.url,
       environmentId,
       brain,
       directory: workspace,
@@ -378,7 +378,7 @@ it.live(
   () =>
     Effect.gen(function* () {
       const bearer = `Bearer ${yield* token()}`
-      const address = new URL(yield* Machine.url)
+      const address = new URL(yield* Sandbox.url)
       const startedAt = Date.now()
       const stalled = (trickle: boolean) =>
         Effect.promise(

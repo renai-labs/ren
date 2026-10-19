@@ -1,8 +1,8 @@
 import { afterAll, expect } from "bun:test"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { EnvironmentAccess } from "@ren/brain/environment-access"
-import { Environments } from "@ren/brain/environments"
-import { Machine, Relay, testEffect } from "@ren/executor/testing"
+import { Hands } from "@ren/brain/hands"
+import { Sandbox, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -11,7 +11,7 @@ import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { Cell } from "../src/cell.js"
 import { Env } from "../src/env.js"
-import { RenWorkspaceDriver } from "../src/harness/opencode/ren-workspace-driver.js"
+import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 import { HostAccess } from "../src/host-access.js"
 import { HostToken } from "../src/host-token.js"
 import { ModelStore } from "../src/model-store.js"
@@ -27,7 +27,7 @@ const it = testEffect(Layer.empty)
 const environmentId = Environment.ID.create()
 
 const accessFor = (sessionId: Session.ID) =>
-  Machine.access({
+  Sandbox.access({
     url: "http://127.0.0.1:9",
     environmentId,
     brain: Brain.ofSession(sessionId),
@@ -248,12 +248,12 @@ it.effect("20 file calls on a Ren that never answers all end in 10 seconds, on o
     yield* subject.configure(yield* Effect.promise(() => FakeRen.hostToken(subject.sessionId)))
     const environments = Context.get(
       yield* Layer.build(
-        Environments.layer.pipe(
+        Hands.layer.pipe(
           Layer.provide(Layer.succeed(EnvironmentAccess.Service, subject.access)),
           Layer.provide(FetchHttpClient.layer),
         ),
       ),
-      Environments.Service,
+      Hands.Service,
     )
     const driver = RenWorkspaceDriver.session(environments, subject.sessionId)
     const calls = yield* Effect.forEach(
