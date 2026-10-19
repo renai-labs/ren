@@ -33,6 +33,8 @@ import type {
   ChatModelsOutput,
   ChatForkInput,
   ChatForkOutput,
+  ChatReadInput,
+  ChatReadOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -325,6 +327,17 @@ export function make(options: ClientOptions) {
             body: { id: input["id"], messageId: input["messageId"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      read: (input: ChatReadInput, requestOptions?: RequestOptions) =>
+        request<ChatReadOutput>(
+          {
+            method: "POST",
+            path: `/sessions/${encodeURIComponent(input.sessionId)}/read`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,

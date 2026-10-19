@@ -356,6 +356,7 @@ export function SessionChat(props: {
   const people = usePeople(props.organizationId, props.viewer, messages)
 
   SessionCache.useLive(props.sessionID, liveOf(info, running))
+  SessionCache.useMarkRead(props.sessionID, running)
 
   Attention.useNotify({ running, asking, title })
 

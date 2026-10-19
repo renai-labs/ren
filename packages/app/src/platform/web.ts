@@ -6,7 +6,7 @@ const prefix = "ren."
 const draftPrefix = "ren.draft."
 const externalProtocols = new Set(["http:", "https:", "mailto:"])
 
-export function createWebPlatform(): Platform.Info {
+export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
   return {
     platform: "web",
     version: import.meta.env.VITE_REN_VERSION ?? "dev",
@@ -25,6 +25,7 @@ export function createWebPlatform(): Platform.Info {
     drafts: DraftStore.make({
       storage: Result.getOrUndefined(Result.try(() => window.localStorage)),
       prefix: draftPrefix,
+      large,
       watch: (handler) => {
         const changed = (event: StorageEvent) => handler(event.key)
         window.addEventListener("storage", changed)

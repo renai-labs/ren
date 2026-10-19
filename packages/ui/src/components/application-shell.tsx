@@ -197,6 +197,7 @@ export type NavigationItemProps = {
   onPreviewChange?: (open: boolean) => void
   current?: boolean
   highlighted?: boolean
+  unread?: boolean
   shortcut?: string
   onActivate?: () => void
 }
@@ -209,7 +210,10 @@ export function NavigationItem(props: NavigationItemProps) {
     props: {
       type: props.render === undefined ? "button" : undefined,
       "aria-current": props.current ? "page" : undefined,
-      "aria-label": navigation.collapsed && typeof props.label === "string" ? props.label : undefined,
+      "aria-label":
+        typeof props.label === "string" && (navigation.collapsed || props.unread)
+          ? `${props.label}${props.unread ? ", unread" : ""}`
+          : undefined,
       "aria-keyshortcuts": props.shortcut,
       className:
         "flex h-9 w-full min-w-0 items-center gap-2 rounded-control px-2 text-start text-sm text-text-secondary transition-standard outline-none group-data-[state=collapsed]/navigation:justify-center group-data-[state=collapsed]/navigation:px-0 hover:bg-fill-secondary hover:text-text-primary focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-primary aria-[current=page]:bg-fill-secondary aria-[current=page]:font-medium aria-[current=page]:text-text-primary [&_svg]:size-4 [&_svg]:shrink-0",
@@ -220,7 +224,7 @@ export function NavigationItem(props: NavigationItemProps) {
       children: (
         <>
           {props.icon}
-          <span className="min-w-0 flex-1 truncate group-data-[state=collapsed]/navigation:hidden">{props.label}</span>
+          <NavigationLabel label={props.label} unread={props.unread} />
           {props.trailing ? (
             <span className="flex shrink-0 items-center gap-1 text-xs text-text-secondary group-data-[state=collapsed]/navigation:hidden">
               {props.trailing}
@@ -245,6 +249,20 @@ export function NavigationItem(props: NavigationItemProps) {
         <Preview {...props} element={element} />
       )}
     </li>
+  )
+}
+
+function NavigationLabel(props: { label: ReactNode; unread: boolean | undefined }) {
+  return (
+    <span
+      className={composeClasses(
+        "min-w-0 flex-1 truncate group-data-[state=collapsed]/navigation:hidden",
+        props.unread && "font-medium text-text-primary",
+      )}
+    >
+      {props.label}
+      {props.unread && typeof props.label !== "string" ? <span className="sr-only">, unread</span> : null}
+    </span>
   )
 }
 

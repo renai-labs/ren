@@ -111,7 +111,7 @@ test("a member finds text in a chat and closes find with Escape", async ({ page 
   await expect(find).toBeFocused()
   await find.fill("STUB")
   await expect(page.getByRole("search", { name: "Find in chat" }).getByRole("status")).toHaveText("1/1")
-  await expect.poll(() => page.evaluate(() => CSS.highlights.get("ren-find-active")?.size ?? 0)).toBe(1)
+  await expect.poll(() => page.evaluate<number>('CSS.highlights.get("ren-find-active")?.size ?? 0')).toBe(1)
   await find.press("Escape")
   await expect(find).toHaveCount(0)
 })

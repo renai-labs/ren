@@ -1,15 +1,17 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { SessionToken } from "@ren/brain-api/session-token"
 import { Shared, TestToken } from "@ren/cell/testing"
+import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { SessionMessage } from "@ren/schema/session-message"
-import { Effect, Layer, ManagedRuntime, Result, Schema } from "effect"
+import { DateTime, Effect, Layer, ManagedRuntime, Result, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
 import { Access } from "../src/access.js"
 import { Models } from "../src/models.js"
 import { Session } from "../src/session.js"
 import { SessionDirectory } from "../src/session/directory.js"
+import { OpenCodeStore } from "../src/session/opencode-store.js"
 import { Space } from "../src/space.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
@@ -177,6 +179,67 @@ describe("SessionDirectory", () => {
       expect((yield* sessions.archive(ada, first)).archivedAt).not.toBeNull()
       expect((yield* sessions.archive(admin, second)).archivedAt).not.toBeNull()
       expect((yield* sessions.list(ada, { spaceId: general.id, ...page })).items).toEqual([])
+    }),
+  )
+
+  it.live("a chat is unread for each member until they read it after its last change", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionDirectory.Service
+      const spaces = yield* Space.Service
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const ada = yield* member(organizationId)
+      const grace = yield* member(organizationId)
+      const general = (yield* spaces.list(ada, page)).items.at(0)
+      if (!general) return yield* Effect.die(new Error("Ada has no space"))
+      const id = yield* Seed.session({ organizationId, spaceId: general.id, createdBy: ada.userId })
+      const created = yield* sessions.get(ada, id)
+      expect(created.unread).toBe(false)
+      const change = (hours: number) => {
+        const at = DateTime.toEpochMillis(created.createdAt) + hours * 3_600_000
+        return database.transaction((transaction) =>
+          OpenCodeStore.writeSession(transaction, {
+            id,
+            parent_id: null,
+            project_id: "global",
+            workspace_id: null,
+            slug: "chat",
+            directory: "/",
+            path: null,
+            title: "Plan",
+            version: "2",
+            summary_additions: null,
+            summary_deletions: null,
+            summary_files: null,
+            metadata: null,
+            cost: 0,
+            tokens_input: 0,
+            tokens_output: 0,
+            tokens_reasoning: 0,
+            tokens_cache_read: 0,
+            tokens_cache_write: 0,
+            permission: null,
+            agent: null,
+            model: null,
+            time_created: at,
+            time_updated: at,
+            time_idle: null,
+            time_viewed: null,
+            idle_outcome: null,
+            time_archived: null,
+            time_suspended: null,
+          }),
+        )
+      }
+      yield* change(1)
+      expect((yield* sessions.list(ada, page)).items.map((item) => item.unread)).toEqual([true])
+      expect((yield* sessions.get(grace, id)).unread).toBe(true)
+      expect((yield* sessions.markRead(ada, id)).unread).toBe(false)
+      expect((yield* sessions.list(ada, page)).items.map((item) => item.unread)).toEqual([false])
+      expect((yield* sessions.get(grace, id)).unread).toBe(true)
+      yield* change(2)
+      expect((yield* sessions.get(ada, id)).unread).toBe(true)
+      expect((yield* Effect.flip(sessions.markRead(ada, Session.ID.create())))._tag).toBe("Primitive.NotFound")
     }),
   )
 })

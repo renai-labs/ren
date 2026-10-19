@@ -32,17 +32,21 @@ export function ChatList() {
         />
       </li>
     )
-  return items.map((chat) => (
-    <ApplicationShell.NavigationItem
-      key={chat.id}
-      current={pathname === `/sessions/${chat.id}`}
-      label={SessionTitle.display(chat.title, SessionTitle.untitled)}
-      trailing={
-        <Suspense fallback={null}>
-          <ChatListStatus sessionID={Session.ID.make(chat.id)} busy={chat.status === "busy"} />
-        </Suspense>
-      }
-      render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
-    />
-  ))
+  return items.map((chat) => {
+    const current = pathname === `/sessions/${chat.id}`
+    return (
+      <ApplicationShell.NavigationItem
+        key={chat.id}
+        current={current}
+        unread={chat.unread && !current}
+        label={SessionTitle.display(chat.title, SessionTitle.untitled)}
+        trailing={
+          <Suspense fallback={null}>
+            <ChatListStatus sessionID={Session.ID.make(chat.id)} busy={chat.status === "busy"} />
+          </Suspense>
+        }
+        render={<Link to="/sessions/$sessionId" params={{ sessionId: chat.id }} />}
+      />
+    )
+  })
 }

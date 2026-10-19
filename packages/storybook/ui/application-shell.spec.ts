@@ -68,6 +68,13 @@ story("ignores b without a modifier", async ({ visit, page }) => {
   await expect(page.getByRole("complementary", { name: "Navigation" })).toHaveAttribute("data-state", "expanded")
 })
 
+story("names unread chats as unread after their title", async ({ visit, page }) => {
+  await visit("ui-application-shell--unread-chats")
+  const sidebar = page.getByRole("complementary", { name: "Navigation" })
+  await expect(sidebar.getByRole("link", { name: "Pricing page copy, unread", exact: true })).toBeVisible()
+  await expect(sidebar.getByRole("link", { name: "Support triage", exact: true })).toBeVisible()
+})
+
 story("marks the current page and advertises keyboard shortcuts", async ({ visit, page }) => {
   await visit("ui-application-shell--expanded")
   const sidebar = page.getByRole("complementary", { name: "Navigation" })

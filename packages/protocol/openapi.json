@@ -1231,6 +1231,74 @@
           "required": true
         }
       }
+    },
+    "/sessions/{sessionId}/read": {
+      "post": {
+        "tags": ["chat"],
+        "operationId": "chat.read",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Record that the caller has read the session as it is now. `unread` on the session stays false for them until it changes again.",
+        "summary": "Mark a session read"
+      }
     }
   },
   "components": {
@@ -1650,6 +1718,10 @@
               }
             ],
             "description": "The session and message this session was forked before, if it is a fork."
+          },
+          "unread": {
+            "type": "boolean",
+            "description": "Whether the session changed after the caller last read it with `chat.read`. A session the caller never read is unread once it changes after it was created."
           }
         },
         "required": [
@@ -1663,7 +1735,8 @@
           "createdAt",
           "updatedAt",
           "archivedAt",
-          "forkedFrom"
+          "forkedFrom",
+          "unread"
         ],
         "additionalProperties": false
       },

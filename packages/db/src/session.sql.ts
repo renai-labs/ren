@@ -109,6 +109,22 @@ export const opencode_message = pgTable(
   ],
 )
 
+export const session_read = pgTable(
+  "session_read",
+  {
+    session_id: text()
+      .$type<Session.ID>()
+      .notNull()
+      .references(() => agent_session.id, { onDelete: "cascade" }),
+    user_id: text()
+      .$type<Auth.UserID>()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    read_at: timestamp().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.session_id, table.user_id] })],
+)
+
 export const sessionRelations = defineRelationsPart(
   { organization, user, space, agent_session, opencode_session, opencode_message },
   (r) => ({

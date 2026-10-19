@@ -50,6 +50,20 @@ export const ChatGroup = HttpApiGroup.make("chat")
       }),
     ),
   )
+  .add(
+    HttpApiEndpoint.post("chat.read", "/sessions/:sessionId/read", {
+      params: { sessionId: Session.ID },
+      success: Session.Info,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "chat.read",
+        summary: "Mark a session read",
+        description:
+          "Record that the caller has read the session as it is now. `unread` on the session stays false for them until it changes again.",
+      }),
+    ),
+  )
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

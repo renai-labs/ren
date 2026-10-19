@@ -5,9 +5,10 @@ import { ConversationShell } from "@ren/ui/conversation-shell"
 import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
+import { Transcript } from "@ren/ui/transcript"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { useRef, useState } from "react"
+import { startTransition, useId, useRef, useState, ViewTransition } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
@@ -21,6 +22,8 @@ export function NewChat(props: { name: string; userId: string }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [sessionID, setSessionID] = useState(() => Session.ID.create())
+  const [sent, setSent] = useState<string>()
+  const transitionName = `new-chat-${useId()}`
   const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: 100 }))
   const models = useQuery(context.api.chat.models.queryOptions({ id: sessionID }))
   const create = useMutation(context.api.session.create.mutationOptions())
@@ -40,6 +43,23 @@ export function NewChat(props: { name: string; userId: string }) {
     if (encoded) platform.drafts?.set(SessionDrafts.fresh, encoded)
     else platform.drafts?.remove(SessionDrafts.fresh)
   }
+  if (sent !== undefined)
+    return (
+      <ConversationShell.Root
+        mode="pending"
+        populated
+        transcript={
+          <ConversationShell.Message author="user">
+            <ViewTransition name={transitionName} share="auto" default="none">
+              <ConversationShell.Bubble>
+                <Transcript.UserText text={sent} />
+              </ConversationShell.Bubble>
+            </ViewTransition>
+            <Transcript.Working label="Starting the chat" />
+          </ConversationShell.Message>
+        }
+      />
+    )
   return (
     <ConversationShell.Root
       populated={false}
@@ -54,6 +74,7 @@ export function NewChat(props: { name: string; userId: string }) {
             onSubmit={() => {
               if (!text || !spaceId || create.isPending) return
               const message = { id: SessionMessage.ID.create(), text }
+              startTransition(() => setSent(text))
               create.mutate(
                 { id: sessionID, spaceId, message, ...(model && { model }) },
                 {
@@ -76,6 +97,7 @@ export function NewChat(props: { name: string; userId: string }) {
                       })
                   },
                   onError: (error) => {
+                    startTransition(() => setSent(undefined))
                     setSessionID(Session.ID.create())
                     Toast.manager.add({
                       type: "error",
@@ -121,17 +143,19 @@ export function NewChat(props: { name: string; userId: string }) {
               </>
             }
           >
-            <ConversationShell.ComposerInput
-              ref={input}
-              aria-label="Message"
-              placeholder="Draft the quarterly report from the finance sheet"
-              dir="auto"
-              autoComplete="off"
-              focusOnMount={!mobile}
-              readOnly={create.isPending}
-              value={draft.text}
-              onChange={(event) => change(Composer.withText(draft, event.currentTarget.value))}
-            />
+            <ViewTransition name={transitionName} share="auto" default="none">
+              <ConversationShell.ComposerInput
+                ref={input}
+                aria-label="Message"
+                placeholder="Draft the quarterly report from the finance sheet"
+                dir="auto"
+                autoComplete="off"
+                focusOnMount={!mobile}
+                readOnly={create.isPending}
+                value={draft.text}
+                onChange={(event) => change(Composer.withText(draft, event.currentTarget.value))}
+              />
+            </ViewTransition>
           </ConversationShell.Composer>
         </>
       }

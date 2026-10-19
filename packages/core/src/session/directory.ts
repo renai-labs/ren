@@ -25,6 +25,7 @@ export type Interface = Primitive.Interface<typeof SessionSchema.definition> & {
     id: Session.ID,
     input: SessionSchema.ForkInput,
   ) => Effect.Effect<SessionSchema.Info, Primitive.NotFound | Primitive.Conflict>
+  readonly markRead: (actor: Actor.Info, id: Session.ID) => Effect.Effect<SessionSchema.Info, Primitive.NotFound>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SessionDirectory") {}
@@ -41,11 +42,19 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
       session: Database.Schema.agent_session,
       opencode: OpenCodeStore.summary,
       membershipId: SpaceQueries.membership.id,
+      unread: sql<boolean>`${updatedAt} > coalesce(${Database.Schema.session_read.read_at}, ${Database.Schema.agent_session.created_at})`,
     })
     .from(Database.Schema.agent_session)
     .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_session.space_id))
     .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
     .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+    .leftJoin(
+      Database.Schema.session_read,
+      and(
+        eq(Database.Schema.session_read.session_id, Database.Schema.agent_session.id),
+        eq(Database.Schema.session_read.user_id, actor.userId),
+      ),
+    )
 
 type Row = Effect.Success<ReturnType<typeof select>>[number]
 
@@ -66,6 +75,7 @@ const toInfo = (row: Row): SessionSchema.Info => ({
     row.session.fork_session_id && row.session.fork_message_id
       ? { sessionId: row.session.fork_session_id, messageId: row.session.fork_message_id }
       : null,
+  unread: row.unread,
 })
 
 const messageNotFound = new Primitive.NotFound({ message: "Message not found." })
@@ -231,6 +241,27 @@ export const layer = Layer.effect(
               .update(Database.Schema.agent_session)
               .set({ archived_at: new Date() })
               .where(eq(Database.Schema.agent_session.id, id))
+            return toInfo(yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
+          }),
+        )
+      }),
+      markRead: Effect.fn("SessionDirectory.markRead")(function* (actor: Actor.Info, id: Session.ID) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const row = yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id))
+            yield* transaction
+              .insert(Database.Schema.session_read)
+              .values({
+                session_id: id,
+                user_id: actor.userId,
+                read_at: row.opencode
+                  ? sql`greatest(now(), to_timestamp(${row.opencode.updatedAt}::bigint / 1000.0))`
+                  : sql`now()`,
+              })
+              .onConflictDoUpdate({
+                target: [Database.Schema.session_read.session_id, Database.Schema.session_read.user_id],
+                set: { read_at: sql`excluded.read_at` },
+              })
             return toInfo(yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
           }),
         )

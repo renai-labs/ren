@@ -161,6 +161,10 @@ export const Info = Schema.Struct({
   forkedFrom: Schema.NullOr(ForkSource).annotate({
     description: "The session and message this session was forked before, if it is a fork.",
   }),
+  unread: Schema.Boolean.annotate({
+    description:
+      "Whether the session changed after the caller last read it with `chat.read`. A session the caller never read is unread once it changes after it was created.",
+  }),
 }).annotate({ identifier: "Session.Info" })
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}

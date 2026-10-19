@@ -12,7 +12,7 @@ import { Text } from "@ren/ui/text"
 
 const chats = ["Quarterly report", "Onboarding emails", "Pricing page copy", "Support triage", "Release notes"]
 
-const navigation = (
+const navigationWith = (unread: ReadonlySet<string>) => (
   <>
     <ApplicationShell.NavigationSection>
       <ApplicationShell.NavigationItem current icon={<Icon glyph="Home" />} label="Home" render={<a href="#home" />} />
@@ -43,6 +43,7 @@ const navigation = (
         <ApplicationShell.NavigationItem
           key={chat}
           highlighted={index === 1}
+          unread={unread.has(chat)}
           icon={<Icon glyph="MessageCircle" />}
           label={chat}
           render={<a href={`#chat-${index}`} />}
@@ -51,6 +52,8 @@ const navigation = (
     </ApplicationShell.NavigationSection>
   </>
 )
+
+const navigation = navigationWith(new Set())
 
 const page = (
   <PageShell.Root title="Home" subtitle="Pick up where you left off.">
@@ -126,6 +129,9 @@ type Story = StoryObj<typeof meta>
 
 export const Expanded: Story = {}
 export const Collapsed: Story = { args: { state: "collapsed" } }
+export const UnreadChats: Story = {
+  args: { navigation: navigationWith(new Set(["Pricing page copy", "Release notes"])) },
+}
 export const Mobile: Story = {
   args: { mobile: true },
   decorators: [

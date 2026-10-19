@@ -117,6 +117,7 @@ export type SessionInfo = {
   updatedAt: string
   archivedAt: string | null
   forkedFrom: SessionForkSource | null
+  unread: boolean
 }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
@@ -305,3 +306,7 @@ export type ChatForkInput = {
 }
 
 export type ChatForkOutput = SessionInfo
+
+export type ChatReadInput = { readonly sessionId: { readonly sessionId: string }["sessionId"] }
+
+export type ChatReadOutput = SessionInfo

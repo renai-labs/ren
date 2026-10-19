@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { DraftChunks } from "./draft-chunks.js"
 import { DraftStore } from "./draft-store.js"
 
 const quotaStorage = (limit: number) => {
@@ -48,7 +49,75 @@ const watcher = () => {
   }
 }
 
+const chunkStore = (loaded: ReadonlyMap<string, string> = new Map()) => {
+  const writes: Array<{ key: string; count: number; indices: ReadonlyArray<number> }> = []
+  const removed: Array<string> = []
+  const failing: { next: boolean; written: Promise<void> } = { next: false, written: Promise.resolve() }
+  return {
+    writes,
+    removed,
+    failing,
+    large: {
+      loaded,
+      write: (key: string, count: number, chunks: ReadonlyArray<{ index: number; text: string }>) => {
+        writes.push({ key, count, indices: chunks.map((chunk) => chunk.index) })
+        failing.written = failing.next
+          ? Promise.reject(new DOMException("The quota has been exceeded.", "QuotaExceededError"))
+          : Promise.resolve()
+        failing.next = false
+        return failing.written
+      },
+      remove: (key: string) => {
+        removed.push(key)
+        return Promise.resolve()
+      },
+    },
+  }
+}
+
+const paste = "p".repeat(3 * DraftChunks.size)
+
 describe("DraftStore", () => {
+  test("a large draft goes to the chunk store, and typing after it rewrites only the last chunk", () => {
+    const storage = quotaStorage(1_000_000)
+    const chunks = chunkStore()
+    const drafts = DraftStore.make({ storage, prefix: "ren.draft.", large: chunks.large })
+    drafts.set("a", "short")
+    drafts.set("a", paste)
+    expect(drafts.get("a")).toBe(paste)
+    expect(storage.values.has("ren.draft.a")).toBe(false)
+    drafts.set("a", `${paste}!`)
+    expect(chunks.writes).toEqual([
+      { key: "a", count: 3, indices: [0, 1, 2] },
+      { key: "a", count: 4, indices: [3] },
+    ])
+    drafts.set("a", "short again")
+    expect(chunks.removed).toEqual(["a"])
+    expect(storage.values.get("ren.draft.a")).toBe("short again")
+  })
+
+  test("a large draft loaded before the first render reads back at once", () => {
+    const chunks = chunkStore(new Map([["a", paste]]))
+    const drafts = DraftStore.make({ storage: quotaStorage(100), prefix: "ren.draft.", large: chunks.large })
+    expect(drafts.get("a")).toBe(paste)
+    drafts.set("a", `${paste}!`)
+    expect(chunks.writes).toEqual([{ key: "a", count: 4, indices: [3] }])
+    drafts.remove("a")
+    expect(drafts.get("a")).toBeUndefined()
+    expect(chunks.removed).toEqual(["a"])
+  })
+
+  test("a failed chunk write is retried in full on the next save", async () => {
+    const chunks = chunkStore()
+    const drafts = DraftStore.make({ storage: quotaStorage(100), prefix: "ren.draft.", large: chunks.large })
+    chunks.failing.next = true
+    drafts.set("a", paste)
+    await chunks.failing.written.catch(() => undefined)
+    drafts.set("a", `${paste}!`)
+    expect(drafts.get("a")).toBe(`${paste}!`)
+    expect(chunks.writes.at(-1)).toEqual({ key: "a", count: 4, indices: [0, 1, 2, 3] })
+  })
+
   test("a draft over the quota evicts the largest other drafts until it fits", () => {
     const storage = quotaStorage(80)
     storage.values.set("ren.theme.v1", "dark")
