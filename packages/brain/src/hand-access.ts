@@ -16,6 +16,7 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("HandAccess.U
 
 export interface Interface {
   readonly open: (sessionId: Session.ID) => Effect.Effect<Hand.Access, NotFound | Unavailable>
+  readonly release: (sessionId: Session.ID) => Effect.Effect<void, Unavailable>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/brain/HandAccess") {}

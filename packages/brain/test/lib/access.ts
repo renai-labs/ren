@@ -14,7 +14,10 @@ const found = (accesses: ReadonlyMap<Session.ID, Hand.Access>, sessionId: Sessio
 }
 
 export const fixed = (accesses: ReadonlyMap<Session.ID, Hand.Access>) =>
-  Layer.succeed(HandAccess.Service, HandAccess.Service.of({ open: (sessionId) => found(accesses, sessionId) }))
+  Layer.succeed(
+    HandAccess.Service,
+    HandAccess.Service.of({ open: (sessionId) => found(accesses, sessionId), release: () => Effect.void }),
+  )
 
 export interface MemoryInterface {
   readonly set: (sessionId: Session.ID, access: Hand.Access) => Effect.Effect<void>
@@ -36,6 +39,7 @@ export const memory = (initial: ReadonlyMap<Session.ID, Hand.Access>) =>
       return Context.make(
         HandAccess.Service,
         HandAccess.Service.of({
+          release: () => Effect.void,
           open: (sessionId) => Effect.flatMap(Ref.get(accesses), (current) => found(current, sessionId)),
         }),
       ).pipe(

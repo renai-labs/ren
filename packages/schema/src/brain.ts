@@ -6,4 +6,4 @@ import type { Session } from "./session.js"
 export const ID = Identifier.make("brn", "Brain.ID")
 export type ID = typeof ID.Type
 
-export const ofSession = (sessionId: Session.ID) => ID.make(`brn_${sessionId.slice(sessionId.indexOf("_") + 1)}`)
+export const ofSession = (sessionId: Session.ID) => ID.make(`brn_${Identifier.suffix(sessionId)}`)

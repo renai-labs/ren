@@ -11,14 +11,14 @@ import { FileNotFoundError, FileTooLargeError, WrongKindError } from "@ren/hand-
 import type { Signal } from "@ren/hand-api/signal"
 import type { HandConnections } from "@ren/brain/hand-connections"
 import { Hand } from "@ren/brain/hand"
+import { Identifier } from "@ren/schema/identifier"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer, Schema } from "effect"
 import { OverrideShell } from "./override-shell.js"
 
 export const provider = "ren"
 
-export const workspaceId = (sessionId: Session.ID) =>
-  Workspace.ID.make(`wrk_${sessionId.slice(sessionId.indexOf("_") + 1)}`)
+export const workspaceId = (sessionId: Session.ID) => Workspace.ID.make(`wrk_${Identifier.suffix(sessionId)}`)
 
 const killedBySignal = (signal: Signal.Name) => new CrossSpawnSpawner.KilledBySignal(signal)
 
@@ -82,9 +82,7 @@ export const replacements = (connections: HandConnections.Interface): LayerNode.
       [provider]: WorkspaceDriver.make({
         create: () => Effect.succeed({ binding: {} }),
         connect: (input) =>
-          Schema.decodeUnknownEffect(Session.ID)(
-            `ses_${input.workspaceID.slice(input.workspaceID.indexOf("_") + 1)}`,
-          ).pipe(
+          Schema.decodeUnknownEffect(Session.ID)(`ses_${Identifier.suffix(input.workspaceID)}`).pipe(
             Effect.map((sessionId) => session(connections, sessionId)),
             Effect.mapError((cause) => new WorkspaceDriver.Error({ message: cause.message, cause })),
           ),

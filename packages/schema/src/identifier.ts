@@ -5,6 +5,8 @@ import { monotonicFactory } from "ulid"
 
 const ulid = monotonicFactory()
 
+export const suffix = (id: string) => id.slice(id.indexOf("_") + 1)
+
 export const make = <const Brand extends string>(prefix: string, brand: Parameters<typeof Schema.brand<Brand>>[0]) => {
   const schema = Schema.String.check(Schema.isStartingWith(`${prefix}_`)).pipe(
     Schema.brand<Brand>(brand),

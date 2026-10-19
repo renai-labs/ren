@@ -9,7 +9,7 @@ import { Sandbox, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, Deferred, Effect, Exit, Layer, Ref, Schedule, Schema, Scope } from "effect"
+import { Context, Deferred, Effect, Exit, Layer, Option, Ref, Schedule, Schema, Scope } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath, stat } from "node:fs/promises"
 import { createServer, type Socket } from "node:net"
@@ -51,6 +51,7 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
   const counted = Layer.succeed(
     HandAccess.Service,
     HandAccess.Service.of({
+      release: () => Effect.void,
       open: (sessionId) =>
         Ref.update(opens, (count) => count + 1).pipe(
           Effect.andThen(beforeOpen),
@@ -76,7 +77,7 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
     ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     () => Effect.succeedNone,
-    true,
+    Option.some(environments),
   )
   return {
     harness: yield* OpenCodeHarness.make(host, endpoints, AbsolutePath.make(local)),

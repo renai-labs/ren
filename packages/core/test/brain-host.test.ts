@@ -280,7 +280,7 @@ describe("BrainHost", () => {
           Effect.provide(host(settings, scripted(yield* Ref.make<ReadonlyArray<Models.Access>>([]), granted, revoked))),
         )
         expect([yield* Ref.get(revoked), yield* Ref.get(granted), script.calls[0]?.authorization]).toEqual([
-          [{ brainId: sessionId, organizationId }],
+          [{ sessionId, organizationId }],
           2,
           "Bearer sk-granted-2",
         ])
@@ -301,10 +301,7 @@ describe("BrainHost", () => {
             ),
           ),
         )
-        expect([failure._tag, yield* Ref.get(revoked)]).toEqual([
-          "BrainRejectedError",
-          [{ brainId: sessionId, organizationId }],
-        ])
+        expect([failure._tag, yield* Ref.get(revoked)]).toEqual(["BrainRejectedError", [{ sessionId, organizationId }]])
       }),
     )
 
@@ -369,7 +366,7 @@ describe("BrainHost", () => {
         const host = yield* brain.authenticateHost(
           Redacted.make(yield* SessionToken.sign(key, { sid, scope: "host", org: organizationId, iat: 0, exp })),
         )
-        expect(host).toEqual({ brainId: sid, organizationId })
+        expect(host).toEqual({ sessionId: sid, organizationId })
         const refreshed = yield* brain.refreshModels(host)
         expect(claims(refreshed.hostToken ?? "").exp).toBe(Duration.toSeconds("5 hours"))
       }).pipe(Effect.provide(host(settings, expiring))),
@@ -553,7 +550,7 @@ describe("BrainHost", () => {
           `/workspace/${sessionId}`,
           `/workspace/${sessionId}`,
         ])
-        const access = yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org })
+        const access = yield* brain.accessEnvironment({ sessionId, organizationId: org })
         expect(access.directory).toBe(`/workspace/${sessionId}`)
       }),
     )
@@ -584,9 +581,9 @@ describe("BrainHost", () => {
         expect((yield* startOn(brain, sessionId, org, yield* Seed.environment(org)).pipe(Effect.flip))._tag).toBe(
           "BrainRejectedError",
         )
-        expect(
-          (yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org }).pipe(Effect.flip))._tag,
-        ).toBe("EnvironmentNotFoundError")
+        expect((yield* brain.accessEnvironment({ sessionId, organizationId: org }).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentNotFoundError",
+        )
       }),
     )
 
@@ -610,10 +607,10 @@ describe("BrainHost", () => {
     environmentIt.live("a refreshed host token comes from the host token alone and outlives now by two hours", () =>
       Effect.gen(function* () {
         const brain = yield* hostWith("http://127.0.0.1:9")
-        const host = { brainId: Session.ID.create(), organizationId }
+        const host = { sessionId: Session.ID.create(), organizationId }
         const body = yield* brain.refreshHostToken(host)
         const refreshed = claims(body.hostToken)
-        expect(refreshed).toMatchObject({ sid: host.brainId, scope: "host", org: organizationId })
+        expect(refreshed).toMatchObject({ sid: host.sessionId, scope: "host", org: organizationId })
         expect(refreshed.exp * 1000 - Date.now()).toBeGreaterThan(Duration.toMillis(Duration.hours(2)) - 5_000)
       }),
     )

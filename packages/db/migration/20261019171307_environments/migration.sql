@@ -26,7 +26,9 @@ CREATE TABLE "session_environment" (
 	"environment_id" text NOT NULL,
 	"hand_id" text,
 	"generation" integer DEFAULT 1 NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"idle_at" timestamp,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "session_environment_generation_check" CHECK ("generation" >= 1)
 );
 --> statement-breakpoint
 CREATE TABLE "space_environment" (

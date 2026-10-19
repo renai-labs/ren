@@ -42,7 +42,7 @@ const handsWith = Effect.fnUntraced(function* (
 })
 
 const subjectIn = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
-  return { brainId: Session.ID.create(), organizationId, spaceId: yield* Seed.team(organizationId) }
+  return { sessionId: Session.ID.create(), organizationId, spaceId: yield* Seed.team(organizationId) }
 })
 
 const handsOf = Effect.fnUntraced(function* (environmentId: Environment.ID) {
@@ -64,7 +64,7 @@ describe("Hands", () => {
       const environmentId = yield* Seed.environment(organizationId)
       const session = yield* subjectIn(organizationId)
       const binding = yield* subject.hands.bind(session, environmentId)
-      expect(binding).toEqual({ directory: `/workspace/${session.brainId}`, isNew: true })
+      expect(binding).toEqual({ directory: `/workspace/${session.sessionId}`, isNew: true })
       expect(yield* subject.hands.find(session)).toEqual(Option.some(binding.directory))
       expect(yield* subject.hands.find({ ...session, organizationId: yield* Seed.organization() })).toEqual(
         Option.none(),
@@ -100,7 +100,7 @@ describe("Hands", () => {
       const organizationId = yield* Seed.organization()
       const environmentId = yield* Seed.environment(organizationId)
       const session = yield* subjectIn(organizationId)
-      const elsewhere = { ...session, brainId: Session.ID.create(), spaceId: Space.ID.create() }
+      const elsewhere = { ...session, sessionId: Session.ID.create(), spaceId: Space.ID.create() }
       expect((yield* subject.hands.bind(elsewhere, environmentId).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
       yield* subject.hands.bind(session, environmentId)
       yield* subject.hands.access(session)
@@ -127,11 +127,11 @@ describe("Hands", () => {
         const again = yield* subject.hands.access(session)
         const provisions = yield* Ref.get(subject.probe.provisions)
         expect(provisions.length).toBe(1)
-        expect([access.directory, access.generation]).toEqual([`/workspace/${session.brainId}`, 1])
+        expect([access.directory, access.generation]).toEqual([`/workspace/${session.sessionId}`, 1])
         expect(again.url.href).toBe(access.url.href)
         const claims = yield* EnvironmentToken.verify([keys[0].publicKey], Redacted.value(access.token))
         expect(Option.map(claims, (found) => [found.kid, found.env, found.brain])).toEqual(
-          Option.some(["new", environmentId, Brain.ofSession(session.brainId)]),
+          Option.some(["new", environmentId, Brain.ofSession(session.sessionId)]),
         )
         expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(14 * 60_000)
         expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(15 * 60_000)
@@ -194,7 +194,7 @@ describe("Hands", () => {
       const failed = yield* subject.hands.access(session).pipe(Effect.flip)
       expect([failed._tag, failed.message]).toEqual([
         "Hands.Unavailable",
-        `The hand of session ${session.brainId} is unavailable: the test provider fails`,
+        `The hand of session ${session.sessionId} is unavailable: the test provider fails`,
       ])
       yield* Ref.set(subject.probe.failing, false)
       expect((yield* subject.hands.access(session)).generation).toBe(1)

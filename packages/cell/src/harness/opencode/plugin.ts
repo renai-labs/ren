@@ -6,8 +6,10 @@ import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Tool } from "@opencode/schema/tool"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { HandConnections } from "@ren/brain/hand-connections"
+import { Identifier } from "@ren/schema/identifier"
 import type { Models } from "@ren/schema/models"
-import { Clock, DateTime, Deferred, Effect, Option, Predicate, Redacted, Ref, Schema, Struct } from "effect"
+import { Session } from "@ren/schema/session"
+import { Clock, DateTime, Deferred, Effect, Option, Predicate, Redacted, Ref, Schema, Stream, Struct } from "effect"
 import type { Harness } from "../harness.js"
 import { ModelProviders } from "./model-providers.js"
 
@@ -53,7 +55,7 @@ export const make = (
   reloads: Ref.Ref<ReadonlyArray<Effect.Effect<void>>>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
-  hasHandConnections: boolean,
+  connections: Option.Option<HandConnections.Interface>,
 ) =>
   Plugin.define({
     id: "ren",
@@ -62,11 +64,11 @@ export const make = (
         const tool = context.tool
         const integration = context.integration
         const provider = context.provider
-        if (!hasHandConnections)
+        if (Option.isNone(connections))
           yield* tool.transform((editor) => {
             for (const id of unavailable) editor.remove(id)
           })
-        if (hasHandConnections)
+        if (Option.isSome(connections))
           yield* tool.hook("execute.after", (event) =>
             Effect.sync(() => {
               if (event.status !== "error") return
@@ -78,6 +80,16 @@ export const make = (
                 ...(event.error.metadata && { metadata: event.error.metadata }),
               })
             }),
+          )
+        if (Option.isSome(connections))
+          yield* context.event.subscribe().pipe(
+            Stream.runForEach((event) => {
+              if (event.type !== "session.idle" || !event.location?.workspaceID) return Effect.void
+              if (Identifier.suffix(event.data.sessionID) !== Identifier.suffix(event.location.workspaceID))
+                return Effect.void
+              return connections.value.release(Session.ID.make(event.data.sessionID))
+            }),
+            Effect.forkScoped,
           )
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(endpoints)))
         yield* integration.transform((editor) => {

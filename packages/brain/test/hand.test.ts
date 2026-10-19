@@ -466,7 +466,7 @@ it.live("stops with SIGKILL a command that ignores SIGTERM when its scope closes
 )
 
 const opening = (open: HandAccess.Interface["open"]) =>
-  Layer.succeed(HandAccess.Service, HandAccess.Service.of({ open }))
+  Layer.succeed(HandAccess.Service, HandAccess.Service.of({ open, release: () => Effect.void }))
 
 const isStopped = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   handle.isRunning.pipe(Effect.map((isRunning) => !isRunning))

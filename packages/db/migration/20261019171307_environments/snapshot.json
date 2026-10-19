@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "87f185c8-1b67-4bfb-89d8-6611bb14232b",
+  "id": "0ae196de-9d20-438d-9bc7-1febf9e1cb45",
   "prevIds": [
     "f6003c57-ea8c-42f2-bd9d-006dcc41cae9"
   ],
@@ -1035,6 +1035,19 @@
       "generated": null,
       "identity": null,
       "name": "generation",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "session_environment"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "idle_at",
       "entityType": "columns",
       "schema": "public",
       "table": "session_environment"
@@ -2275,6 +2288,13 @@
       "entityType": "checks",
       "schema": "public",
       "table": "environment"
+    },
+    {
+      "value": "\"generation\" >= 1",
+      "name": "session_environment_generation_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "session_environment"
     },
     {
       "value": "char_length(\"name\") between 1 and 256",

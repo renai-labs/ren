@@ -39,7 +39,7 @@ export const open = Effect.fn("Host.open")(function* (
     ]).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     refreshKey,
-    Option.isSome(connections),
+    connections,
   )
 })
 
@@ -55,7 +55,7 @@ export const make = Effect.fn("Host.make")(function* (
   >,
   initial: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  hasHandConnections: boolean,
+  connections: Option.Option<HandConnections.Interface>,
 ): Effect.fn.Return<Instance, Error, Scope.Scope> {
   const runtime = yield* Effect.acquireRelease(
     Effect.sync(() => ManagedRuntime.make(routes)),
@@ -66,7 +66,7 @@ export const make = Effect.fn("Host.make")(function* (
   const endpoints = yield* Ref.make(initial)
   const reloads = yield* Ref.make<ReadonlyArray<Effect.Effect<void>>>([])
   const loaded = yield* Deferred.make<void>()
-  yield* plugins.register(RenPlugin.make(endpoints, reloads, loaded, refreshKey, hasHandConnections))
+  yield* plugins.register(RenPlugin.make(endpoints, reloads, loaded, refreshKey, connections))
   const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
@@ -78,7 +78,7 @@ export const make = Effect.fn("Host.make")(function* (
     credentials: Context.get(services, Credential.Service),
     sessions: Context.get(services, Session.Service),
     workspaces: Context.get(services, Workspace.Service),
-    hasHandConnections,
+    hasHandConnections: Option.isSome(connections),
     configure: (next) =>
       Ref.set(endpoints, next).pipe(
         Effect.andThen(Ref.get(reloads)),

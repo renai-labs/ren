@@ -5,7 +5,7 @@ Brain code that is the same on every host and every harness. A host (the cell in
 ## What belongs here
 
 - `src/hand-access.ts`: `HandAccess`, how a brain gets a session's `Hand.Access` (`{ directory, url, token, expiresAt, generation }`). `open` fails with `NotFound` (Ren says the session has no access) or `Unavailable` (Ren does not answer, or cannot give a hand). The cell's Host API layer is the production one; `@ren/brain/testing` has fixed and in-memory layers for tests.
-- `src/hand-connections.ts`: `HandConnections`, the executor connection of each session. Nothing connects before the first file or shell call. The first contact checks the executor's protocol in `hello` and makes the session's directory. An executor of another environment refuses the token, so the call fails with "token refused".
+- `src/hand-connections.ts`: `HandConnections`, the executor connection of each session. `release` tells Ren the session is idle and drops the connection, so the next call asks Ren again. Nothing connects before the first file or shell call. The first contact checks the executor's protocol in `hello` and makes the session's directory. An executor of another environment refuses the token, so the call fails with "token refused".
 - `src/hand.ts`: `Hand`, harness-neutral tool plumbing: `spawner` runs processes through the Executor API, `Files` reads and changes files through it, and `session` gives a session's spawner and files. A harness adapter maps `Files` errors to its own; it never sees the RPC client.
 
 ## Notes

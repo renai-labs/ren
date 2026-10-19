@@ -13,7 +13,7 @@ import {
 
 export class CurrentHost extends Context.Service<
   CurrentHost,
-  { readonly brainId: Session.ID; readonly organizationId: Auth.OrganizationID }
+  { readonly sessionId: Session.ID; readonly organizationId: Auth.OrganizationID }
 >()("@ren/brain-api/CurrentHost") {}
 
 export class HostAuthentication extends HttpApiMiddleware.Service<HostAuthentication, { provides: CurrentHost }>()(
@@ -60,6 +60,16 @@ const EnvironmentsGroup = HttpApiGroup.make("environments")
         summary: "Get access to a session’s hand",
         description:
           "Name the hand and directory of the session named by a host token, with a fresh environment token. The request has no session field: the session comes only from the host token.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("environments.release", "/brain/environment/release").annotateMerge(
+      OpenApi.annotations({
+        identifier: "environments.release",
+        summary: "Release a session’s seat on its hand",
+        description:
+          "Say that the session named by a host token is idle. Its seat stops counting toward its hand’s sessions per hand until its next access; the session keeps its hand.",
       }),
     ),
   )

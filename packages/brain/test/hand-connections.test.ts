@@ -80,7 +80,7 @@ const environmentsWith = (
   )
 
 const opening = (open: HandAccess.Interface["open"]) =>
-  Layer.succeed(HandAccess.Service, HandAccess.Service.of({ open }))
+  Layer.succeed(HandAccess.Service, HandAccess.Service.of({ open, release: () => Effect.void }))
 
 const machine = (options: Parameters<typeof Sandbox.layer>[0]) =>
   Layer.build(Layer.fresh(Sandbox.layer(options))).pipe(
@@ -404,6 +404,7 @@ const controlled = Effect.fnUntraced(function* (initial: Effect.Success<ReturnTy
     Layer.succeed(
       HandAccess.Service,
       HandAccess.Service.of({
+        release: () => Effect.void,
         open: () =>
           Effect.gen(function* () {
             const snapshot = yield* Ref.get(current)

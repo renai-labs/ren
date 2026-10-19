@@ -42,6 +42,18 @@ export const layer = (url: string) =>
             ),
           )
         }),
+        release: Effect.fn("HostAccess.release")(function* (sessionId) {
+          const unavailable = (message: string) => new HandAccess.Unavailable({ sessionId, message })
+          if (sessionId !== info.sessionId)
+            return yield* unavailable(`This cell holds session ${info.sessionId}, not ${sessionId}`)
+          const token = yield* hostToken.current
+          if (Option.isNone(token)) return yield* unavailable("the cell has no valid host token")
+          return yield* host.environments["environments.release"]().pipe(
+            HostToken.withToken(token.value),
+            Effect.timeout(HostToken.renAnswersWithin),
+            Effect.mapError((error) => unavailable(error.message)),
+          )
+        }),
       })
     }),
   )

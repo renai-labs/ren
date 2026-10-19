@@ -5,14 +5,11 @@ import type { HandProvider } from "@ren/schema/hand-provider"
 import { Primitive } from "@ren/schema/primitive"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import type { SpaceEnvironment } from "@ren/schema/space-environment"
-import { defineRelationsPart, isNull, sql } from "drizzle-orm"
-import { check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
+import { defineRelationsPart, sql } from "drizzle-orm"
+import { check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core"
 import type { Schema } from "effect"
 import { organization } from "./auth.sql.js"
 import { space } from "./space.sql.js"
-
-export const spaceEnvironmentConstraint = "space_environment_space_id_environment_id_uidx"
 
 export const environment = pgTable(
   "environment",
@@ -41,27 +38,6 @@ export const environment = pgTable(
       "environment_sessions_per_hand_check",
       sql`${table.sessions_per_hand} between 1 and ${sql.raw(String(Environment.maximumSessionsPerHand))}`,
     ),
-  ],
-)
-
-export const space_environment = pgTable(
-  "space_environment",
-  {
-    id: text().$type<SpaceEnvironment.ID>().primaryKey(),
-    space_id: text()
-      .$type<Space.ID>()
-      .notNull()
-      .references(() => space.id, { onDelete: "cascade" }),
-    environment_id: text()
-      .$type<Environment.ID>()
-      .notNull()
-      .references(() => environment.id, { onDelete: "cascade" }),
-    created_at: timestamp().defaultNow().notNull(),
-    archived_at: timestamp(),
-  },
-  (table) => [
-    uniqueIndex(spaceEnvironmentConstraint).on(table.space_id, table.environment_id).where(isNull(table.archived_at)),
-    index("space_environment_environment_id_idx").on(table.environment_id),
   ],
 )
 
@@ -95,22 +71,21 @@ export const session_environment = pgTable(
       .$type<Hand.ID>()
       .references(() => hand.id, { onDelete: "set null" }),
     generation: integer().default(1).notNull(),
+    idle_at: timestamp(),
     created_at: timestamp().defaultNow().notNull(),
   },
-  (table) => [index("session_environment_hand_id_idx").on(table.hand_id)],
+  (table) => [
+    index("session_environment_hand_id_idx").on(table.hand_id),
+    check("session_environment_generation_check", sql`${table.generation} >= 1`),
+  ],
 )
 
 export const environmentRelations = defineRelationsPart(
-  { organization, space, environment, space_environment, hand, session_environment },
+  { organization, space, environment, hand, session_environment },
   (r) => ({
     environment: {
       organization: r.one.organization({ from: r.environment.organization_id, to: r.organization.id }),
-      spaceEnvironments: r.many.space_environment({ from: r.environment.id, to: r.space_environment.environment_id }),
       hands: r.many.hand({ from: r.environment.id, to: r.hand.environment_id }),
-    },
-    space_environment: {
-      space: r.one.space({ from: r.space_environment.space_id, to: r.space.id }),
-      environment: r.one.environment({ from: r.space_environment.environment_id, to: r.environment.id }),
     },
     hand: {
       environment: r.one.environment({ from: r.hand.environment_id, to: r.environment.id }),

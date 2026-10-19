@@ -12,6 +12,7 @@ import { tags } from "@opencode/util/effect/app-node"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
+import { Identifier } from "@ren/schema/identifier"
 import { Session } from "@ren/schema/session"
 import { Deferred, Duration, Effect, Fiber, Latch, Layer, Option, Stream, Struct } from "effect"
 import { ChildProcess } from "effect/process"
@@ -69,7 +70,7 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
       const exitOrder: Array<Shell.ID> = []
       const outputDir = path.join(global.data, DIRECTORY, location.project.id)
       const hand = Option.map(Option.fromNullishOr(location.workspaceID), (workspaceID) =>
-        handOf(Session.ID.make(`ses_${workspaceID.slice(workspaceID.indexOf("_") + 1)}`)),
+        handOf(Session.ID.make(`ses_${Identifier.suffix(workspaceID)}`)),
       )
       const limits = Effect.map(config.entries(), (entries) => {
         const configured = Config.latest(entries, "tool_output")

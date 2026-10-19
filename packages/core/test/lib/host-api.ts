@@ -18,9 +18,13 @@ const handlers = (around: Around) =>
     ),
     HttpApiBuilder.group(HostApi, "environments", (group) =>
       Effect.map(BrainHost.Service, (brain) =>
-        group.handle("environments.access", () =>
-          around("environments.access", Effect.flatMap(CurrentHost, brain.accessEnvironment)),
-        ),
+        group
+          .handle("environments.access", () =>
+            around("environments.access", Effect.flatMap(CurrentHost, brain.accessEnvironment)),
+          )
+          .handle("environments.release", () =>
+            around("environments.release", Effect.flatMap(CurrentHost, brain.releaseEnvironment)),
+          ),
       ),
     ),
     HttpApiBuilder.group(HostApi, "host", (group) =>
