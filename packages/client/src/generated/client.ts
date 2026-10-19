@@ -19,6 +19,17 @@ import type {
   SpaceMemberCreateOutput,
   SpaceMemberArchiveInput,
   SpaceMemberArchiveOutput,
+  EnvironmentListInput,
+  EnvironmentListOutput,
+  EnvironmentGetInput,
+  EnvironmentGetOutput,
+  EnvironmentCreateInput,
+  EnvironmentCreateOutput,
+  EnvironmentUpdateInput,
+  EnvironmentUpdateOutput,
+  EnvironmentArchiveInput,
+  EnvironmentArchiveOutput,
+  HandProviderListOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -161,7 +172,7 @@ export function make(options: ClientOptions) {
             path: `/spaces`,
             body: { name: input["name"], description: input["description"] },
             successStatus: 200,
-            declaredStatuses: [401, 403, 404, 409],
+            declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
           },
           requestOptions,
@@ -173,7 +184,7 @@ export function make(options: ClientOptions) {
             path: `/spaces/${encodeURIComponent(input.id)}`,
             body: { name: input["name"], description: input["description"] },
             successStatus: 200,
-            declaredStatuses: [401, 403, 404, 409],
+            declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
           },
           requestOptions,
@@ -215,7 +226,7 @@ export function make(options: ClientOptions) {
             path: `/space-members`,
             body: input["payload"],
             successStatus: 200,
-            declaredStatuses: [401, 403, 404, 409],
+            declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
           },
           requestOptions,
@@ -229,6 +240,85 @@ export function make(options: ClientOptions) {
             declaredStatuses: [401, 403, 404],
             empty: false,
           },
+          requestOptions,
+        ),
+    },
+    environment: {
+      list: (input: EnvironmentListInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentListOutput>(
+          {
+            method: "GET",
+            path: `/environments`,
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: EnvironmentGetInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentGetOutput>(
+          {
+            method: "GET",
+            path: `/environments/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: EnvironmentCreateInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentCreateOutput>(
+          {
+            method: "POST",
+            path: `/environments`,
+            body: {
+              spaceId: input["spaceId"],
+              name: input["name"],
+              description: input["description"],
+              provider: input["provider"],
+              config: input["config"],
+              sessionsPerHand: input["sessionsPerHand"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: EnvironmentUpdateInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/environments/${encodeURIComponent(input.id)}`,
+            body: {
+              name: input["name"],
+              description: input["description"],
+              config: input["config"],
+              sessionsPerHand: input["sessionsPerHand"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: EnvironmentArchiveInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/environments/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    handProvider: {
+      list: (requestOptions?: RequestOptions) =>
+        request<HandProviderListOutput>(
+          { method: "GET", path: `/hand-providers`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
           requestOptions,
         ),
     },

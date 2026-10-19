@@ -1,4 +1,6 @@
 import { HttpApi, OpenApi } from "effect/http-api"
+import { EnvironmentGroup } from "./groups/environment.js"
+import { HandProviderGroup } from "./groups/hand-provider.js"
 import { HealthGroup } from "./groups/health.js"
 import { InvitationGroup } from "./groups/invitation.js"
 import { MeGroup } from "./groups/me.js"
@@ -11,6 +13,8 @@ export const Api = HttpApi.make("server")
   .add(InvitationGroup)
   .add(SpaceGroup)
   .add(SpaceMemberGroup)
+  .add(EnvironmentGroup)
+  .add(HandProviderGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren API",

@@ -1,3 +1,5 @@
+export type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: string]: JsonValue }
+
 export type HealthStatus = "ok"
 
 export type AuthUserID = string
@@ -11,6 +13,12 @@ export type SpaceID = string
 export type SpaceMembershipID = string
 
 export type SpaceAssignmentID = string
+
+export type EnvironmentID = string
+
+export type EnvironmentProviderID = string
+
+export type EnvironmentCapability = "processes" | "files"
 
 export type HealthInfo = { status: HealthStatus; version: string }
 
@@ -67,11 +75,38 @@ export type SpaceMemberPending = {
   archivedAt: string | null
 }
 
+export type EnvironmentInfo = {
+  id: EnvironmentID
+  spaceId: SpaceID
+  name: string
+  description: string | null
+  provider: EnvironmentProviderID
+  config: JsonValue
+  sessionsPerHand: number
+  canUpdate: boolean
+  canArchive: boolean
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
+export type EnvironmentProviderInfo = {
+  id: EnvironmentProviderID
+  title: string
+  description: string
+  capabilities: Array<EnvironmentCapability>
+  configSchema: JsonValue
+}
+
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
 export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
+
+export type EnvironmentPage = { items: Array<EnvironmentInfo>; page: number; pageSize: number; total: number }
+
+export type EnvironmentProviders = Array<EnvironmentProviderInfo>
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
@@ -90,6 +125,14 @@ export type NotFoundError = {
 }
 export const isNotFoundError = (value: unknown): value is NotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "NotFoundError"
+
+export type InvalidRequestError = {
+  readonly _tag: "InvalidRequestError"
+  readonly message: string
+  readonly field?: string | undefined
+}
+export const isInvalidRequestError = (value: unknown): value is InvalidRequestError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "InvalidRequestError"
 
 export type ConflictError = {
   readonly _tag: "ConflictError"
@@ -188,3 +231,112 @@ export type SpaceMemberCreateOutput = SpaceMemberInfo
 export type SpaceMemberArchiveInput = { readonly id: { readonly id: string | string }["id"] }
 
 export type SpaceMemberArchiveOutput = SpaceMemberInfo
+
+export type EnvironmentListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type EnvironmentListOutput = EnvironmentPage
+
+export type EnvironmentGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type EnvironmentGetOutput = EnvironmentInfo
+
+export type EnvironmentCreateInput = {
+  readonly spaceId: {
+    readonly spaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly provider: string
+    readonly config: JsonValue
+    readonly sessionsPerHand?: number
+  }["spaceId"]
+  readonly name: {
+    readonly spaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly provider: string
+    readonly config: JsonValue
+    readonly sessionsPerHand?: number
+  }["name"]
+  readonly description?: {
+    readonly spaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly provider: string
+    readonly config: JsonValue
+    readonly sessionsPerHand?: number
+  }["description"]
+  readonly provider: {
+    readonly spaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly provider: string
+    readonly config: JsonValue
+    readonly sessionsPerHand?: number
+  }["provider"]
+  readonly config: {
+    readonly spaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly provider: string
+    readonly config: JsonValue
+    readonly sessionsPerHand?: number
+  }["config"]
+  readonly sessionsPerHand: {
+    readonly spaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly provider: string
+    readonly config: JsonValue
+    readonly sessionsPerHand?: number
+  }["sessionsPerHand"]
+}
+
+export type EnvironmentCreateOutput = EnvironmentInfo
+
+export type EnvironmentUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: {
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
+    readonly config?: JsonValue | undefined
+    readonly sessionsPerHand?: number | undefined
+  }["name"]
+  readonly description?: {
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
+    readonly config?: JsonValue | undefined
+    readonly sessionsPerHand?: number | undefined
+  }["description"]
+  readonly config?: {
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
+    readonly config?: JsonValue | undefined
+    readonly sessionsPerHand?: number | undefined
+  }["config"]
+  readonly sessionsPerHand?: {
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
+    readonly config?: JsonValue | undefined
+    readonly sessionsPerHand?: number | undefined
+  }["sessionsPerHand"]
+}
+
+export type EnvironmentUpdateOutput = EnvironmentInfo
+
+export type EnvironmentArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type EnvironmentArchiveOutput = EnvironmentInfo
+
+export type HandProviderListOutput = EnvironmentProviders

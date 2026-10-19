@@ -2,7 +2,7 @@ export * as ExecutorAdapter from "./executor.js"
 
 import { EnvironmentToken } from "@ren/hand-api/environment-token"
 import { Signature } from "@ren/hand-api/signature"
-import { Sandbox } from "@ren/executor/testing"
+import { Image, Sandbox } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Effect, Schema } from "effect"
@@ -150,31 +150,12 @@ const docker = async (args: ReadonlyArray<string>) => {
   return output.stdout.trim()
 }
 
-const image: { tag: Promise<string> | undefined } = { tag: undefined }
-
-const build = () =>
-  (image.tag ??= (async () => {
-    const artifact = await mkdtemp(path.join(os.tmpdir(), "ren-chaos-executor-"))
-    const bundled = await Bun.build({ entrypoints: [mainPath], target: "bun", outdir: artifact, naming: "executor.js" })
-    if (!bundled.success) throw new Error(`bundling the executor failed: ${bundled.logs.map(String).join("\n")}`)
-    await Bun.write(
-      path.join(artifact, "Dockerfile"),
-      Bun.file(path.resolve(import.meta.dir, "../../infra/executor.Dockerfile")),
-    )
-    const hash = new Bun.CryptoHasher("sha256")
-      .update(await Bun.file(path.join(artifact, "executor.js")).bytes())
-      .digest("hex")
-    const tag = `ren-chaos-executor:${hash.slice(0, 16)}`
-    await docker(["build", "--quiet", "--tag", tag, artifact])
-    return tag
-  })())
-
 export const dockerContainer = async (options: {
   readonly label: string
   readonly environmentId?: Environment.ID
 }): Promise<Container> => {
   const environmentId = options.environmentId ?? Environment.ID.create()
-  const tag = await build()
+  const tag = await Image.build()
   const state = { container: "", url: "" }
   const published = async () => {
     const port = /:(\d+)$/m.exec(await docker(["port", state.container, "4100/tcp"]))?.[1]

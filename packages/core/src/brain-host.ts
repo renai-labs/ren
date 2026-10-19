@@ -34,7 +34,7 @@ import {
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { CurrentHost, HostAuthentication, type HostTokenBody } from "@ren/brain-api/host-api"
-import { Environments } from "./environments.js"
+import { Hands } from "./hands.js"
 import { Models } from "./models.js"
 
 export {
@@ -99,7 +99,7 @@ export const layer = Layer.effect(
     const key = Array.headNonEmpty(Redacted.value(config.keys))
     const http = yield* HttpClient.HttpClient
     const models = yield* Models.Service
-    const environments = yield* Environments.Service
+    const hands = yield* Hands.Service
     const brain = yield* HttpApiClient.makeWith(BrainApi, {
       baseUrl: url,
       httpClient: HttpClient.mapRequestEffect(http, (request) =>
@@ -218,18 +218,18 @@ export const layer = Layer.effect(
         const requested = input.environment
         const binding = requested
           ? Option.some(
-              yield* environments
+              yield* hands
                 .bind(subject, requested.environmentId)
                 .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
             )
-          : Option.map(yield* environments.find(subject), (location) => ({ location, isNew: false }))
+          : Option.map(yield* hands.find(subject), (location) => ({ location, isNew: false }))
         const payload = Option.match(binding, {
           onNone: () => input,
           onSome: (found) => Struct.assign(input, { environment: found.location }),
         })
         return yield* withModels(subject, call(input.sessionId, brain.brain["brain.start"]({ payload }))).pipe(
           Effect.tapErrorTag("BrainRejectedError", () =>
-            Option.exists(binding, (found) => found.isNew) ? environments.unbind(input.sessionId) : Effect.void,
+            Option.exists(binding, (found) => found.isNew) ? hands.unbind(input.sessionId) : Effect.void,
           ),
         )
       }),
@@ -273,11 +273,10 @@ export const layer = Layer.effect(
         return { hostToken: yield* hostToken(host, exp) }
       }),
       accessEnvironment: Effect.fn("BrainHost.accessEnvironment")(function* (host: CurrentHost["Service"]) {
-        return yield* environments.access(host).pipe(
+        return yield* hands.access(host).pipe(
           Effect.catchTags({
-            "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
-            "Environments.Unavailable": (error) =>
-              Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
+            "Hands.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
+            "Hands.Unavailable": (error) => Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
           }),
         )
       }),

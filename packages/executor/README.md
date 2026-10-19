@@ -8,6 +8,7 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 - `src/machine.ts`: `Machine`, the `Executor` that runs processes and files on the machine the executor is on, with `node:fs` and Effect's `ChildProcessSpawner`. Each process belongs to the brain that started it. It runs through Effect's `ChildProcessSpawner`, in a scope of its own. A running process that nobody reads or names for 30 seconds is killed with its group. Once its brain sends a `process.heartbeat`, the process is instead killed 30 seconds after the last heartbeat, even while a reader's connection still looks open: a frozen brain can hold a connection open for minutes.
 - `src/machine/output-log.ts`: `OutputLog`, the output of one process: the kept chunks, the readers and their cursors, and the exit.
 - `src/server.ts`: the RPC server. A gate on the route checks the environment token before the RPC server reads the body, and the `Authentication` middleware gives the caller's brain to the handlers.
+- `Dockerfile`: the image Ren's Docker hand provider runs: the bundled `main.ts` on port 4100, with `ripgrep`. `@ren/executor/testing` builds it (`Image.build`).
 - `src/main.ts`: the program. It provides `Machine.layer` and the platform services (`BunServices.layer`), which include the `ChildProcessSpawner`.
 
 ## Notes

@@ -2,6 +2,8 @@ export * as Seed from "./seed.js"
 
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
+import { Environment } from "@ren/schema/environment"
+import { Space } from "@ren/schema/space"
 import { Effect } from "effect"
 
 export const organization = Effect.fnUntraced(function* () {
@@ -57,6 +59,31 @@ export const invitation = Effect.fnUntraced(function* (input: {
     status: input.status ?? "pending",
     expiresAt: input.expiresAt ?? new Date(Date.now() + 60_000),
     createdAt: new Date(),
+  })
+  return id
+})
+
+const space = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
+  const database = yield* Database.Service
+  const id = Space.ID.create()
+  yield* database.db.insert(Database.Schema.space).values({ id, organization_id: organizationId, name: "Team" })
+  return id
+})
+
+export const environment = Effect.fnUntraced(function* (
+  organizationId: Auth.OrganizationID,
+  options: { readonly id?: Environment.ID; readonly provider?: string; readonly sessionsPerHand?: number } = {},
+) {
+  const database = yield* Database.Service
+  const id = options.id ?? Environment.ID.create()
+  yield* database.db.insert(Database.Schema.environment).values({
+    id,
+    organization_id: organizationId,
+    space_id: yield* space(organizationId),
+    name: "Sandbox",
+    provider: options.provider ?? "test",
+    config: { label: "seeded" },
+    sessions_per_hand: options.sessionsPerHand ?? Environment.defaultSessionsPerHand,
   })
   return id
 })

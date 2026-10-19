@@ -10,6 +10,11 @@ import type {
   SpaceMemberListInput,
   SpaceMemberCreateInput,
   SpaceMemberArchiveInput,
+  EnvironmentListInput,
+  EnvironmentGetInput,
+  EnvironmentCreateInput,
+  EnvironmentUpdateInput,
+  EnvironmentArchiveInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -113,6 +118,60 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["space-member", "archive"] as const,
             mutationFn: (input: SpaceMemberArchiveInput) => client["space-member"]["archive"](input),
+          }),
+      },
+    },
+    environment: {
+      list: {
+        queryKey: (input?: EnvironmentListInput) =>
+          input === undefined ? (["environment", "list"] as const) : (["environment", "list", input] as const),
+        queryOptions: (input: EnvironmentListInput) =>
+          queryOptions({
+            queryKey: ["environment", "list", input] as const,
+            queryFn: (context) => client["environment"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: EnvironmentGetInput) =>
+          input === undefined ? (["environment", "get"] as const) : (["environment", "get", input] as const),
+        queryOptions: (input: EnvironmentGetInput) =>
+          queryOptions({
+            queryKey: ["environment", "get", input] as const,
+            queryFn: (context) => client["environment"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["environment", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["environment", "create"] as const,
+            mutationFn: (input: EnvironmentCreateInput) => client["environment"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["environment", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["environment", "update"] as const,
+            mutationFn: (input: EnvironmentUpdateInput) => client["environment"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["environment", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["environment", "archive"] as const,
+            mutationFn: (input: EnvironmentArchiveInput) => client["environment"]["archive"](input),
+          }),
+      },
+    },
+    handProvider: {
+      list: {
+        queryKey: () => ["handProvider", "list"] as const,
+        queryOptions: () =>
+          queryOptions({
+            queryKey: ["handProvider", "list"] as const,
+            queryFn: (context) => client["handProvider"]["list"]({ signal: context.signal }),
           }),
       },
     },

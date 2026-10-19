@@ -1,210 +1,274 @@
 export * as Environments from "./environments.js"
 
-import { EnvironmentToken } from "@ren/hand-api/environment-token"
-import { Signature } from "@ren/hand-api/signature"
 import { Database } from "@ren/db/database"
-import { Brain } from "@ren/schema/brain"
-import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
-import type { Session } from "@ren/schema/session"
-import { and, eq } from "drizzle-orm"
-import { Array, Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
+import type { Space } from "@ren/schema/space"
+import { and, asc, count, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm"
+import { Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
+import { Access } from "./access.js"
+import { Actor } from "./actor.js"
+import { HandProvider } from "./hand-provider.js"
+import { Primitive } from "./primitive.js"
+import { SpacePolicy } from "./space/policy.js"
+import { SpaceQueries } from "./space/queries.js"
 
-export interface Subject {
-  readonly brainId: Session.ID
-  readonly organizationId: Auth.OrganizationID
-}
-
-export interface Sandbox extends Schema.Schema.Type<typeof Sandbox> {}
-export const Sandbox = Schema.Struct({
-  id: Schema.NonEmptyString,
-  url: Schema.String.check(Schema.makeFilter((url) => URL.canParse(url) || "a sandbox url must be an absolute URL")),
-  generation: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
-  workspace: Schema.String.check(Schema.isStartingWith("/")).pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed("/workspace")),
-  ),
-}).annotate({ identifier: "Environments.Sandbox" })
-
-export interface Info extends Schema.Schema.Type<typeof Info> {}
-export const Info = Schema.Struct({
-  id: Environment.ID,
-  capabilities: Schema.Array(Environment.Capability).pipe(
-    Schema.withDecodingDefaultKey(Effect.succeed(Environment.capabilities)),
-  ),
-  capacity: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
-  sandboxes: Schema.Array(Sandbox).check(
-    Schema.makeFilter(
-      (sandboxes) =>
-        new Set(sandboxes.map((sandbox) => sandbox.id)).size === sandboxes.length || "sandbox ids must be unique",
-    ),
-  ),
-}).annotate({ identifier: "Environments.Info" })
-
-export const List = Schema.fromJsonString(
-  Schema.Array(Info).check(
-    Schema.makeFilter(
-      (environments) =>
-        new Set(environments.map((environment) => environment.id)).size === environments.length ||
-        "environment ids must be unique",
-    ),
-  ),
-).annotate({ identifier: "Environments.List" })
-
-export const SigningKeys = Schema.fromJsonString(Schema.NonEmptyArray(Signature.PrivateKey)).annotate({
-  identifier: "Environments.SigningKeys",
-})
-
-export class NotFound extends Schema.TaggedError<NotFound>()("Environments.NotFound", {
-  message: Schema.String,
-}) {}
-
-export class Changed extends Schema.TaggedError<Changed>()("Environments.Changed", {
-  message: Schema.String,
-}) {}
-
-export class Unavailable extends Schema.TaggedError<Unavailable>()("Environments.Unavailable", {
-  message: Schema.String,
-}) {}
-
-export interface Binding {
-  readonly location: Environment.Location
-  readonly isNew: boolean
-}
-
-export interface Interface {
-  readonly bind: (subject: Subject, environmentId: Environment.ID) => Effect.Effect<Binding, NotFound | Changed>
-  readonly find: (subject: Subject) => Effect.Effect<Option.Option<Environment.Location>>
-  readonly unbind: (sessionId: Session.ID) => Effect.Effect<void>
-  readonly access: (subject: Subject) => Effect.Effect<Environment.Access, NotFound | Unavailable>
+export type Interface = Primitive.Interface<typeof Environment.definition> & {
+  readonly providers: Effect.Effect<ReadonlyArray<Environment.ProviderInfo>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Environments") {}
 
+const notFound = new Primitive.NotFound({ message: "Environment not found." })
+
+const table = Database.Schema.environment
+
+const actions = {
+  list: Primitive.action(Environment.definition, "list"),
+  get: Primitive.action(Environment.definition, "get"),
+  create: Primitive.action(Environment.definition, "create"),
+  update: Primitive.action(Environment.definition, "update"),
+  archive: Primitive.action(Environment.definition, "archive"),
+}
+
+const select = (transaction: Database.Transaction, actor: Actor.Info) =>
+  transaction
+    .select({ environment: table, membershipId: SpaceQueries.membership.id })
+    .from(table)
+    .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, table.space_id))
+    .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+
+type Row = Effect.Success<ReturnType<typeof select>>[number]
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const config = yield* Config.all({
-      environments: Config.schema(List, "ENVIRONMENTS").pipe(Config.withDefault([])),
-      keys: Config.option(Config.schema(Schema.RedactedFromValue(SigningKeys), "ENVIRONMENT_KEYS")),
-      lifetime: Config.Duration("ENVIRONMENT_TOKEN_LIFETIME").pipe(Config.withDefault(Duration.minutes(15))),
-    })
-    if (config.environments.length > 0 && Option.isNone(config.keys))
-      return yield* Effect.die(new Error("ENVIRONMENTS names environments, but ENVIRONMENT_KEYS has no signing key"))
     const database = yield* Database.Service
-    const table = Database.Schema.session_environment
-    const configured = (id: Environment.ID) =>
-      Option.fromNullishOr(config.environments.find((environment) => environment.id === id))
-    const notConfigured = (id: Environment.ID) =>
-      new NotFound({ message: `Environment ${id} is not in Ren’s configuration` })
-    const locationOf = (subject: Subject, environment: Info) => ({
-      environmentId: environment.id,
-      directory: Environment.sessionDirectory(subject.brainId),
-      capabilities: environment.capabilities,
+    const access = yield* Access.Service
+    const registry = yield* HandProvider.Registry
+
+    const visibleTo = (actor: Actor.Info) =>
+      and(
+        eq(table.organization_id, actor.organizationId),
+        isNull(table.archived_at),
+        isNull(Database.Schema.space.archived_at),
+        SpacePolicy.filter(access.plan(actor, actions.get)),
+      )
+
+    const toInfo =
+      (actor: Actor.Info) =>
+      (row: Row): Environment.Info => {
+        const resource = SpacePolicy.resource(row.membershipId)
+        return {
+          id: row.environment.id,
+          spaceId: row.environment.space_id,
+          name: row.environment.name,
+          description: row.environment.description,
+          provider: row.environment.provider,
+          config: row.environment.config,
+          sessionsPerHand: row.environment.sessions_per_hand,
+          canUpdate: access.isAllowed({ actor, action: actions.update, resource }),
+          canArchive: access.isAllowed({ actor, action: actions.archive, resource }),
+          createdAt: DateTime.fromDateUnsafe(row.environment.created_at),
+          updatedAt: DateTime.fromDateUnsafe(row.environment.updated_at),
+          archivedAt: row.environment.archived_at && DateTime.fromDateUnsafe(row.environment.archived_at),
+        }
+      }
+
+    const checked = Effect.fnUntraced(function* (provider: string, config: unknown) {
+      const found = registry.get(provider)
+      if (Option.isNone(found))
+        return yield* new Primitive.Invalid({
+          message: `Ren has no hand provider ${provider}.`,
+          field: "provider",
+        })
+      return yield* found.value
+        .check(config)
+        .pipe(Effect.mapError((error) => new Primitive.Invalid({ message: error.message, field: "config" })))
+    })
+
+    const findVisible = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      id: Environment.ID,
+    ) {
+      const rows = yield* select(transaction, actor)
+        .where(and(eq(table.id, id), eq(table.organization_id, actor.organizationId)))
+        .for("update", { of: table })
+      const row = rows.at(0)
+      if (!row) return
+      const resource = SpacePolicy.resource(row.membershipId)
+      if (!access.isAllowed({ actor, action: actions.get, resource })) return
+      return { row, resource }
+    })
+
+    const spaceOf = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      spaceId: Space.ID,
+    ) {
+      const rows = yield* transaction
+        .select({ membershipId: SpaceQueries.membership.id })
+        .from(Database.Schema.space)
+        .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+        .where(
+          and(
+            eq(Database.Schema.space.id, spaceId),
+            eq(Database.Schema.space.organization_id, actor.organizationId),
+            isNull(Database.Schema.space.archived_at),
+          ),
+        )
+      const row = rows.at(0)
+      if (!row) return
+      return SpacePolicy.resource(row.membershipId)
+    })
+
+    const destroyHands = Effect.fn("Environments.destroyHands")(function* (
+      provider: string,
+      environmentId: Environment.ID,
+    ) {
+      const hands = yield* database.db
+        .delete(Database.Schema.hand)
+        .where(and(eq(Database.Schema.hand.environment_id, environmentId), isNotNull(Database.Schema.hand.binding)))
+        .returning({ binding: Database.Schema.hand.binding })
+        .pipe(Effect.orDie)
+      yield* Option.match(registry.get(provider), {
+        onNone: () => Effect.void,
+        onSome: (found) =>
+          Effect.forEach(
+            hands.map((hand) => hand.binding).filter(Predicate.isNotNull),
+            (binding) =>
+              found
+                .destroy(binding)
+                .pipe(
+                  Effect.catch((error) =>
+                    Effect.logWarning(`Could not destroy a hand of environment ${environmentId}`, error),
+                  ),
+                ),
+            { concurrency: 4, discard: true },
+          ),
+      })
     })
 
     return Service.of({
-      bind: Effect.fn("Environments.bind")(function* (subject: Subject, environmentId: Environment.ID) {
-        const environment = configured(environmentId)
-        if (Option.isNone(environment)) return yield* notConfigured(environmentId)
-        const location = locationOf(subject, environment.value)
-        const inserted = yield* database.db
-          .insert(table)
-          .values({
-            session_id: subject.brainId,
-            organization_id: subject.organizationId,
-            environment_id: environmentId,
-          })
-          .onConflictDoNothing()
-          .returning({ session_id: table.session_id })
-          .pipe(Effect.orDie)
-        if (inserted.length > 0) return { location, isNew: true }
-        const existing = yield* database.db
-          .select({ environment_id: table.environment_id, organization_id: table.organization_id })
-          .from(table)
-          .where(eq(table.session_id, subject.brainId))
-          .pipe(Effect.orDie)
-        const found = existing.at(0)
-        if (found?.environment_id === environmentId && found.organization_id === subject.organizationId)
-          return { location, isNew: false }
-        return yield* new Changed({
-          message: `Session ${subject.brainId} cannot change its environment: not supported yet`,
-        })
-      }),
-      find: Effect.fn("Environments.find")(function* (subject: Subject) {
-        const rows = yield* database.db
-          .select({ environment_id: table.environment_id })
-          .from(table)
-          .where(and(eq(table.session_id, subject.brainId), eq(table.organization_id, subject.organizationId)))
-          .pipe(Effect.orDie)
-        return Option.flatMap(Option.fromNullishOr(rows.at(0)), (row) =>
-          Option.map(configured(row.environment_id), (environment) => locationOf(subject, environment)),
-        )
-      }),
-      unbind: Effect.fn("Environments.unbind")(function* (sessionId: Session.ID) {
-        yield* database.db.delete(table).where(eq(table.session_id, sessionId)).pipe(Effect.orDie)
-      }),
-      access: Effect.fn("Environments.access")(function* (subject: Subject) {
-        const assigned = yield* database.transaction((transaction) =>
+      list: Effect.fn("Environments.list")(function* (actor: Actor.Info, input: Environment.ListInput) {
+        return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const rows = yield* transaction
-              .select({ environment_id: table.environment_id, sandbox_id: table.sandbox_id })
-              .from(table)
-              .where(and(eq(table.session_id, subject.brainId), eq(table.organization_id, subject.organizationId)))
-            const row = rows.at(0)
-            if (!row) return yield* new NotFound({ message: `Session ${subject.brainId} has no environment` })
-            const environment = configured(row.environment_id)
-            if (Option.isNone(environment)) return yield* notConfigured(row.environment_id)
-            const kept = environment.value.sandboxes.find((sandbox) => sandbox.id === row.sandbox_id)
-            if (kept) return { environment: environment.value, sandbox: kept }
-            const sessions = yield* transaction
-              .select({ sandbox_id: table.sandbox_id })
-              .from(table)
-              .where(eq(table.environment_id, row.environment_id))
-              .for("update")
-            const free = environment.value.sandboxes.find(
-              (sandbox) =>
-                sessions.filter((session) => session.sandbox_id === sandbox.id).length < environment.value.capacity,
+            if (!access.isAllowed({ actor, action: actions.list, resource: SpacePolicy.organization }))
+              return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
+            const where: SQL | undefined = and(
+              visibleTo(actor),
+              input.spaceId ? eq(table.space_id, input.spaceId) : undefined,
             )
-            if (!free)
-              return yield* new Unavailable({
-                message: `Every sandbox of environment ${row.environment_id} is full; Ren makes no new sandbox yet`,
-              })
-            yield* transaction.update(table).set({ sandbox_id: free.id }).where(eq(table.session_id, subject.brainId))
-            return { environment: environment.value, sandbox: free }
+            const rows = yield* select(transaction, actor)
+              .where(where)
+              .orderBy(asc(table.created_at), asc(table.id))
+              .limit(input.pageSize)
+              .offset((input.page - 1) * input.pageSize)
+            const totals = yield* transaction
+              .select({ total: count() })
+              .from(table)
+              .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, table.space_id))
+              .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+              .where(where)
+            return {
+              items: rows.map(toInfo(actor)),
+              page: input.page,
+              pageSize: input.pageSize,
+              total: totals.at(0)?.total ?? 0,
+            }
           }),
         )
-        const keys = yield* Option.match(config.keys, {
-          onNone: () => Effect.die(new Error("ENVIRONMENT_KEYS has no signing key")),
-          onSome: (found) => Effect.succeed(Redacted.value(found)),
-        })
-        const exp = Math.floor(((yield* Clock.currentTimeMillis) + Duration.toMillis(config.lifetime)) / 1000)
-        return {
-          environmentId: assigned.environment.id,
-          directory: `${assigned.sandbox.workspace}/${subject.brainId}`,
-          url: assigned.sandbox.url,
-          token: yield* EnvironmentToken.sign(Array.headNonEmpty(keys), {
-            env: assigned.environment.id,
-            brain: Brain.ofSession(subject.brainId),
-            exp,
-          }),
-          expiresAt: DateTime.makeUnsafe(exp * 1000),
-          generation: assigned.sandbox.generation,
-        } satisfies Environment.Access
       }),
+      get: Effect.fn("Environments.get")(function* (actor: Actor.Info, idOrSlug: string) {
+        if (!Schema.is(Environment.ID)(idOrSlug)) return yield* notFound
+        const rows = yield* database.transaction((transaction) =>
+          select(transaction, actor).where(and(visibleTo(actor), eq(table.id, idOrSlug))),
+        )
+        const row = rows.at(0)
+        if (!row) return yield* notFound
+        return toInfo(actor)(row)
+      }),
+      create: Effect.fn("Environments.create")(function* (actor: Actor.Info, input: Environment.CreateInput) {
+        const config = yield* checked(input.provider, input.config)
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const resource = yield* spaceOf(transaction, actor, input.spaceId)
+            if (!resource) return yield* new Primitive.NotFound({ message: "Space not found." })
+            if (!access.isAllowed({ actor, action: actions.create, resource }))
+              return yield* new Primitive.Forbidden({ message: "Join the space to create environments in it." })
+            const id = Environment.ID.create()
+            yield* transaction.insert(table).values({
+              id,
+              organization_id: actor.organizationId,
+              space_id: input.spaceId,
+              name: input.name,
+              description: input.description ?? null,
+              provider: input.provider,
+              config,
+              sessions_per_hand: input.sessionsPerHand,
+            })
+            const rows = yield* select(transaction, actor).where(eq(table.id, id))
+            const row = rows.at(0)
+            if (!row) return yield* notFound
+            return toInfo(actor)(row)
+          }),
+        )
+      }),
+      update: Effect.fn("Environments.update")(function* (
+        actor: Actor.Info,
+        id: Environment.ID,
+        input: Environment.UpdateInput,
+      ) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const visible = yield* findVisible(transaction, actor, id)
+            if (!visible || visible.row.environment.archived_at) return yield* notFound
+            if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource }))
+              return yield* new Primitive.Forbidden({ message: "You cannot edit this environment." })
+            const config = Predicate.isUndefined(input.config)
+              ? undefined
+              : yield* checked(visible.row.environment.provider, input.config)
+            const updated = yield* transaction
+              .update(table)
+              .set({
+                name: input.name,
+                description: input.description,
+                config,
+                sessions_per_hand: input.sessionsPerHand,
+                updated_at: sql`now()`,
+              })
+              .where(eq(table.id, id))
+              .returning()
+            const environment = updated.at(0)
+            if (!environment) return yield* notFound
+            return toInfo(actor)({ ...visible.row, environment })
+          }),
+        )
+      }),
+      archive: Effect.fn("Environments.archive")(function* (actor: Actor.Info, id: Environment.ID) {
+        const archived = yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const visible = yield* findVisible(transaction, actor, id)
+            if (!visible) return yield* notFound
+            if (visible.row.environment.archived_at) return { info: toInfo(actor)(visible.row), isNew: false }
+            if (!access.isAllowed({ actor, action: actions.archive, resource: visible.resource }))
+              return yield* new Primitive.Forbidden({ message: "You cannot archive this environment." })
+            const updated = yield* transaction
+              .update(table)
+              .set({ archived_at: sql`now()`, updated_at: sql`now()` })
+              .where(eq(table.id, id))
+              .returning()
+            const environment = updated.at(0)
+            if (!environment) return yield* notFound
+            return { info: toInfo(actor)({ ...visible.row, environment }), isNew: true }
+          }),
+        )
+        if (archived.isNew) yield* destroyHands(archived.info.provider, id)
+        return archived.info
+      }),
+      providers: Effect.sync(() => registry.providers.map((provider) => provider.info)).pipe(
+        Effect.withSpan("Environments.providers"),
+      ),
     })
-  }),
-)
-
-export const layerNone = Layer.succeed(
-  Service,
-  Service.of({
-    bind: Effect.fn("Environments.bind")(function* (_subject: Subject, environmentId: Environment.ID) {
-      return yield* new NotFound({ message: `Environment ${environmentId} is not in Ren’s configuration` })
-    }),
-    find: () => Effect.succeedNone,
-    unbind: Effect.fn("Environments.unbind")(function* () {}),
-    access: Effect.fn("Environments.access")(function* (subject: Subject) {
-      return yield* new NotFound({ message: `Session ${subject.brainId} has no environment` })
-    }),
   }),
 )

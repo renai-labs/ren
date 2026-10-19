@@ -2,7 +2,7 @@ export * as Primitive from "./primitive.js"
 
 import { Actor } from "@ren/core/actor"
 import { Primitive } from "@ren/core/primitive"
-import { ConflictError, ForbiddenError, NotFoundError } from "@ren/protocol/errors"
+import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
 import { CurrentOrganization } from "@ren/protocol/middleware/active-organization"
 import { CurrentUser } from "@ren/protocol/middleware/authentication"
 import { Effect } from "effect"
@@ -16,6 +16,8 @@ const currentActor = Effect.gen(function* () {
 const notFound = (error: Primitive.NotFound) => Effect.fail(new NotFoundError({ message: error.message }))
 const forbidden = (error: Primitive.Forbidden) => Effect.fail(new ForbiddenError({ message: error.message }))
 const conflict = (error: Primitive.Conflict) => Effect.fail(new ConflictError({ message: error.message }))
+const invalid = (error: Primitive.Invalid) =>
+  Effect.fail(new InvalidRequestError({ message: error.message, ...(error.field && { field: error.field }) }))
 
 export const list =
   <Input, Page>(method: (actor: Actor.Info, input: Input) => Effect.Effect<Page>) =>
@@ -34,7 +36,7 @@ export const create =
     method: (
       actor: Actor.Info,
       input: Input,
-    ) => Effect.Effect<Result, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict>,
+    ) => Effect.Effect<Result, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid>,
   ) =>
   (request: { readonly payload: Input }) =>
     Effect.flatMap(currentActor, (actor) => method(actor, request.payload)).pipe(
@@ -42,6 +44,7 @@ export const create =
         "Primitive.NotFound": notFound,
         "Primitive.Forbidden": forbidden,
         "Primitive.Conflict": conflict,
+        "Primitive.Invalid": invalid,
       }),
     )
 
@@ -51,7 +54,7 @@ export const update =
       actor: Actor.Info,
       id: ID,
       input: Input,
-    ) => Effect.Effect<Result, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict>,
+    ) => Effect.Effect<Result, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid>,
   ) =>
   (request: { readonly params: { readonly id: ID }; readonly payload: Input }) =>
     Effect.flatMap(currentActor, (actor) => method(actor, request.params.id, request.payload)).pipe(
@@ -59,6 +62,7 @@ export const update =
         "Primitive.NotFound": notFound,
         "Primitive.Forbidden": forbidden,
         "Primitive.Conflict": conflict,
+        "Primitive.Invalid": invalid,
       }),
     )
 

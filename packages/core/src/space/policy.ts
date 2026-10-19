@@ -15,11 +15,13 @@ const spaceMember = {
   condition: isNotNull(SpaceQueries.membership.id),
 }
 
+export const memberOfSpace = spaceMember.name
+
+export const administratorRoles = ["owner", "admin"] as const satisfies ReadonlyArray<Auth.Role>
+
 const conditions = new Map([spaceMember].map((relationship) => [relationship.name, relationship.condition]))
 
-const organizationRoles = Auth.Role.literals
-
-const administratorRoles = ["owner", "admin"] as const satisfies ReadonlyArray<Auth.Role>
+export const organizationRoles = Auth.Role.literals
 
 const organizationActions = Primitive.actions(Space.definition, ["list", "create"])
 

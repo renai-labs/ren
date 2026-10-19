@@ -26,6 +26,7 @@
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@effect/platform-bun": "catalog:",
     "@ren/cell": "workspace:*",
     "@ren/executor": "workspace:*",
     "@types/bun": "catalog:",

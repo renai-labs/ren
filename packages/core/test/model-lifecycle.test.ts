@@ -5,13 +5,13 @@ import { Shared, TestCell, TestToken, Wrangler } from "@ren/cell/testing"
 import type { Celld } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, Effect, Layer, Schedule, Schema } from "effect"
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
+import { Effect, Layer, Schedule, Schema } from "effect"
+import { HttpRouter, HttpServer } from "effect/http"
 import { BrainHost } from "../src/brain-host.js"
-import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
 import { HostApiTest } from "./lib/host-api.js"
+import { Host } from "./lib/host.js"
 
 setDefaultTimeout(180_000)
 
@@ -47,12 +47,7 @@ const models = Layer.succeed(
 const keysOf = (keys: ReadonlyArray<SessionToken.Key>) => JSON.stringify(keys)
 
 const brainHost = (cellUrl: string, keys: ReadonlyArray<SessionToken.Key>) =>
-  Layer.fresh(BrainHost.layer).pipe(
-    Layer.provide(models),
-    Layer.provide(Environments.layerNone),
-    Layer.provide(FetchHttpClient.layer),
-    Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ CELL_URL: cellUrl, CELL_KEYS: keysOf(keys) }))),
-  )
+  Host.layer({ CELL_URL: cellUrl, CELL_KEYS: keysOf(keys) }, models)
 
 const corePort = await (async () => {
   const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })

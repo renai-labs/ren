@@ -44,6 +44,14 @@ export const generate = Effect.fn("Signature.generate")(function* (id: string) {
   }
 })
 
+export const publicKeyOf = Effect.fn("Signature.publicKeyOf")(function* (key: PrivateKey) {
+  const subtle = yield* Effect.promise(() =>
+    crypto.subtle.importKey("pkcs8", new Uint8Array(key.key), keyAlgorithm, true, ["sign"]),
+  )
+  const jwk = yield* Effect.promise(() => crypto.subtle.exportKey("jwk", subtle))
+  return yield* Schema.decodeUnknownEffect(PublicKey)({ id: key.id, key: jwk.x }).pipe(Effect.orDie)
+})
+
 export const sign = Effect.fnUntraced(function* (key: PrivateKey, claims: JWTPayload) {
   const subtle = yield* Effect.promise(() =>
     crypto.subtle.importKey("pkcs8", new Uint8Array(key.key), keyAlgorithm, false, ["sign"]),

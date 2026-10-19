@@ -27,9 +27,11 @@ import {
 import { Base64Url } from "effect/encoding"
 import { TestClock } from "effect/testing"
 import { BrainHost } from "../src/brain-host.js"
-import { Environments } from "../src/environments.js"
+import { HandProvider } from "../src/hand-provider.js"
+import { Hands } from "../src/hands.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
+import { TestProvider } from "./lib/hand-provider.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 
@@ -479,7 +481,6 @@ describe("BrainHost", () => {
   })
 
   describe("environments", () => {
-    const environmentId = Environment.ID.create()
     const recordingCell = Effect.fnUntraced(function* (status = 200) {
       const starts: Array<Session.StartInput> = []
       const server = yield* serve(async (request) => {
@@ -495,22 +496,16 @@ describe("BrainHost", () => {
     })
     const hostWith = Effect.fnUntraced(function* (cellUrl: string) {
       const keys = yield* Signature.generate("env")
+      const probe = yield* TestProvider.make({ capabilities: ["files"] })
       const context = yield* Layer.build(
         Host.layerWith(
           { CELL_URL: cellUrl, CELL_KEYS: settings.CELL_KEYS },
           fixed,
-          Layer.fresh(Environments.layer).pipe(
+          Layer.fresh(Hands.layer).pipe(
+            Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
             Layer.provide(
               ConfigProvider.layer(
                 ConfigProvider.fromUnknown({
-                  ENVIRONMENTS: JSON.stringify([
-                    {
-                      id: environmentId,
-                      capabilities: ["files"],
-                      capacity: 1,
-                      sandboxes: [{ id: "a", url: "http://127.0.0.1:7001", generation: 1 }],
-                    },
-                  ]),
                   ENVIRONMENT_KEYS: JSON.stringify([
                     {
                       id: keys.privateKey.id,
@@ -526,7 +521,7 @@ describe("BrainHost", () => {
       return Context.get(context, BrainHost.Service)
     })
     const environmentIt = testEffect(Testing.layer)
-    const startOn = (brain: BrainHost.Interface, sessionId: Session.ID, org: Auth.OrganizationID, id = environmentId) =>
+    const startOn = (brain: BrainHost.Interface, sessionId: Session.ID, org: Auth.OrganizationID, id: Environment.ID) =>
       brain.start(
         {
           sessionId,
@@ -545,8 +540,9 @@ describe("BrainHost", () => {
           const cell = yield* recordingCell()
           const brain = yield* hostWith(cell.url)
           const org = yield* Seed.organization()
+          const environmentId = yield* Seed.environment(org)
           const sessionId = Session.ID.create()
-          yield* startOn(brain, sessionId, org)
+          yield* startOn(brain, sessionId, org, environmentId)
           yield* brain.start({ sessionId, harness: "opencode", instructions: {}, interactive: true }, org)
           const location: Environment.Location = {
             environmentId,
@@ -555,7 +551,7 @@ describe("BrainHost", () => {
           }
           expect(cell.starts.map((input) => input.environment)).toEqual([location, location])
           const access = yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org })
-          expect([access.environmentId, access.url]).toEqual([environmentId, "http://127.0.0.1:7001"])
+          expect(access.environmentId).toBe(environmentId)
         }),
     )
 
@@ -564,12 +560,13 @@ describe("BrainHost", () => {
         const cell = yield* recordingCell()
         const brain = yield* hostWith(cell.url)
         const org = yield* Seed.organization()
+        const environmentId = yield* Seed.environment(org)
         const sessionId = Session.ID.create()
         const unknown = yield* startOn(brain, sessionId, org, Environment.ID.create()).pipe(Effect.flip)
         expect(unknown._tag).toBe("BrainRejectedError")
         expect(cell.starts).toEqual([])
-        yield* startOn(brain, sessionId, org)
-        const changed = yield* startOn(brain, sessionId, org, Environment.ID.create()).pipe(Effect.flip)
+        yield* startOn(brain, sessionId, org, environmentId)
+        const changed = yield* startOn(brain, sessionId, org, yield* Seed.environment(org)).pipe(Effect.flip)
         expect(changed._tag).toBe("BrainRejectedError")
         expect(cell.starts.length).toBe(1)
       }),
@@ -581,7 +578,9 @@ describe("BrainHost", () => {
         const brain = yield* hostWith(cell.url)
         const org = yield* Seed.organization()
         const sessionId = Session.ID.create()
-        expect((yield* startOn(brain, sessionId, org).pipe(Effect.flip))._tag).toBe("BrainRejectedError")
+        expect((yield* startOn(brain, sessionId, org, yield* Seed.environment(org)).pipe(Effect.flip))._tag).toBe(
+          "BrainRejectedError",
+        )
         expect(
           (yield* brain.accessEnvironment({ brainId: sessionId, organizationId: org }).pipe(Effect.flip))._tag,
         ).toBe("EnvironmentNotFoundError")
@@ -593,9 +592,11 @@ describe("BrainHost", () => {
         const cell = yield* recordingCell()
         const brain = yield* hostWith(cell.url)
         const org = yield* Seed.organization()
+        const environmentId = yield* Seed.environment(org)
+        const other = yield* Seed.environment(org)
         const sessionId = Session.ID.create()
         const exits = yield* Effect.all(
-          [startOn(brain, sessionId, org), startOn(brain, sessionId, org, Environment.ID.create())].map(Effect.exit),
+          [startOn(brain, sessionId, org, environmentId), startOn(brain, sessionId, org, other)].map(Effect.exit),
           { concurrency: "unbounded" },
         )
         expect(exits.map(Exit.isSuccess)).toEqual([true, false])

@@ -43,10 +43,12 @@ chaos/
     faults/      the fault proxy that sits on every link
     adapters/    executor (local process, Docker), E2B, Cloudflare
     drivers/     Executor API client, Brain API and OpenCode session driver over TestCell
-    provider/    scripted model provider, test issuer, live model selection, LiteLLM key admin
+    provider/    scripted model provider, test issuer, live model selection, LiteLLM key admin,
+                 and the chaos hand providers that read the lane's containers from a file
+    server-main.ts  the Ren server with the chaos hand providers in place of Docker
     platform.ts  one skip reason per platform or credential, computed once
     preload.ts   refuses non-loopback requests outside the selected mode; tears down on SIGINT
-  infra/         the executor image and the E2B template
+  infra/         the E2B template (the executor image is packages/executor/Dockerfile)
 script/chaos/    template.ts builds the E2B template
 .runs/           ignored executor logs, one directory per run
 ```

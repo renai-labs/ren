@@ -156,6 +156,7 @@
         "effect": "catalog:",
       },
       "devDependencies": {
+        "@effect/platform-bun": "catalog:",
         "@ren/cell": "workspace:*",
         "@ren/executor": "workspace:*",
         "@types/bun": "catalog:",
@@ -181,6 +182,7 @@
       "name": "@ren/e2e",
       "version": "0.0.0",
       "devDependencies": {
+        "@effect/platform-bun": "catalog:",
         "@effect/sql-pg": "catalog:",
         "@opencode/client": "catalog:",
         "@playwright/test": "catalog:",
