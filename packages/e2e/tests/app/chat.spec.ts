@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test"
 import { createOrganization } from "../lib/servers.js"
 
+const brainStart = 30_000
+
 test("a member starts a chat, follows the reply, sends again, mentions an agent and finds the chat in the sidebar", async ({
   page,
 }) => {
@@ -10,7 +12,7 @@ test("a member starts a chat, follows the reply, sends again, mentions an agent 
   await start.getByRole("textbox", { name: "Message" }).fill("Plan the launch")
   await start.getByRole("button", { name: "Send" }).click()
 
-  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/)
+  await expect(page).toHaveURL(/\/sessions\/ses_\w+$/, { timeout: brainStart })
   const sessionURL = page.url()
   await expect(page.getByText("Plan the launch")).toBeVisible()
   await expect(page.getByText("stub reply")).toBeVisible()
@@ -46,7 +48,7 @@ test("a member renames a chat, reverts a message into the composer and restores 
   const start = page.getByRole("form", { name: "Start a chat" })
   await start.getByRole("textbox", { name: "Message" }).fill("Draft the agenda")
   await start.getByRole("button", { name: "Send" }).click()
-  await expect(page.getByText("stub reply")).toBeVisible()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
   await page.getByRole("button", { name: /^Edit Chat title/ }).click()
   await page.getByRole("textbox", { name: "Chat title" }).fill("Board agenda")
@@ -70,7 +72,7 @@ test("a member finds text in a chat and closes find with Escape", async ({ page 
   const start = page.getByRole("form", { name: "Start a chat" })
   await start.getByRole("textbox", { name: "Message" }).fill("Plan the orbit")
   await start.getByRole("button", { name: "Send" }).click()
-  await expect(page.getByText("stub reply")).toBeVisible()
+  await expect(page.getByText("stub reply")).toBeVisible({ timeout: brainStart })
 
   await page.keyboard.press("ControlOrMeta+f")
   const find = page.getByRole("searchbox", { name: "Find in chat" })
