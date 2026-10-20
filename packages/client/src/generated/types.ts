@@ -20,6 +20,20 @@ export type EnvironmentProviderID = string
 
 export type SpaceEnvironmentTemplateID = string
 
+export type SessionModel = { endpointId: string; modelId: string; variant?: string }
+
+export type PermissionRuleEffect = "ask" | "deny"
+
+export type ReferenceAlias = string
+
+export type ReferenceRepository = string
+
+export type ReferenceBranch = string
+
+export type AgentID = string
+
+export type AgentMembershipID = string
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -103,6 +117,23 @@ export type SpaceEnvironmentTemplateInfo = {
   archivedAt: string | null
 }
 
+export type PermissionRule = { action: string; resource: string; effect: PermissionRuleEffect }
+
+export type ReferenceInfo = {
+  alias: ReferenceAlias
+  repository: ReferenceRepository
+  branch?: ReferenceBranch
+  description?: string
+}
+
+export type AgentMembershipInfo = {
+  id: AgentMembershipID
+  spaceId: SpaceID
+  agentId: AgentID
+  isOwner: boolean
+  createdAt: string
+}
+
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
 export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
@@ -125,7 +156,44 @@ export type SpaceEnvironmentTemplatePage = {
   total: number
 }
 
+export type PermissionRuleList = Array<PermissionRule>
+
+export type ReferenceList = Array<ReferenceInfo>
+
+export type AgentMembershipPage = { items: Array<AgentMembershipInfo>; page: number; pageSize: number; total: number }
+
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
+
+export type SettingsInfo = {
+  instructions?: string
+  model?: SessionModel
+  permissions?: PermissionRuleList
+  references?: ReferenceList
+}
+
+export type SpaceSettingsInfo = { id: SpaceID; settings: SettingsInfo; canUpdate: boolean; updatedAt: string | null }
+
+export type OrganizationSettingsInfo = {
+  id: AuthOrganizationID
+  settings: SettingsInfo
+  canUpdate: boolean
+  updatedAt: string | null
+}
+
+export type AgentInfo = {
+  id: AgentID
+  organizationId: AuthOrganizationID
+  ownerSpaceId: SpaceID
+  name: string
+  description: string | null
+  isSubagent: boolean
+  settings: SettingsInfo
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
+export type AgentPage = { items: Array<AgentInfo>; page: number; pageSize: number; total: number }
 
 export type UnauthorizedError = { readonly _tag: "UnauthorizedError"; readonly message: string }
 export const isUnauthorizedError = (value: unknown): value is UnauthorizedError =>
@@ -357,3 +425,337 @@ export type SpaceEnvironmentTemplateCreateOutput = SpaceEnvironmentTemplateInfo
 export type SpaceEnvironmentTemplateArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type SpaceEnvironmentTemplateArchiveOutput = SpaceEnvironmentTemplateInfo
+
+export type SpaceSettingsGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type SpaceSettingsGetOutput = SpaceSettingsInfo
+
+export type SpaceSettingsUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly settings: {
+    readonly settings: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    }
+  }["settings"]
+}
+
+export type SpaceSettingsUpdateOutput = SpaceSettingsInfo
+
+export type OrganizationSettingsGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type OrganizationSettingsGetOutput = OrganizationSettingsInfo
+
+export type OrganizationSettingsUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly settings: {
+    readonly settings: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    }
+  }["settings"]
+}
+
+export type OrganizationSettingsUpdateOutput = OrganizationSettingsInfo
+
+export type AgentListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly isSubagent?: boolean | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly isSubagent?: {
+    readonly spaceId?: string | undefined
+    readonly isSubagent?: boolean | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["isSubagent"]
+  readonly page: {
+    readonly spaceId?: string | undefined
+    readonly isSubagent?: boolean | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly isSubagent?: boolean | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type AgentListOutput = AgentPage
+
+export type AgentGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type AgentGetOutput = AgentInfo
+
+export type AgentCreateInput = {
+  readonly ownerSpaceId: {
+    readonly ownerSpaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly isSubagent?: boolean
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    }
+  }["ownerSpaceId"]
+  readonly name: {
+    readonly ownerSpaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly isSubagent?: boolean
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    }
+  }["name"]
+  readonly description?: {
+    readonly ownerSpaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly isSubagent?: boolean
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    }
+  }["description"]
+  readonly isSubagent: {
+    readonly ownerSpaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly isSubagent?: boolean
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    }
+  }["isSubagent"]
+  readonly settings: {
+    readonly ownerSpaceId: string
+    readonly name: string
+    readonly description?: string | null
+    readonly isSubagent?: boolean
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    }
+  }["settings"]
+}
+
+export type AgentCreateOutput = AgentInfo
+
+export type AgentUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: {
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly isSubagent?: boolean | null
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    } | null
+  }["name"]
+  readonly description?: {
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly isSubagent?: boolean | null
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    } | null
+  }["description"]
+  readonly isSubagent?: {
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly isSubagent?: boolean | null
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    } | null
+  }["isSubagent"]
+  readonly settings?: {
+    readonly name?: string | null
+    readonly description?: string | null | null
+    readonly isSubagent?: boolean | null
+    readonly settings?: {
+      readonly instructions?: string
+      readonly model?: { readonly endpointId: string; readonly modelId: string; readonly variant?: string }
+      readonly permissions?: ReadonlyArray<{
+        readonly action: string
+        readonly resource: string
+        readonly effect: "ask" | "deny"
+      }>
+      readonly references?: ReadonlyArray<{
+        readonly alias: string
+        readonly repository: string
+        readonly branch?: string
+        readonly description?: string
+      }>
+    } | null
+  }["settings"]
+}
+
+export type AgentUpdateOutput = AgentInfo
+
+export type AgentArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type AgentArchiveOutput = AgentInfo
+
+export type AgentTransferOwnershipInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly spaceId: { readonly spaceId: string }["spaceId"]
+}
+
+export type AgentTransferOwnershipOutput = AgentInfo
+
+export type AgentMembershipListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly agentId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly agentId?: {
+    readonly spaceId?: string | undefined
+    readonly agentId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["agentId"]
+  readonly page: {
+    readonly spaceId?: string | undefined
+    readonly agentId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly agentId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type AgentMembershipListOutput = AgentMembershipPage
+
+export type AgentMembershipCreateInput = {
+  readonly spaceId: { readonly spaceId: string; readonly agentId: string }["spaceId"]
+  readonly agentId: { readonly spaceId: string; readonly agentId: string }["agentId"]
+}
+
+export type AgentMembershipCreateOutput = AgentMembershipInfo
+
+export type AgentMembershipArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type AgentMembershipArchiveOutput = AgentMembershipInfo

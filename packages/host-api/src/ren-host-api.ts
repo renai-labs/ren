@@ -2,6 +2,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
+import { SessionSettings } from "@ren/schema/session-settings"
 import { Context } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { Host } from "./host.js"
@@ -85,15 +86,33 @@ const HostGroup = HttpApiGroup.make("host")
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "host" }))
 
+const SettingsGroup = HttpApiGroup.make("settings")
+  .add(
+    HttpApiEndpoint.post("settings.read", "/host/settings", {
+      payload: SessionSettings.Known,
+      success: SessionSettings.Layers,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "settings.read",
+        summary: "Read a session’s settings layers",
+        description:
+          "Return the hash of each settings layer of the session named by a host token: Ren, its organization, its space and its agents. A layer comes with its settings only when its hash differs from the one the brain sent.",
+      }),
+    ),
+  )
+  .middleware(HostAuthentication)
+  .annotateMerge(OpenApi.annotations({ title: "settings" }))
+
 export const RenHostApi = HttpApi.make("host")
   .add(ModelsGroup)
   .add(EnvironmentsGroup)
   .add(HostGroup)
+  .add(SettingsGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Host API",
       version: "0.0.0",
       description:
-        "Internal API a session host calls with its host token: to refresh its brain’s models, to get access to its session’s environment and to refresh the host token.",
+        "Internal API a session host calls with its host token: to refresh its brain’s models, to get access to its session’s environment, to read its session’s settings and to refresh the host token.",
     }),
   )

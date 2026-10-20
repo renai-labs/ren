@@ -33,6 +33,9 @@ const handlers = (around: Around) =>
         group.handle("host.refresh", () => around("host.refresh", Effect.flatMap(CurrentHost, brain.refreshHostToken))),
       ),
     ),
+    HttpApiBuilder.group(RenHostApi, "settings", (group) =>
+      Effect.succeed(group.handle("settings.read", () => Effect.die(new Error("HostApiTest serves no settings")))),
+    ),
   )
 
 const forgetful = HttpApiBuilder.group(SyncApi, "sync", (group) =>

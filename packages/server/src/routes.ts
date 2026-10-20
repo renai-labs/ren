@@ -4,29 +4,39 @@ import { RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
 import { Sync } from "@ren/schema/sync"
 import { Access } from "@ren/core/access"
+import { Agent } from "@ren/core/agent"
+import { AgentMembership } from "@ren/core/agent/membership"
 import { BrainHost } from "@ren/core/brain-host"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
+import { OrganizationSettings } from "@ren/core/organization-settings"
 import { SessionSync } from "@ren/core/session-sync"
+import { Settings } from "@ren/core/settings"
 import { Space } from "@ren/core/space"
 import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
+import { SpaceSettings } from "@ren/core/space/settings"
 import { Effect, Layer } from "effect"
 import { HttpEffect, HttpMiddleware, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "./api.js"
 import { Auth } from "./auth.js"
+import { AgentHandler } from "./handlers/api/agent.js"
+import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
 import { HealthHandler } from "./handlers/api/health.js"
 import { InvitationHandler } from "./handlers/api/invitation.js"
 import { MeHandler } from "./handlers/api/me.js"
 import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
+import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
+import { HostSettingsHandler } from "./handlers/ren-host/settings.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
 import { SpaceHandler } from "./handlers/api/space.js"
 import { SpaceEnvironmentTemplateHandler } from "./handlers/api/space-environment-template.js"
 import { SpaceMemberHandler } from "./handlers/api/space-member.js"
+import { SpaceSettingsHandler } from "./handlers/api/space-settings.js"
 import { SyncHandler } from "./handlers/sync.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
@@ -64,6 +74,10 @@ export const layer = Layer.mergeAll(
         EnvironmentTemplateHandler,
         EnvironmentProviderHandler,
         SpaceEnvironmentTemplateHandler,
+        SpaceSettingsHandler,
+        OrganizationSettingsHandler,
+        AgentHandler,
+        AgentMembershipHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
       Layer.provide([
@@ -73,11 +87,15 @@ export const layer = Layer.mergeAll(
         SpaceMember.layer,
         EnvironmentTemplates.layer,
         SpaceEnvironmentTemplate.layer,
+        SpaceSettings.layer,
+        OrganizationSettings.layer,
+        Agent.layer,
+        AgentMembership.layer,
       ]),
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(
-      Layer.provide([HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
-      Layer.provide(BrainHost.hostAuthentication),
+      Layer.provide([HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler, HostSettingsHandler]),
+      Layer.provide([BrainHost.hostAuthentication, Settings.layer]),
     ),
     AuthRoute,
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),

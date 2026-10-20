@@ -18,6 +18,19 @@ import type {
   SpaceEnvironmentTemplateListInput,
   SpaceEnvironmentTemplateCreateInput,
   SpaceEnvironmentTemplateArchiveInput,
+  SpaceSettingsGetInput,
+  SpaceSettingsUpdateInput,
+  OrganizationSettingsGetInput,
+  OrganizationSettingsUpdateInput,
+  AgentListInput,
+  AgentGetInput,
+  AgentCreateInput,
+  AgentUpdateInput,
+  AgentArchiveInput,
+  AgentTransferOwnershipInput,
+  AgentMembershipListInput,
+  AgentMembershipCreateInput,
+  AgentMembershipArchiveInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -210,6 +223,127 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationKey: ["space-environment-template", "archive"] as const,
             mutationFn: (input: SpaceEnvironmentTemplateArchiveInput) =>
               client["space-environment-template"]["archive"](input),
+          }),
+      },
+    },
+    "space-settings": {
+      get: {
+        queryKey: (input?: SpaceSettingsGetInput) =>
+          input === undefined ? (["space-settings", "get"] as const) : (["space-settings", "get", input] as const),
+        queryOptions: (input: SpaceSettingsGetInput) =>
+          queryOptions({
+            queryKey: ["space-settings", "get", input] as const,
+            queryFn: (context) => client["space-settings"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      update: {
+        mutationKey: () => ["space-settings", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-settings", "update"] as const,
+            mutationFn: (input: SpaceSettingsUpdateInput) => client["space-settings"]["update"](input),
+          }),
+      },
+    },
+    "organization-settings": {
+      get: {
+        queryKey: (input?: OrganizationSettingsGetInput) =>
+          input === undefined
+            ? (["organization-settings", "get"] as const)
+            : (["organization-settings", "get", input] as const),
+        queryOptions: (input: OrganizationSettingsGetInput) =>
+          queryOptions({
+            queryKey: ["organization-settings", "get", input] as const,
+            queryFn: (context) => client["organization-settings"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      update: {
+        mutationKey: () => ["organization-settings", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["organization-settings", "update"] as const,
+            mutationFn: (input: OrganizationSettingsUpdateInput) => client["organization-settings"]["update"](input),
+          }),
+      },
+    },
+    agent: {
+      list: {
+        queryKey: (input?: AgentListInput) =>
+          input === undefined ? (["agent", "list"] as const) : (["agent", "list", input] as const),
+        queryOptions: (input: AgentListInput) =>
+          queryOptions({
+            queryKey: ["agent", "list", input] as const,
+            queryFn: (context) => client["agent"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: AgentGetInput) =>
+          input === undefined ? (["agent", "get"] as const) : (["agent", "get", input] as const),
+        queryOptions: (input: AgentGetInput) =>
+          queryOptions({
+            queryKey: ["agent", "get", input] as const,
+            queryFn: (context) => client["agent"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["agent", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["agent", "create"] as const,
+            mutationFn: (input: AgentCreateInput) => client["agent"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["agent", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["agent", "update"] as const,
+            mutationFn: (input: AgentUpdateInput) => client["agent"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["agent", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["agent", "archive"] as const,
+            mutationFn: (input: AgentArchiveInput) => client["agent"]["archive"](input),
+          }),
+      },
+      transferOwnership: {
+        mutationKey: () => ["agent", "transferOwnership"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["agent", "transferOwnership"] as const,
+            mutationFn: (input: AgentTransferOwnershipInput) => client["agent"]["transferOwnership"](input),
+          }),
+      },
+    },
+    "agent-membership": {
+      list: {
+        queryKey: (input?: AgentMembershipListInput) =>
+          input === undefined
+            ? (["agent-membership", "list"] as const)
+            : (["agent-membership", "list", input] as const),
+        queryOptions: (input: AgentMembershipListInput) =>
+          queryOptions({
+            queryKey: ["agent-membership", "list", input] as const,
+            queryFn: (context) => client["agent-membership"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["agent-membership", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["agent-membership", "create"] as const,
+            mutationFn: (input: AgentMembershipCreateInput) => client["agent-membership"]["create"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["agent-membership", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["agent-membership", "archive"] as const,
+            mutationFn: (input: AgentMembershipArchiveInput) => client["agent-membership"]["archive"](input),
           }),
       },
     },
