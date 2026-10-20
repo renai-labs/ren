@@ -3,7 +3,7 @@ export * as ExecutorClient from "./executor-client.js"
 import { Duration, Effect, Layer, Option, Record } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { RpcClient, RpcClientError, RpcGroup, RpcMiddleware, RpcSerialization } from "effect/rpc"
-import { Authentication, ExecutorApi, UnauthorizedError } from "./executor-api.js"
+import { ExecutorApi } from "./executor-api.js"
 
 export const path = "/v1/rpc"
 
@@ -15,7 +15,7 @@ const answerWithinFor: Readonly<Record<string, Duration.Duration>> = {
   "executor.hello": Duration.seconds(10),
   "process.heartbeat": Duration.seconds(5),
   "process.kill": Duration.seconds(5),
-} satisfies Partial<Record<RpcGroup.Rpcs<typeof ExecutorApi>["_tag"], Duration.Duration>>
+} satisfies Partial<Record<RpcGroup.Rpcs<typeof ExecutorApi.Rpcs>["_tag"], Duration.Duration>>
 
 const isUnauthorizedResponse = (error: unknown) =>
   error instanceof RpcClientError.RpcClientError &&
@@ -27,7 +27,7 @@ const isUnauthorizedResponse = (error: unknown) =>
 export const isNoAnswer = (error: unknown) =>
   error instanceof RpcClientError.RpcClientError && !isUnauthorizedResponse(error)
 
-export type Client = RpcClient.RpcClient<RpcGroup.Rpcs<typeof ExecutorApi>, RpcClientError.RpcClientError>
+export type Client = RpcClient.RpcClient<RpcGroup.Rpcs<typeof ExecutorApi.Rpcs>, RpcClientError.RpcClientError>
 
 export interface Options {
   readonly url: URL
@@ -36,7 +36,7 @@ export interface Options {
   readonly onRefused?: (token: string) => Effect.Effect<void>
 }
 
-const unauthorized = () => Effect.fail(new UnauthorizedError({ message: "Authentication required" }))
+const unauthorized = () => Effect.fail(new ExecutorApi.UnauthorizedError({ message: "Authentication required" }))
 
 const limit = (tag: string) =>
   tag === "process.output"
@@ -45,7 +45,7 @@ const limit = (tag: string) =>
 
 const layer = (options: Options) =>
   Layer.mergeAll(
-    RpcMiddleware.layerClient(Authentication, (call) => {
+    RpcMiddleware.layerClient(ExecutorApi.Authentication, (call) => {
       const answered = Option.match(limit(call.rpc._tag), {
         onNone: () => call.next,
         onSome: (duration) => (request: typeof call.request) =>
@@ -97,5 +97,5 @@ const layer = (options: Options) =>
 
 export const make = (options: Options) =>
   Layer.build(layer(options)).pipe(
-    Effect.flatMap((context) => RpcClient.make(ExecutorApi).pipe(Effect.provide(context))),
+    Effect.flatMap((context) => RpcClient.make(ExecutorApi.Rpcs).pipe(Effect.provide(context))),
   )

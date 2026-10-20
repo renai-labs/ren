@@ -4,8 +4,8 @@ The Hand API: the internal contract between a brain and the executor on its hand
 
 ## What belongs here
 
-- `src/executor-api.ts`: the `ExecutorApi`, an Effect `RpcGroup` that an executor serves at `POST /v1/rpc` and a brain calls with an hand token. Its shapes, its errors, the `Authentication` middleware and the `Caller` live beside it.
-- `src/executor-client.ts`: `ExecutorClient`, the typed client of the `ExecutorApi` (`make`, `Client`) and the RPC `path`.
+- `src/executor-api.ts`: `ExecutorApi`. `ExecutorApi.Rpcs` is the Effect `RpcGroup` that an executor serves at `POST /v1/rpc` and a brain calls with an hand token. Its shapes, its errors, the `Authentication` middleware and the `Caller` live beside it.
+- `src/executor-client.ts`: `ExecutorClient`, the typed client of `ExecutorApi.Rpcs` (`make`, `Client`) and the RPC `path`.
 - `src/hand-token.ts`: the token that lets one brain use the executor of one hand (`HandToken.Claims`).
 - `src/signature.ts`: Ed25519 keys, their variables (`HAND_KEYS` for Ren, `HAND_PUBLIC_KEYS` for executors), `sign`, `verify` and `generate`. Only Ren holds the private key; brains and executors verify with public keys, so a brain that can read its own files still cannot sign.
 - `src/signal.ts`: the signal names a process can get or exit by.
