@@ -19,7 +19,7 @@ Generated clients follow the protocol `HttpApi`. Active work is tracked in [TODO
 
 ## Current contracts
 
-- [Agents and layered settings](agents/contract.md): ownership, pull/merge behavior, permissions, and cell lifecycle.
+None yet.
 
 ## Decision records
 
@@ -27,4 +27,4 @@ None yet.
 
 ## Historical
 
-- [Agents v1 proposal](agents/v1.md): the original design discussions. The current contract above supersedes its runtime and transport decisions.
+None yet.
