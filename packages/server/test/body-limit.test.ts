@@ -1,8 +1,8 @@
 import { describe, expect } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
-import { SessionToken } from "@ren/brain-api/session-token"
-import { maxBodyBytes } from "@ren/brain-api/sync-api"
-import { Seed, Sync, testEffect } from "@ren/core/testing"
+import { SessionToken } from "@ren/host-api/session-token"
+import { Sync } from "@ren/schema/sync"
+import { Seed, SyncFixture, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
 import { Clock, Effect, Layer, Schema, Stream } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse, HttpRouter } from "effect/http"
@@ -57,7 +57,7 @@ describe("body limit", () => {
         const batch = (bytes: number) =>
           json(messages, host, {
             messages: [
-              Sync.message(sessionId, "msg_large", 2, {
+              SyncFixture.message(sessionId, "msg_large", 2, {
                 data: "x".repeat(bytes),
               }),
             ],
@@ -74,9 +74,9 @@ describe("body limit", () => {
                 name: large,
               },
             ),
-            json("/brain/models/refresh", host, { large }),
+            json("/host/models/refresh", host, { large }),
             batch(large.length),
-            batch(maxBodyBytes),
+            batch(Sync.maxBodyBytes),
             post(messages, host).pipe(
               HttpClientRequest.bodyStream(Stream.make(new TextEncoder().encode(JSON.stringify({ messages: [] }))), {
                 contentType: "application/json",

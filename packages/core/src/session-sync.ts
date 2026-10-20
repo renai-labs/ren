@@ -1,15 +1,15 @@
 export * as SessionSync from "./session-sync.js"
 
-import { ForbiddenError, StaleUploadError } from "@ren/brain-api/errors"
-import type { CurrentHost } from "@ren/brain-api/host-api"
-import type { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
+import { ForbiddenError, StaleUploadError } from "@ren/host-api/errors"
+import type { CurrentHost } from "@ren/host-api/ren-host-api"
+import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
 import { and, asc, eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { OpenCodeStore } from "./session/opencode-store.js"
 
-export { ForbiddenError, StaleUploadError } from "@ren/brain-api/errors"
+export { ForbiddenError, StaleUploadError } from "@ren/host-api/errors"
 
 export type Host = CurrentHost["Service"]
 
@@ -22,7 +22,7 @@ export interface Checkpoint {
 }
 
 export interface Page {
-  readonly messages: ReadonlyArray<OpenCodeMessageRow>
+  readonly messages: ReadonlyArray<Sync.OpenCodeMessageRow>
   readonly next: Cursor | null
 }
 
@@ -37,18 +37,18 @@ export interface Interface {
     host: Host,
     sessionId: Session.ID,
     upload: number,
-    messages: ReadonlyArray<OpenCodeMessageRow>,
+    messages: ReadonlyArray<Sync.OpenCodeMessageRow>,
   ) => Effect.Effect<void, ForbiddenError | StaleUploadError>
   readonly commit: (
     host: Host,
     sessionId: Session.ID,
     upload: number,
-    input: { readonly session: OpenCodeSessionRow; readonly seq: number; readonly ids: ReadonlyArray<string> },
+    input: { readonly session: Sync.OpenCodeSessionRow; readonly seq: number; readonly ids: ReadonlyArray<string> },
   ) => Effect.Effect<void, ForbiddenError | StaleUploadError>
   readonly restore: (
     host: Host,
     sessionId: Session.ID,
-  ) => Effect.Effect<ReadonlyArray<OpenCodeSessionRow>, ForbiddenError>
+  ) => Effect.Effect<ReadonlyArray<Sync.OpenCodeSessionRow>, ForbiddenError>
   readonly messages: (
     host: Host,
     sessionId: Session.ID,
@@ -64,7 +64,7 @@ const stale = new StaleUploadError({ message: "The upload is not the current ope
 
 const inScope = (host: Host) =>
   and(
-    eq(Database.Schema.agent_session.root_id, host.brainId),
+    eq(Database.Schema.agent_session.root_id, host.sessionId),
     eq(Database.Schema.agent_session.organization_id, host.organizationId),
   )
 
@@ -154,7 +154,7 @@ export const layer = Layer.effect(
         host: Host,
         sessionId: Session.ID,
         upload: number,
-        messages: ReadonlyArray<OpenCodeMessageRow>,
+        messages: ReadonlyArray<Sync.OpenCodeMessageRow>,
       ) {
         yield* database.transaction((transaction) =>
           Effect.gen(function* () {
@@ -168,7 +168,7 @@ export const layer = Layer.effect(
         host: Host,
         sessionId: Session.ID,
         upload: number,
-        input: { readonly session: OpenCodeSessionRow; readonly seq: number; readonly ids: ReadonlyArray<string> },
+        input: { readonly session: Sync.OpenCodeSessionRow; readonly seq: number; readonly ids: ReadonlyArray<string> },
       ) {
         yield* database.transaction((transaction) =>
           Effect.gen(function* () {

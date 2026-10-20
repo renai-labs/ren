@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
+import { Sync } from "@ren/schema/sync"
 import { Schema } from "effect"
 import { Celld } from "./lib/celld.js"
 import { Shared } from "./lib/shared.js"
@@ -129,8 +129,8 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
     expect(await read(opened)).toMatchObject({
       columns: {
         value: {
-          session_v2: expect.arrayContaining(Object.keys(OpenCodeSessionRow.fields)),
-          session_message: expect.arrayContaining(Object.keys(OpenCodeMessageRow.fields)),
+          session_v2: expect.arrayContaining(Object.keys(Sync.OpenCodeSessionRow.fields)),
+          session_message: expect.arrayContaining(Object.keys(Sync.OpenCodeMessageRow.fields)),
         },
       },
     })

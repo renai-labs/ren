@@ -4,6 +4,7 @@ import { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { Clock, Context, Duration, Effect, Layer, Option, Random, Ref } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { HostToken } from "./host-token.js"
+import { SyncClient } from "./sync-client.js"
 
 export interface Interface {
   readonly step: Effect.Effect<Option.Option<Duration.Duration>>
@@ -81,11 +82,12 @@ export const layer = (storage: DurableObjectStorage, url: string | undefined) =>
       if (!url) return yield* make(Option.none())
       const hostToken = yield* HostToken.Service
       const opened = yield* OpenCodeSync.make({
-        url,
-        token: hostToken.current.pipe(Effect.map(Option.getOrElse(() => ""))),
+        remote: yield* SyncClient.make(url, hostToken.current.pipe(Effect.map(Option.getOrElse(() => "")))).pipe(
+          Effect.provide(FetchHttpClient.layer),
+        ),
         reader: { read: (read) => read((query, ...bindings) => storage.sql.exec(query, ...bindings)) },
         restoring: Effect.promise(async () => (await storage.get<boolean>("ren:restoring")) ?? false),
-      }).pipe(Effect.provide(FetchHttpClient.layer))
+      })
       return yield* make(Option.some(opened), (value) => Effect.promise(() => storage.put("ren:restoring", value)))
     }),
   )

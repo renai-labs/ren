@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect } from "bun:test"
 import { OpenCode } from "@opencode/client"
-import { SyncUnavailableError } from "@ren/brain-api/errors"
-import { SessionToken } from "@ren/brain-api/session-token"
-import { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
+import { SyncUnavailableError } from "@ren/host-api/errors"
+import { SessionToken } from "@ren/host-api/session-token"
+import { Sync } from "@ren/schema/sync"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { BrainHost } from "@ren/core/brain-host"
 import { Session } from "@ren/core/session"
@@ -41,7 +41,10 @@ const it = {
     SyncTest.live(name, body, 180_000, () => celld().url),
 }
 
-const Rows = Schema.Struct({ sessions: Schema.Array(OpenCodeSessionRow), messages: Schema.Array(OpenCodeMessageRow) })
+const Rows = Schema.Struct({
+  sessions: Schema.Array(Sync.OpenCodeSessionRow),
+  messages: Schema.Array(Sync.OpenCodeMessageRow),
+})
 
 const setup = Effect.fnUntraced(function* () {
   const server = yield* HttpServer.HttpServer
@@ -104,7 +107,7 @@ it.live(
       expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
       const before = yield* cell.local
       yield* cell.lose
-      yield* cell.brain.start(cell.input, cell.owner.organizationId)
+      yield* cell.brain.start(cell.input, cell.owner)
       const restored = yield* cell.local
       expect(restored.sessions.map((row) => row.id)).toEqual(before.sessions.map((row) => row.id))
       expect(restored.messages.map((row) => row.id).toSorted()).toEqual(before.messages.map((row) => row.id).toSorted())
@@ -131,12 +134,12 @@ it.live("P5-02: unavailable Ren fails start without making an empty session, and
     const before = yield* cell.local
     yield* cell.lose
     yield* Effect.promise(cell.proxy.down)
-    const refused = yield* Effect.flip(cell.brain.start(cell.input, cell.owner.organizationId))
+    const refused = yield* Effect.flip(cell.brain.start(cell.input, cell.owner))
     expect(refused instanceof BrainHost.BrainUnavailable && refused.cause).toBeInstanceOf(SyncUnavailableError)
     expect((yield* cell.local).sessions).toEqual([])
     cell.proxy.up()
     cell.proxy.once({ match: (request) => request.path === "/brain/sync/restore", fault: "fail" })
-    yield* cell.brain.start(cell.input, cell.owner.organizationId)
+    yield* cell.brain.start(cell.input, cell.owner)
     expect((yield* cell.local).messages.map((row) => row.id)).toEqual(before.messages.map((row) => row.id))
   }),
 )
@@ -157,14 +160,14 @@ it.live("P5-03: a kill between parent and child imports resumes with only the mi
       match: (request) => request.path === `/brain/sync/sessions/${child.id}/messages`,
       before: () => Effect.runPromise(Deferred.succeed(entered, undefined)).then(() => held.promise),
     })
-    const starting = yield* Effect.forkChild(Effect.exit(cell.brain.start(cell.input, cell.owner.organizationId)))
+    const starting = yield* Effect.forkChild(Effect.exit(cell.brain.start(cell.input, cell.owner)))
     yield* Deferred.await(entered)
     expect((yield* cell.local).sessions.map((row) => row.id)).toEqual([cell.id])
     yield* Effect.promise(() => celld().kill())
     held.resolve()
     yield* Fiber.join(starting)
     yield* Effect.promise(() => celld().start())
-    yield* cell.brain.start(cell.input, cell.owner.organizationId)
+    yield* cell.brain.start(cell.input, cell.owner)
     expect((yield* cell.local).sessions).toHaveLength(2)
     expect(
       cell.proxy.requests.filter((request) => request.path === `/brain/sync/sessions/${cell.id}/messages`),
@@ -198,7 +201,7 @@ it.live("P5-04: restore invalidates a late batch from the lost cell", () =>
       Schema.decodeUnknownSync(Schema.Struct({ upload: Schema.Int }))(await response.json()),
     )
     yield* cell.lose
-    yield* cell.brain.start(cell.input, cell.owner.organizationId)
+    yield* cell.brain.start(cell.input, cell.owner)
     const late = yield* request(`/${upload.upload}/messages`, { messages: [] })
     expect(late.status).toBe(409)
     expect(yield* Effect.promise(() => late.json())).toMatchObject({ _tag: "StaleUploadError" })
@@ -215,7 +218,7 @@ it.live("P5-05: an uncommitted root is created before its committed child is imp
     const sql = yield* SqlClient.SqlClient
     yield* sql`delete from opencode_session where session_id = ${cell.id}`
     yield* cell.lose
-    yield* cell.brain.start(cell.input, cell.owner.organizationId)
+    yield* cell.brain.start(cell.input, cell.owner)
     expect((yield* cell.local).sessions.map((row) => row.id).toSorted()).toEqual(
       [cell.id, Session.ID.make(child.id)].toSorted(),
     )
@@ -235,7 +238,7 @@ it.live("P5-06: restore skips descendants of a missing parent and restores other
     const sql = yield* SqlClient.SqlClient
     yield* sql`delete from opencode_session where session_id = ${missing.id}`
     yield* cell.lose
-    yield* cell.brain.start(cell.input, cell.owner.organizationId)
+    yield* cell.brain.start(cell.input, cell.owner)
     expect((yield* cell.local).sessions.map((row) => row.id).toSorted()).toEqual(
       [cell.id, Session.ID.make(sibling.id)].toSorted(),
     )
@@ -274,7 +277,7 @@ it.live("P5-09: a busy session restores as idle and the next pass updates Ren", 
     expect(yield* SyncTest.status(cell.id)).toBe("busy")
     yield* cell.lose
     script.release()
-    yield* cell.brain.start(cell.input, cell.owner.organizationId)
+    yield* cell.brain.start(cell.input, cell.owner)
     expect((yield* cell.local).sessions[0]?.time_suspended).toBeNull()
     expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
     expect(yield* SyncTest.status(cell.id)).toBe("idle")

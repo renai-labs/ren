@@ -83,13 +83,14 @@ export const layer = Layer.effect(
             .returning({ id: Database.Schema.agent_session.id }),
         )
         if (created.length === 0) return yield* alreadyExists
-        return yield* brain.start(input, owner.organizationId)
+        return yield* brain.start(input, owner)
       }),
       send: Effect.fn("Session.send")(function* (input: Session.SendInput) {
         const row = (yield* database.transaction((transaction) =>
           transaction
             .select({
               organizationId: Database.Schema.agent_session.organization_id,
+              spaceId: Database.Schema.agent_session.space_id,
               startInput: Database.Schema.agent_session.start_input,
             })
             .from(Database.Schema.agent_session)
@@ -106,7 +107,7 @@ export const layer = Layer.effect(
                   }),
                 )
               const start = yield* Schema.decodeEffect(Session.StartInput)(row.startInput).pipe(Effect.orDie)
-              yield* brain.start(start, row.organizationId)
+              yield* brain.start(start, row)
               return yield* brain
                 .send(input, row.organizationId)
                 .pipe(

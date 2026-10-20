@@ -1,15 +1,15 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { SQL } from "bun"
 import { OpenCode } from "@opencode/client"
-import { ModelsBody } from "@ren/brain-api/brain-api"
-import { SessionToken } from "@ren/brain-api/session-token"
-import { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
+import { SessionToken } from "@ren/host-api/session-token"
+import { Sync } from "@ren/schema/sync"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { BrainHost } from "@ren/core/brain-host"
 import { Session } from "@ren/core/session"
 import { Seed } from "@ren/core/testing"
+import { Brain } from "@ren/schema/brain"
 import type { Database } from "@ren/db/database"
-import { Deferred, Effect, Queue, Schema } from "effect"
+import { Deferred, Effect, Queue, Redacted, Schema } from "effect"
 import { HttpServer } from "effect/http"
 import { SqlClient } from "effect/sql"
 import { cellKey } from "./lib/app.js"
@@ -50,7 +50,10 @@ const it = {
     SyncTest.live(name, body, 180_000, () => celld().url),
 }
 
-const Rows = Schema.Struct({ sessions: Schema.Array(OpenCodeSessionRow), messages: Schema.Array(OpenCodeMessageRow) })
+const Rows = Schema.Struct({
+  sessions: Schema.Array(Sync.OpenCodeSessionRow),
+  messages: Schema.Array(Sync.OpenCodeMessageRow),
+})
 
 const checkpoints = "/brain/sync/checkpoints"
 
@@ -58,7 +61,8 @@ const uploads = (id: string) => `/brain/sync/sessions/${id}/uploads/`
 
 const seconds = (offset: number) => Math.floor(Date.now() / 1000) + offset
 
-const types = (rows: { readonly messages: ReadonlyArray<OpenCodeMessageRow> }) => rows.messages.map((row) => row.type)
+const types = (rows: { readonly messages: ReadonlyArray<Sync.OpenCodeMessageRow> }) =>
+  rows.messages.map((row) => row.type)
 
 const setup = Effect.fnUntraced(function* () {
   const server = yield* HttpServer.HttpServer
@@ -273,7 +277,7 @@ describe("cell sync", () => {
           })
           if (!response.ok) throw new Error(`${path} answered ${response.status}: ${await response.text()}`)
         })
-      yield* call("PUT", "/ren/models", Schema.encodeSync(ModelsBody)({ access: Shared.access() }))
+      yield* call("PUT", "/ren/models", Schema.encodeSync(Brain.ModelGrant)({ access: Shared.access() }))
       yield* Effect.promise(() => cell.opencode.session.create({ id: cell.id, location: { directory: "/workspace" } }))
       yield* call("POST", "/ren/sessions", {
         sessionId: cell.id,
@@ -286,7 +290,7 @@ describe("cell sync", () => {
       yield* call(
         "PUT",
         "/ren/models",
-        Schema.encodeSync(ModelsBody)({ access: Shared.access(), hostToken: expired }),
+        Schema.encodeSync(Brain.ModelGrant)({ access: Shared.access(), hostToken: Redacted.make(expired) }),
         expired,
       )
       const refused = yield* status(cell.proxy, checkpoints)

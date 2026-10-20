@@ -1,5 +1,5 @@
-import { CurrentHost } from "@ren/brain-api/host-api"
-import { SyncApi } from "@ren/brain-api/sync-api"
+import { CurrentHost } from "@ren/host-api/ren-host-api"
+import { SyncApi } from "@ren/host-api/sync-api"
 import { SessionSync } from "@ren/core/session-sync"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"

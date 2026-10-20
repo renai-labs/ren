@@ -4,19 +4,19 @@ import { AbsolutePath, OpenCode, type OpenCodeClient } from "@opencode/client/ef
 import { Location } from "@opencode/schema/location"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { Environments } from "@ren/brain/environments"
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { TestAccess } from "@ren/brain/testing"
-import { OpenCodeMessageRow } from "@ren/brain-api/sync-api"
+import { Sync } from "@ren/schema/sync"
 import { testEffect } from "@ren/executor/testing"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Option, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Env } from "../src/env.js"
-import { Host } from "../src/harness/opencode/host.js"
-import { RenWorkspaceDriver } from "../src/harness/opencode/ren-workspace-driver.js"
+import { OpenCodeServer } from "../src/harness/opencode/server.js"
+import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 import { BrainTest } from "./lib/brain.js"
 import { OpenCodeRows } from "../src/harness/opencode/opencode-rows.js"
 import { Shared } from "./lib/shared.js"
@@ -44,7 +44,7 @@ const stored = (database: string, sessionID: string) =>
 
 const exported = Effect.fnUntraced(function* (database: string, sessionID: string) {
   const row = (yield* all(database, "select * from session_v2 where id = ?", sessionID)).at(0)
-  const rows = yield* Schema.decodeUnknownEffect(Schema.Array(OpenCodeMessageRow))(
+  const rows = yield* Schema.decodeUnknownEffect(Schema.Array(Sync.OpenCodeMessageRow))(
     yield* all(
       database,
       "select id, session_id, type, seq, data from session_message where session_id = ? order by seq, id",
@@ -177,10 +177,10 @@ it.live("import drops an unsettled assistant message and a running shell and num
 
 const withWorkspaces = Effect.fnUntraced(function* () {
   const database = join(yield* folder, "opencode.db")
-  const environments = yield* Layer.build(
-    Environments.layer.pipe(Layer.provide(TestAccess.fixed(new Map())), Layer.provide(FetchHttpClient.layer)),
-  ).pipe(Effect.map((context) => Context.get(context, Environments.Service)))
-  const host = yield* Host.make(
+  const connections = yield* Layer.build(
+    EnvironmentConnections.layer.pipe(Layer.provide(TestAccess.fixed(new Map())), Layer.provide(FetchHttpClient.layer)),
+  ).pipe(Effect.map((context) => Context.get(context, EnvironmentConnections.Service)))
+  const host = yield* OpenCodeServer.make(
     createEmbeddedRoutes(
       {
         database: { path: database },
@@ -188,11 +188,11 @@ const withWorkspaces = Effect.fnUntraced(function* () {
         models: { fetch: false },
         fs: { filewatcher: false, fff: false },
       },
-      RenWorkspaceDriver.replacements(environments),
+      RenWorkspaceDriver.replacements(connections),
     ).pipe(Layer.provide(HttpServer.layerServices)),
     Shared.access(undefined, stub.url).endpoints,
     () => Effect.succeedNone,
-    true,
+    Option.some(connections),
   )
   const opencode = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
     Effect.provide(FetchHttpClient.layer),

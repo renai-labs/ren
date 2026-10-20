@@ -3,9 +3,9 @@ import { Database } from "bun:sqlite"
 import { AbsolutePath, Session, SessionMessage } from "@opencode/client/effect"
 import { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { SqliteReader } from "@ren/brain/sqlite-reader"
-import { SessionToken } from "@ren/brain-api/session-token"
-import { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
-import { Shared, type StubModel } from "@ren/cell/testing"
+import { SessionToken } from "@ren/host-api/session-token"
+import { Sync } from "@ren/schema/sync"
+import { Shared, type StubModel, SyncClient } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
 import { Seed } from "@ren/core/testing"
 import type { Auth } from "@ren/schema/auth"
@@ -34,12 +34,12 @@ const hostToken = Effect.fnUntraced(function* (sid: RenSession.ID, org: Auth.Org
   return yield* SessionToken.sign(cellKey, { sid, scope: "host", org, iat: now, exp: now + seconds })
 })
 
-const sessionColumns = Object.keys(OpenCodeSessionRow.fields).join(", ")
+const sessionColumns = Object.keys(Sync.OpenCodeSessionRow.fields).join(", ")
 
-const messageColumns = Object.keys(OpenCodeMessageRow.fields).join(", ")
+const messageColumns = Object.keys(Sync.OpenCodeMessageRow.fields).join(", ")
 
 const local = (db: Database, root: RenSession.ID) => {
-  const sessions = Schema.decodeUnknownSync(Schema.Array(OpenCodeSessionRow))(
+  const sessions = Schema.decodeUnknownSync(Schema.Array(Sync.OpenCodeSessionRow))(
     db.query(`select ${sessionColumns} from session_v2`).all(),
   )
   const parents = new Map(sessions.map((session) => [session.id, session.parent_id]))
@@ -54,7 +54,7 @@ const local = (db: Database, root: RenSession.ID) => {
       (session) => session.id,
     ),
     messages: SyncTest.sortRows(
-      Schema.decodeUnknownSync(Schema.Array(OpenCodeMessageRow))(
+      Schema.decodeUnknownSync(Schema.Array(Sync.OpenCodeMessageRow))(
         db.query(`select ${messageColumns} from session_message`).all(),
       ).filter((message) => scoped.has(message.session_id)),
       SyncTest.messageKey,
@@ -106,12 +106,15 @@ const setup = Effect.fnUntraced(function* () {
   const root = Session.ID.make(brain.id)
   const location = { directory: AbsolutePath.make(brain.directory) }
   const sync = (input: { readonly reader?: OpenCodeSync.Reader } = {}) =>
-    OpenCodeSync.make({
-      url: proxy.url,
-      token: Effect.sync(() => token.value),
-      reader: input.reader ?? reader,
-      restoring: Effect.sync(() => host.restoring),
-    }).pipe(Effect.provide(FetchHttpClient.layer))
+    SyncClient.make(
+      proxy.url,
+      Effect.sync(() => token.value),
+    ).pipe(
+      Effect.flatMap((remote) =>
+        OpenCodeSync.make({ remote, reader: input.reader ?? reader, restoring: Effect.sync(() => host.restoring) }),
+      ),
+      Effect.provide(FetchHttpClient.layer),
+    )
   const create = (parentID?: Session.ID) =>
     client.session.create({ location, ...(parentID && { parentID }) }).pipe(
       Effect.orDie,
@@ -374,7 +377,7 @@ describe("OpenCodeSync", () => {
       expect(yield* sync.step()).toEqual({ drained: true })
       const expected = yield* host.expectEqual
       host.proxy.clear()
-      const imported: Array<OpenCodeMessageRow> = []
+      const imported: Array<Sync.OpenCodeMessageRow> = []
       yield* sync.restore({
         sessionId: host.brain.id,
         exists: () => Effect.succeed(false),

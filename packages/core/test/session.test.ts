@@ -10,7 +10,7 @@ import { SessionSync } from "../src/session-sync.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
-import { Sync } from "./lib/sync.js"
+import { SyncFixture } from "./lib/sync-fixture.js"
 
 const runtime = ManagedRuntime.make(Shared.layer)
 beforeAll(async () => {
@@ -104,7 +104,7 @@ describe("Session", () => {
         const sessions = yield* Session.Service
         const owner = yield* Seed.owner()
         const rootId = yield* Seed.session(owner)
-        const host = { brainId: rootId, organizationId: owner.organizationId }
+        const host = { sessionId: rootId, organizationId: owner.organizationId }
         const childId = Session.ID.create()
         expect(yield* sessions.get(rootId)).toMatchObject({
           id: rootId,
@@ -115,10 +115,10 @@ describe("Session", () => {
           outcome: null,
           updatedAt: null,
         })
-        yield* Sync.pass(host, Sync.session(rootId), 2, [])
-        yield* Sync.pass(
+        yield* SyncFixture.pass(host, SyncFixture.session(rootId), 2, [])
+        yield* SyncFixture.pass(
           host,
-          Sync.session(childId, { parent_id: rootId, title: "Explore", time_suspended: Sync.now + 5 }),
+          SyncFixture.session(childId, { parent_id: rootId, title: "Explore", time_suspended: SyncFixture.now + 5 }),
           3,
           [],
         )
@@ -128,20 +128,20 @@ describe("Session", () => {
           title: "Explore",
           status: "busy",
         })
-        yield* Sync.pass(
+        yield* SyncFixture.pass(
           host,
-          Sync.session(childId, {
+          SyncFixture.session(childId, {
             parent_id: rootId,
             title: "Explore",
             idle_outcome: "completed",
-            time_updated: Sync.now + 9,
+            time_updated: SyncFixture.now + 9,
           }),
           4,
           [],
         )
         const child = yield* sessions.get(childId)
         expect(child).toMatchObject({ status: "idle", outcome: "completed" })
-        expect(child.updatedAt?.epochMilliseconds).toBe(Sync.now + 9)
+        expect(child.updatedAt?.epochMilliseconds).toBe(SyncFixture.now + 9)
       }),
   )
 

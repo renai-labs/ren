@@ -1,9 +1,9 @@
 import { describe, expect } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
-import { ForbiddenError, StaleUploadError } from "@ren/brain-api/errors"
-import { SessionToken } from "@ren/brain-api/session-token"
-import { SyncApi } from "@ren/brain-api/sync-api"
-import { Seed, Sync, testEffect } from "@ren/core/testing"
+import { ForbiddenError, StaleUploadError } from "@ren/host-api/errors"
+import { SessionToken } from "@ren/host-api/session-token"
+import { SyncApi } from "@ren/host-api/sync-api"
+import { Seed, SyncFixture, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
 import { Clock, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpRouter } from "effect/http"
@@ -45,11 +45,11 @@ describe("SyncApi", () => {
       const host = yield* root()
       const sync = host.client.sync
       const params = { id: host.rootId }
-      const row = Sync.session(host.rootId, { title: "Fix the build", time_suspended: Sync.now })
+      const row = SyncFixture.session(host.rootId, { title: "Fix the build", time_suspended: SyncFixture.now })
       const messages = [
-        Sync.message(host.rootId, "msg_a", 2, { data: JSON.stringify({ text: "tool output with \u0000" }) }),
-        Sync.message(host.rootId, "msg_b", 2 ** 40),
-        Sync.message(host.rootId, "msg_c", 2 ** 40),
+        SyncFixture.message(host.rootId, "msg_a", 2, { data: JSON.stringify({ text: "tool output with \u0000" }) }),
+        SyncFixture.message(host.rootId, "msg_b", 2 ** 40),
+        SyncFixture.message(host.rootId, "msg_c", 2 ** 40),
       ]
       const opened = yield* sync["sync.startUpload"]({ params, payload: { harness: "opencode", parentId: null } })
       const upload = { ...params, upload: opened.upload }
@@ -59,7 +59,7 @@ describe("SyncApi", () => {
         payload: { session: row, seq: 2 ** 40, ids: messages.map((message) => message.id) },
       })
       expect(yield* sync["sync.checkpoints"]()).toEqual({
-        sessions: [{ id: host.rootId, syncSeq: 2 ** 40, timeSuspended: Sync.now }],
+        sessions: [{ id: host.rootId, syncSeq: 2 ** 40, timeSuspended: SyncFixture.now }],
       })
       expect(yield* sync["sync.restore"]({ payload: { sessionId: host.rootId } })).toEqual({ sessions: [row] })
       const first = yield* sync["sync.messages"]({ params, query: { limit: 2 } })
@@ -103,7 +103,7 @@ describe("SyncApi", () => {
         yield* Effect.flip(
           sync["sync.uploadMessages"]({
             params: { ...params, upload: old.upload },
-            payload: { messages: [Sync.message(host.rootId, "msg_late", 2)] },
+            payload: { messages: [SyncFixture.message(host.rootId, "msg_late", 2)] },
           }),
         ),
       ).toBeInstanceOf(StaleUploadError)
