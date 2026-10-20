@@ -10,7 +10,7 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
-import { Effect, Option, Predicate, Schema, Stream } from "effect"
+import { Clock, Effect, Option, Predicate, Schema, Stream } from "effect"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
@@ -171,7 +171,7 @@ export const make = (
 
   return {
     events: OpenCodeEvents.stream(fetch).pipe(
-      Stream.map(Translate.event),
+      Stream.mapEffect((raw) => Effect.map(Clock.currentTimeMillis, (now) => Translate.frame(raw, now))),
       Stream.filter(Option.isSome),
       Stream.map((event) => event.value),
     ),

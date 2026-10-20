@@ -67,6 +67,19 @@ const decodeTyped = Schema.decodeUnknownOption(Typed)
 export const isAllowed = (raw: unknown) =>
   Option.match(decodeTyped(raw), { onNone: () => false, onSome: (typed) => SessionEvent.types.has(typed.type) })
 
+const decodeConnected = Schema.decodeUnknownOption(
+  Schema.Struct({ id: Schema.String, type: Schema.Literal("server.connected") }),
+)
+
+export const frame = (
+  raw: unknown,
+  created: number,
+): Option.Option<SessionEvent.Event | typeof SessionEvent.Connected.Type> =>
+  Option.match(decodeConnected(raw), {
+    onNone: () => event(raw),
+    onSome: (connected) => Option.some({ id: connected.id, created, type: connected.type, data: {} }),
+  })
+
 export const event = (raw: unknown): Option.Option<SessionEvent.Event> => {
   if (!isAllowed(raw)) return Option.none()
   return decodeEvent(

@@ -520,6 +520,25 @@ test("a session outside this brain is not found", () =>
     }),
   ))
 
+test("the stream reports connected with the harness's own frame, once the harness stream is subscribed", () =>
+  live(
+    Effect.gen(function* () {
+      const upstream = yield* Queue.unbounded<SessionEvent.Event | typeof SessionEvent.Connected.Type>()
+      const frames = yield* Queue.unbounded<SessionEvent.Frame>()
+      yield* Chat.frames({
+        live: Stream.fromQueue(upstream),
+        active: Effect.succeed(false),
+        idleMs: 60_000,
+        heartbeatMs: 60_000,
+      }).pipe(
+        Stream.runForEach((frame) => Queue.offer(frames, frame)),
+        Effect.forkScoped,
+      )
+      yield* Queue.offer(upstream, { id: "evt_upstream", created: 1, type: "server.connected", data: {} })
+      expect(yield* Queue.take(frames)).toEqual({ id: "evt_upstream", created: 1, type: "server.connected", data: {} })
+    }),
+  ))
+
 test("the event stream ends once the session is idle, and not while a turn runs", () =>
   live(
     Effect.gen(function* () {
