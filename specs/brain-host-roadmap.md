@@ -83,7 +83,7 @@ Each is its own spec, on the same Brain API:
 
 ## Ask upstream (OpenCode)
 
-- Expose `fetch` on `OpenCodeWorkerd`, so the cell's host (`packages/cell/src/harness/opencode/host.ts`) stops depending on unpublished subpaths. The adapter's in-process client and the `debug` scope use it; client tokens never do.
+- Expose `fetch` on `OpenCodeWorkerd`, so the cell's host (`packages/cell/src/harness/opencode/server.ts`) stops depending on unpublished subpaths. The adapter's in-process client and the `debug` scope use it; client tokens never do.
 - Persist pending questions and permission requests across a close.
 - The `<context>` blocks in `<system-update>` reach the model HTML-escaped; check whether that is intended.
 - The 2.0.27 client's `session.synthetic` is refused with "Expected string" where the same raw request is accepted.
