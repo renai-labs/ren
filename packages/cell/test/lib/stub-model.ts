@@ -10,6 +10,7 @@ interface Behaviour {
   readonly malformed?: boolean
   readonly dripMs?: number
   readonly tool?: { readonly name: string; readonly input: unknown }
+  readonly tools?: ReadonlyArray<{ readonly name: string; readonly input: unknown }>
   readonly summary?: string
 }
 
@@ -59,7 +60,17 @@ const Message = Schema.Struct({
 const ChatRequest = Schema.Struct({
   model: Schema.String,
   messages: Schema.Array(Message),
-  tools: Schema.optional(Schema.Array(Schema.Struct({ function: Schema.Struct({ name: Schema.String }) }))),
+  tools: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        function: Schema.Struct({
+          name: Schema.String,
+          description: Schema.optional(Schema.String),
+          parameters: Schema.optional(Schema.Unknown),
+        }),
+      }),
+    ),
+  ),
 })
 interface ChatRequest extends Schema.Schema.Type<typeof ChatRequest> {}
 
@@ -158,8 +169,8 @@ const toCall = (body: ChatRequest, request: Request): Call => {
 
 async function* reply(body: ChatRequest, behaviour: Behaviour, gate: Promise<void>) {
   const last = body.messages.findLastIndex((message) => message.role === "user")
-  const answered = body.messages.slice(last + 1).some((message) => message.role === "tool")
-  const tool = answered ? undefined : behaviour.tool
+  const results = body.messages.slice(last + 1).filter((message) => message.role === "tool").length
+  const tool = (behaviour.tools ?? (behaviour.tool ? [behaviour.tool] : [])).at(results)
   const words = tool ? [] : (behaviour.reply ?? "stub reply").split(/(?<= )/)
   const pause = () => (behaviour.dripMs ? Bun.sleep(behaviour.dripMs) : Promise.resolve())
   yield chunk({ role: "assistant", content: "" })

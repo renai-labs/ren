@@ -131,6 +131,7 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
       sessions: Context.get(services, OpenCodeSession.Service),
       workspaces: Context.get(services, Workspace.Service),
       hasEnvironmentConnections: false,
+      settings: Option.none(),
       configure: () => Effect.void,
     },
     endpoints,

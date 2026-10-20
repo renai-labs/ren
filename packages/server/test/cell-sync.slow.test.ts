@@ -68,6 +68,7 @@ const setup = Effect.fnUntraced(function* () {
   const server = yield* HttpServer.HttpServer
   const proxy = yield* Proxy.make(HttpServer.formatAddress(server.address), { hostname: "0.0.0.0", port: ren.port })
   const owner = yield* Seed.owner()
+  yield* Seed.ren()
   const sessions = yield* Session.Service
   const brain = yield* BrainHost.Service
   const id = Session.ID.create()
@@ -248,7 +249,7 @@ describe("cell sync", () => {
   it.live("let the host token expire while Ren is down. The next call from Ren completes the sync", () =>
     Effect.gen(function* () {
       const cell = yield* setup()
-      yield* Effect.promise(cell.proxy.down)
+      cell.proxy.block((request) => request.path !== "/host/settings")
       yield* Seed.session(cell.owner, { sessionId: cell.id })
       const server = TestToken.basic(
         yield* SessionToken.sign(cellKey, { sid: cell.id, scope: "server", exp: seconds(600) }),
@@ -293,7 +294,7 @@ describe("cell sync", () => {
         expired,
       )
       const refused = yield* status(cell.proxy, checkpoints)
-      cell.proxy.up()
+      cell.proxy.unblock()
       expect(yield* refused).toBe(403)
       expect(yield* SyncTest.remote(cell.id)).toEqual({ sessions: [], messages: [] })
       expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
