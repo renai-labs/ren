@@ -1,4 +1,4 @@
-export * as Host from "./host.js"
+export * as OpenCodeServer from "./server.js"
 
 import { Credential } from "@opencode/core/credential"
 import { SdkPlugins } from "@opencode/core/plugin/sdk"
@@ -16,7 +16,7 @@ import type { Harness } from "../harness.js"
 import { RenPlugin } from "./plugin.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 
-export const open = Effect.fn("Host.open")(function* (
+export const open = Effect.fn("OpenCodeServer.open")(function* (
   storage: DurableObjectStorage,
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
@@ -43,7 +43,7 @@ export const open = Effect.fn("Host.open")(function* (
   )
 })
 
-export const make = Effect.fn("Host.make")(function* (
+export const make = Effect.fn("OpenCodeServer.make")(function* (
   routes: Layer.Layer<
     | Credential.Service
     | SdkPlugins.Service

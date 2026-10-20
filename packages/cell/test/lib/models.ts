@@ -23,7 +23,8 @@ export const storage = (stored = new Map<string, string>()) =>
     ),
   )
 
-export const granted = (body: Brain.ModelGrant) => Response.json(Schema.encodeSync(Brain.ModelGrant)(body))
+export const granted = (body: Brain.ModelGrant) =>
+  Response.json(Schema.encodeSync(Schema.toCodecJson(Brain.ModelGrant))(body))
 
 export const issuer = Effect.gen(function* () {
   const exchanges = yield* Queue.unbounded<Exchange>()

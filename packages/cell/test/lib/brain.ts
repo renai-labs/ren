@@ -16,7 +16,7 @@ import { Cell } from "../../src/cell.js"
 import { Env } from "../../src/env.js"
 import { Harness } from "../../src/harness/harness.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
-import { Host } from "../../src/harness/opencode/host.js"
+import { OpenCodeServer } from "../../src/harness/opencode/server.js"
 import { HostToken } from "../../src/host-token.js"
 import { ModelRefresh } from "../../src/model-refresh.js"
 import { ModelStore } from "../../src/model-store.js"
@@ -65,7 +65,7 @@ const make = Effect.gen(function* () {
     ).pipe(Layer.provideMerge(ModelsTest.storage())),
   )
   yield* Context.get(services, ModelStore.Service).write(Shared.access(undefined, Shared.stub().url), undefined)
-  const host = yield* Host.make(
+  const host = yield* OpenCodeServer.make(
     createEmbeddedRoutes({
       database: { path: ":memory:" },
       config: { project: false, content: vars.OPENCODE_CONFIG },

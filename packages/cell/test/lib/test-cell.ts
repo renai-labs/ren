@@ -65,7 +65,10 @@ export const make = async (url: string) => {
         method: "PUT",
         headers: { authorization: server, "content-type": "application/json" },
         body: JSON.stringify(
-          Schema.encodeSync(Brain.ModelGrant)({ access, ...(hostToken && { hostToken: Redacted.make(hostToken) }) }),
+          Schema.encodeSync(Schema.toCodecJson(Brain.ModelGrant))({
+            access,
+            ...(hostToken && { hostToken: Redacted.make(hostToken) }),
+          }),
         ),
       }),
     removeModels: () => fetch(`${url}/ren/models`, { method: "DELETE", headers: { authorization: server } }),

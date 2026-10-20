@@ -13,7 +13,7 @@ import { ChildProcess } from "effect/process"
 import { mkdtemp, realpath, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { maxFileBytes } from "@ren/hand-api/executor-api"
+import { ExecutorApi } from "@ren/hand-api/executor-api"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 
 const handId = Hand.ID.create()
@@ -114,13 +114,13 @@ it.live(
       yield* subject.driver.overrides.mkdir(root)
       yield* Effect.promise(() =>
         writeFile(join(workspace, subject.sessionId, "large.bin"), "").then(() =>
-          truncate(join(workspace, subject.sessionId, "large.bin"), maxFileBytes + 1),
+          truncate(join(workspace, subject.sessionId, "large.bin"), ExecutorApi.maxFileBytes + 1),
         ),
       )
       const error = yield* subject.driver.overrides.read(`${root}/large.bin`).pipe(Effect.flip)
       expect(error instanceof EnvironmentFiles.Failed && String(error.cause)).toContain("use a range")
       const written = yield* subject.driver.overrides
-        .write(`${root}/copy.bin`, new Uint8Array(maxFileBytes + 1))
+        .write(`${root}/copy.bin`, new Uint8Array(ExecutorApi.maxFileBytes + 1))
         .pipe(Effect.flip)
       expect(written instanceof EnvironmentFiles.Failed && String(written.cause)).toContain("write it in parts")
       expect(yield* subject.driver.overrides.stat(`${root}/copy.bin`).pipe(Effect.flip)).toBeInstanceOf(
