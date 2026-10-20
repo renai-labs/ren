@@ -52,7 +52,7 @@ describe("Session", () => {
       const owner = yield* Seed.owner()
       const sessionId = Session.ID.create()
       const script = stub.script()
-      const start = { sessionId, harness: "opencode" as const, title: "Plan", instructions: {}, interactive: true }
+      const start = { sessionId, harness: "opencode" as const, title: "Plan", interactive: true }
       expect(
         yield* sessions.create(owner, {
           ...start,
@@ -85,9 +85,7 @@ describe("Session", () => {
       const sessionId = yield* Seed.session(owner, { title: "First" })
       const other = yield* Seed.owner()
       expect(
-        yield* Effect.flip(
-          sessions.create(other, { sessionId, harness: "opencode", instructions: {}, interactive: true }),
-        ),
+        yield* Effect.flip(sessions.create(other, { sessionId, harness: "opencode", interactive: true })),
       ).toBeInstanceOf(Session.AlreadyExists)
       expect(yield* sessions.get(sessionId)).toMatchObject({
         organizationId: owner.organizationId,
@@ -104,11 +102,7 @@ describe("Session", () => {
       const owner = yield* Seed.owner()
       const agentId = yield* Seed.agent(owner, "build", { isSubagent: false })
       const sessionId = Session.ID.create()
-      yield* sessions.create(
-        owner,
-        { sessionId, harness: "opencode", instructions: {}, interactive: true },
-        { agentId },
-      )
+      yield* sessions.create(owner, { sessionId, harness: "opencode", interactive: true }, { agentId })
       const rows = yield* database.db
         .select({ agentId: Database.Schema.agent_session.agent_id })
         .from(Database.Schema.agent_session)
@@ -139,11 +133,7 @@ describe("Session", () => {
           const sessionId = Session.ID.create()
           expect(
             yield* Effect.flip(
-              sessions.create(
-                owner,
-                { sessionId, harness: "opencode", instructions: {}, interactive: true },
-                { agentId },
-              ),
+              sessions.create(owner, { sessionId, harness: "opencode", interactive: true }, { agentId }),
             ),
           ).toBeInstanceOf(Session.NotFound)
           expect(yield* Effect.flip(sessions.get(sessionId))).toBeInstanceOf(Session.NotFound)
@@ -203,7 +193,7 @@ describe("Session", () => {
     Effect.gen(function* () {
       const sessions = yield* Session.Service
       const owner = yield* Seed.owner()
-      const sessionId = yield* Seed.session(owner, { instructions: {}, interactive: true })
+      const sessionId = yield* Seed.session(owner, { interactive: true })
       const script = stub.script()
       const messageId = Session.MessageID.create()
       expect(

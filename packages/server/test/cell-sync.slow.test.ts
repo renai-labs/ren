@@ -97,7 +97,6 @@ const setup = Effect.fnUntraced(function* () {
       sessionId: id,
       harness: "opencode",
       title: "Sync",
-      instructions: {},
       interactive: false,
       initialMessage: message(text),
     })

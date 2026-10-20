@@ -67,27 +67,19 @@ test.each<[Session.Delivery, Array<string>]>([
     ),
 )
 
-it.live("start creates a session with Ren's identity, model, agent and instructions", () =>
+it.live("start creates a session with its title and model", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service
-    expect(
-      yield* brain.start({
-        title: "First",
-        agent: "build",
-        model: { endpointId: "stub", modelId: "stub-model" },
-        instructions: { team: "Ren" },
-      }),
-    ).toEqual({ sessionId: brain.id, harness: "opencode" })
+    expect(yield* brain.start({ title: "First", model: { endpointId: "stub", modelId: "stub-model" } })).toEqual({
+      sessionId: brain.id,
+      harness: "opencode",
+    })
     const sessionID = SessionID.make(brain.id)
     expect(yield* brain.opencode.session.get({ sessionID })).toMatchObject({
       title: "First",
-      agent: "build",
       model: { providerID: "stub", id: "stub-model" },
       location: { directory: brain.directory },
     })
-    expect(yield* brain.opencode.session.instructions.entry.list({ sessionID })).toEqual([
-      { key: "team", value: "Ren" },
-    ])
     expect((yield* brain.state).nextReconcileAt).not.toBeNull()
   }),
 )
@@ -99,7 +91,6 @@ it.live("start accepts its initial message after configuration and deduplicates 
     yield* brain.start()
     yield* brain.configureModels({ stub: Shared.apiKey("initial-key") })
     const input = {
-      instructions: { team: "Ren initial instructions" },
       interactive: false,
       initialMessage: {
         messageId: Session.MessageID.create(),
@@ -112,7 +103,6 @@ it.live("start accepts its initial message after configuration and deduplicates 
       { sessionId: brain.id, harness: "opencode" },
     ])
     const call = yield* Effect.promise(() => script.called())
-    expect(call.system).toContain("Ren initial instructions")
     expect(call.authorization).toBe("Bearer initial-key")
     expect(call.tools).not.toContain("question")
     script.release()
@@ -129,42 +119,25 @@ it.live("start accepts its initial message after configuration and deduplicates 
   }),
 )
 
-it.live(
-  "a repeated start updates title, agent, model and the whole instruction set without duplicating the session",
-  () =>
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.Service
-      yield* brain.start({ title: "First", instructions: { team: "Ren", old: "remove" } })
-      const input = {
-        title: "Second",
-        agent: "plan",
-        model: { endpointId: "stub", modelId: "stub-other" },
-        instructions: { team: "Ren", goal: "ship" },
-      }
-      expect(yield* brain.start(input)).toEqual(yield* brain.start(input))
-      const sessionID = SessionID.make(brain.id)
-      expect((yield* brain.opencode.session.list()).data).toHaveLength(1)
-      expect(yield* brain.opencode.session.get({ sessionID })).toMatchObject({
-        title: "Second",
-        agent: "plan",
-        model: { id: "stub-other" },
-      })
-      expect(yield* brain.opencode.session.instructions.entry.list({ sessionID })).toEqual([
-        { key: "goal", value: "ship" },
-        { key: "team", value: "Ren" },
-      ])
-    }),
+it.live("a repeated start updates title and model without duplicating the session", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start({ title: "First" })
+    const input = { title: "Second", model: { endpointId: "stub", modelId: "stub-other" } }
+    expect(yield* brain.start(input)).toEqual(yield* brain.start(input))
+    const sessionID = SessionID.make(brain.id)
+    expect((yield* brain.opencode.session.list()).data).toHaveLength(1)
+    expect(yield* brain.opencode.session.get({ sessionID })).toMatchObject({
+      title: "Second",
+      model: { id: "stub-other" },
+    })
+  }),
 )
 
 it.live("start with the same input on an imported session adds no message", () =>
   Effect.gen(function* () {
     const source = yield* BrainTest.Service
-    const input = {
-      title: "Imported",
-      agent: "build",
-      model: { endpointId: "stub", modelId: "stub-model" },
-      instructions: { team: "Ren" },
-    }
+    const input = { title: "Imported", model: { endpointId: "stub", modelId: "stub-model" } }
     yield* source.start(input)
     yield* source.send(`${Shared.stub().script().marker} first`)
     const sessionID = SessionID.make(source.id)
@@ -199,7 +172,6 @@ it.live("a token-session mismatch fails before acquiring the harness", () =>
 )
 
 test.each<[string, Partial<StartBody>]>([
-  ["an unknown agent", { agent: "nobody" }],
   ["an unknown model", { model: { endpointId: "stub", modelId: "missing" } }],
   ["an environment in a brain that cannot use environments", { directory: "/workspace/ses_1" }],
 ])("start rejects %s, creates no session and submits no initial message", (_name, input) =>
@@ -283,15 +255,14 @@ it.live(
     }),
 )
 
-it.live("instructions, non-interactive permissions and the Ren plugin reach the model", () =>
+it.live("non-interactive permissions and the Ren plugin reach the model", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service
     yield* brain.start({ interactive: true })
-    yield* brain.start({ interactive: false, instructions: { team: "Ren builds cells" } })
+    yield* brain.start({ interactive: false })
     const script = Shared.stub().script()
     yield* brain.send(`tools ${script.marker}`)
     yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
-    expect(script.calls[0]?.system).toContain("Ren builds cells")
     expect(
       script.calls[0]?.tools.filter((tool) =>
         ["read", "write", "edit", "patch", "glob", "grep", "shell", "question"].includes(tool),
@@ -312,7 +283,7 @@ it.live("a busy start applies changes without interrupting the running turn", ()
     const script = Shared.stub().script({ hold: true })
     yield* brain.send(`busy ${script.marker}`)
     yield* Effect.promise(() => script.called())
-    yield* brain.start({ title: "While busy", instructions: { team: "Ren" } })
+    yield* brain.start({ title: "While busy" })
     script.release()
     const sessionID = SessionID.make(brain.id)
     yield* brain.opencode.session.wait({ sessionID })

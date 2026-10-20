@@ -124,7 +124,7 @@ const start = (
     keys,
     BrainHost.Service.use((brain) =>
       brain.start(
-        { sessionId, harness: "opencode", instructions: {}, interactive: true, ...input },
+        { sessionId, harness: "opencode", interactive: true, ...input },
         { organizationId, spaceId: Space.ID.create() },
       ),
     ),

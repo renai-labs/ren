@@ -304,7 +304,6 @@ export const start = async (options: {
     const input = (startOptions: StartOptions = {}): SessionSchema.StartInput => ({
       sessionId,
       harness: "opencode",
-      instructions: startOptions.instructions ?? {},
       interactive: startOptions.interactive ?? false,
       ...(environment &&
         !startOptions.withoutEnvironment && {

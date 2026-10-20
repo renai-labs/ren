@@ -7,11 +7,6 @@ import { LiveModel } from "../lib/provider/live.js"
 import { RealStack } from "../lib/real-stack.js"
 import { Wait } from "../lib/wait.js"
 
-const instructions = {
-  "chaos.limits":
-    "This is an automated test. Keep every answer under 40 words. Use at most four tool calls per turn. Never ask questions.",
-}
-
 const select = async (selection: string | undefined) => {
   const selected = await LiveModel.select(selection)
   if (Result.isFailure(selected)) throw new Error(selected.failure)
@@ -40,7 +35,6 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
         models: LiveModel.access(current().selected),
         start: {
           model: { endpointId: current().selected.providerId, modelId: current().selected.modelId },
-          instructions,
         },
       })
 
@@ -108,7 +102,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
         const alternate = await select(process.env.CHAOS_LIVE_MODEL_ALT)
         const opened = await current().stack.session({
           models: LiveModel.access(alternate),
-          start: { model: { endpointId: alternate.providerId, modelId: alternate.modelId }, instructions },
+          start: { model: { endpointId: alternate.providerId, modelId: alternate.modelId } },
         })
         const name = `patched-${crypto.randomUUID().slice(0, 6)}.txt`
         const before = `before-${crypto.randomUUID().slice(0, 6)}`
@@ -145,11 +139,11 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
         const opened = await current().stack.session({
           environment: false,
           models: merged,
-          start: { model: { endpointId: selected.providerId, modelId: selected.modelId }, instructions },
+          start: { model: { endpointId: selected.providerId, modelId: selected.modelId } },
         })
         await ask(opened, "Reply with ONE.")
         const model = { endpointId: alternate.providerId, modelId: alternate.modelId }
-        await opened.start({ model, instructions })
+        await opened.start({ model })
         const models = (await ask(opened, "Reply with TWO.")).flatMap((message) =>
           message.type === "assistant" ? [message.model.id] : [],
         )

@@ -13,7 +13,6 @@ export interface StartOptions {
   readonly directory?: string
   readonly interactive?: boolean
   readonly model?: Session.Model
-  readonly instructions?: Readonly<Record<string, string>>
   readonly initialMessage?: { readonly messageId: Session.MessageID; readonly text: string }
 }
 
@@ -85,7 +84,6 @@ export const make = async (url: string, provider?: ModelProvider.Instance, repai
         interactive: options.interactive ?? false,
         ...(options.directory && { directory: options.directory }),
         ...(options.model && { model: options.model }),
-        ...(options.instructions && { instructions: options.instructions }),
         ...(options.initialMessage && {
           initialMessage: {
             messageId: options.initialMessage.messageId,

@@ -65,7 +65,6 @@ const setup = Effect.fnUntraced(function* () {
     sessionId: id,
     harness: "opencode" as const,
     title: "Restore",
-    instructions: {},
     interactive: false,
     initialMessage: {
       messageId: Session.MessageID.create(),

@@ -73,7 +73,6 @@ describe("model refresh", () => {
         {
           sessionId,
           harness: "opencode",
-          instructions: {},
           interactive: true,
           initialMessage: {
             messageId: Session.MessageID.create(),
