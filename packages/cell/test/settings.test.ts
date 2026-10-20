@@ -101,6 +101,21 @@ describe("settings in the cell", () => {
     }),
   )
 
+  it.live("the layers' references reach the model as git references", () =>
+    Effect.gen(function* () {
+      const docs = {
+        alias: "docs",
+        repository: "https://git.example.invalid/acme/docs.git",
+        branch: "main",
+        description: "Product docs",
+      }
+      const opened = yield* open(TestSettings.layers({ ren: { references: [docs] } }))
+      const first = stub.script()
+      yield* opened.turn(first)
+      expect(JSON.stringify(first.calls[0]?.body)).toContain("Product docs")
+    }),
+  )
+
   it.live("a deny rule refuses the call, and a deny for every resource hides the tool", () =>
     Effect.gen(function* () {
       const opened = yield* open(

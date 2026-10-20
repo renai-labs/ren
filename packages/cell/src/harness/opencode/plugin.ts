@@ -225,6 +225,15 @@ export const make = (
               })
             editor.default(resolved.primary.name)
           })
+          yield* context.reference.transform((editor) => {
+            for (const reference of Option.getOrUndefined(Ref.getUnsafe(shared.current))?.references ?? [])
+              editor.add(reference.alias, {
+                type: "git",
+                repository: reference.repository,
+                ...(reference.branch && { branch: reference.branch }),
+                ...(reference.description && { description: reference.description }),
+              })
+          })
           yield* context.session.hook("context", (event) =>
             Effect.sync(() => {
               const agent = Option.getOrUndefined(agentOf(event.agent))
@@ -272,7 +281,10 @@ export const make = (
               )
             }),
           )
-          const instance = { reload: context.agent.reload(), session: context.session }
+          const instance = {
+            reload: Effect.all([context.agent.reload(), context.reference.reload()], { discard: true }),
+            session: context.session,
+          }
           yield* Ref.update(shared.instances, (all) => [...all, instance])
           yield* Effect.addFinalizer(() =>
             Ref.update(shared.instances, (all) => all.filter((each) => each !== instance)),
