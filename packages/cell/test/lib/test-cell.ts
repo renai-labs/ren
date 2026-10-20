@@ -26,7 +26,7 @@ export const make = async (url: string) => {
   const id = `ses_${crypto.randomUUID().replaceAll("-", "")}`
   const client = await sign({ sid: id })
   const server = TestToken.basic(await sign({ sid: id, scope: "server" }))
-  const opencode = OpenCode.make({ baseUrl: url, headers: { authorization: TestToken.basic(client) } })
+  const opencode = OpenCode.make({ baseUrl: url, headers: { authorization: server } })
   const state = (): Promise<State> =>
     Effect.gen(function* () {
       const http = yield* HttpClient.HttpClient
@@ -77,10 +77,10 @@ export const make = async (url: string) => {
     state,
     until,
     prompt,
-    request: (path: string, init: { readonly method?: string; readonly body?: string } = {}) =>
+    request: (path: string, init: { readonly method?: string; readonly body?: string } = {}, authorization = server) =>
       fetch(`${url}${path}`, {
         ...init,
-        headers: { authorization: TestToken.basic(client), "content-type": "application/json" },
+        headers: { authorization, "content-type": "application/json" },
       }),
     start: async () => {
       await opencode.session.create({ id })
@@ -88,7 +88,7 @@ export const make = async (url: string) => {
     messages: async () => (await opencode.message.list({ sessionID: id, order: "asc" })).data,
     stream: async () => {
       const controller = new AbortController()
-      const response = await fetch(`${url}/api/event`, {
+      const response = await fetch(`${url}/chat/event`, {
         headers: { authorization: TestToken.basic(client) },
         signal: controller.signal,
       })

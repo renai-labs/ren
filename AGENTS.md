@@ -22,7 +22,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 ## Layering
 
 - Runtime dependencies point from `schema` to `protocol`, `db` and `core`, and from those to `server`.
-- `host-api` holds the internal contracts between Ren and a session's host, one per direction: `BrainApi` (`cell` serves, `core` calls) and `RenHostApi` (`server` serves, `cell` calls). It depends only on `schema`. `cell` depends only on `schema`, `host-api`, `environment-api` and `brain`.
+- `host-api` holds the internal contracts between Ren and a session's host, one per direction: `BrainApi` (`cell` serves, `core` calls) and `RenHostApi` (`server` serves, `cell` calls). It depends only on `schema`. `cell` depends only on `schema`, `host-api`, `environment-api`, `brain` and the Chat API (`@ren/protocol/chat`, which it serves to clients).
 - `environment-api` is the internal contract between a brain and an environment's executor, and the environment token Ren signs for it: it depends only on `schema`; `core` signs, `brain` calls and `executor` serves.
 - `executor` runs on an environment's machine and serves the Environment API. It depends only on `schema` and `environment-api`.
 - `brain` holds brain code that is the same on every host and every harness: how a brain reaches its environment. It depends only on `schema` and `environment-api`.

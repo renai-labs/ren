@@ -45,31 +45,39 @@ describe("cell contract", () => {
     expect(await opened.state()).toEqual(closed)
   })
 
-  test("client tokens cannot reach any Brain path or OpenCode credential and connect routes; server tokens can", async () => {
+  test("client tokens reach only the Chat API, with CORS; server tokens reach every path", async () => {
     const opened = await cell()
+    const client = TestToken.basic(opened.client)
     const paths = [
       "/ren",
       "/ren/state",
       "/ren/unknown/deeper",
-      "/ren/sessions",
       `/ren/sessions/${opened.id}/messages`,
       "/ren/models",
+      "/api/session",
+      "/api/event",
       "/api/credential",
-      "/api/credential/cred_ren_stub",
       "/api/integration/stub/connect/key",
-      "/api/integration/stub/connect/oauth",
-      "/api/experimental/integration/wellknown",
     ]
-    expect(await Promise.all(paths.map(async (path) => (await opened.request(path)).status))).toEqual(
+    expect(await Promise.all(paths.map(async (path) => (await opened.request(path, {}, client)).status))).toEqual(
       paths.map(() => 403),
     )
     expect(await opened.state()).toEqual(closed)
+    const preflight = await fetch(`${celld.url}/chat/status`, { method: "OPTIONS" })
+    expect([preflight.status, preflight.headers.get("access-control-allow-headers")]).toEqual([
+      204,
+      "authorization, content-type",
+    ])
+    const status = await opened.request("/chat/status", {}, client)
+    expect([status.status, status.headers.get("access-control-allow-origin"), await status.json()]).toEqual([
+      200,
+      "*",
+      {},
+    ])
     const server = await Promise.all(
-      ["/ren/state", "/api/credential"].map(
-        async (path) => (await fetch(`${celld.url}${path}`, { headers: { authorization: opened.server } })).status,
-      ),
+      ["/ren/state", "/api/credential", "/chat/status"].map(async (path) => (await opened.request(path)).status),
     )
-    expect([...server, (await opened.brain("/ren/unknown/deeper", {})).status]).toEqual([200, 200, 404])
+    expect([...server, (await opened.brain("/ren/unknown/deeper", {})).status]).toEqual([200, 200, 200, 404])
   })
 
   test("the worker bounds request bodies even without Content-Length", async () => {
@@ -164,18 +172,24 @@ describe("cell contract", () => {
     expect(invalid.status).toBe(400)
   })
 
-  test("streams events to the client as they happen", async () => {
+  test("streams a session's events to a client token as they happen", async () => {
     const opened = await cell()
     const controller = new AbortController()
-    const events = opened.opencode.event.subscribe({ signal: controller.signal })[Symbol.asyncIterator]()
-    expect((await events.next()).value).toMatchObject({ type: "server.connected" })
-    await opened.start()
-    const until = async (): Promise<unknown> => {
-      const next = await events.next()
+    const response = await fetch(`${celld.url}/chat/event`, {
+      headers: { authorization: TestToken.basic(opened.client) },
+      signal: controller.signal,
+    })
+    const frames = response.body?.pipeThrough(new TextDecoderStream()).getReader()
+    if (!frames) throw new Error("the event stream has no body")
+    const read = async (text = ""): Promise<string> => {
+      const next = await frames.read()
       if (next.done) throw new Error("the event stream ended")
-      return next.value.type === "session.created" ? next.value : until()
+      return text.includes("session.execution.succeeded") ? text : read(text + next.value)
     }
-    expect(await until()).toMatchObject({ type: "session.created", data: { sessionID: opened.id } })
+    const text = read()
+    await opened.start()
+    await opened.prompt(stub.script({ reply: "streamed" }).marker)
+    expect(await text).toContain('"type":"session.text.ended"')
     controller.abort()
   })
 

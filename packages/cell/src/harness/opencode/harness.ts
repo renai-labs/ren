@@ -17,6 +17,7 @@ import { ModelStore } from "../../model-store.js"
 import { SettingsHost } from "../../settings-host.js"
 import { Sync } from "../../sync.js"
 import { Harness } from "../harness.js"
+import { OpenCodeChat } from "./chat.js"
 import { Credentials } from "./credentials.js"
 import { OpenCodeRows } from "./opencode-rows.js"
 import { RenPlugin } from "./plugin.js"
@@ -285,6 +286,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
 
   return {
     fetch: server.fetch,
+    chat: OpenCodeChat.make(server),
     configure: (next: ReadonlyArray<Models.Endpoint>) => mutations.withPermit(configure(next)),
     start: (input: StartBody) =>
       mutations.withPermit(

@@ -6,6 +6,7 @@ import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Agent, Model, Provider } from "@opencode/client/effect"
 import type { Session as OpenCodeSession } from "@opencode/schema/session"
 import { Tool } from "@opencode/schema/tool"
+import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { BrainSettings } from "@ren/brain/settings"
 import type { Models } from "@ren/schema/models"
@@ -159,6 +160,9 @@ export const make = (
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
   settings: Option.Option<Shared>,
+  approvals: (
+    sessionId: string,
+  ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
 ) =>
   Plugin.define({
     id: "ren",
@@ -254,7 +258,7 @@ export const make = (
             }),
           )
           yield* context.permission.hook("evaluate", (event) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
               const agent = Option.getOrUndefined(agentOf(event.agent))
               if (!agent) return
               const decision = BrainSettings.evaluate(
@@ -269,6 +273,19 @@ export const make = (
                 },
               )
               if (rank[decision.effect] <= rank[event.effect]) return
+              if (decision.effect === "ask") {
+                const saved = yield* approvals(event.sessionID).pipe(
+                  Effect.catchTag("Harness.NotFound", () => Effect.succeed([])),
+                )
+                if (
+                  event.resources.every((resource) =>
+                    saved.some(
+                      (item) => Wildcard.match(event.action, item.action) && Wildcard.match(resource, item.resource),
+                    ),
+                  )
+                )
+                  return
+              }
               event.effect = decision.effect
               if (decision.message) event.message = decision.message
             }),

@@ -19,8 +19,6 @@ export const hostTokenHeader = "ren-host-token"
 
 export const owns = (pathname: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
 
-export const allowsClient = (pathname: string) => /^\/ren\/sessions\/[^/]+\/model$/u.test(pathname)
-
 const forbidden = new ForbiddenError({ message: "The token is for another session" })
 
 const notConfigured = new ModelsNotConfiguredError({ message: "The brain has no model configuration" })

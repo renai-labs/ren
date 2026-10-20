@@ -58,14 +58,15 @@ const packageBoundaries = [
   },
   {
     files: ["packages/cell/**"],
-    regex: "^@ren/(core|db|server|protocol)(/|$)",
-    message: "The cell bundle runs in workerd. It depends only on schema, the Host API, the Environment API and brain.",
+    regex: "^@ren/((core|db|server)(/|$)|protocol(?!/(chat|errors)$))",
+    message:
+      "The cell bundle runs in workerd. It depends only on schema, the Host API, the Environment API, brain and the Chat API.",
   },
   {
     files: ["packages/cell/src/*.ts"],
-    regex: "^(@ren/(core|db|server|protocol|executor)(/|$)|@opencode/)",
+    regex: "^(@ren/((core|db|server|executor)(/|$)|protocol(?!/(chat|errors)$))|@opencode/)",
     message:
-      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema, the Host API, the Environment API and brain.",
+      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema, the Host API, the Environment API, brain and the Chat API.",
   },
   {
     files: ["packages/cell/src/harness/**"],
