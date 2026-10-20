@@ -1,3 +1,5 @@
+export * as ExecutorApi from "./executor-api.js"
+
 import { Hand } from "@ren/schema/hand"
 import { Identifier } from "@ren/schema/identifier"
 import { Brain } from "@ren/schema/brain"
@@ -163,7 +165,7 @@ const Path = Schema.Struct({ path: Schema.String })
 
 const ProcessRef = { id: ProcessID }
 
-export const ExecutorApi = RpcGroup.make(
+export const Rpcs = RpcGroup.make(
   Rpc.make("executor.hello", { success: Hello }),
   Rpc.make("process.spawn", { payload: SpawnInput, success: SpawnResult, error: SpawnFailedError }),
   Rpc.make("process.output", {
