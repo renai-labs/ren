@@ -3,7 +3,7 @@ import { BunServices } from "@effect/platform-bun"
 import { ExecutorVariables } from "@ren/hand-api/executor-variables"
 import { HandToken } from "@ren/hand-api/hand-token"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
-import { Image, Sandbox } from "@ren/executor/testing"
+import { Image, TestHand } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Hand } from "@ren/schema/hand"
@@ -29,7 +29,7 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
           handId,
           environmentId: Environment.ID.create(),
           config,
-          variables: ExecutorVariables.make(handId, [Sandbox.keys.publicKey]),
+          variables: ExecutorVariables.make(handId, [TestHand.keys.publicKey]),
         }
         const bindings = yield* Effect.all([provider.provision(input), provider.provision(input)], {
           concurrency: "unbounded",
@@ -37,7 +37,7 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
         expect(bindings[1]).toEqual(bindings[0])
         yield* Effect.addFinalizer(() => provider.destroy(bindings[0]).pipe(Effect.ignore))
         const endpoint = yield* provider.connect(bindings[0])
-        const token = yield* HandToken.sign(Sandbox.keys.privateKey, {
+        const token = yield* HandToken.sign(TestHand.keys.privateKey, {
           hand: input.handId,
           brain: Brain.ID.create(),
           exp: Math.floor(Date.now() / 1000) + 60,
@@ -45,6 +45,9 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
         const client = yield* ExecutorClient.make({ url: endpoint.url, token: Effect.succeed(token) })
         const hello = yield* client["executor.hello"]()
         expect(hello.handId).toBe(input.handId)
+        const written = new TextEncoder().encode("written by the executor")
+        yield* client["files.write"]({ path: "session/note.txt", bytes: written })
+        expect((yield* client["files.read"]({ path: "session/note.txt" })).bytes).toEqual(written)
         yield* provider.destroy(bindings[0])
         yield* provider.destroy(bindings[0])
         expect((yield* provider.connect(bindings[0]).pipe(Effect.flip))._tag).toBe("HandProvider.Gone")

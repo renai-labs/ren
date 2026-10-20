@@ -4,7 +4,7 @@ import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
-import { Sandbox } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import { Hand } from "@ren/schema/hand"
@@ -61,9 +61,9 @@ const sandbox = async (id: string, publicKeys?: readonly [Signature.PublicKey, .
     const found = served.get(handId)
     if (found) return found.url
     const runtime = ManagedRuntime.make(
-      Sandbox.layer({ handId, workspace: directory, ...(publicKeys && { publicKeys }) }),
+      TestHand.layer({ handId, workspace: directory, ...(publicKeys && { publicKeys }) }),
     )
-    const url = runtime.runPromise(Sandbox.url)
+    const url = runtime.runPromise(TestHand.url)
     served.set(handId, { url, dispose: () => runtime.dispose() })
     return url
   }
@@ -130,7 +130,7 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
     {
       CELL_URL: cellUrl,
       CELL_KEYS: TestToken.vars.CELL_KEYS,
-      HAND_KEYS: JSON.stringify((config.keys ?? [Sandbox.keys.privateKey]).map(encodedKey)),
+      HAND_KEYS: JSON.stringify((config.keys ?? [TestHand.keys.privateKey]).map(encodedKey)),
       ...(config.lifetime && { HAND_TOKEN_LIFETIME: config.lifetime }),
     },
     models,
@@ -341,10 +341,10 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
   })
 
   test("a new signing key works on an executor that knows it, and an old executor refuses the token clearly", async () => {
-    const knowing = await sandbox("sandbox-new", [newer.publicKey, Sandbox.keys.publicKey])
+    const knowing = await sandbox("sandbox-new", [newer.publicKey, TestHand.keys.publicKey])
     const old = await sandbox("sandbox-old")
     const config = current
-    const signedByNewer = { lifetime: "20 seconds", keys: [newer.privateKey, Sandbox.keys.privateKey] }
+    const signedByNewer = { lifetime: "20 seconds", keys: [newer.privateKey, TestHand.keys.privateKey] }
     await restartCore({ ...signedByNewer, target: knowing })
     const onKnowing = Session.ID.create()
     await start(onKnowing)
