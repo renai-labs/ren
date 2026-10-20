@@ -1,6 +1,7 @@
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import { and, eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
@@ -238,6 +239,34 @@ describe("SpaceMember", () => {
       const names = (yield* spaces.list(ada, page)).items.map((space) => space.name)
       expect(names).toEqual(["General Space", "Ada's Personal Space"])
       expect((yield* Effect.flip(spaces.get(ada, team.id)))._tag).toBe("Primitive.NotFound")
+    }),
+  )
+})
+
+describe("Space archive and agents", () => {
+  it.live("a space that owns a live agent cannot be archived, and the error names the agents", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const ada = yield* user(organizationId)
+      const factory = yield* spaces.create(ada, { name: "Factory" })
+      const agentId = Agent.ID.create()
+      yield* database.db.insert(Database.Schema.agent).values({
+        id: agentId,
+        organization_id: organizationId,
+        owner_space_id: factory.id,
+        name: "build",
+        is_subagent: false,
+      })
+      const refused = yield* Effect.flip(spaces.archive(ada, factory.id))
+      expect(refused._tag).toBe("Primitive.Conflict")
+      expect(refused.message).toContain("build")
+      yield* database.db
+        .update(Database.Schema.agent)
+        .set({ archived_at: new Date() })
+        .where(eq(Database.Schema.agent.id, agentId))
+      expect((yield* spaces.archive(ada, factory.id)).archivedAt).not.toBeNull()
     }),
   )
 })

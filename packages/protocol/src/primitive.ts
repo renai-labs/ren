@@ -118,7 +118,7 @@ export const archive = <
   return HttpApiEndpoint.delete(identifier, `/${definition.plural}/:id`, {
     params: { id: definition.id },
     success: definition.info,
-    error: [NotFoundError, ForbiddenError],
+    error: [NotFoundError, ForbiddenError, ConflictError],
   }).annotateMerge(
     OpenApi.annotations({
       identifier,

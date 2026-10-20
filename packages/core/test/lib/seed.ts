@@ -45,6 +45,12 @@ export const member = Effect.fnUntraced(function* (
     .values({ id: Auth.MemberID.create(), organizationId, userId, role, createdAt: new Date() })
 })
 
+export const actor = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, role: string) {
+  const seeded = yield* user()
+  yield* member(organizationId, seeded.id, role)
+  return { userId: seeded.id, organizationId, roles: [role] }
+})
+
 const space = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
   const database = yield* Database.Service
   const id = Space.ID.create()
