@@ -177,6 +177,45 @@ test("a client lists the web search providers where the session works", () =>
     }),
   ))
 
+test("members who queue at the same time each get the speaker note their place in the queue calls for", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const sessionID = SessionID.make(brain.id)
+      const ada = yield* brain.chatAs("user_1", "Ada")
+      const grace = yield* brain.chatAs("user_2", "Grace")
+      const held = stub.script({ hold: true })
+      yield* ada.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: held.marker, delivery: "steer" },
+      })
+      yield* Effect.promise(() => held.called())
+      yield* Effect.all(
+        [grace, ada, grace, ada].map((chat) =>
+          chat.session["session.prompt"]({
+            params,
+            payload: { id: SessionMessage.ID.create(), text: "next", delivery: "queue" },
+          }),
+        ),
+        { concurrency: "unbounded" },
+      )
+      const queued = (yield* brain.opencode.session.inbox.list({ sessionID })).flatMap((item) =>
+        item.type === "user" ? [{ text: item.payload.text, userId: String(item.payload.metadata?.userID) }] : [],
+      )
+      expect(queued).toHaveLength(4)
+      expect(
+        queued.map(
+          (item, index) =>
+            item.text.includes("<message_from") === (item.userId !== (queued[index - 1]?.userId ?? "user_1")),
+        ),
+      ).toEqual([true, true, true, true])
+      held.release()
+      yield* brain.opencode.session.wait({ sessionID })
+    }),
+  ))
+
 test("a member switches the model from the list as the session's setting, an unknown model or a subagent's switch is refused, and Ren's unchanged model does not undo the switch", () =>
   live(
     Effect.gen(function* () {

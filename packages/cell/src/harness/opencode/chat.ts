@@ -10,7 +10,7 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
-import { Clock, Effect, Option, Predicate, Schema, Stream } from "effect"
+import { Clock, Effect, Option, Predicate, Schema, Semaphore, Stream } from "effect"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
@@ -70,6 +70,7 @@ export const make = (
   >,
 ): Harness.Chat => {
   const fetch = host.fetch
+  const speaking = Semaphore.makeUnsafe(1)
   const call = Effect.fnUntraced(function* (
     method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
@@ -227,50 +228,54 @@ export const make = (
         Effect.flatMap((raw) => list(raw, Translate.form)),
       ),
     prompt: (sessionId, prompt) =>
-      Effect.gen(function* () {
-        const note = yield* Option.match(prompt.sender, {
-          onNone: () => Effect.succeedNone,
-          onSome: (sender) => {
-            const name = sender.name
-            if (!name) return Effect.succeedNone
-            return Effect.map(lastSpeaker(sessionId), (last) =>
-              Option.isSome(last) && last.value !== sender.userId
-                ? Option.some(attribution(name, sender.userId))
-                : Option.none(),
-            )
-          },
-        })
-        return yield* call("POST", `/api/session/${sessionId}/prompt`, {
-          id: prompt.id,
-          text: Option.match(note, { onNone: () => prompt.text, onSome: (line) => `${prompt.text}\n\n${line}` }),
-          delivery: prompt.delivery,
-          ...(Predicate.isBoolean(prompt.resume) && { resume: prompt.resume }),
-          ...(prompt.agents && { agents: prompt.agents }),
-          ...(prompt.skills && { skills: prompt.skills }),
-          ...Option.match(prompt.sender, {
-            onNone: () => ({}),
-            onSome: (sender) => ({
-              metadata: { userID: sender.userId, ...(Option.isSome(note) && { displayText: prompt.text }) },
-            }),
-          }),
-        })
-      }).pipe(
-        Effect.asVoid,
-        Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
-        Effect.catchTag("Harness.Conflict", (error) =>
+      speaking
+        .withPermit(
           Effect.gen(function* () {
-            const sent = yield* call("GET", `/api/session/${sessionId}/message/${prompt.id}`).pipe(
-              Effect.as(true),
-              Effect.catchTag("Harness.NotFound", () => Effect.succeed(false)),
-              Effect.orDie,
-            )
-            const queued = (yield* notFoundOnly(call("GET", `/api/session/${sessionId}/inbox`)).pipe(
-              Effect.flatMap((raw) => list(raw, Translate.inbox)),
-            )).some((item) => item.id === prompt.id)
-            if (!sent && !queued) return yield* error
+            const note = yield* Option.match(prompt.sender, {
+              onNone: () => Effect.succeedNone,
+              onSome: (sender) => {
+                const name = sender.name
+                if (!name) return Effect.succeedNone
+                return Effect.map(lastSpeaker(sessionId), (last) =>
+                  Option.isSome(last) && last.value !== sender.userId
+                    ? Option.some(attribution(name, sender.userId))
+                    : Option.none(),
+                )
+              },
+            })
+            return yield* call("POST", `/api/session/${sessionId}/prompt`, {
+              id: prompt.id,
+              text: Option.match(note, { onNone: () => prompt.text, onSome: (line) => `${prompt.text}\n\n${line}` }),
+              delivery: prompt.delivery,
+              ...(Predicate.isBoolean(prompt.resume) && { resume: prompt.resume }),
+              ...(prompt.agents && { agents: prompt.agents }),
+              ...(prompt.skills && { skills: prompt.skills }),
+              ...Option.match(prompt.sender, {
+                onNone: () => ({}),
+                onSome: (sender) => ({
+                  metadata: { userID: sender.userId, ...(Option.isSome(note) && { displayText: prompt.text }) },
+                }),
+              }),
+            })
           }),
+        )
+        .pipe(
+          Effect.asVoid,
+          Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
+          Effect.catchTag("Harness.Conflict", (error) =>
+            Effect.gen(function* () {
+              const sent = yield* call("GET", `/api/session/${sessionId}/message/${prompt.id}`).pipe(
+                Effect.as(true),
+                Effect.catchTag("Harness.NotFound", () => Effect.succeed(false)),
+                Effect.orDie,
+              )
+              const queued = (yield* notFoundOnly(call("GET", `/api/session/${sessionId}/inbox`)).pipe(
+                Effect.flatMap((raw) => list(raw, Translate.inbox)),
+              )).some((item) => item.id === prompt.id)
+              if (!sent && !queued) return yield* error
+            }),
+          ),
         ),
-      ),
     compact: (sessionId, id) =>
       call("POST", `/api/session/${sessionId}/compact`, { id }).pipe(
         Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
