@@ -138,7 +138,7 @@ it.live("P5-02: unavailable Ren fails start without making an empty session, and
     expect(refused instanceof BrainHost.BrainUnavailable && refused.cause).toBeInstanceOf(SyncUnavailableError)
     expect((yield* cell.local).sessions).toEqual([])
     cell.proxy.up()
-    cell.proxy.once({ match: (request) => request.path === "/brain/sync/restore", fault: "fail" })
+    cell.proxy.once({ match: (request) => request.path === "/host/sync/restore", fault: "fail" })
     yield* cell.brain.start(cell.input, cell.owner)
     expect((yield* cell.local).messages.map((row) => row.id)).toEqual(before.messages.map((row) => row.id))
   }),
@@ -157,7 +157,7 @@ it.live("P5-03: a kill between parent and child imports resumes with only the mi
     const held = Promise.withResolvers<void>()
     yield* Effect.addFinalizer(() => Effect.sync(held.resolve))
     cell.proxy.once({
-      match: (request) => request.path === `/brain/sync/sessions/${child.id}/messages`,
+      match: (request) => request.path === `/host/sync/sessions/${child.id}/messages`,
       before: () => Effect.runPromise(Deferred.succeed(entered, undefined)).then(() => held.promise),
     })
     const starting = yield* Effect.forkChild(Effect.exit(cell.brain.start(cell.input, cell.owner)))
@@ -170,7 +170,7 @@ it.live("P5-03: a kill between parent and child imports resumes with only the mi
     yield* cell.brain.start(cell.input, cell.owner)
     expect((yield* cell.local).sessions).toHaveLength(2)
     expect(
-      cell.proxy.requests.filter((request) => request.path === `/brain/sync/sessions/${cell.id}/messages`),
+      cell.proxy.requests.filter((request) => request.path === `/host/sync/sessions/${cell.id}/messages`),
     ).toHaveLength(1)
     expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
     expect(yield* SyncTest.remote(cell.id)).toEqual(yield* cell.local)
@@ -190,7 +190,7 @@ it.live("P5-04: restore invalidates a late batch from the lost cell", () =>
     })
     const request = (path: string, body: unknown) =>
       Effect.promise(() =>
-        fetch(`${cell.proxy.url}/brain/sync/sessions/${cell.id}/uploads${path}`, {
+        fetch(`${cell.proxy.url}/host/sync/sessions/${cell.id}/uploads${path}`, {
           method: "POST",
           headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
           body: JSON.stringify(body),

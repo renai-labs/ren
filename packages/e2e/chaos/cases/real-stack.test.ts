@@ -257,7 +257,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       expect(await session.tool("shell", { command: "echo synced" })).toBe("synced\n")
       expect((await session.synced()).messages.some((row) => row.endsWith(" idle"))).toBe(true)
       const batch = stack().renProxy.inject(
-        { operation: new RegExp(`^POST /brain/sync/sessions/${session.sessionId}/uploads/\\d+/messages$`) },
+        { operation: new RegExp(`^POST /host/sync/sessions/${session.sessionId}/uploads/\\d+/messages$`) },
         { type: "hold" },
       )
       await session.opencode.session.update({ sessionID: session.sessionId, title: "Renamed" })

@@ -64,9 +64,9 @@ const local = (db: Database, root: RenSession.ID) => {
 
 const paths = (requests: ReadonlyArray<Proxy.Request>) => requests.map((request) => request.path)
 
-const checkpoints = "/brain/sync/checkpoints"
+const checkpoints = "/host/sync/checkpoints"
 
-const uploads = (id: string) => `/brain/sync/sessions/${id}/uploads`
+const uploads = (id: string) => `/host/sync/sessions/${id}/uploads`
 
 const isStart = (id: string) => (request: Proxy.Request) => request.path === uploads(id)
 
@@ -387,7 +387,7 @@ describe("OpenCodeSync", () => {
       })
       expect(imported.map((message) => message.id)).toEqual(expected.messages.map((message) => message.id))
       expect(
-        host.proxy.requests.filter((request) => request.path === `/brain/sync/sessions/${host.root}/messages`),
+        host.proxy.requests.filter((request) => request.path === `/host/sync/sessions/${host.root}/messages`),
       ).toHaveLength(Math.floor(expected.messages.length / 500) + 1)
     }),
   )
