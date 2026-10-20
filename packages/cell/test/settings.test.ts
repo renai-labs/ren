@@ -1,15 +1,17 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { AbsolutePath, OpenCode, Session } from "@opencode/client/effect"
+import { Permission } from "@opencode/schema/permission"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { testEffect } from "@ren/executor/testing"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
-import { Effect, Layer, Option, Struct } from "effect"
+import { Effect, Layer, Option, Predicate, Queue, Stream, Struct } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { OpenCodeEvents } from "../src/harness/opencode/events.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { TestSettings } from "./lib/settings.js"
@@ -81,7 +83,7 @@ const open = Effect.fnUntraced(function* (
         sender: { userId: "user_1" },
       })
       .pipe(Effect.andThen(client.session.wait({ sessionID })), Effect.orDie)
-  return { state, harness, client, sessionId, sessionID, turn }
+  return { state, server, harness, client, sessionId, sessionID, turn }
 })
 
 describe("settings in the cell", () => {
@@ -255,5 +257,77 @@ describe("settings in the cell", () => {
       yield* opened.turn(back)
       expect(back.calls[0]?.body.model).toBe("stub-model")
     }),
+  )
+  it.live(
+    "Always lets later calls that a Ren ask rule covers run without asking, and a Ren deny still refuses them",
+    () =>
+      Effect.gen(function* () {
+        const asking = (effect: "ask" | "deny") =>
+          TestSettings.layers({
+            agents: [
+              TestSettings.agent(
+                "ren",
+                { permissions: [{ action: "webfetch", resource: "https://example.invalid/*", effect }] },
+                { isSubagent: false },
+              ),
+              TestSettings.agent("general"),
+              TestSettings.agent("explore"),
+            ],
+          })
+        const opened = yield* open(asking("ask"))
+        const events = yield* Queue.unbounded<{ readonly type: string; readonly data: Record<string, unknown> }>()
+        yield* OpenCodeEvents.stream(opened.server.fetch).pipe(
+          Stream.filter(
+            (event): event is { readonly type: string; readonly data: Record<string, unknown> } =>
+              Predicate.isObject(event) && Predicate.isString(event.type) && Predicate.isObject(event.data),
+          ),
+          Stream.runForEach((event) => Queue.offer(events, event)),
+          Effect.forkScoped,
+        )
+        const until = (
+          types: ReadonlyArray<string>,
+        ): Effect.Effect<{ readonly type: string; readonly data: Record<string, unknown> }> =>
+          Queue.take(events).pipe(
+            Effect.flatMap((event) => (types.includes(event.type) ? Effect.succeed(event) : until(types))),
+          )
+        yield* until(["server.connected"])
+        const fetchOnce = (marker: string) => ({
+          tools: [{ name: "webfetch", input: { url: `https://example.invalid/${marker}`, format: "text" } }],
+        })
+        const send = (script: StubModel.Script) =>
+          opened.harness
+            .send({
+              sessionId: opened.sessionId,
+              messageId: RenSession.MessageID.create(),
+              prompt: { text: `${script.marker} go` },
+              delivery: "steer",
+              sender: { userId: "user_1" },
+            })
+            .pipe(Effect.orDie)
+        const first = stub.script(fetchOnce("first"))
+        yield* send(first)
+        const asked = yield* until(["permission.asked"])
+        yield* opened.client.permission
+          .reply({
+            sessionID: opened.sessionID,
+            requestID: Permission.ID.make(String(asked.data.id)),
+            decision: "always",
+          })
+          .pipe(Effect.orDie)
+        yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+        yield* until(["session.execution.succeeded"])
+        const second = stub.script(fetchOnce("second"))
+        yield* send(second)
+        expect((yield* until(["permission.asked", "session.execution.succeeded"])).type).toBe(
+          "session.execution.succeeded",
+        )
+        opened.state.layers = asking("deny")
+        const third = stub.script(fetchOnce("third"))
+        yield* send(third)
+        expect((yield* until(["permission.asked", "session.execution.succeeded"])).type).toBe(
+          "session.execution.succeeded",
+        )
+        expect(JSON.stringify(third.calls.at(-1)?.body.messages.at(-1))).toContain("Permission denied")
+      }),
   )
 })

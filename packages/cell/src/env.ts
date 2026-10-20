@@ -14,6 +14,8 @@ export const Vars = Schema.Struct({
   ALARM_INTERVAL_MS: Millis(30_000),
   WAIT_BUDGET_MS: Millis(600_000),
   PARK_AFTER_MS: Millis(600_000),
+  CHAT_IDLE_MS: Millis(120_000),
+  CHAT_HEARTBEAT_MS: Millis(15_000),
   OPENCODE_CONFIG: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed("{}"))),
   REN_URL: Schema.optional(Schema.String),
 })

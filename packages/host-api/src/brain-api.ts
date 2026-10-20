@@ -68,7 +68,7 @@ const BrainGroup = HttpApiGroup.make("brain")
         identifier: "brain.setModel",
         summary: "Set a session’s model",
         description:
-          "Set the model of a started session, or clear it with null to use the model its settings give. A client token may call this route. The model must be in the brain’s model list.",
+          "Set the model of a started session, or clear it with null to use the model its settings give. The model must be in the brain’s model list.",
       }),
     ),
   )

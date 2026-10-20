@@ -79,6 +79,7 @@
         "@ren/brain": "workspace:*",
         "@ren/environment-api": "workspace:*",
         "@ren/host-api": "workspace:*",
+        "@ren/protocol": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
       },

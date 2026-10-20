@@ -39,11 +39,13 @@ Each contract lives in a package both sides import. The serving package holds th
 | `Api`            | server    | app, CLI, SDK | `packages/protocol/src/api.ts`                    |
 | `RenHostApi`     | server    | cell          | `packages/host-api/src/ren-host-api.ts`           |
 | `BrainApi`       | cell      | server (core) | `packages/host-api/src/brain-api.ts`              |
+| `ChatApi`        | cell      | app, SDK      | `packages/protocol/src/chat.ts`                   |
 | `EnvironmentApi` | executor  | brain         | `packages/environment-api/src/environment-api.ts` |
 
 ```
 app / CLI / SDK --Api--> server --BrainApi--> cell (brain) --EnvironmentApi--> executor (environment)
                          server <--RenHostApi-- cell
+app / SDK --ChatApi--> cell (brain)
 ```
 
 ## Quick start

@@ -3,6 +3,7 @@ export * as BrainTest from "./brain.js"
 import { AbsolutePath, OpenCode } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/host-api/brain-api"
+import { ChatApi } from "@ren/protocol/chat"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Redacted, Ref, Schema, Semaphore } from "effect"
@@ -10,9 +11,10 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { FetchHttpClient, HttpServer } from "effect/http"
-import { HttpApiTest } from "effect/http-api"
+import { HttpApiClient, HttpApiTest } from "effect/http-api"
 import { Brain } from "../../src/brain.js"
 import { Cell } from "../../src/cell.js"
+import { Chat } from "../../src/chat.js"
 import { Env } from "../../src/env.js"
 import { Harness } from "../../src/harness/harness.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
@@ -26,9 +28,13 @@ import { Shared } from "./shared.js"
 import { TestToken } from "./token.js"
 
 export const make = Effect.fnUntraced(function* (
-  options: { readonly database?: string; readonly id?: Session.ID } = {},
+  options: {
+    readonly database?: string
+    readonly id?: Session.ID
+    readonly vars?: Readonly<Record<string, string>>
+  } = {},
 ) {
-  const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(Shared.stub().url))
+  const vars = Schema.decodeUnknownSync(Env.Vars)({ ...Shared.vars(Shared.stub().url), ...options.vars })
   const directory = yield* Effect.acquireRelease(
     Effect.promise(() => mkdtemp(join(tmpdir(), "ren-brain-"))),
     (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
@@ -106,6 +112,32 @@ export const make = Effect.fnUntraced(function* (
     Effect.provide(HttpServer.layerServices),
   )
   const web = Context.get(yield* Layer.build(Brain.layer.pipe(Layer.provide(Layer.succeedContext(cell)))), Cell.Brain)
+  const chatWeb = Context.get(yield* Layer.build(Chat.layer.pipe(Layer.provide(Layer.succeedContext(cell)))), Cell.Chat)
+  const chatFetch = (path: string, init: RequestInit = {}, user: string | undefined = "user_1", name?: string) => {
+    const request = new Request(`http://cell${path}`, init)
+    Chat.setMember(request.headers, { ...(user && { sub: user }), ...(name && { name }) })
+    return chatWeb.fetch(request)
+  }
+  const chatAs = (user: string, name?: string) =>
+    HttpApiClient.make(ChatApi, { baseUrl: "http://cell" }).pipe(
+      Effect.provide(FetchHttpClient.layer),
+      Effect.provideService(
+        FetchHttpClient.Fetch,
+        Object.assign(
+          (input: string | URL | Request, init?: RequestInit) => {
+            const url = new URL(input instanceof Request ? input.url : String(input))
+            return chatFetch(
+              `${url.pathname}${url.search}`,
+              input instanceof Request ? input : (init ?? {}),
+              user,
+              name,
+            )
+          },
+          { preconnect: fetch.preconnect },
+        ),
+      ),
+    )
+  const chat = yield* chatAs("user_1")
   const opencode = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.provideService(
@@ -139,6 +171,10 @@ export const make = Effect.fnUntraced(function* (
       Effect.promise(() => web.fetch(new Request(`http://cell${path}`, init))),
     store: Context.get(services, ModelStore.Service),
     opencode,
+    harness: host.fetch,
+    chat,
+    chatAs,
+    chatFetch,
     credentials: host.credentials,
     start: (input: Partial<Session.StartInput> = {}) =>
       client.brain["brain.start"]({

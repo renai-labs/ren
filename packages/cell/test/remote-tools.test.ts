@@ -9,7 +9,8 @@ import { TestEnvironment, Processes, Relay, testEffect } from "@ren/executor/tes
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import { Context, Deferred, Effect, Exit, Layer, Option, Ref, Schedule, Schema, Scope } from "effect"
+import { Shell } from "@ren/schema/shell"
+import { Context, Deferred, Effect, Exit, Fiber, Layer, Option, Ref, Schedule, Schema, Scope, Stream } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath, stat } from "node:fs/promises"
 import { createServer, type Socket } from "node:net"
@@ -151,6 +152,8 @@ const lastToolResult = (call: StubModel.Call) =>
   JSON.stringify(call.body.messages.findLast((message) => message.role === "tool")?.content ?? "")
 
 const shell = (command: string) => ({ tool: { name: "shell", input: { command } } })
+
+const ShellID = Schema.Struct({ shellID: Shell.ID })
 
 const text = (path: string) => Effect.promise(() => Bun.file(path).text())
 
@@ -429,6 +432,64 @@ it.live("a background command's output file on the sandbox grows while the comma
       Effect.timeout("10 seconds"),
       Effect.ensuring(Effect.sync(() => Processes.running(pid) && process.kill(pid, "SIGKILL"))),
     )
+  }),
+)
+
+it.live("the Chat API lists the shells that still run, reads a shell's output from a cursor, and stops one", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened)
+    const chat = opened.harness.chat
+    const shellIDs = chat.messages(session.sessionId, {}).pipe(
+      Effect.map((page) =>
+        page.items
+          .flatMap((message) => (message.type === "assistant" ? message.content : []))
+          .flatMap((part) => (part.type === "tool" && part.state.status === "completed" ? [part.state.metadata] : []))
+          .flatMap((metadata) => Option.toArray(Schema.decodeUnknownOption(ShellID)(metadata)))
+          .map((found) => found.shellID),
+      ),
+    )
+    expect(yield* chat.shells(session.sessionId)).toEqual([])
+    const notified = yield* chat.events.pipe(
+      Stream.filter((event) => event.type === "session.inbox.enqueued" && event.data.item.type === "synthetic"),
+      Stream.runHead,
+      Effect.forkScoped,
+    )
+    yield* session.turn(
+      stub.script({ tool: { name: "shell", input: { command: "printf 'hello world'", background: true } } }),
+    )
+    yield* Fiber.join(notified)
+    const [printed] = yield* shellIDs
+    if (!printed) return yield* Effect.die(new Error("The shell tool reported no shell"))
+    expect(yield* chat.shells(session.sessionId)).toEqual([])
+    expect(yield* chat.shellOutput(session.sessionId, printed, {})).toEqual({
+      output: "hello world",
+      cursor: 11,
+      size: 11,
+      truncated: false,
+    })
+    expect(yield* chat.shellOutput(session.sessionId, printed, { cursor: 6 })).toMatchObject({
+      output: "world",
+      cursor: 11,
+    })
+
+    const pidFile = join(workspace, `${crypto.randomUUID()}.pid`)
+    yield* session.turn(
+      stub.script({
+        tool: { name: "shell", input: { command: `echo $$ > ${pidFile}; exec sleep 30`, background: true } },
+      }),
+    )
+    const pid = yield* Pid.read(pidFile)
+    yield* Effect.addFinalizer(() => Effect.sync(() => Processes.running(pid) && process.kill(pid, "SIGKILL")))
+    const sleeping = (yield* shellIDs).find((id) => id !== printed)
+    if (!sleeping) return yield* Effect.die(new Error("The shell tool reported no second shell"))
+    expect(yield* chat.shells(session.sessionId)).toMatchObject([
+      { id: sleeping, sessionID: session.sessionId, status: "running", command: `echo $$ > ${pidFile}; exec sleep 30` },
+    ])
+    yield* chat.removeShell(session.sessionId, sleeping)
+    expect(yield* chat.shells(session.sessionId)).toEqual([])
+    expect((yield* chat.shellOutput(session.sessionId, sleeping, {}).pipe(Effect.flip))._tag).toBe("Harness.NotFound")
+    expect((yield* chat.shells(Session.ID.create()).pipe(Effect.flip))._tag).toBe("Harness.NotFound")
   }),
 )
 

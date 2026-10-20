@@ -51,6 +51,11 @@ export class Brain extends Context.Service<
   { readonly owns: (pathname: string) => boolean; readonly fetch: (request: Request) => Promise<Response> }
 >()("@ren/cell/Cell/Brain") {}
 
+export class Chat extends Context.Service<
+  Chat,
+  { readonly owns: (pathname: string) => boolean; readonly fetch: (request: Request) => Promise<Response> }
+>()("@ren/cell/Cell/Chat") {}
+
 export const acquire = Effect.gen(function* () {
   const info = yield* Info
   const activity = yield* Activity
@@ -79,7 +84,10 @@ export const state = Effect.gen(function* () {
 
 export const fetch = Effect.fn("Cell.fetch")(function* (request: Request) {
   const brain = yield* Brain
-  if (brain.owns(new URL(request.url).pathname)) return yield* Effect.promise(() => brain.fetch(request))
+  const chat = yield* Chat
+  const pathname = new URL(request.url).pathname
+  if (brain.owns(pathname)) return yield* Effect.promise(() => brain.fetch(request))
+  if (chat.owns(pathname)) return yield* Effect.promise(() => chat.fetch(request))
   const ready = yield* Deferred.make<Response>()
   yield* Effect.scoped(
     Effect.gen(function* () {

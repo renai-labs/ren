@@ -2,7 +2,7 @@
 
 A session host: one Durable Object per session, on celld or Cloudflare. Serves `BrainApi` to Ren; calls Ren's `RenHostApi`.
 
-`SessionCell` delegates requests and alarms to Effect services. The internal Brain API is implemented by the OpenCode adapter; client tokens also reach the permitted OpenCode routes.
+`SessionCell` delegates requests and alarms to Effect services. The internal Brain API is implemented by the OpenCode adapter. Client tokens reach only the Chat API (`/chat/*`, `src/chat.ts`), which the adapter serves by translating OpenCode (`src/harness/opencode/chat.ts`, `translate.ts`); every other route needs a server token.
 
 ## Lifecycle
 
