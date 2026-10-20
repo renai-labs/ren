@@ -38,6 +38,13 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("HandConnecti
   message: Schema.String,
 }) {}
 
+export const failureOf = (value: unknown): { readonly message: string } | undefined => {
+  if (value instanceof Unavailable) return value
+  if (ExecutorClient.isNoAnswer(value) && value instanceof Error)
+    return { message: `The hand does not answer: ${value.message}` }
+  return undefined
+}
+
 export const refreshBefore = Duration.minutes(5)
 
 export const retryRenAfter = Duration.seconds(30)
