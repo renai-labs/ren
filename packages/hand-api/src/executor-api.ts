@@ -1,19 +1,20 @@
 import { Hand } from "@ren/schema/hand"
 import { Identifier } from "@ren/schema/identifier"
 import { Brain } from "@ren/schema/brain"
-import { Context, Duration, Schema } from "effect"
+import { Context, Duration, Effect, Schema } from "effect"
 import { Rpc, type RpcClientError, RpcGroup, RpcMiddleware } from "effect/rpc"
 import { Signal } from "./signal.js"
 
 export const protocol = 1
 
+export const port = 4100
+
 export const pingEvery = Duration.seconds(5)
 
 export const stallAfter = Duration.seconds(15)
 
+// oxlint-disable-next-line ren/no-comments -- A client calls process.heartbeat at least every pingEvery. The executor kills a running process it has not heard from in orphanAfter, even with its output open.
 export const orphanAfter = Duration.seconds(30)
-
-export const exitedKeptFor = Duration.seconds(45)
 
 // oxlint-disable-next-line ren/no-comments -- Effect RPC frames one NDJSON message in at most 16 MiB and bytes travel as base64, so a message holds about 12 MiB of a file.
 export const maxFileBytes = 8 * 1024 * 1024
@@ -175,7 +176,7 @@ export const ExecutorApi = RpcGroup.make(
     payload: {
       ...ProcessRef,
       data: Schema.Uint8ArrayFromBase64,
-      end: Schema.optionalKey(Schema.Boolean),
+      end: Schema.Boolean.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(false))),
     },
     error: Schema.Union([ProcessNotFoundError, StdinFullError, StdinClosedError]),
   }),
@@ -183,7 +184,7 @@ export const ExecutorApi = RpcGroup.make(
   Rpc.make("process.kill", {
     payload: {
       ...ProcessRef,
-      signal: Schema.optionalKey(Signal.Name),
+      signal: Signal.Name.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed<Signal.Name>("SIGTERM"))),
       forceKillAfterMs: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
     },
     error: ProcessNotFoundError,
