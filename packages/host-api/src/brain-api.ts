@@ -23,6 +23,10 @@ export type StartBody = typeof StartBody.Type
 
 const SendBody = Session.SendInput.mapFields(Struct.omit(["sessionId"])).annotate({ identifier: "Brain.SendBody" })
 
+export const SetModelBody = Schema.Struct({ model: Schema.NullOr(Session.Model) }).annotate({
+  identifier: "Brain.SetModelBody",
+})
+
 export const Synced = Schema.Struct({ drained: Schema.Boolean }).annotate({ identifier: "Brain.Synced" })
 export type Synced = typeof Synced.Type
 
@@ -51,6 +55,20 @@ const BrainGroup = HttpApiGroup.make("brain")
         identifier: "brain.send",
         summary: "Send a message",
         description: "Accept a message for a started session, deduplicated by message ID.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.put("brain.setModel", "/ren/sessions/:id/model", {
+      params: { id: Session.ID },
+      payload: SetModelBody,
+      error: [ForbiddenError, BrainRejectedError, SessionNotStartedError, ModelsNotConfiguredError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "brain.setModel",
+        summary: "Set a session’s model",
+        description:
+          "Set the model of a started session, or clear it with null to use the model its settings give. A client token may call this route. The model must be in the brain’s model list.",
       }),
     ),
   )

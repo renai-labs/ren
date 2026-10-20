@@ -73,6 +73,7 @@ const setup = Effect.gen(function* () {
     configure: () => Effect.die(new Error("alarm must not configure models")),
     start: () => Effect.die(new Error("alarm must not start sessions")),
     send: () => Effect.die(new Error("alarm must not send messages")),
+    setModel: () => Effect.die(new Error("alarm must not set models")),
     sessions: Effect.suspend(() => current.reading.pipe(Effect.andThen(Effect.sync(() => current.snapshots)))),
   }
   const context = yield* Layer.build(
