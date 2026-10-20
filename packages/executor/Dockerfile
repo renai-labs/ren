@@ -7,6 +7,7 @@ RUN apt-get update \
 COPY executor.js /opt/ren/executor.js
 
 ENV PORT=4100
+RUN mkdir /workspace && chown bun:bun /workspace
 WORKDIR /workspace
 EXPOSE 4100
 

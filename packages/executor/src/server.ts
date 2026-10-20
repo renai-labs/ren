@@ -10,13 +10,17 @@ import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effe
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import { Executor } from "./executor.js"
 
+const bearerPrefix = "bearer "
+
 const unauthorized = new UnauthorizedError({ message: "Authentication required" })
 
 const authenticationCheck = Effect.gen(function* () {
   const publicKeys = yield* Config.schema(Signature.PublicKeys, ExecutorVariables.publicKeys)
   const executor = yield* Executor.Service
   return (authorizationHeader: string | undefined) => {
-    const token = authorizationHeader?.toLowerCase().startsWith("bearer ") ? authorizationHeader.slice(7).trim() : ""
+    const token = authorizationHeader?.toLowerCase().startsWith(bearerPrefix)
+      ? authorizationHeader.slice(bearerPrefix.length).trim()
+      : ""
     return (!token ? Effect.succeedNone : HandToken.verify(publicKeys, token)).pipe(
       Effect.map((verifiedClaims) =>
         verifiedClaims.pipe(
@@ -66,13 +70,11 @@ const operations = ExecutorApi.toLayer(
         ),
       "process.write": (input) =>
         Effect.flatMap(Caller, (caller) =>
-          executor.writeStdin(caller.brain, input.id, { data: input.data, end: input.end ?? false }),
+          executor.writeStdin(caller.brain, input.id, { data: input.data, end: input.end }),
         ),
       "process.heartbeat": (input) => Effect.flatMap(Caller, (caller) => executor.heartbeat(caller.brain, input.id)),
       "process.kill": (input) =>
-        Effect.flatMap(Caller, (caller) =>
-          executor.kill(caller.brain, input.id, input.signal ?? "SIGTERM", input.forceKillAfterMs),
-        ),
+        Effect.flatMap(Caller, (caller) => executor.kill(caller.brain, input.id, input.signal, input.forceKillAfterMs)),
       "files.read": (input) => executor.read(input.path, input.range),
       "files.write": (input) => executor.write(input.path, input.bytes),
       "files.stat": (input) => executor.stat(input.path),

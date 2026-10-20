@@ -1,7 +1,6 @@
-export * as Machine from "./machine.js"
+export * as Sandbox from "./sandbox.js"
 
 import {
-  exitedKeptFor,
   type FileInfo,
   FileNotFoundError,
   FileTooLargeError,
@@ -47,9 +46,17 @@ import { access, lstat, mkdir, open, readdir, realpath, rename, rm, stat, writeF
 import { basename, dirname, join, resolve } from "node:path"
 import manifest from "../package.json"
 import { Executor } from "./executor.js"
-import { OutputLog } from "./machine/output-log.js"
+import { OutputLog } from "./sandbox/output-log.js"
 
-export const exitedLimitBytes = 64 * 1024 * 1024
+const exitedLimitBytes = 64 * 1024 * 1024
+
+const exitedKeptFor = Duration.seconds(45)
+
+const sweepEvery = Duration.seconds(1)
+
+const stdinCapacity = 16
+
+const workspaceVariable = "EXECUTOR_WORKSPACE"
 
 interface Entry {
   readonly id: ProcessID
@@ -59,7 +66,6 @@ interface Entry {
   readonly stdin: Queue.Queue<Uint8Array, Cause.Done> | undefined
   readonly log: OutputLog.Log
   seenAtMs: number
-  isHeartbeating: boolean
 }
 
 const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
@@ -95,15 +101,22 @@ export const layer = Layer.effect(
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const config = yield* Config.all({
       handId: Config.schema(Hand.ID, ExecutorVariables.handId),
-      workspaceDirectory: Config.String("EXECUTOR_WORKSPACE").pipe(Config.withDefault(process.cwd())),
+      workspaceDirectory: Config.String(workspaceVariable).pipe(Config.withDefault(process.cwd())),
+      shell: Config.option(Config.String("SHELL")),
     })
     const workspace = yield* Effect.promise(() => realpath(resolve(config.workspaceDirectory)))
     const shells = yield* Effect.filter(
       [
         ...new Set(
-          [process.env.SHELL, "/bin/bash", "/usr/bin/bash", "/bin/zsh", "/usr/bin/zsh", "/bin/dash", "/bin/sh"].filter(
-            (candidate): candidate is string => Boolean(candidate),
-          ),
+          [
+            Option.getOrUndefined(config.shell),
+            "/bin/bash",
+            "/usr/bin/bash",
+            "/bin/zsh",
+            "/usr/bin/zsh",
+            "/bin/dash",
+            "/bin/sh",
+          ].filter((candidate): candidate is string => Boolean(candidate)),
         ),
       ],
       (candidate) =>
@@ -115,7 +128,7 @@ export const layer = Layer.effect(
         ),
     )
     const path = (value: string) => resolve(workspace, value)
-    const describe = (value: string, options: { readonly followLink: boolean }) =>
+    const fileInfo = (value: string, options: { readonly followLink: boolean }) =>
       attemptFound(value, () => (options.followLink ? stat(path(value)) : lstat(path(value)))).pipe(
         Effect.map((stats): FileInfo => ({
           type: fileType(stats),
@@ -124,10 +137,9 @@ export const layer = Layer.effect(
         })),
       )
     const processes = new Map<ProcessID, Entry>()
-    const exitOrder: Array<ProcessID> = []
     const scope = yield* Effect.scope
 
-    const find = Effect.fnUntraced(function* (brain: Brain.ID, id: ProcessID) {
+    const touch = Effect.fnUntraced(function* (brain: Brain.ID, id: ProcessID) {
       const entry = processes.get(id)
       if (!entry || entry.brain !== brain) return yield* new ProcessNotFoundError({ id })
       entry.seenAtMs = yield* Clock.currentTimeMillis
@@ -135,28 +147,24 @@ export const layer = Layer.effect(
     })
 
     const release = (entry: Entry) =>
-      Effect.sync(() => {
-        processes.delete(entry.id)
-        if (exitOrder.includes(entry.id)) exitOrder.splice(exitOrder.indexOf(entry.id), 1)
-      }).pipe(Effect.andThen(Scope.close(entry.scope, Exit.void)))
+      Effect.sync(() => processes.delete(entry.id)).pipe(Effect.andThen(Scope.close(entry.scope, Exit.void)))
 
     const recordExit = Effect.fnUntraced(function* (entry: Entry, event: OutputLog.ExitEvent) {
       yield* OutputLog.end(entry.log, event)
       entry.seenAtMs = yield* Clock.currentTimeMillis
-      exitOrder.push(entry.id)
-      const exited = exitOrder.flatMap((id) => {
-        const found = processes.get(id)
-        return found ? [found] : []
-      })
-      const total = exited.reduce((bytes, found) => bytes + OutputLog.keptBytes(found.log), 0)
-      const oldest = exited.reduce<{ readonly bytes: number; readonly entries: ReadonlyArray<Entry> }>(
+      // oxlint-disable-next-line ren/no-comments -- A Map keeps insertion order, so moving an exited entry to the end orders exited entries oldest first.
+      processes.delete(entry.id)
+      processes.set(entry.id, entry)
+      const exited = [...processes.values()].filter((found) => found.log.exit)
+      const exitedBytes = exited.reduce((bytes, found) => bytes + OutputLog.keptBytes(found.log), 0)
+      const evicted = exited.reduce<{ readonly bytes: number; readonly entries: ReadonlyArray<Entry> }>(
         (dropped, found) =>
-          total - dropped.bytes > exitedLimitBytes
+          exitedBytes - dropped.bytes > exitedLimitBytes
             ? { bytes: dropped.bytes + OutputLog.keptBytes(found.log), entries: [...dropped.entries, found] }
             : dropped,
         { bytes: 0, entries: [] },
       )
-      yield* Effect.forEach(oldest.entries, release, { discard: true })
+      yield* Effect.forEach(evicted.entries, release, { discard: true })
     })
 
     yield* Effect.gen(function* () {
@@ -164,20 +172,19 @@ export const layer = Layer.effect(
       const orphans = [...processes.values()].filter((entry) =>
         entry.log.exit
           ? !OutputLog.hasReaders(entry.log) && now - entry.seenAtMs >= Duration.toMillis(exitedKeptFor)
-          : (!OutputLog.hasReaders(entry.log) || entry.isHeartbeating) &&
-            now - entry.seenAtMs >= Duration.toMillis(orphanAfter),
+          : now - entry.seenAtMs >= Duration.toMillis(orphanAfter),
       )
       yield* Effect.forEach(orphans, release, { discard: true })
-    }).pipe(Effect.repeat(Schedule.spaced(Duration.seconds(1))), Effect.forkIn(scope))
+    }).pipe(Effect.repeat(Schedule.spaced(sweepEvery)), Effect.forkIn(scope))
 
     const spawn = Effect.fn("Executor.spawn")(function* (brain: Brain.ID, input: SpawnInput) {
       const entryScope = yield* Scope.fork(scope)
-      const outputFile = input.outputFile
-      const output = outputFile
+      const outputPath = input.outputFile
+      const outputFile = outputPath
         ? yield* Effect.acquireRelease(
             Effect.tryPromise(async () => {
-              await mkdir(dirname(path(outputFile)), { recursive: true })
-              return open(path(outputFile), "w")
+              await mkdir(dirname(path(outputPath)), { recursive: true })
+              return open(path(outputPath), "w")
             }),
             (file) => Effect.promise(() => file.close()),
           ).pipe(
@@ -186,7 +193,7 @@ export const layer = Layer.effect(
             Effect.onError(() => Scope.close(entryScope, Exit.void)),
           )
         : undefined
-      const stdin = input.hasStdin === true ? yield* Queue.bounded<Uint8Array, Cause.Done>(16) : undefined
+      const stdin = input.hasStdin === true ? yield* Queue.bounded<Uint8Array, Cause.Done>(stdinCapacity) : undefined
       const handle = yield* spawner
         .spawn(
           ChildProcess.make(input.command, input.arguments, {
@@ -213,7 +220,6 @@ export const layer = Layer.effect(
         stdin,
         log: yield* OutputLog.make.pipe(Scope.provide(entryScope)),
         seenAtMs: yield* Clock.currentTimeMillis,
-        isHeartbeating: false,
       }
       processes.set(id, entry)
       const tagged = (stream: Stream.Stream<Uint8Array, PlatformError.PlatformError>, type: "stdout" | "stderr") =>
@@ -224,7 +230,7 @@ export const layer = Layer.effect(
       yield* Stream.merge(tagged(handle.stdout, "stdout"), tagged(handle.stderr, "stderr")).pipe(
         Stream.runForEach((written) =>
           Effect.gen(function* () {
-            if (output) yield* Effect.promise(() => output.write(written.bytes).catch(() => undefined))
+            if (outputFile) yield* Effect.promise(() => outputFile.write(written.bytes).catch(() => undefined))
             yield* OutputLog.append(entry.log, written.type, written.bytes)
           }),
         ),
@@ -245,7 +251,7 @@ export const layer = Layer.effect(
         Effect.forkIn(entryScope),
       )
       return { id, pid: handle.pid }
-    })
+    }, Effect.uninterruptible)
 
     const output = Effect.fn("Executor.output")(function* (
       brain: Brain.ID,
@@ -253,7 +259,7 @@ export const layer = Layer.effect(
       cursor?: number,
       window?: OutputWindow,
     ) {
-      const entry = yield* find(brain, id)
+      const entry = yield* touch(brain, id)
       const seen = Effect.map(Clock.currentTimeMillis, (now) => {
         entry.seenAtMs = now
       })
@@ -270,7 +276,7 @@ export const layer = Layer.effect(
       id: ProcessID,
       input: { readonly data: Uint8Array; readonly end: boolean },
     ) {
-      const stdin = (yield* find(brain, id)).stdin
+      const stdin = (yield* touch(brain, id)).stdin
       if (!stdin) return yield* new StdinClosedError({ id })
       if (input.data.length > 0 && (yield* Queue.isFull(stdin))) return yield* new StdinFullError({ id })
       const accepted = input.data.length === 0 || (yield* Queue.offer(stdin, input.data))
@@ -279,8 +285,7 @@ export const layer = Layer.effect(
     })
 
     const heartbeat = Effect.fn("Executor.heartbeat")(function* (brain: Brain.ID, id: ProcessID) {
-      const entry = yield* find(brain, id)
-      entry.isHeartbeating = true
+      yield* touch(brain, id)
     })
 
     const kill = Effect.fn("Executor.kill")(function* (
@@ -289,7 +294,7 @@ export const layer = Layer.effect(
       name: Signal.Name,
       forceKillAfterMs?: number,
     ) {
-      const entry = yield* find(brain, id)
+      const entry = yield* touch(brain, id)
       yield* entry.handle
         .kill({
           killSignal: name,
@@ -316,7 +321,7 @@ export const layer = Layer.effect(
       heartbeat,
       kill,
       read: Effect.fn("Executor.read")(function* (value: string, range?: Range) {
-        const info = yield* describe(value, { followLink: true })
+        const info = yield* fileInfo(value, { followLink: true })
         if (info.type !== "file") return yield* new WrongKindError({ path: value, actual: info.type })
         const found = yield* attemptFound(value, async () => {
           await using handle = await open(path(value), "r")
@@ -337,30 +342,35 @@ export const layer = Layer.effect(
           bytes: found.bytes,
         }
       }),
-      write: (value, bytes) =>
-        bytes.length > maxFileBytes
-          ? Effect.fail(new FileTooLargeError({ path: value, sizeBytes: bytes.length, maxBytes: maxFileBytes }))
-          : attempt(value, async () => {
-              await mkdir(dirname(path(value)), { recursive: true })
-              await writeFile(path(value), bytes)
-            }),
-      stat: (value) => describe(value, { followLink: false }),
+      write: Effect.fn("Executor.write")(function* (value: string, bytes: Uint8Array) {
+        if (bytes.length > maxFileBytes)
+          return yield* new FileTooLargeError({ path: value, sizeBytes: bytes.length, maxBytes: maxFileBytes })
+        yield* attempt(value, async () => {
+          await mkdir(dirname(path(value)), { recursive: true })
+          await writeFile(path(value), bytes)
+        })
+      }),
+      stat: Effect.fn("Executor.stat")((value: string) => fileInfo(value, { followLink: false })),
       list: Effect.fn("Executor.list")(function* (value: string) {
-        const info = yield* describe(value, { followLink: true })
+        const info = yield* fileInfo(value, { followLink: true })
         if (info.type !== "directory") return yield* new WrongKindError({ path: value, actual: info.type })
         const entries = yield* attemptFound(value, () => readdir(path(value), { withFileTypes: true }))
         return entries.map((entry) => ({ name: entry.name, type: fileType(entry) }))
       }),
-      remove: (value) => attempt(value, () => rm(path(value), { recursive: true, force: true })),
+      remove: Effect.fn("Executor.remove")((value: string) =>
+        attempt(value, () => rm(path(value), { recursive: true, force: true })),
+      ),
       move: Effect.fn("Executor.move")(function* (from: string, to: string) {
-        yield* describe(from, { followLink: false })
-        const destination = yield* describe(to, { followLink: false }).pipe(
+        yield* fileInfo(from, { followLink: false })
+        const destination = yield* fileInfo(to, { followLink: false }).pipe(
           Effect.map((info) => (info.type === "directory" ? join(path(to), basename(from)) : path(to))),
           Effect.catchTag("FileNotFoundError", () => Effect.succeed(path(to))),
         )
         yield* attempt(from, () => rename(path(from), destination))
       }),
-      mkdir: (value) => attempt(value, () => mkdir(path(value), { recursive: true }).then(() => undefined)),
+      mkdir: Effect.fn("Executor.mkdir")((value: string) =>
+        attempt(value, () => mkdir(path(value), { recursive: true }).then(() => undefined)),
+      ),
     })
   }),
 )
