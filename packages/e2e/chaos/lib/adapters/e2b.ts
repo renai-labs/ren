@@ -1,6 +1,6 @@
 export * as E2BHand from "./e2b.js"
 
-import { port } from "@ren/hand-api/executor-api"
+import { ExecutorApi } from "@ren/hand-api/executor-api"
 import type { Hand } from "@ren/schema/hand"
 import { Schema } from "effect"
 import { ExecutorAdapter } from "./executor.js"
@@ -47,7 +47,7 @@ export interface Sandbox {
   readonly state: () => Promise<string | undefined>
 }
 
-const endpoint = (sandboxId: string, target = port) => `https://${target}-${sandboxId}.${domain()}`
+const endpoint = (sandboxId: string, target = ExecutorApi.port) => `https://${target}-${sandboxId}.${domain()}`
 
 const configure = async (
   sandboxId: string,
@@ -88,7 +88,7 @@ export const create = async (options: {
   await configure(created.sandboxID, created.envdAccessToken, {
     EXECUTOR_HAND_ID: options.handId,
     HAND_PUBLIC_KEYS: ExecutorAdapter.publicKeys,
-    PORT: String(port),
+    PORT: String(ExecutorApi.port),
   })
   return {
     id,

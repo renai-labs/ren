@@ -102,7 +102,7 @@ export const start = async () => {
       const granted = options.models === undefined ? access() : options.models
       const hostToken = options.hostToken === false ? undefined : (options.hostToken ?? (await issuer.issue(sessionId)))
       if (granted) await expectStatus(await driver.configureModels(granted, hostToken), 204, "PUT /ren/models")
-      const directory = options.hand && `/workspace/${sessionId}`
+      const directory = options.hand?.folder(sessionId)
       if (options.start !== false)
         await expectStatus(await driver.start({ ...options.start, ...(directory && { directory }) }), 200, "start")
       return driver

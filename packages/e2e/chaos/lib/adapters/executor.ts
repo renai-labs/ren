@@ -1,6 +1,6 @@
 export * as ExecutorAdapter from "./executor.js"
 
-import { port } from "@ren/hand-api/executor-api"
+import { ExecutorApi } from "@ren/hand-api/executor-api"
 import { HandToken } from "@ren/hand-api/hand-token"
 import { Signature } from "@ren/hand-api/signature"
 import { Image, TestHand } from "@ren/executor/testing"
@@ -158,7 +158,7 @@ export const dockerContainer = async (options: {
   const tag = await Image.build()
   const state = { container: "", url: "", handId: options.handId ?? Hand.ID.create() }
   const published = async () => {
-    const hostPort = /:(\d+)$/m.exec(await docker(["port", state.container, `${port}/tcp`]))?.[1]
+    const hostPort = /:(\d+)$/m.exec(await docker(["port", state.container, `${ExecutorApi.port}/tcp`]))?.[1]
     if (!hostPort) throw new Error(`docker published no executor port for ${options.label}`)
     state.url = `http://127.0.0.1:${hostPort}`
     const container = state.container
@@ -178,7 +178,7 @@ export const dockerContainer = async (options: {
       "--label",
       `ren.chaos=${options.label}`,
       "--publish",
-      `127.0.0.1::${port}`,
+      `127.0.0.1::${ExecutorApi.port}`,
       "--memory",
       "512m",
       "--cpus",

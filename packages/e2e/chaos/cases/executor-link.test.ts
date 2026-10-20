@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import type { ProcessID } from "@ren/hand-api/executor-api"
+import type { ExecutorApi } from "@ren/hand-api/executor-api"
 import { Brain } from "@ren/schema/brain"
 import { Effect, Exit, Stream } from "effect"
 import path from "node:path"
@@ -115,7 +115,7 @@ const twice = async (label: string) => {
   }
 }
 
-const resume = async (id: ProcessID) => {
+const resume = async (id: ExecutorApi.ProcessID) => {
   const parts: Array<Uint8Array> = []
   const state = { position: 0, gaps: 0, exit: false, connections: 0 }
   const connect = async (): Promise<void> => {

@@ -1,6 +1,6 @@
 export * as ExecutorDriver from "./executor.js"
 
-import type { ProcessEvent, ProcessID } from "@ren/hand-api/executor-api"
+import type { ExecutorApi } from "@ren/hand-api/executor-api"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Cause, Effect, Exit, ManagedRuntime, Predicate, Scope, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -25,8 +25,8 @@ export const connect = async (url: string, token: string) => {
     if (Exit.isSuccess(exit)) return exit.value
     throw new Error(`executor call failed with ${errorTag(exit)}: ${Cause.pretty(exit.cause)}`)
   }
-  const output = async (id: ProcessID, ms = 30_000) => {
-    const events: Array<ProcessEvent> = []
+  const output = async (id: ExecutorApi.ProcessID, ms = 30_000) => {
+    const events: Array<ExecutorApi.ProcessEvent> = []
     const exit = await Wait.deadline(
       `process.output ${id}`,
       ms,

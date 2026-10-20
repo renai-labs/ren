@@ -13,7 +13,7 @@ End-to-end tests across server, client, CLI and app (Playwright), and the chaos 
 
 ## Dependencies
 
-Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`Sandbox` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Host API's `hands.access` and `host.refresh` for the hand each session was placed on.
+Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`TestHand` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Host API's `hands.access` and `host.refresh` for the hand each session was placed on.
 
 ## Two runners
 
