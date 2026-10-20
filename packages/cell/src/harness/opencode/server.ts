@@ -145,6 +145,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   yield* Effect.addFinalizer(() => Fiber.interrupt(resuming))
   return {
     fetch,
+    client: api,
     shells: (sessionId, use) => located(sessionId, Shell.Service).pipe(Effect.flatMap(use)),
     agents: (sessionId) => located(sessionId, Agent.Service).pipe(Effect.flatMap((agents) => agents.list())),
     skills: (sessionId) => located(sessionId, Skill.Service).pipe(Effect.flatMap((skills) => skills.list())),
@@ -174,6 +175,7 @@ export const client = (fetch: (request: Request) => Promise<Response>): Effect.E
 
 export interface Instance {
   readonly fetch: (request: Request) => Promise<Response>
+  readonly client: OpenCodeClient
   readonly shells: <A, E>(
     sessionId: string,
     use: (shell: Shell.Interface) => Effect.Effect<A, E>,

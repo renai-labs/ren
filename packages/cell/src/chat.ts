@@ -3,12 +3,12 @@ export * as Chat from "./chat.js"
 import { ChatApi } from "@ren/protocol/chat"
 import { ConflictError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
 import type { SessionEvent } from "@ren/schema/session/event"
-import { Clock, Deferred, Effect, Layer, Option, Predicate, Ref, Result, Stream } from "effect"
+import { Clock, Deferred, Effect, Layer, Option, Predicate, Ref, Result, Schema, Stream } from "effect"
 import { Base64Url } from "effect/encoding"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
-import type { Harness } from "./harness/harness.js"
+import { Harness } from "./harness/harness.js"
 
 type Services = Cell.Info | Cell.Activity | Harness.Service
 
@@ -27,10 +27,6 @@ export const setMember = (headers: Headers, member: { readonly sub?: string; rea
 }
 
 export const owns = (pathname: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-
-const notFound = (error: Harness.NotFound) => new NotFoundError({ message: error.message })
-const rejected = (error: Harness.Rejected) => new InvalidRequestError({ message: error.message })
-const conflict = (error: Harness.Conflict) => new ConflictError({ message: error.message })
 
 const frame = <const Type extends "server.heartbeat">(type: Type) =>
   Effect.map(Clock.currentTimeMillis, (created) => ({ id: `evt_${type}_${created}`, created, type, data: {} }))
@@ -103,309 +99,227 @@ const sender = Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
   }),
 )
 
+const notFound = <A, E, R>(effect: Effect.Effect<A, E | Harness.NotFound, R>) =>
+  Effect.catchIf(effect, Schema.is(Harness.NotFound), (error) =>
+    Effect.fail(new NotFoundError({ message: error.message })),
+  )
+
+const conflict = <A, E, R>(effect: Effect.Effect<A, E | Harness.Conflict, R>) =>
+  Effect.catchIf(effect, Schema.is(Harness.Conflict), (error) =>
+    Effect.fail(new ConflictError({ message: error.message })),
+  )
+
+const rejected = <A, E, R>(effect: Effect.Effect<A, E | Harness.Rejected, R>) =>
+  Effect.catchIf(effect, Schema.is(Harness.Rejected), (error) =>
+    Effect.fail(new InvalidRequestError({ message: error.message })),
+  )
+
+const harnessed = Effect.map(
+  Effect.context<Services>(),
+  (context) =>
+    <A, E, R>(use: (harness: Harness.Instance) => Effect.Effect<A, E, R>) =>
+      Effect.flatMap(Cell.acquire, use).pipe(Effect.scoped, Effect.provide(context)),
+)
+
 const handlers = Layer.mergeAll(
   HttpApiBuilder.group(ChatApi, "event", (group) =>
-    Effect.gen(function* () {
-      const context = yield* Effect.context<Services>()
-      return group.handle("event.subscribe", () => Effect.succeed(events.pipe(Stream.provideContext(context))))
-    }),
+    Effect.map(Effect.context<Services>(), (context) =>
+      group.handle("event.subscribe", () => Effect.succeed(events.pipe(Stream.provideContext(context)))),
+    ),
   ),
   HttpApiBuilder.group(ChatApi, "model", (group) =>
-    Effect.gen(function* () {
-      const context = yield* Effect.context<Services>()
-      return group.handle("model.list", () =>
-        Effect.flatMap(Cell.acquire, (harness) => harness.chat.models).pipe(Effect.scoped, Effect.provide(context)),
-      )
-    }),
+    Effect.map(harnessed, (run) => group.handle("model.list", () => run((harness) => harness.chat.models))),
   ),
   HttpApiBuilder.group(ChatApi, "session", (group) =>
-    Effect.gen(function* () {
-      const context = yield* Effect.context<Services>()
-      const run = <A, E>(use: (chat: Harness.Chat) => Effect.Effect<A, E, HttpServerRequest.HttpServerRequest>) =>
-        Effect.flatMap(Cell.acquire, (harness) => use(harness.chat)).pipe(Effect.scoped, Effect.provide(context))
-      return group
-        .handle("session.get", (request) =>
-          run((chat) => chat.get(request.params.sessionID).pipe(Effect.mapError(notFound))),
-        )
-        .handle("session.status", () => run((chat) => chat.status))
+    Effect.map(harnessed, (run) =>
+      group
+        .handle("session.get", (request) => run((harness) => harness.chat.get(request.params.sessionID).pipe(notFound)))
+        .handle("session.status", () => run((harness) => harness.chat.status))
         .handle("session.messages", (request) =>
-          run((chat) =>
-            chat
+          run((harness) =>
+            harness.chat
               .messages(request.params.sessionID, {
                 ...(request.query.limit ? { limit: request.query.limit } : {}),
                 ...(request.query.cursor ? { cursor: request.query.cursor } : {}),
               })
-              .pipe(
-                Effect.catchTags({
-                  "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                  "Harness.Rejected": (e) => Effect.fail(rejected(e)),
-                }),
-              ),
+              .pipe(notFound, rejected),
           ),
         )
         .handle("session.message", (request) =>
-          run((chat) =>
-            chat.message(request.params.sessionID, request.params.messageID).pipe(Effect.mapError(notFound)),
-          ),
+          run((harness) => harness.chat.message(request.params.sessionID, request.params.messageID).pipe(notFound)),
         )
         .handle("session.children", (request) =>
-          run((chat) => chat.children(request.params.sessionID).pipe(Effect.mapError(notFound))),
+          run((harness) => harness.chat.children(request.params.sessionID).pipe(notFound)),
         )
         .handle("session.inbox.list", (request) =>
-          run((chat) => chat.inbox(request.params.sessionID).pipe(Effect.mapError(notFound))),
+          run((harness) => harness.chat.inbox(request.params.sessionID).pipe(notFound)),
         )
         .handle("session.permission.list", (request) =>
-          run((chat) => chat.permissions(request.params.sessionID).pipe(Effect.mapError(notFound))),
+          run((harness) => harness.chat.permissions(request.params.sessionID).pipe(notFound)),
         )
         .handle("session.form.list", (request) =>
-          run((chat) => chat.forms(request.params.sessionID).pipe(Effect.mapError(notFound))),
+          run((harness) => harness.chat.forms(request.params.sessionID).pipe(notFound)),
         )
         .handle("session.prompt", (request) =>
-          run((chat) =>
+          run((harness) =>
             Effect.gen(function* () {
-              yield* chat.prompt(request.params.sessionID, {
-                id: request.payload.id,
-                text: request.payload.text,
-                delivery: request.payload.delivery,
-                ...(Predicate.isBoolean(request.payload.resume) && { resume: request.payload.resume }),
-                ...(request.payload.agents && { agents: request.payload.agents }),
-                ...(request.payload.skills && { skills: request.payload.skills }),
-                sender: yield* sender,
-              })
+              yield* harness.chat.prompt(request.params.sessionID, { ...request.payload, sender: yield* sender })
               return { id: request.payload.id }
-            }).pipe(
-              Effect.catchTags({
-                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
-              }),
-            ),
+            }).pipe(notFound, conflict),
           ),
         )
         .handle("session.compact", (request) =>
-          run((chat) =>
-            chat.compact(request.params.sessionID, request.payload.id).pipe(
-              Effect.catchTags({
-                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
-              }),
-            ),
-          ),
+          run((harness) => harness.chat.compact(request.params.sessionID, request.payload.id).pipe(notFound, conflict)),
         )
         .handle("session.interrupt", (request) =>
-          run((chat) =>
-            chat
-              .interrupt(request.params.sessionID, { resume: request.query.resume === true })
-              .pipe(Effect.mapError(notFound)),
+          run((harness) =>
+            harness.chat.interrupt(request.params.sessionID, { resume: request.query.resume === true }).pipe(notFound),
           ),
         )
         .handle("session.background", (request) =>
-          run((chat) => chat.background(request.params.sessionID).pipe(Effect.mapError(notFound))),
+          run((harness) => harness.chat.background(request.params.sessionID).pipe(notFound)),
         )
         .handle("session.rename", (request) =>
-          run((chat) => chat.rename(request.params.sessionID, request.payload.title).pipe(Effect.mapError(notFound))),
+          run((harness) => harness.chat.rename(request.params.sessionID, request.payload.title).pipe(notFound)),
         )
         .handle("session.revert.stage", (request) =>
-          run((chat) =>
-            chat.revert.stage(request.params.sessionID, request.payload.messageID).pipe(
-              Effect.catchTags({
-                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
-              }),
-            ),
+          run((harness) =>
+            harness.chat.revert.stage(request.params.sessionID, request.payload.messageID).pipe(notFound, conflict),
           ),
         )
         .handle("session.revert.clear", (request) =>
-          run((chat) =>
-            chat.revert.clear(request.params.sessionID).pipe(
-              Effect.catchTags({
-                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
-              }),
-            ),
-          ),
+          run((harness) => harness.chat.revert.clear(request.params.sessionID).pipe(notFound, conflict)),
         )
         .handle("session.revert.commit", (request) =>
-          run((chat) =>
-            chat.revert.commit(request.params.sessionID).pipe(
-              Effect.catchTags({
-                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
-              }),
-            ),
-          ),
+          run((harness) => harness.chat.revert.commit(request.params.sessionID).pipe(notFound, conflict)),
         )
         .handle("session.inbox.cancel", (request) =>
-          run((chat) =>
-            chat.cancelInbox(request.params.sessionID, request.params.inboxID).pipe(
-              Effect.catchTags({
-                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
-              }),
-            ),
+          run((harness) =>
+            harness.chat.cancelInbox(request.params.sessionID, request.params.inboxID).pipe(notFound, conflict),
           ),
         )
         .handle("session.inbox.update", (request) =>
-          run((chat) =>
-            chat.updateInbox(request.params.sessionID, request.params.inboxID, request.payload.delivery).pipe(
-              Effect.catchTags({
-                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
-              }),
-            ),
+          run((harness) =>
+            harness.chat
+              .updateInbox(request.params.sessionID, request.params.inboxID, request.payload.delivery)
+              .pipe(notFound, conflict),
           ),
         )
         .handle("session.command", (request) =>
-          run((chat) =>
-            chat
-              .command(request.params.sessionID, {
-                name: request.payload.name,
-                text: request.payload.text,
-                delivery: request.payload.delivery,
-                ...(request.payload.agents && { agents: request.payload.agents }),
-                ...(request.payload.skills && { skills: request.payload.skills }),
-              })
-              .pipe(Effect.mapError(notFound)),
-          ),
+          run((harness) => harness.chat.command(request.params.sessionID, request.payload).pipe(notFound)),
         )
         .handle("session.model.switch", (request) =>
-          Effect.gen(function* () {
-            const info = yield* Cell.Info
-            if (request.params.sessionID !== info.sessionId)
-              return yield* new InvalidRequestError({ message: "A subagent’s model comes from its parent session" })
-            const harness = yield* Cell.acquire
-            const model = request.payload.model
-            yield* harness
-              .setModel(
-                request.params.sessionID,
-                Option.some({
-                  endpointId: model.providerID,
-                  modelId: model.id,
-                  ...(model.variant && { variant: model.variant }),
-                }),
-              )
-              .pipe(
-                Effect.catchTags({
-                  BrainRejectedError: (error) => Effect.fail(new InvalidRequestError({ message: error.message })),
-                  SessionNotStartedError: (error) => Effect.fail(new NotFoundError({ message: error.message })),
-                }),
-              )
-          }).pipe(Effect.scoped, Effect.provide(context)),
+          run((harness) =>
+            Effect.gen(function* () {
+              const info = yield* Cell.Info
+              if (request.params.sessionID !== info.sessionId)
+                return yield* new InvalidRequestError({ message: "A subagent’s model comes from its parent session" })
+              const model = request.payload.model
+              yield* harness
+                .setModel(
+                  request.params.sessionID,
+                  Option.some({
+                    endpointId: model.providerID,
+                    modelId: model.id,
+                    ...(model.variant && { variant: model.variant }),
+                  }),
+                )
+                .pipe(
+                  Effect.catchTags({
+                    BrainRejectedError: (error) => Effect.fail(new InvalidRequestError({ message: error.message })),
+                    SessionNotStartedError: (error) => Effect.fail(new NotFoundError({ message: error.message })),
+                  }),
+                )
+            }),
+          ),
         )
         .handle("session.permission.reply", (request) =>
-          run((chat) =>
-            chat
+          run((harness) =>
+            harness.chat
               .replyPermission(
                 request.params.sessionID,
                 request.params.requestID,
                 request.payload.reply,
                 request.payload.message,
               )
-              .pipe(Effect.mapError(notFound)),
+              .pipe(notFound),
           ),
         )
         .handle("session.form.reply", (request) =>
-          run((chat) =>
-            chat.replyForm(request.params.sessionID, request.params.formID, request.payload.answer).pipe(
-              Effect.catchTags({
-                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
-                "Harness.Rejected": (e) => Effect.fail(rejected(e)),
-              }),
-            ),
+          run((harness) =>
+            harness.chat
+              .replyForm(request.params.sessionID, request.params.formID, request.payload.answer)
+              .pipe(notFound, conflict, rejected),
           ),
         )
         .handle("session.form.cancel", (request) =>
-          run((chat) =>
-            chat.cancelForm(request.params.sessionID, request.params.formID).pipe(
-              Effect.catchTags({
-                "Harness.NotFound": (e) => Effect.fail(notFound(e)),
-                "Harness.Conflict": (e) => Effect.fail(conflict(e)),
-              }),
-            ),
+          run((harness) =>
+            harness.chat.cancelForm(request.params.sessionID, request.params.formID).pipe(notFound, conflict),
           ),
-        )
-    }),
+        ),
+    ),
   ),
   HttpApiBuilder.group(ChatApi, "shell", (group) =>
-    Effect.gen(function* () {
-      const context = yield* Effect.context<Services>()
-      const run = <A, E>(use: (chat: Harness.Chat) => Effect.Effect<A, E>) =>
-        Effect.flatMap(Cell.acquire, (harness) => use(harness.chat)).pipe(Effect.scoped, Effect.provide(context))
-      return group
+    Effect.map(harnessed, (run) =>
+      group
         .handle("shell.list", (request) =>
-          run((chat) => chat.shells(request.params.sessionID).pipe(Effect.mapError(notFound))),
+          run((harness) => harness.chat.shells(request.params.sessionID).pipe(notFound)),
         )
         .handle("shell.output", (request) =>
-          run((chat) =>
-            chat
+          run((harness) =>
+            harness.chat
               .shellOutput(request.params.sessionID, request.params.shellID, {
                 ...(Predicate.isNumber(request.query.cursor) && { cursor: request.query.cursor }),
                 ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
               })
-              .pipe(Effect.mapError(notFound)),
+              .pipe(notFound),
           ),
         )
         .handle("shell.remove", (request) =>
-          run((chat) =>
-            chat.removeShell(request.params.sessionID, request.params.shellID).pipe(Effect.mapError(notFound)),
-          ),
-        )
-    }),
+          run((harness) => harness.chat.removeShell(request.params.sessionID, request.params.shellID).pipe(notFound)),
+        ),
+    ),
   ),
   HttpApiBuilder.group(ChatApi, "agent", (group) =>
-    Effect.map(Effect.context<Services>(), (context) =>
+    Effect.map(harnessed, (run) =>
       group.handle("agent.list", (request) =>
-        Effect.flatMap(Cell.acquire, (harness) => harness.chat.agents(request.params.sessionID)).pipe(
-          Effect.mapError(notFound),
-          Effect.scoped,
-          Effect.provide(context),
-        ),
+        run((harness) => harness.chat.agents(request.params.sessionID).pipe(notFound)),
       ),
     ),
   ),
   HttpApiBuilder.group(ChatApi, "skill", (group) =>
-    Effect.map(Effect.context<Services>(), (context) =>
+    Effect.map(harnessed, (run) =>
       group.handle("skill.list", (request) =>
-        Effect.flatMap(Cell.acquire, (harness) => harness.chat.skills(request.params.sessionID)).pipe(
-          Effect.mapError(notFound),
-          Effect.scoped,
-          Effect.provide(context),
-        ),
+        run((harness) => harness.chat.skills(request.params.sessionID).pipe(notFound)),
       ),
     ),
   ),
   HttpApiBuilder.group(ChatApi, "command", (group) =>
-    Effect.map(Effect.context<Services>(), (context) =>
+    Effect.map(harnessed, (run) =>
       group.handle("command.list", (request) =>
-        Effect.flatMap(Cell.acquire, (harness) => harness.chat.commands(request.params.sessionID)).pipe(
-          Effect.mapError(notFound),
-          Effect.scoped,
-          Effect.provide(context),
-        ),
+        run((harness) => harness.chat.commands(request.params.sessionID).pipe(notFound)),
       ),
     ),
   ),
   HttpApiBuilder.group(ChatApi, "file", (group) =>
-    Effect.map(Effect.context<Services>(), (context) =>
+    Effect.map(harnessed, (run) =>
       group.handle("file.search", (request) =>
-        Effect.flatMap(Cell.acquire, (harness) =>
-          harness.chat.files(request.params.sessionID, {
-            query: request.query.query,
-            ...(request.query.type && { type: request.query.type }),
-            ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
-          }),
-        ).pipe(Effect.mapError(notFound), Effect.scoped, Effect.provide(context)),
+        run((harness) =>
+          harness.chat
+            .files(request.params.sessionID, {
+              query: request.query.query,
+              ...(request.query.type && { type: request.query.type }),
+              ...(Predicate.isNumber(request.query.limit) && { limit: request.query.limit }),
+            })
+            .pipe(notFound),
+        ),
       ),
     ),
   ),
   HttpApiBuilder.group(ChatApi, "websearch", (group) =>
-    Effect.map(Effect.context<Services>(), (context) =>
+    Effect.map(harnessed, (run) =>
       group.handle("websearch.providers", (request) =>
-        Effect.flatMap(Cell.acquire, (harness) => harness.chat.webSearchProviders(request.params.sessionID)).pipe(
-          Effect.mapError(notFound),
-          Effect.scoped,
-          Effect.provide(context),
-        ),
+        run((harness) => harness.chat.webSearchProviders(request.params.sessionID).pipe(notFound)),
       ),
     ),
   ),

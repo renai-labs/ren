@@ -274,7 +274,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   endpoints: ReadonlyArray<Models.Endpoint>,
   directory: AbsolutePath = AbsolutePath.make("/workspace"),
 ) {
-  const client = yield* OpenCodeServer.client(server.fetch)
+  const client = server.client
   const state = { firstAskedAt: new Map<string, number>() }
   const sync = yield* Effect.serviceOption(Sync.Service)
   const mutations = yield* Semaphore.make(1)
