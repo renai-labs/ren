@@ -5,7 +5,7 @@ import { Session } from "@ren/schema/session"
 import { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Exit, Fiber, Queue, type Scope, Stream } from "effect"
+import { Effect, Exit, Fiber, Logger, Queue, type Scope, Stream } from "effect"
 import { HttpApi } from "effect/http-api"
 import { Chat } from "../src/chat.js"
 import { BrainTest } from "./lib/brain.js"
@@ -575,6 +575,26 @@ test("the stream reports connected with the harness's own frame, once the harnes
       )
       yield* Queue.offer(upstream, { id: "evt_upstream", created: 1, type: "server.connected", data: {} })
       expect(yield* Queue.take(frames)).toEqual({ id: "evt_upstream", created: 1, type: "server.connected", data: {} })
+    }),
+  ))
+
+test("a failing harness stream ends the client stream and is logged, not taken for a disconnect", () =>
+  live(
+    Effect.gen(function* () {
+      const messages: Array<string> = []
+      const frames = yield* Chat.frames({
+        live: Stream.fail(new Error("upstream broke")),
+        active: Effect.succeed(false),
+        idleMs: 60_000,
+        heartbeatMs: 60_000,
+      }).pipe(
+        Stream.runCollect,
+        Effect.provide(
+          Logger.layer([Logger.make((options) => void messages.push([options.message].flat().map(String).join(" ")))]),
+        ),
+      )
+      expect(frames).toEqual([])
+      expect(messages.join("\n")).toContain("The chat event stream failed")
     }),
   ))
 
