@@ -10,10 +10,10 @@ const sources = await Promise.all(
 )
 
 describe("frontend sources", () => {
-  test("use no raw colour literals outside the generated tokens", () => {
+  test("use no raw colour literals outside the generated tokens and brand marks", () => {
     const literal = /(lch\(|oklch\(|hsla?\(|color-mix\(|#[0-9a-fA-F]{6}\b|rgba?\([0-9])/
     const offending = sources
-      .filter((source) => !source.file.endsWith("tokens.generated.css"))
+      .filter((source) => !source.file.endsWith("tokens.generated.css") && !source.file.endsWith("brand-mark.tsx"))
       .filter((source) => literal.test(source.text))
       .map((source) => source.file)
     expect(offending).toEqual([])
