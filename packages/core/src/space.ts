@@ -200,6 +200,15 @@ export const layer = Layer.effect(
             ) {
               return yield* new Primitive.Forbidden({ message: "This space cannot be archived." })
             }
+            const owned = yield* transaction
+              .select({ name: Database.Schema.agent.name })
+              .from(Database.Schema.agent)
+              .where(and(eq(Database.Schema.agent.owner_space_id, id), isNull(Database.Schema.agent.archived_at)))
+              .orderBy(asc(Database.Schema.agent.name))
+            if (owned.length > 0)
+              return yield* new Primitive.Conflict({
+                message: `This space owns ${owned.map((agent) => agent.name).join(", ")}. Move or archive them first.`,
+              })
             const archived = yield* transaction
               .update(Database.Schema.space)
               .set({ archived_at: sql`now()`, updated_at: sql`now()` })

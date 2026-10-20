@@ -3,7 +3,9 @@ export * as Access from "./access.js"
 import { Policy } from "@ren/schema/policy"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Actor } from "./actor.js"
+import { AgentPolicy } from "./agent/policy.js"
 import { EnvironmentTemplatePolicy } from "./environment-templates/policy.js"
+import { SettingsPolicy } from "./settings/policy.js"
 import { SpacePolicy } from "./space/policy.js"
 
 export interface Resource {
@@ -54,6 +56,8 @@ export const make = (documents: ReadonlyArray<Policy.Document>): Interface => {
 export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...SpacePolicy.documents,
   ...EnvironmentTemplatePolicy.documents,
+  ...SettingsPolicy.documents,
+  ...AgentPolicy.documents,
 ])
 
 export const layer = Layer.effect(

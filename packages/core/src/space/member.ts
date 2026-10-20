@@ -5,9 +5,7 @@ import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm"
-import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
-import { Cause, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
-import { SqlError } from "effect/sql"
+import { Context, DateTime, Effect, Layer, Schema } from "effect"
 import { Access } from "../access.js"
 import { Actor } from "../actor.js"
 import { Primitive } from "../primitive.js"
@@ -67,18 +65,6 @@ const findMember = Effect.fnUntraced(function* (transaction: Database.Transactio
   return yield* toInfo(row)
 })
 
-const mapUniqueConflict =
-  (constraint: string, message: string) =>
-  (error: EffectDrizzleQueryError): Effect.Effect<never, Primitive.Conflict | EffectDrizzleQueryError> => {
-    const failure = Cause.isCause(error.cause) ? Cause.findErrorOption(error.cause) : Option.none()
-    const isMatchingUniqueViolation =
-      Option.isSome(failure) &&
-      SqlError.isSqlError(failure.value) &&
-      failure.value.reason._tag === "UniqueViolation" &&
-      failure.value.reason.constraint === constraint
-    return isMatchingUniqueViolation ? Effect.fail(new Primitive.Conflict({ message })) : Effect.fail(error)
-  }
-
 const addMember = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   actor: Actor.Info,
@@ -96,7 +82,10 @@ const addMember = Effect.fnUntraced(function* (
     .pipe(
       Effect.catchTag(
         "EffectDrizzleQueryError",
-        mapUniqueConflict(Database.Schema.spaceMemberUserConstraint, "The user is already a member of this space."),
+        Primitive.uniqueConflict(
+          Database.Schema.spaceMemberUserConstraint,
+          "The user is already a member of this space.",
+        ),
       ),
     )
   return yield* findMember(transaction, id)
@@ -142,7 +131,7 @@ const addPendingMember = Effect.fnUntraced(function* (
     .pipe(
       Effect.catchTag(
         "EffectDrizzleQueryError",
-        mapUniqueConflict(
+        Primitive.uniqueConflict(
           Database.Schema.spacePendingMemberEmailConstraint,
           "This email is already pending in this space.",
         ),

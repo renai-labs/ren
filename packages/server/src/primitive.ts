@@ -67,10 +67,19 @@ export const update =
     )
 
 export const archive =
-  <ID, Info>(method: (actor: Actor.Info, id: ID) => Effect.Effect<Info, Primitive.NotFound | Primitive.Forbidden>) =>
+  <ID, Info>(
+    method: (
+      actor: Actor.Info,
+      id: ID,
+    ) => Effect.Effect<Info, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict>,
+  ) =>
   (request: { readonly params: { readonly id: ID } }) =>
     Effect.flatMap(currentActor, (actor) => method(actor, request.params.id)).pipe(
-      Effect.catchTags({ "Primitive.NotFound": notFound, "Primitive.Forbidden": forbidden }),
+      Effect.catchTags({
+        "Primitive.NotFound": notFound,
+        "Primitive.Forbidden": forbidden,
+        "Primitive.Conflict": conflict,
+      }),
     )
 
 export const action = update
