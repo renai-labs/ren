@@ -1,5 +1,6 @@
 export * as Docker from "./docker.js"
 
+import { port } from "@ren/hand-api/executor-api"
 import { Duration, Effect, Option, Schedule, Schema, Stream } from "effect"
 import { HttpClient } from "effect/http"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
@@ -8,7 +9,7 @@ import { HandProvider } from "../hand-provider.js"
 const Config = Schema.Struct({
   image: Schema.NonEmptyString.annotate({
     title: "Image",
-    description: "A Docker image that runs Ren’s executor on port 4100.",
+    description: `A Docker image that runs Ren’s executor on port ${port}.`,
   }),
   cpus: Schema.optionalKey(
     Schema.Finite.check(Schema.isGreaterThan(0)).annotate({ title: "CPUs", description: "Docker’s --cpus." }),
@@ -23,7 +24,7 @@ const Config = Schema.Struct({
 
 const Binding = Schema.Struct({ containerId: Schema.NonEmptyString })
 
-const executorPort = "4100/tcp"
+const executorPort = `${port}/tcp`
 
 const nameRaceChecks = 100
 
