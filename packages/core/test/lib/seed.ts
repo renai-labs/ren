@@ -1,6 +1,7 @@
 export * as Seed from "./seed.js"
 
 import { Database } from "@ren/db/database"
+import { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { EnvironmentProvider } from "@ren/schema/environment-provider"
@@ -62,6 +63,15 @@ export const owner = Effect.fnUntraced(function* () {
   const organizationId = yield* organization()
   const creator = yield* user()
   return { organizationId, spaceId: yield* space(organizationId), createdBy: creator.id }
+})
+
+export const globalAgent = Effect.fnUntraced(function* (name: string, input: { readonly isSubagent: boolean }) {
+  const database = yield* Database.Service
+  const id = Agent.ID.create()
+  yield* database.db
+    .insert(Database.Schema.agent)
+    .values({ id, name, description: `The ${name} agent`, is_subagent: input.isSubagent })
+  return id
 })
 
 export const session = Effect.fnUntraced(function* (
