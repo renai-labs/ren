@@ -52,7 +52,7 @@ export const actor = Effect.fnUntraced(function* (organizationId: Auth.Organizat
   return { userId: seeded.id, organizationId, roles: [role] }
 })
 
-const space = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
+export const space = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
   const database = yield* Database.Service
   const id = Space.ID.create()
   yield* database.db.insert(Database.Schema.space).values({ id, organization_id: organizationId, name: "Team" })
@@ -71,6 +71,23 @@ export const globalAgent = Effect.fnUntraced(function* (name: string, input: { r
   yield* database.db
     .insert(Database.Schema.agent)
     .values({ id, name, description: `The ${name} agent`, is_subagent: input.isSubagent })
+  return id
+})
+
+export const agent = Effect.fnUntraced(function* (
+  owner: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
+  name: string,
+  input: { readonly isSubagent: boolean },
+) {
+  const database = yield* Database.Service
+  const id = Agent.ID.create()
+  yield* database.db.insert(Database.Schema.agent).values({
+    id,
+    organization_id: owner.organizationId,
+    owner_space_id: owner.spaceId,
+    name,
+    is_subagent: input.isSubagent,
+  })
   return id
 })
 

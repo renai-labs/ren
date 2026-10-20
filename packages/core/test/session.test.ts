@@ -97,6 +97,60 @@ describe("Session", () => {
     }),
   )
 
+  it.live("create with a live primary agent of the space stores it on the session", () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const owner = yield* Seed.owner()
+      const agentId = yield* Seed.agent(owner, "build", { isSubagent: false })
+      const sessionId = Session.ID.create()
+      yield* sessions.create(
+        owner,
+        { sessionId, harness: "opencode", instructions: {}, interactive: true },
+        { agentId },
+      )
+      const rows = yield* database.db
+        .select({ agentId: Database.Schema.agent_session.agent_id })
+        .from(Database.Schema.agent_session)
+        .where(eq(Database.Schema.agent_session.id, sessionId))
+      expect(rows).toEqual([{ agentId }])
+    }),
+  )
+
+  it.live(
+    "create with a subagent, an archived agent or another space's agent fails with NotFound and stores no session",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const database = yield* Database.Service
+        const owner = yield* Seed.owner()
+        const elsewhere = { organizationId: owner.organizationId, spaceId: yield* Seed.space(owner.organizationId) }
+        const archived = yield* Seed.agent(owner, "archived", { isSubagent: false })
+        yield* database.db
+          .update(Database.Schema.agent)
+          .set({ archived_at: new Date() })
+          .where(eq(Database.Schema.agent.id, archived))
+        const agents = [
+          yield* Seed.agent(owner, "reviewer", { isSubagent: true }),
+          archived,
+          yield* Seed.agent(elsewhere, "visiting", { isSubagent: false }),
+        ]
+        for (const agentId of agents) {
+          const sessionId = Session.ID.create()
+          expect(
+            yield* Effect.flip(
+              sessions.create(
+                owner,
+                { sessionId, harness: "opencode", instructions: {}, interactive: true },
+                { agentId },
+              ),
+            ),
+          ).toBeInstanceOf(Session.NotFound)
+          expect(yield* Effect.flip(sessions.get(sessionId))).toBeInstanceOf(Session.NotFound)
+        }
+      }),
+  )
+
   it.live(
     "get shows a session as idle with no title before a pass, then its parent and the title, status and outcome of the last pass",
     () =>

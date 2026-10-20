@@ -1,11 +1,13 @@
 export * as Session from "./session.js"
 
 import { Database } from "@ren/db/database"
+import type { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { eq } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
+import { AgentQueries } from "./agent/queries.js"
 import { BrainHost } from "./brain-host.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
 
@@ -43,7 +45,11 @@ export interface Interface {
   readonly create: (
     owner: Owner,
     input: Session.StartInput,
-  ) => Effect.Effect<Session.Started, AlreadyExists | BrainHost.BrainUnavailable | BrainHost.BrainRejectedError>
+    options?: { readonly agentId?: Agent.ID },
+  ) => Effect.Effect<
+    Session.Started,
+    AlreadyExists | NotFound | BrainHost.BrainUnavailable | BrainHost.BrainRejectedError
+  >
   readonly send: (
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, NotFound | BrainHost.BrainUnavailable | BrainHost.BrainRejectedError>
@@ -63,24 +69,48 @@ export const layer = Layer.effect(
     const brain = yield* BrainHost.Service
 
     return Service.of({
-      create: Effect.fn("Session.create")(function* (owner: Owner, input: Session.StartInput) {
+      create: Effect.fn("Session.create")(function* (
+        owner: Owner,
+        input: Session.StartInput,
+        options: { readonly agentId?: Agent.ID } = {},
+      ) {
         const startInput = yield* Schema.encodeEffect(Session.StartInput)(Struct.omit(input, ["initialMessage"])).pipe(
           Effect.orDie,
         )
         const created = yield* database.transaction((transaction) =>
-          transaction
-            .insert(Database.Schema.agent_session)
-            .values({
-              id: input.sessionId,
-              organization_id: owner.organizationId,
-              space_id: owner.spaceId,
-              created_by: owner.createdBy,
-              root_id: input.sessionId,
-              harness: input.harness,
-              start_input: startInput,
-            })
-            .onConflictDoNothing()
-            .returning({ id: Database.Schema.agent_session.id }),
+          Effect.gen(function* () {
+            if (
+              options.agentId &&
+              (yield* transaction
+                .select({ id: Database.Schema.agent.id })
+                .from(Database.Schema.agent)
+                .where(
+                  and(
+                    eq(Database.Schema.agent.id, options.agentId),
+                    eq(Database.Schema.agent.organization_id, owner.organizationId),
+                    eq(Database.Schema.agent.is_subagent, false),
+                    isNull(Database.Schema.agent.archived_at),
+                    AgentQueries.isInSpace(owner.spaceId),
+                  ),
+                )
+                .for("share")).length === 0
+            )
+              return yield* new NotFound({ message: "Agent not found." })
+            return yield* transaction
+              .insert(Database.Schema.agent_session)
+              .values({
+                id: input.sessionId,
+                organization_id: owner.organizationId,
+                space_id: owner.spaceId,
+                created_by: owner.createdBy,
+                root_id: input.sessionId,
+                harness: input.harness,
+                agent_id: options.agentId,
+                start_input: startInput,
+              })
+              .onConflictDoNothing()
+              .returning({ id: Database.Schema.agent_session.id })
+          }),
         )
         if (created.length === 0) return yield* alreadyExists
         return yield* brain.start(input, owner)
