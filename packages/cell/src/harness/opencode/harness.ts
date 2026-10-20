@@ -10,7 +10,7 @@ import { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
 import { Model, type SendInput } from "@ren/schema/session"
-import { Clock, Effect, Layer, Option, Schema, Semaphore, Stream, Struct } from "effect"
+import { Clock, Effect, Layer, Option, Semaphore, Stream, Struct } from "effect"
 import { Cell } from "../../cell.js"
 import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
@@ -24,6 +24,7 @@ import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
+import { SessionSettings } from "./session-settings.js"
 
 const environmentActions = ["read", "edit", "glob", "grep", "shell"]
 
@@ -75,19 +76,6 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
 
 const rejected = (error: { readonly message: string }) => new BrainRejectedError({ message: error.message })
 
-const SavedState = Schema.Struct({
-  start: Schema.NullOr(Model),
-  model: Schema.NullOr(Model),
-  interactive: Schema.Boolean,
-})
-
-const savedOf = (session: Session.Info) => Schema.decodeUnknownOption(SavedState)(session.metadata?.ren)
-
-const withSaved = (session: Option.Option<Session.Info>, saved: typeof SavedState.Type) => ({
-  ...Option.getOrUndefined(session)?.metadata,
-  ren: Schema.encodeSync(SavedState)(saved),
-})
-
 const create = Effect.fn("OpenCodeHarness.create")(function* (
   client: OpenCodeClient,
   server: OpenCodeServer.Instance,
@@ -136,7 +124,7 @@ const environmentDirectoryOf = Effect.fn("OpenCodeHarness.environmentDirectoryOf
 })
 
 const overrideOf = (session: Option.Option<Session.Info>, start: Model | null) => {
-  const saved = Option.getOrUndefined(Option.flatMap(session, savedOf))
+  const saved = Option.getOrUndefined(Option.flatMap(session, SessionSettings.savedOf))
   return saved && JSON.stringify(saved.start) === JSON.stringify(start) ? saved.model : start
 }
 
@@ -149,12 +137,7 @@ const resolve = (
   Option.match(server.settings, {
     onNone: () => rejectUnknownModel(client, override ?? undefined).pipe(Effect.as(undefined)),
     onSome: (settings) =>
-      settings
-        .attach(session)
-        .pipe(
-          Effect.andThen(override ? settings.setModel(Option.some(override)) : settings.pull),
-          Effect.mapError(rejected),
-        ),
+      settings.configure({ ...session, model: Option.fromNullishOr(override) }).pipe(Effect.mapError(rejected)),
   })
 
 const update = Effect.fnUntraced(function* (
@@ -186,7 +169,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   const agent = resolved && Agent.ID.make(resolved.primary.name)
   const chosen = resolved?.primary.model ?? override ?? undefined
   const model = chosen && RenPlugin.modelRef(chosen)
-  const metadata = withSaved(session, { start, model: override, interactive: input.interactive })
+  const metadata = SessionSettings.metadata(session, { start, model: override, interactive: input.interactive })
   const environmentDirectory = yield* environmentDirectoryOf(server, input, session)
   const permissions = deniedActions(server, input, environmentDirectory).map((action) => ({
     action,
@@ -217,7 +200,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
     discard: true,
   }).pipe(Effect.orDie)
   if (input.initialMessage)
-    yield* send(client, server, {
+    yield* send(client, {
       ...input.initialMessage,
       sessionId: input.sessionId,
     }).pipe(Effect.catchTag("SessionNotStartedError", Effect.die))
@@ -226,19 +209,12 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
 
 const send = Effect.fn("OpenCodeHarness.send")(function* (
   client: OpenCodeClient,
-  server: OpenCodeServer.Instance,
   input: Omit<SendInput, "delivery"> & { readonly delivery?: SendInput["delivery"] },
 ) {
   const sessionID = Session.ID.make(input.sessionId)
   const session = yield* findSession(client, sessionID)
   if (Option.isNone(session))
     return yield* new SessionNotStartedError({ message: `Session ${input.sessionId} has not been started` })
-  const saved = Option.getOrUndefined(savedOf(session.value))
-  if (
-    Option.isSome(server.settings) &&
-    (yield* server.settings.value.attach({ sessionId: sessionID, interactive: saved?.interactive ?? true }))
-  )
-    yield* server.settings.value.setModel(Option.fromNullishOr(saved?.model)).pipe(Effect.mapError(rejected))
   const messageID = SessionMessage.ID.make(input.messageId)
   const isSent = yield* client.session.message.get({ sessionID, messageID }).pipe(
     Effect.as(true),
@@ -342,7 +318,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           return yield* start(client, server, input, directory)
         }),
       ),
-    send: (input: SendInput) => mutations.withPermit(send(client, server, input)),
+    send: (input: SendInput) => mutations.withPermit(send(client, input)),
     setModel: (sessionId: string, model: Option.Option<Model>) =>
       mutations.withPermit(
         Effect.gen(function* () {
@@ -350,7 +326,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           const session = yield* findSession(client, sessionID)
           if (Option.isNone(session))
             return yield* new SessionNotStartedError({ message: `Session ${sessionId} has not been started` })
-          const saved = Option.getOrUndefined(savedOf(session.value))
+          const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
           if (Option.isSome(server.settings))
             yield* server.settings.value.setModel(model).pipe(Effect.mapError(rejected))
           if (Option.isNone(server.settings) && Option.isSome(model)) {
@@ -360,7 +336,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           yield* client.session
             .update({
               sessionID,
-              metadata: withSaved(session, {
+              metadata: SessionSettings.metadata(session, {
                 start: saved?.start ?? null,
                 model: Option.getOrNull(model),
                 interactive: saved?.interactive ?? true,

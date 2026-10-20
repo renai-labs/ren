@@ -1,5 +1,7 @@
 # Agents: system design
 
+> Historical proposal. Use the [current contract](contract.md) for implemented behavior, package responsibilities and lifecycle rules.
+
 Services, Layers, data and the cell adapter for [v1.md](v1.md). Names are proposals and follow the `AGENTS.md` files.
 
 The document is written in ASD-STE100 Simplified Technical English.

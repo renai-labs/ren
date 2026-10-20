@@ -5,7 +5,7 @@ import { testEffect } from "@ren/executor/testing"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session-settings"
-import { Effect, Layer, Option } from "effect"
+import { Effect, Layer, Option, Struct } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -22,13 +22,28 @@ const it = testEffect(Layer.empty)
 
 const stub = Shared.stub()
 
-const open = Effect.fnUntraced(function* (initial: SessionSettings.Layers) {
+const open = Effect.fnUntraced(function* (
+  initial: SessionSettings.Layers,
+  options: {
+    readonly database?: string
+    readonly sessionId?: RenSession.ID
+    readonly interactive?: boolean
+    readonly start?: boolean
+  } = {},
+) {
   const state = { layers: initial }
-  const access = Shared.access(undefined, stub.url)
+  const access = Struct.evolve(Shared.access(undefined, stub.url), {
+    endpoints: (endpoints) =>
+      endpoints.map((endpoint) =>
+        Struct.evolve(endpoint, {
+          models: (models) => models.map((model) => Struct.assign(model, { variants: [{ id: "high" }] })),
+        }),
+      ),
+  })
   const directory = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-settings-"))))
   const server = yield* OpenCodeServer.make(
     createEmbeddedRoutes({
-      database: { path: ":memory:" },
+      database: { path: options.database ?? ":memory:" },
       config: { project: false, content: Shared.vars(stub.url).OPENCODE_CONFIG },
       models: { fetch: false },
       fs: { filewatcher: false, fff: false },
@@ -52,9 +67,10 @@ const open = Effect.fnUntraced(function* (initial: SessionSettings.Layers) {
       ),
     ),
   )
-  const sessionId = RenSession.ID.create()
+  const sessionId = options.sessionId ?? RenSession.ID.create()
   const sessionID = Session.ID.make(sessionId)
-  yield* harness.start({ sessionId, harness: "opencode", interactive: true })
+  if (options.start !== false)
+    yield* harness.start({ sessionId, harness: "opencode", interactive: options.interactive ?? true })
   const turn = (script: StubModel.Script) =>
     harness
       .send({
@@ -69,6 +85,63 @@ const open = Effect.fnUntraced(function* (initial: SessionSettings.Layers) {
 })
 
 describe("settings in the cell", () => {
+  it.live("clearing a variant switches the existing session back to the default", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(TestSettings.layers())
+      yield* opened.harness.setModel(
+        opened.sessionId,
+        Option.some({ endpointId: "stub", modelId: "stub-model", variant: "high" }),
+      )
+      expect(
+        String((yield* opened.client.session.get({ sessionID: opened.sessionID }).pipe(Effect.orDie)).model?.variant),
+      ).toBe("high")
+      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: "stub-model" }))
+      expect(
+        (yield* opened.client.session.get({ sessionID: opened.sessionID }).pipe(Effect.orDie)).model?.variant ??
+          "default",
+      ).toBe("default")
+    }),
+  )
+
+  it.live("reopening restores the override and non-interactive policy before direct prompts and model edits", () =>
+    Effect.gen(function* () {
+      const directory = yield* Effect.promise(() => mkdtemp(join(tmpdir(), "ren-settings-reopen-")))
+      const database = join(directory, "opencode.db")
+      const sessionId = RenSession.ID.create()
+      const sessionID = Session.ID.make(sessionId)
+      const layers = TestSettings.layers({
+        ren: { permissions: [{ action: "subagent", resource: "explore", effect: "ask" }] },
+      })
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const first = yield* open(layers, { database, sessionId, interactive: false })
+          yield* first.harness.setModel(sessionId, Option.some({ endpointId: "stub", modelId: "stub-other" }))
+        }),
+      )
+      const opened = yield* open(layers, { database, sessionId, start: false })
+      opened.state.layers = TestSettings.layers({
+        ren: {
+          instructions: "Pulled after reopening.",
+          permissions: [{ action: "subagent", resource: "explore", effect: "ask" }],
+        },
+      })
+      const child = stub.script()
+      const turn = stub.script()
+      yield* opened.client.session.prompt({ sessionID, text: `${turn.marker} go` }).pipe(Effect.orDie)
+      yield* opened.client.session.wait({ sessionID }).pipe(Effect.orDie)
+      expect(turn.calls[0]?.system).toContain("Pulled after reopening.")
+      expect(turn.calls[0]?.body.model).toBe("stub-other")
+      const permission = stub.script({
+        tools: [{ name: "subagent", input: { agent: "explore", description: "Look", prompt: `${child.marker} look` } }],
+      })
+      yield* opened.client.session.prompt({ sessionID, text: `${permission.marker} go` }).pipe(Effect.orDie)
+      yield* opened.client.session.wait({ sessionID }).pipe(Effect.orDie)
+      expect(child.calls).toHaveLength(0)
+      expect(yield* opened.client.session.form.list({ sessionID }).pipe(Effect.orDie)).toEqual([])
+      yield* opened.harness.setModel(sessionId, Option.none())
+      expect(String((yield* opened.client.session.get({ sessionID }).pipe(Effect.orDie)).model?.id)).toBe("stub-model")
+    }),
+  )
   it.live("after start, OpenCode runs Ren's main agent, with Ren's subagents and OpenCode's hidden helpers", () =>
     Effect.gen(function* () {
       const opened = yield* open(TestSettings.layers())

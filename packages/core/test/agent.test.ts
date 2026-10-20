@@ -2,7 +2,8 @@ import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
-import { Effect, Layer } from "effect"
+import { Deferred, Effect, Fiber, Layer } from "effect"
+import { SqlClient } from "effect/sql"
 import { Access } from "../src/access.js"
 import { Agent } from "../src/agent.js"
 import { AgentMembership } from "../src/agent/membership.js"
@@ -45,6 +46,42 @@ const org = Effect.gen(function* () {
 const build = { name: "build", isSubagent: false, settings: { ...empty, instructions: "You build features." } }
 
 describe("Agent", () => {
+  for (const operation of ["create", "transfer"] as const)
+    it.live(`${operation} cannot give an agent to a concurrently archived space`, () =>
+      Effect.gen(function* () {
+        const agents = yield* Agent.Service
+        const sql = yield* SqlClient.SqlClient
+        const o = yield* org
+        const existing = yield* agents.create(o.ada, { ...build, ownerSpaceId: o.factory.id })
+        const locked = yield* Deferred.make<void>()
+        const release = yield* Deferred.make<void>()
+        const archive = yield* Effect.forkChild(
+          sql.withTransaction(
+            Effect.gen(function* () {
+              yield* sql`update space set archived_at = now() where id = ${o.eng.id}`
+              yield* Deferred.succeed(locked, undefined)
+              yield* Deferred.await(release)
+            }),
+          ),
+        )
+        yield* Deferred.await(locked)
+        const write = yield* Effect.forkChild(
+          Effect.result(
+            operation === "create"
+              ? agents.create(o.admin, { ...build, name: "other", ownerSpaceId: o.eng.id })
+              : agents.transferOwnership(o.admin, existing.id, { spaceId: o.eng.id }),
+          ),
+        )
+        yield* sql<{ readonly waiting: number }>`select count(*)::int as waiting from pg_stat_activity
+          where datname = current_database() and wait_event_type = 'Lock'`.pipe(
+          Effect.repeat({ until: (rows) => (rows.at(0)?.waiting ?? 0) > 0 || write.pollUnsafe() !== undefined }),
+          Effect.ensuring(Deferred.succeed(release, undefined)),
+        )
+        yield* Fiber.join(archive)
+        expect(yield* Fiber.join(write)).toMatchObject({ _tag: "Failure", failure: { _tag: "Primitive.NotFound" } })
+      }),
+    )
+
   it.live("a member of a space creates an agent it owns, and a non-member gets NotFound for the space", () =>
     Effect.gen(function* () {
       const agents = yield* Agent.Service

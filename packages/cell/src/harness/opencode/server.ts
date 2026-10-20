@@ -17,6 +17,7 @@ import manifest from "../../../package.json"
 import type { Harness } from "../harness.js"
 import { RenPlugin } from "./plugin.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
+import { SessionSettings } from "./session-settings.js"
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
   storage: DurableObjectStorage,
@@ -96,10 +97,21 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
   yield* Deferred.await(loaded)
-  if (Option.isSome(shared))
-    yield* shared.value.control.pull.pipe(
-      Effect.catch((error) => Effect.logWarning(`Opened without settings: ${error.message}`)),
-    )
+  if (Option.isSome(shared)) {
+    const opened = yield* client(fetch)
+    const root = (yield* opened.session.list({ parentID: null, limit: 1 }).pipe(Effect.orDie)).data.at(0)
+    if (root) {
+      const saved = Option.getOrUndefined(SessionSettings.savedOf(root))
+      yield* shared.value.control.configure({
+        sessionId: root.id,
+        interactive: saved?.interactive ?? true,
+        model: Option.fromNullishOr(saved?.model),
+      })
+    } else
+      yield* shared.value.control.pull.pipe(
+        Effect.catch((error) => Effect.logWarning(`Opened without settings: ${error.message}`)),
+      )
+  }
   const resuming = runtime.runFork(Context.get(services, SessionRestart.Service).resumeSuspendedSessions)
   yield* Effect.addFinalizer(() => Fiber.interrupt(resuming))
   return {
