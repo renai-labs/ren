@@ -11,9 +11,11 @@ import { SessionToken } from "@ren/host-api/session-token"
 import { Auth } from "@ren/schema/auth"
 import type { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
+import type { SessionSettings } from "@ren/schema/session-settings"
 import { Effect, Layer, Option, Redacted } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
+import { TestSettings } from "./settings.js"
 import { TestToken } from "./token.js"
 
 export type Answer =
@@ -49,7 +51,11 @@ export const start = () => {
   const answers = new Map<Session.ID, () => Answer | Promise<Answer>>()
   const calls: Array<Call> = []
   const held: Array<() => void> = []
-  const state = { refuseHosts: false, refreshGate: undefined as (() => Promise<void>) | undefined }
+  const state = {
+    refuseHosts: false,
+    refreshGate: undefined as (() => Promise<void>) | undefined,
+    settings: TestSettings.layers(),
+  }
   const presented = { token: "" }
   const listeners = new Set<() => void>()
   const record = (endpoint: Call["endpoint"], sessionId: Session.ID | undefined, status: number) => {
@@ -102,9 +108,7 @@ export const start = () => {
       ),
     ),
     HttpApiBuilder.group(RenHostApi, "settings", (group) =>
-      Effect.succeed(
-        group.handle("settings.read", () => new ForbiddenError({ message: "The fake Ren serves no settings" })),
-      ),
+      Effect.succeed(group.handle("settings.read", () => Effect.sync(() => state.settings))),
     ),
     HttpApiBuilder.group(RenHostApi, "models", (group) =>
       Effect.succeed(
@@ -148,6 +152,9 @@ export const start = () => {
     calls,
     answer: (sessionId: Session.ID, answer: () => Answer | Promise<Answer>) => {
       answers.set(sessionId, answer)
+    },
+    settings: (layers: SessionSettings.Layers) => {
+      state.settings = layers
     },
     refuseHosts: (refusing: boolean) => {
       state.refuseHosts = refusing

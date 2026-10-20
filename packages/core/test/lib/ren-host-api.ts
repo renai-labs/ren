@@ -2,6 +2,7 @@ export * as RenHostApiTest from "./ren-host-api.js"
 
 import { CurrentHost, RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
+import { TestSettings } from "@ren/cell/testing"
 import { Effect, Layer } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { BrainHost } from "../../src/brain-host.js"
@@ -34,7 +35,7 @@ const handlers = (around: Around) =>
       ),
     ),
     HttpApiBuilder.group(RenHostApi, "settings", (group) =>
-      Effect.succeed(group.handle("settings.read", () => Effect.die(new Error("HostApiTest serves no settings")))),
+      Effect.succeed(group.handle("settings.read", () => Effect.succeed(TestSettings.layers()))),
     ),
   )
 

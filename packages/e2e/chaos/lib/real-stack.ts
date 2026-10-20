@@ -95,6 +95,12 @@ export const start = async (options: {
     Database.layer.pipe(Layer.provideMerge(PgClient.layer({ url: Redacted.make(database.href) }))),
   )
   const owner = await databaseRuntime.runPromise(Seed.owner())
+  await databaseRuntime.runPromise(
+    Seed.ren({
+      instructions:
+        "This is an automated test. Keep every answer under 40 words. Use at most four tool calls per turn. Never ask questions.",
+    }),
+  )
 
   const provider = await ModelProvider.start()
   const baseUrl = `${new URL(provider.url).origin}/v1`
