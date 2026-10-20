@@ -2,7 +2,7 @@ import { expect } from "bun:test"
 import { TestAccess } from "./lib/access.js"
 import { BunServices } from "@effect/platform-bun"
 import type { SpawnResult } from "@ren/hand-api/executor-api"
-import { Sandbox, Processes, Relay, testEffect } from "@ren/executor/testing"
+import { TestHand, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
@@ -34,7 +34,7 @@ import { Probe } from "./lib/probe.js"
 
 const handId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-hand-")))
-const it = testEffect(Sandbox.layer({ handId, workspace }))
+const it = testEffect(TestHand.layer({ handId, workspace }))
 
 class Killed extends Error {
   constructor(readonly signal: string) {
@@ -47,7 +47,7 @@ const killed = (signal: string) => new Killed(signal)
 const sessionId = Session.ID.create()
 
 const accessAt = (url: string) =>
-  Sandbox.access({ url, handId, brain: Brain.ofSession(sessionId), directory: join(workspace, sessionId) })
+  TestHand.access({ url, handId, brain: Brain.ofSession(sessionId), directory: join(workspace, sessionId) })
 
 const environmentsWith = (
   access: Layer.Layer<HandAccess.Service>,
@@ -62,10 +62,10 @@ const connectTo = Effect.fnUntraced(function* (url: string, http?: Layer.Layer<H
   return yield* environments.connect(sessionId)
 })
 
-const connect = Effect.flatMap(Sandbox.url, connectTo)
+const connect = Effect.flatMap(TestHand.url, connectTo)
 
 const throughRelay = Effect.gen(function* () {
-  const relay = yield* Relay.make(Relay.portOf(yield* Sandbox.url))
+  const relay = yield* Relay.make(Relay.portOf(yield* TestHand.url))
   return { relay, spawner: HandSession.spawner(yield* connectTo(relay.url), killed) }
 })
 
@@ -148,8 +148,8 @@ it.live("loses no output and keeps the exit code when the connection drops mid-c
 it.live("says the environment lost the command when a restarted executor no longer knows it", () =>
   Effect.gen(function* () {
     const through = yield* throughRelay
-    const restarted = yield* Layer.build(Layer.fresh(Sandbox.layer({ handId, workspace }))).pipe(
-      Effect.flatMap((context) => Effect.provide(Sandbox.url, context)),
+    const restarted = yield* Layer.build(Layer.fresh(TestHand.layer({ handId, workspace }))).pipe(
+      Effect.flatMap((context) => Effect.provide(TestHand.url, context)),
     )
     const handle = yield* through.spawner.spawn(ChildProcess.make("sh", ["-c", "echo started; sleep 30"]))
     yield* firstLine(handle.stdout)
@@ -219,8 +219,8 @@ it.live("runs a shell script in a shell the machine has, and leaves other comman
 
 // oxlint-disable-next-line ren/no-comments -- Ren sends no change notices, so the brain finds the replacement when it refreshes a short token.
 const replaceable = Effect.gen(function* () {
-  const access = yield* Sandbox.access({
-    url: yield* Sandbox.url,
+  const access = yield* TestHand.access({
+    url: yield* TestHand.url,
     handId,
     brain: Brain.ofSession(sessionId),
     directory: join(workspace, sessionId),
@@ -230,8 +230,8 @@ const replaceable = Effect.gen(function* () {
   const environments = yield* environmentsWith(Layer.succeedContext(context))
   const original = yield* Effect.scoped(environments.connect(sessionId))
   const replacement = yield* Scope.make()
-  const next = yield* Layer.buildWithScope(Layer.fresh(Sandbox.layer({ handId, workspace })), replacement).pipe(
-    Effect.flatMap((built) => Effect.provide(Sandbox.url, built)),
+  const next = yield* Layer.buildWithScope(Layer.fresh(TestHand.layer({ handId, workspace })), replacement).pipe(
+    Effect.flatMap((built) => Effect.provide(TestHand.url, built)),
   )
   return {
     hand: HandSession.make(environments, sessionId, killed),
@@ -271,7 +271,7 @@ it.live(
   () =>
     Effect.gen(function* () {
       const environments = yield* environmentsWith(
-        TestAccess.fixed(new Map([[sessionId, yield* accessAt(yield* Sandbox.url)]])),
+        TestAccess.fixed(new Map([[sessionId, yield* accessAt(yield* TestHand.url)]])),
       )
       const hand = HandSession.make(environments, sessionId, killed)
       const name = `${crypto.randomUUID()}.out`
@@ -494,7 +494,7 @@ it.effect("a heartbeat that the executor refuses as expired gets a new token, an
           Effect.flatMap((count) =>
             Clock.currentTimeMillis.pipe(
               Effect.flatMap((issuedAt) =>
-                Sandbox.access({
+                TestHand.access({
                   url,
                   handId,
                   brain: Brain.ofSession(sessionId),

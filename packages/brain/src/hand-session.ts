@@ -46,25 +46,25 @@ const disconnectedNotice = new TextEncoder().encode("\n[hand disconnected: the c
 const lostNotice = (bytes: number) =>
   new TextEncoder().encode(`\n[hand reconnected: ${bytes} bytes of output were lost]\n`)
 
-export const reconnectAfter = Duration.seconds(1)
+const reconnectAfter = Duration.seconds(1)
 
-export const stdinRetryAfter = Duration.millis(50)
+const stdinRetryAfter = Duration.millis(50)
 
 const posixShells = new Set(["sh", "bash", "zsh", "dash", "ksh"])
 
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1)
 
-const runnable = (shells: ReadonlyArray<string> = [], command: string, args: ReadonlyArray<string>) => {
+const commandToRun = (command: string, args: ReadonlyArray<string>, shells: ReadonlyArray<string> = []) => {
   const isShellScript = args.at(0) === "-c" && posixShells.has(baseName(command))
   if (!isShellScript || shells.some((shell) => baseName(shell) === baseName(command))) return command
   return shells.at(0) ?? command
 }
 
-class OutputInterrupted extends Schema.TaggedError<OutputInterrupted>()("HandSession.OutputInterrupted", {
+class OutputDropped extends Schema.TaggedError<OutputDropped>()("HandSession.OutputDropped", {
   message: Schema.String,
 }) {}
 
-export const childProcessError = (method: string) => (cause: unknown) =>
+const childProcessError = (method: string) => (cause: unknown) =>
   PlatformError.systemError({
     _tag: "Unknown",
     module: "ChildProcess",
@@ -87,7 +87,7 @@ export const spawner = (
   options: SpawnOptions = {},
 ) =>
   ChildProcessSpawner.make(
-    Effect.fnUntraced(function* (command) {
+    Effect.fn("HandSession.spawn")(function* (command) {
       if (command._tag === "PipedCommand")
         return yield* PlatformError.badArgument({
           module: "ChildProcess",
@@ -102,7 +102,7 @@ export const spawner = (
       const hasStdin = Boolean(stdinStream) || !stdinConfig.stream || stdinConfig.stream === "pipe"
       const shouldEndStdin = stdinConfig.endOnDone !== false
       const remoteProcess = yield* executor["process.spawn"]({
-        command: runnable(connection.hello.shells, command.command, command.args),
+        command: commandToRun(command.command, command.args, connection.hello.shells),
         arguments: command.args,
         hasStdin,
         variables: Record.filter(command.options.env ?? {}, Predicate.isString),
@@ -121,9 +121,9 @@ export const spawner = (
       const stdoutChunks = yield* Queue.unbounded<Uint8Array, Cause.Done>()
       const stderrChunks = yield* Queue.unbounded<Uint8Array, Cause.Done>()
       const exitResult = yield* Deferred.make<ChildProcessSpawner.ExitCode, PlatformError.PlatformError>()
-      const exited = yield* Deferred.make<void>()
+      const exitReported = yield* Deferred.make<void>()
       yield* Effect.addFinalizer(() =>
-        Deferred.isDone(exited).pipe(
+        Deferred.isDone(exitReported).pipe(
           Effect.flatMap((hasExited) =>
             hasExited
               ? Effect.void
@@ -134,13 +134,13 @@ export const spawner = (
       yield* executor["process.heartbeat"]({ id: remoteProcess.id }).pipe(
         Effect.ignore,
         Effect.repeat(Schedule.spaced(pingEvery)),
-        Effect.raceFirst(Deferred.await(exited)),
+        Effect.raceFirst(Deferred.await(exitReported)),
         Effect.forkScoped,
       )
       const position = yield* Ref.make(0)
-      const contactAt = yield* Ref.make(yield* Clock.currentTimeMillis)
+      const lastContactAtMs = yield* Ref.make(yield* Clock.currentTimeMillis)
       const receive = Effect.fnUntraced(function* (event: ProcessEvent) {
-        yield* Ref.set(contactAt, yield* Clock.currentTimeMillis)
+        yield* Ref.set(lastContactAtMs, yield* Clock.currentTimeMillis)
         if (event.type === "ping") return
         if (event.type === "skip") {
           const reached = yield* Ref.get(position)
@@ -152,7 +152,7 @@ export const spawner = (
           return
         }
         if (event.type === "exit") {
-          yield* Deferred.succeed(exited, undefined)
+          yield* Deferred.succeed(exitReported, undefined)
           yield* event.signal
             ? Deferred.fail(exitResult, childProcessError("exitCode")(killedBySignal(event.signal)))
             : Deferred.succeed(exitResult, ChildProcessSpawner.ExitCode(event.exitCode))
@@ -176,15 +176,15 @@ export const spawner = (
       ).pipe(
         Stream.timeoutOrElse({
           duration: stallAfter,
-          orElse: () => Stream.fail(new OutputInterrupted({ message: "The output stream went silent" })),
+          orElse: () => Stream.fail(new OutputDropped({ message: "The output stream went silent" })),
         }),
         Stream.runForEach(receive),
         Effect.andThen(
-          Deferred.isDone(exited).pipe(
+          Deferred.isDone(exitReported).pipe(
             Effect.flatMap((hasExited) =>
               hasExited
                 ? Effect.void
-                : Effect.fail(new OutputInterrupted({ message: "The output ended before the process exited" })),
+                : Effect.fail(new OutputDropped({ message: "The output ended before the process exited" })),
             ),
           ),
         ),
@@ -195,7 +195,7 @@ export const spawner = (
               ? Effect.succeed(false)
               : Effect.zipWith(
                   Clock.currentTimeMillis,
-                  Ref.get(contactAt),
+                  Ref.get(lastContactAtMs),
                   (now, contact) => now - contact < Duration.toMillis(orphanAfter),
                 ),
         }),
@@ -203,7 +203,7 @@ export const spawner = (
         Effect.onExit((exit) =>
           Effect.gen(function* () {
             const disconnected =
-              !(yield* Deferred.isDone(exited)) && (Exit.isSuccess(exit) || !Cause.hasInterruptsOnly(exit.cause))
+              !(yield* Deferred.isDone(exitReported)) && (Exit.isSuccess(exit) || !Cause.hasInterruptsOnly(exit.cause))
             if (disconnected) yield* Queue.offer(stderrChunks, disconnectedNotice)
             yield* Queue.end(stdoutChunks)
             yield* Queue.end(stderrChunks)
@@ -211,7 +211,9 @@ export const spawner = (
               exitResult,
               exit._tag === "Failure" && Cause.hasFails(exit.cause)
                 ? exit.cause
-                : Cause.fail(childProcessError("output")(new Error("The output ended before the process exited"))),
+                : Cause.fail(
+                    childProcessError("output")(new Error("The output ended before the process exited")),
+                  ),
             )
           }),
         ),
@@ -297,17 +299,29 @@ export const make = (
     spawner: sessionSpawner(),
     spawnerWith: sessionSpawner,
     files: {
-      read: (path, range) =>
+      read: Effect.fn("HandSession.read")((path: string, range?: Range) =>
         withConnection((connection) => connection.client["files.read"]({ path, ...(range && { range }) })),
-      write: (path, bytes) =>
+      ),
+      write: Effect.fn("HandSession.write")((path: string, bytes: Uint8Array) =>
         bytes.length > maxFileBytes
           ? Effect.fail(new FileTooLargeError({ path, sizeBytes: bytes.length, maxBytes: maxFileBytes }))
           : withConnection((connection) => connection.client["files.write"]({ path, bytes })),
-      stat: (path) => withConnection((connection) => connection.client["files.stat"]({ path })),
-      list: (path) => withConnection((connection) => connection.client["files.list"]({ path })),
-      remove: (path) => withConnection((connection) => connection.client["files.remove"]({ path })),
-      move: (from, to) => withConnection((connection) => connection.client["files.move"]({ from, to })),
-      mkdir: (path) => withConnection((connection) => connection.client["files.mkdir"]({ path })),
+      ),
+      stat: Effect.fn("HandSession.stat")((path: string) =>
+        withConnection((connection) => connection.client["files.stat"]({ path })),
+      ),
+      list: Effect.fn("HandSession.list")((path: string) =>
+        withConnection((connection) => connection.client["files.list"]({ path })),
+      ),
+      remove: Effect.fn("HandSession.remove")((path: string) =>
+        withConnection((connection) => connection.client["files.remove"]({ path })),
+      ),
+      move: Effect.fn("HandSession.move")((from: string, to: string) =>
+        withConnection((connection) => connection.client["files.move"]({ from, to })),
+      ),
+      mkdir: Effect.fn("HandSession.mkdir")((path: string) =>
+        withConnection((connection) => connection.client["files.mkdir"]({ path })),
+      ),
     },
   }
 }
