@@ -11,12 +11,12 @@ import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
 import { heapStats } from "bun:jsc"
 import { Executor } from "../src/executor.js"
-import { Machine } from "../src/machine.js"
+import { Sandbox } from "../src/sandbox.js"
 import { testEffect } from "./lib/effect.js"
 import { Processes } from "./lib/process.js"
 
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-executor-")))
-const executor = Machine.layer.pipe(
+const executor = Sandbox.layer.pipe(
   Layer.provide(BunServices.layer),
   Layer.provide(
     ConfigProvider.layer(

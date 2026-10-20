@@ -1,4 +1,4 @@
-export { Sandbox } from "./sandbox.js"
+export { TestHand } from "./test-hand.js"
 export { Image } from "./image.js"
 export { Processes } from "./process.js"
 export { Relay } from "./relay.js"

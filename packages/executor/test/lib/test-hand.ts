@@ -1,4 +1,4 @@
-export * as Sandbox from "./sandbox.js"
+export * as TestHand from "./test-hand.js"
 
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
 import { HandToken } from "@ren/hand-api/hand-token"
@@ -7,7 +7,7 @@ import type { Brain } from "@ren/schema/brain"
 import type { Hand } from "@ren/schema/hand"
 import { ConfigProvider, DateTime, Effect, Layer, Redacted, Schema } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
-import { Machine } from "../../src/machine.js"
+import { Sandbox } from "../../src/sandbox.js"
 import { Server } from "../../src/server.js"
 
 export const keys = await Effect.runPromise(Signature.generate("test"))
@@ -15,12 +15,12 @@ export const keys = await Effect.runPromise(Signature.generate("test"))
 export const layer = (options: {
   readonly handId: Hand.ID
   readonly workspace: string
-  readonly executor?: typeof Machine.layer
+  readonly executor?: typeof Sandbox.layer
   readonly publicKeys?: readonly [Signature.PublicKey, ...ReadonlyArray<Signature.PublicKey>]
 }) =>
   HttpRouter.serve(Server.layer, { disableListenLog: true, disableLogger: true }).pipe(
     Layer.provide(HttpServer.layerServices),
-    Layer.provide(options.executor ?? Machine.layer),
+    Layer.provide(options.executor ?? Sandbox.layer),
     Layer.provide(BunServices.layer),
     Layer.provide(
       ConfigProvider.layer(
