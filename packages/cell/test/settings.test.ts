@@ -4,7 +4,7 @@ import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { testEffect } from "@ren/executor/testing"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
-import type { SessionSettings } from "@ren/schema/session-settings"
+import type { SessionSettings } from "@ren/schema/session/settings"
 import { Effect, Layer, Option, Struct } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
