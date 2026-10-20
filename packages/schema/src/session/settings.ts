@@ -1,7 +1,7 @@
-export * as SessionSettings from "./session-settings.js"
+export * as SessionSettings from "./settings.js"
 
 import { Schema } from "effect"
-import { Settings } from "./settings.js"
+import { Settings } from "../settings.js"
 
 export interface Known extends Schema.Schema.Type<typeof Known> {}
 export const Known = Schema.Struct({

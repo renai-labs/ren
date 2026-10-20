@@ -1,6 +1,6 @@
 export * as TestSettings from "./settings.js"
 
-import type { SessionSettings } from "@ren/schema/session-settings"
+import type { SessionSettings } from "@ren/schema/session/settings"
 import type { Settings } from "@ren/schema/settings"
 
 export const layer = (settings: Partial<Settings.Info> = {}): Settings.Info => ({

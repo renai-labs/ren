@@ -2,7 +2,7 @@ export * as Settings from "./settings.js"
 
 import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
-import { SessionSettings } from "@ren/schema/session-settings"
+import { SessionSettings } from "@ren/schema/session/settings"
 import { Settings } from "@ren/schema/settings"
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"

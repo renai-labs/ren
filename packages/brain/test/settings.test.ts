@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Permission } from "@ren/schema/permission"
-import type { SessionSettings } from "@ren/schema/session-settings"
+import type { SessionSettings } from "@ren/schema/session/settings"
 import type { Settings } from "@ren/schema/settings"
 import { Effect, Option } from "effect"
 import { BrainSettings } from "../src/settings.js"

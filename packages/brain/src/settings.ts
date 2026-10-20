@@ -3,7 +3,7 @@ export * as BrainSettings from "./settings.js"
 import type { Permission } from "@ren/schema/permission"
 import type { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
-import type { SessionSettings } from "@ren/schema/session-settings"
+import type { SessionSettings } from "@ren/schema/session/settings"
 import type { Settings } from "@ren/schema/settings"
 import { Array, Effect, Option, Ref, Schema, Semaphore } from "effect"
 
