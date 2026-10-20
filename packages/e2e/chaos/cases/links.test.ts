@@ -15,21 +15,21 @@ const failed = (work: Promise<unknown>) =>
 const inWindow = () => Date.now() + 4 * 60_000
 
 describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
-  const lane: { stack?: Stack.Instance; hand?: Stack.Hand } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
 
   const current = () => {
-    if (!lane.stack || !lane.hand) throw new Error("the stack did not start")
-    return { stack: lane.stack, hand: lane.hand }
+    if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
+    return { stack: lane.stack, environment: lane.environment }
   }
 
   beforeAll(async () => {
     lane.stack = await Stack.start()
-    lane.hand = await lane.stack.hand("links")
+    lane.environment = await lane.stack.environment("links")
   }, 180_000)
 
   afterAll(() => lane.stack?.dispose())
 
-  const attached = () => current().stack.session({ hand: current().hand })
+  const attached = () => current().stack.session({ environment: current().environment })
 
   const ledgerTurn = async (session: SessionDriver.Driver, label: string) => {
     const marker = Ledger.marker(label)
@@ -126,26 +126,26 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
     })
   })
 
-  describe("brain to hand", () => {
+  describe("brain to environment", () => {
     test("a spawn refused before delivery fails the tool and leaves no side effect", async () => {
       const lanes = current()
       const session = await attached()
-      const fault = lanes.hand.proxy.inject({ operation: "process.spawn" }, { type: "refuse" })
+      const fault = lanes.environment.proxy.inject({ operation: "process.spawn" }, { type: "refuse" })
       const run = await ledgerTurn(session, "spawn-refused")
       await run.turn.script.called(2, 60_000)
       fault.expectApplied()
-      expect(await Ledger.count(lanes.hand.instance, run.marker)).toBe(0)
+      expect(await Ledger.count(lanes.environment.instance, run.marker)).toBe(0)
     })
 
     test("a spawn whose reply is lost ran once and is not resent by the brain", async () => {
       const lanes = current()
       const session = await attached()
-      const fault = lanes.hand.proxy.inject({ operation: "process.spawn" }, { type: "drop-response" })
+      const fault = lanes.environment.proxy.inject({ operation: "process.spawn" }, { type: "drop-response" })
       const run = await ledgerTurn(session, "spawn-dropped")
       await run.turn.script.called(2, 60_000)
       expect(fault.expectApplied().boundary).toBe("after-commit-before-reply")
-      expect(await Ledger.count(lanes.hand.instance, run.marker)).toBe(1)
-      expect(lanes.hand.proxy.seen.filter((entry) => entry.body.includes(run.marker))).toHaveLength(1)
+      expect(await Ledger.count(lanes.environment.instance, run.marker)).toBe(1)
+      expect(lanes.environment.proxy.seen.filter((entry) => entry.body.includes(run.marker))).toHaveLength(1)
     })
   })
 
@@ -154,7 +154,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       const stack = current().stack
       const key = Stack.freshKey("refuse")
       const session = await stack.session({ models: stack.access(key, inWindow()) })
-      const fault = stack.issuerProxy.inject({ operation: "POST /brain/models/refresh" }, { type: "refuse" })
+      const fault = stack.issuerProxy.inject({ operation: "POST /host/models/refresh" }, { type: "refuse" })
       const turn = await session.turn([ModelProvider.text("fallback")])
       expect((await turn.script.called(1)).key).toBe(key)
       expect(fault.expectApplied().boundary).toBe("before-delivery")
@@ -172,7 +172,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       })
       const session = await stack.session({ models: stack.access(key, inWindow()) })
       const from = stack.provider.calls.length
-      const fault = stack.issuerProxy.inject({ operation: "POST /brain/models/refresh" }, { type: "drop-response" })
+      const fault = stack.issuerProxy.inject({ operation: "POST /host/models/refresh" }, { type: "drop-response" })
       const first = await session.turn([ModelProvider.text("first")])
       await first.script.called(1)
       await session.settled()
@@ -189,7 +189,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       stack.issuer.next(() => ({ type: "grant", access: stack.access(Stack.freshKey("rotated"), inWindow()) }))
       const key = Stack.freshKey("current")
       const session = await stack.session({ models: stack.access(key, inWindow()) })
-      const lost = stack.issuerProxy.inject({ operation: "POST /brain/models/refresh" }, { type: "drop-response" })
+      const lost = stack.issuerProxy.inject({ operation: "POST /host/models/refresh" }, { type: "drop-response" })
       const from = stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").length
       const keyOfTurn = async (text: string) => {
         const turn = await session.turn([ModelProvider.text(text)])
@@ -250,11 +250,11 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       )
       await turn.script.called(2, 60_000)
       await session.settled(90_000)
-      expect(await Ledger.count(lanes.hand.instance, marker)).toBe(1)
+      expect(await Ledger.count(lanes.environment.instance, marker)).toBe(1)
     })
   })
 
-  test("a hand outage and an issuer outage together end the tool cleanly and keep credentials intact", async () => {
+  test("an environment outage and an issuer outage together end the tool cleanly and keep credentials intact", async () => {
     const lanes = current()
     const session = await attached()
     const host = await lanes.stack.issuer.issue(session.sessionId)
@@ -262,11 +262,11 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       204,
     )
     lanes.stack.issuer.next(() => ({ type: "unavailable" }))
-    lanes.hand.proxy.partition(true)
+    lanes.environment.proxy.partition(true)
     const broken = await ledgerTurn(session, "both-down")
     await broken.turn.script.called(2, 90_000)
-    lanes.hand.proxy.partition(false)
-    expect(await Ledger.count(lanes.hand.instance, broken.marker)).toBe(0)
+    lanes.environment.proxy.partition(false)
+    expect(await Ledger.count(lanes.environment.instance, broken.marker)).toBe(0)
     lanes.stack.issuer.next(() => ({
       type: "grant",
       access: lanes.stack.access(Stack.freshKey("renewed"), Date.now() + 3_600_000),
@@ -274,7 +274,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
     const from = lanes.stack.issuer.calls.filter((call) => call.endpoint === "models.refresh").length
     const healthy = await ledgerTurn(session, "both-up")
     await healthy.turn.script.called(2, 60_000)
-    expect(await Ledger.count(lanes.hand.instance, healthy.marker)).toBe(1)
+    expect(await Ledger.count(lanes.environment.instance, healthy.marker)).toBe(1)
     expect(
       lanes.stack.issuer.calls
         .filter((call) => call.endpoint === "models.refresh")

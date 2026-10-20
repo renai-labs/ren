@@ -11,21 +11,21 @@ const retries = 10
 const windowMs = 5 * 60_000
 
 describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () => {
-  const lane: { stack?: Stack.Instance; hand?: Stack.Hand } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
 
   const current = () => {
-    if (!lane.stack || !lane.hand) throw new Error("the stack did not start")
-    return { stack: lane.stack, hand: lane.hand }
+    if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
+    return { stack: lane.stack, environment: lane.environment }
   }
 
   beforeAll(async () => {
     lane.stack = await Stack.start()
-    lane.hand = await lane.stack.hand("model-provider")
+    lane.environment = await lane.stack.environment("model-provider")
   }, 180_000)
 
   afterAll(() => lane.stack?.dispose())
 
-  const attached = () => current().stack.session({ hand: current().hand })
+  const attached = () => current().stack.session({ environment: current().environment })
 
   test("a 429 with Retry-After is retried after the delay and the turn completes", async () => {
     const session = await current().stack.session()
@@ -73,7 +73,7 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
     ])
     await turn.script.called(2, 60_000)
     await session.settled(90_000)
-    expect(await Ledger.count(current().hand.instance, marker)).toBe(1)
+    expect(await Ledger.count(current().environment.instance, marker)).toBe(1)
   })
 
   test.each([
@@ -82,14 +82,14 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
     ["an unknown tool", [ModelProvider.tool("chaos_unknown_tool", { anything: true }), ModelProvider.text("after")]],
     ["an early end of stream", [{ type: "eof" }]],
   ] as const)(
-    "%s ends the turn without running anything on the hand",
+    "%s ends the turn without running anything on the environment",
     async (_name, steps) => {
       const session = await attached()
-      const before = current().hand.proxy.count("process.spawn")
+      const before = current().environment.proxy.count("process.spawn")
       const turn = await session.turn(steps)
       await turn.script.called(1)
       expect(SessionDriver.lastIdle(await session.settled(150_000))).toBeDefined()
-      expect(current().hand.proxy.count("process.spawn")).toBe(before)
+      expect(current().environment.proxy.count("process.spawn")).toBe(before)
     },
     180_000,
   )
@@ -104,7 +104,7 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
     })
     const session = await stack.session({
       models: stack.access(Stack.freshKey("start"), Date.now() + windowMs - 60_000),
-      hand: current().hand,
+      environment: current().environment,
     })
     const turn = await session.turn([
       ...Array.from({ length: 3 }, () => ModelProvider.tool("shell", { command: "sleep 3" })),

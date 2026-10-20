@@ -9,12 +9,18 @@
 | `packages/db`              | Drizzle tables, migrations, Postgres layers, isolated test databases             |
 | `packages/core`            | Domain services and layers. No HTTP                                              |
 | `packages/server`          | HTTP handlers, middleware and runtime composition. The API process               |
+| `packages/host-api`        | Internal contracts between Ren and a session's host                              |
+| `packages/cell`            | A session host (Durable Object) running a brain with the OpenCode harness        |
+| `packages/brain`           | Brain code shared by every host: how a brain reaches its environment             |
+| `packages/environment-api` | Internal contract between a brain and an environment's executor                  |
+| `packages/executor`        | Server inside an environment that runs a session's processes and files           |
 | `packages/httpapi-codegen` | Build-time generator from `HttpApi` to typed clients                             |
 | `packages/client`          | Generated Promise and Effect clients                                             |
 | `packages/sdk`             | Public SDK (`@renai-labs/sdk`) built on the client                               |
 | `packages/cli`             | The `ren` command (`@renai-labs/cli`)                                            |
 | `packages/util`            | Shared Effect and platform helpers                                               |
 | `packages/ui`              | React design system                                                              |
+| `packages/storybook`       | Stories and browser tests for `ui`                                               |
 | `packages/app`             | Product web app (Vite + React)                                                   |
 | `packages/site`            | Docs and marketing site (Astro + Starlight)                                      |
 | `packages/e2e`             | End-to-end tests across server, client, CLI and app (Playwright)                 |
@@ -23,6 +29,22 @@
 | `specs/`                   | Specifications for behavior that spans modules                                   |
 | `.opencode/`               | Agent commands and skills                                                        |
 | `.github/`                 | CI workflows, PR and issue templates                                             |
+
+## APIs
+
+Each contract lives in a package both sides import. The serving package holds the handlers.
+
+| API              | Served by | Called by     | Contract                                          |
+| ---------------- | --------- | ------------- | ------------------------------------------------- |
+| `Api`            | server    | app, CLI, SDK | `packages/protocol/src/api.ts`                    |
+| `RenHostApi`     | server    | cell          | `packages/host-api/src/ren-host-api.ts`           |
+| `BrainApi`       | cell      | server (core) | `packages/host-api/src/brain-api.ts`              |
+| `EnvironmentApi` | executor  | brain         | `packages/environment-api/src/environment-api.ts` |
+
+```
+app / CLI / SDK --Api--> server --BrainApi--> cell (brain) --EnvironmentApi--> executor (environment)
+                         server <--RenHostApi-- cell
+```
 
 ## Quick start
 

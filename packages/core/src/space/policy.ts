@@ -4,7 +4,7 @@ import { Auth } from "@ren/schema/auth"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { Space } from "@ren/schema/space"
-import { SpaceEnvironment } from "@ren/schema/space-environment"
+import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { SpaceMember } from "@ren/schema/space-member"
 import { isNotNull, or, sql } from "drizzle-orm"
 import type { Access } from "../access.js"
@@ -28,7 +28,7 @@ const spaceActions = Primitive.actions(Space.definition, ["get", "update", "arch
 
 const memberActions = Primitive.actions(SpaceMember.definition)
 
-const spaceEnvironmentActions = Primitive.actions(SpaceEnvironment.definition)
+const spaceEnvironmentTemplateActions = Primitive.actions(SpaceEnvironmentTemplate.definition)
 
 export const documents = [
   {
@@ -47,10 +47,10 @@ export const documents = [
     ],
   },
   {
-    primitive: SpaceEnvironment.definition.name,
+    primitive: SpaceEnvironmentTemplate.definition.name,
     statements: [
-      { actions: spaceEnvironmentActions, roles: administratorRoles, on: Policy.everywhere },
-      { actions: spaceEnvironmentActions, roles: organizationRoles, on: spaceMember.name },
+      { actions: spaceEnvironmentTemplateActions, roles: administratorRoles, on: Policy.everywhere },
+      { actions: spaceEnvironmentTemplateActions, roles: organizationRoles, on: spaceMember.name },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>

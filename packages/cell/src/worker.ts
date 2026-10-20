@@ -1,4 +1,4 @@
-import { SessionToken } from "@ren/brain-api/session-token"
+import { SessionToken } from "@ren/host-api/session-token"
 import { Session } from "@ren/schema/session"
 import { Effect, Option, Schema } from "effect"
 import { Brain } from "./brain.js"

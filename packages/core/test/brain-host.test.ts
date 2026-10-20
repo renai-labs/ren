@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { Shared, TestToken } from "@ren/cell/testing"
-import { StartBody } from "@ren/brain-api/brain-api"
-import { SessionToken } from "@ren/brain-api/session-token"
-import { Signature } from "@ren/hand-api/signature"
+import { StartBody } from "@ren/host-api/brain-api"
+import { SessionToken } from "@ren/host-api/session-token"
+import { Signature } from "@ren/environment-api/signature"
 import { Testing } from "@ren/db/testing"
-import { Environment } from "@ren/schema/environment"
+import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
@@ -29,11 +29,11 @@ import {
 import { Base64Url } from "effect/encoding"
 import { TestClock } from "effect/testing"
 import { BrainHost } from "../src/brain-host.js"
-import { HandProvider } from "../src/hand-provider.js"
-import { Hands } from "../src/hands.js"
+import { EnvironmentProvider } from "../src/environment-provider.js"
+import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
-import { TestProvider } from "./lib/hand-provider.js"
+import { TestProvider } from "./lib/environment-provider.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 
@@ -502,12 +502,12 @@ describe("BrainHost", () => {
         Host.layerWith(
           { CELL_URL: cellUrl, CELL_KEYS: settings.CELL_KEYS },
           fixed,
-          Layer.fresh(Hands.layer).pipe(
-            Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
+          Layer.fresh(Environments.layer).pipe(
+            Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
             Layer.provide(
               ConfigProvider.layer(
                 ConfigProvider.fromUnknown({
-                  HAND_KEYS: JSON.stringify([
+                  ENVIRONMENT_KEYS: JSON.stringify([
                     {
                       id: keys.privateKey.id,
                       key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(keys.privateKey.key),
@@ -522,7 +522,12 @@ describe("BrainHost", () => {
       return Context.get(context, BrainHost.Service)
     })
     const environmentIt = testEffect(Testing.layer)
-    const startOn = (brain: BrainHost.Interface, sessionId: Session.ID, org: Auth.OrganizationID, id: Environment.ID) =>
+    const startOn = (
+      brain: BrainHost.Interface,
+      sessionId: Session.ID,
+      org: Auth.OrganizationID,
+      id: EnvironmentTemplate.ID,
+    ) =>
       Effect.flatMap(Seed.team(org), (spaceId) =>
         brain.start(
           {
@@ -530,48 +535,52 @@ describe("BrainHost", () => {
             harness: "opencode",
             instructions: {},
             interactive: true,
-            environmentId: id,
+            environmentTemplateId: id,
           },
           { organizationId: org, spaceId },
         ),
       )
 
-    environmentIt.live("start gives the cell the session's environment, also on a later start that names none", () =>
-      Effect.gen(function* () {
-        const cell = yield* recordingCell()
-        const brain = yield* hostWith(cell.url)
-        const org = yield* Seed.organization()
-        const environmentId = yield* Seed.environment(org)
-        const sessionId = Session.ID.create()
-        yield* startOn(brain, sessionId, org, environmentId)
-        yield* brain.start(
-          { sessionId, harness: "opencode", instructions: {}, interactive: true },
-          { organizationId: org, spaceId: yield* Seed.team(org) },
-        )
-        expect(cell.starts.map((input) => input.directory)).toEqual([
-          `/workspace/${sessionId}`,
-          `/workspace/${sessionId}`,
-        ])
-        const access = yield* brain.accessHand({ sessionId, organizationId: org })
-        expect(access.directory).toBe(`/workspace/${sessionId}`)
-      }),
+    environmentIt.live(
+      "start gives the cell the session's environment template, also on a later start that names none",
+      () =>
+        Effect.gen(function* () {
+          const cell = yield* recordingCell()
+          const brain = yield* hostWith(cell.url)
+          const org = yield* Seed.organization()
+          const environmentTemplateId = yield* Seed.environmentTemplate(org)
+          const sessionId = Session.ID.create()
+          yield* startOn(brain, sessionId, org, environmentTemplateId)
+          yield* brain.start(
+            { sessionId, harness: "opencode", instructions: {}, interactive: true },
+            { organizationId: org, spaceId: yield* Seed.team(org) },
+          )
+          expect(cell.starts.map((input) => input.directory)).toEqual([
+            `/workspace/${sessionId}`,
+            `/workspace/${sessionId}`,
+          ])
+          const access = yield* brain.accessEnvironment({ sessionId, organizationId: org })
+          expect(access.directory).toBe(`/workspace/${sessionId}`)
+        }),
     )
 
-    environmentIt.live("Ren refuses an unknown environment, or a change of environment, before it calls the cell", () =>
-      Effect.gen(function* () {
-        const cell = yield* recordingCell()
-        const brain = yield* hostWith(cell.url)
-        const org = yield* Seed.organization()
-        const environmentId = yield* Seed.environment(org)
-        const sessionId = Session.ID.create()
-        const unknown = yield* startOn(brain, sessionId, org, Environment.ID.create()).pipe(Effect.flip)
-        expect(unknown._tag).toBe("BrainRejectedError")
-        expect(cell.starts).toEqual([])
-        yield* startOn(brain, sessionId, org, environmentId)
-        const changed = yield* startOn(brain, sessionId, org, yield* Seed.environment(org)).pipe(Effect.flip)
-        expect(changed._tag).toBe("BrainRejectedError")
-        expect(cell.starts.length).toBe(1)
-      }),
+    environmentIt.live(
+      "Ren refuses an unknown environment template, or a change of environment template, before it calls the cell",
+      () =>
+        Effect.gen(function* () {
+          const cell = yield* recordingCell()
+          const brain = yield* hostWith(cell.url)
+          const org = yield* Seed.organization()
+          const environmentTemplateId = yield* Seed.environmentTemplate(org)
+          const sessionId = Session.ID.create()
+          const unknown = yield* startOn(brain, sessionId, org, EnvironmentTemplate.ID.create()).pipe(Effect.flip)
+          expect(unknown._tag).toBe("BrainRejectedError")
+          expect(cell.starts).toEqual([])
+          yield* startOn(brain, sessionId, org, environmentTemplateId)
+          const changed = yield* startOn(brain, sessionId, org, yield* Seed.environmentTemplate(org)).pipe(Effect.flip)
+          expect(changed._tag).toBe("BrainRejectedError")
+          expect(cell.starts.length).toBe(1)
+        }),
     )
 
     environmentIt.live("a start that the cell refuses removes the binding that it made", () =>
@@ -580,25 +589,27 @@ describe("BrainHost", () => {
         const brain = yield* hostWith(cell.url)
         const org = yield* Seed.organization()
         const sessionId = Session.ID.create()
-        expect((yield* startOn(brain, sessionId, org, yield* Seed.environment(org)).pipe(Effect.flip))._tag).toBe(
-          "BrainRejectedError",
-        )
-        expect((yield* brain.accessHand({ sessionId, organizationId: org }).pipe(Effect.flip))._tag).toBe(
-          "HandNotFoundError",
+        expect(
+          (yield* startOn(brain, sessionId, org, yield* Seed.environmentTemplate(org)).pipe(Effect.flip))._tag,
+        ).toBe("BrainRejectedError")
+        expect((yield* brain.accessEnvironment({ sessionId, organizationId: org }).pipe(Effect.flip))._tag).toBe(
+          "EnvironmentNotFoundError",
         )
       }),
     )
 
-    environmentIt.live("two starts at once naming different environments leave the session on one", () =>
+    environmentIt.live("two starts at once naming different environment templates leave the session on one", () =>
       Effect.gen(function* () {
         const cell = yield* recordingCell()
         const brain = yield* hostWith(cell.url)
         const org = yield* Seed.organization()
-        const environmentId = yield* Seed.environment(org)
-        const other = yield* Seed.environment(org)
+        const environmentTemplateId = yield* Seed.environmentTemplate(org)
+        const other = yield* Seed.environmentTemplate(org)
         const sessionId = Session.ID.create()
         const exits = yield* Effect.all(
-          [startOn(brain, sessionId, org, environmentId), startOn(brain, sessionId, org, other)].map(Effect.exit),
+          [startOn(brain, sessionId, org, environmentTemplateId), startOn(brain, sessionId, org, other)].map(
+            Effect.exit,
+          ),
           { concurrency: "unbounded" },
         )
         expect(exits.map(Exit.isSuccess)).toEqual([true, false])

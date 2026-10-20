@@ -2,7 +2,7 @@ export * as BrainTest from "./brain.js"
 
 import { AbsolutePath, OpenCode } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { BrainApi } from "@ren/brain-api/brain-api"
+import { BrainApi } from "@ren/host-api/brain-api"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Redacted, Ref, Schema, Semaphore } from "effect"

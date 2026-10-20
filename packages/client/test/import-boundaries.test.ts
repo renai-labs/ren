@@ -12,11 +12,17 @@ const packages = {
   "@ren/core": resolve(import.meta.dir, "../../core"),
   "@ren/db": resolve(import.meta.dir, "../../db"),
   "@ren/server": resolve(import.meta.dir, "../../server"),
-  "@ren/brain-api": resolve(import.meta.dir, "../../brain-api"),
-  "@ren/hand-api": resolve(import.meta.dir, "../../hand-api"),
+  "@ren/host-api": resolve(import.meta.dir, "../../host-api"),
+  "@ren/environment-api": resolve(import.meta.dir, "../../environment-api"),
 }
 type Package = keyof typeof packages
-const serverSide: ReadonlyArray<Package> = ["@ren/core", "@ren/db", "@ren/server", "@ren/brain-api", "@ren/hand-api"]
+const serverSide: ReadonlyArray<Package> = [
+  "@ren/core",
+  "@ren/db",
+  "@ren/server",
+  "@ren/host-api",
+  "@ren/environment-api",
+]
 
 describe("public import boundaries", () => {
   test.each<{

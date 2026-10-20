@@ -1,7 +1,7 @@
-export * as E2BHand from "./e2b.js"
+export * as E2BEnvironment from "./e2b.js"
 
-import { ExecutorApi } from "@ren/hand-api/executor-api"
-import type { Hand } from "@ren/schema/hand"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import type { Environment } from "@ren/schema/environment"
 import { Schema } from "effect"
 import { ExecutorAdapter } from "./executor.js"
 import { Process } from "../process.js"
@@ -38,7 +38,7 @@ const call = async (operation: string, method: string, route: string, body?: unk
 
 export interface Sandbox {
   readonly id: string
-  readonly handId: Hand.ID
+  readonly environmentId: Environment.ID
   readonly url: string
   readonly pause: () => Promise<void>
   readonly resume: (timeoutSeconds?: number) => Promise<void>
@@ -47,7 +47,7 @@ export interface Sandbox {
   readonly state: () => Promise<string | undefined>
 }
 
-const endpoint = (sandboxId: string, target = ExecutorApi.port) => `https://${target}-${sandboxId}.${domain()}`
+const endpoint = (sandboxId: string, target = EnvironmentApi.port) => `https://${target}-${sandboxId}.${domain()}`
 
 const configure = async (
   sandboxId: string,
@@ -71,7 +71,7 @@ const configure = async (
 }
 
 export const create = async (options: {
-  readonly handId: Hand.ID
+  readonly environmentId: Environment.ID
   readonly timeoutSeconds?: number
 }): Promise<Sandbox> => {
   const template = process.env.CHAOS_E2B_TEMPLATE ?? ""
@@ -79,20 +79,20 @@ export const create = async (options: {
     await call("create", "POST", "/sandboxes", {
       templateID: template,
       timeout: options.timeoutSeconds ?? 300,
-      metadata: { "ren-hand": options.handId },
+      metadata: { "ren-environment": options.environmentId },
     }),
   )
   const id = created.sandboxID
   const remove = () => call("kill", "DELETE", `/sandboxes/${id}`)
   const forget = Process.onInterrupt(remove)
   await configure(created.sandboxID, created.envdAccessToken, {
-    EXECUTOR_HAND_ID: options.handId,
-    HAND_PUBLIC_KEYS: ExecutorAdapter.publicKeys,
-    PORT: String(ExecutorApi.port),
+    EXECUTOR_ENVIRONMENT_ID: options.environmentId,
+    ENVIRONMENT_PUBLIC_KEYS: ExecutorAdapter.publicKeys,
+    PORT: String(EnvironmentApi.port),
   })
   return {
     id,
-    handId: options.handId,
+    environmentId: options.environmentId,
     url: endpoint(id),
     pause: async () => {
       await call("pause", "POST", `/sandboxes/${id}/pause`)

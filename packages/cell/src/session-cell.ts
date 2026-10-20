@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers"
-import { HandConnections } from "@ren/brain/hand-connections"
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { Effect, Layer, ManagedRuntime } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Brain } from "./brain.js"
@@ -11,7 +11,7 @@ const connections = Layer.unwrap(
   Effect.gen(function* () {
     const info = yield* Cell.Info
     if (!info.vars.REN_URL) return Layer.empty
-    return HandConnections.layer.pipe(Layer.provide(HostAccess.layer), Layer.provide(FetchHttpClient.layer))
+    return EnvironmentConnections.layer.pipe(Layer.provide(HostAccess.layer), Layer.provide(FetchHttpClient.layer))
   }),
 )
 

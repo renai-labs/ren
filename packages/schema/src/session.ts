@@ -1,7 +1,7 @@
 export * as Session from "./session.js"
 
 import { Effect, Schema, Struct } from "effect"
-import { Environment } from "./environment.js"
+import { EnvironmentTemplate } from "./environment-template.js"
 import { Identifier } from "./identifier.js"
 
 const encoder = new TextEncoder()
@@ -101,7 +101,7 @@ export const StartInput = Schema.Struct({
   model: Schema.optionalKey(Model),
   instructions: Instructions.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
   interactive: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
-  environmentId: Schema.optionalKey(Environment.ID),
+  environmentTemplateId: Schema.optionalKey(EnvironmentTemplate.ID),
   initialMessage: Schema.optionalKey(
     SendInput.mapFields(Struct.omit(["sessionId", "delivery"])).annotate({
       identifier: "Session.InitialMessage",

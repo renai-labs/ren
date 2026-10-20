@@ -19,7 +19,7 @@
   "dependencies": {
     "@better-auth/drizzle-adapter": "catalog:",
     "@effect/platform-bun": "catalog:",
-    "@ren/brain-api": "workspace:*",
+    "@ren/host-api": "workspace:*",
     "@ren/core": "workspace:*",
     "@ren/db": "workspace:*",
     "@ren/protocol": "workspace:*",

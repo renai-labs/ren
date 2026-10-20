@@ -1,10 +1,10 @@
 import { expect } from "bun:test"
-import { HandToken } from "@ren/hand-api/hand-token"
-import { ExecutorApi } from "@ren/hand-api/executor-api"
-import { ExecutorClient } from "@ren/hand-api/executor-client"
-import { Signature } from "@ren/hand-api/signature"
+import { EnvironmentToken } from "@ren/environment-api/environment-token"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { Signature } from "@ren/environment-api/signature"
 import { Brain } from "@ren/schema/brain"
-import { Hand } from "@ren/schema/hand"
+import { Environment } from "@ren/schema/environment"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Redacted, Stream } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { RpcClientError } from "effect/rpc"
@@ -14,22 +14,32 @@ import { Socket } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { testEffect } from "./lib/effect.js"
-import { TestHand } from "./lib/test-hand.js"
+import { TestEnvironment } from "./lib/test-environment.js"
 import { Processes } from "./lib/process.js"
 
-const handId = Hand.ID.create()
+const environmentId = Environment.ID.create()
 const brain = Brain.ID.create()
 const workspace = await mkdtemp(join(tmpdir(), "ren-executor-"))
-const it = testEffect(TestHand.layer({ handId, workspace }).pipe(Layer.provideMerge(FetchHttpClient.layer)))
+const it = testEffect(
+  TestEnvironment.layer({ environmentId, workspace }).pipe(Layer.provideMerge(FetchHttpClient.layer)),
+)
 
-const token = Effect.fnUntraced(function* (claims: { readonly handId?: Hand.ID; readonly brain?: Brain.ID } = {}) {
+const token = Effect.fnUntraced(function* (
+  claims: { readonly environmentId?: Environment.ID; readonly brain?: Brain.ID } = {},
+) {
   return Redacted.value(
-    (yield* TestHand.access({ url: yield* TestHand.url, handId, brain, directory: workspace, ...claims })).token,
+    (yield* TestEnvironment.access({
+      url: yield* TestEnvironment.url,
+      environmentId,
+      brain,
+      directory: workspace,
+      ...claims,
+    })).token,
   )
 })
 
 const connect = Effect.fnUntraced(function* (bearer: string) {
-  return yield* ExecutorClient.make({ url: new URL(yield* TestHand.url), token: Effect.succeed(bearer) })
+  return yield* EnvironmentClient.make({ url: new URL(yield* TestEnvironment.url), token: Effect.succeed(bearer) })
 })
 
 const client = Effect.fnUntraced(function* (claims: { readonly brain?: Brain.ID } = {}) {
@@ -44,7 +54,7 @@ const rpc = (tag: string, payload: object | null) =>
 
 const post = Effect.fnUntraced(function* (body: string | Uint8Array, authorization?: string) {
   const http = yield* HttpClient.HttpClient
-  const request = HttpClientRequest.post(`${yield* TestHand.url}${ExecutorClient.path}`).pipe(
+  const request = HttpClientRequest.post(`${yield* TestEnvironment.url}${EnvironmentClient.path}`).pipe(
     typeof body === "string"
       ? HttpClientRequest.bodyText(body, "application/ndjson")
       : HttpClientRequest.bodyUint8Array(body, "application/ndjson"),
@@ -58,28 +68,28 @@ const post = Effect.fnUntraced(function* (body: string | Uint8Array, authorizati
 const refused = Effect.fnUntraced(function* () {
   const valid = yield* token()
   const other = yield* Signature.generate("other")
-  const impostor = yield* Signature.generate(TestHand.keys.publicKey.id)
-  const claims = { hand: handId, brain, exp: Math.floor(Date.now() / 1000) + 600 }
+  const impostor = yield* Signature.generate(TestEnvironment.keys.publicKey.id)
+  const claims = { environment: environmentId, brain, exp: Math.floor(Date.now() / 1000) + 600 }
   return [
     {
       name: "a key the executor does not know",
-      authorization: `Bearer ${yield* HandToken.sign(other.privateKey, claims)}`,
+      authorization: `Bearer ${yield* EnvironmentToken.sign(other.privateKey, claims)}`,
     },
     {
       name: "a known key id signed by another key",
-      authorization: `Bearer ${yield* HandToken.sign(impostor.privateKey, claims)}`,
+      authorization: `Bearer ${yield* EnvironmentToken.sign(impostor.privateKey, claims)}`,
     },
     {
       name: "another token type",
-      authorization: `Bearer ${yield* Signature.sign(TestHand.keys.privateKey, { ...claims, typ: "host" })}`,
+      authorization: `Bearer ${yield* Signature.sign(TestEnvironment.keys.privateKey, { ...claims, typ: "host" })}`,
     },
     {
       name: "a token for another environment",
-      authorization: `Bearer ${yield* token({ handId: Hand.ID.create() })}`,
+      authorization: `Bearer ${yield* token({ environmentId: Environment.ID.create() })}`,
     },
     {
       name: "an expired token",
-      authorization: `Bearer ${Redacted.value((yield* TestHand.access({ url: yield* TestHand.url, handId, brain, directory: workspace, issuedAt: Date.now() - 3_600_000 })).token)}`,
+      authorization: `Bearer ${Redacted.value((yield* TestEnvironment.access({ url: yield* TestEnvironment.url, environmentId, brain, directory: workspace, issuedAt: Date.now() - 3_600_000 })).token)}`,
     },
     { name: "another scheme", authorization: `Basic ${valid}` },
   ]
@@ -88,7 +98,7 @@ const refused = Effect.fnUntraced(function* () {
 it.live("answers a bad token before it decodes the payload", () =>
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient
-    const invalidSpawn = HttpClientRequest.post(`${yield* TestHand.url}${ExecutorClient.path}`).pipe(
+    const invalidSpawn = HttpClientRequest.post(`${yield* TestEnvironment.url}${EnvironmentClient.path}`).pipe(
       HttpClientRequest.bodyText(
         `${JSON.stringify({ _tag: "Request", id: "1", tag: "process.spawn", payload: { command: 42 }, headers: [] })}\n`,
         "application/ndjson",
@@ -104,7 +114,9 @@ it.live("answers a bad token before it decodes the payload", () =>
     }
     expect(yield* answer(invalidSpawn)).toEqual(unauthorized)
     expect(
-      yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* token({ handId: Hand.ID.create() })))),
+      yield* answer(
+        invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* token({ environmentId: Environment.ID.create() }))),
+      ),
     ).toEqual(unauthorized)
     expect(yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken("not.a-token")))).toEqual(unauthorized)
     const decoded = yield* answer(invalidSpawn.pipe(HttpClientRequest.bearerToken(yield* token())))
@@ -115,12 +127,12 @@ it.live("answers a bad token before it decodes the payload", () =>
 
 it.live("gives a client with a bad token the typed UnauthorizedError", () =>
   Effect.gen(function* () {
-    const foreign = yield* connect(yield* token({ handId: Hand.ID.create() }))
+    const foreign = yield* connect(yield* token({ environmentId: Environment.ID.create() }))
     const empty = yield* connect("")
     const errors = yield* Effect.forEach([foreign, empty], (api) =>
       Effect.all([
         api["files.stat"]({ path: "." }).pipe(Effect.flip),
-        api["process.output"]({ id: ExecutorApi.ProcessID.create() }).pipe(Stream.runDrain, Effect.flip),
+        api["process.output"]({ id: EnvironmentApi.ProcessID.create() }).pipe(Stream.runDrain, Effect.flip),
       ]),
     )
     expect(errors.flat()).toEqual(
@@ -155,7 +167,7 @@ it.live("returns the declared errors", () =>
       "ProcessNotFoundError",
     )
     expect(
-      (yield* api["process.kill"]({ id: ExecutorApi.ProcessID.create(), signal: "SIGTERM" }).pipe(Effect.flip))._tag,
+      (yield* api["process.kill"]({ id: EnvironmentApi.ProcessID.create(), signal: "SIGTERM" }).pipe(Effect.flip))._tag,
     ).toBe("ProcessNotFoundError")
     yield* api["process.kill"]({ id: spawned.id, signal: "SIGKILL" })
   }),
@@ -183,7 +195,7 @@ it.live("refuses a token of another type, from an unknown key or scheme, and tak
     const valid = yield* token()
     const lowercase = yield* post(hello, `bearer ${valid}`)
     expect(lowercase.status).toBe(200)
-    expect(lowercase.body).toContain(handId)
+    expect(lowercase.body).toContain(environmentId)
   }),
 )
 
@@ -191,7 +203,7 @@ it.live("answers a token for another environment with 401 and starts no process"
   Effect.gen(function* () {
     const marker = `ren-d4-${crypto.randomUUID()}`
     const spawn = rpc("process.spawn", { command: "sh", arguments: ["-c", "sleep 30; true", marker] })
-    const foreign = yield* post(spawn, `Bearer ${yield* token({ handId: Hand.ID.create() })}`)
+    const foreign = yield* post(spawn, `Bearer ${yield* token({ environmentId: Environment.ID.create() })}`)
     expect(foreign.status).toBe(401)
     expect(foreign.body).not.toContain("prc_")
     expect(Processes.matching(marker)).toEqual([])
@@ -240,9 +252,9 @@ it.live("refuses an Authorization header with no token, two tokens or 64 KiB of 
 
 it.effect("keeps streaming output to a reader whose token expires, and refuses that token afterwards", () =>
   Effect.gen(function* () {
-    const expiring = yield* TestHand.access({
-      url: yield* TestHand.url,
-      handId,
+    const expiring = yield* TestEnvironment.access({
+      url: yield* TestEnvironment.url,
+      environmentId,
       brain,
       directory: workspace,
       issuedAt: 0,
@@ -278,7 +290,7 @@ it.effect("keeps streaming output to a reader whose token expires, and refuses t
 it.live("refuses a negative cursor in the schema, and keeps serving", () =>
   Effect.gen(function* () {
     const bearer = `Bearer ${yield* token()}`
-    const answer = yield* post(rpc("process.output", { id: ExecutorApi.ProcessID.create(), cursor: -1 }), bearer)
+    const answer = yield* post(rpc("process.output", { id: EnvironmentApi.ProcessID.create(), cursor: -1 }), bearer)
     expect(answer.body).toContain("Die")
     expect(answer.body).toContain("Expected a value greater than or equal to 0")
     expect((yield* post(rpc("executor.hello", null), bearer)).status).toBe(200)
@@ -308,7 +320,7 @@ it.live(
         return Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined
       })
       const large = yield* write(9)
-      expect(large instanceof ExecutorApi.FileTooLargeError).toBe(true)
+      expect(large instanceof EnvironmentApi.FileTooLargeError).toBe(true)
       const framed = yield* write(20)
       expect(framed instanceof Error && framed.message).toContain("RPC serialization buffer exceeded")
       const refused = yield* write(100)
@@ -344,7 +356,7 @@ it.live(
       expect(accepted).toBeLessThanOrEqual(32)
       expect(failures).toHaveLength(160 - accepted)
       expect(failures.map((failure) => failure._tag)).toEqual(Array(160 - accepted).fill("StdinFullError"))
-      expect(failures.some(ExecutorClient.isNoAnswer)).toBe(false)
+      expect(failures.some(EnvironmentClient.isNoAnswer)).toBe(false)
       yield* api["process.kill"]({ id: spawned.id, signal: "SIGKILL" })
       const events = yield* api["process.output"]({ id: spawned.id }).pipe(Stream.runCollect)
       expect(events.at(-1)).toEqual({ type: "exit", exitCode: null, signal: "SIGKILL" })
@@ -357,7 +369,7 @@ it.live(
   () =>
     Effect.gen(function* () {
       const bearer = `Bearer ${yield* token()}`
-      const address = new URL(yield* TestHand.url)
+      const address = new URL(yield* TestEnvironment.url)
       const startedAt = Date.now()
       const stalled = (options: { readonly trickle: boolean }) =>
         Effect.promise(
@@ -365,7 +377,7 @@ it.live(
             new Promise<number>((resolve) => {
               const socket = new Socket().connect(Number(address.port), address.hostname, () => {
                 socket.write(
-                  `POST ${ExecutorClient.path} HTTP/1.1\r\nHost: ${address.host}\r\nAuthorization: ${bearer}\r\nContent-Type: application/ndjson\r\nContent-Length: 1000\r\n\r\n{"_tag":"Request"`,
+                  `POST ${EnvironmentClient.path} HTTP/1.1\r\nHost: ${address.host}\r\nAuthorization: ${bearer}\r\nContent-Type: application/ndjson\r\nContent-Length: 1000\r\n\r\n{"_tag":"Request"`,
                 )
                 const timer = options.trickle ? setInterval(() => socket.write(" "), 4000) : undefined
                 socket.on("close", () => clearInterval(timer))

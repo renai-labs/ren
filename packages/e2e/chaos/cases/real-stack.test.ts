@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { HandConnections } from "@ren/brain/hand-connections"
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { Duration } from "effect"
 import { Platform } from "../lib/platform.js"
 import { ModelProvider } from "../lib/provider/model.js"
@@ -128,7 +128,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       await full().container.restart()
       full().retarget()
       const result = (await turn.called(2, 120_000)).toolResults
-      expect([result.includes("hand disconnected"), result.includes("finished")]).toEqual([true, false])
+      expect([result.includes("environment disconnected"), result.includes("finished")]).toEqual([true, false])
       expect(Date.now() - started).toBeLessThan(60_000)
       await session.settled()
       expect(await session.tool("shell", { command: "echo back" })).toBe("back\n")
@@ -183,7 +183,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       await stack().startServer()
       expect([down, expired.includes("Ren does not answer")]).toEqual(["cached\n", true])
       // ast-grep-ignore: no-test-sleep -- the brain asks Ren again 30 seconds after a failure, in real time
-      await Bun.sleep(Duration.toMillis(HandConnections.retryRenAfter) + 1_000)
+      await Bun.sleep(Duration.toMillis(EnvironmentConnections.retryRenAfter) + 1_000)
       expect(await session.tool("shell", { command: "echo back" })).toBe("back\n")
     }, 600_000)
 
@@ -232,7 +232,11 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
 
     test("a refused token request names the cause, the brain does not ask again for 30 seconds, and then the call works", async () => {
       const session = await stack().session()
-      const rule = stack().renProxy.inject({ operation: "POST /brain/hand/access" }, { type: "status", status: 403 }, 1)
+      const rule = stack().renProxy.inject(
+        { operation: "POST /host/environment/access" },
+        { type: "status", status: 403 },
+        1,
+      )
       const refused = await session.tool("shell", { command: "echo refused" })
       expect([rule.applied(), refused.includes("Unable to execute"), refused.includes("refused\n")]).toEqual([
         true,
@@ -243,7 +247,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       expect(await session.tool("shell", { command: "echo soon" })).toContain("StatusCode error (403 POST")
       expect(stack().issued()).toBe(asked)
       // ast-grep-ignore: no-test-sleep -- the brain asks Ren again 30 seconds after a failure, in real time
-      await Bun.sleep(Duration.toMillis(HandConnections.retryRenAfter) + 1_000)
+      await Bun.sleep(Duration.toMillis(EnvironmentConnections.retryRenAfter) + 1_000)
       expect(await session.tool("shell", { command: "echo allowed" })).toBe("allowed\n")
     }, 600_000)
   },

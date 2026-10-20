@@ -1,35 +1,35 @@
 import { describe, expect } from "bun:test"
 import { BunServices } from "@effect/platform-bun"
-import { ExecutorVariables } from "@ren/hand-api/executor-variables"
-import { HandToken } from "@ren/hand-api/hand-token"
-import { ExecutorClient } from "@ren/hand-api/executor-client"
-import { Image, TestHand } from "@ren/executor/testing"
+import { ExecutorVariables } from "@ren/environment-api/executor-variables"
+import { EnvironmentToken } from "@ren/environment-api/environment-token"
+import { EnvironmentClient } from "@ren/environment-api/environment-client"
+import { Image, TestEnvironment } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
+import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
-import { Hand } from "@ren/schema/hand"
 import { Effect, Layer } from "effect"
 import { FetchHttpClient } from "effect/http"
-import { Docker } from "../src/hand-provider/docker.js"
+import { Docker } from "../src/environment-provider/docker.js"
 import { testEffect } from "./lib/effect.js"
 
 const hasDocker = Bun.spawnSync(["docker", "info"], { stdout: "ignore", stderr: "ignore" }).exitCode === 0
 
 const it = testEffect(Layer.mergeAll(BunServices.layer, FetchHttpClient.layer))
 
-describe.skipIf(!hasDocker)("the Docker hand provider", () => {
+describe.skipIf(!hasDocker)("the Docker environment provider", () => {
   it.live(
-    "makes one container for a hand however often it is asked, serves Ren's executor there, and destroys it",
+    "makes one container for an environment however often it is asked, serves Ren's executor there, and destroys it",
     () =>
       Effect.gen(function* () {
         const provider = yield* Docker.provider
         const image = yield* Effect.promise(Image.build)
         const config = yield* provider.check({ image, memoryMiB: 512 })
-        const handId = Hand.ID.create()
+        const environmentId = Environment.ID.create()
         const input = {
-          handId,
-          environmentId: Environment.ID.create(),
+          environmentId,
+          environmentTemplateId: EnvironmentTemplate.ID.create(),
           config,
-          variables: ExecutorVariables.make(handId, [TestHand.keys.publicKey]),
+          variables: ExecutorVariables.make(environmentId, [TestEnvironment.keys.publicKey]),
         }
         const bindings = yield* Effect.all([provider.provision(input), provider.provision(input)], {
           concurrency: "unbounded",
@@ -37,20 +37,20 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
         expect(bindings[1]).toEqual(bindings[0])
         yield* Effect.addFinalizer(() => provider.destroy(bindings[0]).pipe(Effect.ignore))
         const endpoint = yield* provider.connect(bindings[0])
-        const token = yield* HandToken.sign(TestHand.keys.privateKey, {
-          hand: input.handId,
+        const token = yield* EnvironmentToken.sign(TestEnvironment.keys.privateKey, {
+          environment: input.environmentId,
           brain: Brain.ID.create(),
           exp: Math.floor(Date.now() / 1000) + 60,
         })
-        const client = yield* ExecutorClient.make({ url: endpoint.url, token: Effect.succeed(token) })
+        const client = yield* EnvironmentClient.make({ url: endpoint.url, token: Effect.succeed(token) })
         const hello = yield* client["executor.hello"]()
-        expect(hello.handId).toBe(input.handId)
+        expect(hello.environmentId).toBe(input.environmentId)
         const written = new TextEncoder().encode("written by the executor")
         yield* client["files.write"]({ path: "session/note.txt", bytes: written })
         expect((yield* client["files.read"]({ path: "session/note.txt" })).bytes).toEqual(written)
         yield* provider.destroy(bindings[0])
         yield* provider.destroy(bindings[0])
-        expect((yield* provider.connect(bindings[0]).pipe(Effect.flip))._tag).toBe("HandProvider.Gone")
+        expect((yield* provider.connect(bindings[0]).pipe(Effect.flip))._tag).toBe("EnvironmentProvider.Gone")
       }),
     180_000,
   )
@@ -58,7 +58,7 @@ describe.skipIf(!hasDocker)("the Docker hand provider", () => {
   it.live("refuses a config without an image, and says so for the form", () =>
     Effect.gen(function* () {
       const provider = yield* Docker.provider
-      expect((yield* provider.check({ cpus: 1 }).pipe(Effect.flip))._tag).toBe("HandProvider.InvalidConfig")
+      expect((yield* provider.check({ cpus: 1 }).pipe(Effect.flip))._tag).toBe("EnvironmentProvider.InvalidConfig")
       expect(provider.info.configSchema).toMatchObject({
         schema: { required: ["image"], properties: { image: { title: "Image" } } },
       })

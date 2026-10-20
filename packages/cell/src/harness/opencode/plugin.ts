@@ -4,7 +4,7 @@ import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Tool } from "@opencode/schema/tool"
-import { HandConnections } from "@ren/brain/hand-connections"
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Clock, DateTime, Deferred, Effect, Option, Predicate, Redacted, Ref, Schema, Stream, Struct } from "effect"
@@ -12,7 +12,7 @@ import type { Harness } from "../harness.js"
 import { ModelProviders } from "./model-providers.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 
-const handTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
+const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
 
 export const method = IntegrationMethodID.make("ren")
 
@@ -24,12 +24,12 @@ const never = Number.MAX_SAFE_INTEGER
 
 const maxErrorDepth = 8
 
-const handFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
-  const failure = HandConnections.failureOf(value)
+const environmentFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
+  const failure = EnvironmentConnections.failureOf(value)
   if (failure) return failure
   if (depth > maxErrorDepth || !Predicate.isObject(value)) return undefined
   return ["cause", "error", "reason"]
-    .map((key) => (Predicate.hasProperty(value, key) ? handFailure(value[key], depth + 1) : undefined))
+    .map((key) => (Predicate.hasProperty(value, key) ? environmentFailure(value[key], depth + 1) : undefined))
     .find(Boolean)
 }
 
@@ -55,7 +55,7 @@ export const make = (
   reloads: Ref.Ref<ReadonlyArray<Effect.Effect<void>>>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<HandConnections.Interface>,
+  connections: Option.Option<EnvironmentConnections.Interface>,
 ) =>
   Plugin.define({
     id: "ren",
@@ -66,13 +66,13 @@ export const make = (
         const provider = context.provider
         if (Option.isNone(connections))
           yield* tool.transform((editor) => {
-            for (const id of handTools) editor.remove(id)
+            for (const id of environmentTools) editor.remove(id)
           })
         if (Option.isSome(connections))
           yield* tool.hook("execute.after", (event) =>
             Effect.sync(() => {
               if (event.status !== "error") return
-              const failure = handFailure(event.error.error)
+              const failure = environmentFailure(event.error.error)
               if (!failure || event.error.message.includes(failure.message)) return
               event.error = new Tool.Error({
                 message: `${event.error.message}: ${failure.message}`,

@@ -3,11 +3,11 @@ import { TestAccess } from "@ren/brain/testing"
 import { AbsolutePath, OpenCode, SessionMessage } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
-import { HandConnections } from "@ren/brain/hand-connections"
-import { HandAccess } from "@ren/brain/hand-access"
-import { TestHand, Processes, Relay, testEffect } from "@ren/executor/testing"
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { EnvironmentAccess } from "@ren/brain/environment/access"
+import { TestEnvironment, Processes, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Hand } from "@ren/schema/hand"
+import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Context, Deferred, Effect, Exit, Layer, Option, Ref, Schedule, Schema, Scope } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
@@ -26,13 +26,13 @@ import type { StubModel } from "./lib/stub-model.js"
 
 setDefaultTimeout(30_000)
 
-const handId = Hand.ID.create()
+const environmentId = Environment.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-")))
 const local = await realpath(await mkdtemp(join(tmpdir(), "ren-local-")))
 const stub = Shared.stub()
 const fileTools = ["read", "write", "edit", "glob", "grep", "shell"]
 
-const served = TestHand.layer({ handId, workspace })
+const served = TestEnvironment.layer({ environmentId, workspace })
 
 const it = testEffect(served)
 
@@ -42,26 +42,26 @@ const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof served> | Sco
 const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
 const accessTo = (url: string, sessionId: Session.ID) =>
-  TestHand.access({ url, handId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
+  TestEnvironment.access({ url, environmentId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
 const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effect.void) {
   const context = yield* Layer.build(TestAccess.memory(new Map()))
   const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
   const counted = Layer.succeed(
-    HandAccess.Service,
-    HandAccess.Service.of({
+    EnvironmentAccess.Service,
+    EnvironmentAccess.Service.of({
       release: () => Effect.void,
       open: (sessionId) =>
         Ref.update(opens, (count) => count + 1).pipe(
           Effect.andThen(beforeOpen),
-          Effect.andThen(Context.get(context, HandAccess.Service).open(sessionId)),
+          Effect.andThen(Context.get(context, EnvironmentAccess.Service).open(sessionId)),
         ),
     }),
   )
   const environments = Context.get(
-    yield* Layer.build(HandConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
-    HandConnections.Service,
+    yield* Layer.build(EnvironmentConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
+    EnvironmentConnections.Service,
   )
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url))
   const endpoints = Shared.access(undefined, stub.url).endpoints
@@ -131,7 +131,7 @@ const begin = Effect.fnUntraced(function* (
   const sessionId = Session.ID.create()
   const onEnvironment = options.onEnvironment ?? true
   if (onEnvironment)
-    yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* TestHand.url), sessionId))
+    yield* opened.memory.set(sessionId, yield* accessTo(options.url ?? (yield* TestEnvironment.url), sessionId))
   yield* restart(opened.harness, sessionId, onEnvironment ? folder(sessionId) : undefined, options.agent)
   const send = (script: StubModel.Script) => sendTo(opened.harness, sessionId, script)
   return {
@@ -342,7 +342,7 @@ it.live("the same start twice makes one session", () =>
   Effect.gen(function* () {
     const opened = yield* open()
     const sessionId = Session.ID.create()
-    yield* opened.memory.set(sessionId, yield* accessTo(yield* TestHand.url, sessionId))
+    yield* opened.memory.set(sessionId, yield* accessTo(yield* TestEnvironment.url, sessionId))
     yield* Effect.all(
       [restart(opened.harness, sessionId, folder(sessionId)), restart(opened.harness, sessionId, folder(sessionId))],
       {
@@ -358,7 +358,7 @@ it.live("a new session started with a first message runs that first turn on the 
   Effect.gen(function* () {
     const opened = yield* open()
     const sessionId = Session.ID.create()
-    yield* opened.memory.set(sessionId, yield* accessTo(yield* TestHand.url, sessionId))
+    yield* opened.memory.set(sessionId, yield* accessTo(yield* TestEnvironment.url, sessionId))
     const script = stub.script(shell("echo first > first.txt"))
     yield* restart(opened.harness, sessionId, folder(sessionId), undefined, {
       messageId: Session.MessageID.create(),
@@ -380,7 +380,7 @@ it.live(
       expect([deadTurn.ran, deadTurn.result]).toEqual([false, expect.stringContaining("does not answer")])
       const fileSession = Session.ID.create()
       yield* Effect.promise(() => Bun.write(folder(fileSession), "a file, not a folder"))
-      yield* opened.memory.set(fileSession, yield* accessTo(yield* TestHand.url, fileSession))
+      yield* opened.memory.set(fileSession, yield* accessTo(yield* TestEnvironment.url, fileSession))
       yield* restart(opened.harness, fileSession, folder(fileSession))
       const fileTurn = yield* refusedTurn({
         sessionId: fileSession,
@@ -395,7 +395,10 @@ it.live(
         turn: (script) =>
           sendTo(opened.harness, missing, script).pipe(Effect.andThen(Effect.promise(() => script.called(2)))),
       })
-      expect([missingTurn.ran, missingTurn.result]).toEqual([false, expect.stringContaining("No access to a hand")])
+      expect([missingTurn.ran, missingTurn.result]).toEqual([
+        false,
+        expect.stringContaining("No access to an environment"),
+      ])
     }),
 )
 
@@ -509,7 +512,7 @@ it.live("V2 the execute.after hook runs for a subagent's tool call: its failed s
         },
       }),
     )
-    expect(lastToolResult(yield* Effect.promise(() => child.called(2)))).toContain("No access to a hand")
+    expect(lastToolResult(yield* Effect.promise(() => child.called(2)))).toContain("No access to an environment")
   }),
 )
 
@@ -534,12 +537,12 @@ it.live(
     Effect.gen(function* () {
       const opened = yield* open()
       const session = yield* begin(opened)
-      const access = yield* accessTo(yield* TestHand.url, session.sessionId)
+      const access = yield* accessTo(yield* TestEnvironment.url, session.sessionId)
       yield* opened.memory.set(
         session.sessionId,
-        yield* TestHand.access({
-          url: yield* TestHand.url,
-          handId,
+        yield* TestEnvironment.access({
+          url: yield* TestEnvironment.url,
+          environmentId,
           brain: Brain.ofSession(session.sessionId),
           directory: folder(session.sessionId),
           lifetimeMs: 6_000,
@@ -553,14 +556,19 @@ it.live(
       const finished = lastToolResult(yield* Effect.promise(() => running.called(2)))
       const refused = yield* refusedTurn(session).pipe(
         Effect.repeat({
-          until: (attempt) => attempt.result.includes("No access to a hand"),
+          until: (attempt) => attempt.result.includes("No access to an environment"),
           schedule: Schedule.spaced(500),
         }),
         Effect.timeout("15 seconds"),
       )
       yield* opened.memory.set(session.sessionId, access)
       const back = lastToolResult(yield* session.turn(stub.script(shell("echo back"))))
-      expect({ finished, ran: refused.ran, noAccess: refused.result.includes("No access to a hand"), back }).toEqual({
+      expect({
+        finished,
+        ran: refused.ran,
+        noAccess: refused.result.includes("No access to an environment"),
+        back,
+      }).toEqual({
         finished: JSON.stringify("finished\n"),
         ran: false,
         noAccess: true,
@@ -571,7 +579,7 @@ it.live(
 
 it.live("a tool call fails clearly while the sandbox is down, and the next one works once it is back", () =>
   Effect.gen(function* () {
-    const relay = yield* Relay.make(Relay.portOf(yield* TestHand.url))
+    const relay = yield* Relay.make(Relay.portOf(yield* TestEnvironment.url))
     const opened = yield* open()
     const session = yield* begin(opened, { url: relay.url })
     yield* session.turn(stub.script(shell("echo warm")))
@@ -590,7 +598,7 @@ it.live("a tool call fails clearly while the sandbox is down, and the next one w
 )
 
 const frozenSandbox = Effect.gen(function* () {
-  const machinePort = Relay.portOf(yield* TestHand.url)
+  const machinePort = Relay.portOf(yield* TestEnvironment.url)
   const relay = yield* Relay.make(machinePort)
   const sockets = new Set<Socket>()
   const hole = yield* Effect.acquireRelease(

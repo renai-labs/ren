@@ -6,12 +6,17 @@ import { makeWithDefaults } from "drizzle-orm/effect-postgres"
 import { Context, Effect, Layer } from "effect"
 import { SqlError } from "effect/sql/SqlError"
 import { authRelations } from "./auth.sql.js"
-import { environmentRelations } from "./environment.sql.js"
+import { environmentTemplateRelations } from "./environment.sql.js"
 import { spaceRelations } from "./space.sql.js"
-import { spaceEnvironmentRelations } from "./space-environment.sql.js"
+import { spaceEnvironmentTemplateRelations } from "./space-environment-template.sql.js"
 
 const make = makeWithDefaults({
-  relations: { ...spaceRelations, ...authRelations, ...environmentRelations, ...spaceEnvironmentRelations },
+  relations: {
+    ...spaceRelations,
+    ...authRelations,
+    ...environmentTemplateRelations,
+    ...spaceEnvironmentTemplateRelations,
+  },
 })
 
 type Client = Effect.Success<typeof make>

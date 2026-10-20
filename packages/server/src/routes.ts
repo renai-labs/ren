@@ -1,29 +1,29 @@
 export * as Routes from "./routes.js"
 
-import { HostApi } from "@ren/brain-api/host-api"
+import { RenHostApi } from "@ren/host-api/ren-host-api"
 import { Access } from "@ren/core/access"
 import { BrainHost } from "@ren/core/brain-host"
-import { Environments } from "@ren/core/environments"
+import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Space } from "@ren/core/space"
-import { SpaceEnvironment } from "@ren/core/space/environment"
+import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
 import { Effect, Layer } from "effect"
 import { HttpEffect, HttpMiddleware, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "./api.js"
 import { Auth } from "./auth.js"
-import { HealthHandler } from "./handlers/health.js"
-import { InvitationHandler } from "./handlers/invitation.js"
-import { MeHandler } from "./handlers/me.js"
-import { EnvironmentHandler, HandProviderHandler } from "./handlers/environment.js"
-import { HostHandsHandler } from "./handlers/host-hands.js"
-import { HostHandler } from "./handlers/host.js"
-import { ModelsHandler } from "./handlers/models.js"
-import { SpaceHandler } from "./handlers/space.js"
-import { SpaceEnvironmentHandler } from "./handlers/space-environment.js"
-import { SpaceMemberHandler } from "./handlers/space-member.js"
+import { HealthHandler } from "./handlers/api/health.js"
+import { InvitationHandler } from "./handlers/api/invitation.js"
+import { MeHandler } from "./handlers/api/me.js"
+import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
+import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
+import { HostModelsHandler } from "./handlers/ren-host/models.js"
+import { HostTokenHandler } from "./handlers/ren-host/token.js"
+import { SpaceHandler } from "./handlers/api/space.js"
+import { SpaceEnvironmentTemplateHandler } from "./handlers/api/space-environment-template.js"
+import { SpaceMemberHandler } from "./handlers/api/space-member.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 
@@ -55,9 +55,9 @@ export const layer = Layer.mergeAll(
       InvitationHandler,
       SpaceHandler,
       SpaceMemberHandler,
-      EnvironmentHandler,
-      HandProviderHandler,
-      SpaceEnvironmentHandler,
+      EnvironmentTemplateHandler,
+      EnvironmentProviderHandler,
+      SpaceEnvironmentTemplateHandler,
     ]),
     Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
     Layer.provide([
@@ -65,12 +65,12 @@ export const layer = Layer.mergeAll(
       Invitation.layer,
       Space.layer,
       SpaceMember.layer,
-      Environments.layer,
-      SpaceEnvironment.layer,
+      EnvironmentTemplates.layer,
+      SpaceEnvironmentTemplate.layer,
     ]),
   ),
-  HttpApiBuilder.layer(HostApi).pipe(
-    Layer.provide([ModelsHandler, HostHandsHandler, HostHandler]),
+  HttpApiBuilder.layer(RenHostApi).pipe(
+    Layer.provide([HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
     Layer.provide(BrainHost.hostAuthentication),
   ),
   AuthRoute,

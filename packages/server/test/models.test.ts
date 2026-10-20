@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
-import { SessionToken } from "@ren/brain-api/session-token"
+import { SessionToken } from "@ren/host-api/session-token"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { Effect } from "effect"
@@ -15,13 +15,13 @@ const exp = iat + 600
 
 const refresh = (authorization?: string) =>
   app.handler(
-    new Request("http://localhost/brain/models/refresh", {
+    new Request("http://localhost/host/models/refresh", {
       method: "POST",
       headers: authorization ? { authorization } : {},
     }),
   )
 
-describe("POST /brain/models/refresh", () => {
+describe("POST /host/models/refresh", () => {
   test("answers 403 without a host token, or with a server, client, expired or foreign-key token", async () => {
     const sid = Session.ID.create()
     const org = Auth.OrganizationID.create()

@@ -22,13 +22,13 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 ## Layering
 
 - Runtime dependencies point from `schema` to `protocol`, `db` and `core`, and from those to `server`.
-- `brain-api` is the internal contract between Ren and a session's host: it depends only on `schema`; `core` calls it and `cell` serves it. `cell` depends only on `schema`, `brain-api`, `hand-api` and `brain`.
-- `hand-api` is the internal contract between a brain and a hand's executor, and the hand token Ren signs for it: it depends only on `schema`; `core` signs, `brain` calls and `executor` serves.
-- `executor` runs on a hand's machine and serves the Executor API. It depends only on `schema` and `hand-api`.
-- `brain` holds brain code that is the same on every host and every harness: how a brain reaches its hand. It depends only on `schema` and `hand-api`.
+- `host-api` holds the internal contracts between Ren and a session's host, one per direction: `BrainApi` (`cell` serves, `core` calls) and `RenHostApi` (`server` serves, `cell` calls). It depends only on `schema`. `cell` depends only on `schema`, `host-api`, `environment-api` and `brain`.
+- `environment-api` is the internal contract between a brain and an environment's executor, and the environment token Ren signs for it: it depends only on `schema`; `core` signs, `brain` calls and `executor` serves.
+- `executor` runs on an environment's machine and serves the Environment API. It depends only on `schema` and `environment-api`.
+- `brain` holds brain code that is the same on every host and every harness: how a brain reaches its environment. It depends only on `schema` and `environment-api`.
 - `client` may depend only on `schema` and `protocol`. `sdk` builds on `client`; `cli` builds on `sdk`; `app` builds on `client`, `schema`, `ui` and `util`, and uses `better-auth/client` for auth flows.
 - `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
-- `client`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server`, `brain-api` or `hand-api`.
+- `client`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server`, `host-api` or `environment-api`.
 - `httpapi-codegen` stays independent of every Ren package.
 - `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them.
 

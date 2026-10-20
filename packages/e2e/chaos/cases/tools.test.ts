@@ -1,6 +1,6 @@
 import { TestAccess } from "@ren/brain/testing"
-import { HandConnections } from "@ren/brain/hand-connections"
-import { HandSession } from "@ren/brain/hand-session"
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { EnvironmentSession } from "@ren/brain/environment/session"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Stream } from "effect"
@@ -15,52 +15,52 @@ import { Stack } from "../lib/stack.js"
 import { Wait } from "../lib/wait.js"
 
 describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispatcher", () => {
-  const lane: { stack?: Stack.Instance; hand?: Stack.Hand } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
 
   const current = () => {
-    if (!lane.stack || !lane.hand) throw new Error("the stack did not start")
-    return { stack: lane.stack, hand: lane.hand }
+    if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
+    return { stack: lane.stack, environment: lane.environment }
   }
 
   beforeAll(async () => {
     lane.stack = await Stack.start()
-    lane.hand = await lane.stack.hand("tools")
+    lane.environment = await lane.stack.environment("tools")
   }, 180_000)
 
   afterAll(() => lane.stack?.dispose())
 
   const attached = (options: { readonly interactive?: boolean } = {}) =>
-    current().stack.session({ hand: current().hand, start: options })
+    current().stack.session({ environment: current().environment, start: options })
 
   const operationsSince = (from: number) =>
     current()
-      .hand.proxy.seen.slice(from)
+      .environment.proxy.seen.slice(from)
       .map((entry) => entry.operation)
 
   const read = async (sessionId: string, name: string) =>
-    (await current().hand.instance.observe(["cat", `${sessionId}/${name}`])).stdout
+    (await current().environment.instance.observe(["cat", `${sessionId}/${name}`])).stdout
 
   test("a chat-only turn on an attached session sends no executor request", async () => {
     const session = await attached()
-    const from = current().hand.proxy.seen.length
+    const from = current().environment.proxy.seen.length
     const turn = await session.turn([ModelProvider.text("just chatting")])
     await turn.script.called(1)
     await session.settled()
     expect(operationsSince(from)).toEqual([])
   })
 
-  test("patch, which OpenCode offers to GPT models in place of edit and write, adds, updates and deletes files on the hand", async () => {
+  test("patch, which OpenCode offers to GPT models in place of edit and write, adds, updates and deletes files on the environment", async () => {
     const stack = current().stack
     const endpoint = stack.access().endpoints[0]
     if (!endpoint) throw new Error("the access has no endpoint")
     const gpt = { id: "gpt-5-chaos", name: "GPT Chaos", limit: { context: 100_000, output: 4000 } }
     const session = await stack.session({
       models: { endpoints: [{ ...endpoint, models: [...endpoint.models, gpt] }] },
-      hand: current().hand,
+      environment: current().environment,
       start: { model: { endpointId: endpoint.id, modelId: gpt.id } },
     })
     const stem = crypto.randomUUID().slice(0, 8)
-    await current().hand.instance.observe([
+    await current().environment.instance.observe([
       "sh",
       "-c",
       `mkdir -p ${session.sessionId} && cd ${session.sessionId} && printf 'one\\ntwo\\n' > update-${stem}.txt; printf 'x\\n' > delete-${stem}.txt`,
@@ -84,13 +84,14 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     expect(await read(session.sessionId, `add-${stem}.txt`)).toBe("added\n")
     expect(await read(session.sessionId, `update-${stem}.txt`)).toBe("one\nthree\n")
     expect(
-      (await current().hand.instance.observe(["test", "-e", `${session.sessionId}/delete-${stem}.txt`])).exitCode,
+      (await current().environment.instance.observe(["test", "-e", `${session.sessionId}/delete-${stem}.txt`]))
+        .exitCode,
     ).not.toBe(0)
   })
 
-  test("question is answered through the client and never touches the hand", async () => {
+  test("question is answered through the client and never touches the environment", async () => {
     const session = await attached({ interactive: true })
-    const from = current().hand.proxy.seen.length
+    const from = current().environment.proxy.seen.length
     const turn = await session.turn([
       ModelProvider.tool("question", {
         questions: [{ question: "Which colour?", header: "Colour", options: [{ label: "Teal", description: "teal" }] }],
@@ -119,7 +120,7 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     const offered = (await probe.script.called(1)).tools.filter((tool) => inputs[tool] !== undefined)
     await session.settled()
     expect(offered.length).toBeGreaterThan(0)
-    const from = current().hand.proxy.seen.length
+    const from = current().environment.proxy.seen.length
     const turn = await session.turn([
       ...offered.map((tool) => ModelProvider.tool(tool, inputs[tool])),
       ModelProvider.text("done"),
@@ -133,24 +134,24 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     "a paused container ends a running shell call in its time limit, and stops the command once it runs again",
     async () => {
       const stack = current().stack
-      const hand = await stack.dockerHand("paused")
-      const session = await stack.session({ hand })
+      const environment = await stack.dockerEnvironment("paused")
+      const session = await stack.session({ environment })
       const marker = `paused-${crypto.randomUUID().slice(0, 8)}`
       const turn = await session.turn([
         ModelProvider.tool("shell", { command: `echo started; sleep 300; echo ${marker}` }),
         ModelProvider.text("ok"),
       ])
       await Wait.until("the command to start in the container", 60_000, async () =>
-        (await hand.instance.observe(["pgrep", "-f", marker])).exitCode === 0 ? true : undefined,
+        (await environment.instance.observe(["pgrep", "-f", marker])).exitCode === 0 ? true : undefined,
       )
-      await hand.instance.freeze()
+      await environment.instance.freeze()
       const started = Date.now()
       const result = (await turn.script.called(2, 120_000)).toolResults
       expect(Date.now() - started).toBeLessThan(75_000)
       expect(result).toContain("did not finish")
-      await hand.instance.thaw()
+      await environment.instance.thaw()
       await Wait.until("the executor to stop the command", 90_000, async () =>
-        (await hand.instance.observe(["pgrep", "-f", marker])).exitCode !== 0 ? true : undefined,
+        (await environment.instance.observe(["pgrep", "-f", marker])).exitCode !== 0 ? true : undefined,
       )
       await session.settled()
     },
@@ -161,25 +162,25 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     "a container that loses its network during a command ends the call in its time limit, and the next call works once it is back",
     async () => {
       const stack = current().stack
-      const hand = await stack.dockerHand("network")
-      const session = await stack.session({ hand })
+      const environment = await stack.dockerEnvironment("network")
+      const session = await stack.session({ environment })
       const marker = `network-${crypto.randomUUID().slice(0, 8)}`
       const turn = await session.turn([
         ModelProvider.tool("shell", { command: `echo ${marker} > /dev/null; sleep 4; echo $((40 + 2))` }),
         ModelProvider.text("ok"),
       ])
       await Wait.until("the command to start in the container", 60_000, async () =>
-        (await hand.instance.observe(["pgrep", "-f", marker])).exitCode === 0 ? true : undefined,
+        (await environment.instance.observe(["pgrep", "-f", marker])).exitCode === 0 ? true : undefined,
       )
       const cutAt = Date.now()
-      hand.proxy.partition(true)
-      hand.proxy.cutAll()
+      environment.proxy.partition(true)
+      environment.proxy.cutAll()
       // ast-grep-ignore: no-test-sleep -- the container stays off the network for a real time
       await Bun.sleep(5_000)
-      hand.proxy.partition(false)
+      environment.proxy.partition(false)
       const result = (await turn.script.called(2, 120_000)).toolResults
       expect(Date.now() - cutAt).toBeLessThan(30_000)
-      expect(result === "42\n" || result.includes("hand disconnected")).toBe(true)
+      expect(result === "42\n" || result.includes("environment disconnected")).toBe(true)
       await session.settled(60_000)
       const next = await session.turn([
         ModelProvider.tool("shell", { command: "echo $((1 + 2))" }),
@@ -194,18 +195,18 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
   test.skipIf(Platform.docker !== undefined)(
     "the executor keeps its memory within the output limits while 40 commands of 2 MiB end and nobody reads them",
     async () => {
-      const hand = await current().stack.dockerHand("memory")
-      const driver = await hand.driver()
-      const before = await hand.container.memoryBytes()
+      const environment = await current().stack.dockerEnvironment("memory")
+      const driver = await environment.driver()
+      const before = await environment.container.memoryBytes()
       const spawned = await Promise.all(
         Array.from({ length: 40 }, () =>
           driver.ok(driver.client["process.spawn"]({ command: "head", arguments: ["-c", "2097152", "/dev/urandom"] })),
         ),
       )
       await Wait.until("all commands to end", 60_000, async () =>
-        (await hand.instance.observe(["pgrep", "-x", "head"])).stdout.trim() === "" ? true : undefined,
+        (await environment.instance.observe(["pgrep", "-x", "head"])).stdout.trim() === "" ? true : undefined,
       )
-      const after = await hand.container.memoryBytes()
+      const after = await environment.container.memoryBytes()
       expect(spawned.length).toBe(40)
       expect(after - before).toBeLessThan(64 * 1024 * 1024 + 64 * 1024 * 1024)
       expect(await driver.ok(driver.client["executor.hello"]())).toMatchObject({ protocol: 1 })
@@ -218,9 +219,9 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     "grep on a container with no rg fails the tool call with a clear cause",
     async () => {
       const stack = current().stack
-      const hand = await stack.dockerHand("no-rg")
-      await hand.container.asRoot(["rm", "-f", "/usr/bin/rg"])
-      const session = await stack.session({ hand })
+      const environment = await stack.dockerEnvironment("no-rg")
+      await environment.container.asRoot(["rm", "-f", "/usr/bin/rg"])
+      const session = await stack.session({ environment })
       const turn = await session.turn([ModelProvider.tool("grep", { pattern: "needle" }), ModelProvider.text("ok")])
       const result = (await turn.script.called(2, 120_000)).toolResults
       expect(result).toContain("ripgrep execution failed")
@@ -232,28 +233,30 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
   test.skipIf(Platform.docker !== undefined)(
     "a script for zsh runs in the default shell of a Debian container that has no zsh",
     async () => {
-      const hand = await current().stack.dockerHand("no-zsh")
-      expect((await hand.instance.observe(["sh", "-c", "command -v zsh || echo none"])).stdout.trim()).toBe("none")
+      const environment = await current().stack.dockerEnvironment("no-zsh")
+      expect((await environment.instance.observe(["sh", "-c", "command -v zsh || echo none"])).stdout.trim()).toBe(
+        "none",
+      )
       const sessionId = Session.ID.create()
       const access = await ExecutorAdapter.access({
-        url: hand.proxy.url,
-        handId: hand.instance.handId,
+        url: environment.proxy.url,
+        environmentId: environment.instance.environmentId,
         brain: Brain.ofSession(sessionId),
         directory: `/workspace/${sessionId}`,
       })
       const stdout = await Effect.runPromise(
         Effect.gen(function* () {
-          const environments = Context.get(
+          const connections = Context.get(
             yield* Layer.build(
-              HandConnections.layer.pipe(
+              EnvironmentConnections.layer.pipe(
                 Layer.provide(TestAccess.fixed(new Map([[sessionId, access]]))),
                 Layer.provide(FetchHttpClient.layer),
               ),
             ),
-            HandConnections.Service,
+            EnvironmentConnections.Service,
           )
-          const hands = HandSession.make(environments, sessionId, (signal) => signal)
-          const handle = yield* hands.spawner.spawn(ChildProcess.make("/bin/zsh", ["-c", "echo $((6 * 7))"]))
+          const session = EnvironmentSession.make(connections, sessionId, (signal) => signal)
+          const handle = yield* session.spawner.spawn(ChildProcess.make("/bin/zsh", ["-c", "echo $((6 * 7))"]))
           return yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString)
         }).pipe(Effect.scoped),
       )
@@ -266,8 +269,8 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
     "a replaced container runs new commands in its empty workspace, and old process IDs are unknown there",
     async () => {
       const stack = current().stack
-      const hand = await stack.dockerHand("replaced")
-      const session = await stack.session({ hand })
+      const environment = await stack.dockerEnvironment("replaced")
+      const session = await stack.session({ environment })
       const shell = async (command: string) => {
         const turn = await session.turn([ModelProvider.tool("shell", { command }), ModelProvider.text("ok")])
         const result = (await turn.script.called(2, 60_000)).toolResults
@@ -276,11 +279,11 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
       }
       const before = await shell("echo kept > before.txt && ls")
       expect([before.includes("Unable to execute"), before.includes("before.txt")]).toEqual([false, true])
-      const driver = await hand.driver()
+      const driver = await environment.driver()
       const old = await driver.ok(driver.client["process.spawn"]({ command: "sleep", arguments: ["120"] }))
-      await hand.instance.replace()
-      hand.retarget()
-      await hand.publish(hand.generation() + 1)
+      await environment.instance.replace()
+      environment.retarget()
+      await environment.publish(environment.generation() + 1)
       const after = await shell("ls -a; echo listed")
       expect([after.includes("Unable to execute"), after.includes("before.txt")]).toEqual([false, false])
       expect((await driver.output(old.id, 10_000)).error).toBe("ProcessNotFoundError")

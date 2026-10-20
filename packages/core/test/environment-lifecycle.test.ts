@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { Signature } from "@ren/hand-api/signature"
+import { Signature } from "@ren/environment-api/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
-import { TestHand } from "@ren/executor/testing"
+import { TestEnvironment } from "@ren/executor/testing"
 import type { Auth } from "@ren/schema/auth"
+import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
-import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
@@ -17,11 +17,11 @@ import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { BrainHost } from "../src/brain-host.js"
-import { HandProvider } from "../src/hand-provider.js"
-import { Hands } from "../src/hands.js"
+import { EnvironmentProvider } from "../src/environment-provider.js"
+import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
-import { TestProvider } from "./lib/hand-provider.js"
-import { HostApiTest } from "./lib/host-api.js"
+import { TestProvider } from "./lib/environment-provider.js"
+import { RenHostApiTest } from "./lib/ren-host-api.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 
@@ -29,7 +29,7 @@ setDefaultTimeout(180_000)
 
 const wrangler = process.env.CELL_RUNTIME === "wrangler"
 const stub = Shared.stub()
-const environmentId = Environment.ID.create()
+const environmentTemplateId = EnvironmentTemplate.ID.create()
 const newer = await Effect.runPromise(Signature.generate("newer"))
 
 const encodedKey = (key: Signature.PrivateKey) => ({
@@ -50,21 +50,21 @@ const models = Layer.succeed(
 interface Sandbox {
   readonly id: string
   readonly directory: string
-  readonly serve: (handId: Hand.ID) => Promise<string>
+  readonly serve: (environmentId: Environment.ID) => Promise<string>
   readonly dispose: () => Promise<void>
 }
 
 const sandbox = async (id: string, publicKeys?: readonly [Signature.PublicKey, ...Array<Signature.PublicKey>]) => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "ren-environment-lifecycle-")))
-  const served = new Map<Hand.ID, { readonly url: Promise<string>; readonly dispose: () => Promise<void> }>()
-  const serve = (handId: Hand.ID) => {
-    const found = served.get(handId)
+  const served = new Map<Environment.ID, { readonly url: Promise<string>; readonly dispose: () => Promise<void> }>()
+  const serve = (environmentId: Environment.ID) => {
+    const found = served.get(environmentId)
     if (found) return found.url
     const runtime = ManagedRuntime.make(
-      TestHand.layer({ handId, workspace: directory, ...(publicKeys && { publicKeys }) }),
+      TestEnvironment.layer({ environmentId, workspace: directory, ...(publicKeys && { publicKeys }) }),
     )
-    const url = runtime.runPromise(TestHand.url)
-    served.set(handId, { url, dispose: () => runtime.dispose() })
+    const url = runtime.runPromise(TestEnvironment.url)
+    served.set(environmentId, { url, dispose: () => runtime.dispose() })
     return url
   }
   const dispose = async () => {
@@ -95,7 +95,7 @@ interface CoreConfig {
   readonly present?: boolean
 }
 
-const placed = new Map<Hand.ID, Sandbox>()
+const placed = new Map<Environment.ID, Sandbox>()
 
 const disposed = new Set<Sandbox>()
 
@@ -110,19 +110,21 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
     Effect.gen(function* () {
       const db = yield* Database.Service
       yield* db.db
-        .update(Database.Schema.environment)
+        .update(Database.Schema.environment_template)
         .set({ archived_at: config.present === false ? new Date() : null })
-        .where(eq(Database.Schema.environment.id, environmentId))
+        .where(eq(Database.Schema.environment_template.id, environmentTemplateId))
     }),
   )
   const probe = await Effect.runPromise(
     TestProvider.make({
-      endpoint: (handId) => {
-        const on = placed.get(handId) ?? config.target
-        placed.set(handId, on)
+      endpoint: (environmentId) => {
+        const on = placed.get(environmentId) ?? config.target
+        placed.set(environmentId, on)
         return disposed.has(on)
-          ? Effect.fail(new HandProvider.Gone({ message: `the sandbox of hand ${handId} is gone` }))
-          : Effect.promise(() => on.serve(handId)).pipe(Effect.map((url) => ({ url: new URL(url) })))
+          ? Effect.fail(
+              new EnvironmentProvider.Gone({ message: `the sandbox of environment ${environmentId} is gone` }),
+            )
+          : Effect.promise(() => on.serve(environmentId)).pipe(Effect.map((url) => ({ url: new URL(url) })))
       },
     }),
   )
@@ -130,12 +132,12 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
     {
       CELL_URL: cellUrl,
       CELL_KEYS: TestToken.vars.CELL_KEYS,
-      HAND_KEYS: JSON.stringify((config.keys ?? [TestHand.keys.privateKey]).map(encodedKey)),
-      ...(config.lifetime && { HAND_TOKEN_LIFETIME: config.lifetime }),
+      ENVIRONMENT_KEYS: JSON.stringify((config.keys ?? [TestEnvironment.keys.privateKey]).map(encodedKey)),
+      ...(config.lifetime && { ENVIRONMENT_TOKEN_LIFETIME: config.lifetime }),
     },
     models,
-    Hands.layer.pipe(
-      Layer.provide(HandProvider.layer([Effect.succeed(probe.provider)])),
+    Environments.layer.pipe(
+      Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
       Layer.provide(Layer.succeedContext(context)),
     ),
   )
@@ -150,13 +152,13 @@ let current: CoreConfig
 const startCore = async (config: CoreConfig) => {
   current = config
   const api = HttpRouter.toWebHandler(
-    HostApiTest.layer((endpoint, effect) =>
-      endpoint !== "hands.access"
+    RenHostApiTest.layer((endpoint, effect) =>
+      endpoint !== "environments.access"
         ? effect
         : effect.pipe(
             Effect.tap((value) =>
               Effect.sync(() => {
-                if (Schema.is(Hand.Access)(value)) core.issued.push(Redacted.value(value.token))
+                if (Schema.is(Environment.Access)(value)) core.issued.push(Redacted.value(value.token))
               }),
             ),
           ),
@@ -187,7 +189,7 @@ const start = (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) =
           harness: "opencode",
           instructions: {},
           interactive: false,
-          environmentId,
+          environmentTemplateId,
           ...input,
         },
         { organizationId, spaceId },
@@ -226,7 +228,9 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
   beforeAll(async () => {
     first = await sandbox("sandbox-a")
     organizationId = await database.runPromise(Seed.organization())
-    await database.runPromise(Seed.environment(organizationId, { id: environmentId, sessionsPerHand: 1 }))
+    await database.runPromise(
+      Seed.environmentTemplate(organizationId, { id: environmentTemplateId, sessionsPerEnvironment: 1 }),
+    )
     spaceId = await database.runPromise(Seed.team(organizationId))
     await startCore({ target: first, lifetime: "20 seconds" })
     cell = await Wrangler.make({ ...Shared.vars(stub.url), REN_URL: `http://127.0.0.1:${port}` })
@@ -255,7 +259,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     expect(await turn(sessionId, "pwd")).toContain(join(first.directory, sessionId))
   })
 
-  test("a turn longer than the environment token's lifetime continues, with new tokens from the Host API", async () => {
+  test("a turn longer than the environment token's lifetime continues, with new tokens from the Ren Host API", async () => {
     const sessionId = Session.ID.create()
     await start(sessionId)
     const before = core.issued.length
@@ -294,7 +298,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     expect(core.issued.length - before).toBeGreaterThanOrEqual(1)
   })
 
-  test("a hand that is gone is replaced after one failed call, and the old sandbox is not used again", async () => {
+  test("an environment that is gone is replaced after one failed call, and the old sandbox is not used again", async () => {
     const original = await sandbox("sandbox-b")
     const replacement = await sandbox("sandbox-b")
     const config = current
@@ -325,7 +329,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     expect(await turn(sessionId, "echo back")).toBe(JSON.stringify("back\n"))
   })
 
-  test("an archived environment gives no access to the next tool call, and the chat goes on", async () => {
+  test("an archived environment template gives no access to the next tool call, and the chat goes on", async () => {
     const sessionId = Session.ID.create()
     await start(sessionId)
     expect(await turn(sessionId, "echo before")).toBe(JSON.stringify("before\n"))
@@ -333,7 +337,7 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     await restartCore({ ...config, present: false })
     await cell.crash()
     await cell.start()
-    expect(await turn(sessionId, "echo after")).toContain("No access to a hand")
+    expect(await turn(sessionId, "echo after")).toContain("No access to an environment")
     const chat = stub.script({ reply: "still here" })
     await send(sessionId, chat)
     await chat.called(1)
@@ -341,10 +345,10 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
   })
 
   test("a new signing key works on an executor that knows it, and an old executor refuses the token clearly", async () => {
-    const knowing = await sandbox("sandbox-new", [newer.publicKey, TestHand.keys.publicKey])
+    const knowing = await sandbox("sandbox-new", [newer.publicKey, TestEnvironment.keys.publicKey])
     const old = await sandbox("sandbox-old")
     const config = current
-    const signedByNewer = { lifetime: "20 seconds", keys: [newer.privateKey, TestHand.keys.privateKey] }
+    const signedByNewer = { lifetime: "20 seconds", keys: [newer.privateKey, TestEnvironment.keys.privateKey] }
     await restartCore({ ...signedByNewer, target: knowing })
     const onKnowing = Session.ID.create()
     await start(onKnowing)

@@ -1,20 +1,20 @@
 # @ren/executor
 
-The executor: a small server on an environment's machine. A brain calls it to run processes and change files, so a session's tools run on the environment and not where the brain runs. It serves the `ExecutorApi` from `@ren/hand-api/executor-api`, an Effect RPC group, at `POST /v1/rpc` (NDJSON).
+The executor: a small server on an environment's machine. A brain calls it to run processes and change files, so a session's tools run on the environment and not where the brain runs. It serves the `EnvironmentApi` from `@ren/environment-api/environment-api`, an Effect RPC group, at `POST /v1/rpc` (NDJSON).
 
 ## What belongs here
 
-- `src/executor.ts`: `Executor`, the contract for the processes and files of one hand: `Interface` and `Service`.
+- `src/executor.ts`: `Executor`, the contract for the processes and files of one environment: `Interface` and `Service`.
 - `src/sandbox.ts`: `Sandbox`, the `Executor` that runs processes on the machine the executor is on, with Effect's `ChildProcessSpawner`. Each process belongs to the brain that started it and runs in a scope of its own. A running process that its brain has not named for 30 seconds (a heartbeat, a read, a write or a kill) is killed with its group, even while a reader's connection still looks open: a frozen brain can hold a connection open for minutes. A client sends `process.heartbeat` at least every 5 seconds.
 - `src/sandbox/files.ts`: `SandboxFiles`, the file operations of the `Sandbox`, with `node:fs`.
 - `src/sandbox/output-log.ts`: `OutputLog`, the output of one process: the kept chunks, the readers and their cursors, and the exit.
-- `src/server.ts`: the RPC server. A gate on the route checks the hand token before the RPC server reads the body, and the `Authentication` middleware gives the caller's brain to the handlers.
-- `Dockerfile`: the image Ren's Docker hand provider runs: the bundled `main.ts` on port 4100 (`ExecutorApi.port`), with `ripgrep`, as the `bun` user in a `/workspace` that user owns. `@ren/executor/testing` builds it (`Image.build`).
+- `src/server.ts`: the RPC server. A gate on the route checks the environment token before the RPC server reads the body, and the `Authentication` middleware gives the caller's brain to the handlers.
+- `Dockerfile`: the image Ren's Docker environment provider runs: the bundled `main.ts` on port 4100 (`EnvironmentApi.port`), with `ripgrep`, as the `bun` user in a `/workspace` that user owns. `@ren/executor/testing` builds it (`Image.build`).
 - `src/main.ts`: the program. It provides `Sandbox.layer` and the platform services (`BunServices.layer`), which include the `ChildProcessSpawner`.
 
 ## Notes
 
-- Ren signs hand tokens; the executor only verifies them with `HAND_PUBLIC_KEYS`. It holds no secrets.
+- Ren signs environment tokens; the executor only verifies them with `ENVIRONMENT_PUBLIC_KEYS`. It holds no secrets.
 - `Sandbox.layer` needs a `ChildProcessSpawner`; the composition root (`main.ts`, the tests) provides it. File operations stay on `node:fs` for `lstat` and typed `readdir`.
 - `hello` lists the machine's shells (`shells`, by absolute path, its default first).
 - A process's output is a log, like OpenCode's terminals (`pty.ts`):
@@ -28,21 +28,21 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 - A process gets the executor's own environment variables with the request's `env` on top. OpenCode sends a workspace session no base environment.
 - File operations follow OpenCode's local environment: `read` and `list` follow a final symlink, `stat` does not. Errors name the path the caller gave.
 - File paths are not confined to `EXECUTOR_WORKSPACE`: an absolute path, or one with `..`, reaches anywhere the executor's user can. A process can already do so, so the workspace is where relative paths start, not a boundary.
-- The executor reads `HAND_PUBLIC_KEYS` once, at start. Restart it after Ren adds a signing key, or tokens signed with that key are refused.
+- The executor reads `ENVIRONMENT_PUBLIC_KEYS` once, at start. Restart it after Ren adds a signing key, or tokens signed with that key are refused.
 - The machine needs `rg` on its `PATH`: OpenCode's grep and glob run it through the executor.
 
 ## Configuration
 
-| Variable             | Meaning                                                     |
-| -------------------- | ----------------------------------------------------------- |
-| `EXECUTOR_HAND_ID`   | The hand this executor is. Tokens must name it.             |
-| `EXECUTOR_WORKSPACE` | The directory relative paths resolve against. Default: cwd. |
-| `HAND_PUBLIC_KEYS`   | Ren's public keys, from `bun run keys` in `hand-api`.       |
-| `PORT`               | Default 4100.                                               |
+| Variable                  | Meaning                                                      |
+| ------------------------- | ------------------------------------------------------------ |
+| `EXECUTOR_ENVIRONMENT_ID` | The environment this executor is. Tokens must name it.       |
+| `EXECUTOR_WORKSPACE`      | The directory relative paths resolve against. Default: cwd.  |
+| `ENVIRONMENT_PUBLIC_KEYS` | Ren's public keys, from `bun run keys` in `environment-api`. |
+| `PORT`                    | Default 4100.                                                |
 
 ## Dependencies
 
-`@ren/schema`, `@ren/hand-api`, `effect`, `@effect/platform-bun`.
+`@ren/schema`, `@ren/environment-api`, `effect`, `@effect/platform-bun`.
 
 ## Commands
 

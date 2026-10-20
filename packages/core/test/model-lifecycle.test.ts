@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:test"
 import { Brain } from "@ren/schema/brain"
-import { SessionToken } from "@ren/brain-api/session-token"
+import { SessionToken } from "@ren/host-api/session-token"
 import { Shared, TestCell, TestToken, Wrangler } from "@ren/cell/testing"
 import type { Celld } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
@@ -11,7 +11,7 @@ import { HttpRouter, HttpServer } from "effect/http"
 import { BrainHost } from "../src/brain-host.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
-import { HostApiTest } from "./lib/host-api.js"
+import { RenHostApiTest } from "./lib/ren-host-api.js"
 import { Host } from "./lib/host.js"
 
 setDefaultTimeout(180_000)
@@ -66,7 +66,7 @@ const core: {
 
 const startCore = (keys: ReadonlyArray<SessionToken.Key>) => {
   const api = HttpRouter.toWebHandler(
-    HostApiTest.layer((endpoint, effect) =>
+    RenHostApiTest.layer((endpoint, effect) =>
       endpoint !== "models.refresh"
         ? effect
         : Effect.gen(function* () {

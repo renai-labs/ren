@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { ForbiddenError, ModelsUnavailableError } from "@ren/brain-api/errors"
+import { ForbiddenError, ModelsUnavailableError } from "@ren/host-api/errors"
 import { testEffect } from "@ren/executor/testing"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"

@@ -1,7 +1,7 @@
 export * as Brain from "./brain.js"
 
-import { BrainApi } from "@ren/brain-api/brain-api"
-import { ForbiddenError, ModelsNotConfiguredError } from "@ren/brain-api/errors"
+import { BrainApi } from "@ren/host-api/brain-api"
+import { ForbiddenError, ModelsNotConfiguredError } from "@ren/host-api/errors"
 import { DateTime, Effect, Layer, Option, Redacted } from "effect"
 import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"

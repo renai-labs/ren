@@ -1,6 +1,6 @@
 export * as Env from "./env.js"
 
-import { SessionToken } from "@ren/brain-api/session-token"
+import { SessionToken } from "@ren/host-api/session-token"
 import { Effect, Schema } from "effect"
 
 const Millis = (fallback: number) =>

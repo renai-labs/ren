@@ -22,7 +22,7 @@ const actions = [
   "ren-down",
   "short-token",
   "restart-cell",
-  "cut-hand",
+  "cut-environment",
 ] as const
 
 interface Sent {
@@ -32,16 +32,16 @@ interface Sent {
 }
 
 describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and network faults (U2, U3)", () => {
-  const lane: { stack?: Stack.Instance; hand?: Stack.Hand } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
 
   const current = () => {
-    if (!lane.stack || !lane.hand) throw new Error("the stack did not start")
-    return { stack: lane.stack, hand: lane.hand }
+    if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
+    return { stack: lane.stack, environment: lane.environment }
   }
 
   beforeAll(async () => {
     lane.stack = await Stack.start()
-    lane.hand = await lane.stack.hand("lifecycle-chaos")
+    lane.environment = await lane.stack.environment("lifecycle-chaos")
   }, 180_000)
 
   afterAll(() => lane.stack?.dispose())
@@ -50,11 +50,11 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
     `seed %i: ${length} faults end every turn, keep each message once and each effect at most once, and the session recovers`,
     async (seed) => {
       const stack = current().stack
-      const hand = current().hand
+      const environment = current().environment
       const random = Wait.random("lifecycle", seed)
       const access = () => stack.access(Stack.freshKey("lifecycle"), Date.now() + 4 * 60_000)
       stack.issuer.next(() => ({ type: "grant", access: access() }))
-      const session = await stack.session({ models: access(), hand })
+      const session = await stack.session({ models: access(), environment })
       const healing: Array<Promise<void>> = []
       const later = (ms: number, heal: () => Promise<void> | void) =>
         // ast-grep-ignore: no-test-sleep -- the seeded duration of a fault is part of the sequence
@@ -76,28 +76,28 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
         "send-shell": shell,
         "send-text": () => send([ModelProvider.text("plain")], undefined),
         "freeze-executor": async () => {
-          await hand.instance.freeze()
-          later(random.integer(2_000, 12_000), () => hand.instance.thaw())
+          await environment.instance.freeze()
+          later(random.integer(2_000, 12_000), () => environment.instance.thaw())
         },
-        "kill-executor": () => hand.instance.restart(),
+        "kill-executor": () => environment.instance.restart(),
         "replace-executor": async () => {
-          await hand.instance.replace()
-          hand.retarget()
-          hand.publish(hand.generation() + 1)
+          await environment.instance.replace()
+          environment.retarget()
+          environment.publish(environment.generation() + 1)
         },
         "black-hole-executor": async () => {
-          hand.proxy.partition(true)
-          later(random.integer(2_000, 10_000), () => hand.proxy.partition(false))
+          environment.proxy.partition(true)
+          later(random.integer(2_000, 10_000), () => environment.proxy.partition(false))
         },
         "ren-down": async () => {
           stack.issuerProxy.partition(true)
           later(random.integer(2_000, 10_000), () => stack.issuerProxy.partition(false))
         },
         "short-token": async () => {
-          hand.publish(hand.generation(), 20_000)
+          environment.publish(environment.generation(), 20_000)
         },
         "restart-cell": () => stack.restartCell(),
-        "cut-hand": async () => void hand.proxy.cutAll(),
+        "cut-environment": async () => void environment.proxy.cutAll(),
       }
       const sent = await Array.from(
         { length },
@@ -110,16 +110,16 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
         return result ? [...done, result] : done
       }, Promise.resolve([]))
       await Promise.all(healing)
-      await hand.instance.thaw()
-      hand.proxy.partition(false)
+      await environment.instance.thaw()
+      environment.proxy.partition(false)
       stack.issuerProxy.partition(false)
-      hand.publish(hand.generation(), 3_600_000)
+      environment.publish(environment.generation(), 3_600_000)
       await session.closed(240_000)
       const read = await session.messages()
       const accepted = sent.filter((entry) => entry.accepted)
       expect(accepted.map((entry) => SessionDriver.occurrences(read, entry.messageId))).toEqual(accepted.map(() => 1))
       const counts = await Promise.all(
-        sent.flatMap((entry) => (entry.marker ? [Ledger.count(hand.instance, entry.marker)] : [])),
+        sent.flatMap((entry) => (entry.marker ? [Ledger.count(environment.instance, entry.marker)] : [])),
       )
       expect(counts.filter((count) => count > 1)).toEqual([])
       const recovered = Ledger.marker("recovered")
@@ -131,7 +131,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
       )
       await turn.script.called(2, 60_000)
       await session.settled(60_000)
-      expect(await Ledger.count(hand.instance, recovered)).toBe(1)
+      expect(await Ledger.count(environment.instance, recovered)).toBe(1)
     },
     900_000,
   )

@@ -13,7 +13,7 @@ End-to-end tests across server, client, CLI and app (Playwright), and the chaos 
 
 ## Dependencies
 
-Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`TestHand` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Host API's `hands.access` and `host.refresh` for the hand each session was placed on.
+Any package, test-only. Chaos reuses `@ren/cell/testing` (`Wrangler`, `TestCell`, `Shared`, `TestToken`) and `@ren/executor/testing` (`TestEnvironment` keys), and runs the production cell Worker with `REN_URL` set to the test issuer, which also answers the Ren Host API's `environments.access` and `host.refresh` for the environment each session was placed on.
 
 ## Two runners
 
@@ -42,10 +42,10 @@ chaos/
     control.ts   GET /environments/:id and the /environments/changes long poll the cell reads
     faults/      the fault proxy that sits on every link
     adapters/    executor (local process, Docker), E2B, Cloudflare
-    drivers/     Executor API client, Brain API and OpenCode session driver over TestCell
+    drivers/     Environment API client, Brain API and OpenCode session driver over TestCell
     provider/    scripted model provider, test issuer, live model selection, LiteLLM key admin,
-                 and the chaos hand providers that read the lane's containers from a file
-    server-main.ts  the Ren server with the chaos hand providers in place of Docker
+                 and the chaos environment providers that read the lane's containers from a file
+    server-main.ts  the Ren server with the chaos environment providers in place of Docker
     platform.ts  one skip reason per platform or credential, computed once
     preload.ts   refuses non-loopback requests outside the selected mode; tears down on SIGINT
   infra/         the E2B template (the executor image is packages/executor/Dockerfile)
@@ -53,7 +53,7 @@ script/chaos/    template.ts builds the E2B template
 .runs/           ignored executor logs, one directory per run
 ```
 
-`Stack.start` composes one local lane. Each link (core and user to brain, brain to hand, brain to core, brain to provider) goes through its own fault proxy, so a case can refuse a request before delivery, drop the reply after the upstream committed it, answer with a status, hold it, cut the reply after some bytes or lines, partition the link or cut every open connection. `cases/fault-proxy.test.ts` checks where each fault lands.
+`Stack.start` composes one local lane. Each link (core and user to brain, brain to environment, brain to core, brain to provider) goes through its own fault proxy, so a case can refuse a request before delivery, drop the reply after the upstream committed it, answer with a status, hold it, cut the reply after some bytes or lines, partition the link or cut every open connection. `cases/fault-proxy.test.ts` checks where each fault lands.
 
 The scripted model provider answers each call of a turn with the next step of its script: text, a tool call, a status with headers, a cut stream, a malformed frame or malformed tool arguments. `StubModel` from `@ren/cell/testing` gives one behaviour per script, and the provider and stream-fault cases need a different answer for each call of one turn.
 
@@ -79,5 +79,5 @@ bun typecheck
 | `CHAOS_LIVE_BASE_URL`                                   | The bridge host the test process may call in live mode.                                                                   |
 | `CHAOS_LIVE_API_KEY`                                    | The live model's key, when the OpenCode config holds it as a literal that `opencode debug config` masks.                  |
 | `CHAOS_LITELLM_ADMIN_URL`, `CHAOS_LITELLM_ADMIN_KEY`    | An isolated LiteLLM key-management credential.                                                                            |
-| `E2B_API_KEY`, `CHAOS_E2B_TEMPLATE`, `CHAOS_E2B_DOMAIN` | Deployed hands.                                                                                                           |
+| `E2B_API_KEY`, `CHAOS_E2B_TEMPLATE`, `CHAOS_E2B_DOMAIN` | Deployed environments.                                                                                                    |
 | `CHAOS_CLOUDFLARE_URL`                                  | The deployed Worker URL, with `{name}` for the per-run Worker name.                                                       |
