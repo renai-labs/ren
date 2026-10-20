@@ -1,4 +1,4 @@
-export * as OverrideShell from "./override-shell.js"
+export * as RenShell from "./shell.js"
 
 import { Bus } from "@opencode/core/bus"
 import { Config } from "@opencode/core/config"
@@ -20,10 +20,10 @@ import { ChildProcess } from "effect/process"
 import path from "node:path"
 import type { EnvironmentFiles } from "@opencode/core/environment/files"
 import type { ChildProcessSpawner } from "effect/process"
-import type { HandSession } from "@ren/brain/hand-session"
+import type { HandSpawner } from "@ren/brain/hand-session/spawner"
 
 export interface ShellHand {
-  readonly spawnerWith: (options: HandSession.SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
+  readonly spawnerWith: (options: HandSpawner.SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
   readonly overrides: EnvironmentFiles.FilesImpl
 }
 

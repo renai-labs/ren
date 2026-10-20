@@ -16,7 +16,7 @@ import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
 import { Harness } from "../harness.js"
 import { Credentials } from "./credentials.js"
-import { Host } from "./host.js"
+import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
@@ -28,21 +28,21 @@ const environmentInstructionKey = "ren.environment"
 const notSupported = (sessionId: string) =>
   new BrainRejectedError({ message: `Session ${sessionId} cannot change its environment: not supported yet` })
 
-const environmentInstructions = (host: Host.Instance, handDirectory: Option.Option<string>) => {
+const environmentInstructions = (server: OpenCodeServer.Instance, handDirectory: Option.Option<string>) => {
   if (Option.isSome(handDirectory))
     return {
       [environmentInstructionKey]: `Your file and shell tools run on a separate machine, in ${handDirectory.value}. You have full access to that machine.`,
     }
-  if (!host.hasHandConnections) return {}
+  if (!server.hasHandConnections) return {}
   return {
     [environmentInstructionKey]:
       "This session has no environment, so it has no file or shell tools. The other tools work as usual.",
   }
 }
 
-const deniedActions = (host: Host.Instance, input: StartBody, handDirectory: Option.Option<string>) => [
+const deniedActions = (server: OpenCodeServer.Instance, input: StartBody, handDirectory: Option.Option<string>) => [
   ...(input.interactive ? [] : ["question"]),
-  ...(host.hasHandConnections && Option.isNone(handDirectory) ? handActions : []),
+  ...(server.hasHandConnections && Option.isNone(handDirectory) ? handActions : []),
 ]
 
 const findSession = (client: OpenCodeClient, sessionID: Session.ID) =>
@@ -71,7 +71,7 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
 
 const create = Effect.fn("OpenCodeHarness.create")(function* (
   client: OpenCodeClient,
-  host: Host.Instance,
+  server: OpenCodeServer.Instance,
   input: StartBody,
   directory: AbsolutePath,
   handDirectory: Option.Option<string>,
@@ -79,13 +79,13 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
 ) {
   if (Option.isNone(handDirectory))
     return yield* client.session.create({ ...session, location: { directory } }).pipe(Effect.orDie)
-  const workspaceID = yield* host.workspaces
+  const workspaceID = yield* server.workspaces
     .create({
       id: RenWorkspaceDriver.workspaceId(input.sessionId),
       provider: RenWorkspaceDriver.provider,
     })
     .pipe(Effect.orDie)
-  return yield* host.sessions
+  return yield* server.sessions
     .create({
       id: session.id,
       ...(session.title && { title: session.title }),
@@ -98,23 +98,24 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
 })
 
 const handDirectoryOf = Effect.fn("OpenCodeHarness.handDirectoryOf")(function* (
-  host: Host.Instance,
+  server: OpenCodeServer.Instance,
   input: StartBody,
   session: Option.Option<Session.Info>,
 ): Effect.fn.Return<Option.Option<string>, BrainRejectedError> {
   if (Option.isSome(session)) {
-    const location = (yield* host.sessions.get(session.value.id).pipe(Effect.orDie)).location
+    const location = (yield* server.sessions.get(session.value.id).pipe(Effect.orDie)).location
     if (input.directory && !location.workspaceID) return yield* notSupported(input.sessionId)
     return location.workspaceID ? Option.some(location.directory) : Option.none()
   }
   if (!input.directory) return Option.none()
-  if (!host.hasHandConnections) return yield* new BrainRejectedError({ message: "This brain cannot use environments" })
+  if (!server.hasHandConnections)
+    return yield* new BrainRejectedError({ message: "This brain cannot use environments" })
   return Option.some(input.directory)
 })
 
 const start = Effect.fn("OpenCodeHarness.start")(function* (
   client: OpenCodeClient,
-  host: Host.Instance,
+  server: OpenCodeServer.Instance,
   input: StartBody,
   directory: AbsolutePath,
 ) {
@@ -127,14 +128,14 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const sessionID = Session.ID.make(input.sessionId)
   const session = yield* findSession(client, sessionID)
-  const handDirectory = yield* handDirectoryOf(host, input, session)
-  const permissions = deniedActions(host, input, handDirectory).map((action) => ({
+  const handDirectory = yield* handDirectoryOf(server, input, session)
+  const permissions = deniedActions(server, input, handDirectory).map((action) => ({
     action,
     resource: "*",
     effect: "deny" as const,
   }))
   if (Option.isNone(session))
-    yield* create(client, host, input, directory, handDirectory, {
+    yield* create(client, server, input, directory, handDirectory, {
       id: sessionID,
       title: input.title,
       agent,
@@ -149,7 +150,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    { ...input.instructions, ...environmentInstructions(host, handDirectory) },
+    { ...input.instructions, ...environmentInstructions(server, handDirectory) },
   )
   yield* Effect.forEach(
     changes.put,
@@ -201,7 +202,7 @@ const open = Effect.fn("OpenCodeHarness.open")(function* (
   refreshKey: Harness.Refresh,
   connections: Option.Option<HandConnections.Interface>,
 ) {
-  return yield* make(yield* Host.open(storage, config, endpoints, refreshKey, connections), endpoints)
+  return yield* make(yield* OpenCodeServer.open(storage, config, endpoints, refreshKey, connections), endpoints)
 })
 
 export const layer = (storage: DurableObjectStorage) =>
@@ -221,26 +222,26 @@ export const layer = (storage: DurableObjectStorage) =>
   )
 
 export const make = Effect.fn("OpenCodeHarness.make")(function* (
-  host: Host.Instance,
+  server: OpenCodeServer.Instance,
   endpoints: ReadonlyArray<Models.Endpoint>,
   directory: AbsolutePath = AbsolutePath.make("/workspace"),
 ) {
   const client = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
     Effect.provide(Layer.fresh(FetchHttpClient.layer)),
-    Effect.provideService(FetchHttpClient.Fetch, (input, init) => host.fetch(new Request(input, init))),
+    Effect.provideService(FetchHttpClient.Fetch, (input, init) => server.fetch(new Request(input, init))),
   )
   const state = { firstAskedAt: new Map<string, number>() }
   const mutations = yield* Semaphore.make(1)
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (next: ReadonlyArray<Models.Endpoint>) {
-    yield* host.configure(next)
-    yield* Credentials.sync(host.credentials, ModelCredentials.owner, ModelCredentials.entries(next))
+    yield* server.configure(next)
+    yield* Credentials.sync(server.credentials, ModelCredentials.owner, ModelCredentials.entries(next))
   })
   yield* configure(endpoints)
 
   return {
-    fetch: host.fetch,
+    fetch: server.fetch,
     configure: (next: ReadonlyArray<Models.Endpoint>) => mutations.withPermit(configure(next)),
-    start: (input: StartBody) => mutations.withPermit(start(client, host, input, directory)),
+    start: (input: StartBody) => mutations.withPermit(start(client, server, input, directory)),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
     sessions: Effect.gen(function* () {
       const roots = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>

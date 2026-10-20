@@ -7,14 +7,14 @@ import { WorkspaceDriver } from "@opencode/core/workspace/driver"
 import { Workspace } from "@opencode/schema/workspace"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
 import type { LayerNode } from "@opencode/util/effect/layer-node"
-import { FileNotFoundError, FileTooLargeError, WrongKindError } from "@ren/hand-api/executor-api"
+import { ExecutorApi } from "@ren/hand-api/executor-api"
 import type { Signal } from "@ren/hand-api/signal"
 import type { HandConnections } from "@ren/brain/hand-connections"
 import { HandSession } from "@ren/brain/hand-session"
 import { Identifier } from "@ren/schema/identifier"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer } from "effect"
-import { OverrideShell } from "./override-shell.js"
+import { RenShell } from "./shell.js"
 
 export const provider = "ren"
 
@@ -29,7 +29,7 @@ const files = (hand: HandSession.Files): EnvironmentFiles.FilesImpl => {
     new EnvironmentFiles.Failed({
       path,
       cause:
-        cause instanceof FileTooLargeError
+        cause instanceof ExecutorApi.FileTooLargeError
           ? new Error(
               `The file ${path} is too large (${cause.sizeBytes} bytes, at most ${cause.maxBytes}); use a range`,
             )
@@ -39,16 +39,16 @@ const files = (hand: HandSession.Files): EnvironmentFiles.FilesImpl => {
     new EnvironmentFiles.Failed({
       path,
       cause:
-        cause instanceof FileTooLargeError
+        cause instanceof ExecutorApi.FileTooLargeError
           ? new Error(
               `The file ${path} is too large to write in one call (${cause.sizeBytes} bytes, at most ${cause.maxBytes}); write it in parts`,
             )
           : cause,
     })
   const fileLookupError = (path: string) => (error: unknown) =>
-    error instanceof FileNotFoundError ? new EnvironmentFiles.NotFound({ path }) : fileError(path)(error)
+    error instanceof ExecutorApi.FileNotFoundError ? new EnvironmentFiles.NotFound({ path }) : fileError(path)(error)
   const fileKindError = (path: string) => (error: unknown) =>
-    error instanceof WrongKindError
+    error instanceof ExecutorApi.WrongKindError
       ? new EnvironmentFiles.WrongKind({ path, actual: error.actual })
       : fileLookupError(path)(error)
   return {
@@ -92,5 +92,5 @@ export const replacements = (connections: HandConnections.Interface): LayerNode.
   RipgrepBinary.node.replace(
     Layer.succeed(RipgrepBinary.Service, RipgrepBinary.Service.of({ filepath: Effect.succeed("rg") })),
   ),
-  Shell.node.replace(OverrideShell.node((workspaceId) => session(connections, sessionIdOf(workspaceId)))),
+  Shell.node.replace(RenShell.node((workspaceId) => session(connections, sessionIdOf(workspaceId)))),
 ]

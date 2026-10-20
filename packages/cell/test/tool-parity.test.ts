@@ -24,7 +24,7 @@ import { join } from "node:path"
 import { Env } from "../src/env.js"
 import type { Harness } from "../src/harness/harness.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
-import { Host } from "../src/harness/opencode/host.js"
+import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 import { Pid } from "./lib/pid.js"
 import { Shared } from "./lib/shared.js"
@@ -91,7 +91,7 @@ const open = Effect.fnUntraced(function* () {
     yield* Layer.build(HandConnections.layer.pipe(Layer.provide(counted), Layer.provide(FetchHttpClient.layer))),
     HandConnections.Service,
   )
-  const host = yield* Host.make(
+  const host = yield* OpenCodeServer.make(
     embedded(RenWorkspaceDriver.replacements(environments)),
     endpoints,
     () => Effect.succeedNone,

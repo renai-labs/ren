@@ -18,7 +18,7 @@ import { join } from "node:path"
 import { Env } from "../src/env.js"
 import type { Harness } from "../src/harness/harness.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
-import { Host } from "../src/harness/opencode/host.js"
+import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 import { Pid } from "./lib/pid.js"
 import { Shared } from "./lib/shared.js"
@@ -65,7 +65,7 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
   )
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url))
   const endpoints = Shared.access(undefined, stub.url).endpoints
-  const host = yield* Host.make(
+  const host = yield* OpenCodeServer.make(
     createEmbeddedRoutes(
       {
         database: { path: ":memory:" },
