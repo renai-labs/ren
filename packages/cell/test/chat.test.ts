@@ -103,7 +103,7 @@ test("sending the same message id again sends nothing new", () =>
     }),
   ))
 
-test("the session learns who speaks when another member sends a message, and the transcript keeps what each typed", () =>
+test("the model learns who speaks when another member sends a message, and the transcript keeps what each typed", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
@@ -181,13 +181,12 @@ test("a client lists the web search providers where the session works", () =>
     }),
   ))
 
-test("members who queue at the same time each get the speaker note their place in the queue calls for", () =>
+test("a member's queued message names its speaker to the model after the member withdraws the one before it", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const params = { sessionID: brain.id }
-      const sessionID = SessionID.make(brain.id)
       const ada = yield* brain.chatAs("user_1", "Ada")
       const grace = yield* brain.chatAs("user_2", "Grace")
       const held = stub.script({ hold: true })
@@ -196,29 +195,52 @@ test("members who queue at the same time each get the speaker note their place i
         payload: { id: SessionMessage.ID.create(), text: held.marker, delivery: "steer" },
       })
       yield* Effect.promise(() => held.called())
-      yield* Effect.all(
-        [grace, ada, grace, ada].map((chat) =>
-          chat.session["session.prompt"]({
-            params,
-            payload: { id: SessionMessage.ID.create(), text: "next", delivery: "queue" },
-          }),
-        ),
-        { concurrency: "unbounded" },
-      )
-      const queued = (yield* brain.opencode.session.inbox.list({ sessionID })).flatMap((item) =>
-        item.type === "user" ? [{ text: item.payload.text, userId: String(item.payload.metadata?.userID) }] : [],
-      )
-      expect(queued).toHaveLength(4)
-      expect(
-        queued.map(
-          (item, index) =>
-            item.text.includes("<message_from") === (item.userId !== (queued[index - 1]?.userId ?? "user_1")),
-        ),
-      ).toEqual([true, true, true, true])
+      const withdrawn = SessionMessage.ID.create()
+      yield* grace.session["session.prompt"]({
+        params,
+        payload: { id: withdrawn, text: "never mind", delivery: "queue" },
+      })
+      const kept = stub.script()
+      yield* grace.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: kept.marker, delivery: "queue" },
+      })
+      yield* grace.session["session.inbox.cancel"]({ params: { ...params, inboxID: withdrawn } })
       held.release()
-      yield* brain.opencode.session.wait({ sessionID })
+      expect((yield* Effect.promise(() => kept.called())).text).toBe(
+        `${kept.marker}\n\n<message_from user="Grace" user_id="user_2" />`,
+      )
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
     }),
   ))
+
+test.todo("a command another member runs names its speaker to the model, and the transcript shows who ran it", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const params = { sessionID: brain.id }
+      const ada = yield* brain.chatAs("user_1", "Ada")
+      const grace = yield* brain.chatAs("user_2", "Grace")
+      yield* ada.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: stub.script().marker, delivery: "steer" },
+      })
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      const reviewed = stub.script()
+      yield* grace.session["session.command"]({
+        params,
+        payload: { name: "review", text: reviewed.marker, delivery: "steer" },
+      })
+      expect((yield* Effect.promise(() => reviewed.called())).text).toEndWith(
+        '\n\n<message_from user="Grace" user_id="user_2" />',
+      )
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
+      expect(page.items.find((message) => message.type === "user")).toMatchObject({ sender: { userId: "user_2" } })
+    }),
+  ),
+)
 
 test("a member switches the model from the list as the session's setting, an unknown model or a subagent's switch is refused, and Ren's unchanged model does not undo the switch", () =>
   live(
