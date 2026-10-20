@@ -11,6 +11,7 @@
   },
   "scripts": {
     "print-policies": "bun run script/print-policies.ts",
+    "ren:settings": "bun run script/ren-settings.ts",
     "test": "bun ../../script/test.ts",
     "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/brain-host.test.ts test/environment-lifecycle.test.ts",
     "typecheck": "tsgo -b tsconfig.json tsconfig.tests.json"
