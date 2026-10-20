@@ -28,6 +28,7 @@ import {
 import type { Harness } from "../harness.js"
 import { ModelProviders } from "./model-providers.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
+import { RenReferences } from "./references.js"
 
 const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
 
@@ -59,6 +60,8 @@ interface Instance {
 }
 
 interface Shared {
+  readonly references: Ref.Ref<ReadonlyArray<RenReferences.Prepared>>
+  readonly materializing: Semaphore.Semaphore
   readonly current: Ref.Ref<Option.Option<BrainSettings.Resolved>>
   readonly attached: Ref.Ref<Option.Option<{ readonly sessionId: OpenCodeSession.ID; readonly interactive: boolean }>>
   readonly instances: Ref.Ref<ReadonlyArray<Instance>>
@@ -117,13 +120,20 @@ export const settings = Effect.fnUntraced(function* (brain: BrainSettings.Interf
   )
   const instances = yield* Ref.make<ReadonlyArray<Instance>>([])
   const changes = yield* Semaphore.make(1)
+  const materializing = yield* Semaphore.make(1)
+  const references = yield* Ref.make<ReadonlyArray<RenReferences.Prepared>>([])
   const apply = (update: Effect.Effect<BrainSettings.Resolved, BrainSettings.Failure>) =>
     Effect.gen(function* () {
       const next = yield* update
       const session = Option.getOrUndefined(yield* Ref.get(attached))
+      const prepared = session ? yield* RenReferences.prepare(session.sessionId, next.references) : []
+      const previousReferences = yield* Ref.getAndSet(references, prepared)
       const previous = Option.getOrUndefined(yield* Ref.getAndSet(current, Option.some(next)))
       const all = yield* Ref.get(instances)
-      if (JSON.stringify(previous) !== JSON.stringify(next))
+      if (
+        JSON.stringify(previous) !== JSON.stringify(next) ||
+        JSON.stringify(previousReferences) !== JSON.stringify(prepared)
+      )
         yield* Effect.forEach(all, (instance) => instance.reload, { discard: true })
       const api = all.at(0)?.session
       const info =
@@ -138,6 +148,8 @@ export const settings = Effect.fnUntraced(function* (brain: BrainSettings.Interf
       return next
     })
   return {
+    references,
+    materializing,
     current,
     attached,
     instances,
@@ -228,6 +240,15 @@ export const make = (
             editor.default(resolved.primary.name)
           })
           yield* context.reference.transform((editor) => {
+            if (Option.isSome(connections)) {
+              for (const entry of Ref.getUnsafe(shared.references))
+                editor.add(entry.reference.alias, {
+                  type: "local",
+                  path: entry.path,
+                  ...(entry.reference.description && { description: entry.reference.description }),
+                })
+              return
+            }
             for (const reference of Option.getOrUndefined(Ref.getUnsafe(shared.current))?.references ?? [])
               editor.add(reference.alias, {
                 type: "git",
@@ -237,10 +258,25 @@ export const make = (
               })
           })
           yield* context.session.hook("context", (event) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
+              if (Option.isSome(connections) && context.location.workspaceID)
+                yield* shared.materializing
+                  .withPermit(
+                    RenReferences.materialize(
+                      connections.value,
+                      RenWorkspaceDriver.sessionIdOf(context.location.workspaceID),
+                      yield* Ref.get(shared.references),
+                    ),
+                  )
+                  .pipe(Effect.catch((error) => Effect.logWarning("Could not materialize references", error)))
               const agent = Option.getOrUndefined(agentOf(event.agent))
               if (!agent) return
               event.system.push(...agent.instructions.map((text) => ({ type: "text" as const, text })))
+              if (Ref.getUnsafe(shared.references).length > 0 && Option.isSome(connections))
+                event.system.push({
+                  type: "text",
+                  text: "Reference checkouts under /tmp/ren-references/ are read-only. Use a separate clone for changes.",
+                })
               const hidden = new Set(BrainSettings.hiddenTools(agent, [], Object.keys(event.tools)))
               event.tools = Record.filter(event.tools, (_, name) => !hidden.has(name))
               const subagent = event.tools.subagent
@@ -265,7 +301,13 @@ export const make = (
                     onNone: () => true,
                     onSome: (session) => session.interactive,
                   }),
-                  denied: [],
+                  denied: Ref.getUnsafe(shared.references).flatMap((entry) =>
+                    ["edit", "write", "patch"].map((action) => ({
+                      action,
+                      resource: `${entry.path}/*`,
+                      effect: "deny" as const,
+                    })),
+                  ),
                 },
               )
               if (rank[decision.effect] <= rank[event.effect]) return

@@ -58,7 +58,13 @@ Prompt-admission pulls are best effort because OpenCode prompt hooks have no typ
 
 ## References
 
-The plugin currently registers Git references with OpenCode. This advertises their paths, but OpenCode attempts to materialize them in the cell while file and shell tools run on the environment executor. A real workerd/executor clone-and-read test exposed that the advertised checkout is not available on the executor. Fixing materialization on the environment machine is a separate follow-up; the existing prompt-description test does not establish that references are usable.
+With an environment connection, the cell advertises local reference paths on the executor, not Git checkouts inside workerd. Before model dispatch it materializes missing checkouts through the same environment connection used by file and shell tools. The executor image includes Git and CA certificates.
+
+Paths live under `/tmp/ren-references/<session-id>/<repository-and-branch-hash>`. A change of repository or branch selects a different checkout; aliases can share the same checkout. Cloning uses an intermediate directory and moves it into place only after success. Operations are serialized within the cell. Each model request checks the environment again, so replacing the environment reconstructs missing checkouts.
+
+The adapter denies edit, write and patch operations under these paths and tells the model to use a separate clone for changes. Shell access is not a filesystem sandbox. A clone failure is logged and can be retried on the next model request. A successful checkout is cached until its identity changes or the environment loses it; upstream branch changes are not continuously fetched.
+
+The workerd/executor end-to-end journey serves a real local Git fixture, selects a non-default branch, reads its contents with the `read` tool, checks a write denial, replaces the environment and reads the reconstructed checkout. When the cell has no environment connection, it retains OpenCode's Git-reference behavior.
 
 ## Scope
 
