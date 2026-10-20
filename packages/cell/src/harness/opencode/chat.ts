@@ -1,13 +1,13 @@
 export * as OpenCodeChat from "./chat.js"
 
-import type { Form } from "@ren/schema/form"
-import type { Permission } from "@ren/schema/permission"
+import type { SessionListInput } from "@opencode/client/effect/api"
+import { Permission } from "@opencode/schema/permission"
+import { SessionID } from "@opencode/schema/session-id"
+import { SessionMessage } from "@opencode/schema/session-message"
+import type { Session as OpenCodeSession } from "@opencode/schema/session"
+import { Skill } from "@opencode/schema/skill"
 import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
-import { SessionInbox } from "@ren/schema/session/inbox"
-import { SessionInfo } from "@ren/schema/session/info"
-import type { SessionMessage } from "@ren/schema/session/message"
-import { SessionModel } from "@ren/schema/session/model"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
 import { Clock, Effect, Option, Predicate, Schema, Semaphore, Stream } from "effect"
@@ -18,42 +18,6 @@ import { Translate } from "./translate.js"
 
 const capabilities = SessionCapabilities.of("opencode")
 
-const Data = Schema.Struct({ data: Schema.Array(Schema.Unknown) })
-const One = Schema.Struct({ data: Schema.Unknown })
-const unwrap = (raw: unknown) => Option.map(Schema.decodeUnknownOption(One)(raw), (one) => one.data)
-const Page = Schema.Struct({
-  data: Schema.Array(Schema.Unknown),
-  cursor: Schema.Struct({
-    previous: Schema.optionalKey(Schema.NullOr(Schema.String)),
-    next: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  }),
-})
-const Active = Schema.Struct({ data: Schema.Record(Schema.String, Schema.Unknown) })
-const Model = Schema.Struct({
-  id: Schema.String,
-  providerID: Schema.String,
-  name: Schema.String,
-  enabled: Schema.Boolean,
-  variants: Schema.Array(Schema.Struct({ id: Schema.String })),
-  capabilities: Schema.Struct({ input: Schema.Array(Schema.String) }),
-  limit: Schema.Struct({ context: Schema.Int, output: Schema.Int }),
-})
-
-type Failure = Harness.NotFound | Harness.Rejected | Harness.Conflict
-
-const failure = (status: number, message: string): Option.Option<Failure> => {
-  if (status === 404) return Option.some(new Harness.NotFound({ message }))
-  if (status === 409) return Option.some(new Harness.Conflict({ message }))
-  if (status === 400) return Option.some(new Harness.Rejected({ message }))
-  return Option.none()
-}
-
-const ErrorBody = Schema.Struct({ message: Schema.String })
-
-const decodeCompaction = Schema.decodeUnknownOption(SessionInbox.Compaction)
-
-const decodeRevert = Schema.decodeUnknownOption(SessionInfo.Revert)
-
 const Speaker = Schema.Struct({
   metadata: Schema.optionalKey(Schema.Struct({ userID: Schema.optionalKey(Schema.String) })),
 })
@@ -63,120 +27,81 @@ const decodeQueued = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.Lit
 const attribution = (name: string, userId: string) =>
   `<message_from user=${JSON.stringify(name)} user_id=${JSON.stringify(userId)} />`
 
+const missing = (error: { readonly message: string }) => Effect.fail(new Harness.NotFound({ message: error.message }))
+const conflict = (error: { readonly message: string }) => Effect.fail(new Harness.Conflict({ message: error.message }))
+const rejected = (error: { readonly message: string }) => Effect.fail(new Harness.Rejected({ message: error.message }))
+const absent = () => Effect.succeed(false)
+const located = { SessionNotFoundError: missing, LocationNotFoundError: missing }
+
+const readOne = <A, B>(item: A, translate: (item: A) => Option.Option<B>) =>
+  Option.match(translate(item), {
+    onNone: () =>
+      Effect.logError("The brain cannot read a value OpenCode returned", item).pipe(
+        Effect.andThen(Effect.die(new Error("The brain cannot read a value OpenCode returned"))),
+      ),
+    onSome: Effect.succeed,
+  })
+
+const readAll = <A, B>(items: ReadonlyArray<A>, translate: (item: A) => Option.Option<B>) =>
+  Effect.forEach(items, (item) => readOne(item, translate))
+
 export const make = (
   host: Pick<
     OpenCodeServer.Instance,
-    "fetch" | "shells" | "agents" | "skills" | "commands" | "findFiles" | "webSearchProviders"
+    "fetch" | "client" | "shells" | "agents" | "skills" | "commands" | "findFiles" | "webSearchProviders"
   >,
 ): Harness.Chat => {
-  const fetch = host.fetch
+  const api = host.client
   const speaking = Semaphore.makeUnsafe(1)
-  const call = Effect.fnUntraced(function* (
-    method: "GET" | "POST" | "PATCH" | "DELETE",
-    path: string,
-    body?: object,
-  ): Effect.fn.Return<unknown, Failure> {
-    const response = yield* Effect.promise(() =>
-      fetch(
-        new Request(`http://opencode${path}`, {
-          method,
-          ...(body && {
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(body),
-          }),
-        }),
-      ),
-    )
-    const text = yield* Effect.promise(() => response.text())
-    const json = text
-      ? yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(text).pipe(Effect.orDie)
-      : undefined
-    if (response.ok) return json
-    const message = Option.match(Schema.decodeUnknownOption(ErrorBody)(json), {
-      onNone: () => `OpenCode answered ${response.status} to ${method} ${path}`,
-      onSome: (error) => error.message,
-    })
-    const known = failure(response.status, message)
-    if (Option.isSome(known)) return yield* known.value
-    return yield* Effect.die(new Error(message))
-  })
 
-  const list = <A>(raw: unknown, translate: (item: unknown) => Option.Option<A>) =>
-    Effect.gen(function* () {
-      const items = (yield* Schema.decodeUnknownEffect(Data)(raw).pipe(Effect.orDie)).data
-      return yield* Effect.forEach(items, (item) =>
-        Option.match(translate(item), {
-          onNone: () =>
-            Effect.logWarning("The brain skipped an OpenCode item it cannot read", item).pipe(Effect.as([])),
-          onSome: (value) => Effect.succeed([value]),
-        }),
-      ).pipe(Effect.map((all) => all.flat()))
-    })
-
-  const notFoundOnly = <A>(effect: Effect.Effect<A, Failure>) =>
-    effect.pipe(
-      Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
-      Effect.catchTag("Harness.Conflict", (error) => Effect.die(new Error(error.message))),
-    )
-
-  const session = (raw: unknown) => Translate.session(raw, capabilities)
+  const session = (info: OpenCodeSession.Info) => Translate.session(info, capabilities)
 
   const get = (sessionId: Session.ID) =>
-    notFoundOnly(call("GET", `/api/session/${sessionId}`)).pipe(
-      Effect.flatMap((raw) =>
-        Option.match(Option.flatMap(unwrap(raw), session), {
-          onNone: () => Effect.die(new Error(`The brain cannot read session ${sessionId}`)),
-          onSome: Effect.succeed,
-        }),
-      ),
+    api.session.get({ sessionID: SessionID.make(sessionId) }).pipe(
+      Effect.catchTags({ SessionNotFoundError: missing }, Effect.die),
+      Effect.flatMap((info) => readOne(info, session)),
     )
 
-  const models = call("GET", "/api/model").pipe(
-    Effect.orDie,
-    Effect.flatMap((raw) => list(raw, Schema.decodeUnknownOption(Model))),
-    Effect.map((all) =>
-      all
-        .filter((model) => model.enabled)
-        .map((model): SessionModel.Info => ({
-          id: model.id,
-          providerID: model.providerID,
-          name: model.name,
-          variants: model.variants.map((variant) => ({ id: variant.id })),
-          input: model.capabilities.input,
-          limit: model.limit,
-        })),
-    ),
-  )
+  const inbox = (sessionId: Session.ID) =>
+    api.session.inbox.list({ sessionID: SessionID.make(sessionId) }).pipe(
+      Effect.catchTags({ SessionNotFoundError: missing }, Effect.die),
+      Effect.flatMap((items) => readAll(items, Translate.inbox)),
+    )
+
+  const delivered = (sessionId: Session.ID, messageId: SessionMessage.ID) =>
+    api.session.message
+      .get({ sessionID: SessionID.make(sessionId), messageID: messageId })
+      .pipe(
+        Effect.as(true),
+        Effect.catchTags({ SessionNotFoundError: absent, MessageNotFoundError: absent }, Effect.die),
+      )
 
   const lastSpeaker = (sessionId: Session.ID) =>
     Effect.gen(function* () {
-      const read = (path: string) =>
-        notFoundOnly(call("GET", path)).pipe(
-          Effect.flatMap((raw) => Schema.decodeUnknownEffect(Data)(raw).pipe(Effect.orDie)),
-        )
-      const inbox = yield* read(`/api/session/${sessionId}/inbox`)
-      const queued = inbox.data.map((item) => decodeQueued(item)).findLast(Option.isSome)
+      const sessionID = SessionID.make(sessionId)
+      const queued = (yield* api.session.inbox
+        .list({ sessionID })
+        .pipe(Effect.catchTags({ SessionNotFoundError: missing }, Effect.die)))
+        .map((item) => decodeQueued(item))
+        .findLast(Option.isSome)
       if (queued) return Option.fromNullishOr(queued.value.payload.metadata?.userID)
-      const latest = yield* read(`/api/session/${sessionId}/message?type=user&limit=1&order=desc`)
+      const latest = yield* api.message
+        .list({ sessionID, type: "user", limit: 1, order: "desc" })
+        .pipe(Effect.catchTags({ SessionNotFoundError: missing }, Effect.die))
       return Option.fromNullishOr(
         latest.data.map((item) => decodeSpoken(item)).find(Option.isSome)?.value.metadata?.userID,
       )
     })
 
-  const active = call("GET", "/api/session/active").pipe(
-    Effect.orDie,
-    Effect.flatMap(Schema.decodeUnknownEffect(Active)),
-    Effect.orDie,
-    Effect.map((found) => Object.keys(found.data)),
-  )
+  const active = api.session.active().pipe(Effect.orDie, Effect.map(Object.keys))
 
   return {
-    events: OpenCodeEvents.stream(fetch).pipe(
+    events: OpenCodeEvents.stream(host.fetch).pipe(
       Stream.mapEffect((raw) =>
         Effect.gen(function* () {
           const translated = Translate.frame(raw, yield* Clock.currentTimeMillis)
           if (Option.isNone(translated) && Translate.isAllowed(raw))
-            yield* Effect.logWarning("Skipped an OpenCode event that Ren supports but cannot read", raw)
+            return yield* Effect.fail(new Error("The brain cannot read an OpenCode event Ren supports", { cause: raw }))
           return Option.toArray(translated)
         }),
       ),
@@ -186,52 +111,72 @@ export const make = (
     status: Effect.map(active, (ids) =>
       Object.fromEntries(ids.map((id): [string, SessionStatus.Info] => [id, { type: "busy" }])),
     ),
-    models,
+    models: api.model.list().pipe(
+      Effect.orDie,
+      Effect.map((page) =>
+        page.data
+          .filter((model) => model.enabled)
+          .map((model) => ({
+            id: model.id,
+            providerID: model.providerID,
+            name: model.name,
+            variants: model.variants.map((variant) => ({ id: variant.id })),
+            input: model.capabilities.input,
+            limit: { context: model.limit.context, output: model.limit.output },
+          })),
+      ),
+    ),
     get,
     children: (sessionId) =>
       Effect.gen(function* () {
         yield* get(sessionId)
-        const raw = yield* notFoundOnly(call("GET", `/api/session?parentID=${sessionId}&limit=200`))
-        return yield* list(raw, session)
+        const children = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>
+          api.session.list({ parentID: SessionID.make(sessionId), cursor }).pipe(
+            Effect.orDie,
+            Effect.map((page) => [page.data, Option.fromNullishOr(page.cursor.next)] as const),
+          ),
+        ).pipe(Stream.runCollect)
+        return yield* readAll(children, session)
       }),
     messages: (sessionId, page) =>
       Effect.gen(function* () {
-        const query = new URLSearchParams({
-          ...(page.limit ? { limit: String(page.limit) } : {}),
-          ...(page.cursor ? { cursor: page.cursor } : { order: "desc" }),
-        })
-        const raw = yield* call("GET", `/api/session/${sessionId}/message?${query.toString()}`).pipe(
-          Effect.catchTag("Harness.Conflict", (error) => Effect.die(new Error(error.message))),
-        )
-        const decoded = yield* Schema.decodeUnknownEffect(Page)(raw).pipe(Effect.orDie)
+        const found = yield* api.message
+          .list({
+            sessionID: SessionID.make(sessionId),
+            ...(page.limit && { limit: page.limit }),
+            ...(page.cursor ? { cursor: page.cursor } : { order: "desc" }),
+          })
+          .pipe(
+            Effect.catchTags(
+              { SessionNotFoundError: missing, InvalidCursorError: rejected, InvalidRequestError: rejected },
+              Effect.die,
+            ),
+          )
         return {
-          items: yield* list({ data: decoded.data }, Translate.message),
+          items: yield* readAll(found.data, Translate.message),
           cursor: {
-            ...(decoded.cursor.previous && { previous: decoded.cursor.previous }),
-            ...(decoded.cursor.next && { next: decoded.cursor.next }),
+            ...(found.cursor.previous && { previous: found.cursor.previous }),
+            ...(found.cursor.next && { next: found.cursor.next }),
           },
-        } satisfies SessionMessage.Page
+        }
       }),
     message: (sessionId, messageId) =>
-      notFoundOnly(call("GET", `/api/session/${sessionId}/message/${messageId}`)).pipe(
-        Effect.flatMap((raw) =>
-          Option.match(Option.flatMap(unwrap(raw), Translate.message), {
-            onNone: () => Effect.die(new Error(`The brain cannot read message ${messageId}`)),
-            onSome: Effect.succeed,
-          }),
+      api.session.message
+        .get({ sessionID: SessionID.make(sessionId), messageID: SessionMessage.ID.make(messageId) })
+        .pipe(
+          Effect.catchTags({ SessionNotFoundError: missing, MessageNotFoundError: missing }, Effect.die),
+          Effect.flatMap((info) => readOne(info, Translate.message)),
         ),
-      ),
-    inbox: (sessionId) =>
-      notFoundOnly(call("GET", `/api/session/${sessionId}/inbox`)).pipe(
-        Effect.flatMap((raw) => list(raw, Translate.inbox)),
-      ),
+    inbox,
     permissions: (sessionId) =>
-      notFoundOnly(call("GET", `/api/session/${sessionId}/permission`)).pipe(
-        Effect.flatMap((raw) => list(raw, Translate.permission)),
+      api.permission.list({ sessionID: SessionID.make(sessionId) }).pipe(
+        Effect.catchTags(located, Effect.die),
+        Effect.flatMap((requests) => readAll(requests, Translate.permission)),
       ),
     forms: (sessionId) =>
-      notFoundOnly(call("GET", `/api/session/${sessionId}/form`)).pipe(
-        Effect.flatMap((raw) => list(raw, Translate.form)),
+      api.session.form.list({ sessionID: sessionId }).pipe(
+        Effect.catchTags(located, Effect.die),
+        Effect.flatMap((forms) => readAll(forms, Translate.form)),
       ),
     prompt: (sessionId, prompt) =>
       speaking
@@ -249,133 +194,137 @@ export const make = (
                 )
               },
             })
-            return yield* call("POST", `/api/session/${sessionId}/prompt`, {
-              id: prompt.id,
-              text: Option.match(note, { onNone: () => prompt.text, onSome: (line) => `${prompt.text}\n\n${line}` }),
-              delivery: prompt.delivery,
-              ...(Predicate.isBoolean(prompt.resume) && { resume: prompt.resume }),
-              ...(prompt.agents && { agents: prompt.agents }),
-              ...(prompt.skills && { skills: prompt.skills }),
-              ...Option.match(prompt.sender, {
-                onNone: () => ({}),
-                onSome: (sender) => ({
-                  metadata: { userID: sender.userId, ...(Option.isSome(note) && { displayText: prompt.text }) },
+            return yield* api.session
+              .prompt({
+                sessionID: SessionID.make(sessionId),
+                id: SessionMessage.ID.make(prompt.id),
+                text: Option.match(note, { onNone: () => prompt.text, onSome: (line) => `${prompt.text}\n\n${line}` }),
+                delivery: prompt.delivery,
+                ...(Predicate.isBoolean(prompt.resume) && { resume: prompt.resume }),
+                ...(prompt.agents && { agents: prompt.agents }),
+                ...(prompt.skills && {
+                  skills: prompt.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })),
                 }),
-              }),
-            })
+                ...Option.match(prompt.sender, {
+                  onNone: () => ({}),
+                  onSome: (sender) => ({
+                    metadata: { userID: sender.userId, ...(Option.isSome(note) && { displayText: prompt.text }) },
+                  }),
+                }),
+              })
+              .pipe(Effect.catchTags({ ...located, ConflictError: conflict }, Effect.die))
           }),
         )
         .pipe(
           Effect.asVoid,
-          Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
           Effect.catchTag("Harness.Conflict", (error) =>
             Effect.gen(function* () {
-              const sent = yield* call("GET", `/api/session/${sessionId}/message/${prompt.id}`).pipe(
-                Effect.as(true),
-                Effect.catchTag("Harness.NotFound", () => Effect.succeed(false)),
-                Effect.orDie,
-              )
-              const queued = (yield* notFoundOnly(call("GET", `/api/session/${sessionId}/inbox`)).pipe(
-                Effect.flatMap((raw) => list(raw, Translate.inbox)),
-              )).some((item) => item.id === prompt.id)
+              const sent = yield* delivered(sessionId, SessionMessage.ID.make(prompt.id))
+              const queued = (yield* inbox(sessionId)).some((item) => item.id === prompt.id)
               if (!sent && !queued) return yield* error
             }),
           ),
         ),
     compact: (sessionId, id) =>
-      call("POST", `/api/session/${sessionId}/compact`, { id }).pipe(
-        Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
-        Effect.flatMap((raw) =>
-          Option.match(Option.flatMap(unwrap(raw), decodeCompaction), {
-            onNone: () => Effect.die(new Error(`The brain cannot read the compaction of session ${sessionId}`)),
-            onSome: Effect.succeed,
-          }),
-        ),
+      api.session.compact({ sessionID: SessionID.make(sessionId), id: SessionMessage.ID.make(id) }).pipe(
+        Effect.catchTags({ ...located, ConflictError: conflict }, Effect.die),
+        Effect.flatMap((compaction) => readOne(compaction, Translate.compaction)),
       ),
     interrupt: (sessionId, options) =>
-      notFoundOnly(call("POST", `/api/session/${sessionId}/interrupt${options.resume ? "?resume=true" : ""}`)).pipe(
-        Effect.asVoid,
-      ),
-    background: (sessionId) => notFoundOnly(call("POST", `/api/session/${sessionId}/background`)).pipe(Effect.asVoid),
+      api.session
+        .interrupt({ sessionID: SessionID.make(sessionId), ...(options.resume && { resume: true }) })
+        .pipe(Effect.catchTags(located, Effect.die), Effect.asVoid),
+    background: (sessionId) =>
+      api.session.background({ sessionID: SessionID.make(sessionId) }).pipe(Effect.catchTags(located, Effect.die)),
     rename: (sessionId, title) =>
-      notFoundOnly(call("PATCH", `/api/session/${sessionId}`, { title })).pipe(Effect.asVoid),
+      api.session.update({ sessionID: SessionID.make(sessionId), title }).pipe(Effect.catchTags(located, Effect.die)),
     revert: {
       stage: (sessionId, messageId) =>
         Effect.gen(function* () {
-          yield* notFoundOnly(call("POST", `/api/session/${sessionId}/interrupt`))
-          yield* notFoundOnly(call("POST", `/api/experimental/session/${sessionId}/wait`))
-          const raw = yield* call("POST", `/api/session/${sessionId}/revert/stage`, { messageID: messageId }).pipe(
-            Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
-          )
-          return yield* Option.match(Option.flatMap(unwrap(raw), decodeRevert), {
-            onNone: () => Effect.die(new Error(`The brain cannot read the revert of session ${sessionId}`)),
-            onSome: Effect.succeed,
-          })
+          const sessionID = SessionID.make(sessionId)
+          yield* api.session.interrupt({ sessionID }).pipe(Effect.catchTags(located, Effect.die))
+          yield* api.session.wait({ sessionID }).pipe(Effect.catchTags(located, Effect.die))
+          const staged = yield* api.session.revert
+            .stage({ sessionID, messageID: SessionMessage.ID.make(messageId) })
+            .pipe(
+              Effect.catchTags({ ...located, MessageNotFoundError: missing, SessionBusyError: conflict }, Effect.die),
+            )
+          return yield* readOne(staged, Translate.revert)
         }),
       clear: (sessionId) =>
-        call("DELETE", `/api/session/${sessionId}/revert`).pipe(
-          Effect.asVoid,
-          Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
-        ),
+        api.session.revert
+          .clear({ sessionID: SessionID.make(sessionId) })
+          .pipe(Effect.catchTags({ ...located, SessionBusyError: conflict }, Effect.die)),
       commit: (sessionId) =>
-        call("POST", `/api/session/${sessionId}/revert/commit`).pipe(
-          Effect.asVoid,
-          Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
-        ),
+        api.session.revert
+          .commit({ sessionID: SessionID.make(sessionId) })
+          .pipe(Effect.catchTags({ ...located, SessionBusyError: conflict }, Effect.die)),
     },
     cancelInbox: (sessionId, inboxId) =>
       Effect.gen(function* () {
-        yield* notFoundOnly(call("DELETE", `/api/session/${sessionId}/inbox/${inboxId}`))
-        const delivered = yield* notFoundOnly(call("GET", `/api/session/${sessionId}/message/${inboxId}`)).pipe(
-          Effect.as(true),
-          Effect.catchTag("Harness.NotFound", () => Effect.succeed(false)),
-        )
-        if (delivered)
+        const inboxID = SessionMessage.ID.make(inboxId)
+        yield* api.session.inbox
+          .cancel({ sessionID: SessionID.make(sessionId), inboxID })
+          .pipe(Effect.catchTags({ SessionNotFoundError: missing }, Effect.die))
+        if (yield* delivered(sessionId, inboxID))
           return yield* new Harness.Conflict({ message: `The session took input ${inboxId} before it was withdrawn` })
       }),
     updateInbox: (sessionId, inboxId, delivery) =>
-      call("PATCH", `/api/session/${sessionId}/inbox/${inboxId}`, { delivery }).pipe(
-        Effect.asVoid,
-        Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
-      ),
+      api.session.inbox
+        .update({ sessionID: SessionID.make(sessionId), inboxID: SessionMessage.ID.make(inboxId), delivery })
+        .pipe(Effect.catchTags({ SessionNotFoundError: missing, ConflictError: conflict }, Effect.die)),
     command: (sessionId, command) =>
-      notFoundOnly(
-        call("POST", `/api/session/${sessionId}/command`, {
+      api.session
+        .command({
+          sessionID: SessionID.make(sessionId),
           name: command.name,
           text: command.text,
           delivery: command.delivery,
           ...(command.agents && { agents: command.agents }),
-          ...(command.skills && { skills: command.skills }),
-        }),
-      ).pipe(Effect.asVoid),
-    agents: (sessionId) => host.agents(sessionId).pipe(Effect.flatMap((all) => list({ data: all }, Translate.agent))),
-    skills: (sessionId) => host.skills(sessionId).pipe(Effect.flatMap((all) => list({ data: all }, Translate.skill))),
-    commands: (sessionId) =>
-      host.commands(sessionId).pipe(Effect.flatMap((all) => list({ data: all }, Translate.command))),
+          ...(command.skills && {
+            skills: command.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })),
+          }),
+        })
+        .pipe(Effect.catchTags({ ...located, CommandNotFoundError: missing }, Effect.die)),
+    agents: (sessionId) => host.agents(sessionId).pipe(Effect.flatMap((all) => readAll(all, Translate.agent))),
+    skills: (sessionId) => host.skills(sessionId).pipe(Effect.flatMap((all) => readAll(all, Translate.skill))),
+    commands: (sessionId) => host.commands(sessionId).pipe(Effect.flatMap((all) => readAll(all, Translate.command))),
     files: (sessionId, search) =>
-      host.findFiles(sessionId, search).pipe(Effect.flatMap((all) => list({ data: all }, Translate.file))),
+      host.findFiles(sessionId, search).pipe(Effect.flatMap((all) => readAll(all, Translate.file))),
     webSearchProviders: (sessionId) =>
       host
         .webSearchProviders(sessionId)
         .pipe(Effect.map((all) => all.map((provider) => ({ id: provider.id, name: provider.name })))),
-    replyPermission: (sessionId, requestId: Permission.RequestID, reply, message) =>
-      notFoundOnly(
-        call("POST", `/api/session/${sessionId}/permission/${requestId}/reply`, {
+    replyPermission: (sessionId, requestId, reply, message) =>
+      api.permission
+        .reply({
+          sessionID: SessionID.make(sessionId),
+          requestID: Permission.ID.make(requestId),
           decision: reply,
           ...(message && { message }),
-        }),
-      ).pipe(Effect.asVoid),
-    replyForm: (sessionId, formId: Form.ID, answer) =>
-      call("POST", `/api/session/${sessionId}/form/${formId}/reply`, { answer }).pipe(Effect.asVoid),
-    cancelForm: (sessionId, formId) =>
-      call("DELETE", `/api/session/${sessionId}/form/${formId}`).pipe(
-        Effect.asVoid,
-        Effect.catchTag("Harness.Rejected", (error) => Effect.die(new Error(error.message))),
+        })
+        .pipe(Effect.catchTags({ ...located, PermissionNotFoundError: missing }, Effect.die)),
+    replyForm: (sessionId, formId, answer) =>
+      api.session.form.reply({ sessionID: sessionId, formID: formId, answer }).pipe(
+        Effect.catchTags(
+          {
+            ...located,
+            FormNotFoundError: missing,
+            FormAlreadySettledError: conflict,
+            FormInvalidAnswerError: rejected,
+            InvalidRequestError: rejected,
+          },
+          Effect.die,
+        ),
       ),
+    cancelForm: (sessionId, formId) =>
+      api.session.form
+        .cancel({ sessionID: sessionId, formID: formId })
+        .pipe(
+          Effect.catchTags({ ...located, FormNotFoundError: missing, FormAlreadySettledError: conflict }, Effect.die),
+        ),
     shells: (sessionId) =>
-      host
-        .shells(sessionId, (shell) => shell.list())
-        .pipe(Effect.flatMap((all) => list({ data: all }, Translate.shell))),
+      host.shells(sessionId, (shell) => shell.list()).pipe(Effect.flatMap((all) => readAll(all, Translate.shell))),
     shellOutput: (sessionId, shellId, page) =>
       host
         .shells(sessionId, (shell) =>

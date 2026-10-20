@@ -34,15 +34,15 @@ export class Rejected extends Schema.TaggedError<Rejected>()("Harness.Rejected",
 export class Conflict extends Schema.TaggedError<Conflict>()("Harness.Conflict", { message: Schema.String }) {}
 
 interface Mentions {
-  readonly agents?: ReadonlyArray<SessionMessage.AgentAttachment>
-  readonly skills?: ReadonlyArray<{ readonly id: string; readonly mention?: SessionMessage.Mention }>
+  readonly agents?: ReadonlyArray<SessionMessage.AgentAttachment> | undefined
+  readonly skills?: ReadonlyArray<{ readonly id: string; readonly mention?: SessionMessage.Mention }> | undefined
 }
 
 interface Prompt extends Mentions {
   readonly id: SessionMessage.ID
   readonly text: string
   readonly delivery: SessionInbox.Delivery
-  readonly resume?: boolean
+  readonly resume?: boolean | undefined
   readonly sender: Option.Option<Sender>
 }
 

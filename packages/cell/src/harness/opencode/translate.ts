@@ -1,5 +1,16 @@
 export * as Translate from "./translate.js"
 
+import type { Agent } from "@opencode/schema/agent"
+import type { Command } from "@opencode/schema/command"
+import type { FileSystem } from "@opencode/schema/filesystem"
+import type { Form as OpenCodeForm } from "@opencode/schema/form"
+import type { Permission as OpenCodePermission } from "@opencode/schema/permission"
+import type { Session as OpenCodeSession } from "@opencode/schema/session"
+import type { SessionInbox as OpenCodeInbox } from "@opencode/schema/session-inbox"
+import type { SessionMessage as OpenCodeMessage } from "@opencode/schema/session-message"
+import type { Revert } from "@opencode/schema/session-revert"
+import type { Shell as OpenCodeShell } from "@opencode/schema/shell"
+import type { Skill } from "@opencode/schema/skill"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { SessionEvent } from "@ren/schema/session/event"
@@ -9,7 +20,7 @@ import { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
-import { Option, Predicate, pipe, Schema } from "effect"
+import { Option, Predicate, pipe, Schema, Struct } from "effect"
 
 const UserID = Schema.Struct({
   metadata: Schema.Struct({ userID: Schema.String, displayText: Schema.optionalKey(Schema.String) }),
@@ -54,12 +65,18 @@ const nested = (value: unknown, key: string, update: (inner: unknown) => unknown
   Predicate.hasProperty(value, key) ? { ...value, [key]: update(value[key]) } : value
 
 const decodeEvent = Schema.decodeUnknownOption(SessionEvent.Event)
-const decodeMessage = Schema.decodeUnknownOption(SessionMessage.Info)
-const decodeInbox = Schema.decodeUnknownOption(SessionInbox.Info)
-const decodePermission = Schema.decodeUnknownOption(Permission.Request)
-const decodeForm = Schema.decodeUnknownOption(Form.Info)
-const decodeSession = Schema.decodeUnknownOption(SessionInfo.Info)
-const decodeShell = Schema.decodeUnknownOption(Shell.Info)
+const readMessage = Schema.decodeUnknownOption(Schema.toType(SessionMessage.Info))
+const readInbox = Schema.decodeUnknownOption(Schema.toType(SessionInbox.Info))
+const readCompaction = Schema.decodeUnknownOption(Schema.toType(SessionInbox.Compaction))
+const readPermission = Schema.decodeUnknownOption(Schema.toType(Permission.Request))
+const readForm = Schema.decodeUnknownOption(Schema.toType(Form.Info))
+const readSession = Schema.decodeUnknownOption(Schema.toType(SessionInfo.Info.mapFields(Struct.omit(["capabilities"]))))
+const readRevert = Schema.decodeUnknownOption(Schema.toType(SessionInfo.Revert))
+const readShell = Schema.decodeUnknownOption(Schema.toType(Shell.Info))
+const readAgent = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Agent))
+const readSkill = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Skill))
+const readCommand = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.Command))
+const readFile = Schema.decodeUnknownOption(Schema.toType(SessionCatalog.File))
 
 const Typed = Schema.Struct({ type: Schema.String })
 const decodeTyped = Schema.decodeUnknownOption(Typed)
@@ -94,23 +111,27 @@ export const event = (raw: unknown): Option.Option<SessionEvent.Event> => {
   )
 }
 
-export const message = (raw: unknown) => decodeMessage(withSender(raw))
+export const message = (info: OpenCodeMessage.Info) => readMessage(withSender(info))
 
-export const inbox = (raw: unknown) => decodeInbox(nested(raw, "payload", withSender))
+export const inbox = (info: OpenCodeInbox.Info) => readInbox(nested(info, "payload", withSender))
 
-export const permission = decodePermission
+export const compaction = (info: OpenCodeInbox.Compaction) => readCompaction(info)
 
-export const form = (raw: unknown) => decodeForm(withKind(raw))
+export const permission = (request: OpenCodePermission.Request) => readPermission(request)
 
-export const shell = (raw: unknown) => decodeShell(withOwner(raw))
+export const form = (info: OpenCodeForm.Info) => readForm(withKind(info))
 
-export const session = (raw: unknown, capabilities: SessionCapabilities.Info) =>
-  Predicate.isObject(raw) ? decodeSession({ ...raw, capabilities }) : Option.none()
+export const shell = (info: OpenCodeShell.Info) => readShell(withOwner(info))
 
-export const agent = Schema.decodeUnknownOption(SessionCatalog.Agent)
+export const session = (info: OpenCodeSession.Info, capabilities: SessionCapabilities.Info) =>
+  Option.map(readSession(info), (read): SessionInfo.Info => ({ ...read, capabilities }))
 
-export const skill = Schema.decodeUnknownOption(SessionCatalog.Skill)
+export const revert = (staged: Revert) => readRevert(staged)
 
-export const command = Schema.decodeUnknownOption(SessionCatalog.Command)
+export const agent = (info: Agent.Info) => readAgent(info)
 
-export const file = Schema.decodeUnknownOption(SessionCatalog.File)
+export const skill = (info: Skill.Info) => readSkill(info)
+
+export const command = (info: Command.Info) => readCommand(info)
+
+export const file = (entry: FileSystem.Entry) => readFile(entry)

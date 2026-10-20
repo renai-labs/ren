@@ -22,6 +22,7 @@ import { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { Cell } from "../src/cell.js"
 import { Harness } from "../src/harness/harness.js"
 import { OpenCodeChat } from "../src/harness/opencode/chat.js"
+import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { Sync } from "../src/sync.js"
 import { BrainTest } from "./lib/brain.js"
 import { Shared } from "./lib/shared.js"
@@ -76,6 +77,7 @@ const setup = Effect.gen(function* () {
     fetch,
     chat: OpenCodeChat.make({
       fetch,
+      client: yield* OpenCodeServer.client(fetch),
       shells: () => Effect.die(new Error("alarm must not read shells")),
       agents: () => Effect.die(new Error("alarm must not read agents")),
       skills: () => Effect.die(new Error("alarm must not read skills")),

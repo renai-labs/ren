@@ -35,13 +35,6 @@ const ShellCreated = Schema.Struct({ data: Schema.Struct({ info: Schema.Struct({
 
 const PermissionAsked = Schema.Struct({ data: Schema.Struct({ id: Schema.String }) })
 
-const Data = Schema.Struct({ data: Schema.Array(Schema.Unknown) })
-
-const Page = Schema.Struct({ data: Schema.Array(Schema.Unknown), cursor: Schema.Unknown })
-
-const json = (fetch: (request: Request) => Promise<Response>, path: string) =>
-  Effect.promise(() => fetch(new Request(`http://opencode${path}`)).then((response) => response.json()))
-
 const question = {
   name: "question",
   input: { questions: [{ question: "Which?", header: "Pick", options: [{ label: "A", description: "a" }] }] },
@@ -71,25 +64,22 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
         Effect.flatMap((event) => (typed(event).type === type ? Effect.succeed(event) : until(type))),
       )
     yield* until("server.connected")
-    const reads: Array<{ readonly name: string; readonly raw: unknown; readonly ok: boolean }> = []
-    const read = Effect.fnUntraced(function* (
-      name: string,
-      path: string,
-      decode: (raw: unknown) => Option.Option<unknown>,
-    ) {
-      const page = Schema.decodeUnknownSync(Data)(yield* json(brain.harness, path))
-      reads.push(...page.data.map((raw) => ({ name, raw, ok: Option.isSome(decode(raw)) })))
-      return page.data
-    })
+    const reads: Array<{ readonly name: string; readonly item: unknown; readonly ok: boolean }> = []
+    const read = <A>(name: string, items: ReadonlyArray<A>, translate: (item: A) => Option.Option<unknown>) => {
+      reads.push(...items.map((item) => ({ name, item, ok: Option.isSome(translate(item)) })))
+      return items
+    }
     const turn = Effect.fnUntraced(function* (script: { readonly marker: string }, text = "") {
       yield* brain.send(`${text} ${script.marker}`)
       yield* brain.opencode.session.wait({ sessionID })
     })
 
-    expect(yield* read("agent", "/api/agent", Translate.agent)).not.toHaveLength(0)
-    expect(yield* read("skill", "/api/skill", Translate.skill)).not.toHaveLength(0)
-    expect(yield* read("command", "/api/command", Translate.command)).not.toHaveLength(0)
-    expect(yield* read("file", "/api/fs/find?query=package", Translate.file)).not.toHaveLength(0)
+    expect(read("agent", (yield* brain.opencode.agent.list()).data, Translate.agent)).not.toHaveLength(0)
+    expect(read("skill", (yield* brain.opencode.skill.list()).data, Translate.skill)).not.toHaveLength(0)
+    expect(read("command", (yield* brain.opencode.command.list()).data, Translate.command)).not.toHaveLength(0)
+    expect(read("file", (yield* brain.opencode.file.find({ query: "package" })).data, Translate.file)).not.toHaveLength(
+      0,
+    )
 
     yield* turn(stub.script({ reasoning: "thinking it over", reply: "a plain answer" }))
     yield* turn(stub.script({ tool: { name: "skill", input: { name: "missing" } } }))
@@ -107,7 +97,9 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
     })
     yield* brain.send(stub.script({ tool: { name: "webfetch", input: { url: "https://example.com" } } }).marker)
     const asked = Schema.decodeUnknownSync(PermissionAsked)(yield* until("permission.asked"))
-    expect(yield* read("permission", `/api/session/${brain.id}/permission`, Translate.permission)).toHaveLength(1)
+    expect(read("permission", yield* brain.opencode.permission.list({ sessionID }), Translate.permission)).toHaveLength(
+      1,
+    )
     yield* brain.opencode.permission.reply({
       sessionID,
       requestID: Permission.ID.make(asked.data.id),
@@ -119,7 +111,7 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
 
     yield* brain.send(stub.script({ tool: question }).marker)
     const form = Schema.decodeUnknownSync(FormCreated)(yield* until("form.created")).data.form
-    expect(yield* read("form", `/api/session/${brain.id}/form`, Translate.form)).toHaveLength(1)
+    expect(read("form", yield* brain.opencode.session.form.list({ sessionID }), Translate.form)).toHaveLength(1)
     yield* brain.opencode.session.form.reply({
       sessionID,
       formID: Form.ID.make(form.id),
@@ -146,7 +138,7 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
     const changed = SessionMessage.ID.create()
     yield* brain.send(stub.script().marker, { delivery: "queue", messageId: Session.MessageID.make(cancelled) })
     yield* brain.send(stub.script().marker, { delivery: "queue", messageId: Session.MessageID.make(changed) })
-    expect(yield* read("inbox", `/api/session/${brain.id}/inbox`, Translate.inbox)).toHaveLength(2)
+    expect(read("inbox", yield* brain.opencode.session.inbox.list({ sessionID }), Translate.inbox)).toHaveLength(2)
     yield* brain.opencode.session.inbox.cancel({ sessionID, inboxID: cancelled })
     yield* brain.opencode.session.inbox.update({ sessionID, inboxID: changed, delivery: "steer" })
     yield* brain.opencode.session.synthetic({ sessionID, text: "a note", description: "note" })
@@ -176,17 +168,15 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
     yield* until("session.compaction.ended")
     yield* brain.opencode.session.wait({ sessionID })
 
-    const messages = Schema.decodeUnknownSync(Page)(
-      yield* json(brain.harness, `/api/session/${brain.id}/message?order=asc&limit=200`),
-    ).data
-    const user = messages.map((raw) => Schema.decodeUnknownOption(SessionMessage.User)(raw)).findLast(Option.isSome)
+    const messages = (yield* brain.opencode.message.list({ sessionID, order: "asc", limit: 200 })).data
+    const user = messages.findLast((info) => info.type === "user")
     if (!user) return yield* Effect.die(new Error("The session has no user message"))
-    yield* brain.opencode.session.revert.stage({ sessionID, messageID: user.value.id })
+    yield* brain.opencode.session.revert.stage({ sessionID, messageID: user.id })
     yield* until("session.revert.staged")
     yield* brain.opencode.session.revert.clear({ sessionID })
     yield* until("session.revert.cleared")
     yield* turn(stub.script())
-    yield* brain.opencode.session.revert.stage({ sessionID, messageID: user.value.id })
+    yield* brain.opencode.session.revert.stage({ sessionID, messageID: user.id })
     yield* brain.opencode.session.revert.commit({ sessionID })
     yield* until("session.revert.committed")
     yield* brain.opencode.session.switchAgent({ sessionID, agent: Agent.ID.make("plan") })
@@ -199,20 +189,18 @@ test("every allowlisted event, message, inbox item, permission and form OpenCode
         (type) => !unreachable.has(type) && !allowed.some((raw) => typed(raw).type === type),
       ),
     ).toEqual([])
-    const after = Schema.decodeUnknownSync(Page)(
-      yield* json(brain.harness, `/api/session/${brain.id}/message?order=asc&limit=200`),
-    ).data
-    expect([...messages, ...after].filter((raw) => Option.isNone(Translate.message(raw)))).toEqual([])
+    const after = (yield* brain.opencode.message.list({ sessionID, order: "asc", limit: 200 })).data
+    expect([...messages, ...after].filter((info) => Option.isNone(Translate.message(info)))).toEqual([])
     expect(
       new Set(
-        [...messages, ...after].flatMap((raw) => Option.toArray(Translate.message(raw)).map((info) => info.type)),
+        [...messages, ...after].flatMap((info) => Option.toArray(Translate.message(info)).map((each) => each.type)),
       ),
     ).toEqual(
       new Set(["user", "synthetic", "assistant", "idle", "model-switched", "agent-switched", "shell", "compaction"]),
     )
     expect(reads.filter((entry) => !entry.ok)).toEqual([])
     const sender = messages
-      .flatMap((raw) => Option.toArray(Translate.message(raw)))
+      .flatMap((info) => Option.toArray(Translate.message(info)))
       .find((info) => info.type === "user")
     expect(sender).toMatchObject({ sender: { userId: "user_1" } })
   }).pipe(Effect.scoped, Effect.runPromise))

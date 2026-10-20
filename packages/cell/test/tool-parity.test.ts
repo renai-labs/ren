@@ -127,6 +127,7 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
   return yield* OpenCodeHarness.make(
     {
       fetch,
+      client: yield* OpenCodeServer.client(fetch),
       shells: () => Effect.die(new Error("The tool parity host has no shells")),
       agents: () => Effect.die(new Error("The tool parity host has no agents")),
       skills: () => Effect.die(new Error("The tool parity host has no skills")),
