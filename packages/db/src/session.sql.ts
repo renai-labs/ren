@@ -1,3 +1,4 @@
+import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
@@ -15,6 +16,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core"
+import { agent } from "./agent.sql.js"
 import { organization, user } from "./auth.sql.js"
 import { space } from "./space.sql.js"
 
@@ -41,6 +43,9 @@ export const agent_session = pgTable(
       .$type<Session.ID>()
       .notNull()
       .references((): AnyPgColumn => agent_session.id, { onDelete: "cascade" }),
+    agent_id: text()
+      .$type<Agent.ID>()
+      .references(() => agent.id, { onDelete: "set null" }),
     harness: text().$type<Session.Harness>().notNull(),
     start_input: jsonb().$type<Omit<typeof Session.StartInput.Encoded, "initialMessage">>(),
     sync_seq: bigint({ mode: "number" }),
@@ -49,7 +54,10 @@ export const agent_session = pgTable(
     created_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
   },
-  (table) => [index("agent_session_root_id_idx").on(table.root_id)],
+  (table) => [
+    index("agent_session_root_id_idx").on(table.root_id),
+    index("agent_session_agent_id_idx").on(table.agent_id),
+  ],
 )
 
 export const opencode_session = pgTable("opencode_session", {
@@ -105,11 +113,12 @@ export const opencode_message = pgTable(
 )
 
 export const sessionRelations = defineRelationsPart(
-  { organization, user, space, agent_session, opencode_session, opencode_message },
+  { organization, user, space, agent, agent_session, opencode_session, opencode_message },
   (r) => ({
     agent_session: {
       organization: r.one.organization({ from: r.agent_session.organization_id, to: r.organization.id }),
       space: r.one.space({ from: r.agent_session.space_id, to: r.space.id }),
+      agent: r.one.agent({ from: r.agent_session.agent_id, to: r.agent.id }),
       creator: r.one.user({ from: r.agent_session.created_by, to: r.user.id }),
       parent: r.one.agent_session({ from: r.agent_session.parent_id, to: r.agent_session.id, alias: "parent" }),
       children: r.many.agent_session({ from: r.agent_session.id, to: r.agent_session.parent_id, alias: "parent" }),

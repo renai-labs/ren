@@ -5,9 +5,11 @@ import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { makeWithDefaults } from "drizzle-orm/effect-postgres"
 import { Context, Effect, Layer } from "effect"
 import { SqlError } from "effect/sql/SqlError"
+import { agentRelations } from "./agent.sql.js"
 import { authRelations } from "./auth.sql.js"
 import { environmentTemplateRelations } from "./environment.sql.js"
 import { sessionRelations } from "./session.sql.js"
+import { settingsRelations } from "./settings.sql.js"
 import { spaceRelations } from "./space.sql.js"
 import { spaceEnvironmentTemplateRelations } from "./space-environment-template.sql.js"
 
@@ -18,6 +20,8 @@ const make = makeWithDefaults({
     ...authRelations,
     ...environmentTemplateRelations,
     ...spaceEnvironmentTemplateRelations,
+    ...agentRelations,
+    ...settingsRelations,
   },
 })
 
