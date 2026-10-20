@@ -11,6 +11,7 @@ export const stream = (fetch: (request: Request) => Promise<Response>) =>
       const response = yield* Effect.tryPromise((signal) =>
         fetch(new Request("http://opencode/api/event", { signal })),
       ).pipe(Effect.orDie)
+      if (!response.ok) return yield* Effect.fail(new Error(`OpenCode's event stream answered ${response.status}`))
       const body = response.body
       if (!body) return yield* Effect.die(new Error("OpenCode's event stream has no body"))
       return Stream.fromReadableStream({
@@ -22,9 +23,13 @@ export const stream = (fetch: (request: Request) => Promise<Response>) =>
         Stream.mapError((cause) =>
           cause instanceof Error ? cause : new Error("OpenCode's event stream failed", { cause }),
         ),
-        Stream.map((event) => decodeJson(event.data)),
-        Stream.filter(Option.isSome),
-        Stream.map((decoded) => decoded.value),
+        Stream.mapEffect((event) =>
+          Option.match(decodeJson(event.data), {
+            onNone: () => Effect.as(Effect.logWarning("Skipped an OpenCode event that is not JSON", event.data), []),
+            onSome: (decoded) => Effect.succeed([decoded]),
+          }),
+        ),
+        Stream.flattenIterable,
       )
     }),
   )

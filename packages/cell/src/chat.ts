@@ -73,7 +73,9 @@ export const frames = (input: {
       )
       return Stream.merge(live, ticks, { haltStrategy: "either" }).pipe(
         Stream.takeUntil((event) => event.type === "stream.ended"),
-        Stream.catch(() => Stream.empty),
+        Stream.catch((error) =>
+          Stream.drain(Stream.fromEffect(Effect.logError("The chat event stream failed", error))),
+        ),
       )
     }),
   )

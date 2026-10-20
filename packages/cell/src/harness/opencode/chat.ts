@@ -172,9 +172,15 @@ export const make = (
 
   return {
     events: OpenCodeEvents.stream(fetch).pipe(
-      Stream.mapEffect((raw) => Effect.map(Clock.currentTimeMillis, (now) => Translate.frame(raw, now))),
-      Stream.filter(Option.isSome),
-      Stream.map((event) => event.value),
+      Stream.mapEffect((raw) =>
+        Effect.gen(function* () {
+          const translated = Translate.frame(raw, yield* Clock.currentTimeMillis)
+          if (Option.isNone(translated) && Translate.isAllowed(raw))
+            yield* Effect.logWarning("Skipped an OpenCode event that Ren supports but cannot read", raw)
+          return Option.toArray(translated)
+        }),
+      ),
+      Stream.flattenIterable,
     ),
     active: Effect.map(active, (ids) => ids.length > 0),
     status: Effect.map(active, (ids) =>
