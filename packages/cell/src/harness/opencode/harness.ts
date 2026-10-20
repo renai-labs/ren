@@ -1,6 +1,6 @@
 export * as OpenCodeHarness from "./harness.js"
 
-import { AbsolutePath, Agent, Model, OpenCode, Provider, Session, SessionMessage } from "@opencode/client/effect"
+import { AbsolutePath, Model, OpenCode, Provider, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
@@ -62,9 +62,6 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
   client: OpenCodeClient,
   input: StartBody,
 ) {
-  const agent = input.agent
-  if (agent && !(yield* client.agent.list().pipe(Effect.orDie)).data.some((item) => item.id === agent))
-    return yield* new BrainRejectedError({ message: `Unknown agent: ${agent}` })
   const model = input.model
   if (
     model &&
@@ -81,7 +78,7 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
   input: StartBody,
   directory: AbsolutePath,
   environmentDirectory: Option.Option<string>,
-  session: Pick<SessionCreateInput, "title" | "agent" | "model" | "permissions"> & { readonly id: Session.ID },
+  session: Pick<SessionCreateInput, "title" | "model" | "permissions"> & { readonly id: Session.ID },
 ) {
   if (Option.isNone(environmentDirectory))
     return yield* client.session.create({ ...session, location: { directory } }).pipe(Effect.orDie)
@@ -95,7 +92,6 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
     .create({
       id: session.id,
       ...(session.title && { title: session.title }),
-      ...(session.agent && { agent: session.agent }),
       ...(session.model && { model: session.model }),
       ...(session.permissions && { permissions: session.permissions }),
       location: Location.Ref.make({ directory: AbsolutePath.make(environmentDirectory.value), workspaceID }),
@@ -126,7 +122,6 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   directory: AbsolutePath,
 ) {
   yield* rejectUnknownModel(client, input)
-  const agent = input.agent ? Agent.ID.make(input.agent) : undefined
   const model = input.model && {
     providerID: Provider.ID.make(input.model.endpointId),
     id: Model.ID.make(input.model.modelId),
@@ -144,19 +139,16 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
     yield* create(client, server, input, directory, environmentDirectory, {
       id: sessionID,
       title: input.title,
-      agent,
       model,
       permissions,
     })
   if (Option.isSome(session)) {
     yield* client.session.update({ sessionID, title: input.title, permissions }).pipe(Effect.orDie)
-    if (agent && agent !== session.value.agent)
-      yield* client.session.switchAgent({ sessionID, agent }).pipe(Effect.orDie)
     if (model) yield* client.session.switchModel({ sessionID, model }).pipe(Effect.orDie)
   }
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    { ...input.instructions, ...environmentInstructions(server, environmentDirectory) },
+    environmentInstructions(server, environmentDirectory),
   )
   yield* Effect.forEach(
     changes.put,

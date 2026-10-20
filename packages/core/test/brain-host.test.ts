@@ -70,7 +70,7 @@ const it = testEffect(Layer.unwrap(Effect.sync(() => host(settings))))
 const start = Effect.fnUntraced(function* (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) {
   const brain = yield* BrainHost.Service
   return yield* brain.start(
-    { sessionId, harness: "opencode", instructions: {}, interactive: true, ...input },
+    { sessionId, harness: "opencode", interactive: true, ...input },
     { organizationId, spaceId: Space.ID.create() },
   )
 })
@@ -554,7 +554,6 @@ describe("BrainHost", () => {
           {
             sessionId,
             harness: "opencode",
-            instructions: {},
             interactive: true,
             environmentTemplateId: id,
           },
@@ -573,7 +572,7 @@ describe("BrainHost", () => {
           const sessionId = Session.ID.create()
           yield* startOn(brain, sessionId, org, environmentTemplateId)
           yield* brain.start(
-            { sessionId, harness: "opencode", instructions: {}, interactive: true },
+            { sessionId, harness: "opencode", interactive: true },
             { organizationId: org, spaceId: yield* Seed.team(org) },
           )
           expect(cell.starts.map((input) => input.directory)).toEqual([

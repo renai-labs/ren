@@ -145,7 +145,6 @@ export const make = Effect.fnUntraced(function* (
         payload: {
           sessionId: id,
           harness: "opencode",
-          instructions: {},
           interactive: true,
           ...input,
         },

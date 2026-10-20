@@ -156,7 +156,6 @@ const restart = (harness: Harness.Instance, sessionId: Session.ID, directory?: s
   harness.start({
     sessionId,
     harness: "opencode",
-    instructions: {},
     interactive: false,
     ...(directory && { directory }),
     ...(modelId && { model: { endpointId: "stub", modelId } }),
