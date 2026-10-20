@@ -90,7 +90,7 @@ test("stdin whose reply is lost was delivered once and is not resent", async () 
   const before = lane.proxy.count("process.write")
   const fault = dropNext("process.write")
   const exit = await lane.driver.run(
-    lane.driver.client["process.write"]({ id: spawned.id, data: encode(`${marker}\n`) }),
+    lane.driver.client["process.write"]({ id: spawned.id, data: encode(`${marker}\n`), end: false }),
   )
   expect(fault.expectApplied().operation).toBe("process.write")
   expect(Exit.isFailure(exit)).toBe(true)

@@ -1,8 +1,9 @@
 export * as ExecutorAdapter from "./executor.js"
 
+import { port } from "@ren/hand-api/executor-api"
 import { HandToken } from "@ren/hand-api/hand-token"
 import { Signature } from "@ren/hand-api/signature"
-import { Image, Sandbox } from "@ren/executor/testing"
+import { Image, TestHand } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
 import { Effect, Schema } from "effect"
@@ -12,14 +13,14 @@ import path from "node:path"
 import { Process } from "../process.js"
 import { Wait } from "../wait.js"
 
-export const publicKeys = Schema.encodeSync(Signature.PublicKeys)([Sandbox.keys.publicKey])
+export const publicKeys = Schema.encodeSync(Signature.PublicKeys)([TestHand.keys.publicKey])
 
 export const token = (hand: Hand.ID, brain: Brain.ID, lifetimeMs = 600_000) =>
   Effect.runPromise(
-    HandToken.sign(Sandbox.keys.privateKey, { hand, brain, exp: Math.floor((Date.now() + lifetimeMs) / 1000) }),
+    HandToken.sign(TestHand.keys.privateKey, { hand, brain, exp: Math.floor((Date.now() + lifetimeMs) / 1000) }),
   )
 
-export const access = (options: Parameters<typeof Sandbox.access>[0]) => Effect.runPromise(Sandbox.access(options))
+export const access = (options: Parameters<typeof TestHand.access>[0]) => Effect.runPromise(TestHand.access(options))
 
 export const mainPath = path.resolve(
   path.dirname(Bun.resolveSync("@ren/executor/testing", import.meta.dir)),
@@ -68,9 +69,9 @@ const ready = (url: string, alive: () => boolean, ms = 30_000) =>
 
 const freePort = async () => {
   const socket = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
-  const port = socket.port ?? 0
+  const free = socket.port ?? 0
   await socket.stop(true)
-  return port
+  return free
 }
 
 export const localProcess = async (options: {
@@ -157,9 +158,9 @@ export const dockerContainer = async (options: {
   const tag = await Image.build()
   const state = { container: "", url: "", handId: options.handId ?? Hand.ID.create() }
   const published = async () => {
-    const port = /:(\d+)$/m.exec(await docker(["port", state.container, "4100/tcp"]))?.[1]
-    if (!port) throw new Error(`docker published no executor port for ${options.label}`)
-    state.url = `http://127.0.0.1:${port}`
+    const hostPort = /:(\d+)$/m.exec(await docker(["port", state.container, `${port}/tcp`]))?.[1]
+    if (!hostPort) throw new Error(`docker published no executor port for ${options.label}`)
+    state.url = `http://127.0.0.1:${hostPort}`
     const container = state.container
     await ready(
       state.url,
@@ -177,7 +178,7 @@ export const dockerContainer = async (options: {
       "--label",
       `ren.chaos=${options.label}`,
       "--publish",
-      "127.0.0.1::4100",
+      `127.0.0.1::${port}`,
       "--memory",
       "512m",
       "--cpus",

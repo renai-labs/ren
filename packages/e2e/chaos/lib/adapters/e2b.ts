@@ -1,12 +1,11 @@
 export * as E2BHand from "./e2b.js"
 
+import { port } from "@ren/hand-api/executor-api"
 import type { Hand } from "@ren/schema/hand"
 import { Schema } from "effect"
 import { ExecutorAdapter } from "./executor.js"
 import { Process } from "../process.js"
 import { Wait } from "../wait.js"
-
-const executorPort = 4100
 
 const api = () => process.env.CHAOS_E2B_API ?? "https://api.e2b.dev"
 
@@ -48,7 +47,7 @@ export interface Sandbox {
   readonly state: () => Promise<string | undefined>
 }
 
-const endpoint = (sandboxId: string, port = executorPort) => `https://${port}-${sandboxId}.${domain()}`
+const endpoint = (sandboxId: string, target = port) => `https://${target}-${sandboxId}.${domain()}`
 
 const configure = async (
   sandboxId: string,
@@ -89,7 +88,7 @@ export const create = async (options: {
   await configure(created.sandboxID, created.envdAccessToken, {
     EXECUTOR_HAND_ID: options.handId,
     HAND_PUBLIC_KEYS: ExecutorAdapter.publicKeys,
-    PORT: String(executorPort),
+    PORT: String(port),
   })
   return {
     id,
