@@ -4,15 +4,20 @@ import { PgClient } from "@effect/sql-pg"
 import { OpenCode } from "@opencode/client"
 import { Signature } from "@ren/environment-api/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
+import { Access } from "@ren/core/access"
+import { Agent } from "@ren/core/agent"
 import { BrainHost } from "@ren/core/brain-host"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
 import { Models } from "@ren/core/models"
+import { OrganizationSettings } from "@ren/core/organization-settings"
 import { Session } from "@ren/core/session"
+import { SpaceSettings } from "@ren/core/space/settings"
 import { Seed } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { TestEnvironment } from "@ren/executor/testing"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import type { Agent as AgentSchema } from "@ren/schema/agent"
 import { Environment } from "@ren/schema/environment"
 import type { Session as SessionSchema } from "@ren/schema/session"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
@@ -72,6 +77,7 @@ export interface SessionOptions {
   readonly environment?: Sandbox | false
   readonly models?: Models.Access
   readonly start?: StartOptions
+  readonly agentId?: AgentSchema.ID
 }
 
 export const start = async (options: {
@@ -92,7 +98,11 @@ export const start = async (options: {
   if ((await migrate.exited) !== 0) throw new Error("migrating the real-stack database failed")
   const direct = new Bun.SQL(database.href)
   const databaseRuntime = ManagedRuntime.make(
-    Database.layer.pipe(Layer.provideMerge(PgClient.layer({ url: Redacted.make(database.href) }))),
+    Layer.mergeAll(Agent.layer, OrganizationSettings.layer, SpaceSettings.layer).pipe(
+      Layer.provideMerge(Access.layer),
+      Layer.provideMerge(Database.layer),
+      Layer.provideMerge(PgClient.layer({ url: Redacted.make(database.href) })),
+    ),
   )
   const owner = await databaseRuntime.runPromise(Seed.owner())
   await databaseRuntime.runPromise(
@@ -319,7 +329,13 @@ export const start = async (options: {
     })
     const startSession = (startOptions?: StartOptions) =>
       core(BrainHost.Service.use((brain) => brain.start(input(startOptions), owner)))
-    await core(Session.Service.use((sessions) => sessions.create(owner, input(sessionOptions.start))))
+    await core(
+      Session.Service.use((sessions) =>
+        sessions.create(owner, input(sessionOptions.start), {
+          ...(sessionOptions.agentId && { agentId: sessionOptions.agentId }),
+        }),
+      ),
+    )
     const access = await core(BrainHost.Service.use((brain) => brain.access(sessionId)))
     const opencode = OpenCode.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
     const send = (text: string) =>
@@ -380,6 +396,9 @@ export const start = async (options: {
   if (!first) throw new Error("the real stack needs at least one environment")
 
   return {
+    owner,
+    run: <A, E>(effect: Effect.Effect<A, E, ManagedRuntime.ManagedRuntime.Services<typeof databaseRuntime>>) =>
+      databaseRuntime.runPromise(effect),
     sandboxes: all,
     sandbox: (label: string) => {
       const found = all.find((_, index) => sandboxes[index]?.environment.label === label)
