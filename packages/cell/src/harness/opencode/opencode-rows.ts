@@ -5,13 +5,13 @@ import { ProjectID } from "@opencode/schema/project-id"
 import { SessionID } from "@opencode/schema/session-id"
 import { SessionMessage } from "@opencode/schema/session-message"
 import { WorkspaceID } from "@opencode/schema/workspace-id"
-import { type OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
+import { Sync } from "@ren/schema/sync"
 import { Exit, Schema } from "effect"
 
 const JsonColumn = <S extends Schema.Top>(schema: S) => Schema.NullOr(Schema.fromJsonString(schema))
 
 const SessionRow = Schema.Struct({
-  ...OpenCodeSessionRow.fields,
+  ...Sync.OpenCodeSessionRow.fields,
   id: SessionID,
   parent_id: Schema.NullOr(SessionID),
   project_id: ProjectID,
@@ -46,7 +46,7 @@ export const session = (row: unknown) =>
     resume_attempts: 0,
   })
 
-export const message = (row: typeof OpenCodeMessageRow.Type) =>
+export const message = (row: typeof Sync.OpenCodeMessageRow.Type) =>
   Exit.match(Schema.decodeUnknownExit(MessageData)(row.data), {
     onFailure: Exit.failCause,
     onSuccess: (data) => Schema.decodeUnknownExit(SessionMessage.Info)({ ...data, id: row.id, type: row.type }),

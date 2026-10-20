@@ -39,8 +39,9 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
   )
 
 export const services = Layer.mergeAll(BrainHost.layer, Mailer.layer, SignupGuard.layer).pipe(
-  Layer.provide([Models.layerNone, Environments.layer]),
-  Layer.provide(EnvironmentProvider.layer([Docker.provider])),
+  Layer.provideMerge([Models.layerNone, Environments.layer]),
+  Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
+  Layer.provide(BunServices.layer),
 )
 
 export const makeApp = (

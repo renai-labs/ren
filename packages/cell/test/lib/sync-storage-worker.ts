@@ -1,4 +1,4 @@
-import { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
+import { Sync } from "@ren/schema/sync"
 import { Effect, Exit, Result, Schema } from "effect"
 import { Harness } from "../../src/harness/harness.js"
 import { SessionCell } from "../../src/session-cell.js"
@@ -46,7 +46,7 @@ const columns = (sql: SqlStorage, table: string) =>
 
 const decode = (sql: SqlStorage, sessionId: string) => {
   const info = OpenCodeRows.session(sql.exec("select * from session_v2 where id = ?", sessionId).one())
-  const rows = Schema.decodeUnknownSync(Schema.Array(OpenCodeMessageRow))([
+  const rows = Schema.decodeUnknownSync(Schema.Array(Sync.OpenCodeMessageRow))([
     ...sql.exec(
       "select id, session_id, type, seq, data from session_message where session_id = ? order by seq, id",
       sessionId,
@@ -109,11 +109,13 @@ class SyncStorageCell extends SessionCell {
     if (url.pathname === "/test/rows")
       return Response.json({
         sessions: [
-          ...this.ctx.storage.sql.exec(`select ${Object.keys(OpenCodeSessionRow.fields).join(", ")} from session_v2`),
+          ...this.ctx.storage.sql.exec(
+            `select ${Object.keys(Sync.OpenCodeSessionRow.fields).join(", ")} from session_v2`,
+          ),
         ],
         messages: [
           ...this.ctx.storage.sql.exec(
-            `select ${Object.keys(OpenCodeMessageRow.fields).join(", ")} from session_message`,
+            `select ${Object.keys(Sync.OpenCodeMessageRow.fields).join(", ")} from session_message`,
           ),
         ],
       })

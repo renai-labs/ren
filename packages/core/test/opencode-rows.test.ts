@@ -5,14 +5,14 @@ import { SqlClient } from "effect/sql"
 import { SessionSync } from "../src/session-sync.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
-import { Sync } from "./lib/sync.js"
+import { SyncFixture } from "./lib/sync-fixture.js"
 
 const it = testEffect(SessionSync.layer.pipe(Layer.provideMerge(Testing.layer)))
 
 const tree = Effect.fnUntraced(function* () {
   const owner = yield* Seed.owner()
   const rootId = yield* Seed.session(owner)
-  return { rootId, host: { brainId: rootId, organizationId: owner.organizationId } }
+  return { rootId, host: { sessionId: rootId, organizationId: owner.organizationId } }
 })
 
 describe("OpenCode rows in Postgres", () => {
@@ -44,7 +44,7 @@ describe("OpenCode rows in Postgres", () => {
       Effect.gen(function* () {
         const sync = yield* SessionSync.Service
         const { host, rootId } = yield* tree()
-        const defect = yield* Sync.pass(host, Sync.session(rootId, { title: "a\u0000b" }), 2, []).pipe(
+        const defect = yield* SyncFixture.pass(host, SyncFixture.session(rootId, { title: "a\u0000b" }), 2, []).pipe(
           Effect.as(undefined),
           Effect.catchDefect(Effect.succeed),
         )

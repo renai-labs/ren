@@ -1,6 +1,6 @@
 export * as OpenCodeStore from "./opencode-store.js"
 
-import type { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
+import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
 import { and, asc, eq, getColumns, inArray, sql } from "drizzle-orm"
@@ -26,7 +26,7 @@ export const summary = {
 
 export const writeMessages = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
-  rows: ReadonlyArray<OpenCodeMessageRow>,
+  rows: ReadonlyArray<Sync.OpenCodeMessageRow>,
 ) {
   if (rows.length === 0) return
   yield* transaction
@@ -38,7 +38,10 @@ export const writeMessages = Effect.fnUntraced(function* (
     })
 })
 
-export const writeSession = Effect.fnUntraced(function* (transaction: Database.Transaction, row: OpenCodeSessionRow) {
+export const writeSession = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  row: Sync.OpenCodeSessionRow,
+) {
   yield* transaction
     .insert(Database.Schema.opencode_session)
     .values({ ...Struct.omit(row, ["id", "parent_id"]), session_id: row.id })
@@ -72,7 +75,7 @@ export const sessions = (transaction: Database.Transaction, ids: ReadonlyArray<S
     .orderBy(asc(Database.Schema.agent_session.created_at), asc(Database.Schema.agent_session.id))
     .pipe(
       Effect.map((rows) =>
-        rows.map((row): OpenCodeSessionRow => ({
+        rows.map((row): Sync.OpenCodeSessionRow => ({
           ...Struct.omit(row.opencode, ["session_id"]),
           id: row.opencode.session_id,
           parent_id: row.parentId,

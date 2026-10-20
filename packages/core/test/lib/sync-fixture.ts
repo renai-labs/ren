@@ -1,14 +1,14 @@
-export * as Sync from "./sync.js"
+export * as SyncFixture from "./sync-fixture.js"
 
-import type { CurrentHost } from "@ren/brain-api/host-api"
-import type { OpenCodeMessageRow, OpenCodeSessionRow } from "@ren/brain-api/sync-api"
+import type { CurrentHost } from "@ren/host-api/ren-host-api"
+import type { Sync } from "@ren/schema/sync"
 import type { Session } from "@ren/schema/session"
 import { Effect } from "effect"
 import { SessionSync } from "../../src/session-sync.js"
 
 export const now = 1_760_000_000_000
 
-export const session = (id: Session.ID, fields: Partial<OpenCodeSessionRow> = {}): OpenCodeSessionRow => ({
+export const session = (id: Session.ID, fields: Partial<Sync.OpenCodeSessionRow> = {}): Sync.OpenCodeSessionRow => ({
   id,
   project_id: "prj_1",
   workspace_id: null,
@@ -45,8 +45,8 @@ export const message = (
   sessionId: Session.ID,
   id: string,
   seq: number,
-  fields: Partial<OpenCodeMessageRow> = {},
-): OpenCodeMessageRow => ({
+  fields: Partial<Sync.OpenCodeMessageRow> = {},
+): Sync.OpenCodeMessageRow => ({
   id,
   session_id: sessionId,
   type: "user",
@@ -57,9 +57,9 @@ export const message = (
 
 export const pass = Effect.fnUntraced(function* (
   host: CurrentHost["Service"],
-  row: OpenCodeSessionRow,
+  row: Sync.OpenCodeSessionRow,
   seq: number,
-  messages: ReadonlyArray<OpenCodeMessageRow>,
+  messages: ReadonlyArray<Sync.OpenCodeMessageRow>,
 ) {
   const sync = yield* SessionSync.Service
   const upload = yield* sync.startUpload(host, row.id, { harness: "opencode", parentId: row.parent_id })

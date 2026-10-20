@@ -1,10 +1,8 @@
 export * as OpenCodeSync from "./opencode-sync.js"
 
-import { maxBodyBytes, OpenCodeMessageRow, OpenCodeSessionRow, SyncApi } from "@ren/brain-api/sync-api"
 import { Session } from "@ren/schema/session"
+import { Sync } from "@ren/schema/sync"
 import { Clock, Duration, Effect, Metric, Option, Predicate, Record, Schema, Semaphore } from "effect"
-import { HttpClient, HttpClientRequest } from "effect/http"
-import { HttpApiClient } from "effect/http-api"
 
 export type Binding = string | number | null
 
@@ -14,9 +12,43 @@ export interface Reader {
   readonly read: <A>(read: (query: Query) => A) => A
 }
 
+export class Refused extends Schema.TaggedError<Refused>()("OpenCodeSync.Refused", { message: Schema.String }) {}
+
+export class RemoteError extends Schema.TaggedError<RemoteError>()("OpenCodeSync.RemoteError", {
+  message: Schema.String,
+}) {}
+
+export interface Upload {
+  readonly id: Session.ID
+  readonly upload: number
+}
+
+export interface Page {
+  readonly messages: ReadonlyArray<Sync.OpenCodeMessageRow>
+  readonly next: Sync.Cursor | null
+}
+
+export interface Remote {
+  readonly checkpoints: Effect.Effect<ReadonlyArray<Sync.Checkpoint>, RemoteError>
+  readonly startUpload: (id: Session.ID, parentId: Session.ID | null) => Effect.Effect<number, Refused | RemoteError>
+  readonly uploadMessages: (
+    upload: Upload,
+    messages: ReadonlyArray<Sync.OpenCodeMessageRow>,
+  ) => Effect.Effect<void, RemoteError>
+  readonly commit: (
+    upload: Upload,
+    input: {
+      readonly session: Sync.OpenCodeSessionRow
+      readonly seq: number
+      readonly ids: ReadonlyArray<string>
+    },
+  ) => Effect.Effect<void, RemoteError>
+  readonly restore: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Sync.OpenCodeSessionRow>, RemoteError>
+  readonly messages: (id: Session.ID, after: Sync.Cursor | null, limit: number) => Effect.Effect<Page, RemoteError>
+}
+
 export interface Options {
-  readonly url: string
-  readonly token: Effect.Effect<string>
+  readonly remote: Remote
   readonly reader: Reader
   readonly restoring: Effect.Effect<boolean>
 }
@@ -44,8 +76,8 @@ export interface Restore<E = never, R = never> {
   readonly create: Effect.Effect<unknown, E, R>
   readonly setRestoring: (value: boolean) => Effect.Effect<void, E, R>
   readonly import: (data: {
-    readonly session: OpenCodeSessionRow
-    readonly messages: ReadonlyArray<OpenCodeMessageRow>
+    readonly session: Sync.OpenCodeSessionRow
+    readonly messages: ReadonlyArray<Sync.OpenCodeMessageRow>
   }) => Effect.Effect<unknown, E, R>
 }
 
@@ -62,9 +94,9 @@ const batchBytes = 1024 * 1024
 
 const envelopeBytes = JSON.stringify({ messages: [] }).length
 
-const sessionColumns = Object.keys(OpenCodeSessionRow.fields)
+const sessionColumns = Object.keys(Sync.OpenCodeSessionRow.fields)
 
-const messageColumns = Object.keys(OpenCodeMessageRow.fields)
+const messageColumns = Object.keys(Sync.OpenCodeMessageRow.fields)
 
 const tables = [
   { name: "session_v2", columns: sessionColumns },
@@ -102,14 +134,7 @@ const withoutNul = (row: unknown) =>
     : row
 
 export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) {
-  const http = yield* HttpClient.HttpClient
-  const client = yield* HttpApiClient.makeWith(SyncApi, {
-    baseUrl: options.url,
-    httpClient: HttpClient.mapRequestEffect(http, (request) =>
-      Effect.map(options.token, (token) => HttpClientRequest.bearerToken(request, token)),
-    ),
-  })
-  const sync = client.sync
+  const remote = options.remote
   const running = yield* Semaphore.make(1)
   const refused = new Set<Session.ID>()
   const lastPass = new Map<Session.ID, number>()
@@ -137,14 +162,11 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
       Effect.map((rows) => Option.fromNullishOr(rows.at(0))),
     )
 
-  const start = (session: Local, known: boolean) =>
-    sync["sync.startUpload"]({
-      params: { id: session.id },
-      payload: { harness: "opencode", parentId: session.parent_id },
-    }).pipe(
-      Effect.map((started) => Option.some(started.upload)),
-      Effect.catchTag("ForbiddenError", (error) => {
-        if (session.parent_id || known) return Effect.fail(error)
+  const start = (session: Local, ren: { readonly known: boolean }) =>
+    remote.startUpload(session.id, session.parent_id).pipe(
+      Effect.map(Option.some),
+      Effect.catchTag("OpenCodeSync.Refused", (error) => {
+        if (session.parent_id || ren.known) return Effect.fail(error)
         refused.add(session.id)
         return Effect.logWarning(
           `Ren refused the unknown root session ${session.id}. It does not sync in this process.`,
@@ -152,28 +174,24 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
       }),
     )
 
-  const upload = Effect.fnUntraced(function* (
-    params: { readonly id: Session.ID; readonly upload: number },
-    ids: ReadonlyArray<{ readonly id: string }>,
-  ) {
-    const send = (messages: ReadonlyArray<OpenCodeMessageRow>) =>
-      sync["sync.uploadMessages"]({ params, payload: { messages } })
+  const upload = Effect.fnUntraced(function* (params: Upload, ids: ReadonlyArray<{ readonly id: string }>) {
+    const send = (messages: ReadonlyArray<Sync.OpenCodeMessageRow>) => remote.uploadMessages(params, messages)
     const sent: Array<string> = []
-    let rows: Array<OpenCodeMessageRow> = []
+    let rows: Array<Sync.OpenCodeMessageRow> = []
     let bytes = envelopeBytes
     for (const message of ids) {
       const row = yield* first(
-        OpenCodeMessageRow,
+        Sync.OpenCodeMessageRow,
         `select ${messageColumns.join(", ")} from session_message where session_id = ? and id = ?`,
         params.id,
         message.id,
       )
       if (Option.isNone(row)) continue
       const size = encoder.encode(JSON.stringify(row.value)).length
-      if (envelopeBytes + size > maxBodyBytes) {
+      if (envelopeBytes + size > Sync.maxBodyBytes) {
         yield* Metric.update(oversizedRows, 1)
         yield* Effect.logError(
-          `Message ${message.id} is ${size} bytes as JSON, more than the ${maxBodyBytes} bytes that Ren accepts. The session cannot sync.`,
+          `Message ${message.id} is ${size} bytes as JSON, more than the ${Sync.maxBodyBytes} bytes that Ren accepts. The session cannot sync.`,
         )
         return Option.none()
       }
@@ -190,8 +208,8 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
     return Option.some(sent)
   })
 
-  const pass = Effect.fnUntraced(function* (session: Local, known: boolean) {
-    const started = yield* start(session, known)
+  const pass = Effect.fnUntraced(function* (session: Local, ren: { readonly known: boolean }) {
+    const started = yield* start(session, ren)
     if (Option.isNone(started)) return "refused" as const
     const params = { id: session.id, upload: started.value }
     const snapshot = yield* read((query) => ({
@@ -203,12 +221,12 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
     const sent = yield* upload(params, snapshot.ids)
     if (Option.isNone(sent)) return "failed" as const
     const row = yield* first(
-      OpenCodeSessionRow,
+      Sync.OpenCodeSessionRow,
       `select ${sessionColumns.join(", ")} from session_v2 where id = ?`,
       session.id,
     )
     if (Option.isNone(row)) return "failed" as const
-    yield* sync["sync.commit"]({ params, payload: { session: row.value, seq: latest.seq, ids: sent.value } })
+    yield* remote.commit(params, { session: row.value, seq: latest.seq, ids: sent.value })
     return "committed" as const
   })
 
@@ -235,13 +253,14 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
   const step = Effect.fn("OpenCodeSync.step")(function* (input: { readonly deadline?: number } = {}) {
     if (yield* options.restoring) return { drained: false }
     if (!(yield* hasTables)) return { drained: true }
-    const remote = yield* sync["sync.checkpoints"]().pipe(
-      Effect.mapError(
-        (error) =>
-          new SyncError({ reason: "unavailable", message: `Ren did not return the checkpoints: ${error.message}` }),
-      ),
+    const checkpoints = new Map(
+      (yield* remote.checkpoints.pipe(
+        Effect.mapError(
+          (error) =>
+            new SyncError({ reason: "unavailable", message: `Ren did not return the checkpoints: ${error.message}` }),
+        ),
+      )).map((checkpoint) => [checkpoint.id, checkpoint]),
     )
-    const checkpoints = new Map(remote.sessions.map((checkpoint) => [checkpoint.id, checkpoint]))
     const local = yield* read((query) => [
       ...query(
         "select s.id, s.parent_id, s.time_suspended, e.seq from session_v2 s join event_sequence e on e.aggregate_id = s.id order by s.time_created, s.id",
@@ -272,7 +291,7 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
         const checkpoint = checkpoints.get(session.id)
         const until = (lastPass.get(session.id) ?? Number.NEGATIVE_INFINITY) + Duration.toMillis(busyInterval)
         if (session.time_suspended && checkpoint?.timeSuspended && now < until) return until
-        const outcome = yield* pass(session, Boolean(checkpoint)).pipe(
+        const outcome = yield* pass(session, { known: Boolean(checkpoint) }).pipe(
           Effect.catch((error) =>
             Effect.logWarning("The sync pass stopped. The next step starts a new upload.", error).pipe(
               Effect.as("failed" as const),
@@ -297,14 +316,14 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
       running.withPermit(
         Effect.gen(function* () {
           if (!(yield* options.restoring) && (yield* input.exists(input.sessionId))) return
-          const tree = yield* sync["sync.restore"]({ payload: { sessionId: input.sessionId } }).pipe(
-            Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })),
-          )
+          const tree = yield* remote
+            .restore(input.sessionId)
+            .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
           yield* input.setRestoring(true)
-          if (!tree.sessions.some((row) => row.id === input.sessionId) && !(yield* input.exists(input.sessionId)))
+          if (!tree.some((row) => row.id === input.sessionId) && !(yield* input.exists(input.sessionId)))
             yield* input.create
           yield* Effect.forEach(
-            tree.sessions,
+            tree,
             (row) =>
               Effect.gen(function* () {
                 if (yield* input.exists(row.id)) return
@@ -312,15 +331,12 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
                   yield* Effect.logError(`Cannot restore session ${row.id}: parent ${row.parent_id} is missing`)
                   return
                 }
-                const messages: Array<OpenCodeMessageRow> = []
-                let cursor: { readonly seq: number; readonly id: string } | null = null
+                const messages: Array<Sync.OpenCodeMessageRow> = []
+                let cursor: Sync.Cursor | null = null
                 do {
-                  const page: Effect.Success<ReturnType<(typeof sync)["sync.messages"]>> = yield* sync["sync.messages"](
-                    {
-                      params: { id: row.id },
-                      query: { limit: batchRows, ...(cursor ? { afterSeq: cursor.seq, afterId: cursor.id } : {}) },
-                    },
-                  ).pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
+                  const page: Page = yield* remote
+                    .messages(row.id, cursor, batchRows)
+                    .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
                   messages.push(...page.messages)
                   cursor = page.next
                 } while (cursor)

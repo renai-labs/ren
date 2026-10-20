@@ -1,7 +1,8 @@
 export * as Routes from "./routes.js"
 
 import { RenHostApi } from "@ren/host-api/ren-host-api"
-import { maxBodyBytes, SyncApi } from "@ren/host-api/sync-api"
+import { SyncApi } from "@ren/host-api/sync-api"
+import { Sync } from "@ren/schema/sync"
 import { Access } from "@ren/core/access"
 import { BrainHost } from "@ren/core/brain-host"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
@@ -82,7 +83,7 @@ export const layer = Layer.mergeAll(
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
-    Layer.provide([BrainHost.hostAuthentication, bodyLimit(maxBodyBytes), SessionSync.layer]),
+    Layer.provide([BrainHost.hostAuthentication, bodyLimit(Sync.maxBodyBytes), SessionSync.layer]),
   ),
   Cors,
 ).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))

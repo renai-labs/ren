@@ -2,7 +2,7 @@ export * as SyncTest from "./sync.js"
 
 import { test } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
-import type { OpenCodeMessageRow } from "@ren/brain-api/sync-api"
+import type { Sync } from "@ren/schema/sync"
 import { Session } from "@ren/core/session"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -51,7 +51,7 @@ export const isolated = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 export const sortRows = <A>(rows: ReadonlyArray<A>, key: (row: A) => string) =>
   rows.toSorted((left, right) => (key(left) < key(right) ? -1 : 1))
 
-export const messageKey = (row: OpenCodeMessageRow) =>
+export const messageKey = (row: Sync.OpenCodeMessageRow) =>
   `${row.session_id} ${String(row.seq).padStart(16, "0")} ${row.id}`
 
 export const remote = Effect.fnUntraced(function* (root: Session.ID) {
