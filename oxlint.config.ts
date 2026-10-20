@@ -80,6 +80,13 @@ const packageBoundaries = [
     message: "Handlers decode, call a core service and map errors. Queries belong in core.",
   },
   {
+    files: ["packages/chat/src/**"],
+    regex:
+      "^(@ren/(?!schema(/|$)|protocol(/|$)|client(/|$))|node:|bun(:|$)|(fs|path|os|child_process|crypto|url|buffer|stream|events|http|https|net|zlib|worker_threads)(/|$))",
+    message:
+      "The chat runtime runs on web, desktop and mobile. It depends on schema, protocol, client and effect, and on React only in src/react.ts.",
+  },
+  {
     files: ["packages/util/src/**"],
     regex:
       "^(@ren/|node:|bun(:|$)|(fs|path|os|child_process|crypto|url|buffer|stream|events|http|https|net|zlib|worker_threads)(/|$))",
