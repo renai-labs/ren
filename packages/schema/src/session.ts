@@ -22,26 +22,6 @@ export const Model = Schema.Struct({
   variant: Schema.optionalKey(Schema.NonEmptyString),
 }).annotate({ identifier: "Session.Model" })
 
-const instructionKey = /^[a-z0-9][a-z0-9._-]*$/u
-
-export const Instructions = Schema.Record(
-  Schema.String,
-  Schema.String.check(
-    Schema.makeFilter(
-      (value) => encoder.encode(JSON.stringify(value)).length <= 256 * 1024 || "an instruction is at most 256 KiB",
-    ),
-  ),
-)
-  .check(
-    Schema.makeFilter(
-      (instructions) =>
-        Object.keys(instructions).every((key) => instructionKey.test(key)) ||
-        "instruction keys are lowercase letters, digits, dot, underscore and dash, starting with a letter or digit",
-    ),
-  )
-  .annotate({ identifier: "Session.Instructions" })
-export type Instructions = typeof Instructions.Type
-
 export const Delivery = Schema.Literals(["steer", "queue"]).annotate({ identifier: "Session.Delivery" })
 export type Delivery = typeof Delivery.Type
 
@@ -97,9 +77,7 @@ export const StartInput = Schema.Struct({
   sessionId: ID,
   harness: Harness,
   title: Schema.optionalKey(Schema.String),
-  agent: Schema.optionalKey(Schema.NonEmptyString),
   model: Schema.optionalKey(Model),
-  instructions: Instructions.pipe(Schema.withDecodingDefaultKey(Effect.succeed({}))),
   interactive: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(true))),
   environmentTemplateId: Schema.optionalKey(EnvironmentTemplate.ID),
   initialMessage: Schema.optionalKey(

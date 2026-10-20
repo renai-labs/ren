@@ -32,11 +32,6 @@ test.each<[string, (input: unknown) => Exit.Exit<unknown, unknown>, unknown]>([
     { sessionId, ...message([{ url: `data:text/plain,${"a".repeat(Session.maxFileBytes + 1)}` }]) },
   ],
   [
-    "an instruction over 256 KiB",
-    start,
-    { sessionId, harness: "opencode", instructions: { team: "a".repeat(256 * 1024) } },
-  ],
-  [
     "an initial message with a file over 10 MB",
     start,
     {

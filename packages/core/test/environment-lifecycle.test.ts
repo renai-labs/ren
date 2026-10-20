@@ -187,7 +187,6 @@ const start = (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) =
         {
           sessionId,
           harness: "opencode",
-          instructions: {},
           interactive: false,
           environmentTemplateId,
           ...input,

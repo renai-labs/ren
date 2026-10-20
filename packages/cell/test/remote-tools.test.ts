@@ -113,7 +113,6 @@ const restart = (
   harness.start({
     sessionId,
     harness: "opencode",
-    instructions: {},
     interactive: false,
     ...(directory && { directory }),
     ...(agent && { agent }),
