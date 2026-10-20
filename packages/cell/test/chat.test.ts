@@ -1,11 +1,13 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
+import { testEffect } from "@ren/executor/testing"
 import { ChatApi } from "@ren/protocol/chat"
 import { Session } from "@ren/schema/session"
 import { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Exit, Fiber, Logger, Queue, type Scope, Stream } from "effect"
+import { Effect, Exit, Layer, Logger, Queue, Ref, type Scope, Stream } from "effect"
+import { TestClock } from "effect/testing"
 import { HttpApi } from "effect/http-api"
 import { Chat } from "../src/chat.js"
 import { BrainTest } from "./lib/brain.js"
@@ -14,6 +16,8 @@ import { Shared } from "./lib/shared.js"
 setDefaultTimeout(30_000)
 
 const stub = Shared.stub()
+
+const it = testEffect(Layer.empty)
 
 const live = <A, E>(body: Effect.Effect<A, E, Scope.Scope>) => body.pipe(Effect.scoped, Effect.runPromise)
 
@@ -598,25 +602,36 @@ test("a failing harness stream ends the client stream and is logged, not taken f
     }),
   ))
 
-test("the event stream ends once the session is idle, and not while a turn runs", () =>
-  live(
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.make({ vars: { CHAT_IDLE_MS: "300", CHAT_HEARTBEAT_MS: "50" } })
-      yield* brain.start()
-      const held = stub.script({ hold: true })
-      yield* brain.chat.session["session.prompt"]({
-        params: { sessionID: brain.id },
-        payload: { id: SessionMessage.ID.create(), text: held.marker, delivery: "steer" },
-      })
-      yield* Effect.promise(() => held.called())
-      const events = yield* follow(brain)
-      const quiet = yield* events
-        .until("server.heartbeat")
-        .pipe(Effect.andThen(events.until("server.heartbeat")), Effect.repeat({ times: 8 }))
-      expect(quiet.some((frame) => frame.type === "stream.ended")).toBe(false)
-      held.release()
-      const ended = yield* events.until("stream.ended")
-      expect(ended.at(-1)).toMatchObject({ type: "stream.ended", data: { reason: "idle" } })
-      yield* Fiber.join(events.fiber)
-    }),
-  ))
+it.effect("the event stream sends heartbeats while a turn runs, and ends once the brain is idle and quiet", () =>
+  Effect.gen(function* () {
+    const upstream = yield* Queue.unbounded<SessionEvent.Event | typeof SessionEvent.Connected.Type>()
+    const busy = yield* Ref.make(true)
+    const frames = yield* Queue.unbounded<SessionEvent.Frame>()
+    yield* Chat.frames({
+      live: Stream.fromQueue(upstream),
+      active: Ref.get(busy),
+      idleMs: 300,
+      heartbeatMs: 100,
+    }).pipe(
+      Stream.runForEach((frame) => Queue.offer(frames, frame)),
+      Effect.forkScoped,
+    )
+    yield* Queue.offer(upstream, { id: "evt_upstream", created: 0, type: "server.connected", data: {} })
+    expect((yield* Queue.take(frames)).type).toBe("server.connected")
+    const tick = Effect.gen(function* () {
+      yield* TestClock.adjust("100 millis")
+      return (yield* Queue.take(frames)).type
+    })
+    expect(yield* Effect.all(Array.from({ length: 5 }, () => tick))).toEqual(Array(5).fill("server.heartbeat"))
+    yield* Ref.set(busy, false)
+    yield* Queue.offer(upstream, {
+      id: "evt_title",
+      created: 0,
+      type: "session.renamed",
+      data: { sessionID: Session.ID.create(), title: "Plan" },
+    })
+    expect((yield* Queue.take(frames)).type).toBe("session.renamed")
+    expect(yield* Effect.all([tick, tick])).toEqual(["server.heartbeat", "server.heartbeat"])
+    expect(yield* tick).toBe("stream.ended")
+  }),
+)
