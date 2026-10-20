@@ -70,6 +70,7 @@
       "name": "@ren/cell",
       "version": "0.0.0",
       "dependencies": {
+        "@opencode/ai": "catalog:",
         "@opencode/client": "catalog:",
         "@opencode/core": "catalog:",
         "@opencode/plugin": "catalog:",
@@ -407,6 +408,7 @@
     "@effect/platform-bun": "4.0.1",
     "@effect/sql-pg": "4.0.1",
     "@fontsource/ibm-plex-mono": "5.3.0",
+    "@opencode/ai": "2.0.27",
     "@opencode/client": "2.0.27",
     "@opencode/core": "2.0.27",
     "@opencode/plugin": "2.0.27",

@@ -10,22 +10,13 @@ import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
-import { Clock, Effect, Option, Predicate, Schema, Semaphore, Stream } from "effect"
+import { Clock, Effect, Option, Predicate, Stream } from "effect"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
 import { Translate } from "./translate.js"
 
 const capabilities = SessionCapabilities.of("opencode")
-
-const Speaker = Schema.Struct({
-  metadata: Schema.optionalKey(Schema.Struct({ userID: Schema.optionalKey(Schema.String) })),
-})
-const decodeSpoken = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.Literal("user"), ...Speaker.fields }))
-const decodeQueued = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.Literal("user"), payload: Speaker }))
-
-const attribution = (name: string, userId: string) =>
-  `<message_from user=${JSON.stringify(name)} user_id=${JSON.stringify(userId)} />`
 
 const missing = (error: { readonly message: string }) => Effect.fail(new Harness.NotFound({ message: error.message }))
 const conflict = (error: { readonly message: string }) => Effect.fail(new Harness.Conflict({ message: error.message }))
@@ -52,7 +43,6 @@ export const make = (
   >,
 ): Harness.Chat => {
   const api = host.client
-  const speaking = Semaphore.makeUnsafe(1)
 
   const session = (info: OpenCodeSession.Info) => Translate.session(info, capabilities)
 
@@ -75,23 +65,6 @@ export const make = (
         Effect.as(true),
         Effect.catchTags({ SessionNotFoundError: absent, MessageNotFoundError: absent }, Effect.die),
       )
-
-  const lastSpeaker = (sessionId: Session.ID) =>
-    Effect.gen(function* () {
-      const sessionID = SessionID.make(sessionId)
-      const queued = (yield* api.session.inbox
-        .list({ sessionID })
-        .pipe(Effect.catchTags({ SessionNotFoundError: missing }, Effect.die)))
-        .map((item) => decodeQueued(item))
-        .findLast(Option.isSome)
-      if (queued) return Option.fromNullishOr(queued.value.payload.metadata?.userID)
-      const latest = yield* api.message
-        .list({ sessionID, type: "user", limit: 1, order: "desc" })
-        .pipe(Effect.catchTags({ SessionNotFoundError: missing }, Effect.die))
-      return Option.fromNullishOr(
-        latest.data.map((item) => decodeSpoken(item)).find(Option.isSome)?.value.metadata?.userID,
-      )
-    })
 
   const active = api.session.active().pipe(Effect.orDie, Effect.map(Object.keys))
 
@@ -179,43 +152,24 @@ export const make = (
         Effect.flatMap((forms) => readAll(forms, Translate.form)),
       ),
     prompt: (sessionId, prompt) =>
-      speaking
-        .withPermit(
-          Effect.gen(function* () {
-            const note = yield* Option.match(prompt.sender, {
-              onNone: () => Effect.succeedNone,
-              onSome: (sender) => {
-                const name = sender.name
-                if (!name) return Effect.succeedNone
-                return Effect.map(lastSpeaker(sessionId), (last) =>
-                  Option.isSome(last) && last.value !== sender.userId
-                    ? Option.some(attribution(name, sender.userId))
-                    : Option.none(),
-                )
-              },
-            })
-            return yield* api.session
-              .prompt({
-                sessionID: SessionID.make(sessionId),
-                id: SessionMessage.ID.make(prompt.id),
-                text: Option.match(note, { onNone: () => prompt.text, onSome: (line) => `${prompt.text}\n\n${line}` }),
-                delivery: prompt.delivery,
-                ...(Predicate.isBoolean(prompt.resume) && { resume: prompt.resume }),
-                ...(prompt.agents && { agents: prompt.agents }),
-                ...(prompt.skills && {
-                  skills: prompt.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })),
-                }),
-                ...Option.match(prompt.sender, {
-                  onNone: () => ({}),
-                  onSome: (sender) => ({
-                    metadata: { userID: sender.userId, ...(Option.isSome(note) && { displayText: prompt.text }) },
-                  }),
-                }),
-              })
-              .pipe(Effect.catchTags({ ...located, ConflictError: conflict }, Effect.die))
+      api.session
+        .prompt({
+          sessionID: SessionID.make(sessionId),
+          id: SessionMessage.ID.make(prompt.id),
+          text: prompt.text,
+          delivery: prompt.delivery,
+          ...(Predicate.isBoolean(prompt.resume) && { resume: prompt.resume }),
+          ...(prompt.agents && { agents: prompt.agents }),
+          ...(prompt.skills && { skills: prompt.skills.map((skill) => ({ ...skill, id: Skill.ID.make(skill.id) })) }),
+          ...Option.match(prompt.sender, {
+            onNone: () => ({}),
+            onSome: (sender) => ({
+              metadata: { userID: sender.userId, ...(sender.name && { userName: sender.name }) },
+            }),
           }),
-        )
+        })
         .pipe(
+          Effect.catchTags({ ...located, ConflictError: conflict }, Effect.die),
           Effect.asVoid,
           Effect.catchTag("Harness.Conflict", (error) =>
             Effect.gen(function* () {

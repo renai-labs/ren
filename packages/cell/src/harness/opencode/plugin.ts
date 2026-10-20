@@ -1,5 +1,6 @@
 export * as RenPlugin from "./plugin.js"
 
+import { Message } from "@opencode/ai/schema/messages"
 import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
@@ -79,6 +80,10 @@ export const modelRef = (model: Session.Model) => ({
   id: Model.ID.make(model.modelId),
   ...(model.variant && { variant: Model.VariantID.make(model.variant) }),
 })
+
+const decodeSpeaker = Schema.decodeUnknownOption(
+  Schema.Struct({ userID: Schema.String, userName: Schema.optionalKey(Schema.String) }),
+)
 
 const withoutModel = (value: unknown) =>
   Predicate.isObject(value) ? Record.filter(value, (_, key) => key !== "model") : value
@@ -198,6 +203,26 @@ export const make = (
             }),
             Effect.forkScoped,
           )
+        yield* context.session.hook("context", (event) =>
+          Effect.sync(() => {
+            const speakers = event.messages.map((message) =>
+              message.role === "user" ? Option.getOrUndefined(decodeSpeaker(message.metadata)) : undefined,
+            )
+            event.messages = event.messages.map((message, index) => {
+              const speaker = speakers[index]
+              const previous = speakers.slice(0, index).findLast(Predicate.isNotUndefined)
+              if (!speaker || !previous || previous.userID === speaker.userID) return message
+              const user = speaker.userName ? `user=${JSON.stringify(speaker.userName)} ` : ""
+              return Message.make({
+                ...Struct.omit(message, ["content"]),
+                content: [
+                  ...message.content,
+                  Message.text(`\n\n<message_from ${user}user_id=${JSON.stringify(speaker.userID)} />`),
+                ],
+              })
+            })
+          }),
+        )
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(endpoints)))
         yield* integration.transform((editor) => {
           for (const integrationID of Ref.getUnsafe(endpoints).map((endpoint) => endpoint.id))

@@ -17,6 +17,7 @@
     "typecheck": "tsgo -b"
   },
   "dependencies": {
+    "@opencode/ai": "catalog:",
     "@opencode/client": "catalog:",
     "@opencode/core": "catalog:",
     "@opencode/plugin": "catalog:",
