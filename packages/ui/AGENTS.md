@@ -47,6 +47,8 @@ The design system. It owns every visual decision in Ren: tokens, components and 
   - Light `accent-primary` is `#0065cc` (ren-v1 `#0067d0`) so accent text passes AA on its tint. Mirror it in Paper.
   - Searchable pickers use `Combobox.Popover`. `Menu` has no search field: a text field inside `role="menu"` is invalid ARIA.
   - `ThemeSelector` draws the bars in its previews with borders instead of `bg-border-*` fills, so their rounded ends anti-alias differently. It has no parity file.
+  - `ConversationShell.Message` has no `pending` pulse: ren-v1 faded the message, which failed contrast. `ConversationShell.Composer` takes a `label` that names its form.
+  - `Questionnaire` names each question's group by its title, which ren-v1 lost on multi-step questionnaires. While a reply is pending, it dims only its controls and shows a spinner in the submit button; ren-v1 faded the whole form, which failed contrast.
   - Controls inside `Field` take their label, description and invalid state from Base UI, so a `Select` inside an invalid field turns red. ren-v1 dropped the invalid state there.
 
 ## Testing

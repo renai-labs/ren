@@ -36,6 +36,9 @@ export const ThreeLines: Story = {
 export const Anywhere: Story = {
   args: { wrapping: "anywhere", children: "https://ren.example/projects/0f8c2a7d9e4b1c3a5f6e8d7c9b0a1e2f" },
 }
+export const Preserved: Story = {
+  args: { wrapping: "preserved", children: "Draft the report.\n\n  - Revenue\n  - Churn" },
+}
 export const NoWrap: Story = { args: { wrapping: "none", children: paragraph } }
 export const Balanced: Story = { args: { wrapping: "balanced", children: paragraph } }
 export const Center: Story = { args: { alignment: "center" } }

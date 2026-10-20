@@ -27,6 +27,7 @@ export type MarkdownProps = {
   scale?: "compact" | "standard"
   tone?: "primary" | "secondary"
   reveal?: "none" | "gradual"
+  onOpenSession?: ((sessionID: string) => void) | undefined
 }
 
 export function Markdown(props: MarkdownProps) {
@@ -46,7 +47,12 @@ export function Markdown(props: MarkdownProps) {
           </div>
         }
       >
-        <MarkdownRenderer content={props.content} source={source} reveal={props.reveal ?? "none"} />
+        <MarkdownRenderer
+          content={props.content}
+          source={source}
+          reveal={props.reveal ?? "none"}
+          onOpenSession={props.onOpenSession}
+        />
       </Suspense>
     </div>
   )

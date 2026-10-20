@@ -21,6 +21,7 @@ export {
   TwoLines,
   ThreeLines,
   Anywhere,
+  Preserved,
   NoWrap,
   Balanced,
   Center,

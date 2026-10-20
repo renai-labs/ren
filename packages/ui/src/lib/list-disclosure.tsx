@@ -24,7 +24,7 @@ export type DisclosureItemProps = DisclosureState & {
   children?: ReactNode
 }
 
-export function DisclosureRoot(props: DisclosureState & { children: ReactNode }) {
+export function DisclosureRoot(props: DisclosureState & { entrance?: "none" | "animated"; children: ReactNode }) {
   return (
     <Collapsible.Root
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- List.Root and the rows are divs, so a disclosure row cannot be an <li>
@@ -35,7 +35,7 @@ export function DisclosureRoot(props: DisclosureState & { children: ReactNode })
         if (props.locked !== true) props.onOpenChange?.(next)
       }}
       disabled={props.disabled === true || props.locked === true}
-      className="flex min-w-0 flex-col"
+      className={composeClasses("flex min-w-0 flex-col", props.entrance === "animated" && "animate-entrance")}
     >
       {props.children}
     </Collapsible.Root>

@@ -1,3 +1,8 @@
+import { PgClient } from "@effect/sql-pg"
+import { Celld, Shared, TestToken } from "@ren/cell/testing"
+import { Seed } from "@ren/core/testing"
+import { Database } from "@ren/db/database"
+import { Effect, Layer, Redacted } from "effect"
 import path from "path"
 import { databaseURL, ports } from "../tests/lib/env.js"
 
@@ -25,12 +30,15 @@ const mailbox = Bun.serve({
   },
 })
 
+const running: { cell?: Celld.Instance } = {}
 let stopping: Promise<void> | undefined
 const shutdown = (code: number) =>
   (stopping ??= (async () => {
     void mailbox.stop(true)
     for (const child of children) child.kill()
     await Promise.all(children.map((child) => child.exited))
+    await running.cell?.dispose()
+    await Shared.dispose()
     await admin.unsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
     await admin.close()
     process.exit(code)
@@ -50,6 +58,24 @@ if ((await migrate.exited) !== 0) {
   await shutdown(1)
 }
 
+const failed = async (error: unknown): Promise<never> => {
+  console.error(error)
+  await shutdown(1)
+  throw error
+}
+
+await Effect.runPromise(
+  Seed.ren().pipe(
+    Effect.provide(Database.layer.pipe(Layer.provide(PgClient.layer({ url: Redacted.make(database.href) })))),
+  ),
+).catch(failed)
+
+const cell = await Celld.make({
+  ...Shared.vars(),
+  REN_URL: serverURL.replace("127.0.0.1", "host.docker.internal"),
+}).catch(failed)
+running.cell = cell
+
 const server = Bun.spawn(["bun", "run", "src/main.ts"], {
   cwd: path.join(root, "server"),
   env: {
@@ -64,8 +90,8 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     GOOGLE_CLIENT_ID: "e2e-google-client-id",
     GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
     SIGNUP_MX_CHECK: "false",
-    CELL_URL: "http://127.0.0.1:9876",
-    CELL_KEYS: JSON.stringify([{ id: "e2e", secret: "e2e-cell-key-do-not-use-in-production" }]),
+    CELL_URL: cell.url,
+    CELL_KEYS: TestToken.vars.CELL_KEYS,
   },
   stdout: "pipe",
   stderr: "inherit",

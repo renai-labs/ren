@@ -8,6 +8,7 @@ import { SettingsSidebar } from "../../components/settings-sidebar.js"
 import { WorkspaceLayout } from "../../components/workspace-layout.js"
 import { WorkspaceSearch } from "../../components/workspace-search.js"
 import { ProfileCard } from "../../features/organization/profile-card.js"
+import { ChatList } from "../../features/session/chat-list.js"
 import { Keyboard } from "../../platform/keyboard.js"
 
 const settingsPath = /^\/settings(?:\/|$)/
@@ -33,7 +34,13 @@ function Shell() {
   return (
     <WorkspaceLayout
       header={inSettings ? null : <ApplicationSidebarBrand />}
-      navigation={inSettings ? <SettingsSidebar /> : <ApplicationSidebar onSearch={() => setSearching(true)} />}
+      navigation={
+        inSettings ? (
+          <SettingsSidebar />
+        ) : (
+          <ApplicationSidebar onSearch={() => setSearching(true)} chats={<ChatList />} />
+        )
+      }
       footer={inSettings || organization === null ? null : <ProfileCard user={me.user} organization={organization} />}
     >
       <Outlet />

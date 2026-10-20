@@ -3,6 +3,7 @@ import { AppBoot } from "../components/app-boot.js"
 import { Auth } from "../lib/auth.js"
 
 export const Route = createFileRoute("/_authed")({
+  head: () => ({ meta: [{ title: "Ren" }] }),
   beforeLoad: async (options) => {
     const context = options.context
     const session = await context.queryClient.query(Auth.sessionOptions(context.auth))
