@@ -9,7 +9,7 @@ import { HandProvider } from "@ren/core/hand-provider"
 import { Hands } from "@ren/core/hands"
 import { Models } from "@ren/core/models"
 import { Database } from "@ren/db/database"
-import { Sandbox } from "@ren/executor/testing"
+import { TestHand } from "@ren/executor/testing"
 import { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import { Hand } from "@ren/schema/hand"
@@ -171,7 +171,7 @@ export const start = async (options: {
 
   const keys = {
     CELL_KEYS: TestToken.vars.CELL_KEYS,
-    HAND_KEYS: JSON.stringify([encodedKey(Sandbox.keys.privateKey)]),
+    HAND_KEYS: JSON.stringify([encodedKey(TestHand.keys.privateKey)]),
     ...(options.tokenLifetime && { HAND_TOKEN_LIFETIME: options.tokenLifetime }),
   }
   const server = { child: undefined as Bun.Subprocess | undefined, log: "" }
