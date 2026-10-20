@@ -231,6 +231,167 @@ const adaptGroupSpaceEnvironmentTemplate = (raw: RawClient["space-environment-te
   archive: EndpointSpaceEnvironmentTemplateArchive(raw),
 })
 
+type SpaceSettingsGetRequest = Parameters<RawClient["space-settings"]["space-settings.get"]>[0]
+type SpaceSettingsGetInput = { readonly idOrSlug: SpaceSettingsGetRequest["params"]["idOrSlug"] }
+const EndpointSpaceSettingsGet = (raw: RawClient["space-settings"]) => (input: SpaceSettingsGetInput) =>
+  raw["space-settings.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type SpaceSettingsUpdateRequest = Parameters<RawClient["space-settings"]["space-settings.update"]>[0]
+type SpaceSettingsUpdateInput = {
+  readonly id: SpaceSettingsUpdateRequest["params"]["id"]
+  readonly settings: SpaceSettingsUpdateRequest["payload"]["settings"]
+}
+const EndpointSpaceSettingsUpdate = (raw: RawClient["space-settings"]) => (input: SpaceSettingsUpdateInput) =>
+  raw["space-settings.update"]({ params: { id: input["id"] }, payload: { settings: input["settings"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupSpaceSettings = (raw: RawClient["space-settings"]) => ({
+  get: EndpointSpaceSettingsGet(raw),
+  update: EndpointSpaceSettingsUpdate(raw),
+})
+
+type OrganizationSettingsGetRequest = Parameters<RawClient["organization-settings"]["organization-settings.get"]>[0]
+type OrganizationSettingsGetInput = { readonly idOrSlug: OrganizationSettingsGetRequest["params"]["idOrSlug"] }
+const EndpointOrganizationSettingsGet =
+  (raw: RawClient["organization-settings"]) => (input: OrganizationSettingsGetInput) =>
+    raw["organization-settings.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type OrganizationSettingsUpdateRequest = Parameters<
+  RawClient["organization-settings"]["organization-settings.update"]
+>[0]
+type OrganizationSettingsUpdateInput = {
+  readonly id: OrganizationSettingsUpdateRequest["params"]["id"]
+  readonly settings: OrganizationSettingsUpdateRequest["payload"]["settings"]
+}
+const EndpointOrganizationSettingsUpdate =
+  (raw: RawClient["organization-settings"]) => (input: OrganizationSettingsUpdateInput) =>
+    raw["organization-settings.update"]({ params: { id: input["id"] }, payload: { settings: input["settings"] } }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
+const adaptGroupOrganizationSettings = (raw: RawClient["organization-settings"]) => ({
+  get: EndpointOrganizationSettingsGet(raw),
+  update: EndpointOrganizationSettingsUpdate(raw),
+})
+
+type AgentListRequest = Parameters<RawClient["agent"]["agent.list"]>[0]
+type AgentListInput = {
+  readonly spaceId?: AgentListRequest["query"]["spaceId"]
+  readonly isSubagent?: AgentListRequest["query"]["isSubagent"]
+  readonly page: AgentListRequest["query"]["page"]
+  readonly pageSize: AgentListRequest["query"]["pageSize"]
+}
+const EndpointAgentList = (raw: RawClient["agent"]) => (input: AgentListInput) =>
+  raw["agent.list"]({
+    query: {
+      spaceId: input["spaceId"],
+      isSubagent: input["isSubagent"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type AgentGetRequest = Parameters<RawClient["agent"]["agent.get"]>[0]
+type AgentGetInput = { readonly idOrSlug: AgentGetRequest["params"]["idOrSlug"] }
+const EndpointAgentGet = (raw: RawClient["agent"]) => (input: AgentGetInput) =>
+  raw["agent.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type AgentCreateRequest = Parameters<RawClient["agent"]["agent.create"]>[0]
+type AgentCreateInput = {
+  readonly ownerSpaceId: AgentCreateRequest["payload"]["ownerSpaceId"]
+  readonly name: AgentCreateRequest["payload"]["name"]
+  readonly description?: AgentCreateRequest["payload"]["description"]
+  readonly isSubagent: AgentCreateRequest["payload"]["isSubagent"]
+  readonly settings: AgentCreateRequest["payload"]["settings"]
+}
+const EndpointAgentCreate = (raw: RawClient["agent"]) => (input: AgentCreateInput) =>
+  raw["agent.create"]({
+    payload: {
+      ownerSpaceId: input["ownerSpaceId"],
+      name: input["name"],
+      description: input["description"],
+      isSubagent: input["isSubagent"],
+      settings: input["settings"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type AgentUpdateRequest = Parameters<RawClient["agent"]["agent.update"]>[0]
+type AgentUpdateInput = {
+  readonly id: AgentUpdateRequest["params"]["id"]
+  readonly name?: AgentUpdateRequest["payload"]["name"]
+  readonly description?: AgentUpdateRequest["payload"]["description"]
+  readonly isSubagent?: AgentUpdateRequest["payload"]["isSubagent"]
+  readonly settings?: AgentUpdateRequest["payload"]["settings"]
+}
+const EndpointAgentUpdate = (raw: RawClient["agent"]) => (input: AgentUpdateInput) =>
+  raw["agent.update"]({
+    params: { id: input["id"] },
+    payload: {
+      name: input["name"],
+      description: input["description"],
+      isSubagent: input["isSubagent"],
+      settings: input["settings"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type AgentArchiveRequest = Parameters<RawClient["agent"]["agent.archive"]>[0]
+type AgentArchiveInput = { readonly id: AgentArchiveRequest["params"]["id"] }
+const EndpointAgentArchive = (raw: RawClient["agent"]) => (input: AgentArchiveInput) =>
+  raw["agent.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type AgentTransferOwnershipRequest = Parameters<RawClient["agent"]["agent.transferOwnership"]>[0]
+type AgentTransferOwnershipInput = {
+  readonly id: AgentTransferOwnershipRequest["params"]["id"]
+  readonly spaceId: AgentTransferOwnershipRequest["payload"]["spaceId"]
+}
+const EndpointAgentTransferOwnership = (raw: RawClient["agent"]) => (input: AgentTransferOwnershipInput) =>
+  raw["agent.transferOwnership"]({ params: { id: input["id"] }, payload: { spaceId: input["spaceId"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupAgent = (raw: RawClient["agent"]) => ({
+  list: EndpointAgentList(raw),
+  get: EndpointAgentGet(raw),
+  create: EndpointAgentCreate(raw),
+  update: EndpointAgentUpdate(raw),
+  archive: EndpointAgentArchive(raw),
+  transferOwnership: EndpointAgentTransferOwnership(raw),
+})
+
+type AgentMembershipListRequest = Parameters<RawClient["agent-membership"]["agent-membership.list"]>[0]
+type AgentMembershipListInput = {
+  readonly spaceId?: AgentMembershipListRequest["query"]["spaceId"]
+  readonly agentId?: AgentMembershipListRequest["query"]["agentId"]
+  readonly page: AgentMembershipListRequest["query"]["page"]
+  readonly pageSize: AgentMembershipListRequest["query"]["pageSize"]
+}
+const EndpointAgentMembershipList = (raw: RawClient["agent-membership"]) => (input: AgentMembershipListInput) =>
+  raw["agent-membership.list"]({
+    query: { spaceId: input["spaceId"], agentId: input["agentId"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type AgentMembershipCreateRequest = Parameters<RawClient["agent-membership"]["agent-membership.create"]>[0]
+type AgentMembershipCreateInput = {
+  readonly spaceId: AgentMembershipCreateRequest["payload"]["spaceId"]
+  readonly agentId: AgentMembershipCreateRequest["payload"]["agentId"]
+}
+const EndpointAgentMembershipCreate = (raw: RawClient["agent-membership"]) => (input: AgentMembershipCreateInput) =>
+  raw["agent-membership.create"]({ payload: { spaceId: input["spaceId"], agentId: input["agentId"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type AgentMembershipArchiveRequest = Parameters<RawClient["agent-membership"]["agent-membership.archive"]>[0]
+type AgentMembershipArchiveInput = { readonly id: AgentMembershipArchiveRequest["params"]["id"] }
+const EndpointAgentMembershipArchive = (raw: RawClient["agent-membership"]) => (input: AgentMembershipArchiveInput) =>
+  raw["agent-membership.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupAgentMembership = (raw: RawClient["agent-membership"]) => ({
+  list: EndpointAgentMembershipList(raw),
+  create: EndpointAgentMembershipCreate(raw),
+  archive: EndpointAgentMembershipArchive(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -240,6 +401,10 @@ const adaptClient = (raw: RawClient) => ({
   "environment-template": adaptGroupEnvironmentTemplate(raw["environment-template"]),
   environmentProvider: adaptGroupEnvironmentProvider(raw["environmentProvider"]),
   "space-environment-template": adaptGroupSpaceEnvironmentTemplate(raw["space-environment-template"]),
+  "space-settings": adaptGroupSpaceSettings(raw["space-settings"]),
+  "organization-settings": adaptGroupOrganizationSettings(raw["organization-settings"]),
+  agent: adaptGroupAgent(raw["agent"]),
+  "agent-membership": adaptGroupAgentMembership(raw["agent-membership"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

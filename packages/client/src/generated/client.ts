@@ -36,6 +36,32 @@ import type {
   SpaceEnvironmentTemplateCreateOutput,
   SpaceEnvironmentTemplateArchiveInput,
   SpaceEnvironmentTemplateArchiveOutput,
+  SpaceSettingsGetInput,
+  SpaceSettingsGetOutput,
+  SpaceSettingsUpdateInput,
+  SpaceSettingsUpdateOutput,
+  OrganizationSettingsGetInput,
+  OrganizationSettingsGetOutput,
+  OrganizationSettingsUpdateInput,
+  OrganizationSettingsUpdateOutput,
+  AgentListInput,
+  AgentListOutput,
+  AgentGetInput,
+  AgentGetOutput,
+  AgentCreateInput,
+  AgentCreateOutput,
+  AgentUpdateInput,
+  AgentUpdateOutput,
+  AgentArchiveInput,
+  AgentArchiveOutput,
+  AgentTransferOwnershipInput,
+  AgentTransferOwnershipOutput,
+  AgentMembershipListInput,
+  AgentMembershipListOutput,
+  AgentMembershipCreateInput,
+  AgentMembershipCreateOutput,
+  AgentMembershipArchiveInput,
+  AgentMembershipArchiveOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -363,6 +389,186 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/space-environment-templates/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "space-settings": {
+      get: (input: SpaceSettingsGetInput, requestOptions?: RequestOptions) =>
+        request<SpaceSettingsGetOutput>(
+          {
+            method: "GET",
+            path: `/space-settings/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: SpaceSettingsUpdateInput, requestOptions?: RequestOptions) =>
+        request<SpaceSettingsUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/space-settings/${encodeURIComponent(input.id)}`,
+            body: { settings: input["settings"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "organization-settings": {
+      get: (input: OrganizationSettingsGetInput, requestOptions?: RequestOptions) =>
+        request<OrganizationSettingsGetOutput>(
+          {
+            method: "GET",
+            path: `/organization-settings/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: OrganizationSettingsUpdateInput, requestOptions?: RequestOptions) =>
+        request<OrganizationSettingsUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/organization-settings/${encodeURIComponent(input.id)}`,
+            body: { settings: input["settings"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    agent: {
+      list: (input: AgentListInput, requestOptions?: RequestOptions) =>
+        request<AgentListOutput>(
+          {
+            method: "GET",
+            path: `/agents`,
+            query: {
+              spaceId: input["spaceId"],
+              isSubagent: input["isSubagent"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: AgentGetInput, requestOptions?: RequestOptions) =>
+        request<AgentGetOutput>(
+          {
+            method: "GET",
+            path: `/agents/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: AgentCreateInput, requestOptions?: RequestOptions) =>
+        request<AgentCreateOutput>(
+          {
+            method: "POST",
+            path: `/agents`,
+            body: {
+              ownerSpaceId: input["ownerSpaceId"],
+              name: input["name"],
+              description: input["description"],
+              isSubagent: input["isSubagent"],
+              settings: input["settings"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: AgentUpdateInput, requestOptions?: RequestOptions) =>
+        request<AgentUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/agents/${encodeURIComponent(input.id)}`,
+            body: {
+              name: input["name"],
+              description: input["description"],
+              isSubagent: input["isSubagent"],
+              settings: input["settings"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: AgentArchiveInput, requestOptions?: RequestOptions) =>
+        request<AgentArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/agents/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      transferOwnership: (input: AgentTransferOwnershipInput, requestOptions?: RequestOptions) =>
+        request<AgentTransferOwnershipOutput>(
+          {
+            method: "POST",
+            path: `/agents/${encodeURIComponent(input.id)}/transferOwnership`,
+            body: { spaceId: input["spaceId"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "agent-membership": {
+      list: (input: AgentMembershipListInput, requestOptions?: RequestOptions) =>
+        request<AgentMembershipListOutput>(
+          {
+            method: "GET",
+            path: `/agent-memberships`,
+            query: {
+              spaceId: input["spaceId"],
+              agentId: input["agentId"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: AgentMembershipCreateInput, requestOptions?: RequestOptions) =>
+        request<AgentMembershipCreateOutput>(
+          {
+            method: "POST",
+            path: `/agent-memberships`,
+            body: { spaceId: input["spaceId"], agentId: input["agentId"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: AgentMembershipArchiveInput, requestOptions?: RequestOptions) =>
+        request<AgentMembershipArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/agent-memberships/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,
