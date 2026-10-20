@@ -2,7 +2,7 @@ import { afterAll, expect } from "bun:test"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { HandAccess } from "@ren/brain/hand-access"
 import { HandConnections } from "@ren/brain/hand-connections"
-import { Sandbox, Relay, testEffect } from "@ren/executor/testing"
+import { TestHand, Relay, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
@@ -27,7 +27,7 @@ const it = testEffect(Layer.empty)
 const handId = Hand.ID.create()
 
 const accessFor = (sessionId: Session.ID) =>
-  Sandbox.access({
+  TestHand.access({
     url: "http://127.0.0.1:9",
     handId,
     brain: Brain.ofSession(sessionId),

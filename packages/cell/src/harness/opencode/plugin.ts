@@ -4,16 +4,15 @@ import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Tool } from "@opencode/schema/tool"
-import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { HandConnections } from "@ren/brain/hand-connections"
-import { Identifier } from "@ren/schema/identifier"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Clock, DateTime, Deferred, Effect, Option, Predicate, Redacted, Ref, Schema, Stream, Struct } from "effect"
 import type { Harness } from "../harness.js"
 import { ModelProviders } from "./model-providers.js"
+import { RenWorkspaceDriver } from "./workspace-driver.js"
 
-const unavailable = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
+const handTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
 
 export const method = IntegrationMethodID.make("ren")
 
@@ -23,11 +22,12 @@ export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("Mana
 
 const never = Number.MAX_SAFE_INTEGER
 
+const maxErrorDepth = 8
+
 const handFailure = (value: unknown, depth = 0): { readonly message: string } | undefined => {
-  if (value instanceof HandConnections.Unavailable) return value
-  if (ExecutorClient.isNoAnswer(value) && value instanceof Error)
-    return { message: `The hand does not answer: ${value.message}` }
-  if (depth > 8 || !Predicate.isObject(value)) return undefined
+  const failure = HandConnections.failureOf(value)
+  if (failure) return failure
+  if (depth > maxErrorDepth || !Predicate.isObject(value)) return undefined
   return ["cause", "error", "reason"]
     .map((key) => (Predicate.hasProperty(value, key) ? handFailure(value[key], depth + 1) : undefined))
     .find(Boolean)
@@ -66,7 +66,7 @@ export const make = (
         const provider = context.provider
         if (Option.isNone(connections))
           yield* tool.transform((editor) => {
-            for (const id of unavailable) editor.remove(id)
+            for (const id of handTools) editor.remove(id)
           })
         if (Option.isSome(connections))
           yield* tool.hook("execute.after", (event) =>
@@ -85,9 +85,9 @@ export const make = (
           yield* context.event.subscribe().pipe(
             Stream.runForEach((event) => {
               if (event.type !== "session.idle" || !event.location?.workspaceID) return Effect.void
-              if (Identifier.suffix(event.data.sessionID) !== Identifier.suffix(event.location.workspaceID))
-                return Effect.void
-              return connections.value.release(Session.ID.make(event.data.sessionID))
+              const sessionId = RenWorkspaceDriver.sessionIdOf(event.location.workspaceID)
+              if (Session.ID.make(event.data.sessionID) !== sessionId) return Effect.void
+              return connections.value.release(sessionId)
             }),
             Effect.forkScoped,
           )
