@@ -1,6 +1,6 @@
 export * as Probe from "./probe.js"
 
-import type { SpawnResult } from "@ren/hand-api/executor-api"
+import type { ExecutorApi } from "@ren/hand-api/executor-api"
 import { Executor } from "@ren/executor/executor"
 import { Sandbox } from "@ren/executor/sandbox"
 import { TestHand } from "@ren/executor/testing"
@@ -16,7 +16,9 @@ export interface Probe {
   readonly layer: NonNullable<Parameters<typeof TestHand.layer>[0]["executor"]>
 }
 
-export const make = (options: { readonly afterSpawn?: (result: SpawnResult) => Effect.Effect<void> } = {}) =>
+export const make = (
+  options: { readonly afterSpawn?: (result: ExecutorApi.SpawnResult) => Effect.Effect<void> } = {},
+) =>
   Effect.gen(function* () {
     const heartbeats = yield* Ref.make(0)
     const pings = yield* Ref.make(0)

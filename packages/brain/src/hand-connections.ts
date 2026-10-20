@@ -1,12 +1,10 @@
 export * as HandConnections from "./hand-connections.js"
 
-import { type Hello, protocol } from "@ren/hand-api/executor-api"
+import { ExecutorApi } from "@ren/hand-api/executor-api"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import type { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
 import {
-  Cache,
-  Cause,
   Clock,
   Context,
   DateTime,
@@ -14,7 +12,6 @@ import {
   Effect,
   Exit,
   Layer,
-  Option,
   RcMap,
   Redacted,
   Ref,
@@ -53,7 +50,7 @@ const isSameHand = (held: Hand.Access, fresh: Hand.Access) =>
   fresh.url.href === held.url.href && fresh.generation === held.generation && fresh.directory === held.directory
 
 export interface Connection {
-  readonly hello: Hello
+  readonly hello: ExecutorApi.Hello
   readonly client: ExecutorClient.Client
 }
 
@@ -75,30 +72,30 @@ export const layer = Layer.effect(
     const handAccess = yield* HandAccess.Service
     const http = yield* HttpClient.HttpClient
     const liveEntries = new Map<Session.ID, SynchronizedRef.SynchronizedRef<Hand.Access>>()
-    const lastFailures = yield* Cache.makeWith(
-      Effect.fn("HandConnections.openAccess")(function* (sessionId: Session.ID) {
-        return yield* handAccess.open(sessionId).pipe(
-          Effect.mapError((error) =>
-            error._tag === "HandAccess.NotFound"
-              ? new Unavailable({ sessionId, reason: "no_access", message: `No access to a hand: ${error.message}` })
-              : new Unavailable({
-                  sessionId,
-                  reason: "ren_unavailable",
-                  message: `Ren does not answer: ${error.message}`,
-                }),
-          ),
-        )
-      }),
-      {
-        capacity: Number.POSITIVE_INFINITY,
-        timeToLive: (exit) =>
-          Exit.isFailure(exit) &&
-          Option.exists(Cause.findErrorOption(exit.cause), (error) => error.reason === "ren_unavailable")
-            ? retryRenAfter
-            : Duration.zero,
-      },
-    )
-    const openAccess = (sessionId: Session.ID) => Cache.get(lastFailures, sessionId)
+    const renDown = new Map<Session.ID, { readonly untilMs: number; readonly error: Unavailable }>()
+    const openAccess = Effect.fn("HandConnections.openAccess")(function* (sessionId: Session.ID) {
+      const down = renDown.get(sessionId)
+      if (down && (yield* Clock.currentTimeMillis) < down.untilMs) return yield* down.error
+      return yield* handAccess.open(sessionId).pipe(
+        Effect.mapError((error) =>
+          error._tag === "HandAccess.NotFound"
+            ? new Unavailable({ sessionId, reason: "no_access", message: `No access to a hand: ${error.message}` })
+            : new Unavailable({
+                sessionId,
+                reason: "ren_unavailable",
+                message: `Ren does not answer: ${error.message}`,
+              }),
+        ),
+        Effect.tap(() => Effect.sync(() => renDown.delete(sessionId))),
+        Effect.tapError((error) =>
+          error.reason === "ren_unavailable"
+            ? Effect.map(Clock.currentTimeMillis, (now) =>
+                renDown.set(sessionId, { untilMs: now + Duration.toMillis(retryRenAfter), error }),
+              )
+            : Effect.void,
+        ),
+      )
+    })
 
     const connections: RcMap.RcMap<Session.ID, Entry, Unavailable> = yield* RcMap.make({
       idleTimeToLive: Duration.infinity,
@@ -162,11 +159,11 @@ export const layer = Layer.effect(
                   message: `The hand at ${access.url} does not answer: ${cause.message}`,
                 })
           const hello = yield* client["executor.hello"]().pipe(Effect.mapError(unreachableBecause))
-          if (hello.protocol !== protocol)
+          if (hello.protocol !== ExecutorApi.protocol)
             return yield* new Unavailable({
               sessionId,
               reason: "incompatible",
-              message: `The executor is not compatible: it speaks protocol ${hello.protocol}, not ${protocol}`,
+              message: `The executor is not compatible: it speaks protocol ${hello.protocol}, not ${ExecutorApi.protocol}`,
             })
           yield* client["files.mkdir"]({ path: access.directory }).pipe(
             Effect.mapError((error) =>
@@ -181,9 +178,11 @@ export const layer = Layer.effect(
           )
           const checkAccess: Effect.Effect<void, Unavailable> = Effect.gen(function* () {
             const latest = yield* freshAccess
-            if (DateTime.toEpochMillis(latest.expiresAt) > (yield* Clock.currentTimeMillis)) return
+            const now = yield* Clock.currentTimeMillis
+            if (DateTime.toEpochMillis(latest.expiresAt) > now) return
             yield* invalidateSelf
-            yield* Cache.getOption(lastFailures, sessionId)
+            const down = renDown.get(sessionId)
+            if (down && now < down.untilMs) return yield* down.error
             return yield* new Unavailable({
               sessionId,
               reason: "ren_unavailable",

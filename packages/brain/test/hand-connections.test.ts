@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
 import { TestAccess } from "./lib/access.js"
-import type { Hello } from "@ren/hand-api/executor-api"
+import type { ExecutorApi } from "@ren/hand-api/executor-api"
 import { Executor } from "@ren/executor/executor"
 import { Sandbox } from "@ren/executor/sandbox"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
@@ -32,7 +32,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { HandConnections } from "../src/hand-connections.js"
 import { HandAccess } from "../src/hand-access.js"
-import { HandSession } from "../src/hand-session.js"
+import { HandSpawner } from "../src/hand-session/spawner.js"
 import { Probe } from "./lib/probe.js"
 
 const handId = Hand.ID.create()
@@ -434,7 +434,9 @@ const where = (environments: HandConnections.Interface) => Effect.scoped(Effect.
 it.effect("moves to the new sandbox when a renewed access names a new address, with no change notice", () =>
   Effect.gen(function* () {
     const second = yield* machine({ handId, workspace: elsewhere })
-    const subject = yield* controlled(yield* accessAt(yield* TestHand.url, { issuedAt: yield* Clock.currentTimeMillis }))
+    const subject = yield* controlled(
+      yield* accessAt(yield* TestHand.url, { issuedAt: yield* Clock.currentTimeMillis }),
+    )
     expect(yield* where(subject.environments)).toBe(workspace)
     yield* TestClock.adjust(Duration.minutes(7))
     yield* Ref.set(
@@ -446,7 +448,7 @@ it.effect("moves to the new sandbox when a renewed access names a new address, w
   }),
 )
 
-const reporting = (hello: Partial<Pick<Hello, "protocol">>) =>
+const reporting = (hello: Partial<Pick<ExecutorApi.Hello, "protocol">>) =>
   Layer.effect(
     Executor.Service,
     Effect.map(Executor.Service, (executor) =>
@@ -465,7 +467,7 @@ const reporting = (hello: Partial<Pick<Hello, "protocol">>) =>
 
 it.live("refuses an executor that speaks another protocol", () =>
   Effect.gen(function* () {
-    const environmentsFor = Effect.fnUntraced(function* (hello: Partial<Pick<Hello, "protocol">>) {
+    const environmentsFor = Effect.fnUntraced(function* (hello: Partial<Pick<ExecutorApi.Hello, "protocol">>) {
       const url = yield* machine({ handId, workspace, executor: reporting(hello) })
       return yield* environmentsWith(TestAccess.fixed(new Map([[sessionId, yield* accessAt(url)]])))
     })
@@ -598,7 +600,7 @@ it.effect("a connection outlives its token and still reaches the processes it st
       ),
     )
     const connection = yield* environments.connect(sessionId)
-    const handle = yield* HandSession.spawner(connection, (signal) => new Error(`Killed by ${signal}`)).spawn(
+    const handle = yield* HandSpawner.make(connection, (signal) => new Error(`Killed by ${signal}`)).spawn(
       ChildProcess.make("cat", []),
     )
     yield* Probe.advance(Duration.minutes(11))
