@@ -22,7 +22,7 @@ export interface SendOptions {
   readonly delivery?: Session.Delivery
 }
 
-const encodeModels = Schema.encodeSync(Brain.ModelGrant)
+const encodeModels = Schema.encodeSync(Schema.toCodecJson(Brain.ModelGrant))
 
 export const messages = async (opencode: OpenCodeClient, sessionID: string) =>
   (await opencode.message.list({ sessionID, order: "asc", limit: 200 })).data

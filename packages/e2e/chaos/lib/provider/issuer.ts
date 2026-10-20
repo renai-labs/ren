@@ -29,7 +29,7 @@ export interface Instance {
   readonly stop: () => Promise<void>
 }
 
-const encodeModels = Schema.encodeSync(Brain.ModelGrant)
+const encodeModels = Schema.encodeSync(Schema.toCodecJson(Brain.ModelGrant))
 
 const encodeAccess = Schema.encodeSync(Schema.toCodecJson(Hand.Access))
 
