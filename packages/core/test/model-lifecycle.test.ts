@@ -159,7 +159,7 @@ const put = (sessionId: Session.ID, granted: Models.Access, presented?: string) 
         method: "PUT",
         headers: { authorization: header, "content-type": "application/json" },
         body: JSON.stringify(
-          Schema.encodeSync(Brain.ModelGrant)({
+          Schema.encodeSync(Schema.toCodecJson(Brain.ModelGrant))({
             access: granted,
             ...(hostToken && { hostToken: Redacted.make(hostToken) }),
           }),

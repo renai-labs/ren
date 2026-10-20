@@ -3,7 +3,7 @@ export * as Access from "./access.js"
 import { Policy } from "@ren/schema/policy"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Actor } from "./actor.js"
-import { EnvironmentPolicy } from "./environment/policy.js"
+import { EnvironmentPolicy } from "./environments/policy.js"
 import { SpacePolicy } from "./space/policy.js"
 
 export interface Resource {

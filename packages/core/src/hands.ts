@@ -197,10 +197,6 @@ export const layer = Layer.effect(
       subject: Subject,
       options: { readonly isRetry: boolean },
     ): Effect.fn.Return<Hand.Access, NotFound | Unavailable> {
-      const keys = yield* Option.match(signing, {
-        onNone: () => Effect.die(new Error("HAND_KEYS has no signing key")),
-        onSome: Effect.succeed,
-      })
       const environmentRows = yield* database.db
         .select({ provider: environments.provider })
         .from(sessions)
@@ -210,6 +206,10 @@ export const layer = Layer.effect(
       const provider = Option.flatMap(Option.fromNullishOr(environmentRows.at(0)), (row) => registry.get(row.provider))
       if (Option.isNone(provider))
         return yield* new NotFound({ message: `Session ${subject.sessionId} has no environment this Ren can run` })
+      const keys = yield* Option.match(signing, {
+        onNone: () => Effect.die(new Error("HAND_KEYS has no signing key")),
+        onSome: Effect.succeed,
+      })
       const assigned = yield* assign(subject)
       const unavailableBecause = (error: HandProvider.Failed) =>
         new Unavailable({ message: `The hand of session ${subject.sessionId} is unavailable: ${error.message}` })

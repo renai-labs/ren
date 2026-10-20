@@ -1,6 +1,6 @@
 export * as Docker from "./docker.js"
 
-import { port } from "@ren/hand-api/executor-api"
+import { ExecutorApi } from "@ren/hand-api/executor-api"
 import { Duration, Effect, Option, Schedule, Schema, Stream } from "effect"
 import { HttpClient } from "effect/http"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
@@ -9,7 +9,7 @@ import { HandProvider } from "../hand-provider.js"
 const Config = Schema.Struct({
   image: Schema.NonEmptyString.annotate({
     title: "Image",
-    description: `A Docker image that runs Ren’s executor on port ${port}.`,
+    description: `A Docker image that runs Ren’s executor on port ${ExecutorApi.port}.`,
   }),
   cpus: Schema.optionalKey(
     Schema.Finite.check(Schema.isGreaterThan(0)).annotate({ title: "CPUs", description: "Docker’s --cpus." }),
@@ -24,7 +24,7 @@ const Config = Schema.Struct({
 
 const Binding = Schema.Struct({ containerId: Schema.NonEmptyString })
 
-const executorPort = `${port}/tcp`
+const executorPort = `${ExecutorApi.port}/tcp`
 
 const nameRaceChecks = 100
 
@@ -119,12 +119,12 @@ export const provider = Effect.gen(function* () {
         if (restarted.exitCode !== 0) return yield* new HandProvider.Failed({ message: restarted.stderr })
       }
       const published = yield* runDocker(["port", binding.containerId, executorPort])
-      const port = /:(\d+)$/mu.exec(published.stdout)?.at(1)
-      if (published.exitCode !== 0 || !port)
+      const hostPort = /:(\d+)$/mu.exec(published.stdout)?.at(1)
+      if (published.exitCode !== 0 || !hostPort)
         return yield* new HandProvider.Failed({
           message: `The container ${binding.containerId} publishes no executor port: ${published.stderr}`,
         })
-      const url = new URL(`http://127.0.0.1:${port}`)
+      const url = new URL(`http://127.0.0.1:${hostPort}`)
       yield* HandProvider.waitForExecutor(http, url)
       return { url }
     }),
