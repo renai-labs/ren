@@ -130,4 +130,42 @@ describe("settings in the cell", () => {
       expect(child.calls).toHaveLength(0)
     }),
   )
+
+  it.live("a start that Ren sends again keeps the session's model, and a start that names another model sets it", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(TestSettings.layers())
+      const model = Effect.map(
+        opened.client.session.get({ sessionID: opened.sessionID }).pipe(Effect.orDie),
+        (session) => String(session.model?.id),
+      )
+      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: "stub-other" }))
+      yield* opened.harness.start({ sessionId: opened.sessionId, harness: "opencode", interactive: true })
+      expect(yield* model).toBe("stub-other")
+      yield* opened.harness.start({
+        sessionId: opened.sessionId,
+        harness: "opencode",
+        interactive: true,
+        model: { endpointId: "stub", modelId: "stub-model" },
+      })
+      expect(yield* model).toBe("stub-model")
+    }),
+  )
+
+  it.live("a model the session sets wins over the settings, and a model outside the catalog is refused", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(TestSettings.layers())
+      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: "stub-other" }))
+      const script = stub.script()
+      yield* opened.turn(script)
+      expect(script.calls[0]?.body.model).toBe("stub-other")
+      const refused = yield* opened.harness
+        .setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: "gone" }))
+        .pipe(Effect.flip)
+      expect(refused.message).toContain("stub/gone")
+      yield* opened.harness.setModel(opened.sessionId, Option.none())
+      const back = stub.script()
+      yield* opened.turn(back)
+      expect(back.calls[0]?.body.model).toBe("stub-model")
+    }),
+  )
 })

@@ -13,6 +13,9 @@ interface Bindings {
   readonly SESSION_CELL: DurableObjectNamespace<SessionCell>
 }
 
+const serverOnly = (path: string) =>
+  (Brain.owns(path) && !Brain.allowsClient(path)) || OpenCodeRoutes.serverOnly.some((pattern) => pattern.test(path))
+
 // oxlint-disable-next-line import/no-default-export -- workerd, celld and Cloudflare load the worker's default export
 export default {
   fetch: (request, env) =>
@@ -29,8 +32,7 @@ export default {
         if (Option.isNone(claims))
           return Response.json({ _tag: "UnauthorizedError", message: "Authentication required" }, { status: 401 })
         const path = new URL(request.url).pathname
-        const serverOnly = Brain.owns(path) || OpenCodeRoutes.serverOnly.some((pattern) => pattern.test(path))
-        if (serverOnly && claims.value.scope !== "server") return new Response(null, { status: 403 })
+        if (serverOnly(path) && claims.value.scope !== "server") return new Response(null, { status: 403 })
         const headers = new Headers(request.headers)
         headers.delete("authorization")
         const oversized = Number(headers.get("content-length")) > Session.maxBodyBytes

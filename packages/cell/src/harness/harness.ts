@@ -24,6 +24,10 @@ export interface Instance {
   readonly send: (
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, BrainRejectedError | SessionNotStartedError>
+  readonly setModel: (
+    sessionId: string,
+    model: Option.Option<Session.Model>,
+  ) => Effect.Effect<void, BrainRejectedError | SessionNotStartedError>
   readonly sessions: Effect.Effect<ReadonlyArray<SessionState>>
 }
 
