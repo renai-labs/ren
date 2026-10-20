@@ -93,6 +93,33 @@
         "wrangler": "catalog:",
       },
     },
+    "packages/chat": {
+      "name": "@ren/chat",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ren/client": "workspace:*",
+        "@ren/schema": "workspace:*",
+        "diff": "catalog:",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/atom-react": "catalog:",
+        "@opencode/schema": "catalog:",
+        "@ren/cell": "workspace:*",
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "@typescript/native-preview": "catalog:",
+        "react": "catalog:",
+      },
+      "peerDependencies": {
+        "@effect/atom-react": "catalog:",
+        "react": "catalog:",
+      },
+      "optionalPeers": [
+        "@effect/atom-react",
+        "react",
+      ],
+    },
     "packages/cli": {
       "name": "@renai-labs/cli",
       "version": "0.0.0",
@@ -405,6 +432,7 @@
     "@base-ui/react": "1.8.0",
     "@better-auth/drizzle-adapter": "1.7.7",
     "@cloudflare/workers-types": "5.20261010.1",
+    "@effect/atom-react": "4.0.1",
     "@effect/platform-bun": "4.0.1",
     "@effect/sql-pg": "4.0.1",
     "@fontsource/ibm-plex-mono": "5.3.0",
@@ -444,6 +472,7 @@
     "better-auth": "1.7.7",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "diff": "8.0.4",
     "disposable-email-domains-js": "1.26.0",
     "drizzle-kit": "1.0.0-rc.5-5935859",
     "drizzle-orm": "1.0.0-rc.5-5935859",
@@ -743,6 +772,8 @@
     "@ctrl/tinycolor": ["@ctrl/tinycolor@4.2.1", "", {}, "sha512-Vh5uy9Y1JBMId6J1f68TMXnZrTCvNdo9Fu2k0d1YnJngR+sM5kWTKl441c/3TFs+cG0NWOjRWgQ/iaWhbYx+7A=="],
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.12.1", "", {}, "sha512-yHwomvolVafvUXhy5TdiJVkuNCxXn+bKOs2aWiWEQh/5YaV97Oa/abJz3dmx7lxgIUsUlS1Jl4mEfvJPo3YsVw=="],
+
+    "@effect/atom-react": ["@effect/atom-react@4.0.1", "", { "peerDependencies": { "effect": "^4.0.1", "react": ">=19.0.0 <20.0.0", "scheduler": ">=0.25.0 <0.28.0" } }, "sha512-V/vcbFCVY2AV7PvjhmOP37Cr4NofrtxBBGW6M1ckBIBxmpi3sMwdPTxj2obPNE4Ho3gkeEQzRC9zEIQ4BDNdQg=="],
 
     "@effect/opentelemetry": ["@effect/opentelemetry@4.0.1", "", { "peerDependencies": { "@opentelemetry/api": ">=1.9.0 <2.0.0", "@opentelemetry/api-logs": ">=0.203.0 <0.300.0", "@opentelemetry/resources": ">=2.0.0 <3.0.0", "@opentelemetry/sdk-logs": ">=0.203.0 <0.300.0", "@opentelemetry/sdk-metrics": ">=2.0.0 <3.0.0", "@opentelemetry/sdk-trace-base": ">=2.0.0 <3.0.0", "@opentelemetry/sdk-trace-node": ">=2.0.0 <3.0.0", "@opentelemetry/sdk-trace-web": ">=2.0.0 <3.0.0", "@opentelemetry/semantic-conventions": ">=1.33.0 <2.0.0", "effect": "^4.0.1" }, "optionalPeers": ["@opentelemetry/api", "@opentelemetry/api-logs", "@opentelemetry/resources", "@opentelemetry/sdk-logs", "@opentelemetry/sdk-metrics", "@opentelemetry/sdk-trace-base", "@opentelemetry/sdk-trace-node", "@opentelemetry/sdk-trace-web"] }, "sha512-MZ7M1a1dxMqTqeNwIGSECjO7RrReEgeEwHo8BnbOqP+8IfVpdiJi/iPCmkFVWlAxanMl4qhsq69e0Hkul9t+bA=="],
 
@@ -1293,6 +1324,8 @@
     "@ren/brain": ["@ren/brain@workspace:packages/brain"],
 
     "@ren/cell": ["@ren/cell@workspace:packages/cell"],
+
+    "@ren/chat": ["@ren/chat@workspace:packages/chat"],
 
     "@ren/client": ["@ren/client@workspace:packages/client"],
 
