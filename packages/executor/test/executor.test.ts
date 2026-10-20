@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
 import { BunServices } from "@effect/platform-bun"
-import { maxFileBytes, type ProcessEvent, type SpawnInput } from "@ren/hand-api/executor-api"
+import { ExecutorApi } from "@ren/hand-api/executor-api"
 import { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
 import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
@@ -20,7 +20,11 @@ const executor = Sandbox.layer.pipe(
   Layer.provide(BunServices.layer),
   Layer.provide(
     ConfigProvider.layer(
-      ConfigProvider.fromUnknown({ EXECUTOR_HAND_ID: Hand.ID.create(), EXECUTOR_WORKSPACE: workspace }),
+      ConfigProvider.fromUnknown({
+        EXECUTOR_HAND_ID: Hand.ID.create(),
+        EXECUTOR_WORKSPACE: workspace,
+        ...(process.env.SHELL && { SHELL: process.env.SHELL }),
+      }),
     ),
   ),
 )
@@ -29,7 +33,7 @@ const brain = Brain.ID.create()
 const decoder = new TextDecoder()
 const encoder = new TextEncoder()
 
-const run = Effect.fnUntraced(function* (input: SpawnInput) {
+const run = Effect.fnUntraced(function* (input: ExecutorApi.SpawnInput) {
   const executor = yield* Executor.Service
   const spawned = yield* executor.spawn(brain, input)
   return { executor, id: spawned.id, pid: spawned.pid, events: yield* executor.output(brain, spawned.id) }
@@ -38,10 +42,10 @@ const run = Effect.fnUntraced(function* (input: SpawnInput) {
 const bun = process.execPath
 const mebibyte = 1024 * 1024
 
-const bytesOf = (events: ReadonlyArray<ProcessEvent>, type: "stdout" | "stderr") =>
+const bytesOf = (events: ReadonlyArray<ExecutorApi.ProcessEvent>, type: "stdout" | "stderr") =>
   new Uint8Array(Buffer.concat(events.flatMap((event) => (event.type === type ? [event.bytes] : []))))
 
-const collect = (events: Stream.Stream<ProcessEvent>) =>
+const collect = (events: Stream.Stream<ExecutorApi.ProcessEvent>) =>
   Stream.runCollect(events).pipe(
     Effect.map((all) => ({
       stdout: all.flatMap((event) => (event.type === "stdout" ? [decoder.decode(event.bytes)] : [])).join(""),
@@ -235,7 +239,7 @@ it.live("replays output from a cursor, and gives each chunk its offset", () =>
       command: "sh",
       arguments: ["-c", "printf abc; sleep 0.3; printf def"],
     })
-    const chunks = (events: ReadonlyArray<ProcessEvent>) =>
+    const chunks = (events: ReadonlyArray<ExecutorApi.ProcessEvent>) =>
       events.flatMap((event) =>
         event.type === "stdout" ? [{ offset: event.offset, text: decoder.decode(event.bytes) }] : [],
       )
@@ -354,17 +358,17 @@ it.live(
       const executor = yield* Executor.Service
       yield* Effect.promise(() =>
         writeFile(join(workspace, "large.bin"), "").then(() =>
-          truncate(join(workspace, "large.bin"), maxFileBytes + 1),
+          truncate(join(workspace, "large.bin"), ExecutorApi.maxFileBytes + 1),
         ),
       )
       expect((yield* executor.read("large.bin").pipe(Effect.flip))._tag).toBe("FileTooLargeError")
       expect((yield* executor.read("large.bin", { offset: 0, length: 4 })).bytes).toEqual(new Uint8Array(4))
-      expect((yield* executor.read("large.bin", { offset: 0, length: maxFileBytes + 1 })).bytes.length).toBe(
-        maxFileBytes,
-      )
-      expect((yield* executor.write("copy.bin", new Uint8Array(maxFileBytes + 1)).pipe(Effect.flip))._tag).toBe(
-        "FileTooLargeError",
-      )
+      expect(
+        (yield* executor.read("large.bin", { offset: 0, length: ExecutorApi.maxFileBytes + 1 })).bytes.length,
+      ).toBe(ExecutorApi.maxFileBytes)
+      expect(
+        (yield* executor.write("copy.bin", new Uint8Array(ExecutorApi.maxFileBytes + 1)).pipe(Effect.flip))._tag,
+      ).toBe("FileTooLargeError")
       expect((yield* executor.stat("copy.bin").pipe(Effect.flip))._tag).toBe("FileNotFoundError")
     }),
 )
@@ -485,10 +489,14 @@ it.effect("a reader that stops reading holds a command back only until it stalls
     const exit = yield* Stream.runLast(Stream.unwrap(executor.output(brain, spawned.id, 10_000_000))).pipe(
       Effect.forkScoped,
     )
-    const exited = yield* TestClock.adjust(Duration.seconds(16)).pipe(
-      Effect.andThen(TestClock.withLive(Fiber.join(exit).pipe(Effect.timeoutOption(Duration.millis(200))))),
-      Effect.repeat({ until: Option.isSome, times: 10 }),
-    )
+    const exited = yield* executor
+      .heartbeat(brain, spawned.id)
+      .pipe(
+        Effect.ignore,
+        Effect.andThen(TestClock.adjust(Duration.seconds(16))),
+        Effect.andThen(TestClock.withLive(Fiber.join(exit).pipe(Effect.timeoutOption(Duration.millis(200))))),
+        Effect.repeat({ until: Option.isSome, times: 10 }),
+      )
     expect(exited).toEqual(Option.some(Option.some({ type: "exit", exitCode: 0, signal: null })))
     const late = yield* Stream.runCollect(Stream.unwrap(executor.output(brain, spawned.id)))
     const kept = late.flatMap((event) => (event.type === "stdout" ? [event] : []))
@@ -937,10 +945,14 @@ it.effect(
         ),
         Effect.forkScoped,
       )
-      const finished = yield* TestClock.adjust(Duration.seconds(16)).pipe(
-        Effect.andThen(TestClock.withLive(Fiber.join(second).pipe(Effect.timeoutOption(Duration.millis(200))))),
-        Effect.repeat({ until: Option.isSome, times: 20 }),
-      )
+      const finished = yield* executor
+        .heartbeat(brain, spawned.id)
+        .pipe(
+          Effect.ignore,
+          Effect.andThen(TestClock.adjust(Duration.seconds(16))),
+          Effect.andThen(TestClock.withLive(Fiber.join(second).pipe(Effect.timeoutOption(Duration.millis(200))))),
+          Effect.repeat({ until: Option.isSome, times: 20 }),
+        )
       expect(finished).toEqual(Option.some({ bytes: 10_000_000, end: true }))
     }),
 )
@@ -1186,7 +1198,7 @@ it.live(
       const files = Processes.openFiles()
       const listed = yield* executor.list("g9")
       expect(listed).toHaveLength(100_000)
-      expect(JSON.stringify(listed).length).toBeLessThan(maxFileBytes)
+      expect(JSON.stringify(listed).length).toBeLessThan(ExecutorApi.maxFileBytes)
       expect(Processes.openFiles()).toBe(files)
     }),
   60_000,

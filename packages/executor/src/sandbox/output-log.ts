@@ -1,15 +1,15 @@
 export * as OutputLog from "./output-log.js"
 
-import { type OutputWindow, type ProcessEvent, stallAfter } from "@ren/hand-api/executor-api"
+import { ExecutorApi } from "@ren/hand-api/executor-api"
 import { type Cause, Clock, Duration, Effect, Option, PubSub, type Scope, Stream } from "effect"
 
 export const limitBytes = 2 * 1024 * 1024
 
-type OutputEvent = Extract<ProcessEvent, { readonly type: "stdout" | "stderr" }>
+type OutputEvent = Extract<ExecutorApi.ProcessEvent, { readonly type: "stdout" | "stderr" }>
 
 type KeptChunk = OutputEvent & { readonly newlinesBefore: number }
 
-export type ExitEvent = Extract<ProcessEvent, { readonly type: "exit" }>
+export type ExitEvent = Extract<ExecutorApi.ProcessEvent, { readonly type: "exit" }>
 
 const countNewlines = (bytes: Uint8Array) => bytes.reduce((count, byte) => (byte === 10 ? count + 1 : count), 0)
 
@@ -49,7 +49,7 @@ const trim: (log: Log) => Effect.Effect<void> = Effect.fnUntraced(function* (log
   if (!first || log.chunks.length === 1 || log.nextOffset - first.offset <= limitBytes) return
   const end = first.offset + first.bytes.length
   if ([...log.readerPositions.values()].some((position) => position < end)) {
-    const moved = yield* PubSub.take(log.readerMoves).pipe(Effect.timeoutOption(stallAfter))
+    const moved = yield* PubSub.take(log.readerMoves).pipe(Effect.timeoutOption(ExecutorApi.stallAfter))
     if (Option.isSome(moved)) return yield* trim(log)
     for (const reader of log.readerPositions.keys())
       if ((log.readerPositions.get(reader) ?? end) < end) log.readerPositions.delete(reader)
@@ -99,7 +99,11 @@ const waitForChange: (log: Log, position: number, changes: PubSub.Subscription<v
     return yield* waitForChange(log, position, changes)
   })
 
-export const read = (log: Log, cursor?: number, window?: OutputWindow): Stream.Stream<ProcessEvent> => {
+export const read = (
+  log: Log,
+  cursor?: number,
+  window?: ExecutorApi.OutputWindow,
+): Stream.Stream<ExecutorApi.ProcessEvent> => {
   const reader = {}
   const leave = Effect.suspend(() => {
     log.readerPositions.delete(reader)
@@ -120,7 +124,7 @@ export const read = (log: Log, cursor?: number, window?: OutputWindow): Stream.S
           if (log.failure) return yield* Effect.failCause(log.failure)
           const end = log.nextOffset
           const from = window ? Math.max(state.position, end - window.maxBytes) : state.position
-          const events: ReadonlyArray<ProcessEvent> = [
+          const events: ReadonlyArray<ExecutorApi.ProcessEvent> = [
             ...(from > state.position
               ? [
                   {
