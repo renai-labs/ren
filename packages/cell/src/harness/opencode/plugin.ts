@@ -44,7 +44,7 @@ export interface Settings {
   readonly attach: (session: {
     readonly sessionId: OpenCodeSession.ID
     readonly interactive: boolean
-  }) => Effect.Effect<void>
+  }) => Effect.Effect<boolean>
   readonly pull: Effect.Effect<BrainSettings.Resolved, BrainSettings.Failure>
   readonly setModel: (
     model: Option.Option<Session.Model>,
@@ -139,7 +139,11 @@ export const settings = Effect.fnUntraced(function* (brain: BrainSettings.Interf
     attached,
     instances,
     control: {
-      attach: (session) => Ref.set(attached, Option.some(session)),
+      attach: (session) =>
+        Ref.modify(attached, (current) => [
+          Option.getOrUndefined(current)?.sessionId !== session.sessionId,
+          Option.some(session),
+        ]),
       pull: apply(brain.pull),
       setModel: (model) => apply(brain.setModel(model)),
     },

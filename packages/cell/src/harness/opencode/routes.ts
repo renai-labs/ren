@@ -4,4 +4,5 @@ export const serverOnly = [
   /^\/api\/credential(\/|$)/,
   /^\/api\/integration\/[^/]+\/connect(\/|$)/,
   /^\/api\/experimental\/integration(\/|$)/,
+  /^\/api\/session\/[^/]+\/(model|agent)$/,
 ]

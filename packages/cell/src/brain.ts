@@ -19,6 +19,8 @@ export const hostTokenHeader = "ren-host-token"
 
 export const owns = (pathname: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
 
+export const allowsClient = (pathname: string) => /^\/ren\/sessions\/[^/]+\/model$/u.test(pathname)
+
 const forbidden = new ForbiddenError({ message: "The token is for another session" })
 
 const notConfigured = new ModelsNotConfiguredError({ message: "The brain has no model configuration" })
@@ -76,6 +78,17 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
             yield* configured
             const harness = yield* Cell.acquire
             return yield* harness.send({ ...request.payload, sessionId: request.params.id })
+          }),
+        ),
+      )
+      .handle("brain.setModel", (request) =>
+        handle(
+          Effect.gen(function* () {
+            const info = yield* Cell.Info
+            if (request.params.id !== info.sessionId) return yield* Effect.fail(forbidden)
+            yield* configured
+            const harness = yield* Cell.acquire
+            yield* harness.setModel(request.params.id, Option.fromNullishOr(request.payload.model))
           }),
         ),
       )

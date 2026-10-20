@@ -75,7 +75,11 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
 
 const rejected = (error: { readonly message: string }) => new BrainRejectedError({ message: error.message })
 
-const SavedState = Schema.Struct({ interactive: Schema.Boolean })
+const SavedState = Schema.Struct({
+  start: Schema.NullOr(Model),
+  model: Schema.NullOr(Model),
+  interactive: Schema.Boolean,
+})
 
 const savedOf = (session: Session.Info) => Schema.decodeUnknownOption(SavedState)(session.metadata?.ren)
 
@@ -131,6 +135,11 @@ const environmentDirectoryOf = Effect.fn("OpenCodeHarness.environmentDirectoryOf
   return Option.some(input.directory)
 })
 
+const overrideOf = (session: Option.Option<Session.Info>, start: Model | null) => {
+  const saved = Option.getOrUndefined(Option.flatMap(session, savedOf))
+  return saved && JSON.stringify(saved.start) === JSON.stringify(start) ? saved.model : start
+}
+
 const resolve = (
   client: OpenCodeClient,
   server: OpenCodeServer.Instance,
@@ -171,12 +180,13 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
 ) {
   const sessionID = Session.ID.make(input.sessionId)
   const session = yield* findSession(client, sessionID)
-  const override = input.model ?? null
+  const start = input.model ?? null
+  const override = overrideOf(session, start)
   const resolved = yield* resolve(client, server, { sessionId: sessionID, interactive: input.interactive }, override)
   const agent = resolved && Agent.ID.make(resolved.primary.name)
   const chosen = resolved?.primary.model ?? override ?? undefined
   const model = chosen && RenPlugin.modelRef(chosen)
-  const metadata = withSaved(session, { interactive: input.interactive })
+  const metadata = withSaved(session, { start, model: override, interactive: input.interactive })
   const environmentDirectory = yield* environmentDirectoryOf(server, input, session)
   const permissions = deniedActions(server, input, environmentDirectory).map((action) => ({
     action,
@@ -223,11 +233,12 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
   const session = yield* findSession(client, sessionID)
   if (Option.isNone(session))
     return yield* new SessionNotStartedError({ message: `Session ${input.sessionId} has not been started` })
-  if (Option.isSome(server.settings))
-    yield* server.settings.value.attach({
-      sessionId: sessionID,
-      interactive: Option.getOrUndefined(savedOf(session.value))?.interactive ?? true,
-    })
+  const saved = Option.getOrUndefined(savedOf(session.value))
+  if (
+    Option.isSome(server.settings) &&
+    (yield* server.settings.value.attach({ sessionId: sessionID, interactive: saved?.interactive ?? true }))
+  )
+    yield* server.settings.value.setModel(Option.fromNullishOr(saved?.model)).pipe(Effect.mapError(rejected))
   const messageID = SessionMessage.ID.make(input.messageId)
   const isSent = yield* client.session.message.get({ sessionID, messageID }).pipe(
     Effect.as(true),
@@ -332,6 +343,32 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         }),
       ),
     send: (input: SendInput) => mutations.withPermit(send(client, server, input)),
+    setModel: (sessionId: string, model: Option.Option<Model>) =>
+      mutations.withPermit(
+        Effect.gen(function* () {
+          const sessionID = Session.ID.make(sessionId)
+          const session = yield* findSession(client, sessionID)
+          if (Option.isNone(session))
+            return yield* new SessionNotStartedError({ message: `Session ${sessionId} has not been started` })
+          const saved = Option.getOrUndefined(savedOf(session.value))
+          if (Option.isSome(server.settings))
+            yield* server.settings.value.setModel(model).pipe(Effect.mapError(rejected))
+          if (Option.isNone(server.settings) && Option.isSome(model)) {
+            yield* rejectUnknownModel(client, model.value)
+            yield* client.session.switchModel({ sessionID, model: RenPlugin.modelRef(model.value) }).pipe(Effect.orDie)
+          }
+          yield* client.session
+            .update({
+              sessionID,
+              metadata: withSaved(session, {
+                start: saved?.start ?? null,
+                model: Option.getOrNull(model),
+                interactive: saved?.interactive ?? true,
+              }),
+            })
+            .pipe(Effect.orDie)
+        }),
+      ),
     sessions: Effect.gen(function* () {
       const roots = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>
         client.session.list({ parentID: null, cursor }).pipe(
