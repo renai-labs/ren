@@ -101,6 +101,11 @@ export const start = () => {
         ),
       ),
     ),
+    HttpApiBuilder.group(RenHostApi, "settings", (group) =>
+      Effect.succeed(
+        group.handle("settings.read", () => new ForbiddenError({ message: "The fake Ren serves no settings" })),
+      ),
+    ),
     HttpApiBuilder.group(RenHostApi, "models", (group) =>
       Effect.succeed(
         group.handle("models.refresh", () =>

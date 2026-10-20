@@ -1455,10 +1455,1368 @@
         "description": "Archive one space-environment-template and return it. Archiving an archived space-environment-template returns it unchanged.",
         "summary": "Archive space-environment-template"
       }
+    },
+    "/space-settings/{idOrSlug}": {
+      "get": {
+        "tags": ["space-settings"],
+        "operationId": "space-settings.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceSettings.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceSettings.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one space-settings by ID or slug.",
+        "summary": "Get space-settings"
+      }
+    },
+    "/space-settings/{id}": {
+      "patch": {
+        "tags": ["space-settings"],
+        "operationId": "space-settings.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceSettings.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceSettings.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one space-settings.",
+        "summary": "Update space-settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpaceSettings.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/organization-settings/{idOrSlug}": {
+      "get": {
+        "tags": ["organization-settings"],
+        "operationId": "organization-settings.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OrganizationSettings.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSettings.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one organization-settings by ID or slug.",
+        "summary": "Get organization-settings"
+      }
+    },
+    "/organization-settings/{id}": {
+      "patch": {
+        "tags": ["organization-settings"],
+        "operationId": "organization-settings.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Auth.OrganizationID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OrganizationSettings.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSettings.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one organization-settings.",
+        "summary": "Update organization-settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationSettings.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/agents": {
+      "get": {
+        "tags": ["agent"],
+        "operationId": "agent.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "isSubagent",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": ["true", "false"]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the agents that the caller can see.",
+        "summary": "List agents"
+      },
+      "post": {
+        "tags": ["agent"],
+        "operationId": "agent.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one agent.",
+        "summary": "Create agent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Agent.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/agents/{idOrSlug}": {
+      "get": {
+        "tags": ["agent"],
+        "operationId": "agent.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one agent by ID or slug.",
+        "summary": "Get agent"
+      }
+    },
+    "/agents/{id}": {
+      "patch": {
+        "tags": ["agent"],
+        "operationId": "agent.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Agent.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one agent.",
+        "summary": "Update agent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Agent.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["agent"],
+        "operationId": "agent.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Agent.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one agent and return it. Archiving an archived agent returns it unchanged.",
+        "summary": "Archive agent"
+      }
+    },
+    "/agents/{id}/transferOwnership": {
+      "post": {
+        "tags": ["agent"],
+        "operationId": "agent.transferOwnership",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Agent.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the transferOwnership action on one agent.",
+        "summary": "transferOwnership agent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Agent.TransferOwnershipInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/agent-memberships": {
+      "get": {
+        "tags": ["agent-membership"],
+        "operationId": "agent-membership.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "agentId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Agent.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AgentMembership.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMembership.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the agent-memberships that the caller can see.",
+        "summary": "List agent-memberships"
+      },
+      "post": {
+        "tags": ["agent-membership"],
+        "operationId": "agent-membership.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AgentMembership.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMembership.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one agent-membership.",
+        "summary": "Create agent-membership",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentMembership.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/agent-memberships/{id}": {
+      "delete": {
+        "tags": ["agent-membership"],
+        "operationId": "agent-membership.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/AgentMembership.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AgentMembership.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMembership.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one agent-membership and return it. Archiving an archived agent-membership returns it unchanged.",
+        "summary": "Archive agent-membership"
+      }
     }
   },
   "components": {
     "schemas": {
+      "Agent.CreateInput": {
+        "type": "object",
+        "properties": {
+          "ownerSpaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "name": {
+            "$ref": "#/components/schemas/Agent.Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isSubagent": {
+            "type": "boolean"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          }
+        },
+        "required": ["ownerSpaceId", "name"],
+        "additionalProperties": false
+      },
+      "Agent.ID": {
+        "type": "string",
+        "pattern": "^agt_"
+      },
+      "Agent.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Agent.ID"
+          },
+          "organizationId": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "ownerSpaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isSubagent": {
+            "type": "boolean"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "ownerSpaceId",
+          "name",
+          "description",
+          "isSubagent",
+          "settings",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Agent.Name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "Agent.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Agent.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Agent.TransferOwnershipInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          }
+        },
+        "required": ["spaceId"],
+        "additionalProperties": false
+      },
+      "Agent.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.Name"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isSubagent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Settings.Info"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AgentMembership.CreateInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "agentId": {
+            "$ref": "#/components/schemas/Agent.ID"
+          }
+        },
+        "required": ["spaceId", "agentId"],
+        "additionalProperties": false
+      },
+      "AgentMembership.ID": {
+        "type": "string",
+        "pattern": "^agm_"
+      },
+      "AgentMembership.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/AgentMembership.ID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "agentId": {
+            "$ref": "#/components/schemas/Agent.ID"
+          },
+          "isOwner": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "spaceId", "agentId", "isOwner", "createdAt"],
+        "additionalProperties": false
+      },
+      "AgentMembership.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMembership.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
       "Auth.Me": {
         "type": "object",
         "properties": {
@@ -1941,6 +3299,146 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
+      "OrganizationSettings.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          },
+          "canUpdate": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "settings", "canUpdate", "updatedAt"],
+        "additionalProperties": false
+      },
+      "OrganizationSettings.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          }
+        },
+        "required": ["settings"],
+        "additionalProperties": false
+      },
+      "Permission.Rule": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resource": {
+            "type": "string",
+            "minLength": 1
+          },
+          "effect": {
+            "$ref": "#/components/schemas/Permission.RuleEffect"
+          }
+        },
+        "required": ["action", "resource", "effect"],
+        "additionalProperties": false
+      },
+      "Permission.RuleEffect": {
+        "type": "string",
+        "enum": ["ask", "deny"]
+      },
+      "Permission.RuleList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Permission.Rule"
+        }
+      },
+      "Reference.Alias": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[^/\\\\\\s`,]+$"
+      },
+      "Reference.Branch": {
+        "type": "string",
+        "pattern": "^(?!-)(?!.*\\.\\.)(?!.*\\/\\/)(?!.*@\\{)(?!.*\\.lock$)[^\\s~^:?*[\\\\]+(?<![/.])$"
+      },
+      "Reference.Info": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "$ref": "#/components/schemas/Reference.Alias"
+          },
+          "repository": {
+            "$ref": "#/components/schemas/Reference.Repository"
+          },
+          "branch": {
+            "$ref": "#/components/schemas/Reference.Branch"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": ["alias", "repository"],
+        "additionalProperties": false
+      },
+      "Reference.List": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Reference.Info"
+        }
+      },
+      "Reference.Repository": {
+        "type": "string",
+        "minLength": 1
+      },
+      "Session.Model": {
+        "type": "object",
+        "properties": {
+          "endpointId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "modelId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "variant": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["endpointId", "modelId"],
+        "additionalProperties": false
+      },
+      "Settings.Info": {
+        "type": "object",
+        "properties": {
+          "instructions": {
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/Session.Model"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/Permission.RuleList"
+          },
+          "references": {
+            "$ref": "#/components/schemas/Reference.List"
+          }
+        },
+        "additionalProperties": false
+      },
       "Space.AssignmentID": {
         "type": "string",
         "pattern": "^spp_"
@@ -2343,6 +3841,42 @@
         "type": "string",
         "enum": ["active", "pending"]
       },
+      "SpaceSettings.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          },
+          "canUpdate": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "settings", "canUpdate", "updatedAt"],
+        "additionalProperties": false
+      },
+      "SpaceSettings.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/Settings.Info"
+          }
+        },
+        "required": ["settings"],
+        "additionalProperties": false
+      },
       "UnauthorizedErrorEncoded": {
         "type": "object",
         "properties": {
@@ -2397,6 +3931,18 @@
     },
     {
       "name": "space-environment-template"
+    },
+    {
+      "name": "space-settings"
+    },
+    {
+      "name": "organization-settings"
+    },
+    {
+      "name": "agent"
+    },
+    {
+      "name": "agent-membership"
     }
   ]
 }
