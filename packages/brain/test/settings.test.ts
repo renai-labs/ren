@@ -107,6 +107,25 @@ describe("BrainSettings.pull", () => {
 })
 
 describe("BrainSettings.setModel", () => {
+  test("a failed refresh does not commit a candidate model override", async () => {
+    const fake = ren({ ren: layer({ model: stub }), agents: [primary()] })
+    const state = { offline: false }
+    const brain = await run(
+      BrainSettings.make({
+        ...fake.host,
+        read: (known) =>
+          state.offline ? Effect.fail(new BrainSettings.PullError({ message: "offline" })) : fake.host.read(known),
+      }),
+    )
+    await run(brain.pull)
+    state.offline = true
+    expect((await run(Effect.flip(brain.setModel(Option.some({ endpointId: "stub", modelId: "small" })))))._tag).toBe(
+      "BrainSettings.PullError",
+    )
+    state.offline = false
+    expect((await run(brain.pull)).primary.model).toEqual(stub)
+  })
+
   test("the session's model wins for the main agent and each subagent without a model; a model outside the catalog fails and keeps the last one", async () => {
     const small = { endpointId: "stub", modelId: "small" }
     const fake = ren({
@@ -178,6 +197,18 @@ describe("BrainSettings.evaluate", () => {
       rule("edit", "/references/*", "deny"),
       rule("webfetch", "*", "ask"),
     ])
-    expect(BrainSettings.hiddenTools(resolved, [rule("question", "*", "deny")])).toEqual(["shell", "question"])
+    expect(
+      BrainSettings.hiddenTools(resolved, [rule("question", "*", "deny")], ["shell", "question", "edit", "webfetch"]),
+    ).toEqual(["shell", "question"])
+  })
+
+  test("wildcard whole-resource denies hide matching tool names", async () => {
+    const resolved = await agent([rule("linear_*", "*", "deny"), rule("rea?", "*", "deny")])
+    expect(BrainSettings.hiddenTools(resolved, [], ["linear_read", "linear_edit", "read", "shell"])).toEqual([
+      "linear_read",
+      "linear_edit",
+      "read",
+    ])
+    expect(BrainSettings.hiddenTools(resolved, [rule("*", "*", "deny")], ["read", "shell"])).toEqual(["read", "shell"])
   })
 })
