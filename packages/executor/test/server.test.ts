@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
 import { HandToken } from "@ren/hand-api/hand-token"
-import { FileTooLargeError, ProcessID } from "@ren/hand-api/executor-api"
+import { ExecutorApi } from "@ren/hand-api/executor-api"
 import { ExecutorClient } from "@ren/hand-api/executor-client"
 import { Signature } from "@ren/hand-api/signature"
 import { Brain } from "@ren/schema/brain"
@@ -120,7 +120,7 @@ it.live("gives a client with a bad token the typed UnauthorizedError", () =>
     const errors = yield* Effect.forEach([foreign, empty], (api) =>
       Effect.all([
         api["files.stat"]({ path: "." }).pipe(Effect.flip),
-        api["process.output"]({ id: ProcessID.create() }).pipe(Stream.runDrain, Effect.flip),
+        api["process.output"]({ id: ExecutorApi.ProcessID.create() }).pipe(Stream.runDrain, Effect.flip),
       ]),
     )
     expect(errors.flat()).toEqual(
@@ -154,9 +154,9 @@ it.live("returns the declared errors", () =>
     expect((yield* other["process.output"]({ id: spawned.id }).pipe(Stream.runDrain, Effect.flip))._tag).toBe(
       "ProcessNotFoundError",
     )
-    expect((yield* api["process.kill"]({ id: ProcessID.create(), signal: "SIGTERM" }).pipe(Effect.flip))._tag).toBe(
-      "ProcessNotFoundError",
-    )
+    expect(
+      (yield* api["process.kill"]({ id: ExecutorApi.ProcessID.create(), signal: "SIGTERM" }).pipe(Effect.flip))._tag,
+    ).toBe("ProcessNotFoundError")
     yield* api["process.kill"]({ id: spawned.id, signal: "SIGKILL" })
   }),
 )
@@ -171,31 +171,6 @@ it.live(
       expect(events.findLast((event) => event.type !== "ping")).toEqual({ type: "exit", exitCode: 0, signal: null })
     }),
   20_000,
-)
-
-it.effect("stops counting a reader whose stream was interrupted, so the 30-second rule applies again", () =>
-  Effect.gen(function* () {
-    const api = yield* client()
-    const spawned = yield* api["process.spawn"]({ command: "sh", arguments: ["-c", "echo ready; sleep 60"] })
-    const ready = yield* Deferred.make<void>()
-    const reader = yield* api["process.output"]({ id: spawned.id }).pipe(
-      Stream.tap(() => Deferred.succeed(ready, undefined)),
-      Stream.runDrain,
-      Effect.forkScoped,
-    )
-    yield* Deferred.await(ready)
-    yield* TestClock.adjust(Duration.seconds(60))
-    yield* api["process.kill"]({ id: spawned.id, signal: "SIGCONT" })
-    yield* Fiber.interrupt(reader)
-    const exited = yield* TestClock.adjust(Duration.seconds(31)).pipe(
-      Effect.andThen(Processes.exits(spawned.pid)),
-      Effect.repeat({ until: (gone) => gone, times: 3 }),
-    )
-    expect(exited).toBe(true)
-    expect((yield* api["process.kill"]({ id: spawned.id, signal: "SIGTERM" }).pipe(Effect.flip))._tag).toBe(
-      "ProcessNotFoundError",
-    )
-  }),
 )
 
 it.live("refuses a token of another type, from an unknown key or scheme, and takes a lowercase bearer", () =>
@@ -284,7 +259,10 @@ it.effect("keeps streaming output to a reader whose token expires, and refuses t
     )
     yield* writer["process.write"]({ id: spawned.id, data: encoder.encode("a"), end: false })
     yield* Deferred.await(first)
-    yield* TestClock.adjust(Duration.seconds(120))
+    yield* writer["process.heartbeat"]({ id: spawned.id }).pipe(
+      Effect.andThen(TestClock.adjust(Duration.seconds(20))),
+      Effect.repeat({ times: 5 }),
+    )
     expect((yield* reader["files.stat"]({ path: "." }).pipe(Effect.flip))._tag).toBe("UnauthorizedError")
     yield* writer["process.write"]({ id: spawned.id, data: encoder.encode("b"), end: true })
     const all = [...(yield* Fiber.join(events))]
@@ -300,7 +278,7 @@ it.effect("keeps streaming output to a reader whose token expires, and refuses t
 it.live("refuses a negative cursor in the schema, and keeps serving", () =>
   Effect.gen(function* () {
     const bearer = `Bearer ${yield* token()}`
-    const answer = yield* post(rpc("process.output", { id: ProcessID.create(), cursor: -1 }), bearer)
+    const answer = yield* post(rpc("process.output", { id: ExecutorApi.ProcessID.create(), cursor: -1 }), bearer)
     expect(answer.body).toContain("Die")
     expect(answer.body).toContain("Expected a value greater than or equal to 0")
     expect((yield* post(rpc("executor.hello", null), bearer)).status).toBe(200)
@@ -330,7 +308,7 @@ it.live(
         return Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined
       })
       const large = yield* write(9)
-      expect(large instanceof FileTooLargeError).toBe(true)
+      expect(large instanceof ExecutorApi.FileTooLargeError).toBe(true)
       const framed = yield* write(20)
       expect(framed instanceof Error && framed.message).toContain("RPC serialization buffer exceeded")
       const refused = yield* write(100)

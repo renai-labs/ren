@@ -5,16 +5,17 @@ The executor: a small server on an environment's machine. A brain calls it to ru
 ## What belongs here
 
 - `src/executor.ts`: `Executor`, the contract for the processes and files of one hand: `Interface` and `Service`.
-- `src/machine.ts`: `Machine`, the `Executor` that runs processes and files on the machine the executor is on, with `node:fs` and Effect's `ChildProcessSpawner`. Each process belongs to the brain that started it. It runs through Effect's `ChildProcessSpawner`, in a scope of its own. A running process that nobody reads or names for 30 seconds is killed with its group. Once its brain sends a `process.heartbeat`, the process is instead killed 30 seconds after the last heartbeat, even while a reader's connection still looks open: a frozen brain can hold a connection open for minutes.
-- `src/machine/output-log.ts`: `OutputLog`, the output of one process: the kept chunks, the readers and their cursors, and the exit.
+- `src/sandbox.ts`: `Sandbox`, the `Executor` that runs processes on the machine the executor is on, with Effect's `ChildProcessSpawner`. Each process belongs to the brain that started it and runs in a scope of its own. A running process that its brain has not named for 30 seconds (a heartbeat, a read, a write or a kill) is killed with its group, even while a reader's connection still looks open: a frozen brain can hold a connection open for minutes. A client sends `process.heartbeat` at least every 5 seconds.
+- `src/sandbox/files.ts`: `SandboxFiles`, the file operations of the `Sandbox`, with `node:fs`.
+- `src/sandbox/output-log.ts`: `OutputLog`, the output of one process: the kept chunks, the readers and their cursors, and the exit.
 - `src/server.ts`: the RPC server. A gate on the route checks the hand token before the RPC server reads the body, and the `Authentication` middleware gives the caller's brain to the handlers.
-- `Dockerfile`: the image Ren's Docker hand provider runs: the bundled `main.ts` on port 4100, with `ripgrep`. `@ren/executor/testing` builds it (`Image.build`).
-- `src/main.ts`: the program. It provides `Machine.layer` and the platform services (`BunServices.layer`), which include the `ChildProcessSpawner`.
+- `Dockerfile`: the image Ren's Docker hand provider runs: the bundled `main.ts` on port 4100 (`ExecutorApi.port`), with `ripgrep`, as the `bun` user in a `/workspace` that user owns. `@ren/executor/testing` builds it (`Image.build`).
+- `src/main.ts`: the program. It provides `Sandbox.layer` and the platform services (`BunServices.layer`), which include the `ChildProcessSpawner`.
 
 ## Notes
 
 - Ren signs hand tokens; the executor only verifies them with `HAND_PUBLIC_KEYS`. It holds no secrets.
-- `Machine.layer` needs a `ChildProcessSpawner`; the composition root (`main.ts`, the tests) provides it. File operations stay on `node:fs` for `lstat` and typed `readdir`.
+- `Sandbox.layer` needs a `ChildProcessSpawner`; the composition root (`main.ts`, the tests) provides it. File operations stay on `node:fs` for `lstat` and typed `readdir`.
 - `hello` lists the machine's shells (`shells`, by absolute path, its default first).
 - A process's output is a log, like OpenCode's terminals (`pty.ts`):
   - Each `stdout` and `stderr` event carries its `offset`, the byte position at which it starts. stdout and stderr share one count.
