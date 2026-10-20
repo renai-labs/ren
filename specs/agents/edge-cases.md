@@ -1,5 +1,7 @@
 # Agents: edge cases
 
+> Historical expectations for the original proposal. The [current contract](contract.md) supersedes this table where it differs; these rows are not a current acceptance-test list.
+
 Each case gives the expected behavior and the decision it comes from. Main document: [v1.md](v1.md). Cases marked PE are proposed expectations that need approval.
 
 The document is written in ASD-STE100 Simplified Technical English.

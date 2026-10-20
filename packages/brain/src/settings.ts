@@ -139,11 +139,11 @@ export const evaluate = (
   return { effect }
 }
 
-export const hiddenTools = (agent: Agent, denied: Permission.RuleList) =>
-  Array.dedupe(
-    [...agent.permissions, ...denied]
-      .filter((rule) => rule.effect === "deny" && rule.resource === "*" && !rule.action.includes("*"))
-      .map((rule) => rule.action),
+export const hiddenTools = (agent: Agent, denied: Permission.RuleList, tools: ReadonlyArray<string>) =>
+  tools.filter((tool) =>
+    [...agent.permissions, ...denied].some(
+      (rule) => rule.effect === "deny" && rule.resource === "*" && matches(tool, rule.action),
+    ),
   )
 
 const checkModel = (host: Host, model: Session.Model) =>
@@ -166,7 +166,7 @@ export const make = Effect.fnUntraced(function* (host: Host, options: { readonly
   const cache = yield* Ref.make<Layers>({ ren: none, organization: none, space: none, agents: [] })
   const override = yield* Ref.make(Option.fromUndefinedOr(options.model))
   const pulls = yield* Semaphore.make(1)
-  const refresh = Effect.gen(function* () {
+  const refresh = Effect.fnUntraced(function* (model: Option.Option<Session.Model>) {
     const before = yield* Ref.get(cache)
     const read = yield* host.read({
       ...(before.ren.hash && { ren: before.ren.hash }),
@@ -186,21 +186,21 @@ export const make = Effect.fnUntraced(function* (host: Host, options: { readonly
           : Effect.die(new Error(`Ren sent agent ${agent.name} without settings the brain does not have`))
       }),
     }
-    const resolved = yield* resolve(layers, yield* Ref.get(override))
+    const resolved = yield* resolve(layers, model)
     yield* Effect.forEach([resolved.primary, ...resolved.subagents], (agent) => checkModel(host, agent.model), {
       discard: true,
     })
     yield* Ref.set(cache, layers)
+    yield* Ref.set(override, model)
     return resolved
   })
   return {
-    pull: pulls.withPermit(refresh),
+    pull: pulls.withPermit(Effect.flatMap(Ref.get(override), refresh)),
     setModel: (model) =>
       pulls.withPermit(
         Effect.gen(function* () {
           if (Option.isSome(model)) yield* checkModel(host, model.value)
-          yield* Ref.set(override, model)
-          return yield* refresh
+          return yield* refresh(model)
         }),
       ),
   } satisfies Interface

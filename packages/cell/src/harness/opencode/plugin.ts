@@ -21,6 +21,7 @@ import {
   Redacted,
   Ref,
   Schema,
+  Semaphore,
   Stream,
   Struct,
 } from "effect"
@@ -41,10 +42,11 @@ const never = Number.MAX_SAFE_INTEGER
 const rank = { allow: 0, ask: 1, deny: 2 } as const
 
 export interface Settings {
-  readonly attach: (session: {
+  readonly configure: (session: {
     readonly sessionId: OpenCodeSession.ID
     readonly interactive: boolean
-  }) => Effect.Effect<boolean>
+    readonly model: Option.Option<Session.Model>
+  }) => Effect.Effect<BrainSettings.Resolved, BrainSettings.Failure>
   readonly pull: Effect.Effect<BrainSettings.Resolved, BrainSettings.Failure>
   readonly setModel: (
     model: Option.Option<Session.Model>,
@@ -69,7 +71,7 @@ export const sameModel = (
 ) =>
   current?.providerID === model.endpointId &&
   current.id === model.modelId &&
-  (!model.variant || current.variant === model.variant)
+  (current.variant ?? "default") === (model.variant ?? "default")
 
 export const modelRef = (model: Session.Model) => ({
   providerID: Provider.ID.make(model.endpointId),
@@ -114,14 +116,15 @@ export const settings = Effect.fnUntraced(function* (brain: BrainSettings.Interf
     Option.none<{ readonly sessionId: OpenCodeSession.ID; readonly interactive: boolean }>(),
   )
   const instances = yield* Ref.make<ReadonlyArray<Instance>>([])
+  const changes = yield* Semaphore.make(1)
   const apply = (update: Effect.Effect<BrainSettings.Resolved, BrainSettings.Failure>) =>
     Effect.gen(function* () {
       const next = yield* update
-      const previous = Option.getOrUndefined(yield* Ref.getAndSet(current, Option.some(next)))
-      if (JSON.stringify(previous) === JSON.stringify(next)) return next
-      const all = yield* Ref.get(instances)
-      yield* Effect.forEach(all, (instance) => instance.reload, { discard: true })
       const session = Option.getOrUndefined(yield* Ref.get(attached))
+      const previous = Option.getOrUndefined(yield* Ref.getAndSet(current, Option.some(next)))
+      const all = yield* Ref.get(instances)
+      if (JSON.stringify(previous) !== JSON.stringify(next))
+        yield* Effect.forEach(all, (instance) => instance.reload, { discard: true })
       const api = all.at(0)?.session
       const info =
         session && api && Option.getOrUndefined(yield* api.get({ sessionID: session.sessionId }).pipe(Effect.option))
@@ -139,13 +142,12 @@ export const settings = Effect.fnUntraced(function* (brain: BrainSettings.Interf
     attached,
     instances,
     control: {
-      attach: (session) =>
-        Ref.modify(attached, (current) => [
-          Option.getOrUndefined(current)?.sessionId !== session.sessionId,
-          Option.some(session),
-        ]),
-      pull: apply(brain.pull),
-      setModel: (model) => apply(brain.setModel(model)),
+      configure: (session) =>
+        changes.withPermit(
+          Ref.set(attached, Option.some(session)).pipe(Effect.andThen(apply(brain.setModel(session.model)))),
+        ),
+      pull: changes.withPermit(apply(brain.pull)),
+      setModel: (model) => changes.withPermit(apply(brain.setModel(model))),
     },
   } satisfies Shared
 })
@@ -239,7 +241,7 @@ export const make = (
               const agent = Option.getOrUndefined(agentOf(event.agent))
               if (!agent) return
               event.system.push(...agent.instructions.map((text) => ({ type: "text" as const, text })))
-              const hidden = new Set(BrainSettings.hiddenTools(agent, []))
+              const hidden = new Set(BrainSettings.hiddenTools(agent, [], Object.keys(event.tools)))
               event.tools = Record.filter(event.tools, (_, name) => !hidden.has(name))
               const subagent = event.tools.subagent
               if (subagent && Predicate.isObject(subagent.input) && Predicate.isObject(subagent.input.properties))
