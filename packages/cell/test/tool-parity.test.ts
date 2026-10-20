@@ -11,7 +11,7 @@ import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { HandAccess } from "@ren/brain/hand-access"
 import { HandConnections } from "@ren/brain/hand-connections"
-import { Sandbox, Processes, testEffect } from "@ren/executor/testing"
+import { TestHand, Processes, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
@@ -51,7 +51,7 @@ const endpoints = Shared.access(undefined, stub.url).endpoints.map((endpoint) =>
   endpoint.id === "stub" ? { ...endpoint, models: [...endpoint.models, gptModel] } : endpoint,
 )
 
-const served = Sandbox.layer({ handId, workspace })
+const served = TestHand.layer({ handId, workspace })
 const it = testEffect(served)
 
 const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof served> | Scope.Scope>) =>
@@ -60,7 +60,7 @@ const live = <A, E>(body: Effect.Effect<A, E, Layer.Success<typeof served> | Sco
 const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
 const accessTo = (url: string, sessionId: Session.ID) =>
-  Sandbox.access({ url, handId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
+  TestHand.access({ url, handId, brain: Brain.ofSession(sessionId), directory: folder(sessionId) })
 
 const embedded = (replacements: Parameters<typeof createEmbeddedRoutes>[1]) =>
   createEmbeddedRoutes(
@@ -164,7 +164,7 @@ const restart = (harness: Harness.Instance, sessionId: Session.ID, directory?: s
 
 const begin = Effect.fnUntraced(function* (opened: Opened, url?: string, modelId?: string) {
   const sessionId = Session.ID.create()
-  yield* opened.memory.set(sessionId, yield* accessTo(url ?? (yield* Sandbox.url), sessionId))
+  yield* opened.memory.set(sessionId, yield* accessTo(url ?? (yield* TestHand.url), sessionId))
   yield* restart(opened.harness, sessionId, folder(sessionId), modelId)
   return {
     sessionId,
@@ -708,7 +708,7 @@ const longFile = Array.from(
 ).join("")
 
 const pagesOf10MiB = Effect.fnUntraced(function* (offsets: ReadonlyArray<number>) {
-  const proxy = yield* counting(Number(new URL(yield* Sandbox.url).port))
+  const proxy = yield* counting(Number(new URL(yield* TestHand.url).port))
   const opened = yield* open()
   const session = yield* begin(opened, proxy.url)
   yield* Effect.promise(() => Bun.write(join(folder(session.sessionId), "big.txt"), longFile))
@@ -946,7 +946,7 @@ it.live(
     Effect.gen(function* () {
       const opened = yield* open()
       const sessionId = Session.ID.create()
-      yield* opened.memory.set(sessionId, yield* accessTo(yield* Sandbox.url, sessionId))
+      yield* opened.memory.set(sessionId, yield* accessTo(yield* TestHand.url, sessionId))
       const driver = RenWorkspaceDriver.session(opened.environments, sessionId)
       const realLocal = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-files-"))))
       const subjects = {

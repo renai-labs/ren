@@ -3,7 +3,7 @@ import { TestAccess } from "@ren/brain/testing"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { CrossSpawnSpawner } from "@opencode/util/cross-spawn-spawner"
 import { HandConnections } from "@ren/brain/hand-connections"
-import { Sandbox, testEffect } from "@ren/executor/testing"
+import { TestHand, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Hand } from "@ren/schema/hand"
 import { Session } from "@ren/schema/session"
@@ -18,7 +18,7 @@ import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 
 const handId = Hand.ID.create()
 const workspace = await realpath(await mkdtemp(join(tmpdir(), "workspace-driver-")))
-const it = testEffect(Sandbox.layer({ handId, workspace }))
+const it = testEffect(TestHand.layer({ handId, workspace }))
 
 const sessionFor = Effect.fnUntraced(function* (accesses: ReadonlyMap<Session.ID, Hand.Access>, sessionId: Session.ID) {
   const environments = yield* Layer.build(
@@ -29,8 +29,8 @@ const sessionFor = Effect.fnUntraced(function* (accesses: ReadonlyMap<Session.ID
 
 const bound = Effect.gen(function* () {
   const sessionId = Session.ID.create()
-  const access = yield* Sandbox.access({
-    url: yield* Sandbox.url,
+  const access = yield* TestHand.access({
+    url: yield* TestHand.url,
     handId,
     brain: Brain.ofSession(sessionId),
     directory: join(workspace, sessionId),
@@ -90,7 +90,7 @@ it.live("a file or shell call with no access, or on a sandbox that does not answ
       new Map([
         [
           sessionId,
-          yield* Sandbox.access({
+          yield* TestHand.access({
             url: "http://127.0.0.1:9",
             handId,
             brain: Brain.ofSession(sessionId),

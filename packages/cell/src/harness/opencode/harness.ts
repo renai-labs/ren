@@ -23,7 +23,7 @@ import { RenWorkspaceDriver } from "./workspace-driver.js"
 
 const handActions = ["read", "edit", "glob", "grep", "shell"]
 
-const environmentInstruction = "ren.environment"
+const environmentInstructionKey = "ren.environment"
 
 const notSupported = (sessionId: string) =>
   new BrainRejectedError({ message: `Session ${sessionId} cannot change its environment: not supported yet` })
@@ -31,11 +31,11 @@ const notSupported = (sessionId: string) =>
 const environmentInstructions = (host: Host.Instance, handDirectory: Option.Option<string>) => {
   if (Option.isSome(handDirectory))
     return {
-      [environmentInstruction]: `Your file and shell tools run on a separate machine, in ${handDirectory.value}. You have full access to that machine.`,
+      [environmentInstructionKey]: `Your file and shell tools run on a separate machine, in ${handDirectory.value}. You have full access to that machine.`,
     }
   if (!host.hasHandConnections) return {}
   return {
-    [environmentInstruction]:
+    [environmentInstructionKey]:
       "This session has no environment, so it has no file or shell tools. The other tools work as usual.",
   }
 }
@@ -97,7 +97,7 @@ const create = Effect.fn("OpenCodeHarness.create")(function* (
     .pipe(Effect.orDie)
 })
 
-const checkEnvironment = Effect.fn("OpenCodeHarness.checkEnvironment")(function* (
+const handDirectoryOf = Effect.fn("OpenCodeHarness.handDirectoryOf")(function* (
   host: Host.Instance,
   input: StartBody,
   session: Option.Option<Session.Info>,
@@ -127,7 +127,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   }
   const sessionID = Session.ID.make(input.sessionId)
   const session = yield* findSession(client, sessionID)
-  const handDirectory = yield* checkEnvironment(host, input, session)
+  const handDirectory = yield* handDirectoryOf(host, input, session)
   const permissions = deniedActions(host, input, handDirectory).map((action) => ({
     action,
     resource: "*",

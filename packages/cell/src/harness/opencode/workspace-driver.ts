@@ -13,12 +13,14 @@ import type { HandConnections } from "@ren/brain/hand-connections"
 import { HandSession } from "@ren/brain/hand-session"
 import { Identifier } from "@ren/schema/identifier"
 import { Session } from "@ren/schema/session"
-import { Effect, Layer, Schema } from "effect"
+import { Effect, Layer } from "effect"
 import { OverrideShell } from "./override-shell.js"
 
 export const provider = "ren"
 
 export const workspaceId = (sessionId: Session.ID) => Workspace.ID.make(`wrk_${Identifier.suffix(sessionId)}`)
+
+export const sessionIdOf = (workspaceId: Workspace.ID) => Session.ID.make(`ses_${Identifier.suffix(workspaceId)}`)
 
 const killedBySignal = (signal: Signal.Name) => new CrossSpawnSpawner.KilledBySignal(signal)
 
@@ -81,11 +83,7 @@ export const replacements = (connections: HandConnections.Interface): LayerNode.
     WorkspaceDriver.registryNode({
       [provider]: WorkspaceDriver.make({
         create: () => Effect.succeed({ binding: {} }),
-        connect: (input) =>
-          Schema.decodeUnknownEffect(Session.ID)(`ses_${Identifier.suffix(input.workspaceID)}`).pipe(
-            Effect.map((sessionId) => session(connections, sessionId)),
-            Effect.mapError((cause) => new WorkspaceDriver.Error({ message: cause.message, cause })),
-          ),
+        connect: (input) => Effect.succeed(session(connections, sessionIdOf(input.workspaceID))),
         suspendForIdle: () => Effect.void,
         destroy: () => Effect.void,
       }),
@@ -94,5 +92,5 @@ export const replacements = (connections: HandConnections.Interface): LayerNode.
   RipgrepBinary.node.replace(
     Layer.succeed(RipgrepBinary.Service, RipgrepBinary.Service.of({ filepath: Effect.succeed("rg") })),
   ),
-  Shell.node.replace(OverrideShell.node((sessionId) => session(connections, sessionId))),
+  Shell.node.replace(OverrideShell.node((workspaceId) => session(connections, sessionIdOf(workspaceId)))),
 ]

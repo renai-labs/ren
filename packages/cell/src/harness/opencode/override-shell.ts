@@ -1,5 +1,6 @@
 export * as OverrideShell from "./override-shell.js"
 
+import { Bus } from "@opencode/core/bus"
 import { Config } from "@opencode/core/config"
 import { Location } from "@opencode/core/location"
 import { PluginHooks } from "@opencode/core/plugin/hooks"
@@ -12,9 +13,9 @@ import { tags } from "@opencode/util/effect/app-node"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
-import { Identifier } from "@ren/schema/identifier"
-import { Session } from "@ren/schema/session"
-import { Deferred, Duration, Effect, Fiber, Latch, Layer, Option, Stream, Struct } from "effect"
+import type { Event } from "@opencode/schema/event"
+import type { Workspace } from "@opencode/schema/workspace"
+import { Deferred, Duration, Effect, Fiber, Latch, Layer, Option, Predicate, type Schema, Stream, Struct } from "effect"
 import { ChildProcess } from "effect/process"
 import path from "node:path"
 import type { EnvironmentFiles } from "@opencode/core/environment/files"
@@ -28,7 +29,7 @@ export interface ShellHand {
 
 const exitedLimit = 25
 
-const readEvery = 250
+const readEveryMs = 250
 
 interface Output {
   size: number
@@ -56,10 +57,18 @@ const keepLast = (tail: Uint8Array, chunk: Uint8Array, limit: number) => {
 
 const countNewlines = (chunk: Uint8Array) => chunk.reduce((count, byte) => (byte === 10 ? count + 1 : count), 0)
 
-const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
+// oxlint-disable-next-line ren/no-comments -- OpenCode types an ephemeral event with `durable: undefined`, which exactOptionalPropertyTypes refuses as an Event.Definition; the value is a valid one.
+const publishable = <D extends { readonly type: string; readonly data: Schema.Codec<unknown, unknown> }>(
+  definition: D,
+) =>
+  // ast-grep-ignore: no-chained-type-assertions, -- the value is a valid event definition; only OpenCode's published type is wrong
+  definition as unknown as Event.EphemeralDefinition<D["type"], D["data"]> // oxlint-disable-line typescript/no-unsafe-type-assertion -- see the reason above
+
+const layer = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
   Layer.effect(
     Service,
     Effect.gen(function* () {
+      const bus = yield* Bus.Service
       const location = yield* Location.Service
       const global = yield* Global.Service
       const shell = yield* ShellSelect.Service
@@ -69,9 +78,7 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
       const commands = new Map<Shell.ID, Command>()
       const exitOrder: Array<Shell.ID> = []
       const outputDir = path.join(global.data, DIRECTORY, location.project.id)
-      const hand = Option.map(Option.fromNullishOr(location.workspaceID), (workspaceID) =>
-        handOf(Session.ID.make(`ses_${Identifier.suffix(workspaceID)}`)),
-      )
+      const hand = Option.map(Option.fromNullishOr(location.workspaceID), handOf)
       const limits = Effect.map(config.entries(), (entries) => {
         const configured = Config.latest(entries, "tool_output")
         return { maxLines: configured?.max_lines ?? MAX_LINES, maxBytes: configured?.max_bytes ?? MAX_BYTES }
@@ -101,6 +108,7 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
         yield* Deferred.fail(command.done, new NotFoundError({ id }))
         // oxlint-disable-next-line ren/no-comments -- A frozen hand must not hold up an interrupt, so the file is deleted in the background.
         if (Option.isSome(hand)) runFork(hand.value.overrides.remove(command.file).pipe(Effect.ignore))
+        yield* bus.publish(publishable(Shell.Event.Deleted), { id })
       })
       const wait = Effect.fn("Shell.wait")(function* (id: Shell.ID) {
         return yield* Deferred.await((yield* require(id)).done)
@@ -183,7 +191,7 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
           metadata: input.metadata ?? {},
           time: { started: Date.now() },
         }
-        const keep = (yield* limits).maxBytes
+        const tailBytes = (yield* limits).maxBytes
         const ready = Deferred.makeUnsafe<Command, AppProcess.AppProcessError>()
         const output: Output = { size: 0, newlines: 0, tail: new Uint8Array() }
         runFork(
@@ -192,7 +200,7 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
               const handle = yield* hand.value
                 .spawnerWith({
                   outputFile: file,
-                  window: { maxBytes: keep, intervalMs: readEvery },
+                  window: { maxBytes: tailBytes, intervalMs: readEveryMs },
                   onSkip: (skipped) => {
                     output.size += skipped.length
                     output.newlines += skipped.newlines
@@ -225,7 +233,7 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
                     Effect.sync(() => {
                       command.output.size += chunk.length
                       command.output.newlines += countNewlines(chunk)
-                      command.output.tail = keepLast(command.output.tail, chunk, keep)
+                      command.output.tail = keepLast(command.output.tail, chunk, tailBytes)
                     }),
                   ),
                   Effect.ignore,
@@ -250,6 +258,11 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
                   yield* beforeWait
                   yield* outputDone.await
                   yield* Deferred.succeed(command.done, command.info)
+                  yield* bus.publish(publishable(Shell.Event.Exited), {
+                    id,
+                    ...(Predicate.isNotUndefined(exit) && { exit }),
+                    status,
+                  })
                   exitOrder.push(id)
                   while (exitOrder.length > exitedLimit) {
                     const oldest = exitOrder.at(0)
@@ -292,6 +305,7 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
                   ),
                 ),
               )
+              yield* bus.publish(publishable(Shell.Event.Created), { info })
               yield* Deferred.succeed(ready, command)
               yield* Deferred.await(command.done).pipe(Effect.ignore)
             }),
@@ -326,10 +340,10 @@ const layer = (handOf: (sessionId: Session.ID) => ShellHand) =>
     }),
   )
 
-export const node = (handOf: (sessionId: Session.ID) => ShellHand) =>
+export const node = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
   LayerNode.make({
     service: Service,
     tag: tags.values.location,
     layer: layer(handOf),
-    deps: [Location.node, Global.node, ShellSelect.node, PluginHooks.node, Config.node],
+    deps: [Bus.node, Location.node, Global.node, ShellSelect.node, PluginHooks.node, Config.node],
   })
