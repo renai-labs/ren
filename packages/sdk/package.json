@@ -5,7 +5,8 @@
   "type": "module",
   "license": "UNLICENSED",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./chat": "./src/chat.ts"
   },
   "files": [
     "dist"

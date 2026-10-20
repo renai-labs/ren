@@ -1,8 +1,9 @@
 # @ren/client
 
-- Never edit `src/generated/`, `src/effect/generated/` or `src/react/generated/`. Change `@ren/protocol` and run `bun run generate` from the repo root.
+- Never edit `src/generated/`, `src/effect/generated/`, `src/react/generated/` or `src/chat/**/generated/`. Change `@ren/protocol` and run `bun run generate` from the repo root.
 - The root entrypoint must stay free of `effect`, `@ren/schema` and `@ren/protocol` so it stays small in browsers.
 - `@ren/client/effect` may use `effect`, `@ren/schema` and `@ren/protocol`, never `core`, `db` or `server`.
+- `@ren/client/chat` and `@ren/client/chat/effect` are the same pair for the Chat API (`ChatApi`), which a session's brain serves. Their base URL and token come from `chat.access`.
 - `@ren/client/react` builds TanStack Query option factories over the Promise client. Like the root entrypoint, it stays free of `effect`, `@ren/schema` and `@ren/protocol`.
 - `test/import-boundaries.test.ts` enforces these rules. Add new entrypoints to it.
 - Generator behavior lives in `@ren/httpapi-codegen`. Fix generated-output problems there, with a test.
