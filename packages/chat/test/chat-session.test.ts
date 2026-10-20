@@ -279,6 +279,13 @@ test("bulk history (join)", () =>
       expect(ChatState.messages(loaded, brain.id).map((message) => message.id)).toEqual(full)
       expect(ChatState.more(loaded, brain.id)).toBe(false)
       expect(ChatState.loadingHistory(loaded, brain.id)).toBe(false)
+      yield* until(reader.status, (status) => status === "connected")
+      yield* reader.resync("Verify loaded history survives a reconnect")
+      yield* until(reader.state, (state) => state.connection > loaded.connection)
+      yield* reader.open(brain.id)
+      const refreshed = yield* SubscriptionRef.get(reader.state)
+      expect(ChatState.messages(refreshed, brain.id).map((message) => message.id)).toEqual(full)
+      expect(ChatState.more(refreshed, brain.id)).toBe(false)
     }),
   ))
 

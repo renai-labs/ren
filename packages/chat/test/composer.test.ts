@@ -70,20 +70,6 @@ describe("Composer draft", () => {
   })
 })
 
-describe("Composer delivery", () => {
-  test("sends a steer while idle and the follow-up setting while working", () => {
-    expect(Composer.delivery("queue", { working: false })).toBe("steer")
-    expect(Composer.delivery("steer", { working: true })).toBe("steer")
-    expect(Composer.delivery("queue", { working: true })).toBe("queue")
-  })
-
-  test("offers the other delivery only while working", () => {
-    expect(Composer.alternate("steer", { working: false })).toBeUndefined()
-    expect(Composer.alternate("steer", { working: true })).toBe("queue")
-    expect(Composer.alternate("queue", { working: true })).toBe("steer")
-  })
-})
-
 describe("Composer submission", () => {
   const options = { working: true, behavior: "steer" as const, alternative: false, queue: true, current: undefined }
 
@@ -95,6 +81,13 @@ describe("Composer submission", () => {
       "steer",
     )
     expect(Composer.submission(draft("  "), options)).toBeUndefined()
+    expect(Composer.submission(draft("Next"), { ...options, behavior: "queue" })?.delivery).toBe("queue")
+    expect(Composer.submission(draft("Next"), { ...options, behavior: "queue", alternative: true })?.delivery).toBe(
+      "steer",
+    )
+    expect(Composer.submission(draft("Next"), { ...options, behavior: "queue", working: false })?.delivery).toBe(
+      "steer",
+    )
   })
 
   test("a steer carries the picked model and clears it; a queued prompt keeps it for later", () => {

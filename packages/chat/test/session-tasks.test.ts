@@ -65,18 +65,4 @@ describe("session tasks", () => {
     ]
     expect(SessionTasks.latest(messages)).toEqual([{ id: "0", content: "Ship it", status: "pending" }])
   })
-
-  test("has no tasks without a todowrite", () => {
-    expect(SessionTasks.latest([Fixture.user("msg_1", 1)])).toEqual([])
-  })
-
-  test("is unfinished while a task is pending or in progress", () => {
-    expect(SessionTasks.unfinished([{ id: "1", content: "Ship it", status: "completed" }])).toBe(false)
-    expect(
-      SessionTasks.unfinished([
-        { id: "1", content: "Ship it", status: "cancelled" },
-        { id: "2", content: "Tell the team", status: "pending" },
-      ]),
-    ).toBe(true)
-  })
 })

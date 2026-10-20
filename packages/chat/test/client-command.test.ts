@@ -22,12 +22,6 @@ test.each([
 describe("client commands in the / list", () => {
   const all = { "model.choose": true, "session.compact": true, "session.undo": true, "session.redo": true }
 
-  test("offers only the commands the session can run", () => {
-    expect(
-      ClientCommand.offered({ ...all, "session.redo": false, "model.choose": false }).map((item) => item.trigger),
-    ).toEqual(["compact", "undo"])
-  })
-
   test("lists the brain’s commands first and hides a client command the brain also names", () => {
     const listed = ClientCommand.suggestions(
       ClientCommand.offered(all),

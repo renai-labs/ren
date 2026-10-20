@@ -1,6 +1,20 @@
 export * as Reads from "./reads.js"
 
-import { Deferred, Effect, Exit, type Scope } from "effect"
+import { Deferred, Effect, Exit, type Scope, SubscriptionRef } from "effect"
+
+export const snapshot = <S, A, B, E>(input: {
+  readonly state: SubscriptionRef.SubscriptionRef<S>
+  readonly select: (state: S) => A
+  readonly load: (before: A) => Effect.Effect<B, E>
+  readonly apply: (state: S, value: B) => S
+}) =>
+  Effect.gen(function* () {
+    const before = input.select(yield* SubscriptionRef.get(input.state))
+    const value = yield* input.load(before)
+    return yield* SubscriptionRef.modify(input.state, (current) =>
+      input.select(current) === before ? [true, input.apply(current, value)] : [false, current],
+    )
+  }).pipe(Effect.repeat({ while: (applied) => !applied }), Effect.asVoid)
 
 interface Pending<E> {
   readonly done: Deferred.Deferred<void, E>

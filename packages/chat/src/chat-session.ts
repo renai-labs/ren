@@ -226,9 +226,36 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             Effect.flatMap((sessions) => update((current) => Hydrate.info(current, sessions))),
           )
         case "Messages":
-          return yield* api.session
-            .messages({ sessionID: read.sessionID, limit: options.initialMessageLimit ?? messagePageLimit })
-            .pipe(Effect.flatMap((page) => update((current) => Hydrate.messages(current, read.sessionID, page))))
+          return yield* Reads.snapshot({
+            state,
+            select: (current) => current.messages[read.sessionID],
+            load: (before) =>
+              Effect.gen(function* () {
+                const oldest = before?.at(0)?.id
+                const complete = before && !(yield* SubscriptionRef.get(state)).cursor[read.sessionID]
+                const fetch = (cursor?: string): Effect.Effect<SessionMessage.Page, unknown> =>
+                  api.session
+                    .messages({
+                      sessionID: read.sessionID,
+                      limit: cursor ? olderPageLimit : (options.initialMessageLimit ?? messagePageLimit),
+                      ...(cursor && { cursor }),
+                    })
+                    .pipe(
+                      Effect.flatMap((page) =>
+                        oldest && page.cursor.next && (complete || !page.items.some((item) => item.id === oldest))
+                          ? fetch(page.cursor.next).pipe(
+                              Effect.map((older) => ({
+                                items: [...page.items, ...older.items],
+                                cursor: older.cursor,
+                              })),
+                            )
+                          : Effect.succeed(page),
+                      ),
+                    )
+                return yield* fetch()
+              }),
+            apply: (current, page) => Hydrate.messages(current, read.sessionID, page),
+          })
         case "Message":
           return yield* api.session
             .message({ sessionID: read.sessionID, messageID: read.messageID })
@@ -240,13 +267,19 @@ export const make = Effect.fnUntraced(function* (options: Options) {
             Effect.tapError(() => update((current) => Hydrate.endPending(current, read.sessionID))),
           )
         case "Permissions":
-          return yield* api.session.permission
-            .list({ sessionID: read.sessionID })
-            .pipe(Effect.flatMap((items) => update((current) => Hydrate.permissions(current, read.sessionID, items))))
+          return yield* Reads.snapshot({
+            state,
+            select: (current) => current.permissions[read.sessionID],
+            load: () => api.session.permission.list({ sessionID: read.sessionID }),
+            apply: (current, items) => Hydrate.permissions(current, read.sessionID, items),
+          })
         case "Forms":
-          return yield* api.session.form
-            .list({ sessionID: read.sessionID })
-            .pipe(Effect.flatMap((items) => update((current) => Hydrate.forms(current, read.sessionID, items))))
+          return yield* Reads.snapshot({
+            state,
+            select: (current) => current.forms[read.sessionID],
+            load: () => api.session.form.list({ sessionID: read.sessionID }),
+            apply: (current, items) => Hydrate.forms(current, read.sessionID, items),
+          })
         case "Shells":
           return yield* api.shell
             .list({ sessionID: root })
@@ -584,20 +617,21 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       Effect.tapError(() => update((current) => Outbox.compactFailed(current, root, id))),
     )
 
-  const compacting = new Map<
-    string,
-    Deferred.Deferred<Effect.Success<ReturnType<typeof compaction>>, Effect.Error<ReturnType<typeof compaction>>>
-  >()
+  const compacting: {
+    current?:
+      | Deferred.Deferred<Effect.Success<ReturnType<typeof compaction>>, Effect.Error<ReturnType<typeof compaction>>>
+      | undefined
+  } = {}
 
   const compact = (model?: SessionModel.Ref) =>
     Effect.suspend(() => {
-      const active = compacting.get(root)
+      const active = compacting.current
       if (active) return Deferred.await(active)
       const done = Deferred.makeUnsafe<
         Effect.Success<ReturnType<typeof compaction>>,
         Effect.Error<ReturnType<typeof compaction>>
       >()
-      compacting.set(root, done)
+      compacting.current = done
       const id = SessionMessage.ID.create()
       return Effect.gen(function* () {
         const now = yield* DateTime.now
@@ -606,7 +640,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         yield* compaction(id, model).pipe(
           Effect.onExit((exit) =>
             Effect.sync(() => {
-              if (compacting.get(root) === done) compacting.delete(root)
+              if (compacting.current === done) compacting.current = undefined
             }).pipe(Effect.andThen(Deferred.done(done, exit))),
           ),
           Effect.forkIn(scope),

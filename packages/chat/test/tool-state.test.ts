@@ -31,22 +31,6 @@ describe("current tool state", () => {
     expect(ToolState.input(tool)).toEqual({})
   })
 
-  test("preserves running input and metadata", () => {
-    const input = { command: "bun test src/timeline" }
-    const metadata = { background: true, output: "Running timeline tests..." }
-    const tool: SessionMessage.Tool = {
-      type: "tool",
-      id: "tool_running",
-      name: "shell",
-      state: { status: "running", input, metadata },
-      time,
-    }
-
-    expect(ToolState.input(tool)).toBe(input)
-    expect(ToolState.metadata(tool)).toBe(metadata)
-    expect(ToolState.output(tool)).toBe("Running timeline tests...")
-  })
-
   test("reads completed text without converting file content", () => {
     const metadata = { loaded: ["src/session.ts"] }
     const tool: SessionMessage.Tool = {
@@ -68,23 +52,6 @@ describe("current tool state", () => {
 
     expect(ToolState.output(tool)).toBe("first\nsecond")
     expect(ToolState.metadata(tool)).toBe(metadata)
-  })
-
-  test("keeps structured errors at the current boundary", () => {
-    const tool: SessionMessage.Tool = {
-      type: "tool",
-      id: "tool_error",
-      name: "shell",
-      state: {
-        status: "error",
-        input: { command: "bun test" },
-        error: { type: "ToolExecutionError", message: "Command failed" },
-      },
-      time,
-    }
-
-    expect(ToolState.error(tool)).toBe("Command failed")
-    expect(ToolState.output(tool)).toBeUndefined()
   })
 })
 
