@@ -6,6 +6,7 @@ import { Sync } from "@ren/schema/sync"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { BrainHost } from "@ren/core/brain-host"
 import { Session } from "@ren/core/session"
+import { SessionRunner } from "@ren/core/session/runner"
 import { Seed } from "@ren/core/testing"
 import { Deferred, Effect, Fiber, Schema } from "effect"
 import { HttpServer } from "effect/http"
@@ -51,13 +52,13 @@ const setup = Effect.fnUntraced(function* () {
   const proxy = yield* Proxy.make(HttpServer.formatAddress(server.address), { hostname: "0.0.0.0", port: ren.port })
   const owner = yield* Seed.owner()
   yield* Seed.ren()
-  const sessions = yield* Session.Service
+  const sessions = yield* SessionRunner.Service
   const brain = yield* BrainHost.Service
   const id = Session.ID.create()
   const authorization = TestToken.basic(
     yield* SessionToken.sign(cellKey, {
       sid: id,
-      scope: "client",
+      scope: "server",
       exp: Math.floor(Date.now() / 1000) + 3600,
     }),
   )

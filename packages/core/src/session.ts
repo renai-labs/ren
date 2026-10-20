@@ -1,14 +1,20 @@
 export * as Session from "./session.js"
 
 import { Database } from "@ren/db/database"
-import type { Agent } from "@ren/schema/agent"
-import type { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
-import type { Space } from "@ren/schema/space"
-import { and, eq, isNull } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
-import { AgentQueries } from "./agent/queries.js"
+import { SessionCapabilities } from "@ren/schema/session/capabilities"
+import type { SessionModel } from "@ren/schema/session/model"
+import { Space } from "@ren/schema/space"
+import { and, count, desc, eq, isNull, sql, type SQL } from "drizzle-orm"
+import { Context, DateTime, Effect, Layer, Schema } from "effect"
+import { Access } from "./access.js"
+import type { Actor } from "./actor.js"
 import { BrainHost } from "./brain-host.js"
+import { Models } from "./models.js"
+import { Primitive } from "./primitive.js"
+import { SessionRunner } from "./session/runner.js"
+import { SpacePolicy } from "./space/policy.js"
+import { SpaceQueries } from "./space/queries.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
 
 export const ID = Session.ID
@@ -17,163 +23,227 @@ export type ID = Session.ID
 export const MessageID = Session.MessageID
 export type MessageID = Session.MessageID
 
-export class NotFound extends Schema.TaggedError<NotFound>()("Session.NotFound", { message: Schema.String }) {}
-
-export class AlreadyExists extends Schema.TaggedError<AlreadyExists>()("Session.AlreadyExists", {
-  message: Schema.String,
-}) {}
-
-export interface Owner {
-  readonly organizationId: Auth.OrganizationID
-  readonly spaceId: Space.ID
-  readonly createdBy: Auth.UserID
-}
-
-export interface Info extends Owner {
-  readonly id: Session.ID
-  readonly rootId: Session.ID
-  readonly parentId: Session.ID | null
-  readonly harness: Session.Harness
-  readonly title: string | null
-  readonly status: "idle" | "busy"
-  readonly outcome: string | null
-  readonly createdAt: DateTime.Utc
-  readonly updatedAt: DateTime.Utc | null
-}
-
-export interface Interface {
-  readonly create: (
-    owner: Owner,
-    input: Session.StartInput,
-    options?: { readonly agentId?: Agent.ID },
-  ) => Effect.Effect<
-    Session.Started,
-    AlreadyExists | NotFound | BrainHost.BrainUnavailable | BrainHost.BrainRejectedError
-  >
-  readonly send: (
-    input: Session.SendInput,
-  ) => Effect.Effect<Session.Accepted, NotFound | BrainHost.BrainUnavailable | BrainHost.BrainRejectedError>
-  readonly get: (sessionId: Session.ID) => Effect.Effect<Info, NotFound>
+export type Interface = Primitive.Interface<typeof Session.definition> & {
+  readonly access: (actor: Actor.Info, id: Session.ID) => Effect.Effect<Session.ClientAccess, Primitive.NotFound>
+  readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Session") {}
 
-const notFound = new NotFound({ message: "Session not found." })
+const notFound = new Primitive.NotFound({ message: "Session not found." })
 
-const alreadyExists = new AlreadyExists({ message: "A session with this ID already exists." })
+const spaceNotFound = new Primitive.NotFound({ message: "Space not found." })
+
+const updatedAt = sql<Date>`coalesce(to_timestamp(${Database.Schema.opencode_session.time_updated} / 1000.0), ${Database.Schema.agent_session.created_at})`
+
+const select = (transaction: Database.Transaction, actor: Actor.Info) =>
+  transaction
+    .select({
+      session: Database.Schema.agent_session,
+      opencode: OpenCodeStore.summary,
+      membershipId: SpaceQueries.membership.id,
+    })
+    .from(Database.Schema.agent_session)
+    .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_session.space_id))
+    .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+    .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+
+type Row = Effect.Success<ReturnType<typeof select>>[number]
+
+const toInfo = (row: Row): Session.Info => ({
+  id: row.session.id,
+  spaceId: row.session.space_id,
+  createdBy: row.session.created_by,
+  harness: row.session.harness,
+  title: row.opencode?.title ?? null,
+  status: row.opencode?.timeSuspended ? "busy" : "idle",
+  capabilities: SessionCapabilities.of(row.session.harness),
+  createdAt: DateTime.fromDateUnsafe(row.session.created_at),
+  updatedAt: row.opencode
+    ? DateTime.makeUnsafe(row.opencode.updatedAt)
+    : DateTime.fromDateUnsafe(row.session.created_at),
+  archivedAt: row.session.archived_at && DateTime.fromDateUnsafe(row.session.archived_at),
+})
+
+const modelNotFound = new Primitive.NotFound({ message: "Model not found." })
+
+const spaceGet = Primitive.action(Space.definition, "get")
+const spaceUpdate = Primitive.action(Space.definition, "update")
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
+    const access = yield* Access.Service
+    const sessions = yield* SessionRunner.Service
     const brain = yield* BrainHost.Service
+    const catalog = yield* Models.Service
+
+    const models = (actor: Actor.Info, id: Session.ID) =>
+      catalog.catalog({ sessionId: id, organizationId: actor.organizationId }).pipe(
+        Effect.orDie,
+        Effect.map((found) =>
+          found.endpoints.flatMap((endpoint) =>
+            endpoint.models.map((model): SessionModel.Choice => ({
+              id: model.id,
+              providerID: endpoint.id,
+              name: model.name ?? model.id,
+              variants: (model.efforts ?? []).map((effort) => ({ id: effort })),
+            })),
+          ),
+        ),
+      )
+
+    const visibleTo = (actor: Actor.Info) =>
+      and(
+        eq(Database.Schema.space.organization_id, actor.organizationId),
+        isNull(Database.Schema.space.archived_at),
+        isNull(Database.Schema.agent_session.parent_id),
+        SpacePolicy.filter(access.plan(actor, spaceGet)),
+      )
+
+    const find = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      where: SQL | undefined,
+    ) {
+      const row = (yield* select(transaction, actor).where(and(visibleTo(actor), where))).at(0)
+      if (!row) return yield* notFound
+      return row
+    })
+
+    const read = (actor: Actor.Info, id: Session.ID) =>
+      database.transaction((transaction) => find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
 
     return Service.of({
-      create: Effect.fn("Session.create")(function* (
-        owner: Owner,
-        input: Session.StartInput,
-        options: { readonly agentId?: Agent.ID } = {},
-      ) {
-        const startInput = yield* Schema.encodeEffect(Session.StartInput)(Struct.omit(input, ["initialMessage"])).pipe(
-          Effect.orDie,
-        )
-        const created = yield* database.transaction((transaction) =>
+      list: Effect.fn("Session.list")(function* (actor: Actor.Info, input: Session.ListInput) {
+        return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            if (
-              options.agentId &&
-              (yield* transaction
-                .select({ id: Database.Schema.agent.id })
-                .from(Database.Schema.agent)
-                .where(
-                  and(
-                    eq(Database.Schema.agent.id, options.agentId),
-                    eq(Database.Schema.agent.organization_id, owner.organizationId),
-                    eq(Database.Schema.agent.is_subagent, false),
-                    isNull(Database.Schema.agent.archived_at),
-                    AgentQueries.isInSpace(owner.spaceId),
-                  ),
-                )
-                .for("share")).length === 0
+            const where = and(
+              visibleTo(actor),
+              input.spaceId
+                ? eq(Database.Schema.agent_session.space_id, input.spaceId)
+                : eq(Database.Schema.agent_session.created_by, actor.userId),
+              isNull(Database.Schema.agent_session.archived_at),
             )
-              return yield* new NotFound({ message: "Agent not found." })
-            return yield* transaction
-              .insert(Database.Schema.agent_session)
-              .values({
-                id: input.sessionId,
-                organization_id: owner.organizationId,
-                space_id: owner.spaceId,
-                created_by: owner.createdBy,
-                root_id: input.sessionId,
-                harness: input.harness,
-                agent_id: options.agentId,
-                start_input: startInput,
-              })
-              .onConflictDoNothing()
-              .returning({ id: Database.Schema.agent_session.id })
+            const rows = yield* select(transaction, actor)
+              .where(where)
+              .orderBy(desc(updatedAt), desc(Database.Schema.agent_session.id))
+              .limit(input.pageSize)
+              .offset((input.page - 1) * input.pageSize)
+            const totals = yield* transaction
+              .select({ total: count() })
+              .from(Database.Schema.agent_session)
+              .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_session.space_id))
+              .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+              .where(where)
+            return {
+              items: rows.map(toInfo),
+              page: input.page,
+              pageSize: input.pageSize,
+              total: totals.at(0)?.total ?? 0,
+            }
           }),
         )
-        if (created.length === 0) return yield* alreadyExists
-        return yield* brain.start(input, owner)
       }),
-      send: Effect.fn("Session.send")(function* (input: Session.SendInput) {
-        const row = (yield* database.transaction((transaction) =>
+      get: Effect.fn("Session.get")(function* (actor: Actor.Info, idOrSlug: string) {
+        if (!Schema.is(Session.ID)(idOrSlug)) return yield* notFound
+        return toInfo(yield* read(actor, idOrSlug))
+      }),
+      create: Effect.fn("Session.create")(function* (actor: Actor.Info, input: Session.CreateInput) {
+        const space = yield* database.transaction((transaction) =>
           transaction
-            .select({
-              organizationId: Database.Schema.agent_session.organization_id,
-              spaceId: Database.Schema.agent_session.space_id,
-              startInput: Database.Schema.agent_session.start_input,
-            })
-            .from(Database.Schema.agent_session)
-            .where(eq(Database.Schema.agent_session.id, input.sessionId)),
-        )).at(0)
-        if (!row) return yield* notFound
-        return yield* brain.send(input, row.organizationId).pipe(
-          Effect.catchTag("SessionNotStartedError", (error) =>
-            Effect.gen(function* () {
-              if (!row.startInput)
-                return yield* Effect.die(
-                  new Error(`Session ${input.sessionId} is not started on its host and has no start input`, {
-                    cause: error,
-                  }),
-                )
-              const start = yield* Schema.decodeEffect(Session.StartInput)(row.startInput).pipe(Effect.orDie)
-              yield* brain.start(start, row)
-              return yield* brain
-                .send(input, row.organizationId)
-                .pipe(
-                  Effect.catchTag("SessionNotStartedError", (cause) =>
-                    Effect.die(
-                      new Error(`Session ${input.sessionId} is not started on its host after a start`, { cause }),
-                    ),
-                  ),
-                )
+            .select({ id: Database.Schema.space.id, membershipId: SpaceQueries.membership.id })
+            .from(Database.Schema.space)
+            .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+            .where(
+              and(
+                eq(Database.Schema.space.id, input.spaceId),
+                eq(Database.Schema.space.organization_id, actor.organizationId),
+                isNull(Database.Schema.space.archived_at),
+                SpacePolicy.filter(access.plan(actor, spaceGet)),
+              ),
+            ),
+        )
+        if (space.length === 0) return yield* spaceNotFound
+        const model = input.model
+        if (
+          model &&
+          !(yield* models(actor, input.id)).some(
+            (item) =>
+              item.id === model.id &&
+              item.providerID === model.providerID &&
+              (!model.variant || item.variants.some((variant) => variant.id === model.variant)),
+          )
+        )
+          return yield* modelNotFound
+        const start: Session.StartInput = {
+          sessionId: input.id,
+          harness: "opencode",
+          interactive: true,
+          ...(model && {
+            model: {
+              endpointId: model.providerID,
+              modelId: model.id,
+              ...(model.variant && { variant: model.variant }),
+            },
+          }),
+          ...(input.message && {
+            initialMessage: {
+              messageId: Session.MessageID.make(input.message.id),
+              prompt: { text: input.message.text },
+              sender: { userId: actor.userId },
+            },
+          }),
+        }
+        yield* sessions
+          .create({ organizationId: actor.organizationId, spaceId: input.spaceId, createdBy: actor.userId }, start)
+          .pipe(
+            Effect.catchTag("SessionRunner.AlreadyExists", () =>
+              Effect.gen(function* () {
+                const existing = yield* sessions.get(input.id).pipe(Effect.orDie)
+                if (existing.createdBy !== actor.userId || existing.spaceId !== input.spaceId)
+                  return yield* new Primitive.Conflict({ message: "A session with this ID already exists." })
+                return yield* brain.start(start, { organizationId: actor.organizationId, spaceId: input.spaceId })
+              }),
+            ),
+            Effect.catchTags({
+              BrainUnavailable: Effect.die,
+              BrainRejectedError: Effect.die,
+              "SessionRunner.NotFound": Effect.die,
             }),
-          ),
+          )
+        return toInfo(yield* read(actor, input.id))
+      }),
+      archive: Effect.fn("Session.archive")(function* (actor: Actor.Info, id: Session.ID) {
+        return yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const row = yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id))
+            const isAdmin = access.plan(actor, spaceUpdate).isAllowedEverywhere
+            if (row.session.created_by !== actor.userId && !isAdmin)
+              return yield* new Primitive.Forbidden({ message: "Only the person who started a chat can archive it." })
+            if (row.session.archived_at) return toInfo(row)
+            yield* transaction
+              .update(Database.Schema.agent_session)
+              .set({ archived_at: new Date() })
+              .where(eq(Database.Schema.agent_session.id, id))
+            return toInfo(yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
+          }),
         )
       }),
-      get: Effect.fn("Session.get")(function* (sessionId: Session.ID) {
-        const row = (yield* database.transaction((transaction) =>
+      models: Effect.fn("Session.models")(models),
+      access: Effect.fn("Session.access")(function* (actor: Actor.Info, id: Session.ID) {
+        yield* read(actor, id)
+        const user = (yield* database.transaction((transaction) =>
           transaction
-            .select({ session: Database.Schema.agent_session, opencode: OpenCodeStore.summary })
-            .from(Database.Schema.agent_session)
-            .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
-            .where(eq(Database.Schema.agent_session.id, sessionId)),
+            .select({ name: Database.Schema.user.name, email: Database.Schema.user.email })
+            .from(Database.Schema.user)
+            .where(eq(Database.Schema.user.id, actor.userId)),
         )).at(0)
-        if (!row) return yield* notFound
-        return {
-          id: row.session.id,
-          organizationId: row.session.organization_id,
-          spaceId: row.session.space_id,
-          createdBy: row.session.created_by,
-          rootId: row.session.root_id,
-          harness: row.session.harness,
-          parentId: row.session.parent_id,
-          title: row.opencode?.title ?? null,
-          status: row.opencode?.timeSuspended ? "busy" : "idle",
-          outcome: row.opencode?.outcome ?? null,
-          createdAt: DateTime.fromDateUnsafe(row.session.created_at),
-          updatedAt: row.opencode ? DateTime.makeUnsafe(row.opencode.updatedAt) : null,
-        } satisfies Info
+        return yield* brain.access(id, {
+          userId: actor.userId,
+          ...(user && { name: user.name.trim() ? `${user.name.trim()} (${user.email})` : user.email }),
+        })
       }),
     })
   }),

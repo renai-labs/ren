@@ -12,6 +12,7 @@ import { Environments } from "@ren/core/environments"
 import { Models } from "@ren/core/models"
 import { OrganizationSettings } from "@ren/core/organization-settings"
 import { Session } from "@ren/core/session"
+import { SessionRunner } from "@ren/core/session/runner"
 import { SpaceSettings } from "@ren/core/space/settings"
 import { Seed } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
@@ -238,11 +239,11 @@ export const start = async (options: {
       revoke: () => Effect.void,
     }),
   )
-  const core = <A, E>(effect: Effect.Effect<A, E, BrainHost.Service | Session.Service>) =>
+  const core = <A, E>(effect: Effect.Effect<A, E, BrainHost.Service | SessionRunner.Service>) =>
     Effect.runPromise(
       effect.pipe(
         Effect.provide(
-          Layer.fresh(Session.layer).pipe(
+          Layer.fresh(SessionRunner.layer).pipe(
             Layer.provideMerge(
               Layer.fresh(BrainHost.layer).pipe(
                 Layer.provide(models),
@@ -330,7 +331,7 @@ export const start = async (options: {
     const startSession = (startOptions?: StartOptions) =>
       core(BrainHost.Service.use((brain) => brain.start(input(startOptions), owner)))
     await core(
-      Session.Service.use((sessions) =>
+      SessionRunner.Service.use((sessions) =>
         sessions.create(owner, input(sessionOptions.start), {
           ...(sessionOptions.agentId && { agentId: sessionOptions.agentId }),
         }),
@@ -340,7 +341,7 @@ export const start = async (options: {
     const opencode = OpenCode.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
     const send = (text: string) =>
       core(
-        Session.Service.use((sessions) =>
+        SessionRunner.Service.use((sessions) =>
           sessions.send({
             sessionId,
             messageId: Session.MessageID.create(),

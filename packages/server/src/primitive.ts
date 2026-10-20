@@ -7,7 +7,7 @@ import { CurrentOrganization } from "@ren/protocol/middleware/active-organizatio
 import { CurrentUser } from "@ren/protocol/middleware/authentication"
 import { Effect } from "effect"
 
-const currentActor = Effect.gen(function* () {
+export const currentActor = Effect.gen(function* () {
   const user = yield* CurrentUser
   const organization = yield* CurrentOrganization
   return { userId: user.id, organizationId: organization.id, roles: organization.roles } satisfies Actor.Info

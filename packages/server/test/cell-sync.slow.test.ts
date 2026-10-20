@@ -6,6 +6,7 @@ import { Sync } from "@ren/schema/sync"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { BrainHost } from "@ren/core/brain-host"
 import { Session } from "@ren/core/session"
+import { SessionRunner } from "@ren/core/session/runner"
 import { Seed } from "@ren/core/testing"
 import { Brain } from "@ren/schema/brain"
 import type { Database } from "@ren/db/database"
@@ -69,10 +70,10 @@ const setup = Effect.fnUntraced(function* () {
   const proxy = yield* Proxy.make(HttpServer.formatAddress(server.address), { hostname: "0.0.0.0", port: ren.port })
   const owner = yield* Seed.owner()
   yield* Seed.ren()
-  const sessions = yield* Session.Service
+  const sessions = yield* SessionRunner.Service
   const brain = yield* BrainHost.Service
   const id = Session.ID.create()
-  const client = TestToken.basic(yield* SessionToken.sign(cellKey, { sid: id, scope: "client", exp: seconds(3600) }))
+  const client = TestToken.basic(yield* SessionToken.sign(cellKey, { sid: id, scope: "server", exp: seconds(3600) }))
   const opencode = OpenCode.make({ baseUrl: celld().url, headers: { authorization: client } })
   const commits = yield* Queue.unbounded<void>()
   proxy.observe((request, status) => {

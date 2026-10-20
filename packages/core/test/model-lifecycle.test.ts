@@ -193,16 +193,16 @@ const until = (sessionId: Session.ID, predicate: (current: typeof HostState.Type
 
 const asleep = (sessionId: Session.ID) => until(sessionId, (current) => !current.isOpen && current.holders === 0)
 
-const client = (sessionId: Session.ID, path: string, method = "GET") =>
+const opencode = (sessionId: Session.ID, path: string, method = "GET") =>
   Effect.gen(function* () {
-    const header = yield* authorization(sessionId, "client")
+    const header = yield* authorization(sessionId, "server")
     return yield* Effect.promise(() => fetch(`${cell.url}${path}`, { method, headers: { authorization: header } }))
   })
 
 const settled = (sessionId: Session.ID) =>
   Effect.gen(function* () {
-    yield* client(sessionId, `/api/experimental/session/${sessionId}/wait`, "POST")
-    const response = yield* client(sessionId, `/api/session/${sessionId}`)
+    yield* opencode(sessionId, `/api/experimental/session/${sessionId}/wait`, "POST")
+    const response = yield* opencode(sessionId, `/api/session/${sessionId}`)
     return Schema.decodeUnknownSync(Outcome)(yield* Effect.promise(() => response.json())).data.outcome
   })
 
@@ -281,7 +281,7 @@ describe("E. core's updates in each cell lifecycle state", () => {
       const sessionId = Session.ID.create()
       yield* ready(sessionId, access({ stub: lasting("sk-e3-old") }))
       const opening = { done: false }
-      const header = yield* authorization(sessionId, "client")
+      const header = yield* authorization(sessionId, "server")
       const opened = fetch(`${cell.url}/api/info`, { headers: { authorization: header } }).then(() => {
         opening.done = true
       })
