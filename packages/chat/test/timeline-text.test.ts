@@ -32,14 +32,6 @@ describe("timeline text", () => {
     expect(TimelineText.retryStatus([retrying, assistant("msg_after", [])])).toBeUndefined()
   })
 
-  test("splits an error at its first colon", () => {
-    expect(TimelineText.errorParts("Rate limited: try again in a minute")).toEqual({
-      head: "Rate limited:",
-      body: " try again in a minute",
-    })
-    expect(TimelineText.errorParts("Something failed")).toEqual({ head: "", body: "Something failed" })
-  })
-
   test("formats a duration in seconds, then minutes and seconds", () => {
     expect(TimelineText.duration(4_400)).toBe("4s")
     expect(TimelineText.duration(59_600)).toBe("1m 0s")

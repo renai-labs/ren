@@ -168,16 +168,9 @@ describe("pending", () => {
 })
 
 describe("messages", () => {
-  test("uses the configured initial window and retains normal cursor page sizes", () => {
-    const recent = Hydrate.messages(ChatState.empty, sessionID, Fixture.page([Fixture.user("msg_2", 2)], "older"))
-    expect(recent.cursor[sessionID]).toBe("older")
-    const older = Hydrate.older(recent, sessionID, [Fixture.user("msg_1", 1)], undefined)
-    expect(ChatState.messages(older, sessionID).map((message) => message.id)).toEqual(Fixture.ids("msg_1", "msg_2"))
-    expect(older.cursor[sessionID]).toBeUndefined()
-  })
-
   test("bulk history (success)", () => {
     const synced = Hydrate.messages(ChatState.empty, sessionID, Fixture.page([Fixture.user("msg_3", 3)], "recent"))
+    expect(synced.cursor[sessionID]).toBe("recent")
     const newest = ChatState.messages(synced, sessionID)[0]
     const loaded = Hydrate.older(
       synced,

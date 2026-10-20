@@ -245,8 +245,7 @@ const removeKeyed = <T extends { readonly id: string }>(
   sessionID: string,
   id: string,
 ) => {
-  const items = record[sessionID]
-  if (!items?.some((item) => item.id === id)) return record
+  const items = record[sessionID] ?? []
   return set(
     record,
     sessionID,

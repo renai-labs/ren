@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test"
-import { Deferred, Effect, Exit, Fiber, Queue, Ref, Scope } from "effect"
+import { Form } from "@ren/schema/form"
+import { Deferred, Effect, Exit, Fiber, Queue, Ref, Schema, Scope, SubscriptionRef } from "effect"
+import { ChatState } from "../src/chat-state.js"
+import { Hydrate } from "../src/hydrate.js"
 import { Reads } from "../src/reads.js"
+import { Reducer } from "../src/reducer.js"
+import { Fixture } from "./lib/fixture.js"
 
 const effect = <A, E>(name: string, body: () => Effect.Effect<A, E, Scope.Scope>) =>
   test(name, () => body().pipe(Effect.scoped, Effect.runPromise))
@@ -21,6 +26,78 @@ const server = Effect.gen(function* () {
 })
 
 const fork = Effect.forkChild({ startImmediately: true })
+
+effect("a snapshot overtaken by live changes retries without erasing additions or resurrecting removals", () =>
+  Effect.gen(function* () {
+    const state = yield* SubscriptionRef.make(ChatState.empty)
+    const requests = yield* Queue.unbounded<Deferred.Deferred<ReadonlyArray<Form.Info>>>()
+    const answered = Schema.decodeUnknownSync(Form.Info)({
+      id: "frm_answered",
+      sessionID: Fixture.sessionID,
+      title: "Question",
+      kind: "question",
+      fields: [{ key: "answer", type: "string" }],
+    })
+    const created = Schema.decodeUnknownSync(Form.Info)({
+      id: "frm_created",
+      sessionID: Fixture.sessionID,
+      title: "Next question",
+      kind: "question",
+      fields: [{ key: "answer", type: "string" }],
+    })
+    const read = yield* fork(
+      Reads.snapshot({
+        state,
+        select: (current) => current.forms[Fixture.sessionID],
+        load: () =>
+          Effect.gen(function* () {
+            const response = yield* Deferred.make<ReadonlyArray<Form.Info>>()
+            yield* Queue.offer(requests, response)
+            return yield* Deferred.await(response)
+          }),
+        apply: (current, items) => Hydrate.forms(current, Fixture.sessionID, items),
+      }),
+    )
+    const stale = yield* Queue.take(requests)
+    yield* SubscriptionRef.update(
+      state,
+      (current) =>
+        Reducer.apply(
+          current,
+          Fixture.event({
+            id: "evt_cancelled",
+            created: 1,
+            type: "form.cancelled",
+            data: { sessionID: Fixture.sessionID, id: answered.id },
+          }),
+        ).state,
+    )
+    yield* Deferred.succeed(stale, [answered])
+    const fresh = yield* Queue.take(requests)
+    expect((yield* SubscriptionRef.get(state)).forms[Fixture.sessionID]).toEqual([])
+    yield* SubscriptionRef.update(
+      state,
+      (current) =>
+        Reducer.apply(
+          current,
+          Fixture.event({
+            id: "evt_created",
+            created: 2,
+            type: "form.created",
+            data: { form: created },
+          }),
+        ).state,
+    )
+    yield* Deferred.succeed(fresh, [])
+    const retry = yield* Queue.take(requests)
+    expect((yield* SubscriptionRef.get(state)).forms[Fixture.sessionID]).toEqual([created])
+    yield* SubscriptionRef.update(state, (current) => Hydrate.info(current, [Fixture.session(Fixture.sessionID)]))
+    yield* Deferred.succeed(retry, [created])
+    yield* Fiber.join(read)
+    expect((yield* SubscriptionRef.get(state)).forms[Fixture.sessionID]).toEqual([created])
+    expect((yield* SubscriptionRef.get(state)).info[Fixture.sessionID]).toBeDefined()
+  }),
+)
 
 effect("a second sync of a loaded read does not refetch", () =>
   Effect.gen(function* () {

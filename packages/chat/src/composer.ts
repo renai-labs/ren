@@ -7,6 +7,7 @@ import type { SessionInbox } from "@ren/schema/session/inbox"
 import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import { Option, Schema } from "effect"
+import { ClientCommand } from "./client-command.js"
 
 export interface Pasted extends Schema.Schema.Type<typeof Pasted> {}
 export const Pasted = Schema.Struct({ id: Schema.String, text: Schema.String })
@@ -208,11 +209,9 @@ export const trigger = (text: string, cursor: number): Trigger | undefined => {
 }
 
 export const slash = (text: string, commands: ReadonlyArray<SessionCatalog.Command>) => {
-  if (!text.startsWith("/")) return
-  const separator = text.search(/\s/)
-  const name = text.slice(1, separator === -1 ? undefined : separator)
-  if (!commands.some((command) => command.name === name)) return
-  return { name, text: separator === -1 ? "" : text.slice(separator).trim() }
+  const parsed = ClientCommand.parseSlashCommand(text)
+  if (!parsed || !commands.some((command) => command.name === parsed.name)) return
+  return { name: parsed.name, text: parsed.input }
 }
 
 export interface SuggestionPress {
