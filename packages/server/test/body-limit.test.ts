@@ -47,13 +47,13 @@ describe("body limit", () => {
         const http = yield* HttpClient.HttpClient
         const upload = yield* http
           .execute(
-            json(`/brain/sync/sessions/${sessionId}/uploads`, host, {
+            json(`/host/sync/sessions/${sessionId}/uploads`, host, {
               harness: "opencode",
               parentId: null,
             }),
           )
           .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Struct({ upload: Schema.Int }))))
-        const messages = `/brain/sync/sessions/${sessionId}/uploads/${upload.upload}/messages`
+        const messages = `/host/sync/sessions/${sessionId}/uploads/${upload.upload}/messages`
         const batch = (bytes: number) =>
           json(messages, host, {
             messages: [

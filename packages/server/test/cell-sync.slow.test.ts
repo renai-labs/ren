@@ -55,9 +55,9 @@ const Rows = Schema.Struct({
   messages: Schema.Array(Sync.OpenCodeMessageRow),
 })
 
-const checkpoints = "/brain/sync/checkpoints"
+const checkpoints = "/host/sync/checkpoints"
 
-const uploads = (id: string) => `/brain/sync/sessions/${id}/uploads/`
+const uploads = (id: string) => `/host/sync/sessions/${id}/uploads/`
 
 const seconds = (offset: number) => Math.floor(Date.now() / 1000) + offset
 

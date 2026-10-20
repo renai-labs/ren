@@ -90,7 +90,7 @@ export const start = (): Instance => {
   const sync = async (pathname: string, presented: string | undefined) => {
     if (!presented || !(await sessionOf(presented)))
       return Response.json({ _tag: "ForbiddenError", message: "The host token is not valid" }, { status: 403 })
-    if (pathname === "/brain/sync/checkpoints" || pathname === "/brain/sync/restore")
+    if (pathname === "/host/sync/checkpoints" || pathname === "/host/sync/restore")
       return Response.json({ sessions: [] })
     return Response.json({ _tag: "ForbiddenError", message: "The issuer keeps no sessions" }, { status: 403 })
   }
@@ -106,7 +106,7 @@ export const start = (): Instance => {
     fetch: (request) => {
       const pathname = new URL(request.url).pathname
       const presented = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]
-      if (pathname.startsWith("/brain/sync/") && request.method === "POST") return sync(pathname, presented)
+      if (pathname.startsWith("/host/sync/") && request.method === "POST") return sync(pathname, presented)
       const endpoint = endpoints[pathname]
       if (!endpoint || request.method !== "POST") return new Response(null, { status: 404 })
       if (!presented || !valid.has(presented))

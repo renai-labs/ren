@@ -19,7 +19,7 @@ const MessagesQuery = Schema.Struct({
 
 const SyncGroup = HttpApiGroup.make("sync")
   .add(
-    HttpApiEndpoint.post("sync.checkpoints", "/brain/sync/checkpoints", {
+    HttpApiEndpoint.post("sync.checkpoints", "/host/sync/checkpoints", {
       success: Schema.Struct({ sessions: Schema.Array(Sync.Checkpoint) }),
     }).annotateMerge(
       OpenApi.annotations({
@@ -30,7 +30,7 @@ const SyncGroup = HttpApiGroup.make("sync")
     ),
   )
   .add(
-    HttpApiEndpoint.post("sync.startUpload", "/brain/sync/sessions/:id/uploads", {
+    HttpApiEndpoint.post("sync.startUpload", "/host/sync/sessions/:id/uploads", {
       params: SessionParams,
       payload: Schema.Struct({
         harness: Session.Harness,
@@ -49,7 +49,7 @@ const SyncGroup = HttpApiGroup.make("sync")
     ),
   )
   .add(
-    HttpApiEndpoint.post("sync.uploadMessages", "/brain/sync/sessions/:id/uploads/:upload/messages", {
+    HttpApiEndpoint.post("sync.uploadMessages", "/host/sync/sessions/:id/uploads/:upload/messages", {
       params: UploadParams,
       payload: Schema.Struct({ messages: Schema.Array(Sync.OpenCodeMessageRow) }),
       error: StaleUploadError,
@@ -62,7 +62,7 @@ const SyncGroup = HttpApiGroup.make("sync")
     ),
   )
   .add(
-    HttpApiEndpoint.post("sync.commit", "/brain/sync/sessions/:id/uploads/:upload/commit", {
+    HttpApiEndpoint.post("sync.commit", "/host/sync/sessions/:id/uploads/:upload/commit", {
       params: UploadParams,
       payload: Schema.Struct({
         session: Sync.OpenCodeSessionRow,
@@ -81,7 +81,7 @@ const SyncGroup = HttpApiGroup.make("sync")
     ),
   )
   .add(
-    HttpApiEndpoint.post("sync.restore", "/brain/sync/restore", {
+    HttpApiEndpoint.post("sync.restore", "/host/sync/restore", {
       payload: Schema.Struct({ sessionId: Session.ID }),
       success: Schema.Struct({ sessions: Schema.Array(Sync.OpenCodeSessionRow) }),
     }).annotateMerge(
@@ -94,7 +94,7 @@ const SyncGroup = HttpApiGroup.make("sync")
     ),
   )
   .add(
-    HttpApiEndpoint.get("sync.messages", "/brain/sync/sessions/:id/messages", {
+    HttpApiEndpoint.get("sync.messages", "/host/sync/sessions/:id/messages", {
       params: SessionParams,
       query: MessagesQuery,
       success: Schema.Struct({ messages: Schema.Array(Sync.OpenCodeMessageRow), next: Schema.NullOr(Sync.Cursor) }),
