@@ -270,6 +270,14 @@
   :is(.dark, :root[data-theme="dark"]) [data-slot="document"] pre code span {
     color: var(--shiki-dark, inherit);
   }
+
+  [data-slot="diff-line"] code span {
+    color: var(--shiki-light, inherit);
+  }
+
+  :is(.dark, :root[data-theme="dark"]) [data-slot="diff-line"] code span {
+    color: var(--shiki-dark, inherit);
+  }
 }
 
 @layer components {
@@ -294,4 +302,14 @@
       transition: none;
     }
   }
+}
+
+::highlight(ren-find-hit) {
+  background-color: var(--ren-color-fill-secondary);
+  text-decoration: underline 2px var(--ren-color-status-warning);
+}
+
+::highlight(ren-find-active) {
+  background-color: var(--ren-color-accent-primary);
+  color: var(--ren-color-text-inverse);
 }

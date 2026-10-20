@@ -18,7 +18,7 @@ export function useMobile() {
   )
 }
 
-const apple = /Mac|iPhone|iPad/.test(navigator.userAgent)
+export const apple = /Mac|iPhone|iPad/.test(navigator.userAgent)
 
 export function shortcut(key: string) {
   return apple ? `⌘${key}` : `Ctrl+${key}`

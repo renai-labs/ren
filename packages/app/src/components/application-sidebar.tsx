@@ -3,9 +3,9 @@ import { Icon } from "@ren/ui/icon"
 import { IconButton } from "@ren/ui/icon-button"
 import { KeyboardKey } from "@ren/ui/keyboard-key"
 import { Logotype } from "@ren/ui/logotype"
-import { StateMessage } from "@ren/ui/state-message"
 import { Text } from "@ren/ui/text"
 import { Link, useRouterState } from "@tanstack/react-router"
+import type { ReactNode } from "react"
 import { Pathname } from "@ren/util/pathname"
 import { Viewport } from "../platform/viewport.js"
 
@@ -26,7 +26,7 @@ export function ApplicationSidebarBrand() {
   )
 }
 
-export function ApplicationSidebar(props: { onSearch: () => void }) {
+export function ApplicationSidebar(props: { onSearch: () => void; chats: ReactNode }) {
   const pathname = useRouterState({ select: (state) => Pathname.trimTrailingSlashes(state.location.pathname) })
   return (
     <>
@@ -61,13 +61,7 @@ export function ApplicationSidebar(props: { onSearch: () => void }) {
           </IconButton>
         }
       >
-        <li>
-          <StateMessage
-            state="empty"
-            placement="inline"
-            title="Your conversations will appear here once you start chatting!"
-          />
-        </li>
+        {props.chats}
       </ApplicationShell.NavigationSection>
     </>
   )

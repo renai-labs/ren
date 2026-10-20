@@ -1,9 +1,12 @@
+import { Result } from "effect"
+import { DraftStore } from "./draft-store.js"
 import type { Platform } from "./platform.js"
 
 const prefix = "ren."
+const draftPrefix = "ren.draft."
 const externalProtocols = new Set(["http:", "https:", "mailto:"])
 
-export function createWebPlatform(): Platform.Info {
+export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
   return {
     platform: "web",
     version: import.meta.env.VITE_REN_VERSION ?? "dev",
@@ -19,17 +22,51 @@ export function createWebPlatform(): Platform.Info {
       set: (key, value) => localStorage.setItem(prefix + key, value),
       remove: (key) => localStorage.removeItem(prefix + key),
     },
+    drafts: DraftStore.make({
+      storage: Result.getOrUndefined(Result.try(() => window.localStorage)),
+      prefix: draftPrefix,
+      large,
+      watch: (handler) => {
+        const changed = (event: StorageEvent) => handler(event.key)
+        window.addEventListener("storage", changed)
+        return () => window.removeEventListener("storage", changed)
+      },
+    }),
     openExternal: (url) => {
       if (!externalProtocols.has(new URL(url).protocol)) return
       window.open(url, "_blank", "noopener,noreferrer")
     },
     notify: async (title, body) => {
       if (!("Notification" in window)) return
+      if (document.visibilityState === "visible" && document.hasFocus()) return
       const permission =
-        Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission
+        Notification.permission === "default"
+          ? await Notification.requestPermission().catch(() => "denied" as const)
+          : Notification.permission
       if (permission !== "granted") return
-      new Notification(title, body === undefined ? undefined : { body })
+      const notification = new Notification(title, body === undefined ? undefined : { body })
+      notification.addEventListener("click", () => {
+        window.focus()
+        notification.close()
+      })
     },
     writeClipboardText: (text) => navigator.clipboard.writeText(text),
+    onLifecycle: (listener) => {
+      const visibility = () => {
+        if (document.visibilityState === "visible") listener("foreground")
+      }
+      const pageshow = (event: PageTransitionEvent) => {
+        if (event.persisted) listener("foreground")
+      }
+      const online = () => listener("online")
+      document.addEventListener("visibilitychange", visibility)
+      window.addEventListener("pageshow", pageshow)
+      window.addEventListener("online", online)
+      return () => {
+        document.removeEventListener("visibilitychange", visibility)
+        window.removeEventListener("pageshow", pageshow)
+        window.removeEventListener("online", online)
+      }
+    },
   }
 }

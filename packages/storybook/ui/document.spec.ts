@@ -24,3 +24,9 @@ story("renders markdown in place of its plain-text fallback", async ({ visit }) 
   await expect(root.getByRole("link", { name: "status page" })).toBeVisible()
   await expect(root.getByText("## Release notes")).toHaveCount(0)
 })
+
+story("opens markdown links in a new tab without a reference to Ren", async ({ visit }) => {
+  const link = (await visit("ui-document--compact")).getByRole("link", { name: "status page" })
+  await expect(link).toHaveAttribute("target", "_blank")
+  await expect(link).toHaveAttribute("rel", /noreferrer/)
+})

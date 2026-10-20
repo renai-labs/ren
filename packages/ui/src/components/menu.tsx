@@ -34,9 +34,9 @@ const popupVariants = cva(
 const spaciousPopup = "rounded-container p-1"
 
 export type RootProps = {
-  open?: boolean
+  open?: boolean | undefined
   defaultOpen?: boolean
-  onOpenChange?: (open: boolean) => void
+  onOpenChange?: ((open: boolean) => void) | undefined
   children: ReactNode
 }
 

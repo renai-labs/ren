@@ -126,6 +126,7 @@ export type TranscriptDisclosureProps = RowProps &
   DisclosureState & {
     appearance?: "transcript" | "summary"
     actions?: ReactNode
+    entrance?: "none" | "animated"
     children?: ReactNode
   }
 
