@@ -10,6 +10,7 @@ import { Space } from "@ren/schema/space"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { and, eq } from "drizzle-orm"
 import { Effect } from "effect"
+import { RenSettings } from "../../src/settings/ren.js"
 
 export const organization = Effect.fnUntraced(function* () {
   const database = yield* Database.Service
@@ -63,6 +64,21 @@ export const owner = Effect.fnUntraced(function* () {
   const organizationId = yield* organization()
   const creator = yield* user()
   return { organizationId, spaceId: yield* space(organizationId), createdBy: creator.id }
+})
+
+export const ren = Effect.fnUntraced(function* (input: { readonly instructions?: string } = {}) {
+  const database = yield* Database.Service
+  const settings = { permissions: [], references: [] }
+  yield* database.transaction((transaction) =>
+    RenSettings.apply(transaction, {
+      settings: { ...settings, ...input, model: { endpointId: "stub", modelId: "stub-model" } },
+      agents: [
+        { name: "ren", description: "Ren", isSubagent: false, settings },
+        { name: "general", description: "The general subagent", isSubagent: true, settings },
+        { name: "explore", description: "The explore subagent", isSubagent: true, settings },
+      ],
+    }),
+  )
 })
 
 export const globalAgent = Effect.fnUntraced(function* (name: string, input: { readonly isSubagent: boolean }) {

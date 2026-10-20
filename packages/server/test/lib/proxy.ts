@@ -19,29 +19,35 @@ export const make = (target: string, options: { readonly hostname?: string; read
     Effect.sync(() => {
       const requests: Array<Request> = []
       const rules: Array<Rule> = []
+      const blocks: Array<(request: Request) => boolean> = []
       const observers: Array<(request: Request, status: number) => void> = []
+      const forward = async (incoming: globalThis.Request, url: URL, request: Request) => {
+        const index = rules.findIndex((rule) => rule.match(request))
+        const rule = index === -1 ? undefined : rules.splice(index, 1)[0]
+        await rule?.before?.()
+        if (rule?.fault === "fail") return new Response("The proxy failed the request", { status: 503 })
+        const response = await fetch(`${target}${url.pathname}${url.search}`, {
+          method: incoming.method,
+          headers: incoming.headers,
+          ...(incoming.method !== "GET" && { body: await incoming.arrayBuffer() }),
+        })
+        await rule?.after?.(response.clone())
+        for (const observe of observers) observe(request, response.status)
+        if (rule?.fault !== "lose") return response
+        await response.arrayBuffer()
+        return new Response("The proxy lost the reply", { status: 502 })
+      }
       const serve = (port: number) =>
         Bun.serve({
           hostname: options.hostname ?? "127.0.0.1",
           port,
-          fetch: async (incoming) => {
+          fetch: (incoming) => {
             const url = new URL(incoming.url)
             const request = { method: incoming.method, path: url.pathname }
             requests.push(request)
-            const index = rules.findIndex((rule) => rule.match(request))
-            const rule = index === -1 ? undefined : rules.splice(index, 1)[0]
-            await rule?.before?.()
-            if (rule?.fault === "fail") return new Response("The proxy failed the request", { status: 503 })
-            const response = await fetch(`${target}${url.pathname}${url.search}`, {
-              method: incoming.method,
-              headers: incoming.headers,
-              ...(incoming.method !== "GET" && { body: await incoming.arrayBuffer() }),
-            })
-            await rule?.after?.(response.clone())
-            for (const observe of observers) observe(request, response.status)
-            if (rule?.fault !== "lose") return response
-            await response.arrayBuffer()
-            return new Response("The proxy lost the reply", { status: 502 })
+            return blocks.some((blocked) => blocked(request))
+              ? new Response("The proxy blocks this request", { status: 503 })
+              : forward(incoming, url, request)
           },
         })
       const state = { server: serve(options.port ?? 0) }
@@ -50,6 +56,8 @@ export const make = (target: string, options: { readonly hostname?: string; read
         url: state.server.url.origin,
         requests,
         once: (rule: Rule) => void rules.push(rule),
+        block: (match: (request: Request) => boolean) => void blocks.push(match),
+        unblock: () => void blocks.splice(0),
         observe: (observe: (request: Request, status: number) => void) => void observers.push(observe),
         clear: () => void requests.splice(0),
         down: () => state.server.stop(true),

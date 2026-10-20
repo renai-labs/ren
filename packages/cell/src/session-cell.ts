@@ -6,19 +6,22 @@ import { Brain } from "./brain.js"
 import { Cell } from "./cell.js"
 import { OpenCodeHarness } from "./harness/opencode/harness.js"
 import { HostAccess } from "./host-access.js"
+import { SettingsHost } from "./settings-host.js"
 
-const connections = Layer.unwrap(
+const ren = Layer.unwrap(
   Effect.gen(function* () {
     const info = yield* Cell.Info
     if (!info.vars.REN_URL) return Layer.empty
-    return EnvironmentConnections.layer.pipe(Layer.provide(HostAccess.layer), Layer.provide(FetchHttpClient.layer))
+    return Layer.mergeAll(EnvironmentConnections.layer.pipe(Layer.provide(HostAccess.layer)), SettingsHost.layer).pipe(
+      Layer.provide(FetchHttpClient.layer),
+    )
   }),
 )
 
 export class SessionCell extends DurableObject {
   readonly runtime = ManagedRuntime.make(
     Brain.layer.pipe(
-      Layer.provideMerge(OpenCodeHarness.layer(this.ctx.storage).pipe(Layer.provide(connections))),
+      Layer.provideMerge(OpenCodeHarness.layer(this.ctx.storage).pipe(Layer.provide(ren))),
       Layer.provideMerge(Cell.layer(this.ctx.storage, this.ctx.id.name, this.env)),
     ),
   )

@@ -50,6 +50,7 @@ const setup = Effect.fnUntraced(function* () {
   const server = yield* HttpServer.HttpServer
   const proxy = yield* Proxy.make(HttpServer.formatAddress(server.address), { hostname: "0.0.0.0", port: ren.port })
   const owner = yield* Seed.owner()
+  yield* Seed.ren()
   const sessions = yield* Session.Service
   const brain = yield* BrainHost.Service
   const id = Session.ID.create()
