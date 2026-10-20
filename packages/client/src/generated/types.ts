@@ -14,11 +14,11 @@ export type SpaceMembershipID = string
 
 export type SpaceAssignmentID = string
 
-export type EnvironmentID = string
+export type EnvironmentTemplateID = string
 
-export type HandProviderID = string
+export type EnvironmentProviderID = string
 
-export type SpaceEnvironmentID = string
+export type SpaceEnvironmentTemplateID = string
 
 export type HealthInfo = { status: HealthStatus; version: string }
 
@@ -75,25 +75,30 @@ export type SpaceMemberPending = {
   archivedAt: string | null
 }
 
-export type EnvironmentInfo = {
-  id: EnvironmentID
+export type EnvironmentTemplateInfo = {
+  id: EnvironmentTemplateID
   organizationId: AuthOrganizationID
   name: string
   description: string | null
-  provider: HandProviderID
+  provider: EnvironmentProviderID
   config: JsonValue
-  sessionsPerHand: number
+  sessionsPerEnvironment: number
   createdAt: string
   updatedAt: string
   archivedAt: string | null
 }
 
-export type HandProviderInfo = { id: HandProviderID; title: string; description: string; configSchema: JsonValue }
+export type EnvironmentProviderInfo = {
+  id: EnvironmentProviderID
+  title: string
+  description: string
+  configSchema: JsonValue
+}
 
-export type SpaceEnvironmentInfo = {
-  id: SpaceEnvironmentID
+export type SpaceEnvironmentTemplateInfo = {
+  id: SpaceEnvironmentTemplateID
   spaceId: SpaceID
-  environmentId: EnvironmentID
+  environmentTemplateId: EnvironmentTemplateID
   createdAt: string
   archivedAt: string | null
 }
@@ -104,11 +109,21 @@ export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: numbe
 
 export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
 
-export type EnvironmentPage = { items: Array<EnvironmentInfo>; page: number; pageSize: number; total: number }
+export type EnvironmentTemplatePage = {
+  items: Array<EnvironmentTemplateInfo>
+  page: number
+  pageSize: number
+  total: number
+}
 
-export type HandProviderInfos = Array<HandProviderInfo>
+export type EnvironmentProviderInfos = Array<EnvironmentProviderInfo>
 
-export type SpaceEnvironmentPage = { items: Array<SpaceEnvironmentInfo>; page: number; pageSize: number; total: number }
+export type SpaceEnvironmentTemplatePage = {
+  items: Array<SpaceEnvironmentTemplateInfo>
+  page: number
+  pageSize: number
+  total: number
+}
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
@@ -234,108 +249,111 @@ export type SpaceMemberArchiveInput = { readonly id: { readonly id: string | str
 
 export type SpaceMemberArchiveOutput = SpaceMemberInfo
 
-export type EnvironmentListInput = {
+export type EnvironmentTemplateListInput = {
   readonly page: { readonly page: number; readonly pageSize: number }["page"]
   readonly pageSize: { readonly page: number; readonly pageSize: number }["pageSize"]
 }
 
-export type EnvironmentListOutput = EnvironmentPage
+export type EnvironmentTemplateListOutput = EnvironmentTemplatePage
 
-export type EnvironmentGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+export type EnvironmentTemplateGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 
-export type EnvironmentGetOutput = EnvironmentInfo
+export type EnvironmentTemplateGetOutput = EnvironmentTemplateInfo
 
-export type EnvironmentCreateInput = {
+export type EnvironmentTemplateCreateInput = {
   readonly name: {
     readonly name: string
     readonly description?: string | null
     readonly provider: string
     readonly config: JsonValue
-    readonly sessionsPerHand?: number
+    readonly sessionsPerEnvironment?: number
   }["name"]
   readonly description?: {
     readonly name: string
     readonly description?: string | null
     readonly provider: string
     readonly config: JsonValue
-    readonly sessionsPerHand?: number
+    readonly sessionsPerEnvironment?: number
   }["description"]
   readonly provider: {
     readonly name: string
     readonly description?: string | null
     readonly provider: string
     readonly config: JsonValue
-    readonly sessionsPerHand?: number
+    readonly sessionsPerEnvironment?: number
   }["provider"]
   readonly config: {
     readonly name: string
     readonly description?: string | null
     readonly provider: string
     readonly config: JsonValue
-    readonly sessionsPerHand?: number
+    readonly sessionsPerEnvironment?: number
   }["config"]
-  readonly sessionsPerHand: {
+  readonly sessionsPerEnvironment: {
     readonly name: string
     readonly description?: string | null
     readonly provider: string
     readonly config: JsonValue
-    readonly sessionsPerHand?: number
-  }["sessionsPerHand"]
+    readonly sessionsPerEnvironment?: number
+  }["sessionsPerEnvironment"]
 }
 
-export type EnvironmentCreateOutput = EnvironmentInfo
+export type EnvironmentTemplateCreateOutput = EnvironmentTemplateInfo
 
-export type EnvironmentUpdateInput = {
+export type EnvironmentTemplateUpdateInput = {
   readonly id: { readonly id: string }["id"]
   readonly name?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
-    readonly sessionsPerHand?: number | undefined
+    readonly sessionsPerEnvironment?: number | undefined
   }["name"]
   readonly description?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
-    readonly sessionsPerHand?: number | undefined
+    readonly sessionsPerEnvironment?: number | undefined
   }["description"]
   readonly config?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
-    readonly sessionsPerHand?: number | undefined
+    readonly sessionsPerEnvironment?: number | undefined
   }["config"]
-  readonly sessionsPerHand?: {
+  readonly sessionsPerEnvironment?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
     readonly config?: JsonValue | undefined
-    readonly sessionsPerHand?: number | undefined
-  }["sessionsPerHand"]
+    readonly sessionsPerEnvironment?: number | undefined
+  }["sessionsPerEnvironment"]
 }
 
-export type EnvironmentUpdateOutput = EnvironmentInfo
+export type EnvironmentTemplateUpdateOutput = EnvironmentTemplateInfo
 
-export type EnvironmentArchiveInput = { readonly id: { readonly id: string }["id"] }
+export type EnvironmentTemplateArchiveInput = { readonly id: { readonly id: string }["id"] }
 
-export type EnvironmentArchiveOutput = EnvironmentInfo
+export type EnvironmentTemplateArchiveOutput = EnvironmentTemplateInfo
 
-export type HandProviderListOutput = HandProviderInfos
+export type EnvironmentProviderListOutput = EnvironmentProviderInfos
 
-export type SpaceEnvironmentListInput = {
+export type SpaceEnvironmentTemplateListInput = {
   readonly spaceId: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["spaceId"]
   readonly page: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["page"]
   readonly pageSize: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["pageSize"]
 }
 
-export type SpaceEnvironmentListOutput = SpaceEnvironmentPage
+export type SpaceEnvironmentTemplateListOutput = SpaceEnvironmentTemplatePage
 
-export type SpaceEnvironmentCreateInput = {
-  readonly spaceId: { readonly spaceId: string; readonly environmentId: string }["spaceId"]
-  readonly environmentId: { readonly spaceId: string; readonly environmentId: string }["environmentId"]
+export type SpaceEnvironmentTemplateCreateInput = {
+  readonly spaceId: { readonly spaceId: string; readonly environmentTemplateId: string }["spaceId"]
+  readonly environmentTemplateId: {
+    readonly spaceId: string
+    readonly environmentTemplateId: string
+  }["environmentTemplateId"]
 }
 
-export type SpaceEnvironmentCreateOutput = SpaceEnvironmentInfo
+export type SpaceEnvironmentTemplateCreateOutput = SpaceEnvironmentTemplateInfo
 
-export type SpaceEnvironmentArchiveInput = { readonly id: { readonly id: string }["id"] }
+export type SpaceEnvironmentTemplateArchiveInput = { readonly id: { readonly id: string }["id"] }
 
-export type SpaceEnvironmentArchiveOutput = SpaceEnvironmentInfo
+export type SpaceEnvironmentTemplateArchiveOutput = SpaceEnvironmentTemplateInfo

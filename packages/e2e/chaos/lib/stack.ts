@@ -17,7 +17,7 @@ export const freshKey = (label = "key") => `chaos-${label}-${crypto.randomUUID()
 export interface SessionOptions {
   readonly models?: Models.Access | null
   readonly hostToken?: string | false
-  readonly hand?: Hand
+  readonly environment?: Environment
   readonly start?: SessionDriver.StartOptions | false
 }
 
@@ -36,27 +36,27 @@ export const start = async () => {
   const forgetCell = Process.onInterrupt(cell.crash)
   const cellProxy = await FaultProxy.make(cell.url)
   const brain = Brain.ID.create()
-  const hands: Array<{ readonly instance: ExecutorAdapter.Instance; readonly proxy: FaultProxy.Instance }> = []
+  const environments: Array<{ readonly instance: ExecutorAdapter.Instance; readonly proxy: FaultProxy.Instance }> = []
 
-  const placed = new Map<Session.ID, Hand>()
+  const placed = new Map<Session.ID, Environment>()
   issuer.environments(async (sessionId) => {
-    const hand = placed.get(sessionId)
+    const environment = placed.get(sessionId)
     return (
-      hand &&
+      environment &&
       ExecutorAdapter.access({
-        url: hand.proxy.url,
-        handId: hand.instance.handId,
+        url: environment.proxy.url,
+        environmentId: environment.instance.environmentId,
         brain: Brain.ofSession(sessionId),
-        directory: `${hand.instance.workspace}/${sessionId}`,
-        lifetimeMs: hand.lifetimeMs(),
-        generation: hand.generation(),
+        directory: `${environment.instance.workspace}/${sessionId}`,
+        lifetimeMs: environment.lifetimeMs(),
+        generation: environment.generation(),
       })
     )
   })
 
   const attach = async <I extends ExecutorAdapter.Instance>(instance: I) => {
     const proxy = await FaultProxy.make(instance.url())
-    hands.push({ instance, proxy })
+    environments.push({ instance, proxy })
     const state = { generation: 1, lifetimeMs: 3_600_000 }
     return {
       instance,
@@ -69,7 +69,7 @@ export const start = async () => {
         state.lifetimeMs = lifetimeMs
       },
       retarget: () => proxy.target(instance.url()),
-      driver: async () => ExecutorDriver.connect(proxy.url, await ExecutorAdapter.token(instance.handId, brain)),
+      driver: async () => ExecutorDriver.connect(proxy.url, await ExecutorAdapter.token(instance.environmentId, brain)),
     }
   }
 
@@ -78,7 +78,7 @@ export const start = async () => {
 
   const dispose = async () => {
     forgetCell()
-    await Promise.all(hands.map((entry) => Promise.all([entry.proxy.stop(), entry.instance.dispose()])))
+    await Promise.all(environments.map((entry) => Promise.all([entry.proxy.stop(), entry.instance.dispose()])))
     await cellProxy.stop()
     await cell.dispose()
     await Promise.all([providerProxy.stop(), issuerProxy.stop(), provider.stop(), issuer.stop()])
@@ -98,17 +98,17 @@ export const start = async () => {
         hostToken: await issuer.issue(sessionId),
       }))
       const sessionId = driver.sessionId
-      if (options.hand) placed.set(sessionId, options.hand)
+      if (options.environment) placed.set(sessionId, options.environment)
       const granted = options.models === undefined ? access() : options.models
       const hostToken = options.hostToken === false ? undefined : (options.hostToken ?? (await issuer.issue(sessionId)))
       if (granted) await expectStatus(await driver.configureModels(granted, hostToken), 204, "PUT /ren/models")
-      const directory = options.hand?.folder(sessionId)
+      const directory = options.environment?.folder(sessionId)
       if (options.start !== false)
         await expectStatus(await driver.start({ ...options.start, ...(directory && { directory }) }), 200, "start")
       return driver
     },
-    hand: async (label: string) => attach(await ExecutorAdapter.localProcess({ label })),
-    dockerHand: async (label: string) => {
+    environment: async (label: string) => attach(await ExecutorAdapter.localProcess({ label })),
+    dockerEnvironment: async (label: string) => {
       const container = await ExecutorAdapter.dockerContainer({ label })
       return { ...(await attach(container)), container }
     },
@@ -122,7 +122,7 @@ export const start = async () => {
 
 export type Instance = Awaited<ReturnType<typeof start>>
 
-export interface Hand {
+export interface Environment {
   readonly instance: ExecutorAdapter.Instance
   readonly proxy: FaultProxy.Instance
   readonly generation: () => number

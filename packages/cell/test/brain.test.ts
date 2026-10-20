@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { BrainApi } from "@ren/brain-api/brain-api"
+import { BrainApi } from "@ren/host-api/brain-api"
 import { Session } from "@ren/schema/session"
 import { Exit, Schema } from "effect"
 import { HttpApi } from "effect/http-api"

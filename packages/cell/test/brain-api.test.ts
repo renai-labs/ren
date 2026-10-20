@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
-import type { StartBody } from "@ren/brain-api/brain-api"
+import type { StartBody } from "@ren/host-api/brain-api"
 import {
   BrainRejectedError,
   ForbiddenError,
   ModelsNotConfiguredError,
   SessionNotStartedError,
-} from "@ren/brain-api/errors"
+} from "@ren/host-api/errors"
 import { testEffect } from "@ren/executor/testing"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"

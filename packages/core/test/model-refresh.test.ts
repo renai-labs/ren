@@ -8,7 +8,7 @@ import { HttpRouter, HttpServer } from "effect/http"
 import { BrainHost } from "../src/brain-host.js"
 import { Models } from "../src/models.js"
 import { testEffect } from "./lib/effect.js"
-import { HostApiTest } from "./lib/host-api.js"
+import { RenHostApiTest } from "./lib/ren-host-api.js"
 import { Host } from "./lib/host.js"
 
 const stub = Shared.stub()
@@ -33,7 +33,7 @@ const models = Layer.succeed(
 const settings = { CELL_URL: "", CELL_KEYS: TestToken.vars.CELL_KEYS }
 
 const api = HttpRouter.toWebHandler(
-  HostApiTest.layer().pipe(
+  RenHostApiTest.layer().pipe(
     Layer.provide(Host.layer({ CELL_URL: "http://127.0.0.1:9", CELL_KEYS: settings.CELL_KEYS }, models)),
     Layer.provide(HttpServer.layerServices),
   ),

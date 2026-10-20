@@ -9,7 +9,7 @@ Postgres access: Drizzle tables, migrations, connection layers and isolated test
 - `src/database.ts`: `Database.Service`, the Effect-native Drizzle instance with relations, and `Database.Schema`, the tables.
 - `src/auth.sql.ts`: Better Auth tables, generated from `@ren/server`'s auth config (`bun run generate` in `packages/server`).
 - `src/auth-database.ts`: `AuthDatabase.Service`, a Promise-based Drizzle instance (`bun-sql`) used only by Better Auth.
-- `src/testing.ts`: `Testing.layer`, which creates an isolated database, applies migrations, and drops it afterwards.
+- `test/lib/testing.ts` (`@ren/db/testing`): `Testing.layer`, which creates an isolated database, applies migrations, and drops it afterwards.
 - `migration/`: generated SQL migrations.
 
 ## What does not

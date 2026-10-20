@@ -749,10 +749,10 @@
         "summary": "Archive space-member"
       }
     },
-    "/environments": {
+    "/environment-templates": {
       "get": {
-        "tags": ["environment"],
-        "operationId": "environment.list",
+        "tags": ["environment-template"],
+        "operationId": "environment-template.list",
         "parameters": [
           {
             "name": "page",
@@ -783,11 +783,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Environment.Page",
+            "description": "EnvironmentTemplate.Page",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Environment.Page"
+                  "$ref": "#/components/schemas/EnvironmentTemplate.Page"
                 }
               }
             }
@@ -813,12 +813,12 @@
             }
           }
         },
-        "description": "Return one page of the environments that the caller can see.",
-        "summary": "List environments"
+        "description": "Return one page of the environment-templates that the caller can see.",
+        "summary": "List environment-templates"
       },
       "post": {
-        "tags": ["environment"],
-        "operationId": "environment.create",
+        "tags": ["environment-template"],
+        "operationId": "environment-template.create",
         "parameters": [],
         "security": [
           {
@@ -830,11 +830,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Environment.Info",
+            "description": "EnvironmentTemplate.Info",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Environment.Info"
+                  "$ref": "#/components/schemas/EnvironmentTemplate.Info"
                 }
               }
             }
@@ -890,13 +890,13 @@
             }
           }
         },
-        "description": "Create one environment.",
-        "summary": "Create environment",
+        "description": "Create one environment-template.",
+        "summary": "Create environment-template",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Environment.CreateInput"
+                "$ref": "#/components/schemas/EnvironmentTemplate.CreateInput"
               }
             }
           },
@@ -904,10 +904,10 @@
         }
       }
     },
-    "/environments/{idOrSlug}": {
+    "/environment-templates/{idOrSlug}": {
       "get": {
-        "tags": ["environment"],
-        "operationId": "environment.get",
+        "tags": ["environment-template"],
+        "operationId": "environment-template.get",
         "parameters": [
           {
             "name": "idOrSlug",
@@ -928,11 +928,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Environment.Info",
+            "description": "EnvironmentTemplate.Info",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Environment.Info"
+                  "$ref": "#/components/schemas/EnvironmentTemplate.Info"
                 }
               }
             }
@@ -968,20 +968,20 @@
             }
           }
         },
-        "description": "Return one environment by ID or slug.",
-        "summary": "Get environment"
+        "description": "Return one environment-template by ID or slug.",
+        "summary": "Get environment-template"
       }
     },
-    "/environments/{id}": {
+    "/environment-templates/{id}": {
       "patch": {
-        "tags": ["environment"],
-        "operationId": "environment.update",
+        "tags": ["environment-template"],
+        "operationId": "environment-template.update",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Environment.ID"
+              "$ref": "#/components/schemas/EnvironmentTemplate.ID"
             },
             "required": true
           }
@@ -996,11 +996,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Environment.Info",
+            "description": "EnvironmentTemplate.Info",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Environment.Info"
+                  "$ref": "#/components/schemas/EnvironmentTemplate.Info"
                 }
               }
             }
@@ -1056,13 +1056,13 @@
             }
           }
         },
-        "description": "Change one environment.",
-        "summary": "Update environment",
+        "description": "Change one environment-template.",
+        "summary": "Update environment-template",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Environment.UpdateInput"
+                "$ref": "#/components/schemas/EnvironmentTemplate.UpdateInput"
               }
             }
           },
@@ -1070,14 +1070,14 @@
         }
       },
       "delete": {
-        "tags": ["environment"],
-        "operationId": "environment.archive",
+        "tags": ["environment-template"],
+        "operationId": "environment-template.archive",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/Environment.ID"
+              "$ref": "#/components/schemas/EnvironmentTemplate.ID"
             },
             "required": true
           }
@@ -1092,11 +1092,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Environment.Info",
+            "description": "EnvironmentTemplate.Info",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Environment.Info"
+                  "$ref": "#/components/schemas/EnvironmentTemplate.Info"
                 }
               }
             }
@@ -1132,14 +1132,14 @@
             }
           }
         },
-        "description": "Archive one environment and return it. Archiving an archived environment returns it unchanged.",
-        "summary": "Archive environment"
+        "description": "Archive one environment-template and return it. Archiving an archived environment-template returns it unchanged.",
+        "summary": "Archive environment-template"
       }
     },
-    "/hand-providers": {
+    "/environment-providers": {
       "get": {
-        "tags": ["handProvider"],
-        "operationId": "handProvider.list",
+        "tags": ["environmentProvider"],
+        "operationId": "environmentProvider.list",
         "parameters": [],
         "security": [
           {
@@ -1151,11 +1151,11 @@
         ],
         "responses": {
           "200": {
-            "description": "HandProvider.Infos",
+            "description": "EnvironmentProvider.Infos",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HandProvider.Infos"
+                  "$ref": "#/components/schemas/EnvironmentProvider.Infos"
                 }
               }
             }
@@ -1181,14 +1181,14 @@
             }
           }
         },
-        "description": "Return the hand providers this deployment has, each with a JSON Schema of the config that an environment of that provider takes.",
-        "summary": "List hand providers"
+        "description": "Return the environment providers this deployment has, each with a JSON Schema of the config that an environment template of that provider takes.",
+        "summary": "List environment providers"
       }
     },
-    "/space-environments": {
+    "/space-environment-templates": {
       "get": {
-        "tags": ["space-environment"],
-        "operationId": "space-environment.list",
+        "tags": ["space-environment-template"],
+        "operationId": "space-environment-template.list",
         "parameters": [
           {
             "name": "spaceId",
@@ -1227,11 +1227,11 @@
         ],
         "responses": {
           "200": {
-            "description": "SpaceEnvironment.Page",
+            "description": "SpaceEnvironmentTemplate.Page",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SpaceEnvironment.Page"
+                  "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Page"
                 }
               }
             }
@@ -1257,12 +1257,12 @@
             }
           }
         },
-        "description": "Return one page of the space-environments that the caller can see.",
-        "summary": "List space-environments"
+        "description": "Return one page of the space-environment-templates that the caller can see.",
+        "summary": "List space-environment-templates"
       },
       "post": {
-        "tags": ["space-environment"],
-        "operationId": "space-environment.create",
+        "tags": ["space-environment-template"],
+        "operationId": "space-environment-template.create",
         "parameters": [],
         "security": [
           {
@@ -1274,11 +1274,11 @@
         ],
         "responses": {
           "200": {
-            "description": "SpaceEnvironment.Info",
+            "description": "SpaceEnvironmentTemplate.Info",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SpaceEnvironment.Info"
+                  "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Info"
                 }
               }
             }
@@ -1334,13 +1334,13 @@
             }
           }
         },
-        "description": "Create one space-environment.",
-        "summary": "Create space-environment",
+        "description": "Create one space-environment-template.",
+        "summary": "Create space-environment-template",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SpaceEnvironment.CreateInput"
+                "$ref": "#/components/schemas/SpaceEnvironmentTemplate.CreateInput"
               }
             }
           },
@@ -1348,16 +1348,16 @@
         }
       }
     },
-    "/space-environments/{id}": {
+    "/space-environment-templates/{id}": {
       "delete": {
-        "tags": ["space-environment"],
-        "operationId": "space-environment.archive",
+        "tags": ["space-environment-template"],
+        "operationId": "space-environment-template.archive",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "schema": {
-              "$ref": "#/components/schemas/SpaceEnvironment.ID"
+              "$ref": "#/components/schemas/SpaceEnvironmentTemplate.ID"
             },
             "required": true
           }
@@ -1372,11 +1372,11 @@
         ],
         "responses": {
           "200": {
-            "description": "SpaceEnvironment.Info",
+            "description": "SpaceEnvironmentTemplate.Info",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SpaceEnvironment.Info"
+                  "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Info"
                 }
               }
             }
@@ -1412,8 +1412,8 @@
             }
           }
         },
-        "description": "Archive one space-environment and return it. Archiving an archived space-environment returns it unchanged.",
-        "summary": "Archive space-environment"
+        "description": "Archive one space-environment-template and return it. Archiving an archived space-environment-template returns it unchanged.",
+        "summary": "Archive space-environment-template"
       }
     }
   },
@@ -1540,7 +1540,36 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
-      "Environment.CreateInput": {
+      "EnvironmentProvider.ID": {
+        "type": "string",
+        "minLength": 1
+      },
+      "EnvironmentProvider.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/EnvironmentProvider.ID"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "configSchema": {
+            "description": "A JSON Schema document (draft 2020-12) of the provider’s config."
+          }
+        },
+        "required": ["id", "title", "description", "configSchema"],
+        "additionalProperties": false
+      },
+      "EnvironmentProvider.Infos": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/EnvironmentProvider.Info"
+        }
+      },
+      "EnvironmentTemplate.CreateInput": {
         "type": "object",
         "properties": {
           "name": {
@@ -1560,12 +1589,12 @@
             ]
           },
           "provider": {
-            "$ref": "#/components/schemas/HandProvider.ID"
+            "$ref": "#/components/schemas/EnvironmentProvider.ID"
           },
           "config": {
             "description": "The settings of the provider. Its schema is in the provider list."
           },
-          "sessionsPerHand": {
+          "sessionsPerEnvironment": {
             "type": "integer",
             "minimum": 1,
             "maximum": 100
@@ -1574,15 +1603,15 @@
         "required": ["name", "provider", "config"],
         "additionalProperties": false
       },
-      "Environment.ID": {
+      "EnvironmentTemplate.ID": {
         "type": "string",
-        "pattern": "^env_"
+        "pattern": "^tpl_"
       },
-      "Environment.Info": {
+      "EnvironmentTemplate.Info": {
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/Environment.ID"
+            "$ref": "#/components/schemas/EnvironmentTemplate.ID"
           },
           "organizationId": {
             "$ref": "#/components/schemas/Auth.OrganizationID"
@@ -1601,10 +1630,10 @@
             ]
           },
           "provider": {
-            "$ref": "#/components/schemas/HandProvider.ID"
+            "$ref": "#/components/schemas/EnvironmentProvider.ID"
           },
           "config": {},
-          "sessionsPerHand": {
+          "sessionsPerEnvironment": {
             "type": "integer"
           },
           "createdAt": {
@@ -1631,20 +1660,20 @@
           "description",
           "provider",
           "config",
-          "sessionsPerHand",
+          "sessionsPerEnvironment",
           "createdAt",
           "updatedAt",
           "archivedAt"
         ],
         "additionalProperties": false
       },
-      "Environment.Page": {
+      "EnvironmentTemplate.Page": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Environment.Info"
+              "$ref": "#/components/schemas/EnvironmentTemplate.Info"
             }
           },
           "page": {
@@ -1660,7 +1689,7 @@
         "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
       },
-      "Environment.UpdateInput": {
+      "EnvironmentTemplate.UpdateInput": {
         "type": "object",
         "properties": {
           "name": {
@@ -1696,14 +1725,14 @@
           "config": {
             "anyOf": [
               {
-                "description": "Applies to hands made after the change. Running hands keep their config."
+                "description": "Applies to environments made after the change. Running environments keep their config."
               },
               {
                 "type": "null"
               }
             ]
           },
-          "sessionsPerHand": {
+          "sessionsPerEnvironment": {
             "anyOf": [
               {
                 "type": "integer",
@@ -1731,35 +1760,6 @@
         },
         "required": ["_tag", "message"],
         "additionalProperties": false
-      },
-      "HandProvider.ID": {
-        "type": "string",
-        "minLength": 1
-      },
-      "HandProvider.Info": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/HandProvider.ID"
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "configSchema": {
-            "description": "A JSON Schema document (draft 2020-12) of the provider’s config."
-          }
-        },
-        "required": ["id", "title", "description", "configSchema"],
-        "additionalProperties": false
-      },
-      "HandProvider.Infos": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/HandProvider.Info"
-        }
       },
       "Health.Info": {
         "type": "object",
@@ -2075,34 +2075,34 @@
         },
         "additionalProperties": false
       },
-      "SpaceEnvironment.CreateInput": {
+      "SpaceEnvironmentTemplate.CreateInput": {
         "type": "object",
         "properties": {
           "spaceId": {
             "$ref": "#/components/schemas/Space.ID"
           },
-          "environmentId": {
-            "$ref": "#/components/schemas/Environment.ID"
+          "environmentTemplateId": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.ID"
           }
         },
-        "required": ["spaceId", "environmentId"],
+        "required": ["spaceId", "environmentTemplateId"],
         "additionalProperties": false
       },
-      "SpaceEnvironment.ID": {
+      "SpaceEnvironmentTemplate.ID": {
         "type": "string",
         "pattern": "^spe_"
       },
-      "SpaceEnvironment.Info": {
+      "SpaceEnvironmentTemplate.Info": {
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/SpaceEnvironment.ID"
+            "$ref": "#/components/schemas/SpaceEnvironmentTemplate.ID"
           },
           "spaceId": {
             "$ref": "#/components/schemas/Space.ID"
           },
-          "environmentId": {
-            "$ref": "#/components/schemas/Environment.ID"
+          "environmentTemplateId": {
+            "$ref": "#/components/schemas/EnvironmentTemplate.ID"
           },
           "createdAt": {
             "type": "string"
@@ -2118,16 +2118,16 @@
             ]
           }
         },
-        "required": ["id", "spaceId", "environmentId", "createdAt", "archivedAt"],
+        "required": ["id", "spaceId", "environmentTemplateId", "createdAt", "archivedAt"],
         "additionalProperties": false
       },
-      "SpaceEnvironment.Page": {
+      "SpaceEnvironmentTemplate.Page": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SpaceEnvironment.Info"
+              "$ref": "#/components/schemas/SpaceEnvironmentTemplate.Info"
             }
           },
           "page": {
@@ -2350,13 +2350,13 @@
       "name": "space-member"
     },
     {
-      "name": "environment"
+      "name": "environment-template"
     },
     {
-      "name": "handProvider"
+      "name": "environmentProvider"
     },
     {
-      "name": "space-environment"
+      "name": "space-environment-template"
     }
   ]
 }

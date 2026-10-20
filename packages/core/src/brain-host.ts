@@ -1,19 +1,19 @@
 export * as BrainHost from "./brain-host.js"
 
-import { BrainApi, type StartBody } from "@ren/brain-api/brain-api"
+import { BrainApi, type StartBody } from "@ren/host-api/brain-api"
 import {
   BrainRejectedError,
-  HandNotFoundError,
-  HandUnavailableError,
+  EnvironmentNotFoundError,
+  EnvironmentUnavailableError,
   ForbiddenError,
   type ModelsNotConfiguredError,
   ModelsUnavailableError,
   type SessionNotStartedError,
-} from "@ren/brain-api/errors"
-import { SessionToken } from "@ren/brain-api/session-token"
+} from "@ren/host-api/errors"
+import { SessionToken } from "@ren/host-api/session-token"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
-import type { Hand } from "@ren/schema/hand"
+import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import {
   Array,
@@ -34,19 +34,19 @@ import {
 } from "effect"
 import { HttpClient, HttpClientError, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
-import type { Host } from "@ren/brain-api/host"
-import { CurrentHost, HostAuthentication } from "@ren/brain-api/host-api"
-import { Hands } from "./hands.js"
+import type { Host } from "@ren/host-api/host"
+import { CurrentHost, HostAuthentication } from "@ren/host-api/ren-host-api"
+import { Environments } from "./environments.js"
 import { Models } from "./models.js"
 
 export {
   BrainRejectedError,
-  HandNotFoundError,
-  HandUnavailableError,
+  EnvironmentNotFoundError,
+  EnvironmentUnavailableError,
   ForbiddenError,
   ModelsUnavailableError,
   SessionNotStartedError,
-} from "@ren/brain-api/errors"
+} from "@ren/host-api/errors"
 
 export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("BrainUnavailable", {
   cause: Schema.Defect(),
@@ -55,7 +55,7 @@ export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("Br
 export interface Interface {
   readonly start: (
     input: Session.StartInput,
-    placement: Hands.Placement,
+    placement: Environments.Placement,
   ) => Effect.Effect<Session.Started, BrainUnavailable | BrainRejectedError>
   readonly send: (
     input: Session.SendInput,
@@ -69,10 +69,10 @@ export interface Interface {
   readonly authenticateHost: (hostToken: Redacted.Redacted) => Effect.Effect<CurrentHost["Service"], ForbiddenError>
   readonly refreshModels: (host: CurrentHost["Service"]) => Effect.Effect<Brain.ModelGrant, ModelsUnavailableError>
   readonly refreshHostToken: (host: CurrentHost["Service"]) => Effect.Effect<Host.Refreshed>
-  readonly accessHand: (
+  readonly accessEnvironment: (
     host: CurrentHost["Service"],
-  ) => Effect.Effect<Hand.Access, HandNotFoundError | HandUnavailableError>
-  readonly releaseHand: (host: CurrentHost["Service"]) => Effect.Effect<void>
+  ) => Effect.Effect<Environment.Access, EnvironmentNotFoundError | EnvironmentUnavailableError>
+  readonly releaseEnvironment: (host: CurrentHost["Service"]) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainHost") {}
@@ -102,7 +102,7 @@ export const layer = Layer.effect(
     const key = Array.headNonEmpty(Redacted.value(config.keys))
     const http = yield* HttpClient.HttpClient
     const models = yield* Models.Service
-    const hands = yield* Hands.Service
+    const environments = yield* Environments.Service
     const brain = yield* HttpApiClient.makeWith(BrainApi, {
       baseUrl: url,
       httpClient: HttpClient.mapRequestEffect(http, (request) =>
@@ -215,24 +215,24 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, placement: Hands.Placement) {
+      start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, placement: Environments.Placement) {
         if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
         const subject = { sessionId: input.sessionId, organizationId: placement.organizationId }
-        const requested = input.environmentId
+        const requested = input.environmentTemplateId
         const binding = requested
           ? Option.some(
-              yield* hands
+              yield* environments
                 .bind({ ...subject, spaceId: placement.spaceId }, requested)
                 .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
             )
-          : Option.map(yield* hands.findDirectory(subject), (directory) => ({ directory, isNew: false }))
+          : Option.map(yield* environments.findDirectory(subject), (directory) => ({ directory, isNew: false }))
         const payload = {
-          ...Struct.omit(input, ["environmentId"]),
+          ...Struct.omit(input, ["environmentTemplateId"]),
           ...Option.match(binding, { onNone: () => ({}), onSome: (found) => ({ directory: found.directory }) }),
         } satisfies StartBody
         return yield* withModels(subject, call(input.sessionId, brain.brain["brain.start"]({ payload }))).pipe(
           Effect.tapErrorTag("BrainRejectedError", () =>
-            Option.exists(binding, (found) => found.isNew) ? hands.unbind(subject) : Effect.void,
+            Option.exists(binding, (found) => found.isNew) ? environments.unbind(subject) : Effect.void,
           ),
         )
       }),
@@ -275,16 +275,17 @@ export const layer = Layer.effect(
         )
         return { hostToken: Redacted.make(yield* hostToken(host, exp)) }
       }),
-      accessHand: Effect.fn("BrainHost.accessHand")(function* (host: CurrentHost["Service"]) {
-        return yield* hands.access(host).pipe(
+      accessEnvironment: Effect.fn("BrainHost.accessEnvironment")(function* (host: CurrentHost["Service"]) {
+        return yield* environments.access(host).pipe(
           Effect.catchTags({
-            "Hands.NotFound": (error) => Effect.fail(new HandNotFoundError({ message: error.message })),
-            "Hands.Unavailable": (error) => Effect.fail(new HandUnavailableError({ message: error.message })),
+            "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
+            "Environments.Unavailable": (error) =>
+              Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
           }),
         )
       }),
-      releaseHand: Effect.fn("BrainHost.releaseHand")(function* (host: CurrentHost["Service"]) {
-        yield* hands.release(host)
+      releaseEnvironment: Effect.fn("BrainHost.releaseEnvironment")(function* (host: CurrentHost["Service"]) {
+        yield* environments.release(host)
       }),
       access: Effect.fn("BrainHost.access")(function* (sessionId: Session.ID) {
         const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + clientLifetime

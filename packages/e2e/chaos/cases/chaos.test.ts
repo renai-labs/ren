@@ -16,7 +16,7 @@ const actions = [
   "send-shell",
   "send-text",
   "queue",
-  "cut-hand",
+  "cut-environment",
   "cut-user",
   "issuer-503",
   "provider-503",
@@ -31,16 +31,16 @@ interface Sent {
 }
 
 describe.skipIf(Platform.wrangler !== undefined)("seeded fault sequences across every link", () => {
-  const lane: { stack?: Stack.Instance; hand?: Stack.Hand } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
 
   const current = () => {
-    if (!lane.stack || !lane.hand) throw new Error("the stack did not start")
-    return { stack: lane.stack, hand: lane.hand }
+    if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
+    return { stack: lane.stack, environment: lane.environment }
   }
 
   beforeAll(async () => {
     lane.stack = await Stack.start()
-    lane.hand = await lane.stack.hand("chaos")
+    lane.environment = await lane.stack.environment("chaos")
   }, 180_000)
 
   afterAll(() => lane.stack?.dispose())
@@ -49,13 +49,13 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded fault sequences across 
     `seed %i: ${length} actions keep every accepted message once and every tool effect at most once`,
     async (seed) => {
       const stack = current().stack
-      const hand = current().hand
+      const environment = current().environment
       const random = Wait.random("seeded", seed)
       const access = () => stack.access(Stack.freshKey("seeded"), Date.now() + 4 * 60_000)
       stack.issuer.next(() => ({ type: "grant", access: access() }))
       const session = await stack.session({
         models: access(),
-        hand,
+        environment,
       })
       const rules: Array<FaultProxy.Rule> = []
       const send = async (
@@ -82,17 +82,17 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded fault sequences across 
         },
         "send-text": () => send([ModelProvider.text("plain")], undefined, "steer"),
         queue: () => send([ModelProvider.text("queued")], undefined, "queue"),
-        "cut-hand": async () => void hand.proxy.cutAll(),
+        "cut-environment": async () => void environment.proxy.cutAll(),
         "cut-user": async () => void stack.cellProxy.cutAll(),
         "issuer-503": async () =>
           void rules.push(
-            stack.issuerProxy.inject({ operation: "POST /brain/models/refresh" }, { type: "status", status: 503 }),
+            stack.issuerProxy.inject({ operation: "POST /host/models/refresh" }, { type: "status", status: 503 }),
           ),
         "provider-503": async () =>
           void rules.push(
             stack.providerProxy.inject({ operation: "POST /v1/chat/completions" }, { type: "status", status: 503 }),
           ),
-        "restart-executor": () => hand.instance.restart().then(() => undefined),
+        "restart-executor": () => environment.instance.restart().then(() => undefined),
         "restart-cell": () => stack.restartCell().then(() => undefined),
       }
       const sent = await Array.from(
@@ -111,7 +111,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded fault sequences across 
       const accepted = sent.filter((entry) => entry.accepted)
       expect(accepted.map((entry) => SessionDriver.occurrences(read, entry.messageId))).toEqual(accepted.map(() => 1))
       const counts = await Promise.all(
-        sent.flatMap((entry) => (entry.marker ? [Ledger.count(hand.instance, entry.marker)] : [])),
+        sent.flatMap((entry) => (entry.marker ? [Ledger.count(environment.instance, entry.marker)] : [])),
       )
       expect(counts.filter((count) => count > 1)).toEqual([])
     },

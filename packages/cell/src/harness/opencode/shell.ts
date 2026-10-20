@@ -20,10 +20,10 @@ import { ChildProcess } from "effect/process"
 import path from "node:path"
 import type { EnvironmentFiles } from "@opencode/core/environment/files"
 import type { ChildProcessSpawner } from "effect/process"
-import type { HandSpawner } from "@ren/brain/hand-session/spawner"
+import type { EnvironmentSpawner } from "@ren/brain/environment/session/spawner"
 
-export interface ShellHand {
-  readonly spawnerWith: (options: HandSpawner.SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
+export interface ShellEnvironment {
+  readonly spawnerWith: (options: EnvironmentSpawner.SpawnOptions) => ChildProcessSpawner.ChildProcessSpawner["Service"]
   readonly overrides: EnvironmentFiles.FilesImpl
 }
 
@@ -64,7 +64,7 @@ const publishable = <D extends { readonly type: string; readonly data: Schema.Co
   // ast-grep-ignore: no-chained-type-assertions, -- the value is a valid event definition; only OpenCode's published type is wrong
   definition as unknown as Event.EphemeralDefinition<D["type"], D["data"]> // oxlint-disable-line typescript/no-unsafe-type-assertion -- see the reason above
 
-const layer = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
+const layer = (environmentOf: (workspaceId: Workspace.ID) => ShellEnvironment) =>
   Layer.effect(
     Service,
     Effect.gen(function* () {
@@ -78,7 +78,7 @@ const layer = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
       const commands = new Map<Shell.ID, Command>()
       const exitOrder: Array<Shell.ID> = []
       const outputDir = path.join(global.data, DIRECTORY, location.project.id)
-      const hand = Option.map(Option.fromNullishOr(location.workspaceID), handOf)
+      const environment = Option.map(Option.fromNullishOr(location.workspaceID), environmentOf)
       const limits = Effect.map(config.entries(), (entries) => {
         const configured = Config.latest(entries, "tool_output")
         return { maxLines: configured?.max_lines ?? MAX_LINES, maxBytes: configured?.max_bytes ?? MAX_BYTES }
@@ -106,8 +106,8 @@ const layer = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
         commands.delete(id)
         if (command.timeoutFiber) yield* Fiber.interrupt(command.timeoutFiber)
         yield* Deferred.fail(command.done, new NotFoundError({ id }))
-        // oxlint-disable-next-line ren/no-comments -- A frozen hand must not hold up an interrupt, so the file is deleted in the background.
-        if (Option.isSome(hand)) runFork(hand.value.overrides.remove(command.file).pipe(Effect.ignore))
+        // oxlint-disable-next-line ren/no-comments -- A frozen environment must not hold up an interrupt, so the file is deleted in the background.
+        if (Option.isSome(environment)) runFork(environment.value.overrides.remove(command.file).pipe(Effect.ignore))
         yield* bus.publish(publishable(Shell.Event.Deleted), { id })
       })
       const wait = Effect.fn("Shell.wait")(function* (id: Shell.ID) {
@@ -121,8 +121,8 @@ const layer = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
           return { output: "", cursor: command.output.size, size: command.output.size, truncated: false }
         const start = Math.max(0, cursor)
         const length = Math.min(limit, command.output.size - start)
-        const bytes = Option.isSome(hand)
-          ? yield* hand.value.overrides.read(command.file, { offset: start, length }).pipe(
+        const bytes = Option.isSome(environment)
+          ? yield* environment.value.overrides.read(command.file, { offset: start, length }).pipe(
               Effect.map((read) => read.bytes),
               Effect.orElseSucceed(() => new Uint8Array()),
             )
@@ -172,10 +172,10 @@ const layer = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
           shell: input.shell ?? (yield* shell.resolve({ priority: "config" })),
           env: { TERM: "xterm-256color", OPENCODE_TERMINAL: "1" },
         }
-        if (Option.isNone(hand))
+        if (Option.isNone(environment))
           return yield* new AppProcess.AppProcessError({
             command: invocation.command,
-            cause: new Error("This session has no hand, so it cannot run commands"),
+            cause: new Error("This session has no environment, so it cannot run commands"),
           })
         yield* hooks.trigger("shell", "create.before", invocation)
         if (before) yield* before(invocation)
@@ -197,7 +197,7 @@ const layer = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
         runFork(
           Effect.scoped(
             Effect.gen(function* () {
-              const handle = yield* hand.value
+              const handle = yield* environment.value
                 .spawnerWith({
                   outputFile: file,
                   window: { maxBytes: tailBytes, intervalMs: readEveryMs },
@@ -340,10 +340,10 @@ const layer = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
     }),
   )
 
-export const node = (handOf: (workspaceId: Workspace.ID) => ShellHand) =>
+export const node = (environmentOf: (workspaceId: Workspace.ID) => ShellEnvironment) =>
   LayerNode.make({
     service: Service,
     tag: tags.values.location,
-    layer: layer(handOf),
+    layer: layer(environmentOf),
     deps: [Bus.node, Location.node, Global.node, ShellSelect.node, PluginHooks.node, Config.node],
   })

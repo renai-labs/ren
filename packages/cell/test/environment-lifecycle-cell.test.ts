@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { TestHand, Processes, Relay } from "@ren/executor/testing"
+import { TestEnvironment, Processes, Relay } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
-import { Hand } from "@ren/schema/hand"
+import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Effect, Exit, ManagedRuntime, Scope } from "effect"
 import { mkdtemp, realpath } from "node:fs/promises"
@@ -18,12 +18,12 @@ setDefaultTimeout(120_000)
 
 const stub = Shared.stub()
 const fileTools = new Set(["read", "write", "edit", "glob", "grep", "shell"])
-const handId = Hand.ID.create()
+const environmentId = Environment.ID.create()
 
 const sandbox = async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "ren-lifecycle-")))
-  const runtime = ManagedRuntime.make(TestHand.layer({ handId, workspace: directory }))
-  return { directory, url: await runtime.runPromise(TestHand.url), dispose: () => runtime.dispose() }
+  const runtime = ManagedRuntime.make(TestEnvironment.layer({ environmentId, workspace: directory }))
+  return { directory, url: await runtime.runPromise(TestEnvironment.url), dispose: () => runtime.dispose() }
 }
 
 type Sandbox = Awaited<ReturnType<typeof sandbox>>
@@ -31,18 +31,18 @@ type Sandbox = Awaited<ReturnType<typeof sandbox>>
 // oxlint-disable-next-line ren/no-comments -- A sandbox behind a relay keeps its URL when its executor restarts, as a resumed sandbox does.
 const restartable = async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "ren-lifecycle-restart-")))
-  const state = { runtime: ManagedRuntime.make(TestHand.layer({ handId, workspace: directory })) }
+  const state = { runtime: ManagedRuntime.make(TestEnvironment.layer({ environmentId, workspace: directory })) }
   const scope = Effect.runSync(Scope.make())
   const relay = await Effect.runPromise(
-    Relay.make(Relay.portOf(await state.runtime.runPromise(TestHand.url))).pipe(Scope.provide(scope)),
+    Relay.make(Relay.portOf(await state.runtime.runPromise(TestEnvironment.url))).pipe(Scope.provide(scope)),
   )
   return {
     directory,
     url: relay.url,
     restart: async () => {
       await state.runtime.dispose()
-      state.runtime = ManagedRuntime.make(TestHand.layer({ handId, workspace: directory }))
-      await Effect.runPromise(relay.target(Relay.portOf(await state.runtime.runPromise(TestHand.url))))
+      state.runtime = ManagedRuntime.make(TestEnvironment.layer({ environmentId, workspace: directory }))
+      await Effect.runPromise(relay.target(Relay.portOf(await state.runtime.runPromise(TestEnvironment.url))))
       await Effect.runPromise(relay.cut)
     },
     dispose: async () => {
@@ -85,9 +85,9 @@ const place = async (
   const lifetimeMs = options.lifetimeMs ?? 3_600_000
   const sign = () =>
     Effect.runPromise(
-      TestHand.access({
+      TestEnvironment.access({
         url: target.url,
-        handId,
+        environmentId,
         brain: Brain.ofSession(sessionId),
         directory: join(target.directory, sessionId),
         lifetimeMs,
@@ -361,9 +361,9 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     const session = await connect()
     const calls = { count: 0 }
     const access = await Effect.runPromise(
-      TestHand.access({
+      TestEnvironment.access({
         url: first.url,
-        handId,
+        environmentId,
         brain: Brain.ofSession(session.sessionId),
         directory: join(first.directory, session.sessionId),
         lifetimeMs: 3_600_000,
@@ -398,7 +398,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     await Effect.runPromise(Pid.read(pidFile))
     const restartedAt = Date.now()
     await restarting.restart()
-    expect(lastToolResult(await running.called(2))).toContain("hand disconnected")
+    expect(lastToolResult(await running.called(2))).toContain("environment disconnected")
     expect(Date.now() - restartedAt).toBeLessThan(45_000)
     expect(await pwdOf(session)).toContain(join(restarting.directory, session.sessionId))
     await restarting.dispose()

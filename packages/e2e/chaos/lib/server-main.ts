@@ -1,7 +1,7 @@
 import { BunHttpServer, BunRuntime } from "@effect/platform-bun"
 import { BrainHost } from "@ren/core/brain-host"
-import { HandProvider } from "@ren/core/hand-provider"
-import { Hands } from "@ren/core/hands"
+import { EnvironmentProvider } from "@ren/core/environment-provider"
+import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { SignupGuard } from "@ren/core/signup-guard"
@@ -11,12 +11,12 @@ import { Postgres } from "@ren/db/postgres"
 import { Routes } from "@ren/server/routes"
 import { Config, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
-import { ChaosHands } from "./provider/hands.js"
+import { ChaosEnvironments } from "./provider/environments.js"
 
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([BrainHost.layer, Mailer.layer, SignupGuard.layer]),
-  Layer.provide([Models.layerNone, Hands.layer]),
-  Layer.provide(HandProvider.layer(ChaosHands.providers)),
+  Layer.provide([Models.layerNone, Environments.layer]),
+  Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, Postgres.layer]),
   Layer.provide(BunHttpServer.layerConfig({ port: Config.Port("PORT").pipe(Config.withDefault(4000)) })),

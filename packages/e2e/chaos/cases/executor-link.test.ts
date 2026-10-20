@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test"
-import type { ExecutorApi } from "@ren/hand-api/executor-api"
+import type { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Brain } from "@ren/schema/brain"
 import { Effect, Exit, Stream } from "effect"
 import path from "node:path"
@@ -13,7 +13,10 @@ const executor = await ExecutorAdapter.localProcess({ label: "executor-link" })
 
 const proxy = await FaultProxy.make(executor.url())
 
-const driver = await ExecutorDriver.connect(proxy.url, await ExecutorAdapter.token(executor.handId, Brain.ID.create()))
+const driver = await ExecutorDriver.connect(
+  proxy.url,
+  await ExecutorAdapter.token(executor.environmentId, Brain.ID.create()),
+)
 
 const lane = { executor, proxy, driver }
 
@@ -115,7 +118,7 @@ const twice = async (label: string) => {
   }
 }
 
-const resume = async (id: ExecutorApi.ProcessID) => {
+const resume = async (id: EnvironmentApi.ProcessID) => {
   const parts: Array<Uint8Array> = []
   const state = { position: 0, gaps: 0, exit: false, connections: 0 }
   const connect = async (): Promise<void> => {

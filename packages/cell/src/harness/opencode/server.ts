@@ -7,7 +7,7 @@ import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
-import type { HandConnections } from "@ren/brain/hand-connections"
+import type { EnvironmentConnections } from "@ren/brain/environment/connections"
 import type { Models } from "@ren/schema/models"
 import { Context, Deferred, Effect, Fiber, Layer, ManagedRuntime, Option, Ref, type Scope } from "effect"
 import { HttpEffect, HttpRouter, HttpServer } from "effect/http"
@@ -21,7 +21,7 @@ export const open = Effect.fn("OpenCodeServer.open")(function* (
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<HandConnections.Interface>,
+  connections: Option.Option<EnvironmentConnections.Interface>,
 ) {
   const options = {
     storage,
@@ -55,7 +55,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   >,
   initial: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
-  connections: Option.Option<HandConnections.Interface>,
+  connections: Option.Option<EnvironmentConnections.Interface>,
 ): Effect.fn.Return<Instance, Error, Scope.Scope> {
   const runtime = yield* Effect.acquireRelease(
     Effect.sync(() => ManagedRuntime.make(routes)),
@@ -78,7 +78,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     credentials: Context.get(services, Credential.Service),
     sessions: Context.get(services, Session.Service),
     workspaces: Context.get(services, Workspace.Service),
-    hasHandConnections: Option.isSome(connections),
+    hasEnvironmentConnections: Option.isSome(connections),
     configure: (next) =>
       Ref.set(endpoints, next).pipe(
         Effect.andThen(Ref.get(reloads)),
@@ -92,6 +92,6 @@ export interface Instance {
   readonly credentials: Credential.Interface
   readonly sessions: Session.Interface
   readonly workspaces: Workspace.Interface
-  readonly hasHandConnections: boolean
+  readonly hasEnvironmentConnections: boolean
   readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>
 }

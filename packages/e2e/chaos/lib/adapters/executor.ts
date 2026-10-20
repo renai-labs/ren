@@ -1,11 +1,11 @@
 export * as ExecutorAdapter from "./executor.js"
 
-import { ExecutorApi } from "@ren/hand-api/executor-api"
-import { HandToken } from "@ren/hand-api/hand-token"
-import { Signature } from "@ren/hand-api/signature"
-import { Image, TestHand } from "@ren/executor/testing"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { EnvironmentToken } from "@ren/environment-api/environment-token"
+import { Signature } from "@ren/environment-api/signature"
+import { Image, TestEnvironment } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
-import { Hand } from "@ren/schema/hand"
+import { Environment } from "@ren/schema/environment"
 import { Effect, Schema } from "effect"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import os from "node:os"
@@ -13,14 +13,19 @@ import path from "node:path"
 import { Process } from "../process.js"
 import { Wait } from "../wait.js"
 
-export const publicKeys = Schema.encodeSync(Signature.PublicKeys)([TestHand.keys.publicKey])
+export const publicKeys = Schema.encodeSync(Signature.PublicKeys)([TestEnvironment.keys.publicKey])
 
-export const token = (hand: Hand.ID, brain: Brain.ID, lifetimeMs = 600_000) =>
+export const token = (environment: Environment.ID, brain: Brain.ID, lifetimeMs = 600_000) =>
   Effect.runPromise(
-    HandToken.sign(TestHand.keys.privateKey, { hand, brain, exp: Math.floor((Date.now() + lifetimeMs) / 1000) }),
+    EnvironmentToken.sign(TestEnvironment.keys.privateKey, {
+      environment,
+      brain,
+      exp: Math.floor((Date.now() + lifetimeMs) / 1000),
+    }),
   )
 
-export const access = (options: Parameters<typeof TestHand.access>[0]) => Effect.runPromise(TestHand.access(options))
+export const access = (options: Parameters<typeof TestEnvironment.access>[0]) =>
+  Effect.runPromise(TestEnvironment.access(options))
 
 export const mainPath = path.resolve(
   path.dirname(Bun.resolveSync("@ren/executor/testing", import.meta.dir)),
@@ -37,10 +42,10 @@ interface Observation {
 
 export interface Instance {
   readonly url: () => string
-  readonly handId: Hand.ID
+  readonly environmentId: Environment.ID
   readonly workspace: string
   readonly restart: () => Promise<void>
-  readonly replace: (handId?: Hand.ID) => Promise<void>
+  readonly replace: (environmentId?: Environment.ID) => Promise<void>
   readonly freeze: () => Promise<void>
   readonly thaw: () => Promise<void>
   readonly dispose: () => Promise<void>
@@ -76,9 +81,9 @@ const freePort = async () => {
 
 export const localProcess = async (options: {
   readonly label: string
-  readonly handId?: Hand.ID
+  readonly environmentId?: Environment.ID
 }): Promise<Instance> => {
-  const handId = options.handId ?? Hand.ID.create()
+  const environmentId = options.environmentId ?? Environment.ID.create()
   const workspace = await realpath(await mkdtemp(path.join(os.tmpdir(), "ren-chaos-workspace-")))
   await mkdir(logs, { recursive: true })
   const state: { port: number; starts: number; child: ReturnType<typeof Bun.spawn> | undefined } = {
@@ -102,9 +107,9 @@ export const localProcess = async (options: {
         HOME: workspace,
         TMPDIR: os.tmpdir(),
         PORT: String(state.port),
-        EXECUTOR_HAND_ID: handId,
+        EXECUTOR_ENVIRONMENT_ID: environmentId,
         EXECUTOR_WORKSPACE: workspace,
-        HAND_PUBLIC_KEYS: publicKeys,
+        ENVIRONMENT_PUBLIC_KEYS: publicKeys,
       },
       stdin: "ignore",
       stdout: log,
@@ -124,7 +129,7 @@ export const localProcess = async (options: {
   await start()
   return {
     url: () => `http://127.0.0.1:${state.port}`,
-    handId,
+    environmentId,
     workspace,
     restart: async () => {
       await halt()
@@ -153,12 +158,12 @@ const docker = async (args: ReadonlyArray<string>) => {
 
 export const dockerContainer = async (options: {
   readonly label: string
-  readonly handId?: Hand.ID
+  readonly environmentId?: Environment.ID
 }): Promise<Container> => {
   const tag = await Image.build()
-  const state = { container: "", url: "", handId: options.handId ?? Hand.ID.create() }
+  const state = { container: "", url: "", environmentId: options.environmentId ?? Environment.ID.create() }
   const published = async () => {
-    const hostPort = /:(\d+)$/m.exec(await docker(["port", state.container, `${ExecutorApi.port}/tcp`]))?.[1]
+    const hostPort = /:(\d+)$/m.exec(await docker(["port", state.container, `${EnvironmentApi.port}/tcp`]))?.[1]
     if (!hostPort) throw new Error(`docker published no executor port for ${options.label}`)
     state.url = `http://127.0.0.1:${hostPort}`
     const container = state.container
@@ -178,7 +183,7 @@ export const dockerContainer = async (options: {
       "--label",
       `ren.chaos=${options.label}`,
       "--publish",
-      `127.0.0.1::${ExecutorApi.port}`,
+      `127.0.0.1::${EnvironmentApi.port}`,
       "--memory",
       "512m",
       "--cpus",
@@ -188,9 +193,9 @@ export const dockerContainer = async (options: {
       "--tmpfs",
       `/workspace:rw,size=${64 * 1024 * 1024},mode=1777`,
       "--env",
-      `EXECUTOR_HAND_ID=${state.handId}`,
+      `EXECUTOR_ENVIRONMENT_ID=${state.environmentId}`,
       "--env",
-      `HAND_PUBLIC_KEYS=${publicKeys}`,
+      `ENVIRONMENT_PUBLIC_KEYS=${publicKeys}`,
       tag,
     ])
     await published()
@@ -203,17 +208,17 @@ export const dockerContainer = async (options: {
   await start()
   return {
     url: () => state.url,
-    get handId() {
-      return state.handId
+    get environmentId() {
+      return state.environmentId
     },
     workspace: "/workspace",
     restart: async () => {
       await docker(["restart", "--time", "0", state.container])
       await published()
     },
-    replace: async (handId) => {
+    replace: async (environmentId) => {
       await remove()
-      if (handId) state.handId = handId
+      if (environmentId) state.environmentId = environmentId
       await start()
     },
     freeze: () => docker(["pause", state.container]).then(() => undefined),

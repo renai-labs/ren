@@ -8,9 +8,9 @@ const vendored = {
   message: "repos/ holds vendored reference source. Import from the package dependency instead.",
 }
 const serverOnly = {
-  regex: "^@ren/(core|db|server|brain-api|hand-api)(/|$)",
+  regex: "^@ren/(core|db|server|host-api|environment-api)(/|$)",
   message:
-    "Client-side packages never import core, db, server or the internal Brain and Hand APIs. Go through @ren/client.",
+    "Client-side packages never import core, db, server or the internal Host and Environment APIs. Go through @ren/client.",
 }
 const packageBoundaries = [
   { files: ["packages/schema/**"], regex: "^@ren/", message: "Schema imports nothing from Ren." },
@@ -20,19 +20,21 @@ const packageBoundaries = [
     message: "Protocol depends only on schema.",
   },
   {
-    files: ["packages/brain-api/**"],
+    files: ["packages/host-api/**"],
     regex: "^@ren/(?!schema(/|$))",
-    message: "The Brain API depends only on schema. Core calls it and hosts serve it.",
+    message: "The Host API depends only on schema. It holds BrainApi and RenHostApi.",
   },
   {
-    files: ["packages/hand-api/**"],
+    files: ["packages/environment-api/**"],
     regex: "^@ren/(?!schema(/|$))",
-    message: "The Hand API depends only on schema. Ren signs its tokens, a brain calls it and an executor serves it.",
+    message:
+      "The Environment API depends only on schema. Ren signs its tokens, a brain calls it and an executor serves it.",
   },
   {
     files: ["packages/brain/**"],
-    regex: "^@ren/(?!schema(/|$)|hand-api(/|$)|executor(/|$))",
-    message: "Brain code runs on every host. It depends only on schema and the Hand API; tests may start an executor.",
+    regex: "^@ren/(?!schema(/|$)|environment-api(/|$)|executor(/|$))",
+    message:
+      "Brain code runs on every host. It depends only on schema and the Environment API; tests may start an executor.",
   },
   {
     files: ["packages/brain/src/**"],
@@ -41,8 +43,8 @@ const packageBoundaries = [
   },
   {
     files: ["packages/executor/**"],
-    regex: "^@ren/(?!schema(/|$)|hand-api(/|$))",
-    message: "The executor runs on a hand's machine. It depends only on schema and the Hand API.",
+    regex: "^@ren/(?!schema(/|$)|environment-api(/|$))",
+    message: "The executor runs on an environment's machine. It depends only on schema and the Environment API.",
   },
   {
     files: ["packages/db/**"],
@@ -57,19 +59,19 @@ const packageBoundaries = [
   {
     files: ["packages/cell/**"],
     regex: "^@ren/(core|db|server|protocol)(/|$)",
-    message: "The cell bundle runs in workerd. It depends only on schema, the Brain API, the Hand API and brain.",
+    message: "The cell bundle runs in workerd. It depends only on schema, the Host API, the Environment API and brain.",
   },
   {
     files: ["packages/cell/src/*.ts"],
     regex: "^(@ren/(core|db|server|protocol|executor)(/|$)|@opencode/)",
     message:
-      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema, the Brain API, the Hand API and brain.",
+      "The cell host never imports a harness's packages; it reaches OpenCode through src/harness. The cell depends only on schema, the Host API, the Environment API and brain.",
   },
   {
     files: ["packages/cell/src/harness/**"],
     regex: "^(@ren/(core|db|server|protocol|executor)(/|$)|cloudflare:)",
     message:
-      "A harness never uses Durable Object APIs; the host passes it storage and requests. The cell depends only on schema, the Brain API, the Hand API and brain.",
+      "A harness never uses Durable Object APIs; the host passes it storage and requests. The cell depends only on schema, the Host API, the Environment API and brain.",
   },
   {
     files: ["packages/server/src/handlers/**"],

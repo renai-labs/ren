@@ -1,7 +1,7 @@
 export * as HostToken from "./host-token.js"
 
-import { HostApi } from "@ren/brain-api/host-api"
-import { SessionToken } from "@ren/brain-api/session-token"
+import { RenHostApi } from "@ren/host-api/ren-host-api"
+import { SessionToken } from "@ren/host-api/session-token"
 import { Clock, Context, Duration, Effect, Layer, Option, Redacted, Semaphore } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
@@ -24,7 +24,7 @@ class PresentedToken extends Context.Service<PresentedToken, string>()("@ren/cel
 export const client = (url: string) =>
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient
-    return yield* HttpApiClient.makeWith(HostApi, {
+    return yield* HttpApiClient.makeWith(RenHostApi, {
       baseUrl: url,
       httpClient: HttpClient.mapRequestEffect(http, (request) =>
         Effect.map(PresentedToken, (token) => HttpClientRequest.bearerToken(request, token)),

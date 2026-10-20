@@ -1,10 +1,15 @@
 export * as FakeRen from "./ren.js"
 
-import { HostApi, CurrentHost, HostAuthentication } from "@ren/brain-api/host-api"
-import { HandNotFoundError, HandUnavailableError, ForbiddenError, ModelsUnavailableError } from "@ren/brain-api/errors"
-import { SessionToken } from "@ren/brain-api/session-token"
+import { RenHostApi, CurrentHost, HostAuthentication } from "@ren/host-api/ren-host-api"
+import {
+  EnvironmentNotFoundError,
+  EnvironmentUnavailableError,
+  ForbiddenError,
+  ModelsUnavailableError,
+} from "@ren/host-api/errors"
+import { SessionToken } from "@ren/host-api/session-token"
 import { Auth } from "@ren/schema/auth"
-import type { Hand } from "@ren/schema/hand"
+import type { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import { Effect, Layer, Option, Redacted } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
@@ -12,13 +17,13 @@ import { HttpApiBuilder } from "effect/http-api"
 import { TestToken } from "./token.js"
 
 export type Answer =
-  | { readonly type: "access"; readonly access: Hand.Access }
+  | { readonly type: "access"; readonly access: Environment.Access }
   | { readonly type: "not_found" }
   | { readonly type: "unavailable"; readonly message: string }
   | { readonly type: "hold" }
 
 export interface Call {
-  readonly endpoint: "hands.access" | "hands.release" | "host.refresh" | "models.refresh"
+  readonly endpoint: "environments.access" | "environments.release" | "host.refresh" | "models.refresh"
   readonly sessionId: Session.ID | undefined
   readonly hostToken: string
   readonly status: number
@@ -52,39 +57,39 @@ export const start = () => {
     for (const listener of listeners) listener()
   }
   const handlers = Layer.mergeAll(
-    HttpApiBuilder.group(HostApi, "hands", (group) =>
+    HttpApiBuilder.group(RenHostApi, "environments", (group) =>
       Effect.succeed(
         group
-          .handle("hands.access", () =>
+          .handle("environments.access", () =>
             Effect.gen(function* () {
               const host = yield* CurrentHost
               const answer = yield* Effect.promise(async (): Promise<Answer> =>
                 (answers.get(host.sessionId) ?? (() => ({ type: "not_found" }) as const))(),
               )
               if (answer.type === "hold") {
-                record("hands.access", host.sessionId, 0)
+                record("environments.access", host.sessionId, 0)
                 return yield* Effect.callback<never>((resume) => {
                   held.push(() => resume(Effect.never))
                 })
               }
               if (answer.type === "not_found") {
-                record("hands.access", host.sessionId, 404)
-                return yield* new HandNotFoundError({ message: `Session ${host.sessionId} has no environment` })
+                record("environments.access", host.sessionId, 404)
+                return yield* new EnvironmentNotFoundError({ message: `Session ${host.sessionId} has no environment` })
               }
               if (answer.type === "unavailable") {
-                record("hands.access", host.sessionId, 503)
-                return yield* new HandUnavailableError({ message: answer.message })
+                record("environments.access", host.sessionId, 503)
+                return yield* new EnvironmentUnavailableError({ message: answer.message })
               }
-              record("hands.access", host.sessionId, 200)
+              record("environments.access", host.sessionId, 200)
               return answer.access
             }),
           )
-          .handle("hands.release", () =>
-            Effect.map(CurrentHost, (host) => record("hands.release", host.sessionId, 204)),
+          .handle("environments.release", () =>
+            Effect.map(CurrentHost, (host) => record("environments.release", host.sessionId, 204)),
           ),
       ),
     ),
-    HttpApiBuilder.group(HostApi, "host", (group) =>
+    HttpApiBuilder.group(RenHostApi, "host", (group) =>
       Effect.succeed(
         group.handle("host.refresh", () =>
           Effect.gen(function* () {
@@ -96,7 +101,7 @@ export const start = () => {
         ),
       ),
     ),
-    HttpApiBuilder.group(HostApi, "models", (group) =>
+    HttpApiBuilder.group(RenHostApi, "models", (group) =>
       Effect.succeed(
         group.handle("models.refresh", () =>
           Effect.gen(function* () {
@@ -125,7 +130,7 @@ export const start = () => {
     }),
   )
   const api = HttpRouter.toWebHandler(
-    HttpApiBuilder.layer(HostApi).pipe(
+    HttpApiBuilder.layer(RenHostApi).pipe(
       Layer.provide(handlers),
       Layer.provide(authentication),
       Layer.provide(HttpServer.layerServices),
@@ -146,7 +151,7 @@ export const start = () => {
       state.refreshGate = gate
     },
     accessCalls: (sessionId: Session.ID) =>
-      calls.filter((call) => call.endpoint === "hands.access" && call.sessionId === sessionId).length,
+      calls.filter((call) => call.endpoint === "environments.access" && call.sessionId === sessionId).length,
     reached: (sessionId: Session.ID, count = 1) =>
       new Promise<void>((resolve) => {
         const check = () => {

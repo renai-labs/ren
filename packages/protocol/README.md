@@ -1,6 +1,6 @@
 # @ren/protocol
 
-The public HTTP contract: `HttpApi` endpoint groups, middleware tags and API errors.
+The public HTTP contract (`Api`): endpoint groups, middleware tags and errors. Ren serves it; the app, CLI and SDK call it.
 
 ## What belongs here
 

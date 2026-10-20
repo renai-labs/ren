@@ -19,23 +19,23 @@ import type {
   SpaceMemberCreateOutput,
   SpaceMemberArchiveInput,
   SpaceMemberArchiveOutput,
-  EnvironmentListInput,
-  EnvironmentListOutput,
-  EnvironmentGetInput,
-  EnvironmentGetOutput,
-  EnvironmentCreateInput,
-  EnvironmentCreateOutput,
-  EnvironmentUpdateInput,
-  EnvironmentUpdateOutput,
-  EnvironmentArchiveInput,
-  EnvironmentArchiveOutput,
-  HandProviderListOutput,
-  SpaceEnvironmentListInput,
-  SpaceEnvironmentListOutput,
-  SpaceEnvironmentCreateInput,
-  SpaceEnvironmentCreateOutput,
-  SpaceEnvironmentArchiveInput,
-  SpaceEnvironmentArchiveOutput,
+  EnvironmentTemplateListInput,
+  EnvironmentTemplateListOutput,
+  EnvironmentTemplateGetInput,
+  EnvironmentTemplateGetOutput,
+  EnvironmentTemplateCreateInput,
+  EnvironmentTemplateCreateOutput,
+  EnvironmentTemplateUpdateInput,
+  EnvironmentTemplateUpdateOutput,
+  EnvironmentTemplateArchiveInput,
+  EnvironmentTemplateArchiveOutput,
+  EnvironmentProviderListOutput,
+  SpaceEnvironmentTemplateListInput,
+  SpaceEnvironmentTemplateListOutput,
+  SpaceEnvironmentTemplateCreateInput,
+  SpaceEnvironmentTemplateCreateOutput,
+  SpaceEnvironmentTemplateArchiveInput,
+  SpaceEnvironmentTemplateArchiveOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -249,12 +249,12 @@ export function make(options: ClientOptions) {
           requestOptions,
         ),
     },
-    environment: {
-      list: (input: EnvironmentListInput, requestOptions?: RequestOptions) =>
-        request<EnvironmentListOutput>(
+    "environment-template": {
+      list: (input: EnvironmentTemplateListInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateListOutput>(
           {
             method: "GET",
-            path: `/environments`,
+            path: `/environment-templates`,
             query: { page: input["page"], pageSize: input["pageSize"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
@@ -262,28 +262,28 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-      get: (input: EnvironmentGetInput, requestOptions?: RequestOptions) =>
-        request<EnvironmentGetOutput>(
+      get: (input: EnvironmentTemplateGetInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateGetOutput>(
           {
             method: "GET",
-            path: `/environments/${encodeURIComponent(input.idOrSlug)}`,
+            path: `/environment-templates/${encodeURIComponent(input.idOrSlug)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,
         ),
-      create: (input: EnvironmentCreateInput, requestOptions?: RequestOptions) =>
-        request<EnvironmentCreateOutput>(
+      create: (input: EnvironmentTemplateCreateInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateCreateOutput>(
           {
             method: "POST",
-            path: `/environments`,
+            path: `/environment-templates`,
             body: {
               name: input["name"],
               description: input["description"],
               provider: input["provider"],
               config: input["config"],
-              sessionsPerHand: input["sessionsPerHand"],
+              sessionsPerEnvironment: input["sessionsPerEnvironment"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -291,16 +291,16 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-      update: (input: EnvironmentUpdateInput, requestOptions?: RequestOptions) =>
-        request<EnvironmentUpdateOutput>(
+      update: (input: EnvironmentTemplateUpdateInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateUpdateOutput>(
           {
             method: "PATCH",
-            path: `/environments/${encodeURIComponent(input.id)}`,
+            path: `/environment-templates/${encodeURIComponent(input.id)}`,
             body: {
               name: input["name"],
               description: input["description"],
               config: input["config"],
-              sessionsPerHand: input["sessionsPerHand"],
+              sessionsPerEnvironment: input["sessionsPerEnvironment"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -308,11 +308,11 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-      archive: (input: EnvironmentArchiveInput, requestOptions?: RequestOptions) =>
-        request<EnvironmentArchiveOutput>(
+      archive: (input: EnvironmentTemplateArchiveInput, requestOptions?: RequestOptions) =>
+        request<EnvironmentTemplateArchiveOutput>(
           {
             method: "DELETE",
-            path: `/environments/${encodeURIComponent(input.id)}`,
+            path: `/environment-templates/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,
@@ -320,19 +320,25 @@ export function make(options: ClientOptions) {
           requestOptions,
         ),
     },
-    handProvider: {
+    environmentProvider: {
       list: (requestOptions?: RequestOptions) =>
-        request<HandProviderListOutput>(
-          { method: "GET", path: `/hand-providers`, successStatus: 200, declaredStatuses: [401, 403], empty: false },
+        request<EnvironmentProviderListOutput>(
+          {
+            method: "GET",
+            path: `/environment-providers`,
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
           requestOptions,
         ),
     },
-    "space-environment": {
-      list: (input: SpaceEnvironmentListInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentListOutput>(
+    "space-environment-template": {
+      list: (input: SpaceEnvironmentTemplateListInput, requestOptions?: RequestOptions) =>
+        request<SpaceEnvironmentTemplateListOutput>(
           {
             method: "GET",
-            path: `/space-environments`,
+            path: `/space-environment-templates`,
             query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
@@ -340,23 +346,23 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-      create: (input: SpaceEnvironmentCreateInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentCreateOutput>(
+      create: (input: SpaceEnvironmentTemplateCreateInput, requestOptions?: RequestOptions) =>
+        request<SpaceEnvironmentTemplateCreateOutput>(
           {
             method: "POST",
-            path: `/space-environments`,
-            body: { spaceId: input["spaceId"], environmentId: input["environmentId"] },
+            path: `/space-environment-templates`,
+            body: { spaceId: input["spaceId"], environmentTemplateId: input["environmentTemplateId"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
           },
           requestOptions,
         ),
-      archive: (input: SpaceEnvironmentArchiveInput, requestOptions?: RequestOptions) =>
-        request<SpaceEnvironmentArchiveOutput>(
+      archive: (input: SpaceEnvironmentTemplateArchiveInput, requestOptions?: RequestOptions) =>
+        request<SpaceEnvironmentTemplateArchiveOutput>(
           {
             method: "DELETE",
-            path: `/space-environments/${encodeURIComponent(input.id)}`,
+            path: `/space-environment-templates/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,

@@ -2,10 +2,10 @@ export * as Seed from "./seed.js"
 
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
-import { Environment } from "@ren/schema/environment"
-import { HandProvider } from "@ren/schema/hand-provider"
+import { EnvironmentTemplate } from "@ren/schema/environment-template"
+import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { Space } from "@ren/schema/space"
-import { SpaceEnvironment } from "@ren/schema/space-environment"
+import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { and, eq } from "drizzle-orm"
 import { Effect } from "effect"
 
@@ -79,24 +79,28 @@ export const team = Effect.fnUntraced(function* (organizationId: Auth.Organizati
   return id
 })
 
-export const environment = Effect.fnUntraced(function* (
+export const environmentTemplate = Effect.fnUntraced(function* (
   organizationId: Auth.OrganizationID,
-  options: { readonly id?: Environment.ID; readonly provider?: string; readonly sessionsPerHand?: number } = {},
+  options: {
+    readonly id?: EnvironmentTemplate.ID
+    readonly provider?: string
+    readonly sessionsPerEnvironment?: number
+  } = {},
 ) {
   const database = yield* Database.Service
-  const id = options.id ?? Environment.ID.create()
-  yield* database.db.insert(Database.Schema.environment).values({
+  const id = options.id ?? EnvironmentTemplate.ID.create()
+  yield* database.db.insert(Database.Schema.environment_template).values({
     id,
     organization_id: organizationId,
     name: "Sandbox",
-    provider: HandProvider.ID.make(options.provider ?? "test"),
+    provider: EnvironmentProvider.ID.make(options.provider ?? "test"),
     config: { label: "seeded" },
-    sessions_per_hand: options.sessionsPerHand ?? 8,
+    sessions_per_environment: options.sessionsPerEnvironment ?? 8,
   })
-  yield* database.db.insert(Database.Schema.space_environment).values({
-    id: SpaceEnvironment.ID.create(),
+  yield* database.db.insert(Database.Schema.space_environment_template).values({
+    id: SpaceEnvironmentTemplate.ID.create(),
     space_id: yield* team(organizationId),
-    environment_id: id,
+    environment_template_id: id,
   })
   return id
 })

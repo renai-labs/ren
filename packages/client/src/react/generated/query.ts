@@ -10,14 +10,14 @@ import type {
   SpaceMemberListInput,
   SpaceMemberCreateInput,
   SpaceMemberArchiveInput,
-  EnvironmentListInput,
-  EnvironmentGetInput,
-  EnvironmentCreateInput,
-  EnvironmentUpdateInput,
-  EnvironmentArchiveInput,
-  SpaceEnvironmentListInput,
-  SpaceEnvironmentCreateInput,
-  SpaceEnvironmentArchiveInput,
+  EnvironmentTemplateListInput,
+  EnvironmentTemplateGetInput,
+  EnvironmentTemplateCreateInput,
+  EnvironmentTemplateUpdateInput,
+  EnvironmentTemplateArchiveInput,
+  SpaceEnvironmentTemplateListInput,
+  SpaceEnvironmentTemplateCreateInput,
+  SpaceEnvironmentTemplateArchiveInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -124,86 +124,92 @@ export function make(client: ReturnType<typeof Ren.make>) {
           }),
       },
     },
-    environment: {
+    "environment-template": {
       list: {
-        queryKey: (input?: EnvironmentListInput) =>
-          input === undefined ? (["environment", "list"] as const) : (["environment", "list", input] as const),
-        queryOptions: (input: EnvironmentListInput) =>
+        queryKey: (input?: EnvironmentTemplateListInput) =>
+          input === undefined
+            ? (["environment-template", "list"] as const)
+            : (["environment-template", "list", input] as const),
+        queryOptions: (input: EnvironmentTemplateListInput) =>
           queryOptions({
-            queryKey: ["environment", "list", input] as const,
-            queryFn: (context) => client["environment"]["list"](input, { signal: context.signal }),
+            queryKey: ["environment-template", "list", input] as const,
+            queryFn: (context) => client["environment-template"]["list"](input, { signal: context.signal }),
           }),
       },
       get: {
-        queryKey: (input?: EnvironmentGetInput) =>
-          input === undefined ? (["environment", "get"] as const) : (["environment", "get", input] as const),
-        queryOptions: (input: EnvironmentGetInput) =>
+        queryKey: (input?: EnvironmentTemplateGetInput) =>
+          input === undefined
+            ? (["environment-template", "get"] as const)
+            : (["environment-template", "get", input] as const),
+        queryOptions: (input: EnvironmentTemplateGetInput) =>
           queryOptions({
-            queryKey: ["environment", "get", input] as const,
-            queryFn: (context) => client["environment"]["get"](input, { signal: context.signal }),
+            queryKey: ["environment-template", "get", input] as const,
+            queryFn: (context) => client["environment-template"]["get"](input, { signal: context.signal }),
           }),
       },
       create: {
-        mutationKey: () => ["environment", "create"] as const,
+        mutationKey: () => ["environment-template", "create"] as const,
         mutationOptions: () =>
           mutationOptions({
-            mutationKey: ["environment", "create"] as const,
-            mutationFn: (input: EnvironmentCreateInput) => client["environment"]["create"](input),
+            mutationKey: ["environment-template", "create"] as const,
+            mutationFn: (input: EnvironmentTemplateCreateInput) => client["environment-template"]["create"](input),
           }),
       },
       update: {
-        mutationKey: () => ["environment", "update"] as const,
+        mutationKey: () => ["environment-template", "update"] as const,
         mutationOptions: () =>
           mutationOptions({
-            mutationKey: ["environment", "update"] as const,
-            mutationFn: (input: EnvironmentUpdateInput) => client["environment"]["update"](input),
+            mutationKey: ["environment-template", "update"] as const,
+            mutationFn: (input: EnvironmentTemplateUpdateInput) => client["environment-template"]["update"](input),
           }),
       },
       archive: {
-        mutationKey: () => ["environment", "archive"] as const,
+        mutationKey: () => ["environment-template", "archive"] as const,
         mutationOptions: () =>
           mutationOptions({
-            mutationKey: ["environment", "archive"] as const,
-            mutationFn: (input: EnvironmentArchiveInput) => client["environment"]["archive"](input),
+            mutationKey: ["environment-template", "archive"] as const,
+            mutationFn: (input: EnvironmentTemplateArchiveInput) => client["environment-template"]["archive"](input),
           }),
       },
     },
-    handProvider: {
+    environmentProvider: {
       list: {
-        queryKey: () => ["handProvider", "list"] as const,
+        queryKey: () => ["environmentProvider", "list"] as const,
         queryOptions: () =>
           queryOptions({
-            queryKey: ["handProvider", "list"] as const,
-            queryFn: (context) => client["handProvider"]["list"]({ signal: context.signal }),
+            queryKey: ["environmentProvider", "list"] as const,
+            queryFn: (context) => client["environmentProvider"]["list"]({ signal: context.signal }),
           }),
       },
     },
-    "space-environment": {
+    "space-environment-template": {
       list: {
-        queryKey: (input?: SpaceEnvironmentListInput) =>
+        queryKey: (input?: SpaceEnvironmentTemplateListInput) =>
           input === undefined
-            ? (["space-environment", "list"] as const)
-            : (["space-environment", "list", input] as const),
-        queryOptions: (input: SpaceEnvironmentListInput) =>
+            ? (["space-environment-template", "list"] as const)
+            : (["space-environment-template", "list", input] as const),
+        queryOptions: (input: SpaceEnvironmentTemplateListInput) =>
           queryOptions({
-            queryKey: ["space-environment", "list", input] as const,
-            queryFn: (context) => client["space-environment"]["list"](input, { signal: context.signal }),
+            queryKey: ["space-environment-template", "list", input] as const,
+            queryFn: (context) => client["space-environment-template"]["list"](input, { signal: context.signal }),
           }),
       },
       create: {
-        mutationKey: () => ["space-environment", "create"] as const,
+        mutationKey: () => ["space-environment-template", "create"] as const,
         mutationOptions: () =>
           mutationOptions({
-            mutationKey: ["space-environment", "create"] as const,
-            mutationFn: (input: SpaceEnvironmentCreateInput) => client["space-environment"]["create"](input),
+            mutationKey: ["space-environment-template", "create"] as const,
+            mutationFn: (input: SpaceEnvironmentTemplateCreateInput) =>
+              client["space-environment-template"]["create"](input),
           }),
       },
       archive: {
-        mutationKey: () => ["space-environment", "archive"] as const,
+        mutationKey: () => ["space-environment-template", "archive"] as const,
         mutationOptions: () =>
           mutationOptions({
-            mutationKey: ["space-environment", "archive"] as const,
-            mutationFn: (input: SpaceEnvironmentArchiveInput) => client["space-environment"]["archive"](input),
+            mutationKey: ["space-environment-template", "archive"] as const,
+            mutationFn: (input: SpaceEnvironmentTemplateArchiveInput) =>
+              client["space-environment-template"]["archive"](input),
           }),
       },
     },

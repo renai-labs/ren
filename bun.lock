@@ -55,25 +55,13 @@
       "name": "@ren/brain",
       "version": "0.0.0",
       "dependencies": {
-        "@ren/hand-api": "workspace:*",
+        "@ren/environment-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
       },
       "devDependencies": {
         "@effect/platform-bun": "catalog:",
         "@ren/executor": "workspace:*",
-        "@types/bun": "catalog:",
-        "@typescript/native-preview": "catalog:",
-      },
-    },
-    "packages/brain-api": {
-      "name": "@ren/brain-api",
-      "version": "0.0.0",
-      "dependencies": {
-        "@ren/schema": "workspace:*",
-        "effect": "catalog:",
-      },
-      "devDependencies": {
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },
@@ -89,8 +77,8 @@
         "@opencode/server": "catalog:",
         "@opencode/util": "catalog:",
         "@ren/brain": "workspace:*",
-        "@ren/brain-api": "workspace:*",
-        "@ren/hand-api": "workspace:*",
+        "@ren/environment-api": "workspace:*",
+        "@ren/host-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
       },
@@ -146,9 +134,9 @@
       "name": "@ren/core",
       "version": "0.0.0",
       "dependencies": {
-        "@ren/brain-api": "workspace:*",
         "@ren/db": "workspace:*",
-        "@ren/hand-api": "workspace:*",
+        "@ren/environment-api": "workspace:*",
+        "@ren/host-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/util": "workspace:*",
         "disposable-email-domains-js": "catalog:",
@@ -187,12 +175,12 @@
         "@opencode/client": "catalog:",
         "@playwright/test": "catalog:",
         "@ren/brain": "workspace:*",
-        "@ren/brain-api": "workspace:*",
         "@ren/cell": "workspace:*",
         "@ren/core": "workspace:*",
         "@ren/db": "workspace:*",
+        "@ren/environment-api": "workspace:*",
         "@ren/executor": "workspace:*",
-        "@ren/hand-api": "workspace:*",
+        "@ren/host-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/server": "workspace:*",
         "@ren/util": "workspace:*",
@@ -201,12 +189,25 @@
         "effect": "catalog:",
       },
     },
+    "packages/environment-api": {
+      "name": "@ren/environment-api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ren/schema": "workspace:*",
+        "effect": "catalog:",
+        "jose": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+      },
+    },
     "packages/executor": {
       "name": "@ren/executor",
       "version": "0.0.0",
       "dependencies": {
         "@effect/platform-bun": "catalog:",
-        "@ren/hand-api": "workspace:*",
+        "@ren/environment-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
       },
@@ -215,13 +216,12 @@
         "@typescript/native-preview": "catalog:",
       },
     },
-    "packages/hand-api": {
-      "name": "@ren/hand-api",
+    "packages/host-api": {
+      "name": "@ren/host-api",
       "version": "0.0.0",
       "dependencies": {
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
-        "jose": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -283,9 +283,9 @@
       "dependencies": {
         "@better-auth/drizzle-adapter": "catalog:",
         "@effect/platform-bun": "catalog:",
-        "@ren/brain-api": "workspace:*",
         "@ren/core": "workspace:*",
         "@ren/db": "workspace:*",
+        "@ren/host-api": "workspace:*",
         "@ren/protocol": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/util": "workspace:*",
@@ -1286,8 +1286,6 @@
 
     "@ren/brain": ["@ren/brain@workspace:packages/brain"],
 
-    "@ren/brain-api": ["@ren/brain-api@workspace:packages/brain-api"],
-
     "@ren/cell": ["@ren/cell@workspace:packages/cell"],
 
     "@ren/client": ["@ren/client@workspace:packages/client"],
@@ -1298,9 +1296,11 @@
 
     "@ren/e2e": ["@ren/e2e@workspace:packages/e2e"],
 
+    "@ren/environment-api": ["@ren/environment-api@workspace:packages/environment-api"],
+
     "@ren/executor": ["@ren/executor@workspace:packages/executor"],
 
-    "@ren/hand-api": ["@ren/hand-api@workspace:packages/hand-api"],
+    "@ren/host-api": ["@ren/host-api@workspace:packages/host-api"],
 
     "@ren/httpapi-codegen": ["@ren/httpapi-codegen@workspace:packages/httpapi-codegen"],
 

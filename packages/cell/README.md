@@ -1,6 +1,8 @@
 # @ren/cell
 
-One session host per Durable Object, deployed to celld or Cloudflare. `SessionCell` delegates requests and alarms to Effect services. The internal Brain API is implemented by the OpenCode adapter; client tokens also reach the permitted OpenCode routes.
+A session host: one Durable Object per session, on celld or Cloudflare. Serves `BrainApi` to Ren; calls Ren's `RenHostApi`.
+
+`SessionCell` delegates requests and alarms to Effect services. The internal Brain API is implemented by the OpenCode adapter; client tokens also reach the permitted OpenCode routes.
 
 ## Lifecycle
 
@@ -14,7 +16,7 @@ Start, send and API key changes share a semaphore. Model turns continue independ
 
 `PUT /ren/models` takes a `Models.Access`: endpoints, each with a protocol, a base URL, an API key and its models. The cell stores it in Durable Object storage, so it survives a restart. If OpenCode is open, its endpoints and API keys apply at once; otherwise the next open applies them. Each endpoint becomes an OpenCode provider with the endpoint's id, and each model's efforts become its OpenCode variants. `start` and `send` answer `ModelsNotConfiguredError` (409) until access is stored, and while a stored key has expired; `BrainHost` then grants it and retries once. `DELETE /ren/models` removes the access and Ren's API keys; `BrainHost.revokeModels` calls it and revokes the keys at their source even when the cell cannot be reached.
 
-Access comes with a host token. When OpenCode finds an API key within five minutes of expiring, the cell posts the token to `${REN_URL}/brain/models/refresh` and stores the fresh access and token it gets back, so a long turn or a re-sent message never runs on an expired key. Concurrent refreshes share one request. Without `REN_URL`, an expiring key is used until it expires. A model OpenCode already knows keeps its own reasoning variants; `efforts` adds to them.
+Access comes with a host token. When OpenCode finds an API key within five minutes of expiring, the cell posts the token to `${REN_URL}/host/models/refresh` and stores the fresh access and token it gets back, so a long turn or a re-sent message never runs on an expired key. Concurrent refreshes share one request. Without `REN_URL`, an expiring key is used until it expires. A model OpenCode already knows keeps its own reasoning variants; `efforts` adds to them.
 
 `app.version` identifies **Ren's cell package**, derived from this package's `package.json`. OpenCode dependency versions are pinned in the workspace catalog.
 
@@ -39,11 +41,11 @@ The message is submitted after applying the session configuration and instructio
 
 ## Environments
 
-The production cell has `HandConnections` whenever `REN_URL` is set. It asks Ren for a session's access through the Host API (`hands.access`, with the host token) at the first file or shell call; `start`, a wake and a continue contact neither Ren nor a hand. The cell keeps the answer in memory only: the binding is in Ren's database, in `session_environment`.
+The production cell has `EnvironmentConnections` whenever `REN_URL` is set. It asks Ren for a session's access through the Ren Host API (`environments.access`, with the host token) at the first file or shell call; `start`, a wake and a continue contact neither Ren nor an environment. The cell keeps the answer in memory only: the binding is in Ren's database, in `session_environment`.
 
-`start` takes a `directory` from Ren only for a new session, which then works in that directory in a `ren` workspace. A later `start` keeps it; a `directory` for a session that started without one answers "not supported yet". Ren refuses a change of environment before it calls the cell. A session without an environment has no read, write, edit, patch, glob, grep or shell; its other tools stay, and the `ren.environment` instruction tells the model why. When the session goes idle (OpenCode's `session.idle` for the session that owns the workspace), the Ren plugin calls `HandConnections.release`, which calls the Host API's `hands.release`. A tool error names its cause (no access, Ren does not answer, the hand does not answer, token refused, not compatible) through the public `execute.after` hook.
+`start` takes a `directory` from Ren only for a new session, which then works in that directory in a `ren` workspace. A later `start` keeps it; a `directory` for a session that started without one answers "not supported yet". Ren refuses a change of environment before it calls the cell. A session without an environment has no read, write, edit, patch, glob, grep or shell; its other tools stay, and the `ren.environment` instruction tells the model why. When the session goes idle (OpenCode's `session.idle` for the session that owns the workspace), the Ren plugin calls `EnvironmentConnections.release`, which calls the Ren Host API's `environments.release`. A tool error names its cause (no access, Ren does not answer, the environment does not answer, token refused, not compatible) through the public `execute.after` hook.
 
-A host with environments replaces OpenCode's `Shell` service with Ren's (`shell.ts`, `RenShell`), because OpenCode's writes every command's full output to the host's data folder, which in workerd is the isolate's memory. Ren's runs each command on the session's hand and has the executor write the full output to OpenCode's path there (`/tmp/opencode/data/shell/<project>/sh_<id>.out`), the path the model is told. It reads the output through a window: the executor sends only the last `max_bytes` (50 KB by default) at most every 250 ms, and counts the bytes and lines it left out, so the model's "showing lines X-Y of Z" stays exact and the cell's memory does not grow with the output. A location without a hand, such as a client's `shell.create`, gets a tool error, and nothing runs in the cell. It publishes OpenCode's shell events (`shell.created`, `shell.exited`, `shell.deleted`) as OpenCode's own Shell does.
+A host with environments replaces OpenCode's `Shell` service with Ren's (`shell.ts`, `RenShell`), because OpenCode's writes every command's full output to the host's data folder, which in workerd is the isolate's memory. Ren's runs each command on the session's environment and has the executor write the full output to OpenCode's path there (`/tmp/opencode/data/shell/<project>/sh_<id>.out`), the path the model is told. It reads the output through a window: the executor sends only the last `max_bytes` (50 KB by default) at most every 250 ms, and counts the bytes and lines it left out, so the model's "showing lines X-Y of Z" stays exact and the cell's memory does not grow with the output. A location without an environment, such as a client's `shell.create`, gets a tool error, and nothing runs in the cell. It publishes OpenCode's shell events (`shell.created`, `shell.exited`, `shell.deleted`) as OpenCode's own Shell does.
 
 The cell renews its host token with `host.refresh` in its last five minutes. A missing or expiring host token makes `start` and `send` answer `ModelsNotConfiguredError`, so Ren configures the brain again with a fresh one.
 
@@ -66,7 +68,7 @@ bun typecheck
 - `brain-api.test.ts`: `HttpApiTest.groups` with the real Brain handlers, OpenCode adapter, in-memory SQLite and a loopback model fixture. No cell process is needed.
 - `alarm.test.ts`: the actual `Cell.alarm` under `TestClock`, first with scripted snapshots, then with the in-process OpenCode harness.
 - `remote-tools.test.ts`: the in-process OpenCode harness with tools on real executors.
-- `hand-access.test.ts`: the Host API `HandAccess` against a fake Ren (`test/lib/ren.ts`).
+- `host-access.test.ts`: `HostAccess`, the cell's Ren Host API `EnvironmentAccess`, against a fake Ren (`test/lib/ren.ts`).
 - `workspace-driver.test.ts`: the OpenCode `ren` driver's file and error mapping.
 - `lease.test.ts`, `reconcile.test.ts`, `credentials.test.ts`, `model-refresh.test.ts`: Ren's ownership, decisions and transformations.
 - `cell.test.ts`: a smoke set of authentication, routing, body limits, streams and the idle close against celld; the same suite runs under Wrangler.

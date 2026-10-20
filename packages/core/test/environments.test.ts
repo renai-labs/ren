@@ -1,204 +1,233 @@
 import { describe, expect } from "bun:test"
-import { Signature } from "@ren/hand-api/signature"
+import { EnvironmentToken } from "@ren/environment-api/environment-token"
+import { Signature } from "@ren/environment-api/signature"
+import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
+import { Brain } from "@ren/schema/brain"
+import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
-import { ConfigProvider, Effect, Layer, Ref, Schema } from "effect"
-import { Access } from "../src/access.js"
+import { Space } from "@ren/schema/space"
+import { eq, sql } from "drizzle-orm"
+import { ConfigProvider, Context, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
+import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
-import { HandProvider } from "../src/hand-provider.js"
-import { Hands } from "../src/hands.js"
-import { Space } from "../src/space.js"
-import { SpaceEnvironment } from "../src/space/environment.js"
-import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
-import { TestProvider } from "./lib/hand-provider.js"
+import { TestProvider } from "./lib/environment-provider.js"
 import { Seed } from "./lib/seed.js"
 
-const probe = await Effect.runPromise(TestProvider.make())
+const it = testEffect(Testing.layer)
 
-const key = await Effect.runPromise(Signature.generate("environments"))
+const keys = await Effect.runPromise(Effect.all([Signature.generate("new"), Signature.generate("old")]))
 
-const it = testEffect(
-  Layer.mergeAll(Environments.layer, SpaceEnvironment.layer, Hands.layer, Space.layer, SpaceProvisioning.layer).pipe(
-    Layer.provideMerge(HandProvider.layer([Effect.succeed(probe.provider)])),
-    Layer.provideMerge(Access.layer),
-    Layer.provideMerge(Testing.layer),
-    Layer.provide(
-      ConfigProvider.layer(
-        ConfigProvider.fromUnknown({
-          HAND_KEYS: JSON.stringify([
-            { id: key.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.privateKey.key) },
-          ]),
-        }),
-      ),
-    ),
-  ),
+const signingKeys = JSON.stringify(
+  keys.map((pair) => ({
+    id: pair.privateKey.id,
+    key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(pair.privateKey.key),
+  })),
 )
 
-const page = { page: 1, pageSize: 50 }
-
-const user = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, role = "member") {
-  const provisioning = yield* SpaceProvisioning.Service
-  const seeded = yield* Seed.user()
-  yield* Seed.member(organizationId, seeded.id, role)
-  yield* provisioning.createInitialMemberships(organizationId, seeded)
-  return { userId: seeded.id, organizationId, roles: [role] }
+const environmentsWith = Effect.fnUntraced(function* (
+  config: Readonly<Record<string, string>> = {},
+  options: Parameters<typeof TestProvider.make>[0] = {},
+) {
+  const probe = yield* TestProvider.make(options)
+  const context = yield* Layer.build(
+    Layer.fresh(Environments.layer).pipe(
+      Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
+      Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ENVIRONMENT_KEYS: signingKeys, ...config }))),
+    ),
+  )
+  return { environments: Context.get(context, Environments.Service), probe }
 })
 
-const team = Effect.fnUntraced(function* () {
-  const spaces = yield* Space.Service
-  const organizationId = yield* Seed.organization()
-  const ada = yield* user(organizationId)
-  const admin = yield* user(organizationId, "admin")
-  const space = yield* spaces.create(ada, { name: "Team" })
-  return { organizationId, ada, admin, space }
+const subjectIn = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
+  return { sessionId: Session.ID.create(), organizationId, spaceId: yield* Seed.team(organizationId) }
 })
 
-const input = {
-  name: "Python",
-  provider: HandProvider.ID.make("test"),
-  config: { label: "python" },
-  sessionsPerHand: 2,
-}
+const environmentsOf = Effect.fnUntraced(function* (environmentTemplateId: EnvironmentTemplate.ID) {
+  const database = yield* Database.Service
+  return yield* database.db
+    .select({
+      environmentId: Database.Schema.environment.id,
+      sessions: sql<number>`(select count(*)::int from ${Database.Schema.session_environment} where ${Database.Schema.session_environment.environment_id} = ${Database.Schema.environment.id})`,
+    })
+    .from(Database.Schema.environment)
+    .where(eq(Database.Schema.environment.environment_template_id, environmentTemplateId))
+})
 
 describe("Environments", () => {
-  it.live("an admin makes an org environment; the provider checks the config and keeps its own form", () =>
+  it.live("binds a session to its organization's environment template, with no environment yet", () =>
     Effect.gen(function* () {
-      const environments = yield* Environments.Service
-      const setup = yield* team()
-      const made = yield* environments.create(setup.admin, { ...input, config: { label: "python", extra: "dropped" } })
-      expect(made).toMatchObject({
-        name: "Python",
-        provider: "test",
-        config: { label: "python" },
-        sessionsPerHand: 2,
-        archivedAt: null,
-      })
-      expect(yield* environments.get(setup.admin, made.id)).toEqual(made)
-      expect((yield* environments.list(setup.admin, page)).items).toEqual([made])
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+      const session = yield* subjectIn(organizationId)
+      const binding = yield* subject.environments.bind(session, environmentTemplateId)
+      expect(binding).toEqual({ directory: `/workspace/${session.sessionId}`, isNew: true })
+      expect(yield* subject.environments.findDirectory(session)).toEqual(Option.some(binding.directory))
+      expect(
+        yield* subject.environments.findDirectory({ ...session, organizationId: yield* Seed.organization() }),
+      ).toEqual(Option.none())
+      expect(yield* Ref.get(subject.probe.provisions)).toEqual([])
     }),
   )
 
-  it.live("an unknown provider or a config the provider refuses is Invalid, and names the field", () =>
-    Effect.gen(function* () {
-      const environments = yield* Environments.Service
-      const setup = yield* team()
-      const unknown = yield* environments
-        .create(setup.admin, { ...input, provider: HandProvider.ID.make("e2b") })
-        .pipe(Effect.flip)
-      expect(unknown).toMatchObject({ _tag: "Primitive.Invalid", field: "provider" })
-      const refused = yield* environments.create(setup.admin, { ...input, config: { label: "" } }).pipe(Effect.flip)
-      expect(refused).toMatchObject({ _tag: "Primitive.Invalid", field: "config" })
-      const made = yield* environments.create(setup.admin, input)
-      const update = yield* environments.update(setup.admin, made.id, { config: { label: 3 } }).pipe(Effect.flip)
-      expect(update).toMatchObject({ _tag: "Primitive.Invalid", field: "config" })
-      expect((yield* environments.update(setup.admin, made.id, { config: { label: "new" } })).config).toEqual({
-        label: "new",
-      })
-    }),
+  it.live(
+    "a session keeps its environment template, and another organization's environment template is not found",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+        const other = yield* Seed.environmentTemplate(organizationId)
+        const foreign = yield* Seed.environmentTemplate(yield* Seed.organization())
+        const session = yield* subjectIn(organizationId)
+        yield* subject.environments.bind(session, environmentTemplateId)
+        expect((yield* subject.environments.bind(session, environmentTemplateId)).isNew).toBe(false)
+        expect((yield* subject.environments.bind(session, other).pipe(Effect.flip))._tag).toBe("Environments.Changed")
+        expect(
+          (yield* subject.environments.bind(yield* subjectIn(organizationId), foreign).pipe(Effect.flip))._tag,
+        ).toBe("Environments.NotFound")
+        expect((yield* subject.environments.access(yield* subjectIn(organizationId)).pipe(Effect.flip))._tag).toBe(
+          "Environments.NotFound",
+        )
+      }),
   )
 
-  it.live("every member sees the org's environments; only admins change them; another org sees none", () =>
+  it.live("a session uses only an environment template linked to its space, and loses it when the link goes", () =>
     Effect.gen(function* () {
-      const environments = yield* Environments.Service
-      const setup = yield* team()
-      const made = yield* environments.create(setup.admin, input)
-      expect(yield* environments.get(setup.ada, made.id)).toEqual(made)
-      expect((yield* environments.create(setup.ada, input).pipe(Effect.flip))._tag).toBe("Primitive.Forbidden")
-      expect((yield* environments.update(setup.ada, made.id, { name: "Mine" }).pipe(Effect.flip))._tag).toBe(
-        "Primitive.Forbidden",
+      const subject = yield* environmentsWith()
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+      const session = yield* subjectIn(organizationId)
+      const elsewhere = { ...session, sessionId: Session.ID.create(), spaceId: Space.ID.create() }
+      expect((yield* subject.environments.bind(elsewhere, environmentTemplateId).pipe(Effect.flip))._tag).toBe(
+        "Environments.NotFound",
       )
-      expect((yield* environments.archive(setup.ada, made.id).pipe(Effect.flip))._tag).toBe("Primitive.Forbidden")
-      expect((yield* environments.list(yield* user(yield* Seed.organization()), page)).items).toEqual([])
+      yield* subject.environments.bind(session, environmentTemplateId)
+      yield* subject.environments.access(session)
+      yield* database.db
+        .update(Database.Schema.space_environment_template)
+        .set({ archived_at: new Date() })
+        .where(eq(Database.Schema.space_environment_template.environment_template_id, environmentTemplateId))
+      expect((yield* subject.environments.access(session).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
+      expect(yield* subject.environments.findDirectory(session)).toEqual(Option.none())
     }),
   )
 
-  it.live("a member of a space links an org environment to it; archiving the link ends its sessions' access", () =>
+  it.live(
+    "the first access makes an environment and a token for the session's brain, signed with the first key; the next reuses it",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+        const session = yield* subjectIn(organizationId)
+        yield* subject.environments.bind(session, environmentTemplateId)
+        const before = Date.now()
+        const access = yield* subject.environments.access(session)
+        const again = yield* subject.environments.access(session)
+        const provisions = yield* Ref.get(subject.probe.provisions)
+        expect(provisions.length).toBe(1)
+        expect([access.directory, access.generation]).toEqual([`/workspace/${session.sessionId}`, 1])
+        expect(again.url.href).toBe(access.url.href)
+        const claims = yield* EnvironmentToken.verify([keys[0].publicKey], Redacted.value(access.token))
+        expect(Option.map(claims, (found) => [found.kid, found.environment, found.brain])).toEqual(
+          Option.some(["new", ...provisions, Brain.ofSession(session.sessionId)]),
+        )
+        expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(14 * 60_000)
+        expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(15 * 60_000)
+      }),
+  )
+
+  it.live("a configured token lifetime is the access's lifetime", () =>
     Effect.gen(function* () {
-      const environments = yield* Environments.Service
-      const links = yield* SpaceEnvironment.Service
-      const hands = yield* Hands.Service
-      const setup = yield* team()
-      const grace = yield* user(setup.organizationId)
-      const made = yield* environments.create(setup.admin, input)
-      const link = { spaceId: setup.space.id, environmentId: made.id }
-      expect((yield* links.create(grace, link).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-      const linked = yield* links.create(setup.ada, link)
-      expect((yield* links.create(setup.ada, link).pipe(Effect.flip))._tag).toBe("Primitive.Conflict")
-      expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([linked])
-      expect((yield* links.list(grace, { ...page, spaceId: setup.space.id })).items).toEqual([])
-      const session = { sessionId: Session.ID.create(), organizationId: setup.organizationId, spaceId: setup.space.id }
-      yield* hands.bind(session, made.id)
-      yield* hands.access(session)
-      expect((yield* links.archive(setup.ada, linked.id)).archivedAt).not.toBeNull()
-      expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([])
-      expect((yield* hands.access(session).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
+      const subject = yield* environmentsWith({ ENVIRONMENT_TOKEN_LIFETIME: "20 seconds" })
+      const organizationId = yield* Seed.organization()
+      const session = yield* subjectIn(organizationId)
+      yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+      const before = Date.now()
+      const access = yield* subject.environments.access(session)
+      expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(20_000)
+      expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(18_000)
     }),
   )
 
-  it.live("a space cannot link another organization's environment", () =>
+  it.live("sessions that ask at once share environments, never more than sessionsPerEnvironment on one", () =>
     Effect.gen(function* () {
-      const environments = yield* Environments.Service
-      const links = yield* SpaceEnvironment.Service
-      const setup = yield* team()
-      const elsewhere = yield* team()
-      const foreign = yield* environments.create(elsewhere.admin, input)
-      expect(
-        (yield* links.create(setup.admin, { spaceId: setup.space.id, environmentId: foreign.id }).pipe(Effect.flip))
-          ._tag,
-      ).toBe("Primitive.NotFound")
-      expect(
-        (yield* links.create(elsewhere.admin, { spaceId: setup.space.id, environmentId: foreign.id }).pipe(Effect.flip))
-          ._tag,
-      ).toBe("Primitive.NotFound")
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId, { sessionsPerEnvironment: 2 })
+      const sessions = yield* Effect.all(Array.from({ length: 5 }, () => subjectIn(organizationId)))
+      yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
+        discard: true,
+      })
+      yield* Effect.forEach(sessions, (session) => subject.environments.access(session), { concurrency: "unbounded" })
+      const made = yield* environmentsOf(environmentTemplateId)
+      expect(made.map((environment) => environment.sessions).toSorted((left, right) => left - right)).toEqual([1, 2, 2])
+      expect((yield* Ref.get(subject.probe.provisions)).length).toBe(3)
     }),
   )
 
-  it.live("archiving hides an environment, ends its sessions' access and destroys its hands", () =>
+  it.live("an environment that is gone is replaced once; the sessions on it get the next generation", () =>
     Effect.gen(function* () {
-      const environments = yield* Environments.Service
-      const links = yield* SpaceEnvironment.Service
-      const hands = yield* Hands.Service
-      const setup = yield* team()
-      const made = yield* environments.create(setup.admin, input)
-      yield* links.create(setup.ada, { spaceId: setup.space.id, environmentId: made.id })
-      const session = { sessionId: Session.ID.create(), organizationId: setup.organizationId, spaceId: setup.space.id }
-      yield* hands.bind(session, made.id)
-      yield* hands.access(session)
-      const handId = (yield* Ref.get(probe.provisions)).at(-1)
-      const archived = yield* environments.archive(setup.admin, made.id)
-      expect(archived.archivedAt).not.toBeNull()
-      expect(yield* environments.archive(setup.admin, made.id)).toEqual(archived)
-      expect((yield* environments.get(setup.admin, made.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-      expect((yield* hands.access(session).pipe(Effect.flip))._tag).toBe("Hands.NotFound")
-      expect((yield* Ref.get(probe.destroyed)).at(-1)).toBe(handId)
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+      const sessions = yield* Effect.all([subjectIn(organizationId), subjectIn(organizationId)])
+      yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
+        discard: true,
+      })
+      const first = yield* Effect.forEach(sessions, (session) => subject.environments.access(session))
+      const lost = (yield* Ref.get(subject.probe.provisions))[0]
+      if (!lost) return yield* Effect.die(new Error("no environment was made"))
+      yield* Ref.set(subject.probe.gone, new Set([lost]))
+      const replaced = yield* Effect.forEach(sessions, (session) => subject.environments.access(session))
+      expect(replaced.map((access) => access.generation)).toEqual([2, 2])
+      expect(replaced.at(0)?.url.href).not.toBe(first.at(0)?.url.href)
+      expect(replaced.at(1)?.url.href).toBe(replaced.at(0)?.url.href)
+      expect((yield* environmentsOf(environmentTemplateId)).length).toBe(1)
     }),
   )
 
-  it.live("lists each provider with a JSON Schema of its config, for the form", () =>
+  it.live("a provider that fails gives Unavailable, and the next access tries again", () =>
     Effect.gen(function* () {
-      const registry = yield* HandProvider.Registry
-      expect(registry.providers.map((provider) => provider.info)).toEqual([
-        {
-          id: HandProvider.ID.make("test"),
-          title: "Test",
-          description: "Hands that live in the test’s memory.",
-          configSchema: {
-            dialect: "draft-2020-12",
-            schema: {
-              type: "object",
-              title: "Test",
-              properties: {
-                label: { type: "string", minLength: 1, title: "Label", description: "A name for the test hands." },
-              },
-              required: ["label"],
-              additionalProperties: true,
-            },
-            definitions: {},
-          },
-        },
+      const subject = yield* environmentsWith()
+      const organizationId = yield* Seed.organization()
+      const session = yield* subjectIn(organizationId)
+      yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
+      yield* Ref.set(subject.probe.failing, true)
+      const failed = yield* subject.environments.access(session).pipe(Effect.flip)
+      expect([failed._tag, failed.message]).toEqual([
+        "Environments.Unavailable",
+        `The environment of session ${session.sessionId} is unavailable: the test provider fails`,
       ])
+      yield* Ref.set(subject.probe.failing, false)
+      expect((yield* subject.environments.access(session)).generation).toBe(1)
     }),
+  )
+
+  it.live(
+    "an archived environment template gives no access, and a provider this deployment lacks gives no binding",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const subject = yield* environmentsWith()
+        const organizationId = yield* Seed.organization()
+        const environmentTemplateId = yield* Seed.environmentTemplate(organizationId)
+        const session = yield* subjectIn(organizationId)
+        yield* subject.environments.bind(session, environmentTemplateId)
+        yield* database.db
+          .update(Database.Schema.environment_template)
+          .set({ archived_at: new Date() })
+          .where(eq(Database.Schema.environment_template.id, environmentTemplateId))
+        expect((yield* subject.environments.access(session).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
+        const elsewhere = yield* Seed.environmentTemplate(organizationId, { provider: "e2b" })
+        expect(
+          (yield* subject.environments.bind(yield* subjectIn(organizationId), elsewhere).pipe(Effect.flip))._tag,
+        ).toBe("Environments.NotFound")
+      }),
   )
 })

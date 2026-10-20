@@ -1,74 +1,23 @@
 export * as Environment from "./environment.js"
 
-import { Effect, Schema } from "effect"
-import { Auth } from "./auth.js"
-import { HandProvider } from "./hand-provider.js"
+import { Schema } from "effect"
 import { Identifier } from "./identifier.js"
-import { Pagination } from "./pagination.js"
-import { Primitive } from "./primitive.js"
 
 export const ID = Identifier.make("env", "Environment.ID")
 export type ID = typeof ID.Type
 
-export const maximumSessionsPerHand = 100
-
-const defaultSessionsPerHand = 8
-
-const SessionsPerHand = Schema.Int.check(
-  Schema.isBetween(
-    { minimum: 1, maximum: maximumSessionsPerHand },
-    { message: `Use 1 to ${maximumSessionsPerHand} sessions per hand.` },
-  ),
-)
-
-export interface Info extends Schema.Schema.Type<typeof Info> {}
-export const Info = Schema.Struct({
-  id: ID,
-  organizationId: Auth.OrganizationID,
-  name: Schema.String,
-  description: Schema.NullOr(Schema.String),
-  provider: HandProvider.ID,
-  config: Schema.Json,
-  sessionsPerHand: Schema.Int,
-  createdAt: Schema.DateTimeUtc,
-  updatedAt: Schema.DateTimeUtc,
-  archivedAt: Schema.NullOr(Schema.DateTimeUtc),
-}).annotate({ identifier: "Environment.Info" })
-
-export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
-export const ListInput = Schema.Struct({
-  ...Pagination.fields(50),
-}).annotate({ identifier: "Environment.ListInput" })
-
-const Page = Pagination.Page(Info).annotate({ identifier: "Environment.Page" })
-
-export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
-export const CreateInput = Schema.Struct({
-  name: Primitive.Name,
-  description: Schema.optional(Schema.String),
-  provider: HandProvider.ID,
-  config: Schema.Json.annotate({ description: "The settings of the provider. Its schema is in the provider list." }),
-  sessionsPerHand: SessionsPerHand.pipe(Schema.withDecodingDefaultKey(Effect.succeed(defaultSessionsPerHand))),
-}).annotate({ identifier: "Environment.CreateInput" })
-
-export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
-export const UpdateInput = Schema.Struct({
-  name: Schema.optional(Primitive.Name),
-  description: Schema.optional(Schema.NullOr(Schema.String)),
-  config: Schema.optional(
-    Schema.Json.annotate({ description: "Applies to hands made after the change. Running hands keep their config." }),
-  ),
-  sessionsPerHand: Schema.optional(SessionsPerHand),
-}).annotate({ identifier: "Environment.UpdateInput" })
-
-export const definition = Primitive.define({
-  name: "environment",
-  plural: "environments",
-  id: ID,
-  info: Info,
-  list: { input: ListInput, page: Page },
-  get: true,
-  create: { input: CreateInput, result: Info },
-  update: { input: UpdateInput, result: Info },
-  archive: true,
+export const Directory = Schema.String.check(Schema.isStartingWith("/")).annotate({
+  identifier: "Environment.Directory",
 })
+export type Directory = typeof Directory.Type
+
+export interface Access extends Schema.Schema.Type<typeof Access> {}
+export const Access = Schema.Struct({
+  directory: Directory,
+  url: Schema.URL,
+  token: Schema.Redacted(Schema.String),
+  expiresAt: Schema.DateTimeUtc,
+  generation: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
+    description: "Increases each time Ren gives the session another environment, not when its token is refreshed.",
+  }),
+}).annotate({ identifier: "Environment.Access" })

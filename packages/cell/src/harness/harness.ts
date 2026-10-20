@@ -1,7 +1,7 @@
 export * as Harness from "./harness.js"
 
-import type { StartBody } from "@ren/brain-api/brain-api"
-import type { BrainRejectedError, SessionNotStartedError } from "@ren/brain-api/errors"
+import type { StartBody } from "@ren/host-api/brain-api"
+import type { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
 import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
 import { Context, Effect, Exit, Layer, type Option, Scope } from "effect"

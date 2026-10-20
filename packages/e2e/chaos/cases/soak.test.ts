@@ -12,22 +12,22 @@ import { Stack } from "../lib/stack.js"
 import { Wait } from "../lib/wait.js"
 
 describe.skipIf(Platform.wrangler !== undefined || Platform.soak !== undefined)("a soaked local cell", () => {
-  const lane: { stack?: Stack.Instance; hand?: Stack.Hand } = {}
+  const lane: { stack?: Stack.Instance; environment?: Stack.Environment } = {}
 
   const current = () => {
-    if (!lane.stack || !lane.hand) throw new Error("the stack did not start")
-    return { stack: lane.stack, hand: lane.hand }
+    if (!lane.stack || !lane.environment) throw new Error("the stack did not start")
+    return { stack: lane.stack, environment: lane.environment }
   }
 
   beforeAll(async () => {
     lane.stack = await Stack.start()
-    lane.hand = await lane.stack.hand("soak")
+    lane.environment = await lane.stack.environment("soak")
   }, 180_000)
 
   afterAll(() => lane.stack?.dispose())
 
   const cycle = async (label: string) => {
-    const session = await current().stack.session({ hand: current().hand })
+    const session = await current().stack.session({ environment: current().environment })
     const marker = Ledger.marker(label)
     const turn = await session.turn([
       ModelProvider.tool("shell", { command: Ledger.append(marker) }),
@@ -35,7 +35,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.soak !== undefined)(
     ])
     await turn.script.called(2, 60_000)
     await session.closed(120_000)
-    return Ledger.count(current().hand.instance, marker)
+    return Ledger.count(current().environment.instance, marker)
   }
 
   const rss = () => {

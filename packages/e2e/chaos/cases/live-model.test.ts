@@ -59,7 +59,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       expect(lastAnswer(read).toLowerCase()).toContain(word.toLowerCase())
     }, 300_000)
 
-    test("the model creates, reads and edits a file, and the file on the hand proves it", async () => {
+    test("the model creates, reads and edits a file, and the file on the environment proves it", async () => {
       const opened = await session()
       const name = `live-${crypto.randomUUID().slice(0, 6)}.txt`
       const first = `alpha-${crypto.randomUUID().slice(0, 6)}`

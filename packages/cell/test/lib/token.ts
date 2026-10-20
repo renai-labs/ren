@@ -1,6 +1,6 @@
 export * as TestToken from "./token.js"
 
-import { SessionToken } from "@ren/brain-api/session-token"
+import { SessionToken } from "@ren/host-api/session-token"
 import { Effect } from "effect"
 
 export const keys = [

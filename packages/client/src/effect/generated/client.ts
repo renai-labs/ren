@@ -110,108 +110,125 @@ const adaptGroupSpaceMember = (raw: RawClient["space-member"]) => ({
   archive: EndpointSpaceMemberArchive(raw),
 })
 
-type EnvironmentListRequest = Parameters<RawClient["environment"]["environment.list"]>[0]
-type EnvironmentListInput = {
-  readonly page: EnvironmentListRequest["query"]["page"]
-  readonly pageSize: EnvironmentListRequest["query"]["pageSize"]
+type EnvironmentTemplateListRequest = Parameters<RawClient["environment-template"]["environment-template.list"]>[0]
+type EnvironmentTemplateListInput = {
+  readonly page: EnvironmentTemplateListRequest["query"]["page"]
+  readonly pageSize: EnvironmentTemplateListRequest["query"]["pageSize"]
 }
-const EndpointEnvironmentList = (raw: RawClient["environment"]) => (input: EnvironmentListInput) =>
-  raw["environment.list"]({ query: { page: input["page"], pageSize: input["pageSize"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+const EndpointEnvironmentTemplateList =
+  (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateListInput) =>
+    raw["environment-template.list"]({ query: { page: input["page"], pageSize: input["pageSize"] } }).pipe(
+      Effect.mapError(mapClientError),
+    )
 
-type EnvironmentGetRequest = Parameters<RawClient["environment"]["environment.get"]>[0]
-type EnvironmentGetInput = { readonly idOrSlug: EnvironmentGetRequest["params"]["idOrSlug"] }
-const EndpointEnvironmentGet = (raw: RawClient["environment"]) => (input: EnvironmentGetInput) =>
-  raw["environment.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+type EnvironmentTemplateGetRequest = Parameters<RawClient["environment-template"]["environment-template.get"]>[0]
+type EnvironmentTemplateGetInput = { readonly idOrSlug: EnvironmentTemplateGetRequest["params"]["idOrSlug"] }
+const EndpointEnvironmentTemplateGet =
+  (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateGetInput) =>
+    raw["environment-template.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
 
-type EnvironmentCreateRequest = Parameters<RawClient["environment"]["environment.create"]>[0]
-type EnvironmentCreateInput = {
-  readonly name: EnvironmentCreateRequest["payload"]["name"]
-  readonly description?: EnvironmentCreateRequest["payload"]["description"]
-  readonly provider: EnvironmentCreateRequest["payload"]["provider"]
-  readonly config: EnvironmentCreateRequest["payload"]["config"]
-  readonly sessionsPerHand: EnvironmentCreateRequest["payload"]["sessionsPerHand"]
+type EnvironmentTemplateCreateRequest = Parameters<RawClient["environment-template"]["environment-template.create"]>[0]
+type EnvironmentTemplateCreateInput = {
+  readonly name: EnvironmentTemplateCreateRequest["payload"]["name"]
+  readonly description?: EnvironmentTemplateCreateRequest["payload"]["description"]
+  readonly provider: EnvironmentTemplateCreateRequest["payload"]["provider"]
+  readonly config: EnvironmentTemplateCreateRequest["payload"]["config"]
+  readonly sessionsPerEnvironment: EnvironmentTemplateCreateRequest["payload"]["sessionsPerEnvironment"]
 }
-const EndpointEnvironmentCreate = (raw: RawClient["environment"]) => (input: EnvironmentCreateInput) =>
-  raw["environment.create"]({
-    payload: {
-      name: input["name"],
-      description: input["description"],
-      provider: input["provider"],
-      config: input["config"],
-      sessionsPerHand: input["sessionsPerHand"],
-    },
-  }).pipe(Effect.mapError(mapClientError))
+const EndpointEnvironmentTemplateCreate =
+  (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateCreateInput) =>
+    raw["environment-template.create"]({
+      payload: {
+        name: input["name"],
+        description: input["description"],
+        provider: input["provider"],
+        config: input["config"],
+        sessionsPerEnvironment: input["sessionsPerEnvironment"],
+      },
+    }).pipe(Effect.mapError(mapClientError))
 
-type EnvironmentUpdateRequest = Parameters<RawClient["environment"]["environment.update"]>[0]
-type EnvironmentUpdateInput = {
-  readonly id: EnvironmentUpdateRequest["params"]["id"]
-  readonly name?: EnvironmentUpdateRequest["payload"]["name"]
-  readonly description?: EnvironmentUpdateRequest["payload"]["description"]
-  readonly config?: EnvironmentUpdateRequest["payload"]["config"]
-  readonly sessionsPerHand?: EnvironmentUpdateRequest["payload"]["sessionsPerHand"]
+type EnvironmentTemplateUpdateRequest = Parameters<RawClient["environment-template"]["environment-template.update"]>[0]
+type EnvironmentTemplateUpdateInput = {
+  readonly id: EnvironmentTemplateUpdateRequest["params"]["id"]
+  readonly name?: EnvironmentTemplateUpdateRequest["payload"]["name"]
+  readonly description?: EnvironmentTemplateUpdateRequest["payload"]["description"]
+  readonly config?: EnvironmentTemplateUpdateRequest["payload"]["config"]
+  readonly sessionsPerEnvironment?: EnvironmentTemplateUpdateRequest["payload"]["sessionsPerEnvironment"]
 }
-const EndpointEnvironmentUpdate = (raw: RawClient["environment"]) => (input: EnvironmentUpdateInput) =>
-  raw["environment.update"]({
-    params: { id: input["id"] },
-    payload: {
-      name: input["name"],
-      description: input["description"],
-      config: input["config"],
-      sessionsPerHand: input["sessionsPerHand"],
-    },
-  }).pipe(Effect.mapError(mapClientError))
+const EndpointEnvironmentTemplateUpdate =
+  (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateUpdateInput) =>
+    raw["environment-template.update"]({
+      params: { id: input["id"] },
+      payload: {
+        name: input["name"],
+        description: input["description"],
+        config: input["config"],
+        sessionsPerEnvironment: input["sessionsPerEnvironment"],
+      },
+    }).pipe(Effect.mapError(mapClientError))
 
-type EnvironmentArchiveRequest = Parameters<RawClient["environment"]["environment.archive"]>[0]
-type EnvironmentArchiveInput = { readonly id: EnvironmentArchiveRequest["params"]["id"] }
-const EndpointEnvironmentArchive = (raw: RawClient["environment"]) => (input: EnvironmentArchiveInput) =>
-  raw["environment.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+type EnvironmentTemplateArchiveRequest = Parameters<
+  RawClient["environment-template"]["environment-template.archive"]
+>[0]
+type EnvironmentTemplateArchiveInput = { readonly id: EnvironmentTemplateArchiveRequest["params"]["id"] }
+const EndpointEnvironmentTemplateArchive =
+  (raw: RawClient["environment-template"]) => (input: EnvironmentTemplateArchiveInput) =>
+    raw["environment-template.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupEnvironment = (raw: RawClient["environment"]) => ({
-  list: EndpointEnvironmentList(raw),
-  get: EndpointEnvironmentGet(raw),
-  create: EndpointEnvironmentCreate(raw),
-  update: EndpointEnvironmentUpdate(raw),
-  archive: EndpointEnvironmentArchive(raw),
+const adaptGroupEnvironmentTemplate = (raw: RawClient["environment-template"]) => ({
+  list: EndpointEnvironmentTemplateList(raw),
+  get: EndpointEnvironmentTemplateGet(raw),
+  create: EndpointEnvironmentTemplateCreate(raw),
+  update: EndpointEnvironmentTemplateUpdate(raw),
+  archive: EndpointEnvironmentTemplateArchive(raw),
 })
 
-const EndpointHandProviderList = (raw: RawClient["handProvider"]) => () =>
-  raw["handProvider.list"]({}).pipe(Effect.mapError(mapClientError))
+const EndpointEnvironmentProviderList = (raw: RawClient["environmentProvider"]) => () =>
+  raw["environmentProvider.list"]({}).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupHandProvider = (raw: RawClient["handProvider"]) => ({ list: EndpointHandProviderList(raw) })
+const adaptGroupEnvironmentProvider = (raw: RawClient["environmentProvider"]) => ({
+  list: EndpointEnvironmentProviderList(raw),
+})
 
-type SpaceEnvironmentListRequest = Parameters<RawClient["space-environment"]["space-environment.list"]>[0]
-type SpaceEnvironmentListInput = {
-  readonly spaceId: SpaceEnvironmentListRequest["query"]["spaceId"]
-  readonly page: SpaceEnvironmentListRequest["query"]["page"]
-  readonly pageSize: SpaceEnvironmentListRequest["query"]["pageSize"]
+type SpaceEnvironmentTemplateListRequest = Parameters<
+  RawClient["space-environment-template"]["space-environment-template.list"]
+>[0]
+type SpaceEnvironmentTemplateListInput = {
+  readonly spaceId: SpaceEnvironmentTemplateListRequest["query"]["spaceId"]
+  readonly page: SpaceEnvironmentTemplateListRequest["query"]["page"]
+  readonly pageSize: SpaceEnvironmentTemplateListRequest["query"]["pageSize"]
 }
-const EndpointSpaceEnvironmentList = (raw: RawClient["space-environment"]) => (input: SpaceEnvironmentListInput) =>
-  raw["space-environment.list"]({
-    query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-  }).pipe(Effect.mapError(mapClientError))
+const EndpointSpaceEnvironmentTemplateList =
+  (raw: RawClient["space-environment-template"]) => (input: SpaceEnvironmentTemplateListInput) =>
+    raw["space-environment-template.list"]({
+      query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+    }).pipe(Effect.mapError(mapClientError))
 
-type SpaceEnvironmentCreateRequest = Parameters<RawClient["space-environment"]["space-environment.create"]>[0]
-type SpaceEnvironmentCreateInput = {
-  readonly spaceId: SpaceEnvironmentCreateRequest["payload"]["spaceId"]
-  readonly environmentId: SpaceEnvironmentCreateRequest["payload"]["environmentId"]
+type SpaceEnvironmentTemplateCreateRequest = Parameters<
+  RawClient["space-environment-template"]["space-environment-template.create"]
+>[0]
+type SpaceEnvironmentTemplateCreateInput = {
+  readonly spaceId: SpaceEnvironmentTemplateCreateRequest["payload"]["spaceId"]
+  readonly environmentTemplateId: SpaceEnvironmentTemplateCreateRequest["payload"]["environmentTemplateId"]
 }
-const EndpointSpaceEnvironmentCreate = (raw: RawClient["space-environment"]) => (input: SpaceEnvironmentCreateInput) =>
-  raw["space-environment.create"]({
-    payload: { spaceId: input["spaceId"], environmentId: input["environmentId"] },
-  }).pipe(Effect.mapError(mapClientError))
+const EndpointSpaceEnvironmentTemplateCreate =
+  (raw: RawClient["space-environment-template"]) => (input: SpaceEnvironmentTemplateCreateInput) =>
+    raw["space-environment-template.create"]({
+      payload: { spaceId: input["spaceId"], environmentTemplateId: input["environmentTemplateId"] },
+    }).pipe(Effect.mapError(mapClientError))
 
-type SpaceEnvironmentArchiveRequest = Parameters<RawClient["space-environment"]["space-environment.archive"]>[0]
-type SpaceEnvironmentArchiveInput = { readonly id: SpaceEnvironmentArchiveRequest["params"]["id"] }
-const EndpointSpaceEnvironmentArchive =
-  (raw: RawClient["space-environment"]) => (input: SpaceEnvironmentArchiveInput) =>
-    raw["space-environment.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+type SpaceEnvironmentTemplateArchiveRequest = Parameters<
+  RawClient["space-environment-template"]["space-environment-template.archive"]
+>[0]
+type SpaceEnvironmentTemplateArchiveInput = { readonly id: SpaceEnvironmentTemplateArchiveRequest["params"]["id"] }
+const EndpointSpaceEnvironmentTemplateArchive =
+  (raw: RawClient["space-environment-template"]) => (input: SpaceEnvironmentTemplateArchiveInput) =>
+    raw["space-environment-template.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
 
-const adaptGroupSpaceEnvironment = (raw: RawClient["space-environment"]) => ({
-  list: EndpointSpaceEnvironmentList(raw),
-  create: EndpointSpaceEnvironmentCreate(raw),
-  archive: EndpointSpaceEnvironmentArchive(raw),
+const adaptGroupSpaceEnvironmentTemplate = (raw: RawClient["space-environment-template"]) => ({
+  list: EndpointSpaceEnvironmentTemplateList(raw),
+  create: EndpointSpaceEnvironmentTemplateCreate(raw),
+  archive: EndpointSpaceEnvironmentTemplateArchive(raw),
 })
 
 const adaptClient = (raw: RawClient) => ({
@@ -220,9 +237,9 @@ const adaptClient = (raw: RawClient) => ({
   invitation: adaptGroupInvitation(raw["invitation"]),
   space: adaptGroupSpace(raw["space"]),
   "space-member": adaptGroupSpaceMember(raw["space-member"]),
-  environment: adaptGroupEnvironment(raw["environment"]),
-  handProvider: adaptGroupHandProvider(raw["handProvider"]),
-  "space-environment": adaptGroupSpaceEnvironment(raw["space-environment"]),
+  "environment-template": adaptGroupEnvironmentTemplate(raw["environment-template"]),
+  environmentProvider: adaptGroupEnvironmentProvider(raw["environmentProvider"]),
+  "space-environment-template": adaptGroupSpaceEnvironmentTemplate(raw["space-environment-template"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

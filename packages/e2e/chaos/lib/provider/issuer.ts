@@ -1,23 +1,23 @@
 export * as TestIssuer from "./issuer.js"
 
 import { Brain } from "@ren/schema/brain"
-import { SessionToken } from "@ren/brain-api/session-token"
+import { SessionToken } from "@ren/host-api/session-token"
 import { TestToken } from "@ren/cell/testing"
 import { Auth } from "@ren/schema/auth"
-import { Hand } from "@ren/schema/hand"
+import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Effect, Option, Redacted, Schema } from "effect"
 
 interface Call {
-  readonly endpoint: "models.refresh" | "hands.access" | "host.refresh"
+  readonly endpoint: "models.refresh" | "environments.access" | "host.refresh"
   readonly hostToken: string | undefined
   readonly status: number
 }
 
 type Reply = { readonly type: "grant"; readonly access: Models.Access } | { readonly type: "unavailable" }
 
-type Environments = (sessionId: Session.ID) => Promise<Hand.Access | undefined>
+type Environments = (sessionId: Session.ID) => Promise<Environment.Access | undefined>
 
 export interface Instance {
   readonly url: string
@@ -31,7 +31,7 @@ export interface Instance {
 
 const encodeModels = Schema.encodeSync(Schema.toCodecJson(Brain.ModelGrant))
 
-const encodeAccess = Schema.encodeSync(Schema.toCodecJson(Hand.Access))
+const encodeAccess = Schema.encodeSync(Schema.toCodecJson(Environment.Access))
 
 const organizationId = Auth.OrganizationID.create()
 
@@ -65,13 +65,13 @@ export const start = (): Instance => {
   }
   const serve = async (endpoint: Call["endpoint"], presented: string): Promise<Response> => {
     const sessionId = await sessionOf(presented)
-    if (endpoint === "hands.access") {
+    if (endpoint === "environments.access") {
       const access = sessionId && (await state.environments(Session.ID.make(sessionId)))
       if (!access)
         return answer(
           endpoint,
           404,
-          { _tag: "HandNotFoundError", message: "The session has no environment" },
+          { _tag: "EnvironmentNotFoundError", message: "The session has no environment" },
           presented,
         )
       return answer(endpoint, 200, encodeAccess(access), presented)
@@ -88,9 +88,9 @@ export const start = (): Instance => {
     return answer(endpoint, 200, encodeModels({ access: reply.access, hostToken: Redacted.make(next) }), presented)
   }
   const endpoints: Readonly<Record<string, Call["endpoint"]>> = {
-    "/brain/models/refresh": "models.refresh",
-    "/brain/hand/access": "hands.access",
-    "/brain/host/refresh": "host.refresh",
+    "/host/models/refresh": "models.refresh",
+    "/host/environment/access": "environments.access",
+    "/host/token/refresh": "host.refresh",
   }
   const server = Bun.serve({
     hostname: "127.0.0.1",

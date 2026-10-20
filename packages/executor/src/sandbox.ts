@@ -1,10 +1,10 @@
 export * as Sandbox from "./sandbox.js"
 
-import { ExecutorApi } from "@ren/hand-api/executor-api"
-import { ExecutorVariables } from "@ren/hand-api/executor-variables"
-import { Signal } from "@ren/hand-api/signal"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { ExecutorVariables } from "@ren/environment-api/executor-variables"
+import { Signal } from "@ren/environment-api/signal"
 import { Brain } from "@ren/schema/brain"
-import { Hand } from "@ren/schema/hand"
+import { Environment } from "@ren/schema/environment"
 import {
   Cause,
   Clock,
@@ -41,7 +41,7 @@ const stdinCapacity = 16
 const workspaceVariable = "EXECUTOR_WORKSPACE"
 
 interface Entry {
-  readonly id: ExecutorApi.ProcessID
+  readonly id: EnvironmentApi.ProcessID
   readonly brain: Brain.ID
   readonly scope: Scope.Closeable
   readonly handle: ChildProcessSpawner.ChildProcessHandle
@@ -62,7 +62,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const config = yield* Config.all({
-      handId: Config.schema(Hand.ID, ExecutorVariables.handId),
+      environmentId: Config.schema(Environment.ID, ExecutorVariables.environmentId),
       workspaceDirectory: Config.String(workspaceVariable).pipe(Config.withDefault(process.cwd())),
       shell: Config.option(Config.String("SHELL")),
     })
@@ -90,12 +90,12 @@ export const layer = Layer.effect(
         ),
     )
     const path = (value: string) => resolve(workspace, value)
-    const processes = new Map<ExecutorApi.ProcessID, Entry>()
+    const processes = new Map<EnvironmentApi.ProcessID, Entry>()
     const scope = yield* Effect.scope
 
-    const touch = Effect.fnUntraced(function* (brain: Brain.ID, id: ExecutorApi.ProcessID) {
+    const touch = Effect.fnUntraced(function* (brain: Brain.ID, id: EnvironmentApi.ProcessID) {
       const entry = processes.get(id)
-      if (!entry || entry.brain !== brain) return yield* new ExecutorApi.ProcessNotFoundError({ id })
+      if (!entry || entry.brain !== brain) return yield* new EnvironmentApi.ProcessNotFoundError({ id })
       entry.seenAtMs = yield* Clock.currentTimeMillis
       return entry
     })
@@ -126,12 +126,12 @@ export const layer = Layer.effect(
       const orphans = [...processes.values()].filter((entry) =>
         entry.log.exit
           ? !OutputLog.hasReaders(entry.log) && now - entry.seenAtMs >= Duration.toMillis(exitedKeptFor)
-          : now - entry.seenAtMs >= Duration.toMillis(ExecutorApi.orphanAfter),
+          : now - entry.seenAtMs >= Duration.toMillis(EnvironmentApi.orphanAfter),
       )
       yield* Effect.forEach(orphans, release, { discard: true })
     }).pipe(Effect.repeat(Schedule.spaced(sweepEvery)), Effect.forkIn(scope))
 
-    const spawn = Effect.fn("Executor.spawn")(function* (brain: Brain.ID, input: ExecutorApi.SpawnInput) {
+    const spawn = Effect.fn("Executor.spawn")(function* (brain: Brain.ID, input: EnvironmentApi.SpawnInput) {
       const entryScope = yield* Scope.fork(scope)
       const outputPath = input.outputFile
       const outputFile = outputPath
@@ -143,7 +143,7 @@ export const layer = Layer.effect(
             (file) => Effect.promise(() => file.close()),
           ).pipe(
             Scope.provide(entryScope),
-            Effect.mapError((cause) => new ExecutorApi.SpawnFailedError({ message: message(cause) })),
+            Effect.mapError((cause) => new EnvironmentApi.SpawnFailedError({ message: message(cause) })),
             Effect.onError(() => Scope.close(entryScope, Exit.void)),
           )
         : undefined
@@ -161,11 +161,13 @@ export const layer = Layer.effect(
         )
         .pipe(
           Scope.provide(entryScope),
-          Effect.mapError((cause) => new ExecutorApi.SpawnFailedError({ message: message(cause) })),
-          Effect.catchDefect((defect) => Effect.fail(new ExecutorApi.SpawnFailedError({ message: message(defect) }))),
+          Effect.mapError((cause) => new EnvironmentApi.SpawnFailedError({ message: message(cause) })),
+          Effect.catchDefect((defect) =>
+            Effect.fail(new EnvironmentApi.SpawnFailedError({ message: message(defect) })),
+          ),
           Effect.onError(() => Scope.close(entryScope, Exit.void)),
         )
-      const id = ExecutorApi.ProcessID.create()
+      const id = EnvironmentApi.ProcessID.create()
       const entry: Entry = {
         id,
         brain,
@@ -209,16 +211,16 @@ export const layer = Layer.effect(
 
     const output = Effect.fn("Executor.output")(function* (
       brain: Brain.ID,
-      id: ExecutorApi.ProcessID,
+      id: EnvironmentApi.ProcessID,
       cursor?: number,
-      window?: ExecutorApi.OutputWindow,
+      window?: EnvironmentApi.OutputWindow,
     ) {
       const entry = yield* touch(brain, id)
       const seen = Effect.map(Clock.currentTimeMillis, (now) => {
         entry.seenAtMs = now
       })
       return OutputLog.read(entry.log, cursor, window).pipe(
-        Stream.merge(Stream.tick(ExecutorApi.pingEvery).pipe(Stream.drop(1), Stream.as({ type: "ping" as const })), {
+        Stream.merge(Stream.tick(EnvironmentApi.pingEvery).pipe(Stream.drop(1), Stream.as({ type: "ping" as const })), {
           haltStrategy: "left",
         }),
         Stream.ensuring(seen),
@@ -227,24 +229,24 @@ export const layer = Layer.effect(
 
     const writeStdin = Effect.fn("Executor.writeStdin")(function* (
       brain: Brain.ID,
-      id: ExecutorApi.ProcessID,
+      id: EnvironmentApi.ProcessID,
       input: { readonly data: Uint8Array; readonly end: boolean },
     ) {
       const stdin = (yield* touch(brain, id)).stdin
-      if (!stdin) return yield* new ExecutorApi.StdinClosedError({ id })
-      if (input.data.length > 0 && (yield* Queue.isFull(stdin))) return yield* new ExecutorApi.StdinFullError({ id })
+      if (!stdin) return yield* new EnvironmentApi.StdinClosedError({ id })
+      if (input.data.length > 0 && (yield* Queue.isFull(stdin))) return yield* new EnvironmentApi.StdinFullError({ id })
       const accepted = input.data.length === 0 || (yield* Queue.offer(stdin, input.data))
-      if (!accepted) return yield* new ExecutorApi.StdinClosedError({ id })
+      if (!accepted) return yield* new EnvironmentApi.StdinClosedError({ id })
       if (input.end) yield* Queue.end(stdin)
     })
 
-    const heartbeat = Effect.fn("Executor.heartbeat")(function* (brain: Brain.ID, id: ExecutorApi.ProcessID) {
+    const heartbeat = Effect.fn("Executor.heartbeat")(function* (brain: Brain.ID, id: EnvironmentApi.ProcessID) {
       yield* touch(brain, id)
     })
 
     const kill = Effect.fn("Executor.kill")(function* (
       brain: Brain.ID,
-      id: ExecutorApi.ProcessID,
+      id: EnvironmentApi.ProcessID,
       name: Signal.Name,
       forceKillAfterMs?: number,
     ) {
@@ -262,9 +264,9 @@ export const layer = Layer.effect(
 
     return Executor.Service.of({
       hello: {
-        protocol: ExecutorApi.protocol,
+        protocol: EnvironmentApi.protocol,
         version: manifest.version,
-        handId: config.handId,
+        environmentId: config.environmentId,
         os: process.platform,
         arch: process.arch,
         shells,

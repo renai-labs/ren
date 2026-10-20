@@ -1,8 +1,8 @@
 import { expect } from "bun:test"
 import { BunServices } from "@effect/platform-bun"
-import { ExecutorApi } from "@ren/hand-api/executor-api"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Brain } from "@ren/schema/brain"
-import { Hand } from "@ren/schema/hand"
+import { Environment } from "@ren/schema/environment"
 import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { existsSync } from "node:fs"
@@ -21,7 +21,7 @@ const executor = Sandbox.layer.pipe(
   Layer.provide(
     ConfigProvider.layer(
       ConfigProvider.fromUnknown({
-        EXECUTOR_HAND_ID: Hand.ID.create(),
+        EXECUTOR_ENVIRONMENT_ID: Environment.ID.create(),
         EXECUTOR_WORKSPACE: workspace,
         ...(process.env.SHELL && { SHELL: process.env.SHELL }),
       }),
@@ -33,7 +33,7 @@ const brain = Brain.ID.create()
 const decoder = new TextDecoder()
 const encoder = new TextEncoder()
 
-const run = Effect.fnUntraced(function* (input: ExecutorApi.SpawnInput) {
+const run = Effect.fnUntraced(function* (input: EnvironmentApi.SpawnInput) {
   const executor = yield* Executor.Service
   const spawned = yield* executor.spawn(brain, input)
   return { executor, id: spawned.id, pid: spawned.pid, events: yield* executor.output(brain, spawned.id) }
@@ -42,10 +42,10 @@ const run = Effect.fnUntraced(function* (input: ExecutorApi.SpawnInput) {
 const bun = process.execPath
 const mebibyte = 1024 * 1024
 
-const bytesOf = (events: ReadonlyArray<ExecutorApi.ProcessEvent>, type: "stdout" | "stderr") =>
+const bytesOf = (events: ReadonlyArray<EnvironmentApi.ProcessEvent>, type: "stdout" | "stderr") =>
   new Uint8Array(Buffer.concat(events.flatMap((event) => (event.type === type ? [event.bytes] : []))))
 
-const collect = (events: Stream.Stream<ExecutorApi.ProcessEvent>) =>
+const collect = (events: Stream.Stream<EnvironmentApi.ProcessEvent>) =>
   Stream.runCollect(events).pipe(
     Effect.map((all) => ({
       stdout: all.flatMap((event) => (event.type === "stdout" ? [decoder.decode(event.bytes)] : [])).join(""),
@@ -239,7 +239,7 @@ it.live("replays output from a cursor, and gives each chunk its offset", () =>
       command: "sh",
       arguments: ["-c", "printf abc; sleep 0.3; printf def"],
     })
-    const chunks = (events: ReadonlyArray<ExecutorApi.ProcessEvent>) =>
+    const chunks = (events: ReadonlyArray<EnvironmentApi.ProcessEvent>) =>
       events.flatMap((event) =>
         event.type === "stdout" ? [{ offset: event.offset, text: decoder.decode(event.bytes) }] : [],
       )
@@ -358,16 +358,16 @@ it.live(
       const executor = yield* Executor.Service
       yield* Effect.promise(() =>
         writeFile(join(workspace, "large.bin"), "").then(() =>
-          truncate(join(workspace, "large.bin"), ExecutorApi.maxFileBytes + 1),
+          truncate(join(workspace, "large.bin"), EnvironmentApi.maxFileBytes + 1),
         ),
       )
       expect((yield* executor.read("large.bin").pipe(Effect.flip))._tag).toBe("FileTooLargeError")
       expect((yield* executor.read("large.bin", { offset: 0, length: 4 })).bytes).toEqual(new Uint8Array(4))
       expect(
-        (yield* executor.read("large.bin", { offset: 0, length: ExecutorApi.maxFileBytes + 1 })).bytes.length,
-      ).toBe(ExecutorApi.maxFileBytes)
+        (yield* executor.read("large.bin", { offset: 0, length: EnvironmentApi.maxFileBytes + 1 })).bytes.length,
+      ).toBe(EnvironmentApi.maxFileBytes)
       expect(
-        (yield* executor.write("copy.bin", new Uint8Array(ExecutorApi.maxFileBytes + 1)).pipe(Effect.flip))._tag,
+        (yield* executor.write("copy.bin", new Uint8Array(EnvironmentApi.maxFileBytes + 1)).pipe(Effect.flip))._tag,
       ).toBe("FileTooLargeError")
       expect((yield* executor.stat("copy.bin").pipe(Effect.flip))._tag).toBe("FileNotFoundError")
     }),
@@ -1198,7 +1198,7 @@ it.live(
       const files = Processes.openFiles()
       const listed = yield* executor.list("g9")
       expect(listed).toHaveLength(100_000)
-      expect(JSON.stringify(listed).length).toBeLessThan(ExecutorApi.maxFileBytes)
+      expect(JSON.stringify(listed).length).toBeLessThan(EnvironmentApi.maxFileBytes)
       expect(Processes.openFiles()).toBe(files)
     }),
   60_000,

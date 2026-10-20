@@ -1,7 +1,7 @@
 export * as TestCell from "./test-cell.js"
 
 import { OpenCode } from "@opencode/client"
-import { BrainApi } from "@ren/brain-api/brain-api"
+import { BrainApi } from "@ren/host-api/brain-api"
 import { Brain } from "@ren/schema/brain"
 import { DateTime, Effect, Redacted, Schema } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
