@@ -10,6 +10,10 @@ const exceptions = new Map([
     "environmentProvider",
     "The environment providers of the deployment and the config schema of each, for the environment template form.",
   ],
+  [
+    "chat",
+    "Short-lived access to a session's brain for the Chat API, and the models a new session may use; it reads no session field.",
+  ],
 ])
 
 const operations = [

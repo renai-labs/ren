@@ -62,7 +62,10 @@ export interface Interface {
     input: Session.SendInput,
     organizationId: Auth.OrganizationID,
   ) => Effect.Effect<Session.Accepted, BrainUnavailable | BrainRejectedError | SessionNotStartedError>
-  readonly access: (sessionId: Session.ID) => Effect.Effect<Session.ClientAccess>
+  readonly access: (
+    sessionId: Session.ID,
+    member?: { readonly userId: Auth.UserID; readonly name?: string },
+  ) => Effect.Effect<Session.ClientAccess>
   readonly revokeModels: (
     sessionId: Session.ID,
     organizationId: Auth.OrganizationID,
@@ -308,11 +311,20 @@ export const layer = Layer.effect(
       releaseEnvironment: Effect.fn("BrainHost.releaseEnvironment")(function* (host: CurrentHost["Service"]) {
         yield* environments.release(host)
       }),
-      access: Effect.fn("BrainHost.access")(function* (sessionId: Session.ID) {
+      access: Effect.fn("BrainHost.access")(function* (
+        sessionId: Session.ID,
+        member?: { readonly userId: Auth.UserID; readonly name?: string },
+      ) {
         const exp = Math.floor((yield* Clock.currentTimeMillis) / 1000) + clientLifetime
         return {
           url,
-          token: yield* SessionToken.sign(key, { sid: sessionId, scope: "client", exp }),
+          token: yield* SessionToken.sign(key, {
+            sid: sessionId,
+            scope: "client",
+            exp,
+            ...(member && { sub: member.userId }),
+            ...(member?.name && { name: member.name }),
+          }),
           expiresAt: DateTime.makeUnsafe(exp * 1000),
         } satisfies Session.ClientAccess
       }),

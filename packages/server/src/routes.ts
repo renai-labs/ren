@@ -11,6 +11,8 @@ import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { OrganizationSettings } from "@ren/core/organization-settings"
+import { Session } from "@ren/core/session"
+import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
 import { Settings } from "@ren/core/settings"
 import { Space } from "@ren/core/space"
@@ -24,6 +26,7 @@ import { Api } from "./api.js"
 import { Auth } from "./auth.js"
 import { AgentHandler } from "./handlers/api/agent.js"
 import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
+import { ChatHandler } from "./handlers/api/chat.js"
 import { HealthHandler } from "./handlers/api/health.js"
 import { InvitationHandler } from "./handlers/api/invitation.js"
 import { MeHandler } from "./handlers/api/me.js"
@@ -33,6 +36,7 @@ import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostSettingsHandler } from "./handlers/ren-host/settings.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
+import { SessionHandler } from "./handlers/api/session.js"
 import { SpaceHandler } from "./handlers/api/space.js"
 import { SpaceEnvironmentTemplateHandler } from "./handlers/api/space-environment-template.js"
 import { SpaceMemberHandler } from "./handlers/api/space-member.js"
@@ -78,6 +82,8 @@ export const layer = Layer.mergeAll(
         OrganizationSettingsHandler,
         AgentHandler,
         AgentMembershipHandler,
+        SessionHandler,
+        ChatHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
       Layer.provide([
@@ -91,6 +97,7 @@ export const layer = Layer.mergeAll(
         OrganizationSettings.layer,
         Agent.layer,
         AgentMembership.layer,
+        Session.layer.pipe(Layer.provide(SessionRunner.layer)),
       ]),
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(

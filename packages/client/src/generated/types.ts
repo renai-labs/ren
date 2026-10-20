@@ -34,6 +34,31 @@ export type AgentID = string
 
 export type AgentMembershipID = string
 
+export type SessionID = string
+
+export type SessionHarness = "opencode"
+
+export type SessionStatus = "idle" | "busy"
+
+export type SessionCapabilitiesInfo = {
+  steer: boolean
+  queue: boolean
+  interrupt: boolean
+  model: boolean
+  permissions: boolean
+  forms: boolean
+  revert: boolean
+  compact: boolean
+  shell: boolean
+  commands: boolean
+  rename: boolean
+  files: boolean
+}
+
+export type SessionClientAccess = { url: string; token: string; expiresAt: string }
+
+export type SessionModelVariant = { id: string }
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -134,6 +159,21 @@ export type AgentMembershipInfo = {
   createdAt: string
 }
 
+export type SessionInfo = {
+  id: SessionID
+  spaceId: SpaceID
+  createdBy: AuthUserID
+  harness: SessionHarness
+  title: string | null
+  status: SessionStatus
+  capabilities: SessionCapabilitiesInfo
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
+export type SessionModelChoice = { id: string; providerID: string; name: string; variants: Array<SessionModelVariant> }
+
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
 export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
@@ -161,6 +201,8 @@ export type PermissionRuleList = Array<PermissionRule>
 export type ReferenceList = Array<ReferenceInfo>
 
 export type AgentMembershipPage = { items: Array<AgentMembershipInfo>; page: number; pageSize: number; total: number }
+
+export type SessionPage = { items: Array<SessionInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
@@ -759,3 +801,64 @@ export type AgentMembershipCreateOutput = AgentMembershipInfo
 export type AgentMembershipArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type AgentMembershipArchiveOutput = AgentMembershipInfo
+
+export type SessionListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type SessionListOutput = SessionPage
+
+export type SessionGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type SessionGetOutput = SessionInfo
+
+export type SessionCreateInput = {
+  readonly id: {
+    readonly id: string
+    readonly spaceId: string
+    readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+  }["id"]
+  readonly spaceId: {
+    readonly id: string
+    readonly spaceId: string
+    readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+  }["spaceId"]
+  readonly message?: {
+    readonly id: string
+    readonly spaceId: string
+    readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+  }["message"]
+  readonly model?: {
+    readonly id: string
+    readonly spaceId: string
+    readonly message?: { readonly id: string; readonly text: string } | undefined
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | undefined
+  }["model"]
+}
+
+export type SessionCreateOutput = SessionInfo
+
+export type SessionArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type SessionArchiveOutput = SessionInfo
+
+export type ChatAccessInput = { readonly id: { readonly id: string }["id"] }
+
+export type ChatAccessOutput = SessionClientAccess
+
+export type ChatModelsInput = { readonly id: { readonly id: string }["id"] }
+
+export type ChatModelsOutput = Array<SessionModelChoice>

@@ -4,6 +4,7 @@ import { test } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
 import type { Sync } from "@ren/schema/sync"
 import { Session } from "@ren/core/session"
+import { SessionRunner } from "@ren/core/session/runner"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
@@ -21,7 +22,7 @@ const make = (cellURL?: string) =>
         ),
       ),
     ),
-    Session.layer,
+    SessionRunner.layer,
   ).pipe(
     Layer.provideMerge(services),
     Layer.provide(FetchHttpClient.layer),
@@ -93,6 +94,6 @@ export const remote = Effect.fnUntraced(function* (root: Session.ID) {
 })
 
 export const status = (id: string) =>
-  Effect.flatMap(Session.Service, (sessions) => sessions.get(Session.ID.make(id))).pipe(
+  Effect.flatMap(SessionRunner.Service, (sessions) => sessions.get(Session.ID.make(id))).pipe(
     Effect.map((info) => info.status),
   )

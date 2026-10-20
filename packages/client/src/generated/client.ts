@@ -62,6 +62,18 @@ import type {
   AgentMembershipCreateOutput,
   AgentMembershipArchiveInput,
   AgentMembershipArchiveOutput,
+  SessionListInput,
+  SessionListOutput,
+  SessionGetInput,
+  SessionGetOutput,
+  SessionCreateInput,
+  SessionCreateOutput,
+  SessionArchiveInput,
+  SessionArchiveOutput,
+  ChatAccessInput,
+  ChatAccessOutput,
+  ChatModelsInput,
+  ChatModelsOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -571,6 +583,78 @@ export function make(options: ClientOptions) {
             path: `/agent-memberships/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    session: {
+      list: (input: SessionListInput, requestOptions?: RequestOptions) =>
+        request<SessionListOutput>(
+          {
+            method: "GET",
+            path: `/sessions`,
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: SessionGetInput, requestOptions?: RequestOptions) =>
+        request<SessionGetOutput>(
+          {
+            method: "GET",
+            path: `/sessions/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: SessionCreateInput, requestOptions?: RequestOptions) =>
+        request<SessionCreateOutput>(
+          {
+            method: "POST",
+            path: `/sessions`,
+            body: { id: input["id"], spaceId: input["spaceId"], message: input["message"], model: input["model"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: SessionArchiveInput, requestOptions?: RequestOptions) =>
+        request<SessionArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/sessions/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    chat: {
+      access: (input: ChatAccessInput, requestOptions?: RequestOptions) =>
+        request<ChatAccessOutput>(
+          {
+            method: "POST",
+            path: `/sessions/${encodeURIComponent(input.id)}/chat`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      models: (input: ChatModelsInput, requestOptions?: RequestOptions) =>
+        request<ChatModelsOutput>(
+          {
+            method: "GET",
+            path: `/sessions/${encodeURIComponent(input.id)}/models`,
+            successStatus: 200,
+            declaredStatuses: [401, 403],
             empty: false,
           },
           requestOptions,
