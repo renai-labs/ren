@@ -163,8 +163,10 @@ export const dockerContainer = async (options: {
   const tag = await Image.build()
   const state = { container: "", url: "", environmentId: options.environmentId ?? Environment.ID.create() }
   const published = async () => {
-    const hostPort = /:(\d+)$/m.exec(await docker(["port", state.container, `${EnvironmentApi.port}/tcp`]))?.[1]
-    if (!hostPort) throw new Error(`docker published no executor port for ${options.label}`)
+    const hostPort = await Wait.until(`docker to publish the executor port for ${options.label}`, 10_000, async () => {
+      const output = await run(["docker", "port", state.container, `${EnvironmentApi.port}/tcp`])
+      return /:(\d+)$/m.exec(output.stdout.trim())?.[1]
+    })
     state.url = `http://127.0.0.1:${hostPort}`
     const container = state.container
     await ready(

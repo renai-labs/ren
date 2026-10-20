@@ -53,6 +53,7 @@ interface Call {
   readonly marker: string | undefined
   readonly kind: "title" | "turn"
   readonly model: string
+  readonly system: string
   readonly key: string | undefined
   readonly tools: ReadonlyArray<string>
   readonly toolResults: string
@@ -164,6 +165,7 @@ const toCall = (body: typeof ChatRequest.Type, authorization: string, known: (ma
         : undefined,
     kind,
     model: body.model,
+    system,
     key: /^Bearer\s+(\S+)$/i.exec(authorization)?.[1],
     tools: body.tools?.map((item) => item.function.name) ?? [],
     toolResults: body.messages
