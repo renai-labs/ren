@@ -1,5 +1,5 @@
 import type { SessionInfo, SessionPage } from "@ren/client"
-import { ChatState, Family } from "@ren/chat"
+import { Family } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import type { SessionCapabilities } from "@ren/schema/session/capabilities"
@@ -20,7 +20,6 @@ import { Chat } from "../../lib/chat.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { Failure } from "./failure.js"
-import { SessionTitle } from "./session-title.js"
 
 function RunningMenu(props: {
   background: Family.Background
@@ -241,41 +240,41 @@ export function SessionHeader(props: {
 }
 
 export function ChildHeader(props: {
-  state: ChatState.State
   root: Session.ID
-  sessionID: Session.ID
-  rootTitle: string
+  title: string
+  ancestors: ReadonlyArray<{ readonly id: string; readonly title: string }>
+  running: boolean
   onOpen: (sessionID: Session.ID | undefined) => void
 }) {
-  const ancestors = Family.ancestors(props.state, props.sessionID)
-  const name = (id: string) =>
-    id === props.root ? props.rootTitle : SessionTitle.display(Family.childTitle(props.state, id, ""), "Subagent")
-  const parent = ancestors.at(-1) ?? props.root
-  const running = ChatState.activity(props.state, props.sessionID) === "running"
+  const parent = props.ancestors.at(-1)
   const open = (id: string) => props.onOpen(id === props.root ? undefined : Session.ID.make(id))
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
-      <IconButton label={`Back to ${name(parent)}`} size="small" onClick={() => open(parent)}>
+      <IconButton
+        label={`Back to ${parent?.title ?? ""}`}
+        size="small"
+        onClick={() => open(parent?.id ?? props.root)}
+      >
         <Icon glyph="ArrowLeft" />
       </IconButton>
       <Breadcrumbs.Root>
-        {(ancestors.length > 0 ? ancestors : [props.root]).map((id) => (
+        {props.ancestors.map((ancestor) => (
           <Breadcrumbs.Link
-            key={id}
+            key={ancestor.id}
             render={
               <Link
                 to="/sessions/$sessionId"
                 params={{ sessionId: props.root }}
-                search={id === props.root ? {} : { child: Session.ID.make(id) }}
+                search={ancestor.id === props.root ? {} : { child: Session.ID.make(ancestor.id) }}
               />
             }
           >
-            {name(id)}
+            {ancestor.title}
           </Breadcrumbs.Link>
         ))}
-        <Breadcrumbs.Page>{name(props.sessionID)}</Breadcrumbs.Page>
+        <Breadcrumbs.Page>{props.title}</Breadcrumbs.Page>
       </Breadcrumbs.Root>
-      {running ? <ProgressIndicator size="small" label="Running" /> : null}
+      {props.running ? <ProgressIndicator size="small" label="Running" /> : null}
     </div>
   )
 }

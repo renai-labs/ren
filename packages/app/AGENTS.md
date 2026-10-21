@@ -20,7 +20,8 @@ The product SPA and its web host. Desktop and mobile hosts will import it throug
 - Realtime events from the sync layer write into the query cache.
 - State lives in one place:
   - Server data lives in TanStack Query.
-  - Live chat state (transcript, inbox, permissions, forms, connection) lives in `@ren/chat` atoms, read through `@ren/chat/react` under the provider in `routes/_authed.tsx`. Session lists and metadata stay in TanStack Query.
+  - Live chat state lives in `@ren/chat` atoms, read through `@ren/chat/react`.
+  - Only `features/session/chat-view.ts` reads the whole chat state during render. Components take its narrow values, never `ChatState.State`, so streaming doesn't re-render them.
   - Anything shareable or restorable (filters, tabs, open panels, selection) lives in the URL as search params validated with Effect Schema.
   - Everything else lives in the component that owns it.
 - Auth goes through `better-auth/client` in `src/lib/auth.ts`. The session is a query (`Auth.sessionOptions`), guarded in `beforeLoad`.

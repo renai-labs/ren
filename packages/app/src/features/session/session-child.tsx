@@ -1,4 +1,3 @@
-import { ChatState, Family, Working } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import { Button } from "@ren/ui/button"
@@ -6,57 +5,42 @@ import { ConversationShell } from "@ren/ui/conversation-shell"
 import { Notice } from "@ren/ui/notice"
 import { StateMessage } from "@ren/ui/state-message"
 import { Toast } from "@ren/ui/toast"
-import { AsyncResult } from "effect/reactivity"
 import { useRef } from "react"
 import { Chat } from "../../lib/chat.js"
-import { Requests } from "./requests.js"
+import { ChatView } from "./chat-view.js"
 import { ChildHeader } from "./session-header.js"
 import { SessionRequests } from "./session-requests.js"
-import { SessionTitle } from "./session-title.js"
 import { useTranscriptRows } from "./transcript-rows.js"
-
-const childName = (state: ChatState.State, sessionID: string) =>
-  SessionTitle.display(Family.childTitle(state, sessionID, ""), "Subagent")
 
 export function SessionChild(props: {
   root: Session.ID
   sessionID: Session.ID
-  state: ChatState.State
   rootTitle: string
   onOpen: (sessionID: Session.ID | undefined) => void
 }) {
-  const result = ChatReact.useChild(props.root, props.sessionID)
-  const timeline = AsyncResult.isSuccess(result) ? result.value : undefined
+  const chat = ChatView.useChild(props.root, props.sessionID, props.rootTitle)
   const scroller = useRef<ConversationShell.TimelineHandle>(null)
   const retry = Chat.useRetry(props.root)
   const loadMore = ChatReact.useAction(props.root, (opened) => opened.loadMore(props.sessionID))
-  const messages = ChatState.messages(props.state, props.sessionID)
-  const title = childName(props.state, props.sessionID)
-  const parent = props.state.info[props.sessionID]?.parentID ?? props.root
-  const parentTitle =
-    parent === props.root
-      ? props.rootTitle
-      : SessionTitle.display(Family.childTitle(props.state, parent, ""), "Subagent")
-  const requests = Requests.live(props.state, props.sessionID)
-  const back = () => props.onOpen(parent === props.root ? undefined : Session.ID.make(parent))
+  const back = () => props.onOpen(chat.parent === props.root ? undefined : Session.ID.make(chat.parent))
   const transcript = useTranscriptRows({
     view: { root: props.root, sessionID: props.sessionID },
-    state: props.state,
-    messages,
-    rows: timeline?.rows ?? [],
-    activeMessageID: timeline?.activeMessageID,
-    busy: ChatState.activity(props.state, props.sessionID) === "running",
-    working: timeline ? Working.show(props.state, props.sessionID, timeline, parent) : false,
+    statuses: chat.statuses,
+    messages: chat.messages,
+    rows: chat.rows,
+    activeMessageID: chat.activeMessageID,
+    busy: chat.running,
+    working: chat.working,
     onOpenChild: props.onOpen,
   })
 
   return (
-    <section aria-label={`${title} subagent`} className="flex min-h-0 flex-1 flex-col">
+    <section aria-label={`${chat.title} subagent`} className="flex min-h-0 flex-1 flex-col">
       <ConversationShell.Root
         mode="read-only"
-        populated={messages.length > 0}
+        populated={chat.messages.length > 0}
         placeholder={
-          AsyncResult.isFailure(result) ? (
+          chat.failed ? (
             <StateMessage state="failed" title="Could not load this subagent" onRetry={retry} />
           ) : (
             <StateMessage state="empty" title="No messages yet" />
@@ -64,20 +48,20 @@ export function SessionChild(props: {
         }
         header={
           <ChildHeader
-            state={props.state}
             root={props.root}
-            sessionID={props.sessionID}
-            rootTitle={props.rootTitle}
+            title={chat.title}
+            ancestors={chat.ancestors}
+            running={chat.running}
             onOpen={props.onOpen}
           />
         }
         timeline={
           <ConversationShell.Timeline
             ref={scroller}
-            label={`${title} transcript`}
+            label={`${chat.title} transcript`}
             history={{
-              more: ChatState.more(props.state, props.sessionID),
-              loading: ChatState.loadingHistory(props.state, props.sessionID),
+              more: chat.more,
+              loading: chat.loadingHistory,
               onLoadOlder: () =>
                 void loadMore().catch(() =>
                   Toast.manager.add({ type: "error", title: "Could not load earlier messages" }),
@@ -91,19 +75,19 @@ export function SessionChild(props: {
             <SessionRequests
               root={props.root}
               sessionID={props.sessionID}
-              permission={requests.permission}
-              permissionTitle={requests.permissionTitle}
-              form={requests.form}
-              formTitle={requests.formTitle}
-              connection={requests.connection}
+              permission={chat.requests.permission}
+              permissionTitle={chat.requests.permissionTitle}
+              form={chat.requests.form}
+              formTitle={chat.requests.formTitle}
+              connection={chat.requests.connection}
               onOpen={props.onOpen}
               onAnswered={() => scroller.current?.resume()}
             />
-            {(requests.permission ?? requests.form) ? null : (
+            {(chat.requests.permission ?? chat.requests.form) ? null : (
               <Notice tone="neutral" placement="banner" layout="inline">
                 Subagent sessions cannot be prompted.{" "}
                 <Button appearance="link" onClick={back}>
-                  Back to {parentTitle}
+                  Back to {chat.parentTitle}
                 </Button>
               </Notice>
             )}

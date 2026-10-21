@@ -1,7 +1,5 @@
-import { useAtomValue } from "@effect/atom-react"
 import {
   ChatState,
-  Family,
   Projection,
   type TimelineDetail,
   TimelineOpen,
@@ -22,10 +20,9 @@ import { Separator } from "@ren/ui/separator"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
 import { Transcript } from "@ren/ui/transcript"
-import { ChatReact } from "@ren/chat/react"
 import { DateTime } from "effect"
-import { AsyncResult } from "effect/reactivity"
 import { Platform } from "../../platform/platform.js"
+import { ChatView } from "./chat-view.js"
 import { TranscriptError, TranscriptNotice, TranscriptNoticeItem, TranscriptShell } from "./transcript-notice.js"
 import { FileChanges, TranscriptTool } from "./transcript-tool.js"
 
@@ -65,8 +62,7 @@ export interface RowData {
 const isSubagent = (tool: SessionMessage.Tool) => tool.name === "subagent" || tool.name === "task"
 
 function Subagent(props: { shared: Shared; tool: SessionMessage.Tool }) {
-  const state = AsyncResult.getOrElse(useAtomValue(ChatReact.useAtoms().state(props.shared.root)), () => ChatState.empty)
-  const card = Family.subagent(state, props.shared.sessionID, props.tool)
+  const card = ChatView.useSubagent(props.shared.root, props.shared.sessionID, props.tool)
   const child = card.child
   const openChild = props.shared.onOpenChild
   return (
