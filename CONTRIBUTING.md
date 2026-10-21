@@ -1,5 +1,7 @@
 # Contributing to Ren
 
+Ren does not accept outside contributions. Only collaborators can open pull requests and merge to `main`. Everyone else is welcome to [open an issue](https://github.com/renai-labs/ren/issues/new/choose) for bugs and feature requests.
+
 ## Setup
 
 Requires Bun 1.4.2 and Docker.
