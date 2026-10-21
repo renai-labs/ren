@@ -9,10 +9,11 @@ import { Toast } from "@ren/ui/toast"
 import { AsyncResult } from "effect/reactivity"
 import { useRef } from "react"
 import { Chat } from "../../lib/chat.js"
+import { Requests } from "./requests.js"
 import { ChildHeader } from "./session-header.js"
 import { SessionRequests } from "./session-requests.js"
 import { SessionTitle } from "./session-title.js"
-import { transcriptRows } from "./transcript-rows.js"
+import { useTranscriptRows } from "./transcript-rows.js"
 
 const childName = (state: ChatState.State, sessionID: string) =>
   SessionTitle.display(Family.childTitle(state, sessionID, ""), "Subagent")
@@ -36,8 +37,19 @@ export function SessionChild(props: {
     parent === props.root
       ? props.rootTitle
       : SessionTitle.display(Family.childTitle(props.state, parent, ""), "Subagent")
-  const asking = Family.permission(props.state, props.sessionID) ?? Family.form(props.state, props.sessionID)
+  const requests = Requests.live(props.state, props.sessionID)
   const back = () => props.onOpen(parent === props.root ? undefined : Session.ID.make(parent))
+  const transcript = useTranscriptRows({
+    view: { root: props.root, sessionID: props.sessionID },
+    state: props.state,
+    messages,
+    rows: timeline?.rows ?? [],
+    activeMessageID: timeline?.activeMessageID,
+    busy: ChatState.activity(props.state, props.sessionID) === "running",
+    working: timeline ? Working.show(props.state, props.sessionID, timeline, parent) : false,
+    onOpenChild: props.onOpen,
+  })
+
   return (
     <section aria-label={`${title} subagent`} className="flex min-h-0 flex-1 flex-col">
       <ConversationShell.Root
@@ -71,16 +83,7 @@ export function SessionChild(props: {
                   Toast.manager.add({ type: "error", title: "Could not load earlier messages" }),
                 ),
             }}
-            {...transcriptRows({
-              view: { root: props.root, sessionID: props.sessionID },
-              state: props.state,
-              messages,
-              rows: timeline?.rows ?? [],
-              activeMessageID: timeline?.activeMessageID,
-              busy: ChatState.activity(props.state, props.sessionID) === "running",
-              working: timeline ? Working.show(props.state, props.sessionID, timeline, parent) : false,
-              onOpenChild: props.onOpen,
-            })}
+            {...transcript}
           />
         }
         interaction={
@@ -88,11 +91,15 @@ export function SessionChild(props: {
             <SessionRequests
               root={props.root}
               sessionID={props.sessionID}
-              state={props.state}
+              permission={requests.permission}
+              permissionTitle={requests.permissionTitle}
+              form={requests.form}
+              formTitle={requests.formTitle}
+              connection={requests.connection}
               onOpen={props.onOpen}
               onAnswered={() => scroller.current?.resume()}
             />
-            {asking ? null : (
+            {(requests.permission ?? requests.form) ? null : (
               <Notice tone="neutral" placement="banner" layout="inline">
                 Subagent sessions cannot be prompted.{" "}
                 <Button appearance="link" onClick={back}>
