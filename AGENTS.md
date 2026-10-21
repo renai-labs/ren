@@ -13,6 +13,15 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 | Change lint rules or `oxlint.config.ts` | `script/AGENTS.md`.                                                          |
 | Change Turborepo config                 | `docs/` in the installed `turbo` package. Its behaviour differs from memory. |
 | Write a spec                            | `specs/README.md`.                                                           |
+| Add a runtime option or a feature flag  | `specs/runtime/README.md`.                                                   |
+
+## Vocabulary
+
+- **Brain**: the agent loop that serves a session, or every session in a space. It serves the Brain API and the Chat API.
+- **Harness**: the agent runtime inside a brain, such as OpenCode.
+- **Host**: where a brain runs (`BrainHost`): a cell, which is a Durable Object, or a sandbox.
+- **Environment**: one running sandbox where a brain's tools run, served by an **executor**. An **EnvironmentProvider** makes environments; an **EnvironmentTemplate** is the saved config for one.
+- **Runtime**: a brain's harness, host, environment and scope. A space has one, and each session keeps the one it started with.
 
 ## Git
 
