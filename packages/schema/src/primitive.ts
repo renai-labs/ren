@@ -14,13 +14,18 @@ export const Name = Schema.String.check(
 
 export const maximumSlugLength = 64
 
+export const slugPattern = "[a-z0-9]+(?:-[a-z0-9]+)*"
+
 export const Slug = Schema.String.check(
-  Schema.isNonEmpty({ message: "Name is required." }),
   Schema.isMaxLength(maximumSlugLength, { message: `Use ${maximumSlugLength} characters or fewer.` }),
-  Schema.isPattern(/^[a-z0-9][a-z0-9-]*$/u, {
-    message: "Use lowercase letters, digits and dashes, starting with a letter or digit.",
+  Schema.isPattern(new RegExp(`^${slugPattern}$`, "u"), {
+    message: "Use lowercase letters and digits, joined by single dashes.",
   }),
 ).annotate({ identifier: "Primitive.Slug" })
+
+export const HttpsUrl = Schema.String.check(
+  Schema.makeFilter((url) => URL.parse(url)?.protocol === "https:" || "an https URL"),
+).annotate({ identifier: "Primitive.HttpsUrl" })
 
 export interface List {
   readonly input: Schema.Top
