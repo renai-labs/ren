@@ -12,7 +12,7 @@ import { useState } from "react"
 import type { ReactNode } from "react"
 import { Chat } from "../../lib/chat.js"
 import { Failure } from "./failure.js"
-import { FormProgress } from "./form-progress.js"
+import { FormProgress } from "../../lib/form-progress.js"
 import { Requests } from "./requests.js"
 import { SessionTitle } from "./session-title.js"
 

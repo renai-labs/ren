@@ -55,6 +55,7 @@ export function usePendingInvitation(props: PendingInvitationProps) {
         return
       }
       context.queryClient.clear()
+      await import("../../lib/chat.js").then((loaded) => loaded.Chat.forget())
       await navigate({ to: "/login", search: { invitationId: props.id, redirect: props.redirect } })
     },
     decline: async () => {

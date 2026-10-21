@@ -9,14 +9,13 @@ import { Transcript } from "@ren/ui/transcript"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { startTransition, useId, useRef, useState, ViewTransition } from "react"
+import { Attention } from "../../lib/attention.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
 import { Failure } from "./failure.js"
 import { ComposerModelPicker } from "./composer-model-picker.js"
 import { SessionDrafts } from "./session-drafts.js"
-
-const historyKey = "history"
 
 export function NewChat(props: { name: string; userId: string }) {
   const context = RouterContext.useRouterContext()
@@ -74,6 +73,7 @@ export function NewChat(props: { name: string; userId: string }) {
             label="Start a chat"
             onSubmit={() => {
               if (!text || !spaceId || create.isPending) return
+              Attention.ask(platform)
               const message = { id: SessionMessage.ID.create(), text }
               startTransition(() => setSent(text))
               create.mutate(
@@ -82,9 +82,9 @@ export function NewChat(props: { name: string; userId: string }) {
                   onSuccess: () => {
                     platform.drafts?.remove(SessionDrafts.fresh)
                     platform.drafts?.set(
-                      historyKey,
+                      SessionDrafts.history,
                       ComposerHistory.encode(
-                        ComposerHistory.prepend(ComposerHistory.decode(platform.drafts.get(historyKey)), {
+                        ComposerHistory.prepend(ComposerHistory.decode(platform.drafts.get(SessionDrafts.history)), {
                           text: draft.text,
                           pasted: [],
                         }),

@@ -197,7 +197,7 @@ story("keeps following new turns until the reader scrolls up", async ({ visit, p
   await root.getByRole("button", { name: "Add turn" }).click()
   await expect(root.getByText(/^Answer 201\./)).toBeInViewport()
   await root.getByText(/^Answer 201\./).hover()
-  await page.mouse.wheel(0, -1200)
+  await page.mouse.wheel(0, -2 * (await root.getByLabel("Conversation").evaluate((node) => node.clientHeight)))
   await expect(root.getByRole("status", { name: "Following" })).toHaveText("Paused")
   await root.getByRole("button", { name: "Add turn" }).click()
   await expect(root.getByText(/^Question 202:/)).not.toBeInViewport()
@@ -209,7 +209,7 @@ story("keeps following new turns until the reader scrolls up", async ({ visit, p
 story("follows again once the reader scrolls back to the end", async ({ visit, page }) => {
   const root = await visit("ui-conversation-shell--timeline")
   await root.getByText(/^Answer 200\./).hover()
-  await page.mouse.wheel(0, -600)
+  await page.mouse.wheel(0, -(await root.getByLabel("Conversation").evaluate((node) => node.clientHeight)))
   await expect(root.getByRole("status", { name: "Following" })).toHaveText("Paused")
   await page.mouse.wheel(0, 5000)
   await expect(root.getByRole("status", { name: "Following" })).toHaveText("Following")

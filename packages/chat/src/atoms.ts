@@ -9,6 +9,7 @@ import type { HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 import { ChatSession } from "./chat-session.js"
 import { ChatState } from "./chat-state.js"
+import { Family } from "./family.js"
 import { Projection } from "./projection.js"
 import { ShellOutput } from "./shell-output.js"
 import type { TimelineDetail } from "./timeline-detail.js"
@@ -51,6 +52,23 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     for (const key of oldest) handoffs.delete(key)
   }
 
+  const attentions = new Map<Session.ID, Family.Attention>()
+  const watchers = new Set<() => void>()
+
+  const publish = (sessionID: Session.ID, value: Family.Attention | undefined) => {
+    if (value) attentions.set(sessionID, value)
+    else attentions.delete(sessionID)
+    for (const watcher of watchers) watcher()
+  }
+
+  const attention = {
+    read: (sessionID: Session.ID) => attentions.get(sessionID),
+    subscribe: (watcher: () => void) => {
+      watchers.add(watcher)
+      return () => void watchers.delete(watcher)
+    },
+  }
+
   const session = Atom.family((sessionID: Session.ID) =>
     options.runtime
       .atom(
@@ -67,6 +85,13 @@ export const make = <R, ER>(options: Options<R, ER>) => {
           yield* opened.open(sessionID).pipe(
             Effect.andThen(opened.enrich(sessionID)),
             Effect.catch((error) => Effect.logWarning("The chat could not load the session", error)),
+            Effect.forkScoped,
+          )
+          yield* Effect.addFinalizer(() => Effect.sync(() => publish(sessionID, undefined)))
+          yield* SubscriptionRef.changes(opened.state).pipe(
+            Stream.map((current) => Family.attention(current, sessionID)),
+            Stream.changes,
+            Stream.runForEach((value) => Effect.sync(() => publish(sessionID, value))),
             Effect.forkScoped,
           )
           const lifecycle = options.lifecycle
@@ -207,6 +232,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     session,
     state,
     status,
+    attention,
     timeline,
     child,
     models,

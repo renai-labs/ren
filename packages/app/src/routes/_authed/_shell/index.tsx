@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router"
+import { createFileRoute, redirect, useRouterState } from "@tanstack/react-router"
 import { Effect, Schema } from "effect"
 import { NewChat } from "../../../features/session/new-chat.js"
 
@@ -23,5 +23,6 @@ export const Route = createFileRoute("/_authed/_shell/")({
 
 function NewChatRoute() {
   const context = Route.useRouteContext()
-  return <NewChat name={context.me.user.name} userId={context.me.user.id} />
+  const visit = useRouterState({ select: (state) => state.location.state.__TSR_key })
+  return <NewChat key={visit} name={context.me.user.name} userId={context.me.user.id} />
 }

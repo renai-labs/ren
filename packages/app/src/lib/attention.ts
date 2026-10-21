@@ -1,7 +1,8 @@
 export * as Attention from "./attention.js"
 
 import { useEffect, useEffectEvent, useRef } from "react"
-import { Platform } from "./platform.js"
+import { Platform } from "../platform/platform.js"
+import { ChatPreferences } from "./chat-preferences.js"
 
 export type Signal = "finished" | "input"
 
@@ -21,13 +22,18 @@ const copy: Readonly<Record<Signal, string>> = {
   input: "Ren needs your input",
 }
 
+export function ask(platform: Platform.Info) {
+  if (ChatPreferences.notify.read(platform.storage)) void platform.requestNotifications?.()
+}
+
 export function useNotify(input: Activity & { readonly title: string }) {
   const platform = Platform.usePlatform()
   const previous = useRef<Activity>({ running: input.running, asking: input.asking })
   const notify = useEffectEvent((next: Activity) => {
     const found = signal(previous.current, next)
     previous.current = next
-    if (found) void platform.notify(input.title, copy[found]).catch(() => undefined)
+    if (found && ChatPreferences.notify.read(platform.storage))
+      void platform.notify(input.title, copy[found]).catch(() => undefined)
   })
   useEffect(() => notify({ running: input.running, asking: input.asking }), [input.running, input.asking])
 }

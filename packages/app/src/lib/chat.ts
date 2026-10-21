@@ -12,6 +12,7 @@ import { FetchHttpClient, HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 import type { Platform } from "../platform/platform.js"
 import { ChatPreferences } from "./chat-preferences.js"
+import { FormProgress } from "./form-progress.js"
 
 export interface Chat {
   readonly atoms: ChatAtoms.ChatAtoms
@@ -24,6 +25,7 @@ const made = new Map<string, Chat>()
 export function forget() {
   for (const chat of made.values()) chat.registry.dispose()
   made.clear()
+  FormProgress.reset()
 }
 
 export function forUser(platform: Platform.Info, userId: string) {

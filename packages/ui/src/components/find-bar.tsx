@@ -32,26 +32,34 @@ const clear = () => {
   CSS.highlights.delete(activeName)
 }
 
-const textNodes = (body: Element) => {
-  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT)
-  const nodes: Array<Text> = []
-  while (walker.nextNode()) if (walker.currentNode instanceof Text) nodes.push(walker.currentNode)
-  return nodes
-}
-
 const special = /[.*+?^${}()|[\]\\]/g
 
+const bodyRanges = (body: Element, pattern: RegExp) => {
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+  const nodes: Array<{ node: Text; start: number }> = []
+  const text = { value: "" }
+  while (walker.nextNode())
+    if (walker.currentNode instanceof Text) {
+      nodes.push({ node: walker.currentNode, start: text.value.length })
+      text.value += walker.currentNode.data
+    }
+  const at = (offset: number) => {
+    const found = nodes.findLast((entry) => entry.start <= offset) ?? nodes[0]
+    return found && { node: found.node, offset: Math.min(offset - found.start, found.node.length) }
+  }
+  return [...text.value.matchAll(pattern)].flatMap((found) => {
+    const start = at(found.index)
+    const end = at(found.index + found[0].length)
+    if (!start || !end) return []
+    const range = document.createRange()
+    range.setStart(start.node, start.offset)
+    range.setEnd(end.node, end.offset)
+    return [range]
+  })
+}
+
 const rowRanges = (row: Element, pattern: RegExp) =>
-  [...row.querySelectorAll(bodies)].flatMap((body) =>
-    textNodes(body).flatMap((node) =>
-      [...(node.nodeValue ?? "").matchAll(pattern)].map((found) => {
-        const range = document.createRange()
-        range.setStart(node, found.index)
-        range.setEnd(node, found.index + found[0].length)
-        return range
-      }),
-    ),
-  )
+  [...row.querySelectorAll(bodies)].flatMap((body) => bodyRanges(body, pattern))
 
 const ranges = (root: Element, query: string, match: FindBarMatch | undefined) => {
   const pattern = new RegExp(query.replaceAll(special, "\\$&"), "gi")

@@ -6,6 +6,8 @@ import type { Platform } from "../../platform/platform.js"
 
 export const fresh = "new"
 
+export const history = "history"
+
 export const key = (sessionID: Session.ID) => `session.${sessionID}`
 
 export function prefill(drafts: Platform.Storage | undefined, draft: string, text: string) {

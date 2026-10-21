@@ -78,56 +78,65 @@ const AuthedShellSplatRoute = AuthedShellSplatRouteImport.update({
   path: "/$",
   getParentRoute: () => AuthedShellRoute,
 } as any)
-const AuthedShellSettingsIndexRoute = AuthedShellSettingsIndexRouteImport.update({
-  id: "/settings/",
-  path: "/settings/",
-  getParentRoute: () => AuthedShellRoute,
-} as any)
-const AuthedShellSettingsAdminRoute = AuthedShellSettingsAdminRouteImport.update({
-  id: "/settings/_admin",
-  path: "/settings",
-  getParentRoute: () => AuthedShellRoute,
-} as any)
-const AuthedShellSettingsPreferencesRoute = AuthedShellSettingsPreferencesRouteImport.update({
-  id: "/settings/preferences",
-  path: "/settings/preferences",
-  getParentRoute: () => AuthedShellRoute,
-} as any)
+const AuthedShellSettingsIndexRoute =
+  AuthedShellSettingsIndexRouteImport.update({
+    id: "/settings/",
+    path: "/settings/",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellSettingsAdminRoute =
+  AuthedShellSettingsAdminRouteImport.update({
+    id: "/settings/_admin",
+    path: "/settings",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellSettingsPreferencesRoute =
+  AuthedShellSettingsPreferencesRouteImport.update({
+    id: "/settings/preferences",
+    path: "/settings/preferences",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSpacesIndexRoute = AuthedShellSpacesIndexRouteImport.update({
   id: "/spaces/",
   path: "/spaces/",
   getParentRoute: () => AuthedShellRoute,
 } as any)
-const AuthedShellSpacesSpaceIdRouteRoute = AuthedShellSpacesSpaceIdRouteRouteImport.update({
-  id: "/spaces/$spaceId",
-  path: "/spaces/$spaceId",
-  getParentRoute: () => AuthedShellRoute,
-} as any)
-const AuthedShellSessionsSessionIdIndexRoute = AuthedShellSessionsSessionIdIndexRouteImport.update({
-  id: "/sessions/$sessionId/",
-  path: "/sessions/$sessionId/",
-  getParentRoute: () => AuthedShellRoute,
-} as any)
-const AuthedShellSettingsAdminGeneralRoute = AuthedShellSettingsAdminGeneralRouteImport.update({
-  id: "/general",
-  path: "/general",
-  getParentRoute: () => AuthedShellSettingsAdminRoute,
-} as any)
-const AuthedShellSpacesSpaceIdIndexRoute = AuthedShellSpacesSpaceIdIndexRouteImport.update({
-  id: "/",
-  path: "/",
-  getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
-} as any)
-const AuthedShellSpacesSpaceIdMembersRoute = AuthedShellSpacesSpaceIdMembersRouteImport.update({
-  id: "/members",
-  path: "/members",
-  getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
-} as any)
-const AuthedShellSettingsAdminMembersIndexRoute = AuthedShellSettingsAdminMembersIndexRouteImport.update({
-  id: "/members/",
-  path: "/members/",
-  getParentRoute: () => AuthedShellSettingsAdminRoute,
-} as any)
+const AuthedShellSpacesSpaceIdRouteRoute =
+  AuthedShellSpacesSpaceIdRouteRouteImport.update({
+    id: "/spaces/$spaceId",
+    path: "/spaces/$spaceId",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellSessionsSessionIdIndexRoute =
+  AuthedShellSessionsSessionIdIndexRouteImport.update({
+    id: "/sessions/$sessionId/",
+    path: "/sessions/$sessionId/",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
+const AuthedShellSettingsAdminGeneralRoute =
+  AuthedShellSettingsAdminGeneralRouteImport.update({
+    id: "/general",
+    path: "/general",
+    getParentRoute: () => AuthedShellSettingsAdminRoute,
+  } as any)
+const AuthedShellSpacesSpaceIdIndexRoute =
+  AuthedShellSpacesSpaceIdIndexRouteImport.update({
+    id: "/",
+    path: "/",
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
+  } as any)
+const AuthedShellSpacesSpaceIdMembersRoute =
+  AuthedShellSpacesSpaceIdMembersRouteImport.update({
+    id: "/members",
+    path: "/members",
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
+  } as any)
+const AuthedShellSettingsAdminMembersIndexRoute =
+  AuthedShellSettingsAdminMembersIndexRouteImport.update({
+    id: "/members/",
+    path: "/members/",
+    getParentRoute: () => AuthedShellSettingsAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof AuthedShellIndexRoute
@@ -413,28 +422,33 @@ interface AuthedShellSpacesSpaceIdRouteRouteChildren {
   AuthedShellSpacesSpaceIdIndexRoute: typeof AuthedShellSpacesSpaceIdIndexRoute
 }
 
-const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteRouteChildren = {
-  AuthedShellSpacesSpaceIdMembersRoute: AuthedShellSpacesSpaceIdMembersRoute,
-  AuthedShellSpacesSpaceIdIndexRoute: AuthedShellSpacesSpaceIdIndexRoute,
-}
+const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteRouteChildren =
+  {
+    AuthedShellSpacesSpaceIdMembersRoute: AuthedShellSpacesSpaceIdMembersRoute,
+    AuthedShellSpacesSpaceIdIndexRoute: AuthedShellSpacesSpaceIdIndexRoute,
+  }
 
-const AuthedShellSpacesSpaceIdRouteRouteWithChildren = AuthedShellSpacesSpaceIdRouteRoute._addFileChildren(
-  AuthedShellSpacesSpaceIdRouteRouteChildren,
-)
+const AuthedShellSpacesSpaceIdRouteRouteWithChildren =
+  AuthedShellSpacesSpaceIdRouteRoute._addFileChildren(
+    AuthedShellSpacesSpaceIdRouteRouteChildren,
+  )
 
 interface AuthedShellSettingsAdminRouteChildren {
   AuthedShellSettingsAdminGeneralRoute: typeof AuthedShellSettingsAdminGeneralRoute
   AuthedShellSettingsAdminMembersIndexRoute: typeof AuthedShellSettingsAdminMembersIndexRoute
 }
 
-const AuthedShellSettingsAdminRouteChildren: AuthedShellSettingsAdminRouteChildren = {
-  AuthedShellSettingsAdminGeneralRoute: AuthedShellSettingsAdminGeneralRoute,
-  AuthedShellSettingsAdminMembersIndexRoute: AuthedShellSettingsAdminMembersIndexRoute,
-}
+const AuthedShellSettingsAdminRouteChildren: AuthedShellSettingsAdminRouteChildren =
+  {
+    AuthedShellSettingsAdminGeneralRoute: AuthedShellSettingsAdminGeneralRoute,
+    AuthedShellSettingsAdminMembersIndexRoute:
+      AuthedShellSettingsAdminMembersIndexRoute,
+  }
 
-const AuthedShellSettingsAdminRouteWithChildren = AuthedShellSettingsAdminRoute._addFileChildren(
-  AuthedShellSettingsAdminRouteChildren,
-)
+const AuthedShellSettingsAdminRouteWithChildren =
+  AuthedShellSettingsAdminRoute._addFileChildren(
+    AuthedShellSettingsAdminRouteChildren,
+  )
 
 interface AuthedShellRouteChildren {
   AuthedShellSplatRoute: typeof AuthedShellSplatRoute
@@ -450,15 +464,19 @@ interface AuthedShellRouteChildren {
 const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSplatRoute: AuthedShellSplatRoute,
   AuthedShellIndexRoute: AuthedShellIndexRoute,
-  AuthedShellSpacesSpaceIdRouteRoute: AuthedShellSpacesSpaceIdRouteRouteWithChildren,
+  AuthedShellSpacesSpaceIdRouteRoute:
+    AuthedShellSpacesSpaceIdRouteRouteWithChildren,
   AuthedShellSettingsAdminRoute: AuthedShellSettingsAdminRouteWithChildren,
   AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
   AuthedShellSettingsIndexRoute: AuthedShellSettingsIndexRoute,
   AuthedShellSpacesIndexRoute: AuthedShellSpacesIndexRoute,
-  AuthedShellSessionsSessionIdIndexRoute: AuthedShellSessionsSessionIdIndexRoute,
+  AuthedShellSessionsSessionIdIndexRoute:
+    AuthedShellSessionsSessionIdIndexRoute,
 }
 
-const AuthedShellRouteWithChildren = AuthedShellRoute._addFileChildren(AuthedShellRouteChildren)
+const AuthedShellRouteWithChildren = AuthedShellRoute._addFileChildren(
+  AuthedShellRouteChildren,
+)
 
 interface AuthedRouteChildren {
   AuthedShellRoute: typeof AuthedShellRouteWithChildren
@@ -468,7 +486,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedShellRoute: AuthedShellRouteWithChildren,
 }
 
-const AuthedRouteWithChildren = AuthedRoute._addFileChildren(AuthedRouteChildren)
+const AuthedRouteWithChildren =
+  AuthedRoute._addFileChildren(AuthedRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
@@ -479,4 +498,6 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   InvitesAcceptRoute: InvitesAcceptRoute,
 }
-export const routeTree = rootRouteImport._addFileChildren(rootRouteChildren)._addFileTypes<FileRouteTypes>()
+export const routeTree = rootRouteImport
+  ._addFileChildren(rootRouteChildren)
+  ._addFileTypes<FileRouteTypes>()

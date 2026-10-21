@@ -66,6 +66,7 @@ export function ProfileCard(props: {
         onConfirm={async () => {
           await auth.signOut()
           queryClient.clear()
+          await import("../../lib/chat.js").then((loaded) => loaded.Chat.forget())
           await navigate({ to: "/login" })
         }}
       />
