@@ -1,6 +1,7 @@
-import { Agent } from "@ren/schema/agent"
+import type { Agent } from "@ren/schema/agent"
 import type { AgentMembership } from "@ren/schema/agent-membership"
 import type { Auth } from "@ren/schema/auth"
+import { Primitive } from "@ren/schema/primitive"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
 import { boolean, check, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
@@ -39,7 +40,7 @@ export const agent = pgTable(
     check("agent_global_check", sql`(${table.organization_id} is null) = (${table.owner_space_id} is null)`),
     check(
       "agent_name_length_check",
-      sql`char_length(${table.name}) between 1 and ${sql.raw(String(Agent.maximumNameLength))}`,
+      sql`char_length(${table.name}) between 1 and ${sql.raw(String(Primitive.maximumSlugLength))}`,
     ),
   ],
 )

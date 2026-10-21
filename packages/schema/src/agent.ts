@@ -1,6 +1,6 @@
 export * as Agent from "./agent.js"
 
-import { Effect, Schema } from "effect"
+import { Effect, Schema, Struct } from "effect"
 import { Auth } from "./auth.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
@@ -11,15 +11,7 @@ import { Space } from "./space.js"
 export const ID = Identifier.make("agt", "Agent.ID")
 export type ID = typeof ID.Type
 
-export const maximumNameLength = 64
-
-export const Name = Schema.String.check(
-  Schema.isNonEmpty({ message: "Name is required." }),
-  Schema.isMaxLength(maximumNameLength, { message: `Use ${maximumNameLength} characters or fewer.` }),
-  Schema.isPattern(/^[a-z0-9][a-z0-9-]*$/u, {
-    message: "Use lowercase letters, digits and dashes, starting with a letter or digit.",
-  }),
-).annotate({ identifier: "Agent.Name" })
+export const Name = Primitive.Slug.annotate({ identifier: "Agent.Name" })
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
@@ -52,6 +44,11 @@ export const CreateInput = Schema.Struct({
   isSubagent: Schema.Boolean.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(false))),
   settings: Settings.Info.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({ permissions: [], references: [] }))),
 }).annotate({ identifier: "Agent.CreateInput" })
+
+export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
+export const Declaration = CreateInput.mapFields(Struct.omit(["ownerSpaceId", "name"])).annotate({
+  identifier: "Agent.Declaration",
+})
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({

@@ -12,6 +12,16 @@ export const Name = Schema.String.check(
   Schema.isMaxLength(maximumNameLength, { message: `Use ${maximumNameLength} characters or fewer.` }),
 )
 
+export const maximumSlugLength = 64
+
+export const Slug = Schema.String.check(
+  Schema.isNonEmpty({ message: "Name is required." }),
+  Schema.isMaxLength(maximumSlugLength, { message: `Use ${maximumSlugLength} characters or fewer.` }),
+  Schema.isPattern(/^[a-z0-9][a-z0-9-]*$/u, {
+    message: "Use lowercase letters, digits and dashes, starting with a letter or digit.",
+  }),
+).annotate({ identifier: "Primitive.Slug" })
+
 export interface List {
   readonly input: Schema.Top
   readonly page: Schema.Top
