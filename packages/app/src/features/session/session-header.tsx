@@ -2,6 +2,7 @@ import type { SessionInfo, SessionPage } from "@ren/client"
 import { ChatState, Family } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
+import type { SessionCapabilities } from "@ren/schema/session/capabilities"
 import { Breadcrumbs } from "@ren/ui/breadcrumbs"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
@@ -21,13 +22,16 @@ import { Platform } from "../../platform/platform.js"
 import { Failure } from "./failure.js"
 import { SessionTitle } from "./session-title.js"
 
-function RunningMenu(props: { state: ChatState.State; root: Session.ID; onOpen: (sessionID: Session.ID) => void }) {
-  const background = Family.background(props.state, props.root)
+function RunningMenu(props: {
+  background: Family.Background
+  root: Session.ID
+  onOpen: (sessionID: Session.ID) => void
+}) {
   const stop = ChatReact.useAction(props.root, (opened, sessionID: Session.ID) => opened.stop(sessionID))
   const move = ChatReact.useAction(props.root, (opened) => opened.background)
-  const subagents = background.tasks.filter((task) => task.type === "subagent")
-  if (background.tasks.length === 0 && background.blocking.length === 0) return null
-  const count = background.tasks.length + background.blocking.length
+  const subagents = props.background.tasks.filter((task) => task.type === "subagent")
+  if (props.background.tasks.length === 0 && props.background.blocking.length === 0) return null
+  const count = props.background.tasks.length + props.background.blocking.length
   return (
     <Menu.Root>
       <Menu.Trigger
@@ -39,7 +43,7 @@ function RunningMenu(props: { state: ChatState.State; root: Session.ID; onOpen: 
         }
       />
       <Menu.Popup alignment="end">
-        {background.tasks.map((task) => (
+        {props.background.tasks.map((task) => (
           <Menu.Item
             key={task.id}
             icon={<Icon glyph={task.type === "subagent" ? "Ghost" : "EnvVariable"} />}
@@ -49,7 +53,7 @@ function RunningMenu(props: { state: ChatState.State; root: Session.ID; onOpen: 
             {task.label}
           </Menu.Item>
         ))}
-        {background.blocking.length > 0 ? (
+        {props.background.blocking.length > 0 ? (
           <Menu.Item
             icon={<Icon glyph="ArrowDown" />}
             shortcut="Ctrl+B"
@@ -77,9 +81,11 @@ function RunningMenu(props: { state: ChatState.State; root: Session.ID; onOpen: 
 }
 
 function Actions(props: {
-  state: ChatState.State
   sessionID: Session.ID
   title: string
+  capabilities: SessionCapabilities.Info | undefined
+  prompted: boolean
+  reverted: boolean
   onUndo: () => void
   onRedo: () => void
   onCompact: () => void
@@ -92,9 +98,6 @@ function Actions(props: {
   const archive = useMutation(context.api.session.archive.mutationOptions())
   const [confirming, setConfirming] = useState(false)
   const approval = Chat.useAutoApprove(props.sessionID)
-  const capabilities = props.state.info[props.sessionID]?.capabilities
-  const reverted = ChatState.revertMessageID(props.state, props.sessionID) !== undefined
-  const prompted = ChatState.visibleUserMessages(props.state, props.sessionID).length > 0
   return (
     <>
       <Menu.Root>
@@ -106,22 +109,22 @@ function Actions(props: {
           }
         />
         <Menu.Popup alignment="end">
-          {capabilities?.revert === false ? null : (
+          {props.capabilities?.revert === false ? null : (
             <>
-              <Menu.Item icon={<Icon glyph="Restore" />} disabled={!prompted} onSelect={props.onUndo}>
+              <Menu.Item icon={<Icon glyph="Restore" />} disabled={!props.prompted} onSelect={props.onUndo}>
                 Undo last message
               </Menu.Item>
-              <Menu.Item icon={<Icon glyph="Repeat" />} disabled={!reverted} onSelect={props.onRedo}>
+              <Menu.Item icon={<Icon glyph="Repeat" />} disabled={!props.reverted} onSelect={props.onRedo}>
                 Restore undone messages
               </Menu.Item>
             </>
           )}
-          {capabilities?.compact === false ? null : (
-            <Menu.Item icon={<Icon glyph="Minimize2" />} disabled={!prompted} onSelect={props.onCompact}>
+          {props.capabilities?.compact === false ? null : (
+            <Menu.Item icon={<Icon glyph="Minimize2" />} disabled={!props.prompted} onSelect={props.onCompact}>
               Compact chat
             </Menu.Item>
           )}
-          {capabilities?.permissions === false ? null : (
+          {props.capabilities?.permissions === false ? null : (
             <Menu.CheckboxItem
               icon={<Icon glyph="BadgeCheck" />}
               checked={approval.enabled}
@@ -174,11 +177,11 @@ function Actions(props: {
   )
 }
 
-function Title(props: { state: ChatState.State; sessionID: Session.ID; title: string }) {
+function Title(props: { sessionID: Session.ID; title: string; renamable: boolean }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
   const rename = ChatReact.useAction(props.sessionID, (opened, title: string) => opened.rename(title))
-  if (props.state.info[props.sessionID]?.capabilities.rename === false)
+  if (!props.renamable)
     return (
       <Text purpose="label" truncation="single-line" element="h1">
         {props.title}
@@ -204,29 +207,30 @@ function Title(props: { state: ChatState.State; sessionID: Session.ID; title: st
 }
 
 export function SessionHeader(props: {
-  state: ChatState.State
   sessionID: Session.ID
-  fallbackTitle: string | undefined
+  title: string
+  capabilities: SessionCapabilities.Info | undefined
+  prompted: boolean
+  reverted: boolean
+  background: Family.Background
   onOpen: (sessionID: Session.ID) => void
   onUndo: () => void
   onRedo: () => void
   onCompact: () => void
   onArchived: () => void
 }) {
-  const title = SessionTitle.display(
-    props.state.info[props.sessionID]?.title ?? props.fallbackTitle,
-    SessionTitle.untitled,
-  )
   return (
     <>
       <div className="min-w-0 flex-1">
-        <Title state={props.state} sessionID={props.sessionID} title={title} />
+        <Title sessionID={props.sessionID} title={props.title} renamable={props.capabilities?.rename !== false} />
       </div>
-      <RunningMenu state={props.state} root={props.sessionID} onOpen={props.onOpen} />
+      <RunningMenu background={props.background} root={props.sessionID} onOpen={props.onOpen} />
       <Actions
-        state={props.state}
         sessionID={props.sessionID}
-        title={title}
+        title={props.title}
+        capabilities={props.capabilities}
+        prompted={props.prompted}
+        reverted={props.reverted}
         onUndo={props.onUndo}
         onRedo={props.onRedo}
         onCompact={props.onCompact}

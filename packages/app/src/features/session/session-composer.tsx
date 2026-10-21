@@ -4,6 +4,7 @@ import { ChatReact } from "@ren/chat/react"
 import type { Session } from "@ren/schema/session"
 import { SessionCatalog } from "@ren/schema/session/catalog"
 import type { SessionInbox } from "@ren/schema/session/inbox"
+import type { SessionInfo } from "@ren/schema/session/info"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { ConversationShell } from "@ren/ui/conversation-shell"
@@ -46,29 +47,26 @@ const press = (event: KeyboardEvent<HTMLTextAreaElement>): ComposerKeys.Press =>
   isComposing: event.nativeEvent.isComposing,
 })
 
-const clientCommands = (state: ChatState.State, sessionID: Session.ID) => {
-  const capabilities = state.info[sessionID]?.capabilities
-  const prompted = ChatState.visibleUserMessages(state, sessionID).length > 0
+const clientCommands = (
+  info: SessionInfo.Info | undefined,
+  history: { readonly prompted: boolean; readonly reverted: boolean },
+) => {
+  const capabilities = info?.capabilities
   return ClientCommand.offered({
     "model.choose": capabilities?.model !== false,
-    "session.compact": capabilities?.compact !== false && prompted,
-    "session.undo": capabilities?.revert !== false && prompted,
-    "session.redo": capabilities?.revert !== false && ChatState.revertMessageID(state, sessionID) !== undefined,
+    "session.compact": capabilities?.compact !== false && history.prompted,
+    "session.undo": capabilities?.revert !== false && history.prompted,
+    "session.redo": capabilities?.revert !== false && history.reverted,
   })
 }
 
-const sessionStatus = (state: ChatState.State, sessionID: Session.ID) => {
-  const info = state.info[sessionID]
-  const running = ChatState.activity(state, sessionID) === "running"
-  return {
-    model: info?.model,
-    running,
-    stoppable: running && info?.capabilities.interrupt !== false,
-    queue: info?.capabilities.queue !== false,
-    commands: info?.capabilities.commands !== false,
-    picker: info?.capabilities.model !== false,
-  }
-}
+const sessionStatus = (info: SessionInfo.Info | undefined, session: { readonly running: boolean }) => ({
+  model: info?.model,
+  stoppable: session.running && info?.capabilities.interrupt !== false,
+  queue: info?.capabilities.queue !== false,
+  commands: info?.capabilities.commands !== false,
+  picker: info?.capabilities.model !== false,
+})
 
 const commandSuggestions = (
   commands: ReadonlyArray<ClientCommand.Suggestion>,
@@ -209,7 +207,11 @@ function Controls(props: {
 
 export function SessionComposer(props: {
   sessionID: Session.ID
-  state: ChatState.State
+  info: SessionInfo.Info | undefined
+  running: boolean
+  pending: ReadonlyArray<SessionInbox.Info>
+  prompted: boolean
+  reverted: boolean
   unavailable: boolean
   covered: boolean
   onUndo: () => void
@@ -253,16 +255,16 @@ export function SessionComposer(props: {
   )
   const cancelInput = ChatReact.useAction(props.sessionID, (opened, id: SessionMessage.ID) => opened.cancelInput(id))
   const interrupt = ChatReact.useAction(props.sessionID, (opened) => opened.interrupt)
-  const status = sessionStatus(props.state, props.sessionID)
-  const running = status.running
+  const status = sessionStatus(props.info, { running: props.running })
+  const running = props.running
   const stoppable = status.stoppable
   const content = !Composer.isBlank(draft)
-  const queued = Composer.queued(ChatState.pending(props.state, props.sessionID))
+  const queued = Composer.queued(props.pending)
   const readOnly = props.unavailable || moving
   const suggested = useSuggestions({
     sessionID: props.sessionID,
     commands: status.commands,
-    client: clientCommands(props.state, props.sessionID),
+    client: clientCommands(props.info, { prompted: props.prompted, reverted: props.reverted }),
     suggesting,
     picked,
   })

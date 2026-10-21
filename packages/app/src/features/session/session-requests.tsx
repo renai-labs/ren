@@ -1,6 +1,7 @@
-import { type ChatState, Family, WebSearch } from "@ren/chat"
+import { WebSearch } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import type { Form } from "@ren/schema/form"
+import type { Permission } from "@ren/schema/permission"
 import { Session } from "@ren/schema/session"
 import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
@@ -14,23 +15,21 @@ import { Chat } from "../../lib/chat.js"
 import { Failure } from "./failure.js"
 import { FormProgress } from "../../lib/form-progress.js"
 import { Requests } from "./requests.js"
-import { SessionTitle } from "./session-title.js"
 
 function Source(props: {
-  state: ChatState.State
+  title: string
   sessionID: Session.ID
   viewed: Session.ID
   onOpen: (sessionID: Session.ID) => void
   children: ReactNode
 }) {
   if (props.sessionID === props.viewed) return props.children
-  const title = SessionTitle.display(Family.childTitle(props.state, props.sessionID, ""), "Subagent")
   return (
     <div className="flex flex-col gap-2">
       <div className="flex min-w-0 items-center gap-2 px-1">
         <Icon glyph="Ghost" tone="secondary" />
         <Text purpose="caption" element="span" truncation="single-line">
-          {title} needs your input
+          {props.title} needs your input
         </Text>
         <div className="ml-auto">
           <Button appearance="plain" size="small" onClick={() => props.onOpen(props.sessionID)}>
@@ -111,32 +110,29 @@ function ProviderDock(props: DockProps) {
 function SessionWebSearch(props: {
   root: Session.ID
   sessionID: Session.ID
-  state: ChatState.State
+  form: Form.Info | undefined
+  title: string
+  connection: number
   covered: boolean
   onOpen: (sessionID: Session.ID) => void
   onAnswered: () => void
 }) {
   const [choice, setChoice] = useState<Requests.WebSearchChoice>()
-  const [sending, setSending] = useState<Requests.WebSearchSending>()
+  const [sending, setSending] = useState<Requests.WebSearchSending & { readonly title: string }>()
   const status = ChatReact.useStatus(props.root)
   const connected = AsyncResult.isSuccess(status) && status.value === "connected"
   const reply = ChatReact.useAction(props.root, (opened, form: Form.Info, selection: string | false) =>
     opened.replyWebSearch(form, selection),
   )
   const owner = props.sessionID
-  const request = Requests.webSearchRequest(
-    sending,
-    Family.webSearch(props.state, props.sessionID),
-    owner,
-    props.state.connection,
-  )
+  const request = Requests.webSearchRequest(sending, props.form, owner, props.connection)
   const form = request.form
   if (!form || props.covered) return null
   const specific = WebSearch.providerField(form) !== undefined
   const selection = Requests.webSearchSelection(choice, owner, form, request)
   const submit = (answer: string | false) => {
     if (request.sending || !connected || (answer === false && specific)) return
-    const started = { form, owner, connection: props.state.connection }
+    const started = { form, owner, connection: props.connection, title: props.title }
     setSending(started)
     setChoice({ owner, formID: form.id, value: selection.value, failed: false })
     void reply(form, answer)
@@ -156,7 +152,7 @@ function SessionWebSearch(props: {
   }
   return (
     <Source
-      state={props.state}
+      title={sending && request.sending ? sending.title : props.title}
       sessionID={Session.ID.make(form.sessionID)}
       viewed={props.sessionID}
       onOpen={props.onOpen}
@@ -169,14 +165,18 @@ function SessionWebSearch(props: {
 export function SessionRequests(props: {
   root: Session.ID
   sessionID: Session.ID
-  state: ChatState.State
+  permission: Permission.Request | undefined
+  permissionTitle: string
+  form: Form.Info | undefined
+  formTitle: string
+  connection: number
   onOpen: (sessionID: Session.ID) => void
   onAnswered: () => void
 }) {
   const [sending, setSending] = useState<string>()
   const approving = Chat.useAutoApprove(props.root).enabled
-  const permission = approving ? undefined : Family.permission(props.state, props.sessionID)
-  const form = Family.question(props.state, props.sessionID)
+  const permission = approving ? undefined : props.permission
+  const form = props.form?.kind === "question" ? props.form : undefined
   const replyPermission = ChatReact.useAction(props.root, (opened, reply: Parameters<typeof opened.replyPermission>) =>
     opened.replyPermission(...reply),
   )
@@ -197,7 +197,9 @@ export function SessionRequests(props: {
     <SessionWebSearch
       root={props.root}
       sessionID={props.sessionID}
-      state={props.state}
+      form={props.form?.kind === "websearch.provider" ? props.form : undefined}
+      title={props.formTitle}
+      connection={props.connection}
       covered={permission !== undefined}
       onOpen={props.onOpen}
       onAnswered={props.onAnswered}
@@ -208,7 +210,7 @@ export function SessionRequests(props: {
       <>
         {webSearch}
         <Source
-          state={props.state}
+          title={props.permissionTitle}
           sessionID={Session.ID.make(permission.sessionID)}
           viewed={props.sessionID}
           onOpen={props.onOpen}
@@ -242,7 +244,7 @@ export function SessionRequests(props: {
   return (
     <>
       {webSearch}
-      <Source state={props.state} sessionID={owner} viewed={props.sessionID} onOpen={props.onOpen}>
+      <Source title={props.formTitle} sessionID={owner} viewed={props.sessionID} onOpen={props.onOpen}>
         <Questionnaire
           resetKey={form.id}
           questions={Requests.formQuestions(form)}
