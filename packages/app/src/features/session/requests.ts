@@ -1,25 +1,9 @@
 export * as Requests from "./requests.js"
 
-import { type ChatState, Family, WebSearch } from "@ren/chat"
+import { WebSearch } from "@ren/chat"
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import type { QuestionnaireQuestion } from "@ren/ui/questionnaire"
-import { SessionTitle } from "./session-title.js"
-
-const sourceTitle = (state: ChatState.State, sessionID: string) =>
-  SessionTitle.display(Family.childTitle(state, sessionID, ""), "Subagent")
-
-export function live(state: ChatState.State, sessionID: string) {
-  const permission = Family.permission(state, sessionID)
-  const form = Family.form(state, sessionID)
-  return {
-    permission,
-    permissionTitle: permission ? sourceTitle(state, permission.sessionID) : "",
-    form,
-    formTitle: form ? sourceTitle(state, form.sessionID) : "",
-    connection: state.connection,
-  }
-}
 
 export const permissionField = "permission"
 

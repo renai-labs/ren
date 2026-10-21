@@ -1,4 +1,4 @@
-import { ChatState, Projection, type TimelineDetail, TimelineRow, TimelineText } from "@ren/chat"
+import { type ChatState, Projection, type TimelineDetail, TimelineRow, TimelineText } from "@ren/chat"
 import type { ChatAtoms } from "@ren/chat"
 import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
@@ -27,7 +27,7 @@ const responseMeta = (turn: SessionMessage.Info | undefined, assistants: Readonl
 
 export function useTranscriptRows(props: {
   view: ChatAtoms.View
-  state: ChatState.State
+  statuses: ReadonlyMap<string, ChatState.PendingStatus>
   messages: ReadonlyArray<SessionMessage.Info>
   rows: ReadonlyArray<TimelineRow.Row>
   activeMessageID: string | undefined
@@ -72,7 +72,7 @@ export function useTranscriptRows(props: {
     UserMessage: (row) => {
       const message = messages.get(row.userMessageID)
       const context = contexts.get(row.userMessageID)
-      const status = ChatState.pendingStatus(props.state, props.view.sessionID, row.userMessageID)
+      const status = props.statuses.get(row.userMessageID)
       const senderID = message?.type === "user" ? message.sender?.userId : undefined
       const sender = senderID && senderID !== props.viewer ? (people.get(senderID) ?? member) : undefined
       return {

@@ -1,4 +1,4 @@
-import { ChatState, Family, SessionTasks, type TimelineDetail, TimelineSearch, ToolState, Working } from "@ren/chat"
+import { Family, SessionTasks, type TimelineDetail, type TimelineRow, TimelineSearch, ToolState } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import type { SessionInfo } from "@ren/schema/session/info"
@@ -12,7 +12,7 @@ import { TaskProgress, type TaskStatus } from "@ren/ui/task-progress"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
 import { useQuery } from "@tanstack/react-query"
-import { Effect, Equal, Option, SubscriptionRef } from "effect"
+import { Effect, Option, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useDeferredValue, useRef, useState } from "react"
 import type { ReactNode, RefObject } from "react"
@@ -24,8 +24,8 @@ import { Attention } from "../../lib/attention.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
+import { ChatView } from "./chat-view.js"
 import { Failure } from "./failure.js"
-import { Requests } from "./requests.js"
 import { SessionChild } from "./session-child.js"
 import { SessionComposer } from "./session-composer.js"
 import { SessionDrafts } from "./session-drafts.js"
@@ -37,9 +37,9 @@ import { useTranscriptRows } from "./transcript-rows.js"
 import { Timeline } from "./timeline.js"
 
 function useShortcuts(input: {
-  sessionID: Session.ID
   child: Session.ID | undefined
-  state: ChatState.State
+  childParent: Session.ID | undefined
+  blocking: boolean
   scroller: RefObject<ConversationShell.TimelineHandle | null>
   onBackground: () => void
   onFind: () => void
@@ -50,7 +50,7 @@ function useShortcuts(input: {
     const intent = SessionKeys.intent(event, {
       apple: Viewport.apple,
       child: input.child !== undefined,
-      blocking: Family.background(input.state, input.sessionID).blocking.length > 0,
+      blocking: input.blocking,
     })
     if (!intent || (intent === "parent" && Keyboard.isTyping(event))) return
     event.preventDefault()
@@ -59,10 +59,7 @@ function useShortcuts(input: {
       next: () => input.scroller.current?.step(1),
       background: input.onBackground,
       find: input.onFind,
-      parent: () => {
-        const parent = input.child ? input.state.info[input.child]?.parentID : undefined
-        input.onChild(parent && parent !== input.sessionID ? Session.ID.make(parent) : undefined)
-      },
+      parent: () => input.onChild(input.childParent),
     }
     run[intent]()
   })
@@ -73,13 +70,6 @@ const taskStatus: Readonly<Record<SessionTasks.Status, TaskStatus>> = {
   in_progress: "in-progress",
   completed: "completed",
   cancelled: "cancelled",
-}
-
-function useEqual<A>(value: A) {
-  const [kept, setKept] = useState(value)
-  if (Equal.equals(kept, value)) return kept
-  setKept(value)
-  return value
 }
 
 function Tasks(props: { tasks: ReadonlyArray<SessionTasks.Task>; running: boolean }) {
@@ -128,19 +118,7 @@ function SessionInteraction(props: {
   )
 }
 
-function useView(sessionID: Session.ID) {
-  const session = ChatReact.useSession(sessionID)
-  const timeline = AsyncResult.isSuccess(session.timeline) ? session.timeline.value : undefined
-  return {
-    state: AsyncResult.getOrElse(session.state, () => ChatState.empty),
-    timeline,
-    rows: timeline?.rows ?? [],
-    reconnecting: AsyncResult.isSuccess(session.status) && session.status.value === "reconnecting",
-    failed: AsyncResult.isFailure(session.state),
-  }
-}
-
-const blocked = (requests: ReturnType<typeof Requests.live>, permissions: { readonly approving: boolean }) =>
+const blocked = (requests: ReturnType<typeof ChatView.useRoot>["requests"], permissions: { readonly approving: boolean }) =>
   Boolean((permissions.approving ? undefined : requests.permission) ?? requests.form)
 
 interface Find {
@@ -148,14 +126,14 @@ interface Find {
   readonly active: number
 }
 
-const findTarget = (rows: ReturnType<typeof useView>["rows"], match: TimelineSearch.Match | undefined) => {
+const findTarget = (rows: ReadonlyArray<TimelineRow.Row>, match: TimelineSearch.Match | undefined) => {
   if (!match) return
   if (match.role === "user") return Timeline.rowFor(rows, match.messageID)
   return Timeline.rowForPart(rows, (reference) => reference.partID === match.partID)
 }
 
 const partTarget = (
-  rows: ReturnType<typeof useView>["rows"],
+  rows: ReadonlyArray<TimelineRow.Row>,
   messages: ReadonlyArray<SessionMessage.Info>,
   part: string | undefined,
 ) => {
@@ -185,7 +163,7 @@ const revealTarget = (rows: {
   hold: rows.search === undefined && rows.part !== undefined,
 })
 
-function useFind(messages: ReadonlyArray<SessionMessage.Info>, rows: ReturnType<typeof useView>["rows"]) {
+function useFind(messages: ReadonlyArray<SessionMessage.Info>, rows: ReadonlyArray<TimelineRow.Row>) {
   const [find, setFind] = useState<Find>()
   const query = useDeferredValue(find?.value ?? "")
   const matches = TimelineSearch.matches(messages, query)
@@ -314,21 +292,12 @@ export function SessionChat(props: {
     ...context.api.session.get.queryOptions({ idOrSlug: props.sessionID }),
     select: (session) => session.title,
   })
-  const view = useView(props.sessionID)
-  const state = view.state
-  const timeline = view.timeline
-  const rows = view.rows
-  const messages = ChatState.messages(state, props.sessionID)
-  const info = state.info[props.sessionID]
-  const running = ChatState.activity(state, props.sessionID) === "running"
+  const chat = ChatView.useRoot(props.sessionID, props.child)
+  const rows = chat.rows
+  const messages = chat.messages
+  const info = chat.info
+  const running = chat.running
   const title = SessionTitle.display(info?.title ?? stored.data, SessionTitle.untitled)
-  const asking = ChatState.permissionSessions(state).length + ChatState.formSessions(state).length
-  const prompted = ChatState.visibleUserMessages(state, props.sessionID).length > 0
-  const reverted = ChatState.revertMessageID(state, props.sessionID) !== undefined
-  const requests = Requests.live(state, props.sessionID)
-  const pending = ChatState.pending(state, props.sessionID)
-  const background = useEqual(Family.background(state, props.sessionID))
-  const tasks = useEqual(SessionTasks.latest(messages))
   const scroller = useRef<ConversationShell.TimelineHandle>(null)
   const [restored, setRestored] = useState(0)
   const finder = useFind(messages, rows)
@@ -360,17 +329,17 @@ export function SessionChat(props: {
   const onRedo = () => void redo().catch(Failure.toast("Could not restore the undone messages"))
   const onCompact = () => void compact().catch(Failure.toast("Could not compact the chat"))
   const retry = Chat.useRetry(props.sessionID)
-  const blocking = blocked(requests, { approving: Chat.useAutoApprove(props.sessionID).enabled })
+  const blocking = blocked(chat.requests, { approving: Chat.useAutoApprove(props.sessionID).enabled })
   const people = usePeople(props.organizationId, props.viewer, messages)
 
   SessionCache.useLive(props.sessionID, liveOf(info, { running }))
 
-  Attention.useNotify({ running, asking, title })
+  Attention.useNotify({ running, asking: chat.asking, title })
 
   useShortcuts({
-    sessionID: props.sessionID,
     child: props.child,
-    state,
+    childParent: chat.childParent,
+    blocking: chat.background.blocking.length > 0,
     scroller,
     onBackground: () => void move().catch(Failure.toast("Could not move the work to the background")),
     onFind: finder.open,
@@ -379,7 +348,7 @@ export function SessionChat(props: {
 
   const transcript = useTranscriptRows({
     view: { root: props.sessionID, sessionID: props.sessionID },
-    state,
+    statuses: chat.statuses,
     messages,
     modelNames,
     part: props.part,
@@ -388,9 +357,9 @@ export function SessionChat(props: {
     onPending: inputs.act,
     onOpenSession: openSession,
     rows,
-    activeMessageID: timeline?.activeMessageID,
+    activeMessageID: chat.activeMessageID,
     busy: running,
-    working: timeline ? Working.show(state, props.sessionID, timeline) : false,
+    working: chat.working,
     ...(info?.capabilities.revert !== false && {
       onRevert: reverter.onRevert,
     }),
@@ -405,7 +374,7 @@ export function SessionChat(props: {
       populated={messages.length > 0}
       hidden={props.child !== undefined}
       placeholder={
-        view.failed ? <StateMessage state="failed" title="Could not open this chat" onRetry={retry} /> : undefined
+        chat.failed ? <StateMessage state="failed" title="Could not open this chat" onRetry={retry} /> : undefined
       }
       header={
         <>
@@ -413,9 +382,9 @@ export function SessionChat(props: {
             sessionID={props.sessionID}
             title={title}
             capabilities={info?.capabilities}
-            prompted={prompted}
-            reverted={reverted}
-            background={background}
+            prompted={chat.prompted}
+            reverted={chat.reverted}
+            background={chat.background}
             onOpen={props.onChild}
             onUndo={onUndo}
             onRedo={onRedo}
@@ -430,8 +399,8 @@ export function SessionChat(props: {
           ref={scroller}
           label="Conversation"
           history={{
-            more: ChatState.more(state, props.sessionID),
-            loading: ChatState.loadingHistory(state, props.sessionID),
+            more: chat.more,
+            loading: chat.loadingHistory,
             onLoadOlder: () => void loadMore().catch(Failure.toast("Could not load earlier messages")),
           }}
           target={reveal.target}
@@ -444,20 +413,20 @@ export function SessionChat(props: {
       }
       interaction={
         <SessionInteraction
-          tasks={tasks}
-          reconnecting={view.reconnecting}
+          tasks={chat.tasks}
+          reconnecting={chat.reconnecting}
           running={running}
-          reverted={reverted}
+          reverted={chat.reverted}
           onRedo={onRedo}
         >
           <SessionRequests
             root={props.sessionID}
             sessionID={props.sessionID}
-            permission={requests.permission}
-            permissionTitle={requests.permissionTitle}
-            form={requests.form}
-            formTitle={requests.formTitle}
-            connection={requests.connection}
+            permission={chat.requests.permission}
+            permissionTitle={chat.requests.permissionTitle}
+            form={chat.requests.form}
+            formTitle={chat.requests.formTitle}
+            connection={chat.requests.connection}
             onOpen={props.onChild}
             onAnswered={() => scroller.current?.resume()}
           />
@@ -470,10 +439,10 @@ export function SessionChat(props: {
             sessionID={props.sessionID}
             info={info}
             running={running}
-            pending={pending}
-            prompted={prompted}
-            reverted={reverted}
-            unavailable={view.failed}
+            pending={chat.pending}
+            prompted={chat.prompted}
+            reverted={chat.reverted}
+            unavailable={chat.failed}
             covered={props.child !== undefined}
             onUndo={onUndo}
             onRedo={onRedo}
@@ -486,7 +455,6 @@ export function SessionChat(props: {
           <SessionChild
             root={props.sessionID}
             sessionID={props.child}
-            state={state}
             rootTitle={title}
             onOpen={props.onChild}
           />
