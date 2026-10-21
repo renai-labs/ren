@@ -20,6 +20,16 @@ export interface Large {
   readonly remove: (key: string) => Promise<void>
 }
 
+export interface Shared {
+  readonly key: string
+  readonly value: string | undefined
+}
+
+export interface Share {
+  readonly post: (message: Shared) => void
+  readonly listen: (handler: (message: Shared) => void) => () => void
+}
+
 const quotaNames = new Set(["QuotaExceededError", "NS_ERROR_DOM_QUOTA_REACHED"])
 
 const isQuota = (error: unknown) =>
@@ -30,6 +40,7 @@ export function make(options: {
   readonly prefix: string
   readonly watch?: (handler: (key: string | null) => void) => () => void
   readonly large?: Large | undefined
+  readonly share?: Share | undefined
 }): Platform.Drafts {
   const memory = new Map<string, string>()
   const large = new Map(options.large?.loaded)
@@ -62,9 +73,34 @@ export function make(options: {
   }
   const forgetLarge = (key: string) => {
     written.delete(key)
-    if (large.delete(key)) void options.large?.remove(key).catch(() => undefined)
+    if (!large.delete(key)) return false
+    void options.large?.remove(key).catch(() => undefined)
+    return true
   }
-  const watch = options.watch
+  const listeners = new Set<(key: string) => void>()
+  const changed = (key: string) => {
+    memory.delete(key)
+    for (const listener of listeners) listener(key)
+  }
+  options.watch?.((name) => {
+    if (!name?.startsWith(options.prefix)) return
+    const key = name.slice(options.prefix.length)
+    if (Result.getOrUndefined(attempt((storage) => storage.getItem(name))) !== null) {
+      large.delete(key)
+      written.delete(key)
+    }
+    changed(key)
+  })
+  options.share?.listen((message) => {
+    if (message.value === undefined) {
+      large.delete(message.key)
+      written.delete(message.key)
+    } else {
+      large.set(message.key, message.value)
+      written.set(message.key, DraftChunks.split(message.value))
+    }
+    changed(message.key)
+  })
   return {
     get: (key) =>
       memory.get(key) ??
@@ -75,14 +111,15 @@ export function make(options: {
       const backing = options.large
       if (backing && DraftChunks.large(value)) {
         const chunks = DraftChunks.split(value)
-        const changed = DraftChunks.changed(written.get(key), chunks)
+        const previous = written.get(key)
         written.set(key, chunks)
         large.set(key, value)
         memory.delete(key)
         attempt((storage) => storage.removeItem(options.prefix + key))
-        void backing.write(key, chunks.length, changed).catch(() => {
+        void backing.write(key, chunks.length, DraftChunks.changed(previous, chunks)).catch(() => {
           if (written.get(key) === chunks) written.delete(key)
         })
+        options.share?.post({ key, value })
         return
       }
       forgetLarge(key)
@@ -91,20 +128,13 @@ export function make(options: {
     },
     remove: (key) => {
       memory.delete(key)
-      forgetLarge(key)
+      if (forgetLarge(key)) options.share?.post({ key, value: undefined })
       attempt((storage) => storage.removeItem(options.prefix + key))
     },
-    ...(watch && {
-      subscribe: (listener: (key: string) => void) =>
-        watch((name) => {
-          if (!name?.startsWith(options.prefix)) return
-          const key = name.slice(options.prefix.length)
-          memory.delete(key)
-          large.delete(key)
-          written.delete(key)
-          listener(key)
-        }),
-    }),
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => void listeners.delete(listener)
+    },
   }
 }
 

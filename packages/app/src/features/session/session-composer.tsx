@@ -12,6 +12,7 @@ import { Effect, Predicate, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useRef, useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
+import { Attention } from "../../lib/attention.js"
 import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { Debounce } from "../../lib/debounce.js"
 import { DraftStore } from "../../platform/draft-store.js"
@@ -25,7 +26,6 @@ import { ComposerModelPicker } from "./composer-model-picker.js"
 import { ComposerQueue } from "./composer-queue.js"
 import { SessionDrafts } from "./session-drafts.js"
 
-const historyKey = "history"
 const trailingSpace = /\s$/
 const fileSearchDelay = 150
 
@@ -221,7 +221,7 @@ export function SessionComposer(props: {
   const key = SessionDrafts.key(props.sessionID)
   const behavior = ChatPreferences.followUp.read(platform.storage)
   const [draft, setDraft] = useState(() => Composer.decode(platform.drafts?.get(key)))
-  const [history, setHistory] = useState(() => ComposerHistory.decode(platform.drafts?.get(historyKey)))
+  const [history, setHistory] = useState(() => ComposerHistory.decode(platform.drafts?.get(SessionDrafts.history)))
   const [browsing, setBrowsing] = useState(ComposerHistory.idle)
   const [suggesting, setSuggesting] = useState<Suggesting>()
   const [picked, setPicked] = useState<ReadonlyArray<Mentions.Item>>([])
@@ -279,7 +279,7 @@ export function SessionComposer(props: {
   const remember = (next: ReadonlyArray<ComposerHistory.Entry>) => {
     latest.current.history = next
     setHistory(next)
-    platform.drafts?.set(historyKey, ComposerHistory.encode(next))
+    platform.drafts?.set(SessionDrafts.history, ComposerHistory.encode(next))
   }
   const caret = (position: number, text: string) =>
     requestAnimationFrame(() => {
@@ -325,6 +325,7 @@ export function SessionComposer(props: {
       if (stoppable) stop()
       return
     }
+    Attention.ask(platform)
     const id = submission.retry ?? SessionMessage.ID.create()
     const slash = Composer.slash(submission.text, suggested.commands)
     remember(ComposerHistory.prepend(history, submission.sent))

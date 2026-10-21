@@ -15,3 +15,5 @@ export const write = (formID: string, progress: QuestionnaireProgress) => {
 }
 
 export const clear = (formID: string) => saved.delete(formID)
+
+export const reset = () => saved.clear()

@@ -82,6 +82,28 @@ test("the timeline atom of a session shows a prompt and its reply as rows", () =
     ])
   }).pipe(Effect.scoped, Effect.runPromise))
 
+test("attention reports a session once something else opens it, and never opens it itself", () =>
+  Effect.gen(function* () {
+    const made = yield* setup
+    const attention = made.atoms.attention
+    const id = made.brain.id
+    const reported = Effect.callback<string>((resume) => {
+      const check = () => {
+        const value = attention.read(id)
+        if (value === undefined) return
+        stop()
+        resume(Effect.succeed(value))
+      }
+      const stop = attention.subscribe(check)
+      check()
+    })
+    expect(attention.read(id)).toBeUndefined()
+    expect(made.registry.getNodes().has(made.atoms.session(id))).toBe(false)
+    const unmount = made.registry.mount(made.atoms.state(id))
+    yield* Effect.addFinalizer(() => Effect.sync(unmount))
+    expect(yield* reported).toBe("idle")
+  }).pipe(Effect.scoped, Effect.runPromise))
+
 test("a new chat's first prompt is in the timeline as soon as its session opens, before the session echoes it", () =>
   Effect.gen(function* () {
     const made = yield* setup

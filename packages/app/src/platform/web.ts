@@ -1,4 +1,4 @@
-import { Result } from "effect"
+import { Option, Result, Schema } from "effect"
 import { DraftStore } from "./draft-store.js"
 import type { Platform } from "./platform.js"
 
@@ -6,7 +6,12 @@ const prefix = "ren."
 const draftPrefix = "ren.draft."
 const externalProtocols = new Set(["http:", "https:", "mailto:"])
 
+const decodeShared = Schema.decodeUnknownOption(
+  Schema.Struct({ key: Schema.String, value: Schema.UndefinedOr(Schema.String) }),
+)
+
 export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
+  const channel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel("ren-drafts")
   return {
     platform: "web",
     version: import.meta.env.VITE_REN_VERSION ?? "dev",
@@ -31,24 +36,32 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
         window.addEventListener("storage", changed)
         return () => window.removeEventListener("storage", changed)
       },
+      share: channel && {
+        post: (message) => channel.postMessage(message),
+        listen: (handler) => {
+          const received = (event: MessageEvent) => Option.map(decodeShared(event.data), handler)
+          channel.addEventListener("message", received)
+          return () => channel.removeEventListener("message", received)
+        },
+      },
     }),
     openExternal: (url) => {
       if (!externalProtocols.has(new URL(url).protocol)) return
       window.open(url, "_blank", "noopener,noreferrer")
     },
     notify: async (title, body) => {
-      if (!("Notification" in window)) return
+      if (!("Notification" in window) || Notification.permission !== "granted") return
       if (document.visibilityState === "visible" && document.hasFocus()) return
-      const permission =
-        Notification.permission === "default"
-          ? await Notification.requestPermission().catch(() => "denied" as const)
-          : Notification.permission
-      if (permission !== "granted") return
       const notification = new Notification(title, body === undefined ? undefined : { body })
       notification.addEventListener("click", () => {
         window.focus()
         notification.close()
       })
+    },
+    requestNotifications: async () => {
+      if (!("Notification" in window)) return false
+      if (Notification.permission !== "default") return Notification.permission === "granted"
+      return (await Notification.requestPermission().catch(() => "denied")) === "granted"
     },
     writeClipboardText: (text) => navigator.clipboard.writeText(text),
     onLifecycle: (listener) => {

@@ -17,3 +17,5 @@ const followUps = ["steer", "queue"] as const
 export type FollowUp = (typeof followUps)[number]
 
 export const followUp = Preference.make("chat.follow-up.v1", Schema.Literals(followUps), "steer")
+
+export const notify = Preference.make("chat.notify.v1", Schema.Boolean, true)

@@ -3,6 +3,7 @@ import { Field } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
 import { PageShell } from "@ren/ui/page-shell"
 import { Select } from "@ren/ui/select"
+import { Switch } from "@ren/ui/switch"
 import { Text } from "@ren/ui/text"
 import { Theme } from "@ren/ui/theme"
 import { ThemeSelector } from "@ren/ui/theme-selector"
@@ -34,6 +35,7 @@ function ChatSettings() {
   const platform = Platform.usePlatform()
   const [detail, setDetail] = useState(() => ChatPreferences.detail.read(platform.storage))
   const [followUp, setFollowUp] = useState(() => ChatPreferences.followUp.read(platform.storage))
+  const [notify, setNotify] = useState(() => ChatPreferences.notify.read(platform.storage))
   return (
     <PageShell.Section title="Chats" frame="divided">
       <Field.Root label="Detail" description="How much of Ren’s work a chat shows." orientation="horizontal">
@@ -66,6 +68,30 @@ function ChatSettings() {
           }}
         />
       </Field.Root>
+      {platform.requestNotifications ? (
+        <Field.Root
+          label="Notify me when Ren finishes or needs input"
+          description="Only while Ren’s tab is in the background."
+          orientation="horizontal"
+        >
+          <Switch
+            checked={notify}
+            onCheckedChange={(enabled) => {
+              ChatPreferences.notify.write(platform.storage, enabled)
+              setNotify(enabled)
+              if (!enabled) return
+              void platform.requestNotifications?.().then((allowed) => {
+                if (!allowed)
+                  Toast.manager.add({
+                    type: "error",
+                    title: "Notifications are blocked",
+                    description: "Allow notifications for Ren in your browser’s site settings.",
+                  })
+              })
+            }}
+          />
+        </Field.Root>
+      ) : null}
     </PageShell.Section>
   )
 }

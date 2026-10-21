@@ -21,6 +21,7 @@ interface Base {
   readonly drafts?: Drafts
   readonly openExternal: (url: string) => void
   readonly notify: (title: string, body?: string) => Promise<void>
+  readonly requestNotifications?: () => Promise<boolean>
   readonly fetch?: typeof globalThis.fetch
   readonly writeClipboardText?: (text: string) => Promise<void>
   readonly readClipboardImage?: () => Promise<File | undefined>

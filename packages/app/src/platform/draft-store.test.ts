@@ -49,6 +49,26 @@ const watcher = () => {
   }
 }
 
+const tabs = () => {
+  const handlers = {
+    a: new Set<(message: DraftStore.Shared) => void>(),
+    b: new Set<(message: DraftStore.Shared) => void>(),
+  }
+  const endpoint = (
+    own: Set<(message: DraftStore.Shared) => void>,
+    other: Set<(message: DraftStore.Shared) => void>,
+  ) => ({
+    post: (message: DraftStore.Shared) => {
+      for (const handler of other) handler(message)
+    },
+    listen: (handler: (message: DraftStore.Shared) => void) => {
+      own.add(handler)
+      return () => void own.delete(handler)
+    },
+  })
+  return { a: endpoint(handlers.a, handlers.b), b: endpoint(handlers.b, handlers.a) }
+}
+
 const chunkStore = (loaded: ReadonlyMap<string, string> = new Map()) => {
   const writes: Array<{ key: string; count: number; indices: ReadonlyArray<number> }> = []
   const removed: Array<string> = []
@@ -164,6 +184,31 @@ describe("DraftStore", () => {
     stop?.()
     events.emit("ren.draft.a")
     expect(changed).toEqual(["a"])
+  })
+
+  test("a large draft typed in one tab reads back in another, until it is removed", () => {
+    const storage = quotaStorage(1_000_000)
+    const link = tabs()
+    const events = watcher()
+    const first = DraftStore.make({ storage, prefix: "ren.draft.", large: chunkStore().large, share: link.a })
+    const second = DraftStore.make({
+      storage,
+      prefix: "ren.draft.",
+      large: chunkStore().large,
+      share: link.b,
+      watch: events.watch,
+    })
+    const changed: Array<string> = []
+    const stop = second.subscribe?.((key) => changed.push(key))
+    first.set("a", "short")
+    events.emit("ren.draft.a")
+    first.set("a", paste)
+    events.emit("ren.draft.a")
+    expect(second.get("a")).toBe(paste)
+    first.remove("a")
+    expect(second.get("a")).toBeUndefined()
+    expect(changed).toEqual(["a", "a", "a", "a"])
+    stop?.()
   })
 
   test("a draft changed in another tab replaces a large draft held here", () => {
