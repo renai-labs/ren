@@ -1,6 +1,6 @@
 export * as EnvironmentTemplate from "./environment-template.js"
 
-import { Effect, Schema } from "effect"
+import { Effect, Schema, Struct } from "effect"
 import { Auth } from "./auth.js"
 import { EnvironmentProvider } from "./environment-provider.js"
 import { Identifier } from "./identifier.js"
@@ -52,6 +52,11 @@ export const CreateInput = Schema.Struct({
     Schema.withDecodingDefaultKey(Effect.succeed(defaultSessionsPerEnvironment)),
   ),
 }).annotate({ identifier: "EnvironmentTemplate.CreateInput" })
+
+export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
+export const Declaration = CreateInput.mapFields(Struct.omit(["name"])).annotate({
+  identifier: "EnvironmentTemplate.Declaration",
+})
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({

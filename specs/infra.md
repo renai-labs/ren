@@ -1,6 +1,6 @@
 # Infra
 
-Status: proposal. Nothing in this document is built yet. Sections 1 to 7 are decided, except the drafts in section 4.5. Section 8 lists the open areas.
+Status: proposal. Nothing in this document is built yet. Sections 1 to 7 are decided. Section 8 lists the open areas.
 
 ## 1. Purpose
 
@@ -46,6 +46,8 @@ The registry holds templates: listings for apps and factories. Installing a temp
 | `org`                         | `OrganizationSettings.UpdateInput`                                                                       |
 | `spaces.<slug>`               | `Infra.SpaceDeclaration`: `Space.CreateInput` fields, `SpaceSettings.UpdateInput` `settings`, and `uses` |
 | `spaces.<slug>.agents.<name>` | `Agent.Declaration`: `Agent.CreateInput` without `ownerSpaceId` and `name`                               |
+| `spaces.<slug>.<kind>.<slug>` | The declaration of each other primitive (section 4.5)                                                    |
+| `moved`                       | `Infra.Move`                                                                                             |
 
 A primitive's declaration is its `CreateInput` without ids and without the fields that the position in the folder gives. When a primitive is implemented, it adds its declaration to its own module, and `Infra.Spec` adds one field for it.
 
@@ -85,11 +87,24 @@ Each primitive adds its folder or file when it is implemented: `apps/<slug>/`, `
 3. Another space uses an agent or a custom app through `uses` in its `space.yaml`. Apply makes that a membership, as v2 `AgentMembership` does for agents.
 4. To transfer ownership, move the folder to the other space and add a `moved:` entry.
 
-### 4.5 Remaining primitives
+### 4.5 Primitives
 
-These primitives are not in v2 yet. The shapes below are drafts taken from ren-v1. When a primitive is implemented, its module in `@ren/schema` owns the shape and `Infra.Spec` adds one field. Then this section points to the module and keeps no copy. `?` marks an optional field.
+Each primitive's declaration is in its own module in `@ren/schema`. This document keeps no copy of the shapes. The shapes come from ren-v1 and change when each primitive is implemented.
 
-Full tree with all primitives:
+| Folder part                          | Schema                                                       | ren-v1 source                                         |
+| ------------------------------------ | ------------------------------------------------------------ | ----------------------------------------------------- |
+| `spaces/<slug>/apps/<slug>/app.yaml` | `App.Declaration`                                            | `registry/blueprints/apps/<slug>/blueprint.yaml`      |
+| `apps/<slug>/skills/<slug>/`         | `Skill.Declaration`: `Skill.Content` or `Skill.Upstream`     | `registry/AGENTS.md` (content or pointer, never both) |
+| `apps/<slug>/mcps.yaml`              | `Mcp.Declaration`                                            | `mcp.yaml`, `McpEntry` in `registry/src/content.ts`   |
+| `requiredCredentials`                | `Credential.Requirement`, `Credential.SkillRequirement`      | `vault/requirements.ts`                               |
+| `spaces/<slug>/crons.yaml`           | `Cron.Declaration`                                           | `cron_trigger`                                        |
+| `spaces/<slug>/webhooks.yaml`        | `Webhook.Declaration`, `Webhook.Request`                     | `webhook_trigger` with `provider = "generic"`         |
+| `spaces/<slug>/channels.yaml`        | `Channel.Declaration`                                        | `SpecChannelBinding` and the channel mapping tables   |
+| `spaces/<slug>/environment.yaml`     | `EnvironmentTemplate.Declaration`                            | v2 `EnvironmentTemplate.CreateInput` without `name`   |
+| `deploy.yaml`                        | `Infra.Bindings`, with `Channel.Target` and `Credential.Ref` | —                                                     |
+| `moved.yaml`                         | `Infra.Move`, `Infra.Path`                                   | —                                                     |
+
+Full tree:
 
 ```
 .ren/
@@ -101,150 +116,29 @@ Full tree with all primitives:
     space.yaml                 # name, description, settings, uses { agents, apps }
     instructions.md
     environment.yaml
-    crons.yaml                 # record: <slug> → Cron
-    webhooks.yaml              # record: <slug> → Webhook
-    channels.yaml              # record: <slug> → Channel
+    crons.yaml
+    webhooks.yaml
+    channels.yaml
     agents/<name>/
       agent.yaml
       instructions.md
     apps/<slug>/
       app.yaml
-      mcps.yaml                # record: <slug> → MCP
+      mcps.yaml
       skills/<slug>/           # SKILL.md and its files, or skill.yaml
 ```
 
-#### App (`app.yaml`)
+Rules that `Infra.Spec` checks across spaces, beyond the agent rules in section 4.2:
 
-From v1 `registry/blueprints/apps/<slug>/blueprint.yaml`, without the listing fields (`examplePrompts`, `page.mdx`, categories). Those belong to the registry listing.
+1. An app is defined in one space only. A space does not list an app it owns in `uses`.
+2. A space that uses a custom app also uses each app in its `dependsOn`. A registry app's dependencies are checked by `plan`, because `validate` runs without the registry.
+3. Each skill slug and MCP slug is defined in one custom app only.
+4. A cron, webhook or channel names an agent that is in its space, or no agent.
+5. A `from` path in `moved.yaml` does not exist in the spec, and a `to` path does.
 
-```
-App {
-  name: string
-  description: string
-  icon?: url
-  dependsOn: AppSlug[]                       # references only (§5.3)
-  requiredCredentials: RequiredCredential[]
-  environment?: { packages: Packages, buildCommands: string[] }
-}
-Packages { apt?: string[], npm?: string[], pip?: string[], go?: string[] }   # v1 Environment.Packages
-```
+An MCP with header auth names a credential in its own `requiredCredentials` (`Mcp.Declaration`).
 
-#### Skill (`skills/<slug>/`)
-
-From v1 `registry/AGENTS.md`. A skill folder is content or a pointer, never both:
-
-- Content: `SKILL.md` with frontmatter `name`, `description` and `metadata.requiredCredentials` (only `env` and `oauth_app`, as in v1 `SkillRequiredCredential`), plus its files.
-- Pointer: `skill.yaml` = `{ upstream: { url: https-url, ref?: string, path?: string } }`. `ref` is a git commit or tag.
-
-The folder name is the skill slug. It must equal the `name` in `SKILL.md`.
-
-#### MCP (`mcps.yaml`)
-
-From v1 `mcp.yaml` and `McpEntry` (`registry/src/content.ts`):
-
-```
-Mcp {
-  name: string
-  description: string
-  transport: { type: "remote", url: https-url } | { type: "local", command: string[] }
-  auth: { type: "none" }
-      | { type: "oauth", authorizationEndpoint: url, tokenEndpoint: url, tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none" }
-      | { type: "header", name: string, credential: CredentialName }
-  requiredCredentials: RequiredCredential[]
-  tools?: string[]                           # allowlist; without it, every tool the server lists
-}
-```
-
-#### Required credential
-
-From v1 `vault/requirements.ts`. The discriminator is `kind`:
-
-```
-RequiredCredential =
-  | { kind: "env", name: UPPER_SNAKE, description? }
-  | { kind: "secret", name: FieldName, description? }
-  | { kind: "oauth_app", name: string, description? }
-  | { kind: "text", name: FieldName, message, placeholder?, when? }
-  | { kind: "select", name: FieldName, message, options: { label, value, hint? }[], when? }
-When = { name: FieldName, op: "eq" | "neq", value: string }
-```
-
-A spec declares only the requirement. The value is a binding (§5.1).
-
-#### Cron (`crons.yaml`)
-
-From v1 `cron_trigger`. The owner is the space, not a project:
-
-```
-Cron {
-  agent?: AgentName        # without it, the space's ren agent
-  schedule: cron-expression
-  message: string          # v1 inputMessage
-  model?: Session.Model
-  until?: datetime         # inclusive, UTC
-  enabled: boolean = true
-}
-```
-
-The timezone is a binding. Two ticks never overlap: a tick that starts while the last one runs is skipped, as in v1 (`overlap: SKIP`).
-
-#### Webhook (`webhooks.yaml`)
-
-From v1 `webhook_trigger` with `provider = "generic"`:
-
-```
-Webhook {
-  agent?: AgentName
-  purpose: string
-  enabled: boolean = true
-}
-```
-
-The secret is a binding. Apply prints the URL as output. A request is `POST <url>` with the header `x-ren-token` and the body `{ threadKey?: string, body: string }`. The same `threadKey` continues the same session.
-
-#### Channel (`channels.yaml`)
-
-From v1 `SpecChannelBinding` and the mapping tables (`slack_install.channel_mappings`, `github_installation.repo_mappings`, `telegram_chat_mapping`, `project_email`, Linear `webhook_trigger`):
-
-```
-Channel {
-  kind: "slack" | "linear" | "github" | "telegram" | "email"
-  purpose: string
-  agent?: AgentName
-  github?: { prListener: boolean = false, prListenerPrompt?: string }
-  telegram?: { allowedSenders?: string[], blockedSenders?: string[] }
-}
-```
-
-The target is a binding: Slack channel id, Linear project id, GitHub repository, Telegram chat and topic id. An email channel's address is generated output.
-
-#### Environment (`environment.yaml`)
-
-`EnvironmentTemplate.CreateInput` without `name`: `{ provider, config, sessionsPerEnvironment }`. Apply makes one template per space and links it through `SpaceEnvironmentTemplate`.
-
-#### Bindings (`deploy.yaml`)
-
-```
-Deploy {
-  organization: OrganizationSlug
-  spaces: Record<SpaceSlug, {
-    timezone?: IANA-zone
-    channels?: Record<ChannelSlug, { slack?: { channelId }, linear?: { projectId }, github?: { repository }, telegram?: { chatId, topicId? } }>
-    credentials?: Record<AppSlug, Record<CredentialName, CredentialRef>>
-    webhooks?: Record<WebhookSlug, { secret: CredentialRef }>
-  }>
-}
-```
-
-`CredentialRef` names a credential that is connected in Ren. The value is never in a file.
-
-#### Renames (`moved.yaml`)
-
-```
-Moved = { from: SpecPath, to: SpecPath }[]     # example: spaces/eng/agents/qa → spaces/support/agents/qa
-```
-
-A `from` path must not exist in the spec, and a `to` path must exist. Delete an entry after it has been applied everywhere.
+All slugs use `Primitive.Slug`: lowercase letters and digits joined by single dashes, at most 64 characters. This is the Agent Skills name rule, so a skill folder name is also a valid `SKILL.md` name.
 
 ## 5. Rules
 
@@ -327,8 +221,6 @@ All commands are in the `ren infra` group.
 | `pull`     | Writes the live organization to `.ren/`. It overwrites local files. Git keeps local changes safe.          |
 
 ## 8. Open areas
-
-Section 4.5 has drafts for these. Each draft becomes final when its primitive is implemented.
 
 1. **Personal spaces.** `SpaceProvisioning` gives each user a personal space. The `space` table has no column that marks it. The spec declares the whole organization, so the first apply would archive every personal space. Decide: personal spaces are not a managed kind (add a marker column), or a personal space is a binding.
 2. **Natural keys.** Spaces are keyed by `Primitive.Slug` in the schema, but the `space` table has no slug column yet. Plan cannot map a space folder to a row before the column exists. Make a list of each managed kind that needs a slug unique per organization. `EnvironmentTemplate` has only a name.
