@@ -317,7 +317,7 @@ Additions to v1:
 - **Turn line** on each row and card: the line from [Who has the turn](#who-has-the-turn), with a live dot when an agent is working.
 - **Human review**: a "Needs review" badge with the first line of the reason on rows and cards. On the detail page, a banner with the reason and two buttons, **Approve** and **Request changes**, each with a comment field and the continue choice; a menu holds Mark done, Dismiss and Take over. When the agent's session waits on a question, the banner shows the question with an **Answer** button that opens the chat's form.
 - **Factory order editor**: on the space page, a "Factory" tab with a sortable list of the space's agents and `ren`. The dashboard comes to this tab later.
-- **Subtasks** (phase 2): a "Sub-tasks" section on the detail page, with rows and an "Add sub-task" button; a parent chip on a subtask's row and card; a count on the parent's row.
+- **Subtasks** (phase 2): a "Sub-tasks" section on the detail page, with rows, a "done/total" count and an "Add sub-task" button that opens the create composer inline; a "Parent" property in the aside, on a task with no subtasks; the parent in the breadcrumb. In the list, a subtask nests under its parent, with tree lines, when both are in the same group, in the view's sort order. Otherwise it is a row of its own with a "› Parent" chip. A parent's row and card show the count. A "Show sub-tasks" display option, on by default, hides every subtask.
 - **Drag and drop** between board columns (phase 2): a drop does `assign` with `start: "none"`.
 - Sidebar: a "Tasks" link, as in v1.
 

@@ -7,6 +7,9 @@ const task = (fields: Partial<TaskInfo>): TaskInfo => ({
   id: "tsk_1",
   organizationId: "org",
   spaceId: "spc",
+  parentId: null,
+  parent: null,
+  subtasks: null,
   number: 1,
   identifier: "REN-1",
   title: "Add SSO",
@@ -109,4 +112,19 @@ test("a review that waits on the current user says you", () => {
     name: undefined,
     reason: "Merge",
   })
+})
+
+test("a subtask nests under its parent when both are in the rows, and names its parent when the parent is not", () => {
+  const parent = task({ id: "tsk_parent", title: "Tasks" })
+  const nested = { parentId: "tsk_parent", parent: { id: "tsk_parent", identifier: "REN-1", title: "Tasks" } }
+  const labels = task({ id: "tsk_labels", ...nested })
+  const review = task({ id: "tsk_review", ...nested })
+  const other = task({ id: "tsk_other" })
+  expect(TaskView.tree([labels, other, parent, review])).toEqual([
+    { task: other },
+    { task: parent },
+    { task: labels, branch: "middle" },
+    { task: review, branch: "last" },
+  ])
+  expect(TaskView.tree([labels, other])).toEqual([{ task: labels, parent: "Tasks" }, { task: other }])
 })

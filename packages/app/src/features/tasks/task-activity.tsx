@@ -167,6 +167,8 @@ function Event(props: {
       return <FieldEvent data={data} />
     case "label":
       return <LabelEvent data={data} />
+    case "parent":
+      return <Text purpose="body">{parentChange(data)}</Text>
     case "link":
       return (
         <div className="flex flex-col gap-2">
@@ -183,6 +185,11 @@ function Event(props: {
         </div>
       )
   }
+}
+
+const parentChange = (data: Extract<TaskEventData, { _tag: "parent" }>) => {
+  if (data.to === null) return "Made this a task of its own."
+  return data.from === null ? "Made this a sub-task." : "Moved this sub-task to another parent."
 }
 
 function ReviewEvent(props: { data: Extract<TaskEventData, { _tag: "reviewed" }> }) {

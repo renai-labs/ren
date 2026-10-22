@@ -1,6 +1,7 @@
 import type { SpaceInfo, TaskCreateInput } from "@ren/client"
 import { Task } from "@ren/schema/task"
 import { Avatar } from "@ren/ui/avatar"
+import { Button } from "@ren/ui/button"
 import { Combobox } from "@ren/ui/combobox"
 import { Dialog } from "@ren/ui/dialog"
 import { Icon } from "@ren/ui/icon"
@@ -17,7 +18,7 @@ import { PropertyControls } from "./task-controls.js"
 import type { Values } from "./task-controls.js"
 import { Tasks } from "./tasks.js"
 
-type Preset = { readonly agentId?: string | null; readonly status?: Task.Status }
+export type Preset = { readonly agentId?: string | null; readonly status?: Task.Status; readonly parentId?: string }
 
 type Draft = Pick<Values, "status" | "priority" | "agentId" | "ownerId" | "labels" | "dueAt">
 
@@ -32,8 +33,15 @@ const blankDraft = (agentId: string | null, status: Task.Status | undefined): Dr
   dueAt: null,
 })
 
-const createInput = (spaceId: string, title: string, description: string, draft: Draft): TaskCreateInput => ({
+const createInput = (
+  spaceId: string,
+  preset: Preset,
+  title: string,
+  description: string,
+  draft: Draft,
+): TaskCreateInput => ({
   spaceId,
+  ...(preset.parentId && { parentId: preset.parentId }),
   title: title.trim(),
   ...(description.trim() && { description: description.trim() }),
   status: draft.status,
@@ -183,7 +191,7 @@ function SpacePicker(props: {
   )
 }
 
-function TaskComposer(props: {
+export function TaskComposer(props: {
   spaceId: string
   preset: Preset
   catalog: ReturnType<typeof Tasks.useCatalog>
@@ -191,7 +199,9 @@ function TaskComposer(props: {
   pending: boolean
   create: (input: TaskCreateInput) => Promise<unknown>
   onCreated: () => void
+  onCancel?: () => void
 }) {
+  const noun = props.preset.parentId ? { lower: "sub-task", title: "Sub-task" } : { lower: "task", title: "Task" }
   const [draft, setDraft] = useState(() => blankDraft(props.preset.agentId ?? null, props.preset.status))
   const [scope, setScope] = useState(props.spaceId)
   if (scope !== props.spaceId) {
@@ -208,7 +218,7 @@ function TaskComposer(props: {
     schema: Schema.toStandardSchemaV1(composerSchema),
     onSubmit: async (value) => {
       setError(null)
-      await props.create(createInput(props.spaceId, value.title, value.description, draft)).then(
+      await props.create(createInput(props.spaceId, props.preset, value.title, value.description, draft)).then(
         () => {
           form.reset()
           if (createMore) titleRef.current?.focus()
@@ -222,14 +232,20 @@ function TaskComposer(props: {
   })
 
   const submitOn = (event: KeyboardEvent<HTMLTextAreaElement>, options: { readonly modifier: boolean }) => {
-    if (event.key !== "Enter" || event.nativeEvent.isComposing) return
+    if (event.nativeEvent.isComposing) return
+    if (event.key === "Escape" && props.onCancel && !props.pending) {
+      event.preventDefault()
+      props.onCancel()
+      return
+    }
+    if (event.key !== "Enter") return
     if (options.modifier && !(event.metaKey || event.ctrlKey)) return
     event.preventDefault()
     void form.handleSubmit()
   }
 
   return (
-    <Form.Root form={form} label="Create task" arrangement="fill">
+    <Form.Root form={form} label={`Create ${noun.lower}`} arrangement="fill">
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-6 pt-2 pb-4">
         <form.AppField name="title">
           {(field) => (
@@ -238,14 +254,14 @@ function TaskComposer(props: {
               height="automatic"
               size="title"
               ref={titleRef}
-              label="Task title"
+              label={`${noun.title} title`}
               onKeyDown={(event) => submitOn(event, { modifier: false })}
               disabled={props.pending}
               maxLength={Task.maximumTitleLength}
-              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens to take a task title
+              // oxlint-disable-next-line jsx-a11y/no-autofocus -- the composer opens to take a task title
               autoFocus
               rows={1}
-              placeholder="Task title"
+              placeholder={`${noun.title} title`}
             />
           )}
         </form.AppField>
@@ -255,7 +271,7 @@ function TaskComposer(props: {
               appearance="plain"
               size="reading"
               height={props.expanded ? "expanded" : "growing"}
-              label="Task description"
+              label={`${noun.title} description`}
               onKeyDown={(event) => submitOn(event, { modifier: true })}
               disabled={props.pending}
               placeholder="Add description…"
@@ -286,7 +302,12 @@ function TaskComposer(props: {
             Create more
           </Text>
         </div>
-        <form.SubmitButton pendingLabel="Creating…">Create task</form.SubmitButton>
+        {props.onCancel ? (
+          <Button appearance="plain" disabled={props.pending} onClick={props.onCancel}>
+            Cancel
+          </Button>
+        ) : null}
+        <form.SubmitButton pendingLabel="Creating…">Create {noun.lower}</form.SubmitButton>
       </div>
     </Form.Root>
   )

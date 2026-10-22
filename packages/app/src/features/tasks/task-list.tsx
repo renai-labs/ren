@@ -8,6 +8,7 @@ import { List } from "@ren/ui/list"
 import { TaskLinkBadge } from "@ren/ui/task-link-badge"
 import { TaskRow } from "@ren/ui/task-row"
 import { TaskStatusCircle } from "@ren/ui/task-status-circle"
+import { TaskSubtaskProgress } from "@ren/ui/task-subtask-progress"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
 import { AttentionTurn } from "./task-attention.js"
@@ -53,8 +54,8 @@ export function TaskList(props: TaskListProps) {
             </IconButton>
           }
         >
-          {group.tasks.map((task) => (
-            <Row key={task.id} {...props} task={task} shown={shown} />
+          {TaskView.tree(group.tasks).map((entry) => (
+            <Row key={entry.task.id} {...props} entry={entry} shown={shown} />
           ))}
         </List.Group>
       ))}
@@ -64,11 +65,11 @@ export function TaskList(props: TaskListProps) {
 
 function Row(
   props: TaskListProps & {
-    task: TaskInfo
+    entry: TaskView.Entry
     shown: ReadonlySet<TaskSearch.Property>
   },
 ) {
-  const task = props.task
+  const task = props.entry.task
   const control = {
     task,
     presentation: "icon" as const,
@@ -78,6 +79,8 @@ function Row(
   return (
     <TaskRow
       title={task.title}
+      branch={props.entry.branch}
+      parent={props.entry.parent}
       selected={props.selected.has(task.id)}
       onOpen={() => props.onOpen(task)}
       selection={
@@ -105,13 +108,7 @@ function Row(
           {props.shown.has("status") ? <StatusControl {...control} /> : null}
         </>
       }
-      badge={
-        task.humanReview ? (
-          <Badge tone="warning" size="small">
-            Needs review
-          </Badge>
-        ) : undefined
-      }
+      badge={<TaskBadges task={task} />}
       aside={
         <>
           {props.shown.has("labels") ? <LabelsControl {...control} /> : null}
@@ -157,5 +154,19 @@ function Row(
         </>
       }
     />
+  )
+}
+
+export function TaskBadges(props: { task: TaskInfo }) {
+  const subtasks = props.task.subtasks
+  return (
+    <>
+      {subtasks && subtasks.total > 0 ? <TaskSubtaskProgress done={subtasks.done} total={subtasks.total} /> : null}
+      {props.task.humanReview ? (
+        <Badge tone="warning" size="small">
+          Needs review
+        </Badge>
+      ) : null}
+    </>
   )
 }

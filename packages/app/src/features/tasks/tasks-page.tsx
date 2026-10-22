@@ -1,5 +1,4 @@
 import type { TaskInfo } from "@ren/client"
-import type { Task } from "@ren/schema/task"
 import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
 import { IconButton } from "@ren/ui/icon-button"
@@ -16,6 +15,7 @@ import { RouterContext } from "../../lib/router-context.js"
 import { ArchiveTasksDialog } from "./archive-tasks-dialog.js"
 import { BulkActionBar } from "./task-bulk-bar.js"
 import { TaskCreateDialog } from "./task-create-dialog.js"
+import type { Preset } from "./task-create-dialog.js"
 import { TaskList } from "./task-list.js"
 import { TaskBoard } from "./task-board.js"
 import { TaskSearch } from "./task-search.js"
@@ -23,8 +23,6 @@ import { TaskQueries } from "./task-queries.js"
 import { TaskView } from "./task-view.js"
 import { Tasks } from "./tasks.js"
 import { ActiveFilters, TasksToolbar } from "./tasks-toolbar.js"
-
-type Preset = { readonly agentId?: string | null; readonly status?: Task.Status }
 
 type Dialog =
   | { readonly kind: "create"; readonly preset: Preset }

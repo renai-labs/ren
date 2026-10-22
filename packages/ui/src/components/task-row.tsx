@@ -1,12 +1,22 @@
+import { cva } from "class-variance-authority"
 import type { ReactNode } from "react"
+import { composeClasses } from "../lib/compose-classes.js"
 import { Button } from "./button.js"
+import { Icon } from "./icon.js"
+import { Text } from "./text.js"
 
 const controls = "button, a, input, select, textarea, label, [role=menuitem], [role=option], [role=checkbox]"
+
+const stemVariants = cva("absolute top-0 left-2 border-l border-border-primary", {
+  variants: { branch: { middle: "bottom-0", last: "h-1/2" } },
+})
 
 export type TaskRowProps = {
   title: string
   selected?: boolean
   onOpen: () => void
+  branch?: "middle" | "last" | undefined
+  parent?: string | undefined
   selection?: ReactNode
   leading?: ReactNode
   badge?: ReactNode
@@ -32,11 +42,26 @@ export function TaskRow(props: TaskRowProps) {
       className="group/task-row flex min-h-11 min-w-0 items-center gap-2 rounded-control px-2 transition-standard hover:bg-fill-primary data-selected:bg-fill-primary"
     >
       {props.selection ? <div className="flex shrink-0">{props.selection}</div> : null}
+      {props.branch ? (
+        <span aria-hidden="true" data-slot="task-row-branch" className="relative w-5 shrink-0 self-stretch">
+          <span className={composeClasses(stemVariants({ branch: props.branch }))} />
+          <span className="absolute top-1/2 left-2 w-2.5 border-t border-border-primary" />
+        </span>
+      ) : null}
       {props.leading}
       <span className="flex min-w-0 items-center gap-2">
         <Button appearance="text" onClick={props.onOpen} title={props.title}>
           {props.title}
         </Button>
+        {props.parent ? (
+          <span className="flex max-w-48 min-w-0 items-center gap-1" title={props.parent}>
+            <Icon glyph="ChevronRight" size="extra-small" tone="secondary" />
+            <Text purpose="caption" tone="secondary" truncation="single-line" element="span">
+              <span className="sr-only">Sub-task of </span>
+              {props.parent}
+            </Text>
+          </span>
+        ) : null}
         {props.badge}
       </span>
       <div className="ml-auto hidden max-w-sidebar shrink-0 items-center gap-1 lg:flex">{props.aside}</div>

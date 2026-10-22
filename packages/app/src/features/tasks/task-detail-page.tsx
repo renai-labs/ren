@@ -21,11 +21,13 @@ import {
   DueDateControl,
   LabelsControl,
   OwnerControl,
+  ParentControl,
   PriorityControl,
   StatusControl,
 } from "./task-controls.js"
 import { TaskView } from "./task-view.js"
 import { TaskReview } from "./task-review.js"
+import { TaskSubtasks } from "./task-subtasks.js"
 import { TaskDescription, TaskTextEditor, TaskTitleEditor } from "./task-text-editor.js"
 import { Tasks } from "./tasks.js"
 
@@ -131,6 +133,7 @@ function Detail(props: DetailProps) {
             onCancel={() => setRequesting(false)}
           />
         ) : null}
+        {task.parentId === null ? <TaskSubtasks task={task} catalog={props.catalog} userId={props.userId} /> : null}
         <TaskActivity task={task} catalog={props.catalog} onOpenSession={props.onOpenSession} />
       </article>
     </PageShell.Record>
@@ -162,6 +165,7 @@ function Properties(props: {
           />
           <OwnerControl {...controls} owner={task.ownerId ? props.catalog.person(task.ownerId) : undefined} />
           <DueDateControl {...controls} />
+          {task.subtasks === null ? <ParentControl {...controls} /> : null}
         </div>
       </PageShell.Section>
       <PageShell.Section title="Labels">
@@ -194,6 +198,11 @@ function DetailHeader(props: {
       <div className="min-w-0 flex-1">
         <Breadcrumbs.Root>
           <Breadcrumbs.Link render={<Link to="/tasks" />}>Tasks</Breadcrumbs.Link>
+          {task.parent ? (
+            <Breadcrumbs.Link render={<Link to="/tasks/$taskId" params={{ taskId: task.parent.id }} />}>
+              {task.parent.identifier}
+            </Breadcrumbs.Link>
+          ) : null}
           <Breadcrumbs.Page>{task.identifier}</Breadcrumbs.Page>
         </Breadcrumbs.Root>
       </div>

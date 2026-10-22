@@ -161,6 +161,7 @@ function FilterMenu(props: FilterProps) {
 
 function DisplayPopover(props: ViewProps) {
   const switchId = useId()
+  const subtasksId = useId()
   return (
     <Popover.Root>
       <Popover.Trigger
@@ -229,6 +230,16 @@ function DisplayPopover(props: ViewProps) {
               />
             </div>
           ) : null}
+          <div className="flex items-center justify-between gap-2">
+            <Text purpose="body" element="label" htmlFor={subtasksId}>
+              Show sub-tasks
+            </Text>
+            <Switch
+              id={subtasksId}
+              checked={props.view.subtasks}
+              onCheckedChange={(subtasks) => props.onChange({ ...props.view, subtasks })}
+            />
+          </div>
           <PropertyToggles view={props.view} onChange={props.onChange} />
         </div>
       </Popover.Content>
