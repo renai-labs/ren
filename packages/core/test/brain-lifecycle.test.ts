@@ -5,6 +5,7 @@ import { Testing } from "@ren/db/testing"
 import { SqlClient } from "effect/sql"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
+import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { type Duration, Effect, Layer, ManagedRuntime, Schedule, Schema } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
@@ -37,7 +38,9 @@ const ren = async (options: { readonly lostEvery?: Duration.Input } = {}) =>
   ManagedRuntime.make(
     Host.serve(port).pipe(
       Layer.provideMerge(Host.stack({ port, root, config: {}, models, environments: Host.noTemplates, ...options })),
-      Layer.provide(Layer.succeedContext(await database.runPromise(Effect.context<Database.Service | SqlClient.SqlClient>()))),
+      Layer.provide(
+        Layer.succeedContext(await database.runPromise(Effect.context<Database.Service | SqlClient.SqlClient>())),
+      ),
     ),
   )
 
@@ -80,7 +83,7 @@ const seeded = () =>
       const creator = yield* Seed.user()
       const brainId = Brain.ID.create()
       const sessionId = yield* Seed.session({ organizationId, spaceId, createdBy: creator.id, brainId })
-      return { brainId, sessionId }
+      return { brainId, sessionId, spaceId }
     }),
   )
 
@@ -119,6 +122,27 @@ const outcome = (sessionId: Session.ID) =>
         .where(eq(Database.Schema.opencode_session.session_id, sessionId))).at(0)?.outcome
     }),
   )
+
+const archive = (table: "session" | "space", found: { readonly sessionId: Session.ID; readonly spaceId: Space.ID }) =>
+  database.runPromise(
+    Effect.gen(function* () {
+      const db = yield* Database.Service
+      if (table === "session")
+        yield* db.db
+          .update(Database.Schema.agent_session)
+          .set({ archived_at: new Date() })
+          .where(eq(Database.Schema.agent_session.id, found.sessionId))
+      else
+        yield* db.db
+          .update(Database.Schema.space)
+          .set({ archived_at: new Date() })
+          .where(eq(Database.Schema.space.id, found.spaceId))
+    }),
+  )
+
+const isAlive = (pid: number) => Bun.spawnSync(["kill", "-0", String(pid)]).exitCode === 0
+
+const pidOf = (binding: unknown) => Schema.decodeUnknownSync(Schema.Struct({ pid: Schema.Int }))(binding).pid
 
 describe("brain runs", () => {
   beforeAll(() => database.runPromise(Seed.ren()))
@@ -178,6 +202,42 @@ describe("brain runs", () => {
     )
     expect(failed._tag).toBe("BrainUnavailable")
     expect((await row(found.brainId)).phase).toBe("replacing")
+    await current.dispose()
+  })
+
+  test("cleanup destroys the sandbox of a brain with all chats archived or its space archived, and keeps the others", async () => {
+    const current = await ren()
+    const brains = await Promise.all([seeded(), seeded(), seeded()])
+    await Promise.all(
+      brains.map((found) =>
+        current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId))),
+      ),
+    )
+    const pids = await Promise.all(
+      brains.map((found) => reaches(found.brainId, "ready").then((ready) => pidOf(ready.binding))),
+    )
+    const archivedChats = brains[0]
+    const archivedSpace = brains[1]
+    await archive("session", archivedChats)
+    await archive("space", archivedSpace)
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.cleanup))
+    expect(pids.map(isAlive)).toEqual([false, false, true])
+    expect((await row(archivedChats.brainId)).binding).toBeNull()
+    expect((await row(archivedSpace.brainId)).binding).toBeNull()
+    await current.dispose()
+  })
+
+  test("cleanup destroys a provider sandbox whose brain row does not exist", async () => {
+    const current = await ren()
+    const created = await current.runPromise(
+      SandboxProvider.Service.use((provider) =>
+        provider.create({ brainId: Brain.ID.create(), generation: 1, env: {} }),
+      ),
+    )
+    const pid = pidOf(created.binding)
+    expect(isAlive(pid)).toBe(true)
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.cleanup))
+    expect(isAlive(pid)).toBe(false)
     await current.dispose()
   })
 
