@@ -1804,7 +1804,8 @@
                 {
                   "type": "null"
                 }
-              ]
+              ],
+              "description": "Only agents that this space owns or shares, and the global agents, which are in every space."
             },
             "required": false
           },
@@ -3055,10 +3056,26 @@
             "$ref": "#/components/schemas/Agent.ID"
           },
           "organizationId": {
-            "$ref": "#/components/schemas/Auth.OrganizationID"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.OrganizationID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a global agent, such as `ren`, which every space can use and no one can change."
           },
           "ownerSpaceId": {
-            "$ref": "#/components/schemas/Space.ID"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a global agent."
           },
           "name": {
             "type": "string"
@@ -4221,6 +4238,13 @@
               }
             ]
           },
+          "agentOrder": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The space’s factory order: agent IDs, first to last. It orders the task board’s columns and does not limit which agent holds a task."
+          },
           "canUpdate": {
             "type": "boolean"
           },
@@ -4257,6 +4281,7 @@
           "description",
           "memberCount",
           "membershipId",
+          "agentOrder",
           "canUpdate",
           "canAddMember",
           "canRemoveMember",
@@ -4320,6 +4345,21 @@
                     "type": "null"
                   }
                 ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentOrder": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The space’s factory order: agent IDs, first to last. It orders the task board’s columns and does not limit which agent holds a task.",
+                "maxItems": 64
               },
               {
                 "type": "null"

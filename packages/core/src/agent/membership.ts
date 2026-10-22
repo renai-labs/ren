@@ -184,7 +184,7 @@ export const layer = Layer.effect(
               .for("update")).at(0)
             if (!row) return yield* notFound
             const found = yield* findAgent(transaction, actor, row.agent_id).pipe(Effect.mapError(() => notFound))
-            const isTargetMember = yield* AgentQueries.isMember(transaction, actor, row.space_id)
+            const isTargetMember = yield* AgentQueries.isMember(transaction, row.space_id, actor.userId)
             if (
               !access.isAllowed({
                 actor,

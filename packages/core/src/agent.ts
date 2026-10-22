@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import { Agent } from "@ren/schema/agent"
 import { AgentMembership } from "@ren/schema/agent-membership"
 import { Settings } from "@ren/schema/settings"
-import { and, asc, count, eq, isNull, sql, type SQL } from "drizzle-orm"
+import { and, asc, count, eq, isNull, or, sql, type SQL } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Predicate, Schema } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
@@ -105,10 +105,15 @@ export const layer = Layer.effect(
     return Service.of({
       list: Effect.fn("Agent.list")(function* (actor: Actor.Info, input: Agent.ListInput) {
         const where = and(
-          eq(Database.Schema.agent.organization_id, actor.organizationId),
           isNull(Database.Schema.agent.archived_at),
-          visibleTo(actor),
-          input.spaceId ? AgentQueries.isInSpace(input.spaceId) : undefined,
+          or(
+            isNull(Database.Schema.agent.organization_id),
+            and(
+              eq(Database.Schema.agent.organization_id, actor.organizationId),
+              visibleTo(actor),
+              input.spaceId ? AgentQueries.isInSpace(input.spaceId) : undefined,
+            ),
+          ),
           Predicate.isBoolean(input.isSubagent) ? eq(Database.Schema.agent.is_subagent, input.isSubagent) : undefined,
         )
         return yield* database.transaction((transaction) =>
@@ -129,14 +134,16 @@ export const layer = Layer.effect(
         )
       }),
       get: Effect.fn("Agent.get")(function* (actor: Actor.Info, idOrSlug: string) {
+        const where = Schema.is(Agent.ID)(idOrSlug)
+          ? eq(Database.Schema.agent.id, idOrSlug)
+          : eq(Database.Schema.agent.name, idOrSlug)
         return yield* database.transaction((transaction) =>
-          findLive(
-            transaction,
-            actor,
-            Schema.is(Agent.ID)(idOrSlug)
-              ? eq(Database.Schema.agent.id, idOrSlug)
-              : eq(Database.Schema.agent.name, idOrSlug),
-          ).pipe(Effect.flatMap(rowInfo)),
+          Effect.gen(function* () {
+            const global = (yield* select(transaction, actor).where(
+              and(where, isNull(Database.Schema.agent.organization_id), isNull(Database.Schema.agent.archived_at)),
+            )).at(0)
+            return yield* rowInfo(global ?? (yield* findLive(transaction, actor, where)))
+          }),
         )
       }),
       create: Effect.fn("Agent.create")(function* (actor: Actor.Info, input: Agent.CreateInput) {

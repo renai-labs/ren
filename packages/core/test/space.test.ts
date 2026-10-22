@@ -4,7 +4,7 @@ import { Testing } from "@ren/db/testing"
 import { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import { Session } from "@ren/schema/session"
-import { and, eq } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Access } from "../src/access.js"
 import { Space } from "../src/space.js"
@@ -268,6 +268,52 @@ describe("Space archive and agents", () => {
         .set({ archived_at: new Date() })
         .where(eq(Database.Schema.agent.id, agentId))
       expect((yield* spaces.archive(ada, factory.id)).archivedAt).not.toBeNull()
+    }),
+  )
+})
+
+describe("Space factory order", () => {
+  it.live("the order keeps usable agents in order, a read drops the ones no longer usable, and it starts as ren", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const database = yield* Database.Service
+      yield* Seed.ren()
+      const ren = (yield* database.db
+        .select({ id: Database.Schema.agent.id })
+        .from(Database.Schema.agent)
+        .where(and(eq(Database.Schema.agent.name, "ren"), isNull(Database.Schema.agent.organization_id)))).at(0)?.id
+      if (!ren) return yield* Effect.die(new Error("The seed wrote no ren agent"))
+      const organizationId = yield* Seed.organization()
+      const ada = yield* user(organizationId)
+      const factory = yield* spaces.create(ada, { name: "Factory" })
+      const other = yield* spaces.create(ada, { name: "Other" })
+      expect(factory.agentOrder).toEqual([ren])
+      const owner = { organizationId, spaceId: factory.id }
+      const plan = yield* Seed.agent(owner, "plan", { isSubagent: false })
+      const build = yield* Seed.agent(owner, "build", { isSubagent: false })
+      const helper = yield* Seed.agent(owner, "helper", { isSubagent: true })
+      const elsewhere = yield* Seed.agent({ organizationId, spaceId: other.id }, "elsewhere", { isSubagent: false })
+      expect((yield* spaces.get(ada, factory.id)).agentOrder).toEqual([])
+      expect((yield* spaces.update(ada, factory.id, { agentOrder: [build, plan, ren] })).agentOrder).toEqual([
+        build,
+        plan,
+        ren,
+      ])
+      for (const unusable of [elsewhere, helper, "agt_missing", "plan"]) {
+        expect((yield* Effect.flip(spaces.update(ada, factory.id, { agentOrder: [unusable] })))._tag).toBe(
+          "Primitive.Invalid",
+        )
+      }
+      yield* database.db
+        .update(Database.Schema.agent)
+        .set({ archived_at: new Date() })
+        .where(eq(Database.Schema.agent.id, plan))
+      expect((yield* spaces.get(ada, factory.id)).agentOrder).toEqual([build, ren])
+      const stored = yield* database.db
+        .select({ order: Database.Schema.space.agent_order })
+        .from(Database.Schema.space)
+        .where(eq(Database.Schema.space.id, factory.id))
+      expect(stored).toEqual([{ order: [build, plan, ren] }])
     }),
   )
 })

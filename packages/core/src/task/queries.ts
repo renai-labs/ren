@@ -5,12 +5,13 @@ import type { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import type { Space } from "@ren/schema/space"
 import { Task } from "@ren/schema/task"
-import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm"
 import { DateTime, Effect } from "effect"
 import type { Access } from "../access.js"
 import type { Actor } from "../actor.js"
 import { AgentQueries } from "../agent/queries.js"
 import { Primitive } from "../primitive.js"
+import { OpenCodeStore } from "../session/opencode-store.js"
 import { TaskPolicy } from "./policy.js"
 
 export const notFound = new Primitive.NotFound({ message: "Task not found." })
@@ -88,6 +89,43 @@ export const lockForWrite = (
     .for("update", { of: Database.Schema.task })
     .pipe(Effect.flatMap(allowedOne(access, actor, action)))
 
+export const latestSessions = (transaction: Database.Transaction, taskIds: ReadonlyArray<Task.ID>) =>
+  transaction
+    .selectDistinctOn([Database.Schema.task_session.task_id], {
+      taskId: Database.Schema.task_session.task_id,
+      id: Database.Schema.task_session.session_id,
+      synced: Database.Schema.opencode_session.session_id,
+      suspended: Database.Schema.opencode_session.time_suspended,
+      outcome: Database.Schema.opencode_session.idle_outcome,
+    })
+    .from(Database.Schema.task_session)
+    .innerJoin(Database.Schema.task, eq(Database.Schema.task.id, Database.Schema.task_session.task_id))
+    .innerJoin(
+      Database.Schema.agent_session,
+      eq(Database.Schema.agent_session.id, Database.Schema.task_session.session_id),
+    )
+    .leftJoin(Database.Schema.opencode_session, OpenCodeStore.join)
+    .where(
+      and(
+        inArray(Database.Schema.task_session.task_id, taskIds),
+        eq(Database.Schema.task_session.agent_id, Database.Schema.task.agent_id),
+        eq(Database.Schema.agent_session.space_id, Database.Schema.task.space_id),
+        isNull(Database.Schema.agent_session.archived_at),
+      ),
+    )
+    .orderBy(
+      Database.Schema.task_session.task_id,
+      desc(Database.Schema.task_session.created_at),
+      desc(Database.Schema.task_session.session_id),
+    )
+
+type Latest = Effect.Success<ReturnType<typeof latestSessions>>[number]
+
+const stateOf = (session: Latest): Task.SessionState => {
+  if (session.suspended || !session.synced) return "working"
+  return session.outcome === "failed" ? "failed" : "idle"
+}
+
 export const present = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   access: Access.Interface,
@@ -115,6 +153,12 @@ export const present = Effect.fnUntraced(function* (
     .orderBy(asc(Database.Schema.task_link.created_at), asc(Database.Schema.task_link.id))
   const labelsOf = Map.groupBy(labels, (label) => label.taskId)
   const linksOf = Map.groupBy(links, (link) => link.task_id)
+  const sessions = new Map(
+    (yield* latestSessions(transaction, ids)).map((session) => [
+      session.taskId,
+      { id: session.id, state: stateOf(session) },
+    ]),
+  )
   return rows.map((row): Task.Info => ({
     id: row.task.id,
     organizationId: row.task.organization_id,
@@ -130,7 +174,7 @@ export const present = Effect.fnUntraced(function* (
     dueAt: row.task.due_at && DateTime.fromDateUnsafe(row.task.due_at),
     agentId: row.task.agent_id,
     ownerId: row.task.owner_id,
-    session: null,
+    session: sessions.get(row.task.id) ?? null,
     labels: (labelsOf.get(row.task.id) ?? []).map((label) => ({
       id: label.id,
       name: label.name,
@@ -176,32 +220,11 @@ export const checkAssignment = Effect.fnUntraced(function* (
     ? yield* transaction
         .select({ id: Database.Schema.agent.id })
         .from(Database.Schema.agent)
-        .where(
-          and(
-            eq(Database.Schema.agent.id, assignment.agentId),
-            isNull(Database.Schema.agent.archived_at),
-            eq(Database.Schema.agent.is_subagent, false),
-            or(
-              isNull(Database.Schema.agent.organization_id),
-              and(eq(Database.Schema.agent.organization_id, organizationId), AgentQueries.isInSpace(spaceId)),
-            ),
-          ),
-        )
+        .where(and(eq(Database.Schema.agent.id, assignment.agentId), AgentQueries.isUsableIn(spaceId, organizationId)))
+        .for("share")
     : undefined
   if (agents?.length === 0)
     return yield* new Primitive.Invalid({ message: "This agent is not available in the space.", field: "agentId" })
-  const owners = assignment.ownerId
-    ? yield* transaction
-        .select({ id: Database.Schema.space_member.id })
-        .from(Database.Schema.space_member)
-        .where(
-          and(
-            eq(Database.Schema.space_member.space_id, spaceId),
-            eq(Database.Schema.space_member.user_id, assignment.ownerId),
-            isNull(Database.Schema.space_member.archived_at),
-          ),
-        )
-    : undefined
-  if (owners?.length === 0)
+  if (assignment.ownerId && !(yield* AgentQueries.isMember(transaction, spaceId, assignment.ownerId)))
     return yield* new Primitive.Invalid({ message: "The owner must be a member of the space.", field: "ownerId" })
 })

@@ -1,13 +1,15 @@
 export * as Space from "./space.js"
 
 import { Database } from "@ren/db/database"
+import { Agent } from "@ren/schema/agent"
 import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
-import { and, asc, count, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm"
+import { and, asc, count, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
-import { Context, DateTime, Effect, Layer, Schema } from "effect"
+import { Array, Context, DateTime, Effect, Layer, Schema } from "effect"
 import { Access } from "./access.js"
 import { Actor } from "./actor.js"
+import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
@@ -40,6 +42,7 @@ const select = (transaction: Database.Transaction, actor: Actor.Info) =>
       membershipId: SpaceQueries.membership.id,
       isFirstOrganizationSpace,
       memberCount,
+      agentOrder: AgentQueries.factoryOrder,
     })
     .from(Database.Schema.space)
     .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
@@ -81,6 +84,7 @@ export const layer = Layer.effect(
           description: row.space.description,
           memberCount: row.memberCount,
           membershipId: row.membershipId,
+          agentOrder: row.agentOrder,
           canUpdate: isAllowed(actions.update),
           canAddMember: isAllowed(actions.addMember),
           canRemoveMember: isAllowed(actions.removeMember),
@@ -177,14 +181,33 @@ export const layer = Layer.effect(
             if (!access.isAllowed({ actor, action: actions.update, resource: visible.resource })) {
               return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
-            const updated = yield* transaction
+            const agentOrder = input.agentOrder && Array.dedupe(input.agentOrder)
+            const usable = agentOrder
+              ? yield* transaction
+                  .select({ id: Database.Schema.agent.id })
+                  .from(Database.Schema.agent)
+                  .where(
+                    and(
+                      inArray(Database.Schema.agent.id, agentOrder.filter(Schema.is(Agent.ID))),
+                      AgentQueries.isUsableIn(id, actor.organizationId),
+                    ),
+                  )
+              : []
+            if (agentOrder && usable.length !== agentOrder.length)
+              return yield* new Primitive.Invalid({
+                message: "Each agent in the factory order must be usable in this space.",
+                field: "agentOrder",
+              })
+            yield* transaction
               .update(Database.Schema.space)
-              .set({ name: input.name, description: input.description, updated_at: sql`now()` })
+              .set({
+                name: input.name,
+                description: input.description,
+                agent_order: agentOrder?.filter(Schema.is(Agent.ID)),
+                updated_at: sql`now()`,
+              })
               .where(eq(Database.Schema.space.id, id))
-              .returning()
-            const space = updated.at(0)
-            if (!space) return yield* notFound
-            return toInfo(actor)({ ...visible.row, space })
+            return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
           }),
         )
       }),

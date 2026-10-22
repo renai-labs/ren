@@ -2,20 +2,32 @@ export * as Task from "./task.js"
 
 import { Database } from "@ren/db/database"
 import { Label } from "@ren/schema/label"
+import { Session } from "@ren/schema/session"
 import { Task } from "@ren/schema/task"
 import type { TaskEvent } from "@ren/schema/task-event"
 import { TaskLink } from "@ren/schema/task-link"
-import { and, asc, count, desc, eq, inArray, isNull, or, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
-import { Array, Context, DateTime, Effect, Layer, Predicate, Schema } from "effect"
+import { Array, Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
+import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
+import { SessionRunner } from "./session/runner.js"
 import { TaskPolicy } from "./task/policy.js"
 import { TaskQueries } from "./task/queries.js"
+import { TaskStart } from "./task/start.js"
 import { TaskTrail } from "./task/trail.js"
 
-export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assign" | "start" | "review">
+export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assign"> & {
+  readonly assign: (
+    actor: Actor.Info,
+    id: Task.ID,
+    input: Task.AssignInput,
+  ) => Effect.Effect<Task.Info, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid>
+}
+
+export const reviewStart: "continue" | "none" = "continue"
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Task") {}
 
@@ -24,6 +36,9 @@ const actions = {
   create: Primitive.action(Task.definition, "create"),
   update: Primitive.action(Task.definition, "update"),
   archive: Primitive.action(Task.definition, "archive"),
+  assign: Primitive.action(Task.definition, "assign"),
+  start: Primitive.action(Task.definition, "start"),
+  review: Primitive.action(Task.definition, "review"),
 }
 
 const closed: ReadonlySet<Task.Status> = new Set(["done", "dismissed"])
@@ -140,12 +155,138 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const access = yield* Access.Service
+    const runner = yield* SessionRunner.Service
 
     const reread = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Task.ID) {
       const rows = yield* TaskQueries.select(transaction, actor).where(eq(Database.Schema.task.id, id))
       const info = (yield* TaskQueries.present(transaction, access, actor, rows)).at(0)
       if (!info) return yield* TaskQueries.notFound
       return info
+    })
+
+    const read = (actor: Actor.Info, id: Task.ID) =>
+      database.transaction((transaction) => reread(transaction, actor, id))
+
+    const launch = Effect.fnUntraced(function* (
+      actor: Actor.Info,
+      id: Task.ID,
+      mode: Task.StartMode,
+      review?: TaskStart.Review,
+    ) {
+      const where = eq(Database.Schema.task.id, id)
+      const planned = yield* database.transaction((transaction) =>
+        TaskQueries.find(transaction, access, actor, where, actions.start).pipe(
+          Effect.flatMap((row) =>
+            TaskStart.plan(transaction, row, mode, review).pipe(Effect.map((plan) => ({ plan, task: row.task }))),
+          ),
+        ),
+      )
+      const message = {
+        messageId: Session.MessageID.create(),
+        prompt: { text: planned.plan.text },
+        sender: { userId: actor.userId },
+      }
+      const sessionId = planned.plan.sessionId ?? Session.ID.create()
+      yield* planned.plan.sessionId
+        ? runner
+            .send({ ...message, sessionId, delivery: "queue" })
+            .pipe(Effect.catchTag("SessionRunner.NotFound", Effect.die))
+        : runner
+            .create(
+              { organizationId: planned.task.organization_id, spaceId: planned.task.space_id, createdBy: actor.userId },
+              { sessionId, harness: "opencode", interactive: true, initialMessage: message },
+              planned.plan.isGlobal ? {} : { agentId: planned.plan.agentId },
+            )
+            .pipe(
+              Effect.catchTags({
+                "SessionRunner.AlreadyExists": Effect.die,
+                "SessionRunner.NotFound": () =>
+                  Effect.fail(new Primitive.Conflict({ message: "The task’s agent is no longer available." })),
+              }),
+            )
+      return yield* database.transaction((transaction) =>
+        Effect.gen(function* () {
+          const row = yield* TaskQueries.lockForWrite(transaction, access, actor, where, actions.start)
+          if (!planned.plan.sessionId)
+            yield* transaction
+              .insert(Database.Schema.task_session)
+              .values({ task_id: id, session_id: sessionId, agent_id: planned.plan.agentId })
+          yield* transaction
+            .update(Database.Schema.task)
+            .set({ updated_at: sql`now()`, ...(row.task.status === "todo" && { status: "in_progress" as const }) })
+            .where(eq(Database.Schema.task.id, id))
+          yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
+            { _tag: "started", agentId: planned.plan.agentId, sessionId, mode },
+            ...(row.task.status === "todo" ? [{ _tag: "status", from: "todo", to: "in_progress" } as const] : []),
+          ])
+          return yield* reread(transaction, actor, id)
+        }),
+      )
+    })
+
+    const launchAfterCommit = (actor: Actor.Info, id: Task.ID, mode: Task.StartMode, review?: TaskStart.Review) =>
+      launch(actor, id, mode, review).pipe(
+        Effect.catch((error) => Effect.logWarning("The task’s agent did not start", error)),
+        Effect.andThen(read(actor, id)),
+      )
+
+    const decide = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      row: TaskQueries.Row,
+      actor: Actor.Info,
+      input: Extract<Task.ReviewInput, { readonly humanReview: false }>,
+    ) {
+      if (!row.task.human_review) return yield* new Primitive.Conflict({ message: "This task has no open review." })
+      const requested = transaction
+        .select({ at: sql`max(${Database.Schema.task_event.created_at})` })
+        .from(Database.Schema.task_event)
+        .where(
+          and(
+            eq(Database.Schema.task_event.task_id, row.task.id),
+            eq(Database.Schema.task_event.kind, "review_requested"),
+          ),
+        )
+      const edits = yield* transaction
+        .select({ id: Database.Schema.task_event.id })
+        .from(Database.Schema.task_event)
+        .where(
+          and(
+            eq(Database.Schema.task_event.task_id, row.task.id),
+            eq(Database.Schema.task_event.kind, "field"),
+            sql`${Database.Schema.task_event.data} ->> 'field' = 'description'`,
+            gt(Database.Schema.task_event.created_at, sql`(${requested})`),
+          ),
+        )
+        .limit(1)
+      yield* transaction
+        .update(Database.Schema.task)
+        .set({ human_review: false, human_review_reason: null, updated_at: sql`now()` })
+        .where(eq(Database.Schema.task.id, row.task.id))
+      const comment = input.comment ?? null
+      yield* TaskTrail.record(transaction, { id: row.task.id, organizationId: row.task.organization_id }, actor, [
+        { _tag: "reviewed", decision: input.decision, comment },
+      ])
+      return { decision: input.decision, comment, descriptionChanged: edits.length > 0 }
+    })
+
+    const nextAssignment = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      row: TaskQueries.Row,
+      input: Task.AssignInput,
+    ) {
+      const spaceId = input.spaceId ?? row.task.space_id
+      const moves = spaceId !== row.task.space_id
+      if (moves) yield* TaskQueries.writableSpace(transaction, access, actor, spaceId, actions.assign)
+      const agentId = Predicate.isUndefined(input.agentId) ? row.task.agent_id : input.agentId
+      const owner = row.task.owner_id
+      const ownerStays = !moves || !owner || (yield* AgentQueries.isMember(transaction, spaceId, owner))
+      const keptOwner = ownerStays ? owner : null
+      yield* TaskQueries.checkAssignment(transaction, row.task.organization_id, spaceId, {
+        agentId: moves || agentId !== row.task.agent_id ? agentId : null,
+        ownerId: input.ownerId,
+      })
+      return { spaceId, agentId, ownerId: Predicate.isUndefined(input.ownerId) ? keptOwner : input.ownerId }
     })
 
     const refuseClosing = (actor: Actor.Info, status: Task.Status | undefined) =>
@@ -265,6 +406,10 @@ export const layer = Layer.effect(
               created_by_agent_id: by.agentId,
               created_by_session_id: by.sessionId,
             })
+            if (actor.agent)
+              yield* transaction
+                .insert(Database.Schema.task_session)
+                .values({ task_id: task.id, session_id: actor.agent.sessionId, agent_id: actor.agent.agentId })
             const labels = input.labels
               ? yield* setLabels(transaction, task, input.labels, { canCreate: !actor.agent })
               : []
@@ -348,6 +493,90 @@ export const layer = Layer.effect(
             return yield* reread(transaction, actor, id)
           }),
         )
+      }),
+      assign: Effect.fn("Task.assign")(function* (actor: Actor.Info, id: Task.ID, input: Task.AssignInput) {
+        const assigned = yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const row = yield* TaskQueries.lockForWrite(
+              transaction,
+              access,
+              actor,
+              eq(Database.Schema.task.id, id),
+              actions.assign,
+            )
+            const next = yield* nextAssignment(transaction, actor, row, input)
+            const changed =
+              next.spaceId !== row.task.space_id ||
+              next.agentId !== row.task.agent_id ||
+              next.ownerId !== row.task.owner_id
+            if (changed || input.note) {
+              yield* transaction
+                .update(Database.Schema.task)
+                .set({
+                  space_id: next.spaceId,
+                  agent_id: next.agentId,
+                  owner_id: next.ownerId,
+                  updated_at: sql`now()`,
+                  ...(!next.agentId && { human_review: false, human_review_reason: null }),
+                })
+                .where(eq(Database.Schema.task.id, id))
+              yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
+                {
+                  _tag: "assigned",
+                  fromAgentId: row.task.agent_id,
+                  toAgentId: next.agentId,
+                  fromOwnerId: row.task.owner_id,
+                  toOwnerId: next.ownerId,
+                  fromSpaceId: row.task.space_id,
+                  toSpaceId: next.spaceId,
+                  note: input.note ?? null,
+                },
+              ])
+            }
+            return { hasAgent: Boolean(next.agentId), agentChanged: next.agentId !== row.task.agent_id }
+          }),
+        )
+        const start = input.start ?? (assigned.agentChanged ? "continue" : "none")
+        if (start === "none" || !assigned.hasAgent) return yield* read(actor, id)
+        return yield* launchAfterCommit(actor, id, start)
+      }),
+      start: Effect.fn("Task.start")(function* (actor: Actor.Info, id: Task.ID, input: Task.StartInput) {
+        return yield* launch(actor, id, input.mode).pipe(
+          Effect.catchTags({ BrainUnavailable: Effect.die, BrainRejectedError: Effect.die }),
+        )
+      }),
+      review: Effect.fn("Task.review")(function* (actor: Actor.Info, id: Task.ID, input: Task.ReviewInput) {
+        if (!input.humanReview && actor.agent)
+          return yield* new Primitive.Forbidden({ message: "Only a person decides a review." })
+        const decided = yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            const row = yield* TaskQueries.lockForWrite(
+              transaction,
+              access,
+              actor,
+              eq(Database.Schema.task.id, id),
+              actions.review,
+            )
+            if (!input.humanReview) {
+              const review = yield* decide(transaction, row, actor, input)
+              return row.task.agent_id ? Option.some(review) : Option.none()
+            }
+            if (closed.has(row.task.status))
+              return yield* new Primitive.Conflict({ message: "A done or dismissed task needs no review." })
+            if (row.task.human_review && row.task.human_review_reason === input.reason) return Option.none()
+            yield* transaction
+              .update(Database.Schema.task)
+              .set({ human_review: true, human_review_reason: input.reason, updated_at: sql`now()` })
+              .where(eq(Database.Schema.task.id, id))
+            yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
+              { _tag: "review_requested", reason: input.reason },
+            ])
+            return Option.none()
+          }),
+        )
+        const start = input.humanReview ? "none" : (input.start ?? reviewStart)
+        if (Option.isNone(decided) || start === "none") return yield* read(actor, id)
+        return yield* launchAfterCommit(actor, id, "continue", decided.value)
       }),
     })
   }),

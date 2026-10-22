@@ -16,8 +16,10 @@ export const Name = Primitive.Slug.annotate({ identifier: "Agent.Name" })
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
-  organizationId: Auth.OrganizationID,
-  ownerSpaceId: Space.ID,
+  organizationId: Schema.NullOr(Auth.OrganizationID).annotate({
+    description: "Null for a global agent, such as `ren`, which every space can use and no one can change.",
+  }),
+  ownerSpaceId: Schema.NullOr(Space.ID).annotate({ description: "Null for a global agent." }),
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
   isSubagent: Schema.Boolean,
@@ -29,7 +31,9 @@ export const Info = Schema.Struct({
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
 export const ListInput = Schema.Struct({
-  spaceId: Schema.optional(Space.ID),
+  spaceId: Schema.optional(Space.ID).annotate({
+    description: "Only agents that this space owns or shares, and the global agents, which are in every space.",
+  }),
   isSubagent: Schema.optional(Schema.Boolean),
   ...Pagination.fields(50),
 }).annotate({ identifier: "Agent.ListInput" })
