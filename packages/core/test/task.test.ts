@@ -1,61 +1,23 @@
 import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
-import { Testing } from "@ren/db/testing"
-import { and, eq, isNull } from "drizzle-orm"
-import type { Space as SpaceSchema } from "@ren/schema/space"
 import type { Task as TaskSchema } from "@ren/schema/task"
-import type { TaskActivity as Activity } from "@ren/schema/task-activity"
-import { Effect, Layer } from "effect"
-import { Access } from "../src/access.js"
-import type { Actor } from "../src/actor.js"
+import { eq } from "drizzle-orm"
+import { Effect } from "effect"
 import { Label } from "../src/label.js"
-import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { Task } from "../src/task.js"
 import { TaskActivity } from "../src/task/activity.js"
 import { TaskComment } from "../src/task/comment.js"
-import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
+import { TaskFixture } from "./lib/task-fixture.js"
 
-const it = testEffect(
-  Layer.mergeAll(Task.layer, TaskComment.layer, TaskActivity.layer, Label.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer)),
-    Layer.provideMerge(Access.layer),
-    Layer.provideMerge(Testing.layer),
-  ),
-)
+const it = TaskFixture.harness().it
 
-const page = { page: 1, pageSize: 50 }
+const page = TaskFixture.page
 
-const org = Effect.gen(function* () {
-  const database = yield* Database.Service
-  const spaces = yield* Space.Service
-  yield* Seed.ren()
-  const organizationId = yield* Seed.organization()
-  const ada = yield* Seed.actor(organizationId, "member")
-  const grace = yield* Seed.actor(organizationId, "member")
-  const admin = yield* Seed.actor(organizationId, "admin")
-  const factory = yield* spaces.create(ada, { name: "Factory" })
-  const eng = yield* spaces.create(grace, { name: "Eng" })
-  const slug = (yield* database.db
-    .select({ slug: Database.Schema.organization.slug })
-    .from(Database.Schema.organization)
-    .where(eq(Database.Schema.organization.id, organizationId))).at(0)?.slug
-  const ren = (yield* database.db
-    .select({ id: Database.Schema.agent.id })
-    .from(Database.Schema.agent)
-    .where(and(eq(Database.Schema.agent.name, "ren"), isNull(Database.Schema.agent.organization_id)))).at(0)?.id
-  if (!slug || !ren) return yield* Effect.die(new Error("The seed wrote no organization or ren agent"))
-  const agentIn = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: SpaceSchema.ID) {
-    const agentId = yield* Seed.agent({ organizationId, spaceId }, "build", { isSubagent: false })
-    const sessionId = yield* Seed.session({ organizationId, spaceId, createdBy: actor.userId })
-    return { ...actor, agent: { agentId, sessionId, spaceId } }
-  })
-  return { organizationId, prefix: slug.toUpperCase(), ren, ada, grace, admin, factory, eng, agentIn }
-})
+const org = TaskFixture.org
 
-const kinds = (activity: { readonly items: ReadonlyArray<Activity.Info> }) =>
-  activity.items.map((item) => (item.type === "event" ? item.event.data._tag : "comment"))
+const kinds = TaskFixture.kinds
 
 describe("Task", () => {
   it.live("a new task is todo, numbered from 1 in its organization, and named by the organization's slug", () =>
@@ -134,7 +96,7 @@ describe("Task", () => {
       })
       expect((yield* tasks.list(build, page)).items.map((task) => task.id)).toEqual([own.id])
       expect((yield* Effect.flip(tasks.get(build, elsewhere.id)))._tag).toBe("Primitive.NotFound")
-      const adminAgent = { ...o.admin, agent: build.agent }
+      const adminAgent = TaskFixture.actingAs(o.admin, o.factory.id, build.agent.agentId, build.agent.sessionId)
       expect((yield* tasks.list(adminAgent, page)).items.map((task) => task.id)).toEqual([own.id])
       expect((yield* Effect.flip(tasks.get(adminAgent, elsewhere.id)))._tag).toBe("Primitive.NotFound")
       expect((yield* Effect.flip(tasks.create(build, { spaceId: o.eng.id, title: "Sneak" })))._tag).toBe(

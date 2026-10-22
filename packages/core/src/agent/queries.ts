@@ -1,8 +1,11 @@
 export * as AgentQueries from "./queries.js"
 
 import { Database } from "@ren/db/database"
+import type { Agent } from "@ren/schema/agent"
+import type { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { and, eq, isNull, or, sql } from "drizzle-orm"
+import { alias } from "drizzle-orm/pg-core"
 import { Effect } from "effect"
 import type { Access } from "../access.js"
 import type { Actor } from "../actor.js"
@@ -28,7 +31,7 @@ export const isSpaceMember = (actor: Actor.Info) =>
       and ${Database.Schema.space_member.archived_at} is null
   ))`
 
-export const isInSpace = (spaceId: Space.ID) =>
+export const isInSpace = (spaceId: Space.ID | typeof Database.Schema.space.id) =>
   or(
     eq(Database.Schema.agent.owner_space_id, spaceId),
     sql`exists (
@@ -38,6 +41,44 @@ export const isInSpace = (spaceId: Space.ID) =>
     )`,
   )
 
+export const isUsableIn = (
+  spaceId: Space.ID | typeof Database.Schema.space.id,
+  organizationId: Auth.OrganizationID | typeof Database.Schema.space.organization_id,
+) =>
+  and(
+    isNull(Database.Schema.agent.archived_at),
+    eq(Database.Schema.agent.is_subagent, false),
+    or(
+      isNull(Database.Schema.agent.organization_id),
+      and(eq(Database.Schema.agent.organization_id, organizationId), isInSpace(spaceId)),
+    ),
+  )
+
+const owned = alias(Database.Schema.agent, "owned_agent")
+
+export const factoryOrder = sql<ReadonlyArray<Agent.ID>>`coalesce(
+  (
+    select jsonb_agg(${Database.Schema.agent.id} order by ordered.position)
+    from jsonb_array_elements_text(${Database.Schema.space.agent_order}) with ordinality as ordered(id, position)
+    inner join ${Database.Schema.agent} on ${Database.Schema.agent.id} = ordered.id
+    where ${isUsableIn(Database.Schema.space.id, Database.Schema.space.organization_id)}
+  ),
+  (
+    select jsonb_agg(${Database.Schema.agent.id} order by ${Database.Schema.agent.name})
+    from ${Database.Schema.agent}
+    where ${Database.Schema.agent.organization_id} is null
+      and ${Database.Schema.agent.archived_at} is null
+      and not ${Database.Schema.agent.is_subagent}
+      and not exists (
+        select 1 from ${Database.Schema.agent} as ${owned}
+        where ${owned.owner_space_id} = ${Database.Schema.space.id}
+          and ${owned.archived_at} is null
+          and not ${owned.is_subagent}
+      )
+  ),
+  '[]'::jsonb
+)`
+
 export const select = (transaction: Database.Transaction, actor: Actor.Info) =>
   transaction
     .select({ agent: Database.Schema.agent, isOwnerMember: isOwnerMember(actor), isSpaceMember: isSpaceMember(actor) })
@@ -45,8 +86,8 @@ export const select = (transaction: Database.Transaction, actor: Actor.Info) =>
 
 export const isMember = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
-  actor: Actor.Info,
   spaceId: Space.ID,
+  userId: Auth.UserID,
 ) {
   const rows = yield* transaction
     .select({ id: Database.Schema.space_member.id })
@@ -54,7 +95,7 @@ export const isMember = Effect.fnUntraced(function* (
     .where(
       and(
         eq(Database.Schema.space_member.space_id, spaceId),
-        eq(Database.Schema.space_member.user_id, actor.userId),
+        eq(Database.Schema.space_member.user_id, userId),
         isNull(Database.Schema.space_member.archived_at),
       ),
     )

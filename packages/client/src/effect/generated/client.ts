@@ -60,11 +60,12 @@ type SpaceUpdateInput = {
   readonly id: SpaceUpdateRequest["params"]["id"]
   readonly name?: SpaceUpdateRequest["payload"]["name"]
   readonly description?: SpaceUpdateRequest["payload"]["description"]
+  readonly agentOrder?: SpaceUpdateRequest["payload"]["agentOrder"]
 }
 const EndpointSpaceUpdate = (raw: RawClient["space"]) => (input: SpaceUpdateInput) =>
   raw["space.update"]({
     params: { id: input["id"] },
-    payload: { name: input["name"], description: input["description"] },
+    payload: { name: input["name"], description: input["description"], agentOrder: input["agentOrder"] },
   }).pipe(Effect.mapError(mapClientError))
 
 type SpaceArchiveRequest = Parameters<RawClient["space"]["space.archive"]>[0]

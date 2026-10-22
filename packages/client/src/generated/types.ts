@@ -84,6 +84,7 @@ export type SpaceInfo = {
   description: string | null
   memberCount: number
   membershipId: SpaceMembershipID | null
+  agentOrder: Array<string>
   canUpdate: boolean
   canAddMember: boolean
   canRemoveMember: boolean
@@ -224,8 +225,8 @@ export type OrganizationSettingsInfo = {
 
 export type AgentInfo = {
   id: AgentID
-  organizationId: AuthOrganizationID
-  ownerSpaceId: SpaceID
+  organizationId: AuthOrganizationID | null
+  ownerSpaceId: SpaceID | null
   name: string
   description: string | null
   isSubagent: boolean
@@ -306,11 +307,21 @@ export type SpaceCreateOutput = SpaceInfo
 
 export type SpaceUpdateInput = {
   readonly id: { readonly id: string }["id"]
-  readonly name?: { readonly name?: string | undefined; readonly description?: string | null | undefined }["name"]
+  readonly name?: {
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
+    readonly agentOrder?: ReadonlyArray<string> | undefined
+  }["name"]
   readonly description?: {
     readonly name?: string | undefined
     readonly description?: string | null | undefined
+    readonly agentOrder?: ReadonlyArray<string> | undefined
   }["description"]
+  readonly agentOrder?: {
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
+    readonly agentOrder?: ReadonlyArray<string> | undefined
+  }["agentOrder"]
 }
 
 export type SpaceUpdateOutput = SpaceInfo

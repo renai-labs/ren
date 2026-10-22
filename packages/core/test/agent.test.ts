@@ -123,6 +123,29 @@ describe("Agent", () => {
     }),
   )
 
+  it.live("every member lists and gets the live global agents, in every space, but cannot change them", () =>
+    Effect.gen(function* () {
+      const agents = yield* Agent.Service
+      const o = yield* org
+      const ren = yield* Seed.globalAgent("ren", { isSubagent: false })
+      yield* Seed.globalAgent("explore", { isSubagent: true })
+      const own = yield* agents.create(o.ada, { ...build, ownerSpaceId: o.factory.id })
+      const ids = (input: { readonly spaceId?: typeof o.factory.id }) =>
+        agents
+          .list(o.ada, { ...page, isSubagent: false, ...input })
+          .pipe(Effect.map((result) => result.items.map((agent) => agent.id)))
+      expect(yield* ids({})).toEqual([ren, own.id])
+      expect(yield* ids({ spaceId: o.factory.id })).toEqual([ren, own.id])
+      expect((yield* agents.list(o.grace, { ...page, isSubagent: false })).items.map((agent) => agent.id)).toEqual([
+        ren,
+      ])
+      expect(yield* agents.get(o.grace, ren)).toMatchObject({ name: "ren", organizationId: null, ownerSpaceId: null })
+      expect((yield* agents.get(o.grace, "ren")).id).toBe(ren)
+      expect((yield* Effect.flip(agents.update(o.admin, ren, { description: "Mine" })))._tag).toBe("Primitive.NotFound")
+      expect((yield* Effect.flip(agents.archive(o.admin, ren)))._tag).toBe("Primitive.NotFound")
+    }),
+  )
+
   it.live("a member of a non-owner space can read the agent but gets Forbidden on edit", () =>
     Effect.gen(function* () {
       const agents = yield* Agent.Service

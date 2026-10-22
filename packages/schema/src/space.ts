@@ -15,6 +15,13 @@ export type MembershipID = typeof MembershipID.Type
 export const AssignmentID = Identifier.make("spp", "Space.AssignmentID")
 export type AssignmentID = typeof AssignmentID.Type
 
+export const maximumAgentOrder = 64
+
+const AgentOrder = Schema.Array(Schema.String).annotate({
+  description:
+    "The space’s factory order: agent IDs, first to last. It orders the task board’s columns and does not limit which agent holds a task.",
+})
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
@@ -23,6 +30,7 @@ export const Info = Schema.Struct({
   description: Schema.NullOr(Schema.String),
   memberCount: Schema.Int,
   membershipId: Schema.NullOr(MembershipID),
+  agentOrder: AgentOrder,
   canUpdate: Schema.Boolean,
   canAddMember: Schema.Boolean,
   canRemoveMember: Schema.Boolean,
@@ -50,6 +58,11 @@ export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
   name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
+  agentOrder: Schema.optional(
+    AgentOrder.check(
+      Schema.isMaxLength(maximumAgentOrder, { message: `A factory has at most ${maximumAgentOrder} agents.` }),
+    ),
+  ),
 }).annotate({ identifier: "Space.UpdateInput" })
 
 export const definition = Primitive.define({
