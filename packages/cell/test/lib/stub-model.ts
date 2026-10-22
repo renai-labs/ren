@@ -6,6 +6,7 @@ interface Behaviour {
   readonly reply?: string
   readonly hold?: boolean
   readonly status?: number
+  readonly rejectKey?: string
   readonly cut?: boolean
   readonly malformed?: boolean
   readonly dripMs?: number
@@ -239,6 +240,12 @@ interface Waiter {
   readonly resolve: (call: Call) => void
 }
 
+export const keyOf = (call: Pick<Call, "apiKey" | "authorization">) =>
+  call.apiKey ?? call.authorization?.replace(/^Bearer /, "") ?? null
+
+const statusOf = (behaviour: Behaviour, call: Call) =>
+  behaviour.rejectKey && keyOf(call) === behaviour.rejectKey ? 401 : behaviour.status
+
 export const start = (): Server => {
   const calls: Array<Call> = []
   const scripts = new Map<string, Entry>()
@@ -280,11 +287,9 @@ export const start = (): Server => {
         compaction: summary === undefined ? {} : { reply: summary },
         turn: entry?.behaviour ?? {},
       }[call.kind]
-      if (behaviour.status)
-        return Response.json(
-          { error: { message: `stub model status ${behaviour.status}`, type: "stub_error" } },
-          { status: behaviour.status },
-        )
+      const status = statusOf(behaviour, call)
+      if (status)
+        return Response.json({ error: { message: `stub model status ${status}`, type: "stub_error" } }, { status })
       const chunks = endpoint.stream(call.body, behaviour, entry?.gate.promise ?? Promise.resolve())
       const body = new ReadableStream<Uint8Array>({
         pull: async (controller) => {

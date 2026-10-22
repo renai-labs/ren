@@ -7,19 +7,20 @@ import { testEffect } from "@ren/executor/testing"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
-import { Context, Effect, Layer, Option, Predicate, Queue, Schedule, Stream, Struct } from "effect"
+import { Context, Effect, Layer, Option, Predicate, Queue, Redacted, Schedule, Stream, Struct } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ChatSettings } from "../src/chat-settings.js"
+import type { Harness } from "../src/harness/harness.js"
 import { OpenCodeEvents } from "../src/harness/opencode/events.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { ModelsTest } from "./lib/models.js"
 import { TestSettings } from "./lib/settings.js"
 import { Shared } from "./lib/shared.js"
-import type { StubModel } from "./lib/stub-model.js"
+import { StubModel } from "./lib/stub-model.js"
 
 setDefaultTimeout(60_000)
 
@@ -36,6 +37,7 @@ const open = Effect.fnUntraced(function* (
     readonly start?: boolean
     readonly stored?: Map<string, string>
     readonly directory?: string
+    readonly refreshKey?: Harness.Refresh
   } = {},
 ) {
   const access = Struct.evolve(Shared.access(undefined, stub.url), {
@@ -61,7 +63,7 @@ const open = Effect.fnUntraced(function* (
       fs: { filewatcher: false, fff: false },
     }).pipe(Layer.provide(HttpServer.layerServices)),
     access.endpoints,
-    () => Effect.succeedNone,
+    options.refreshKey ?? (() => Effect.succeedNone),
     Option.none(),
     {
       saved: Option.some(settings.saved),
@@ -433,5 +435,60 @@ describe("settings in the cell", () => {
           ),
         ).toBe(false)
       }),
+  )
+  it.live("a 401 renews the key once and the call runs again; a second 401 fails the turn", () =>
+    Effect.gen(function* () {
+      const renewals = { count: 0 }
+      const opened = yield* open(
+        TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
+        {
+          refreshKey: () =>
+            Effect.sync(() => {
+              renewals.count += 1
+              return Option.some({ key: Redacted.make(`stub-renewed-${renewals.count}`) })
+            }),
+        },
+      )
+      const healed = stub.script({ rejectKey: "stub-key", reply: "healed" })
+      yield* opened.turn(healed)
+      expect(healed.calls.map(StubModel.keyOf)).toEqual(["stub-key", "stub-renewed-1"])
+      expect(renewals.count).toBe(1)
+      const refused = stub.script({ status: 401 })
+      yield* opened.turn(refused)
+      expect(refused.calls).toHaveLength(2)
+      expect(renewals.count).toBe(2)
+      expect(yield* opened.client.session.get({ sessionID: opened.sessionID }).pipe(Effect.orDie)).toMatchObject({
+        outcome: "failed",
+      })
+    }),
+  )
+  it.live("a chat whose picked model is gone falls back to its settings' model and gets a message naming both", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(
+        TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
+      )
+      const picked = { id: "stub-picked", name: "Stub Picked", limit: { context: 100_000, output: 4000 } }
+      yield* opened.harness.configure(
+        opened.access.endpoints.map((endpoint) =>
+          endpoint.id === "stub" ? Struct.evolve(endpoint, { models: (models) => [...models, picked] }) : endpoint,
+        ),
+      )
+      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: picked.id }))
+      const modelOf = opened.client.session
+        .get({ sessionID: opened.sessionID })
+        .pipe(
+          Effect.orDie,
+          Effect.map((session) => String(session.model?.id)),
+        )
+      expect(yield* modelOf).toBe(picked.id)
+      yield* opened.harness.configure(opened.access.endpoints)
+      yield* opened.harness.applySettings([{ id: opened.sessionId, agent: null, archived: false }])
+      expect(yield* modelOf).toBe("stub-model")
+      const notes = JSON.stringify(
+        yield* opened.client.session.inbox.list({ sessionID: opened.sessionID }).pipe(Effect.orDie),
+      )
+      expect(notes).toContain("stub/stub-picked")
+      expect(notes).toContain("stub/stub-model")
+    }),
   )
 })

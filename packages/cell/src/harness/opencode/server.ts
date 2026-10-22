@@ -20,7 +20,7 @@ import { ServerWorkerd } from "@opencode/server/workerd"
 import type { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
 import type { Models } from "@ren/schema/models"
-import { Context, Deferred, Effect, Fiber, Layer, ManagedRuntime, Option, Ref, type Scope } from "effect"
+import { Context, Deferred, Effect, Fiber, Layer, ManagedRuntime, Option, Ref, type Scope, Struct } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import manifest from "../../../package.json"
 import type { FileSystem } from "@opencode/schema/filesystem"
@@ -122,6 +122,19 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   const locations = yield* Ref.make<ReadonlyArray<RenPlugin.LocationModels>>([])
   const credentials = Context.get(services, Credential.Service)
   // oxlint-disable-next-line ren/no-comments -- A credential stays while any Location still has its endpoint installed (E64).
+  // oxlint-disable-next-line ren/no-comments -- A 401 renews the endpoint's key at once (E58); the caller retries the request one time.
+  const renew = Effect.fnUntraced(function* (endpointId: string) {
+    const endpoint = (yield* Ref.get(endpoints)).find((each) => each.id === endpointId)
+    if (!endpoint) return false
+    const renewed = yield* refreshKey(endpointId)
+    if (Option.isNone(renewed)) return false
+    const entry = ModelCredentials.entries([Struct.evolve(endpoint, { apiKey: () => renewed.value })]).at(0)
+    if (!entry) return false
+    yield* credentials
+      .update(Credentials.idOf(ModelCredentials.owner, entry.integrationID), { value: entry.value })
+      .pipe(Effect.orDie)
+    return true
+  })
   const synced = Effect.gen(function* () {
     const latest = yield* Ref.get(endpoints)
     const installed = yield* Effect.forEach(yield* Ref.get(locations), (location) => Ref.get(location.installed))
@@ -155,6 +168,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       endpoints,
       locations,
       synced,
+      renew,
       loaded,
       refreshKey,
       connections,

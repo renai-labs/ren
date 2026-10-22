@@ -74,6 +74,30 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
     return yield* new BrainRejectedError({ message: `Unknown model: ${model.endpointId}/${model.modelId}` })
 })
 
+const modelName = (model: Model) => `${model.endpointId}/${model.modelId}`
+
+// oxlint-disable-next-line ren/no-comments -- A chat whose picked model is gone uses its settings' model; the pick is cleared and the chat is told why (E55).
+const dropPick = Effect.fnUntraced(function* (
+  client: OpenCodeClient,
+  session: Option.Option<Session.Info>,
+  saved: SessionSettings.Saved,
+  picked: Model,
+  now: Model,
+) {
+  const info = Option.getOrUndefined(session)
+  if (!info) return
+  yield* client.session
+    .update({ sessionID: info.id, metadata: SessionSettings.metadata(session, { ...saved, model: null }) })
+    .pipe(Effect.orDie)
+  yield* client.session
+    .synthetic({
+      sessionID: info.id,
+      text: `The model ${modelName(picked)} is no longer available. This chat now uses ${modelName(now)}.`,
+      resume: false,
+    })
+    .pipe(Effect.orDie)
+})
+
 const rejected = (error: { readonly message: string }) => new BrainRejectedError({ message: error.message })
 
 const create = Effect.fn("OpenCodeHarness.create")(function* (
@@ -412,33 +436,34 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       ),
     applySettings: Effect.fn("OpenCodeHarness.applySettings")(function* (chats: ReadonlyArray<PullChat>) {
       if (Option.isNone(server.chats) || Option.isNone(settings)) return
+      const known = server.chats.value
       const lookup = yield* lookupOf(client)
       const active = new Set(Object.keys(yield* client.session.active().pipe(Effect.orDie)))
+      const stopArchived = (sessionID: Session.ID) =>
+        active.has(sessionID) ? client.session.interrupt({ sessionID }).pipe(Effect.orDie) : Effect.void
       yield* Effect.forEach(
         chats,
         (chat) =>
           Effect.gen(function* () {
             const session = yield* findSession(client, Session.ID.make(chat.id))
             if (Option.isNone(session)) return
-            if (chat.archived) {
-              if (active.has(chat.id))
-                yield* client.session.interrupt({ sessionID: session.value.id }).pipe(Effect.orDie)
-              return
-            }
+            if (chat.archived) return yield* stopArchived(session.value.id)
             const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
-            const resolved = yield* settings.value.resolve(chat.id, Option.fromNullishOr(saved?.model), lookup).pipe(
-              Effect.tapError((error) => Effect.logWarning(`Chat ${chat.id} keeps its settings: ${error.message}`)),
-              Effect.option,
-            )
+            const gone = saved?.model && Option.isNone(lookup(saved.model)) ? saved : undefined
+            const resolved = yield* settings.value
+              .resolve(chat.id, gone ? Option.none() : Option.fromNullishOr(saved?.model), lookup)
+              .pipe(
+                Effect.tapError((error) => Effect.logWarning(`Chat ${chat.id} keeps its settings: ${error.message}`)),
+                Effect.option,
+              )
             if (Option.isNone(resolved)) return
-            const chats = server.chats
-            if (Option.isNone(chats)) return
+            if (gone?.model) yield* dropPick(client, session, gone, gone.model, resolved.value.primary.model)
             yield* Ref.update(
-              chats.value.latest,
+              known.latest,
               (all) =>
                 new Map([...all, [chat.id, { resolved: resolved.value, interactive: saved?.interactive ?? true }]]),
             )
-            if (!active.has(chat.id)) yield* chats.value.install(chat.id)
+            if (!active.has(chat.id)) yield* known.install(chat.id)
           }),
         { discard: true },
       )
