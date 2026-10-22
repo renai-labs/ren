@@ -102,6 +102,7 @@ export function Dots(props: { labels: ReadonlyArray<Label> }) {
       <span
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard users need the tooltip to identify label dots
         tabIndex={0}
+        role="img"
         aria-label={props.labels.map((label) => labelDisplay(label.name)).join(", ")}
         className="flex shrink-0 items-center gap-1 rounded-full focus-visible:outline-2 focus-visible:outline-accent-primary"
       >
