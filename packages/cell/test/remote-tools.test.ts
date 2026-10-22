@@ -1,6 +1,6 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
 import { TestAccess } from "@ren/brain/testing"
-import { AbsolutePath, OpenCode, SessionMessage } from "@opencode/client/effect"
+import { OpenCode, SessionMessage } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
@@ -79,9 +79,10 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
     endpoints,
     () => Effect.succeedNone,
     Option.some(environments),
+    { saved: Option.none(), nativeTools: false, directoryOf: () => local },
   )
   return {
-    harness: yield* OpenCodeHarness.make(host, endpoints, AbsolutePath.make(local)),
+    harness: yield* OpenCodeHarness.make(host, endpoints),
     host,
     memory,
     opens: Ref.get(opens),

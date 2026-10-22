@@ -174,7 +174,9 @@ const remember = Effect.fnUntraced(function* (
   if (!chat || Option.isNone(server.chats)) return
   yield* Ref.update(server.chats.value.latest, (all) => new Map([...all, [sessionId, chat]]))
   if (Option.isSome(settings)) yield* settings.value.keep(sessionId, chat)
-  if (options.install) yield* server.chats.value.install(sessionId)
+  if (!options.install) return
+  yield* server.activate(sessionId).pipe(Effect.ignore)
+  yield* server.chats.value.install(sessionId)
 })
 
 const update = Effect.fnUntraced(function* (
@@ -190,6 +192,28 @@ const update = Effect.fnUntraced(function* (
     yield* client.session
       .switchModel({ sessionID: session.id, model: RenPlugin.modelRef(wanted.model) })
       .pipe(Effect.orDie)
+})
+
+const pick = Effect.fnUntraced(function* (
+  client: OpenCodeClient,
+  server: OpenCodeServer.Instance,
+  settings: Option.Option<ChatSettings.Interface>,
+  sessionID: Session.ID,
+  model: Option.Option<Model>,
+  options: { readonly interactive: boolean },
+) {
+  if (Option.isNone(settings)) {
+    if (Option.isNone(model)) return
+    yield* rejectUnknownModel(client, model.value)
+    yield* client.session.switchModel({ sessionID, model: RenPlugin.modelRef(model.value) }).pipe(Effect.orDie)
+    return
+  }
+  if (Option.isSome(model) && Option.isNone((yield* lookupOf(client))(model.value)))
+    return yield* new BrainRejectedError({ message: `Unknown model: ${model.value.endpointId}/${model.value.modelId}` })
+  const resolved = yield* resolve(client, settings, sessionID, Option.getOrNull(model))
+  yield* remember(server, settings, sessionID, resolved && { resolved, interactive: options.interactive }, {
+    install: true,
+  })
 })
 
 const start = Effect.fn("OpenCodeHarness.start")(function* (
@@ -384,24 +408,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           if (Option.isNone(session))
             return yield* new SessionNotStartedError({ message: `Session ${sessionId} has not been started` })
           const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
-          if (Option.isSome(settings)) {
-            if (Option.isSome(model) && Option.isNone((yield* lookupOf(client))(model.value)))
-              return yield* new BrainRejectedError({
-                message: `Unknown model: ${model.value.endpointId}/${model.value.modelId}`,
-              })
-            const resolved = yield* resolve(client, settings, sessionID, Option.getOrNull(model))
-            yield* remember(
-              server,
-              settings,
-              sessionId,
-              resolved && { resolved, interactive: saved?.interactive ?? true },
-              { install: true },
-            )
-          }
-          if (Option.isNone(settings) && Option.isSome(model)) {
-            yield* rejectUnknownModel(client, model.value)
-            yield* client.session.switchModel({ sessionID, model: RenPlugin.modelRef(model.value) }).pipe(Effect.orDie)
-          }
+          yield* pick(client, server, settings, sessionID, model, { interactive: saved?.interactive ?? true })
           yield* client.session
             .update({
               sessionID,

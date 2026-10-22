@@ -1,13 +1,13 @@
 import { describe, expect } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
-import { SessionToken } from "@ren/host-api/session-token"
 import { Sync } from "@ren/schema/sync"
 import { Seed, SyncFixture, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
-import { Clock, Effect, Layer, Schema, Stream } from "effect"
+import { Brain } from "@ren/schema/brain"
+import { Effect, Layer, Schema, Stream } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse, HttpRouter } from "effect/http"
 import { Routes } from "../src/routes.js"
-import { cellKey, config, environment, services } from "./lib/app.js"
+import { config, environment, hostToken, services } from "./lib/app.js"
 
 const it = testEffect(
   HttpRouter.serve(Routes.layer, {
@@ -36,13 +36,7 @@ describe("body limit", () => {
         const owner = yield* Seed.owner()
         const sessionId = yield* Seed.session(owner)
         const host = {
-          authorization: `Bearer ${yield* SessionToken.sign(cellKey, {
-            sid: sessionId,
-            scope: "host",
-            org: owner.organizationId,
-            iat: Math.floor((yield* Clock.currentTimeMillis) / 1000),
-            exp: Math.floor((yield* Clock.currentTimeMillis) / 1000) + 600,
-          })}`,
+          authorization: `Bearer ${yield* hostToken(Brain.ofSession(sessionId), owner.organizationId)}`,
         }
         const http = yield* HttpClient.HttpClient
         const upload = yield* http

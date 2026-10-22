@@ -136,7 +136,16 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
     )
   yield* plugins.register(
-    RenPlugin.make(endpoints, reloads, loaded, refreshKey, connections, chats, options.nativeTools, approvals),
+    RenPlugin.make(
+      endpoints,
+      reloads,
+      loaded,
+      refreshKey,
+      connections,
+      chats,
+      { nativeTools: options.nativeTools },
+      approvals,
+    ),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
@@ -160,6 +169,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     hasEnvironmentConnections: Option.isSome(connections),
     nativeTools: options.nativeTools,
     directoryOf: options.directoryOf,
+    activate: (sessionId) => located(sessionId, Effect.void),
     chats,
     configure: (next) =>
       Ref.set(endpoints, next).pipe(
@@ -196,6 +206,7 @@ export interface Instance {
   readonly hasEnvironmentConnections: boolean
   readonly nativeTools: boolean
   readonly directoryOf: (sessionId: string) => string
+  readonly activate: (sessionId: string) => Effect.Effect<void, Harness.NotFound>
   readonly chats: Option.Option<RenPlugin.Chats>
   readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>
 }

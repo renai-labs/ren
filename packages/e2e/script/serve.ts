@@ -1,8 +1,10 @@
 import { PgClient } from "@effect/sql-pg"
-import { Celld, Shared, TestToken } from "@ren/cell/testing"
+import { Shared } from "@ren/cell/testing"
 import { Seed } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
-import { Effect, Layer, Redacted } from "effect"
+import { Signature } from "@ren/schema/signature"
+import { Effect, Layer, Redacted, Schema } from "effect"
+import os from "os"
 import path from "path"
 import { databaseURL, ports } from "../tests/lib/env.js"
 
@@ -30,14 +32,12 @@ const mailbox = Bun.serve({
   },
 })
 
-const running: { cell?: Celld.Instance } = {}
 let stopping: Promise<void> | undefined
 const shutdown = (code: number) =>
   (stopping ??= (async () => {
     void mailbox.stop(true)
     for (const child of children) child.kill()
     await Promise.all(children.map((child) => child.exited))
-    await running.cell?.dispose()
     await Shared.dispose()
     await admin.unsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)
     await admin.close()
@@ -70,11 +70,22 @@ await Effect.runPromise(
   ),
 ).catch(failed)
 
-const cell = await Celld.make({
-  ...Shared.vars(),
-  REN_URL: serverURL.replace("127.0.0.1", "host.docker.internal"),
-}).catch(failed)
-running.cell = cell
+const brainKey = await Effect.runPromise(Signature.generate("e2e"))
+const modelsFile = path.join(os.tmpdir(), `${name}-models.json`)
+await Bun.write(
+  modelsFile,
+  JSON.stringify({
+    endpoints: [
+      {
+        id: "stub",
+        protocol: "openai-chat",
+        baseUrl: Shared.stub().url,
+        apiKey: { key: "stub-key" },
+        models: [{ id: "stub-model", name: "Stub", limit: { context: 100_000, output: 4000 } }],
+      },
+    ],
+  }),
+)
 
 const server = Bun.spawn(["bun", "run", "src/main.ts"], {
   cwd: path.join(root, "server"),
@@ -90,8 +101,16 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     GOOGLE_CLIENT_ID: "e2e-google-client-id",
     GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
     SIGNUP_MX_CHECK: "false",
-    CELL_URL: cell.url,
-    CELL_KEYS: TestToken.vars.CELL_KEYS,
+    SANDBOX_PROVIDER: "local",
+    LOCAL_BRAIN_ROOT: path.join(os.tmpdir(), `${name}-brains`),
+    REN_URL: serverURL,
+    REN_MODELS_FILE: modelsFile,
+    BRAIN_KEYS: JSON.stringify([
+      {
+        id: brainKey.privateKey.id,
+        key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(brainKey.privateKey.key),
+      },
+    ]),
   },
   stdout: "pipe",
   stderr: "inherit",

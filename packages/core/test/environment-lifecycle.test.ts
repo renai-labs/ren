@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
+import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
-import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
+import { Shared, Wrangler } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
@@ -42,8 +43,6 @@ const models = Layer.succeed(
   Models.Service.of({
     catalog: () => Effect.succeed({ endpoints: [] }),
     grant: () => Effect.sync(() => Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url)),
-    refreshIfDue: () => Effect.succeedNone,
-    revoke: () => Effect.void,
   }),
 )
 
@@ -128,19 +127,16 @@ const brainHost = async (cellUrl: string, config: CoreConfig) => {
       },
     }),
   )
-  return Host.layerWith(
+  return Host.cellLayer(
     {
       CELL_URL: cellUrl,
-      CELL_KEYS: TestToken.vars.CELL_KEYS,
+      REN_URL: `http://127.0.0.1:${port}`,
       ENVIRONMENT_KEYS: JSON.stringify((config.keys ?? [TestEnvironment.keys.privateKey]).map(encodedKey)),
       ...(config.lifetime && { ENVIRONMENT_TOKEN_LIFETIME: config.lifetime }),
     },
     models,
-    Environments.layer.pipe(
-      Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
-      Layer.provide(Layer.succeedContext(context)),
-    ),
-  )
+    Environments.layer.pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),
+  ).pipe(Layer.provide(Layer.succeedContext(context)))
 }
 
 let cell: Wrangler.Instance
@@ -180,8 +176,14 @@ const restartCore = async (config: CoreConfig) => {
 const withHost = async <A, E>(effect: Effect.Effect<A, E, BrainHost.Service>) =>
   Effect.runPromise(effect.pipe(Effect.provide(await brainHost(cell.url, current))))
 
-const start = (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) =>
-  withHost(
+const start = async (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) => {
+  await database.runPromise(
+    Effect.gen(function* () {
+      const creator = yield* Seed.user()
+      yield* Seed.session({ organizationId, spaceId, createdBy: creator.id }, { sessionId })
+    }),
+  )
+  return withHost(
     BrainHost.Service.use((brain) =>
       brain.start(
         {
@@ -191,24 +193,22 @@ const start = (sessionId: Session.ID, input: Partial<Session.StartInput> = {}) =
           environmentTemplateId,
           ...input,
         },
-        { organizationId, spaceId },
+        { organizationId, spaceId, brainId: Brain.ofSession(sessionId) },
       ),
     ),
   )
+}
 
 const send = (sessionId: Session.ID, script: StubModel.Script) =>
   withHost(
     BrainHost.Service.use((brain) =>
-      brain.send(
-        {
-          sessionId,
-          messageId: Session.MessageID.create(),
-          prompt: { text: `${script.marker} use the tool` },
-          delivery: "steer",
-          sender: { userId: "user_1" },
-        },
-        organizationId,
-      ),
+      brain.send({
+        sessionId,
+        messageId: Session.MessageID.create(),
+        prompt: { text: `${script.marker} use the tool` },
+        delivery: "steer",
+        sender: { userId: "user_1" },
+      }),
     ),
   )
 
@@ -232,7 +232,11 @@ describe.skipIf(!wrangler)("environments from Ren core through a Wrangler cell t
     )
     spaceId = await database.runPromise(Seed.team(organizationId))
     await startCore({ target: first, lifetime: "20 seconds" })
-    cell = await Wrangler.make({ ...Shared.vars(stub.url), REN_URL: `http://127.0.0.1:${port}` })
+    cell = await Wrangler.make({
+      ...Shared.vars(stub.url),
+      BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([Host.keys[0].publicKey]),
+      REN_URL: `http://127.0.0.1:${port}`,
+    })
   }, 240_000)
 
   afterAll(async () => {

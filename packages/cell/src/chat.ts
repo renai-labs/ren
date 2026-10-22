@@ -138,7 +138,7 @@ const events = (scope: Effect.Success<typeof scopeOf>) =>
                 event.type === "shell.exited" || event.type === "shell.deleted"
                   ? shells.get(event.data.id)
                   : sessionOf(event)
-              return owner === undefined ? event.type.startsWith("server.") : allowed.has(owner)
+              return !owner ? event.type.startsWith("server.") : allowed.has(owner)
             }),
           )
       const expiring = Option.match(scope.exp, {

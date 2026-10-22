@@ -135,8 +135,14 @@ export const layer = Layer.effect(
                   }),
                 )
               const start = yield* Schema.decodeEffect(Session.StartInput)(row.startInput).pipe(Effect.orDie)
-              yield* brain.start(start, row)
-              return yield* new BrainHost.BrainUnavailable({ cause: error })
+              yield* brain.start(
+                {
+                  ...start,
+                  initialMessage: { messageId: input.messageId, prompt: input.prompt, sender: input.sender },
+                },
+                row,
+              )
+              return { messageId: input.messageId }
             }),
           ),
         )

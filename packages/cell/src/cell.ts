@@ -1,6 +1,6 @@
 export * as Cell from "./cell.js"
 
-import { Brain as BrainSchema } from "@ren/schema/brain"
+import { Brain } from "@ren/schema/brain"
 import {
   Clock,
   Context,
@@ -34,7 +34,7 @@ export class Info extends Context.Service<
   Info,
   {
     readonly storage: Pick<DurableObjectStorage, "getAlarm" | "setAlarm">
-    readonly brainId: BrainSchema.ID
+    readonly brainId: Brain.ID
     readonly generation: number
     readonly version: string
     readonly vars: Env.Vars
@@ -52,10 +52,10 @@ export class Activity extends Context.Service<
   }
 >()("@ren/cell/Cell/Activity") {}
 
-export class Brain extends Context.Service<
-  Brain,
+export class BrainRoutes extends Context.Service<
+  BrainRoutes,
   { readonly owns: (pathname: string) => boolean; readonly fetch: (request: Request) => Promise<Response> }
->()("@ren/cell/Cell/Brain") {}
+>()("@ren/cell/Cell/BrainRoutes") {}
 
 export class Chat extends Context.Service<
   Chat,
@@ -76,19 +76,23 @@ export const acquire = Effect.gen(function* () {
 
 export const state = Effect.gen(function* () {
   const info = yield* Info
+  const activity = yield* Activity
   const harness = yield* Harness.Service
   const opened = yield* harness.state
+  const alarm = yield* Effect.promise(() => info.storage.getAlarm())
   return {
     brain: info.brainId,
     generation: info.generation,
     version: info.version,
     isOpen: opened.isOpen,
     holders: opened.holders,
+    waitingSince: Option.getOrNull(yield* Ref.get(activity.waitingSince)),
+    nextReconcileAt: alarm ? DateTime.makeUnsafe(alarm) : null,
   } satisfies BrainApiState
 })
 
 export const fetch = Effect.fn("Cell.fetch")(function* (request: Request) {
-  const brain = yield* Brain
+  const brain = yield* BrainRoutes
   const chat = yield* Chat
   const pathname = new URL(request.url).pathname
   if (brain.owns(pathname)) return yield* Effect.promise(() => brain.fetch(request))
@@ -103,7 +107,8 @@ export const fetch = Effect.fn("Cell.fetch")(function* (request: Request) {
         yield* Deferred.succeed(ready, response)
         return
       }
-      const stream = new IdentityTransformStream()
+      const stream: { readonly readable: ReadableStream; readonly writable: WritableStream } =
+        "IdentityTransformStream" in globalThis ? new IdentityTransformStream() : new TransformStream()
       yield* Deferred.succeed(ready, new Response(stream.readable, response))
       yield* Effect.tryPromise(() => body.pipeTo(stream.writable)).pipe(Effect.ignore)
     }),
@@ -212,7 +217,7 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
       if (!name) return yield* Effect.die(new Error("A brain cell has no name, so no brain id"))
       return {
         storage,
-        brainId: yield* Schema.decodeUnknownEffect(BrainSchema.ID)(name).pipe(Effect.orDie),
+        brainId: yield* Schema.decodeUnknownEffect(Brain.ID)(name).pipe(Effect.orDie),
         generation: 1,
         version: manifest.version,
         vars: yield* Schema.decodeUnknownEffect(Env.Vars)(env).pipe(Effect.orDie),

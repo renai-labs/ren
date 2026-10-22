@@ -52,7 +52,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded fault sequences across 
       const environment = current().environment
       const random = Wait.random("seeded", seed)
       const access = () => stack.access(Stack.freshKey("seeded"), Date.now() + 4 * 60_000)
-      stack.issuer.next(() => ({ type: "grant", access: access() }))
+      stack.ren.refresh(() => ({ type: "grant", access: access() }))
       const session = await stack.session({
         models: access(),
         environment,
@@ -86,7 +86,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded fault sequences across 
         "cut-user": async () => void stack.cellProxy.cutAll(),
         "issuer-503": async () =>
           void rules.push(
-            stack.issuerProxy.inject({ operation: "POST /host/models/refresh" }, { type: "status", status: 503 }),
+            stack.renProxy.inject({ operation: "POST /host/models/refresh" }, { type: "status", status: 503 }),
           ),
         "provider-503": async () =>
           void rules.push(

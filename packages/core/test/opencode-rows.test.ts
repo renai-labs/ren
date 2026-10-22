@@ -12,7 +12,7 @@ const it = testEffect(SessionSync.layer.pipe(Layer.provideMerge(Testing.layer)))
 const tree = Effect.fnUntraced(function* () {
   const owner = yield* Seed.owner()
   const rootId = yield* Seed.session(owner)
-  return { rootId, host: { sessionId: rootId, organizationId: owner.organizationId } }
+  return { rootId, host: SyncFixture.host(owner.organizationId, rootId) }
 })
 
 describe("OpenCode rows in Postgres", () => {

@@ -58,7 +58,7 @@ export const publicKeyOf = Effect.fn("Signature.publicKeyOf")(function* (key: Pr
   const jwk = yield* Effect.promise(() => crypto.subtle.exportKey("jwk", subtle))
   return yield* Schema.decodeUnknownEffect(PublicKey)({
     id: key.id,
-    key: Predicate.hasProperty(jwk, "x") ? jwk.x : undefined,
+    ...(Predicate.hasProperty(jwk, "x") && { key: jwk.x }),
   }).pipe(Effect.orDie)
 })
 

@@ -4,6 +4,7 @@ import type { CurrentHost } from "@ren/host-api/ren-host-api"
 import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { asc, eq } from "drizzle-orm"
 import { Deferred, Effect, Fiber, Layer, Schedule } from "effect"
@@ -18,7 +19,7 @@ const it = testEffect(SessionSync.layer.pipe(Layer.provideMerge(Testing.layer)))
 const tree = Effect.fnUntraced(function* () {
   const owner = yield* Seed.owner()
   const rootId = yield* Seed.session(owner)
-  return { owner, rootId, host: { sessionId: rootId, organizationId: owner.organizationId } }
+  return { owner, rootId, host: SyncFixture.host(owner.organizationId, rootId) }
 })
 
 const stored = Effect.fnUntraced(function* (sessionId: Session.ID) {
@@ -240,7 +241,7 @@ describe("SessionSync", () => {
       const sync = yield* SessionSync.Service
       const { owner, host, rootId } = yield* tree()
       const otherRoot = yield* Seed.session(owner)
-      const otherOrganization = { sessionId: rootId, organizationId: yield* Seed.organization() }
+      const otherOrganization = SyncFixture.host(yield* Seed.organization(), rootId)
       const unknownChild = Session.ID.create()
       const attempts: ReadonlyArray<Effect.Effect<unknown, ForbiddenError>> = [
         sync.startUpload(host, Session.ID.create(), { harness: "opencode", parentId: null }),
@@ -346,16 +347,31 @@ describe("SessionSync", () => {
       const otherRoot = yield* Seed.session(owner)
       yield* SyncFixture.pass(host, SyncFixture.session(rootId, { time_suspended: SyncFixture.now + 1 }), 7, [])
       yield* sync.startUpload(host, childId, { harness: "opencode", parentId: rootId })
-      yield* SyncFixture.pass(
-        { sessionId: otherRoot, organizationId: owner.organizationId },
-        SyncFixture.session(otherRoot),
-        3,
-        [],
-      )
+      yield* SyncFixture.pass(SyncFixture.host(owner.organizationId, otherRoot), SyncFixture.session(otherRoot), 3, [])
       expect(yield* sync.checkpoints(host)).toEqual([
         { id: rootId, syncSeq: 7, timeSuspended: SyncFixture.now + 1 },
         { id: childId, syncSeq: null, timeSuspended: null },
       ])
+    }),
+  )
+
+  it.live("checkpoints of a space brain list every chat of that brain and none of another brain", () =>
+    Effect.gen(function* () {
+      const sync = yield* SessionSync.Service
+      const owner = yield* Seed.owner()
+      const brainId = Brain.ID.create()
+      const first = yield* Seed.session({ ...owner, brainId })
+      const second = yield* Seed.session({ ...owner, brainId })
+      const elsewhere = yield* Seed.session(owner)
+      const host = { brainId, organizationId: owner.organizationId, generation: 1 }
+      yield* SyncFixture.pass(host, SyncFixture.session(first), 4, [])
+      yield* SyncFixture.pass(host, SyncFixture.session(second), 5, [])
+      expect(
+        yield* Effect.flip(sync.startUpload(host, elsewhere, { harness: "opencode", parentId: null })),
+      ).toBeInstanceOf(ForbiddenError)
+      expect(
+        Object.fromEntries((yield* sync.checkpoints(host)).map((checkpoint) => [checkpoint.id, checkpoint.syncSeq])),
+      ).toEqual({ [first]: 4, [second]: 5 })
     }),
   )
 

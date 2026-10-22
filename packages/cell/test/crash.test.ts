@@ -1,22 +1,13 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { Effect, Layer, ManagedRuntime } from "effect"
-import { Celld } from "./lib/celld.js"
+import { ManagedRuntime } from "effect"
 import { Shared } from "./lib/shared.js"
 import { StubModel } from "./lib/stub-model.js"
 import { TestCell } from "./lib/test-cell.js"
 
 setDefaultTimeout(120_000)
 
-const runtime = ManagedRuntime.make(
-  Layer.effect(
-    Shared.Service,
-    Effect.acquireRelease(
-      Effect.promise(() => Celld.make(Shared.vars())),
-      (instance) => Effect.promise(instance.dispose),
-    ),
-  ),
-)
-let celld: Celld.Instance
+const runtime = ManagedRuntime.make(Shared.layer)
+let celld: Shared.Runtime
 beforeAll(async () => {
   celld = await runtime.runPromise(Shared.Service)
 }, 120_000)
@@ -30,11 +21,11 @@ const restart = async () => {
 }
 
 const started = async () => {
-  const opened = await TestCell.make(celld.url)
+  const opened = await TestCell.make(celld)
   await opened.start()
   return {
     ...opened,
-    ended: () => opened.until((state) => Bun.deepEquals(state, TestCell.closed), 60_000),
+    ended: () => opened.settled(60_000),
     outcome: async () => (await opened.opencode.session.get({ sessionID: opened.id })).outcome,
     answers: async () =>
       (await opened.messages()).flatMap((message) =>
@@ -75,7 +66,7 @@ describe("crash recovery", () => {
       StubModel.restarted,
       `second ${second.marker}`,
     ])
-    expect(await opened.ended()).toEqual(TestCell.closed)
+    expect(await opened.ended()).toEqual(TestCell.idle)
     expect(await opened.outcome()).toBe("succeeded")
     expect((await opened.messages()).filter((message) => message.type === "user")).toHaveLength(2)
     expect((await opened.answers()).at(-1)).toBe("after the crash")
@@ -96,7 +87,7 @@ describe("crash recovery", () => {
     await celld.start()
     expect(calls).toBe(1)
     expect((await script.called(2)).text).toBe(StubModel.restarted)
-    expect(await opened.ended()).toEqual(TestCell.closed)
+    expect(await opened.ended()).toEqual(TestCell.idle)
     expect(await opened.outcome()).toBe("succeeded")
     expect(TestCell.kinds(await opened.messages()).slice(-3)).toEqual(["synthetic", "assistant", "idle:succeeded"])
     expect((await opened.answers()).at(-1)).toBe("resumed")
@@ -110,7 +101,7 @@ describe("crash recovery", () => {
     await opened.ended()
     const calls = stub.calls.length
     await restart()
-    expect(await opened.state()).toEqual(TestCell.closed)
+    expect(await opened.settled()).toEqual(TestCell.idle)
     expect(stub.calls).toHaveLength(calls)
   })
 
@@ -131,7 +122,7 @@ describe("crash recovery", () => {
     script.set({ reply: "after the crash" })
     await celld.start()
     await script.called(before + 1)
-    expect(await opened.ended()).toEqual(TestCell.closed)
+    expect(await opened.ended()).toEqual(TestCell.idle)
     expect(await opened.outcome()).toBe("succeeded")
     expect((await opened.messages()).filter((message) => message.id === messageId)).toHaveLength(1)
     expect((await opened.answers()).at(-1)).toBe("after the crash")
@@ -154,7 +145,7 @@ describe("crash recovery", () => {
     script.set({ reply: "resumed" })
     await restart()
     expect(await script.called(2)).toMatchObject({ text: StubModel.restarted, authorization: "Bearer sk-newer" })
-    expect(await opened.ended()).toEqual(TestCell.closed)
+    expect(await opened.ended()).toEqual(TestCell.idle)
     expect(await opened.outcome()).toBe("succeeded")
   })
 })

@@ -3,6 +3,7 @@ export * as Seed from "./seed.js"
 import { Database } from "@ren/db/database"
 import { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
+import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { Session } from "@ren/schema/session"
@@ -112,13 +113,25 @@ export const session = Effect.fnUntraced(function* (
     readonly organizationId: Auth.OrganizationID
     readonly spaceId: Space.ID
     readonly createdBy: Auth.UserID
+    readonly brainId?: Brain.ID
   },
   start: Omit<Partial<Session.StartInput>, "initialMessage"> = {},
 ) {
   const database = yield* Database.Service
   const id = start.sessionId ?? Session.ID.create()
+  const brainId = owner.brainId ?? Brain.ofSession(id)
+  yield* database.db
+    .insert(Database.Schema.brain)
+    .values({
+      id: brainId,
+      organization_id: owner.organizationId,
+      space_id: owner.spaceId,
+      scope: owner.brainId ? "space" : "session",
+    })
+    .onConflictDoNothing()
   yield* database.db.insert(Database.Schema.agent_session).values({
     id,
+    brain_id: brainId,
     organization_id: owner.organizationId,
     space_id: owner.spaceId,
     created_by: owner.createdBy,
@@ -127,6 +140,12 @@ export const session = Effect.fnUntraced(function* (
     start_input: { sessionId: id, harness: "opencode", ...start },
   })
   return id
+})
+
+export const subject = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, spaceId: Space.ID) {
+  const creator = yield* user()
+  const sessionId = yield* session({ organizationId, spaceId, createdBy: creator.id })
+  return { sessionId, organizationId, spaceId }
 })
 
 export const invitation = Effect.fnUntraced(function* (input: {

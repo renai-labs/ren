@@ -98,10 +98,10 @@ const place = async (
 }
 
 const connect = async () => {
-  const opened = await TestCell.make(cell.url)
+  const opened = await TestCell.make({ kind: "wrangler", url: cell.url, ren, brain: Brain.ID.create })
   const sessionId = Session.ID.make(opened.id)
   const configure = async () =>
-    expect((await opened.models(Shared.access(), await FakeRen.hostToken(sessionId))).status).toBe(204)
+    expect((await opened.models(Shared.access(), await FakeRen.hostToken(opened.brainId))).status).toBe(204)
   const start = (target: Sandbox | undefined) =>
     opened.brain("/ren/sessions", {
       sessionId,
@@ -227,7 +227,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     expect(await pwdOf(onSandbox)).toContain(join(first.directory, onSandbox.sessionId))
     await Promise.all(
       [onSandbox, local].map((session) =>
-        session.opened.until((state) => Bun.deepEquals(state, TestCell.closed), 30_000),
+        session.opened.until((state) => Bun.deepEquals(state, TestCell.idle), 30_000),
       ),
     )
     expect(await pwdOf(onSandbox)).toContain(join(first.directory, onSandbox.sessionId))
@@ -316,7 +316,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     await session.configure()
     expect((await session.start(first)).status).toBe(200)
     expect(await pwdOf(session)).toContain(session.sessionId)
-    await session.opened.until((state) => Bun.deepEquals(state, TestCell.closed), 30_000)
+    await session.opened.until((state) => Bun.deepEquals(state, TestCell.idle), 30_000)
     // ast-grep-ignore: no-test-sleep -- the real environment token must expire while the cell sleeps
     await Bun.sleep(21_000)
     expect(await pwdOf(session)).toContain(join(first.directory, session.sessionId))
@@ -383,7 +383,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     const restarting = await restartable()
     const session = await begin(true, restarting)
     expect(await pwdOf(session)).toContain(restarting.directory)
-    await session.opened.until((state) => Bun.deepEquals(state, TestCell.closed), 30_000)
+    await session.opened.until((state) => Bun.deepEquals(state, TestCell.idle), 30_000)
     await restarting.restart()
     expect(await pwdOf(session)).toContain(join(restarting.directory, session.sessionId))
     await restarting.dispose()
@@ -427,7 +427,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     })
     await session.turn(job)
     const pid = await Effect.runPromise(Pid.read(pidFile))
-    await session.opened.until((state) => Bun.deepEquals(state, TestCell.closed), 60_000)
+    await session.opened.until((state) => Bun.deepEquals(state, TestCell.idle), 60_000)
     const stoppedAfter = await waitUntil(() => !Processes.running(pid), 45_000)
     if (stoppedAfter === undefined) process.kill(pid, "SIGKILL")
     expect(stoppedAfter).toBeDefined()
@@ -450,10 +450,10 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
   test("killing one cell leaves the commands of another cell on the same sandbox running", async () => {
     const other = await Wrangler.make(withRen)
     const survivor = await begin()
-    const opened = await TestCell.make(other.url)
+    const opened = await TestCell.make({ kind: "wrangler", url: other.url, ren, brain: Brain.ID.create })
     const victimId = Session.ID.make(opened.id)
     await place(victimId, first)
-    expect((await opened.models(Shared.access(), await FakeRen.hostToken(victimId))).status).toBe(204)
+    expect((await opened.models(Shared.access(), await FakeRen.hostToken(opened.brainId))).status).toBe(204)
     expect(
       (
         await opened.brain("/ren/sessions", {
@@ -481,9 +481,9 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
   test("a host token that expires soon makes the next send ask Ren for a new configuration, and then tools work", async () => {
     const session = await connect()
     await place(session.sessionId, first)
-    expect((await session.opened.models(Shared.access(), await FakeRen.hostToken(session.sessionId, 60))).status).toBe(
-      204,
-    )
+    expect(
+      (await session.opened.models(Shared.access(), await FakeRen.hostToken(session.opened.brainId, 60))).status,
+    ).toBe(204)
     expect((await session.start(first)).status).toBe(409)
     await session.configure()
     expect((await session.start(first)).status).toBe(200)

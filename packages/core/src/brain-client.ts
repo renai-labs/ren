@@ -1,6 +1,6 @@
 export * as BrainClient from "./brain-client.js"
 
-import { BrainApi } from "@ren/host-api/brain-api"
+import { BrainApi, hostTokenHeader } from "@ren/host-api/brain-api"
 import { BrainToken } from "@ren/host-api/brain-token"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
@@ -24,11 +24,9 @@ export interface Host {
   readonly organizationId: Auth.OrganizationID
 }
 
-export const hostTokenHeader = "ren-host-token"
-
 export interface Interface {
   readonly renUrl: string
-  readonly publicKeys: ReadonlyArray<Signature.PublicKey>
+  readonly publicKeys: Array.NonEmptyReadonlyArray<Signature.PublicKey>
   readonly brain: (target: Target) => Effect.Effect<HttpApiClient.ForApi<typeof BrainApi>>
   readonly hostToken: (host: Host) => Effect.Effect<string>
   readonly clientToken: (

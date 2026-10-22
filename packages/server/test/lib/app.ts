@@ -1,19 +1,48 @@
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
+import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
+import { Settings } from "@ren/core/settings"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { Testing } from "@ren/db/testing"
-import { ConfigProvider, Layer, Logger } from "effect"
+import { BrainToken } from "@ren/host-api/brain-token"
+import type { Auth } from "@ren/schema/auth"
+import type { Brain } from "@ren/schema/brain"
+import { Signature } from "@ren/schema/signature"
+import { Clock, ConfigProvider, Effect, Layer, Logger, Schema } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { Routes } from "../../src/routes.js"
 
 export const origin = "http://localhost:5173"
 
-export const cellKey = { id: "test", secret: "a-test-cell-key-of-at-least-32-characters" }
+export const brainKey = await Effect.runPromise(Signature.generate("test"))
+
+const brainKeys = JSON.stringify([
+  { id: brainKey.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(brainKey.privateKey.key) },
+])
+
+export const sign = (claims: Parameters<typeof BrainToken.sign>[1], key = brainKey.privateKey) =>
+  BrainToken.sign(key, claims)
+
+export const hostToken = Effect.fnUntraced(function* (
+  brainId: Brain.ID,
+  organizationId: Auth.OrganizationID,
+  fields: { readonly gen?: number; readonly exp?: number } = {},
+) {
+  const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)
+  return yield* sign({
+    scope: "host",
+    brain: brainId,
+    gen: fields.gen ?? 1,
+    org: organizationId,
+    iat: now,
+    exp: fields.exp ?? now + 600,
+  })
+})
 
 export const config = {
   BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
@@ -32,13 +61,14 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
       SKIP_EMAIL_VERIFICATION: "true",
       SIGNUP_MX_CHECK: "false",
       CELL_URL: "http://127.0.0.1:9",
-      CELL_KEYS: JSON.stringify([cellKey]),
+      BRAIN_KEYS: brainKeys,
       ...overrides,
     }),
     { asPrimary: true },
   )
 
 export const services = Layer.mergeAll(BrainHost.layer, Mailer.layer, SignupGuard.layer).pipe(
+  Layer.provideMerge([BrainClient.layer, Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer]),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide(BunServices.layer),

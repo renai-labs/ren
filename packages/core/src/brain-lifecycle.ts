@@ -60,7 +60,10 @@ export const layer = Layer.effect(
         .pipe(
           Effect.orDie,
           Effect.flatMap((rows) =>
-            rows[0] ? Effect.succeed(rows[0]) : Effect.die(new Error(`Brain ${brainId} does not exist`)),
+            Option.match(Option.fromNullishOr(rows.at(0)), {
+              onNone: () => Effect.die(new Error(`Brain ${brainId} does not exist`)),
+              onSome: Effect.succeed,
+            }),
           ),
         )
 
@@ -106,128 +109,138 @@ export const layer = Layer.effect(
       REN_URL: client.renUrl,
       REN_BRAIN_ID: row.id,
       REN_BRAIN_GENERATION: String(row.generation),
-      BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(
-        client.publicKeys as readonly [Signature.PublicKey, ...Array<Signature.PublicKey>],
-      ),
+      BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(client.publicKeys),
     })
+
+    const create = Effect.fnUntraced(function* (row: Row) {
+      const created = yield* provider.create({ brainId: row.id, generation: row.generation, env: env(row) }).pipe(
+        Effect.map(Option.some),
+        Effect.catchTag("SandboxProvider.Capacity", (error) =>
+          Effect.logWarning(`Waiting for capacity: ${error.message}`).pipe(
+            Effect.andThen(Effect.sleep(error.retryAfter)),
+            Effect.as(Option.none<SandboxProvider.Created>()),
+          ),
+        ),
+      )
+      if (Option.isNone(created)) return false
+      yield* update(row.id, {
+        provider: provider.kind,
+        binding: created.value.binding,
+        url: created.value.url,
+        key_ids: client.publicKeys.map((key) => key.id),
+        phase: "booting",
+        keep_alive_until: new Date((yield* now).getTime() + Duration.toMillis(Duration.minutes(10))),
+      })
+      return false
+    })
+
+    const boot = Effect.fnUntraced(function* (row: Row) {
+      const target = Option.getOrUndefined(targetOf(row))
+      if (!target) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
+      const api = yield* client.brain(target)
+      const state = yield* waitFor(api.brain["brain.state"](), timing.boot)
+      if (Option.isNone(state)) {
+        if (row.binding) yield* provider.destroy(row.binding).pipe(Effect.ignore)
+        yield* fail(row, `The brain did not answer within ${Duration.format(timing.boot)}`, "creating")
+        yield* update(row.id, { binding: null, url: null })
+        return false
+      }
+      yield* update(row.id, { phase: "ready", failures: 0, failure: null })
+      yield* keepAlive(yield* read(row.id), timing.idle)
+      return true
+    })
+
+    const resume = Effect.fnUntraced(function* (row: Row) {
+      if (!row.binding) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
+      const connected = yield* provider.connect(row.binding).pipe(
+        Effect.map(Option.some),
+        Effect.catchTag("SandboxProvider.Gone", () => Effect.succeedNone),
+        Effect.catchTag("SandboxProvider.Capacity", (error) =>
+          Effect.sleep(error.retryAfter).pipe(
+            Effect.andThen(Effect.fail(new SandboxProvider.Failed({ message: error.message }))),
+          ),
+        ),
+      )
+      if (Option.isNone(connected)) return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+      yield* update(row.id, { url: connected.value.url, keep_alive_until: null })
+      yield* keepAlive({ ...row, keep_alive_until: null }, timing.idle)
+      yield* update(row.id, { phase: "waking" })
+      return false
+    })
+
+    const wake = Effect.fnUntraced(function* (row: Row) {
+      const target = Option.getOrUndefined(targetOf(row))
+      if (!target) return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+      const api = yield* client.brain(target)
+      const woke = yield* api.brain["brain.wake"]().pipe(
+        Effect.retry({ schedule: Schedule.spaced(timing.poll) }),
+        Effect.timeoutOption(timing.wake),
+      )
+      if (Option.isNone(woke)) {
+        yield* Effect.logWarning(`Brain ${row.id} did not confirm its wake in time; Ren replaces it`)
+        return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+      }
+      yield* update(row.id, { phase: "ready", failures: 0, failure: null })
+      return true
+    })
+
+    const replace = Effect.fnUntraced(function* (row: Row) {
+      yield* database
+        .transaction((transaction) =>
+          Effect.gen(function* () {
+            const at = yield* now
+            yield* transaction
+              .update(brains)
+              .set({
+                generation: sql`${brains.generation} + 1`,
+                binding: null,
+                url: null,
+                keep_alive_until: null,
+                phase: "creating",
+              })
+              .where(eq(brains.id, row.id))
+            const busy = transaction
+              .select({ id: Database.Schema.agent_session.id })
+              .from(Database.Schema.agent_session)
+              .where(eq(Database.Schema.agent_session.brain_id, row.id))
+            yield* transaction
+              .update(Database.Schema.opencode_session)
+              .set({ time_suspended: null, idle_outcome: "interrupted", time_idle: at.getTime() })
+              .where(
+                and(
+                  inArray(Database.Schema.opencode_session.session_id, busy),
+                  isNotNull(Database.Schema.opencode_session.time_suspended),
+                ),
+              )
+          }),
+        )
+        .pipe(Effect.orDie)
+      if (row.binding)
+        yield* provider
+          .destroy(row.binding)
+          .pipe(Effect.catch((error) => Effect.logWarning("Destroying the replaced sandbox failed", error)))
+      return false
+    })
+
+    const settle = Effect.fnUntraced(function* (row: Row) {
+      const at = yield* now
+      if (row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()) return true
+      return yield* update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false))
+    })
+
+    const phases = {
+      creating: create,
+      booting: boot,
+      resuming: resume,
+      waking: wake,
+      replacing: replace,
+      ready: settle,
+      failed: () => Effect.succeed(true),
+    } satisfies Record<Brain.Phase, (row: Row) => Effect.Effect<boolean, unknown>>
 
     const step = Effect.fn("BrainLifecycle.step")(function* (brainId: Brain.ID) {
       const row = yield* read(brainId)
-      switch (row.phase) {
-        case "creating": {
-          const created = yield* provider.create({ brainId, generation: row.generation, env: env(row) }).pipe(
-            Effect.map(Option.some),
-            Effect.catchTag("SandboxProvider.Capacity", (error) =>
-              Effect.logWarning(`Waiting for capacity: ${error.message}`).pipe(
-                Effect.andThen(Effect.sleep(error.retryAfter)),
-                Effect.as(Option.none<SandboxProvider.Created>()),
-              ),
-            ),
-          )
-          if (Option.isNone(created)) return false
-          yield* update(brainId, {
-            provider: provider.kind,
-            binding: created.value.binding,
-            url: created.value.url,
-            key_ids: client.publicKeys.map((key) => key.id),
-            phase: "booting",
-            keep_alive_until: new Date((yield* now).getTime() + Duration.toMillis(Duration.minutes(10))),
-          })
-          return false
-        }
-        case "booting": {
-          const target = Option.getOrUndefined(targetOf(row))
-          if (!target) return yield* update(brainId, { phase: "creating" }).pipe(Effect.as(false))
-          const api = yield* client.brain(target)
-          const state = yield* waitFor(api.brain["brain.state"](), timing.boot)
-          if (Option.isNone(state)) {
-            if (row.binding) yield* provider.destroy(row.binding).pipe(Effect.ignore)
-            yield* fail(row, `The brain did not answer within ${Duration.format(timing.boot)}`, "creating")
-            yield* update(brainId, { binding: null, url: null })
-            return false
-          }
-          yield* update(brainId, { phase: "ready", failures: 0, failure: null })
-          yield* keepAlive(yield* read(brainId), timing.idle)
-          return true
-        }
-        case "resuming": {
-          if (!row.binding) return yield* update(brainId, { phase: "creating" }).pipe(Effect.as(false))
-          const connected = yield* provider.connect(row.binding).pipe(
-            Effect.map(Option.some),
-            Effect.catchTag("SandboxProvider.Gone", () => Effect.succeedNone),
-            Effect.catchTag("SandboxProvider.Capacity", (error) =>
-              Effect.sleep(error.retryAfter).pipe(
-                Effect.andThen(Effect.fail(new SandboxProvider.Failed({ message: error.message }))),
-              ),
-            ),
-          )
-          if (Option.isNone(connected)) return yield* update(brainId, { phase: "replacing" }).pipe(Effect.as(false))
-          yield* update(brainId, { url: connected.value.url, keep_alive_until: null })
-          yield* keepAlive({ ...row, keep_alive_until: null }, timing.idle)
-          yield* update(brainId, { phase: "waking" })
-          return false
-        }
-        case "waking": {
-          const target = Option.getOrUndefined(targetOf(row))
-          if (!target) return yield* update(brainId, { phase: "replacing" }).pipe(Effect.as(false))
-          const api = yield* client.brain(target)
-          const woke = yield* api.brain["brain.wake"]().pipe(
-            Effect.retry({ schedule: Schedule.spaced(timing.poll) }),
-            Effect.timeoutOption(timing.wake),
-          )
-          if (Option.isNone(woke)) {
-            yield* Effect.logWarning(`Brain ${brainId} did not confirm its wake in time; Ren replaces it`)
-            return yield* update(brainId, { phase: "replacing" }).pipe(Effect.as(false))
-          }
-          yield* update(brainId, { phase: "ready", failures: 0, failure: null })
-          return true
-        }
-        case "replacing": {
-          yield* database
-            .transaction((transaction) =>
-              Effect.gen(function* () {
-                const at = yield* now
-                yield* transaction
-                  .update(brains)
-                  .set({
-                    generation: sql`${brains.generation} + 1`,
-                    binding: null,
-                    url: null,
-                    keep_alive_until: null,
-                    phase: "creating",
-                  })
-                  .where(eq(brains.id, brainId))
-                const busy = transaction
-                  .select({ id: Database.Schema.agent_session.id })
-                  .from(Database.Schema.agent_session)
-                  .where(eq(Database.Schema.agent_session.brain_id, brainId))
-                yield* transaction
-                  .update(Database.Schema.opencode_session)
-                  .set({ time_suspended: null, idle_outcome: "interrupted", time_idle: at.getTime() })
-                  .where(
-                    and(
-                      inArray(Database.Schema.opencode_session.session_id, busy),
-                      isNotNull(Database.Schema.opencode_session.time_suspended),
-                    ),
-                  )
-              }),
-            )
-            .pipe(Effect.orDie)
-          if (row.binding)
-            yield* provider
-              .destroy(row.binding)
-              .pipe(Effect.catch((error) => Effect.logWarning("Destroying the replaced sandbox failed", error)))
-          return false
-        }
-        case "ready": {
-          const at = yield* now
-          if (row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()) return true
-          if (!row.binding) return yield* update(brainId, { phase: "creating" }).pipe(Effect.as(false))
-          return yield* update(brainId, { phase: "resuming" }).pipe(Effect.as(false))
-        }
-        case "failed":
-          return true
-      }
+      return yield* phases[row.phase](row)
     })
 
     const run = (brainId: Brain.ID) =>
@@ -317,8 +330,10 @@ export const layer = Layer.effect(
         })
         const moving =
           busy.length > 0 &&
-          lastProgress !== null &&
-          at.getTime() - lastProgress.getTime() < Duration.toMillis(timing.stuck)
+          Option.exists(
+            Option.fromNullishOr(lastProgress),
+            (last) => at.getTime() - last.getTime() < Duration.toMillis(timing.stuck),
+          )
         if (moving)
           yield* keepAlive(row, timing.busy).pipe(Effect.catch((error) => Effect.logWarning("keepAlive failed", error)))
       }),

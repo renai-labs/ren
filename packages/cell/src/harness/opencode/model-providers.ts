@@ -25,28 +25,24 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
       if (protocol.canonical) provider.canonical = protocol.canonical
       if (endpoint.headers) provider.headers = { ...provider.headers, ...endpoint.headers }
     })
-    const known = editor.get(endpoint.id)?.models
-    editor.models.set(
-      endpoint.id,
-      endpoint.models.map((model) => {
-        const base = known?.get(model.id) ?? Model.Info.default(Provider.ID.make(endpoint.id), Model.ID.make(model.id))
-        return {
-          ...base,
-          modelID: Model.ID.make(model.upstreamId ?? model.id),
-          ...(model.name && { name: model.name }),
-          ...(model.limit && { limit: { ...base.limit, ...model.limit } }),
-          variants: [
-            ...Variant.resolve(
-              {
-                ...Model.Info.default(Provider.ID.make(endpoint.id), Model.ID.make(model.id)),
-                package: protocol.package,
-                ...(model.limit && { limit: model.limit }),
-              },
-              model.efforts && [{ type: "effort", values: model.efforts }],
-            ),
-          ],
-        }
-      }),
-    )
+    const listed = new Set(endpoint.models.map((model) => model.id))
+    for (const id of editor.get(endpoint.id)?.models.keys() ?? [])
+      if (!listed.has(id)) editor.models.remove(endpoint.id, id)
+    for (const model of endpoint.models)
+      editor.models.update(endpoint.id, Model.ID.make(model.id), (info) => {
+        info.modelID = Model.ID.make(model.upstreamId ?? model.id)
+        if (model.name) info.name = model.name
+        if (model.limit) info.limit = { ...info.limit, ...model.limit }
+        info.variants = [
+          ...Variant.resolve(
+            {
+              ...Model.Info.default(Provider.ID.make(endpoint.id), Model.ID.make(model.id)),
+              package: protocol.package,
+              ...(model.limit && { limit: model.limit }),
+            },
+            model.efforts && [{ type: "effort", values: model.efforts }],
+          ),
+        ]
+      })
   }
 }

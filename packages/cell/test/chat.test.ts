@@ -255,8 +255,12 @@ test("a member switches the model from the list as the session's setting, an unk
         payload: { model: { providerID: "stub", id: "missing" } },
       }).pipe(Effect.exit)
       expect(Exit.isFailure(refused) && refused.cause.toString()).toContain("InvalidRequestError")
+      const subagent = yield* brain.opencode.session.create({
+        id: SessionID.make(`${brain.id}_child`),
+        parentID: SessionID.make(brain.id),
+      })
       const child = yield* brain.chat.session["session.model.switch"]({
-        params: { sessionID: Session.ID.create() },
+        params: { sessionID: Session.ID.make(subagent.id) },
         payload: { model: { providerID: "stub", id: "stub-other" } },
       }).pipe(Effect.flip)
       expect(child._tag).toBe("InvalidRequestError")

@@ -11,6 +11,8 @@ import {
   SyncUnavailableError,
 } from "./errors.js"
 
+export const hostTokenHeader = "ren-host-token"
+
 export const StartBody = Session.StartInput.mapFields((fields) => ({
   ...Struct.omit(fields, ["environmentTemplateId"]),
   directory: Schema.optionalKey(
@@ -34,6 +36,8 @@ export const State = Schema.Struct({
   version: Schema.String,
   isOpen: Schema.Boolean,
   holders: Schema.Int,
+  waitingSince: Schema.NullOr(Schema.DateTimeUtc),
+  nextReconcileAt: Schema.NullOr(Schema.DateTimeUtc),
 }).annotate({ identifier: "Brain.State" })
 
 export const Synced = Schema.Struct({ drained: Schema.Boolean }).annotate({ identifier: "Brain.Synced" })
@@ -106,7 +110,7 @@ const BrainGroup = HttpApiGroup.make("brain")
       OpenApi.annotations({
         identifier: "brain.state",
         summary: "Read the host's state",
-        description: "Read the brain's identity, version and activity without opening the harness.",
+        description: "Read the brain’s identity, version and activity without opening the harness.",
       }),
     ),
   )

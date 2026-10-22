@@ -2,10 +2,10 @@ import { expect, test } from "bun:test"
 import { ForbiddenError, ModelsUnavailableError } from "@ren/host-api/errors"
 import { testEffect } from "@ren/executor/testing"
 import type { Models } from "@ren/schema/models"
-import { Session } from "@ren/schema/session"
 import { Context, DateTime, Effect, Fiber, Layer, Option, Redacted, Schema, type Scope } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
+import { Fence } from "../src/fence.js"
 import { ModelRefresh } from "../src/model-refresh.js"
 import { HostToken } from "../src/host-token.js"
 import { ModelStore } from "../src/model-store.js"
@@ -16,9 +16,17 @@ import { TestToken } from "./lib/token.js"
 
 const it = testEffect(Layer.empty)
 
+const hosts = {
+  old: await FakeRen.hostToken(TestToken.brain, 7200),
+  new: await FakeRen.hostToken(TestToken.brain, 7300),
+  late: await FakeRen.hostToken(TestToken.brain, 7400),
+  next: await FakeRen.hostToken(TestToken.brain, 7500),
+  plain: await FakeRen.hostToken(TestToken.brain, 7600),
+}
+
 const expiring = 60_000
 
-const renewed = 3_600_000
+const renewed = 21_600_000
 
 const grant = (apiKeys: Readonly<Record<string, Models.ApiKey>>) => Shared.access(apiKeys, "http://127.0.0.1:9")
 
@@ -48,7 +56,8 @@ const make = Effect.gen(function* () {
   const issuer = yield* ModelsTest.issuer
   const services = yield* Layer.build(
     ModelRefresh.layer(issuer.url).pipe(
-      Layer.provideMerge(HostToken.layer(issuer.url, TestToken.keys)),
+      Layer.provideMerge(HostToken.layer(issuer.url)),
+      Layer.provideMerge(Fence.layer),
       Layer.provideMerge(ModelsTest.storage()),
       Layer.provide(FetchHttpClient.layer),
     ),
@@ -69,35 +78,37 @@ const todo = <A, E>(name: string, body: Effect.Effect<A, E, Scope.Scope>) => tes
 it.effect("a delayed forbidden refresh cannot remove a newer host token", () =>
   Effect.gen(function* () {
     const subject = yield* make
-    yield* subject.store.write(grant({ stub: Shared.apiKey("old-key", expiring) }), "old-host")
+    yield* subject.store.write(grant({ stub: Shared.apiKey("old-key", expiring) }), hosts.old)
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     const exchange = yield* subject.next
-    expect(exchange.authorization).toBe("Bearer old-host")
+    expect(exchange.authorization).toBe(`Bearer ${hosts.old}`)
     const newer = grant({ stub: Shared.apiKey("new-key", renewed) })
-    yield* subject.store.write(newer, "new-host")
+    yield* subject.store.write(newer, hosts.new)
     yield* subject.reply(exchange, forbidden())
-    expect(yield* Fiber.join(pending)).toEqual(Option.none())
-    expect(yield* subject.store.readHostToken).toEqual(Option.some("new-host"))
+    expect(key(yield* Fiber.join(pending))).toEqual(Option.some("new-key"))
+    expect(yield* subject.store.readHostToken).toEqual(Option.some(hosts.new))
     expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(newer)))
   }),
 )
 
-it.effect("a forbidden refresh removes the host token that made it, and later refreshes send no request", () =>
-  Effect.gen(function* () {
-    const subject = yield* make
-    const access = grant({ stub: Shared.apiKey("old-key", expiring) })
-    yield* subject.store.write(access, "old-host")
-    const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
-    yield* subject.reply(yield* subject.next, forbidden())
-    expect(yield* Fiber.join(pending)).toEqual(Option.none())
-    expect(yield* subject.store.readHostToken).toEqual(Option.none())
-    expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(access)))
-    expect(yield* Effect.all([subject.refresh("stub"), subject.refresh("stub")])).toEqual([
-      Option.none(),
-      Option.none(),
-    ])
-    expect(subject.requests).toEqual(["Bearer old-host"])
-  }),
+it.effect(
+  "a forbidden refresh removes the host token that made it, keeps the unexpired key, and later refreshes send no request",
+  () =>
+    Effect.gen(function* () {
+      const subject = yield* make
+      const access = grant({ stub: Shared.apiKey("old-key", expiring) })
+      yield* subject.store.write(access, hosts.old)
+      const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
+      yield* subject.reply(yield* subject.next, forbidden())
+      expect(key(yield* Fiber.join(pending))).toEqual(Option.some("old-key"))
+      expect(yield* subject.store.readHostToken).toEqual(Option.none())
+      expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(access)))
+      expect((yield* Effect.all([subject.refresh("stub"), subject.refresh("stub")])).map(key)).toEqual([
+        Option.some("old-key"),
+        Option.some("old-key"),
+      ])
+      expect(subject.requests).toEqual([`Bearer ${hosts.old}`])
+    }),
 )
 
 const newer = grant({ stub: Shared.apiKey("new-key", renewed) })
@@ -108,15 +119,15 @@ test.each<
   ["access removed", (store) => store.remove, Option.none(), Option.none()],
   [
     "access and a host token installed",
-    (store) => store.write(newer, "new-host"),
-    Option.some("new-host"),
+    (store) => store.write(newer, hosts.new),
+    Option.some(hosts.new),
     Option.some(newer),
   ],
 ])("a successful refresh cannot overwrite %s while its response was in flight", (_name, change, hostToken, access) =>
   run(
     Effect.gen(function* () {
       const subject = yield* make
-      yield* subject.store.write(grant({ stub: Shared.apiKey("old-key", expiring) }), "old-host")
+      yield* subject.store.write(grant({ stub: Shared.apiKey("old-key", expiring) }), hosts.old)
       const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
       const exchange = yield* subject.next
       yield* change(subject.store)
@@ -124,7 +135,7 @@ test.each<
         exchange,
         ModelsTest.granted({
           access: grant({ stub: Shared.apiKey("late-key", 2 * renewed) }),
-          hostToken: Redacted.make("late-host"),
+          hostToken: Redacted.make(hosts.late),
         }),
       )
       expect(key(yield* Fiber.join(pending))).not.toEqual(Option.some("late-key"))
@@ -140,16 +151,16 @@ todo(
     const subject = yield* make
     yield* subject.store.write(
       grant({ stub: Shared.apiKey("stub-old", expiring), anthropic: Shared.apiKey("anthropic-old", expiring) }),
-      "host",
+      hosts.plain,
     )
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     const exchange = yield* subject.next
-    yield* subject.store.write(grant({ stub: Shared.apiKey("stub-old", expiring) }), "host")
+    yield* subject.store.write(grant({ stub: Shared.apiKey("stub-old", expiring) }), hosts.plain)
     yield* subject.reply(
       exchange,
       ModelsTest.granted({
         access: grant({ stub: Shared.apiKey("stub-new", renewed), anthropic: Shared.apiKey("anthropic-new", renewed) }),
-        hostToken: Redacted.make("host"),
+        hostToken: Redacted.make(hosts.plain),
       }),
     )
     yield* Fiber.join(pending)
@@ -164,7 +175,7 @@ it.effect("concurrent refreshes of one or two expiring endpoints are served by o
     const subject = yield* make
     yield* subject.store.write(
       grant({ stub: Shared.apiKey("stub-old", expiring), anthropic: Shared.apiKey("anthropic-old", expiring) }),
-      "old-host",
+      hosts.old,
     )
     const pending = yield* Effect.all(
       [subject.refresh("stub"), subject.refresh("stub"), subject.refresh("anthropic")],
@@ -174,7 +185,7 @@ it.effect("concurrent refreshes of one or two expiring endpoints are served by o
       yield* subject.next,
       ModelsTest.granted({
         access: grant({ stub: Shared.apiKey("stub-new", renewed), anthropic: Shared.apiKey("anthropic-new", renewed) }),
-        hostToken: Redacted.make("new-host"),
+        hostToken: Redacted.make(hosts.new),
       }),
     )
     expect((yield* Fiber.join(pending)).map(key)).toEqual([
@@ -182,8 +193,8 @@ it.effect("concurrent refreshes of one or two expiring endpoints are served by o
       Option.some("stub-new"),
       Option.some("anthropic-new"),
     ])
-    expect(subject.requests).toEqual(["Bearer old-host"])
-    expect(yield* subject.store.readHostToken).toEqual(Option.some("new-host"))
+    expect(subject.requests).toEqual([`Bearer ${hosts.old}`])
+    expect(yield* subject.store.readHostToken).toEqual(Option.some(hosts.new))
   }),
 )
 
@@ -193,17 +204,16 @@ it.effect(
     Effect.gen(function* () {
       const subject = yield* make
       yield* TestClock.setTime(Date.now())
-      const sessionId = Session.ID.create()
       const access = grant({ stub: Shared.apiKey("old-key", expiring) })
-      yield* subject.store.write(access, yield* Effect.promise(() => FakeRen.hostToken(sessionId)))
+      yield* subject.store.write(access, hosts.old)
       const refreshing = yield* subject.refresh("stub").pipe(Effect.forkChild)
       yield* subject.next
-      const soon = yield* Effect.promise(() => FakeRen.hostToken(sessionId, 60))
+      const soon = yield* Effect.promise(() => FakeRen.hostToken(TestToken.brain, 60))
       yield* subject.store.write(access, soon)
       const renewing = yield* subject.hostToken.current.pipe(Effect.forkChild)
       const exchange = yield* subject.next
       expect(exchange.authorization).toBe(`Bearer ${soon}`)
-      const renewed = yield* Effect.promise(() => FakeRen.hostToken(sessionId))
+      const renewed = yield* Effect.promise(() => FakeRen.hostToken(TestToken.brain))
       yield* subject.reply(exchange, Response.json({ hostToken: renewed }))
       expect(yield* Fiber.join(renewing)).toEqual(Option.some(renewed))
       expect(refreshing.pollUnsafe()).toBeUndefined()
@@ -218,29 +228,29 @@ it.effect("a renewal that omits the requested endpoint removes it and returns no
     const subject = yield* make
     yield* subject.store.write(
       grant({ stub: Shared.apiKey("stub-old", expiring), anthropic: Shared.apiKey("anthropic-old", expiring) }),
-      "old-host",
+      hosts.old,
     )
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     const remaining = grant({ anthropic: Shared.apiKey("anthropic-new", renewed) })
     yield* subject.reply(
       yield* subject.next,
-      ModelsTest.granted({ access: remaining, hostToken: Redacted.make("new-host") }),
+      ModelsTest.granted({ access: remaining, hostToken: Redacted.make(hosts.new) }),
     )
     expect(yield* Fiber.join(pending)).toEqual(Option.none())
     expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(remaining)))
-    expect(yield* subject.store.readHostToken).toEqual(Option.some("new-host"))
+    expect(yield* subject.store.readHostToken).toEqual(Option.some(hosts.new))
   }),
 )
 
 it.effect("a renewed key that expires earlier is the issuer's answer: it is stored and returned", () =>
   Effect.gen(function* () {
     const subject = yield* make
-    yield* subject.store.write(grant({ stub: Shared.apiKey("old-key", expiring) }), "old-host")
+    yield* subject.store.write(grant({ stub: Shared.apiKey("old-key", expiring) }), hosts.old)
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     const earlier = grant({ stub: Shared.apiKey("renewed-key", expiring - 30_000) })
     yield* subject.reply(
       yield* subject.next,
-      ModelsTest.granted({ access: earlier, hostToken: Redacted.make("new-host") }),
+      ModelsTest.granted({ access: earlier, hostToken: Redacted.make(hosts.new) }),
     )
     expect(key(yield* Fiber.join(pending))).toEqual(Option.some("renewed-key"))
     expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(earlier)))
@@ -250,7 +260,7 @@ it.effect("a renewed key that expires earlier is the issuer's answer: it is stor
 it.effect("a stored key that never expires is served without a renewal request", () =>
   Effect.gen(function* () {
     const subject = yield* make
-    yield* subject.store.write(grant({ stub: Shared.apiKey("forever") }), "host")
+    yield* subject.store.write(grant({ stub: Shared.apiKey("forever") }), hosts.plain)
     expect(
       yield* Effect.raceFirst(
         subject.refresh("stub").pipe(Effect.map(key)),
@@ -260,31 +270,31 @@ it.effect("a stored key that never expires is served without a renewal request",
   }),
 )
 
-it.effect("a key expiring one millisecond after the five-minute window is served without a renewal request", () =>
+it.effect("a key expiring one millisecond after the three-hour window is served without a renewal request", () =>
   Effect.gen(function* () {
     const subject = yield* make
     yield* TestClock.setTime(1_000_000)
-    yield* subject.store.write(grant({ stub: Shared.apiKey("current", 1_300_001) }), "host")
+    yield* subject.store.write(grant({ stub: Shared.apiKey("current", 11_800_001) }), hosts.plain)
     expect(key(yield* subject.refresh("stub"))).toEqual(Option.some("current"))
     expect(subject.requests).toEqual([])
   }),
 )
 
-it.effect("a key expiring exactly at the five-minute window is renewed before it is served", () =>
+it.effect("a key expiring exactly at the three-hour window is renewed before it is served", () =>
   Effect.gen(function* () {
     const subject = yield* make
     yield* TestClock.setTime(1_000_000)
-    yield* subject.store.write(grant({ stub: Shared.apiKey("current", 1_300_000) }), "host")
+    yield* subject.store.write(grant({ stub: Shared.apiKey("current", 11_800_000) }), hosts.plain)
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     yield* subject.reply(
       yield* subject.next,
       ModelsTest.granted({
-        access: grant({ stub: Shared.apiKey("renewed", 4_600_000) }),
-        hostToken: Redacted.make("next-host"),
+        access: grant({ stub: Shared.apiKey("renewed", 31_600_000) }),
+        hostToken: Redacted.make(hosts.next),
       }),
     )
     expect(key(yield* Fiber.join(pending))).toEqual(Option.some("renewed"))
-    expect(subject.requests).toEqual(["Bearer host"])
+    expect(subject.requests).toEqual([`Bearer ${hosts.plain}`])
   }),
 )
 
@@ -292,21 +302,21 @@ it.effect("an unavailable renewal keeps the stored key and host token, and the n
   Effect.gen(function* () {
     const subject = yield* make
     const access = grant({ stub: Shared.apiKey("old-key", expiring) })
-    yield* subject.store.write(access, "old-host")
+    yield* subject.store.write(access, hosts.old)
     const failed = yield* subject.refresh("stub").pipe(Effect.forkChild)
     yield* subject.reply(yield* subject.next, unavailable())
-    expect(yield* Fiber.join(failed)).toEqual(Option.none())
+    expect(key(yield* Fiber.join(failed))).toEqual(Option.some("old-key"))
     expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(access)))
-    expect(yield* subject.store.readHostToken).toEqual(Option.some("old-host"))
+    expect(yield* subject.store.readHostToken).toEqual(Option.some(hosts.old))
     const pending = yield* subject.refresh("stub").pipe(Effect.forkChild)
     yield* subject.reply(
       yield* subject.next,
       ModelsTest.granted({
         access: grant({ stub: Shared.apiKey("new-key", renewed) }),
-        hostToken: Redacted.make("new-host"),
+        hostToken: Redacted.make(hosts.new),
       }),
     )
     expect(key(yield* Fiber.join(pending))).toEqual(Option.some("new-key"))
-    expect(subject.requests).toEqual(["Bearer old-host", "Bearer old-host"])
+    expect(subject.requests).toEqual([`Bearer ${hosts.old}`, `Bearer ${hosts.old}`])
   }),
 )

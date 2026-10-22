@@ -1,12 +1,12 @@
-import { afterAll, beforeAll, describe, expect } from "bun:test"
-import { SessionToken } from "@ren/host-api/session-token"
+import { describe, expect, setDefaultTimeout } from "bun:test"
+import { BrainToken } from "@ren/host-api/brain-token"
 import { Shared, TestToken } from "@ren/cell/testing"
 import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Layer, ManagedRuntime, Result, Schema } from "effect"
-import { Base64Url } from "effect/encoding"
+import { Effect, Layer, Option } from "effect"
 import { Access } from "../src/access.js"
+import { BrainRegistry } from "../src/brain-registry.js"
 import { Models } from "../src/models.js"
 import { Session } from "../src/session.js"
 import { SessionRunner } from "../src/session/runner.js"
@@ -16,38 +16,28 @@ import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 
-const runtime = ManagedRuntime.make(Shared.layer)
-beforeAll(async () => {
-  settings.CELL_URL = (await runtime.runPromise(Shared.Service)).url
-}, 120_000)
-afterAll(() => runtime.dispose())
+setDefaultTimeout(60_000)
+
 const stub = Shared.stub()
 
-const configured = Shared.access({ stub: Shared.apiKey("sk-configured") })
+const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.url)
 
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
     catalog: () => Effect.succeed(Models.catalog(configured)),
     grant: () => Effect.succeed(configured),
-    refreshIfDue: () => Effect.succeedNone,
-    revoke: () => Effect.void,
   }),
 )
 
-const settings = { CELL_URL: "", CELL_KEYS: TestToken.vars.CELL_KEYS }
-
 const it = testEffect(
-  Layer.unwrap(
-    Effect.sync(() =>
-      Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
-        Layer.provideMerge(SessionRunner.layer),
-        Layer.provideMerge(Host.layer(settings, models)),
-        Layer.provideMerge(models),
-        Layer.provideMerge(Access.layer),
-        Layer.provideMerge(Testing.layer),
-      ),
-    ),
+  Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
+    Layer.provideMerge(SessionRunner.layer),
+    Layer.provideMerge(BrainRegistry.layer),
+    Layer.provideMerge(Host.layer({}, models)),
+    Layer.provideMerge(models),
+    Layer.provideMerge(Access.layer),
+    Layer.provideMerge(Testing.layer),
   ),
 )
 
@@ -62,9 +52,10 @@ const member = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID,
 })
 
 const claims = (token: string) =>
-  Schema.decodeUnknownSync(Schema.fromJsonString(SessionToken.Claims))(
-    Result.getOrThrow(Base64Url.decodeString(token.slice(0, token.indexOf(".")))),
-  )
+  BrainToken.verify(
+    Host.keys.map((key) => key.publicKey),
+    token,
+  ).pipe(Effect.map(Option.getOrUndefined))
 
 describe("Session", () => {
   it.live(
@@ -95,8 +86,8 @@ describe("Session", () => {
         expect((yield* Effect.flip(sessions.create(grace, { id: Session.ID.create(), spaceId: team.id })))._tag).toBe(
           "Primitive.NotFound",
         )
-        const access = yield* sessions.access(ada, id)
-        expect(claims(access.token)).toMatchObject({
+        const access = yield* Host.ready(sessions.access(ada, id))
+        expect(yield* claims(access.token)).toMatchObject({
           sid: id,
           scope: "client",
           sub: ada.userId,

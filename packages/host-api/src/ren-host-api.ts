@@ -45,7 +45,7 @@ export const PullSession = Schema.Struct({
 
 export interface PullRequest extends Schema.Schema.Type<typeof PullRequest> {}
 export const PullRequest = Schema.Struct({
-  version: Schema.String.annotate({ description: "The brain's version." }),
+  version: Schema.String.annotate({ description: "The brain’s version." }),
   keyIds: Schema.Array(Schema.String).annotate({ description: "The ids of the public keys the brain holds." }),
   models: Schema.NullOr(Schema.String).annotate({ description: "The models hash the brain has." }),
   layers: SessionSettings.Known,
@@ -61,7 +61,7 @@ export const PullModels = Schema.Struct({
 export interface PullChat extends Schema.Schema.Type<typeof PullChat> {}
 export const PullChat = Schema.Struct({
   id: Session.ID,
-  agent: Schema.NullOr(Schema.String).annotate({ description: "The name of the chat's primary agent." }),
+  agent: Schema.NullOr(Schema.String).annotate({ description: "The name of the chat’s primary agent." }),
   archived: Schema.Boolean,
 }).annotate({ identifier: "Host.PullChat" })
 
@@ -82,7 +82,7 @@ const PullGroup = HttpApiGroup.make("pull")
         identifier: "pull",
         summary: "Pull a brain's settings and models",
         description:
-          "Send the hashes the brain has and the state of its chats. The reply sends each settings layer and the models; a body comes only when its hash changed. It lists the brain's chats with their primary agent.",
+          "Send the hashes the brain has and the state of its chats. The reply sends each settings layer and the models; a body comes only when its hash changed. It lists the brain’s chats with their primary agent.",
       }),
     ),
   )
@@ -128,7 +128,7 @@ const EnvironmentsGroup = HttpApiGroup.make("environments")
         identifier: "environments.release",
         summary: "Release a session's seat on its environment",
         description:
-          "Say that a session of the brain is idle. Its seat stops counting toward its environment's sessions per environment until its next access.",
+          "Say that a session of the brain is idle. Its seat stops counting toward its environment’s sessions per environment until its next access.",
       }),
     ),
   )
@@ -158,6 +158,6 @@ export const RenHostApi = HttpApi.make("host")
       title: "Ren Host API",
       version: "0.0.0",
       description:
-        "Internal API a brain calls with its host token: to pull its settings and models, to refresh its model keys and host token, and to get access to a session's environment.",
+        "Internal API a brain calls with its host token: to pull its settings and models, to refresh its model keys and host token, and to get access to a session’s environment.",
     }),
   )

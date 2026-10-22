@@ -33,11 +33,7 @@ const sandbox = Layer.unwrap(
     )
     return BrainHost.layerSandbox.pipe(
       Layer.provide(BrainLifecycle.layer),
-      Layer.provide(
-        provider === "e2b"
-          ? E2BSandbox.layer
-          : LocalSandbox.layer({ entry, root }),
-      ),
+      Layer.provide(provider === "e2b" ? E2BSandbox.layer : LocalSandbox.layer({ entry, root })),
       Layer.provide(DurableRunner.layerMemory),
     )
   }),

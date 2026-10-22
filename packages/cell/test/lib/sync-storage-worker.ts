@@ -94,16 +94,19 @@ const sizes = (sql: SqlStorage, sessionId: string) => ({
 
 class SyncStorageCell extends SessionCell {
   readonly alarmReads: Array<ReturnType<typeof read> & { readonly isOpen: boolean }> = []
+  watched = ""
 
   override async fetch(request: Request) {
     const url = new URL(request.url)
-    const sessionId = this.ctx.id.name ?? ""
+    this.watched = url.searchParams.get("session") ?? this.watched
+    const sessionId = this.watched
     if (url.pathname === "/test/lose-storage") {
       await this.runtime.runPromise(Effect.flatMap(Harness.Service, (harness) => harness.close))
       await this.ctx.storage.deleteAlarm()
       await this.ctx.storage.deleteAll()
       return new Response(null, { status: 204 })
     }
+    if (url.pathname === "/test/watch") return new Response(null, { status: 204 })
     if (url.pathname === "/test/read") return Response.json(read(this.ctx.storage.sql, sessionId))
     if (url.pathname === "/test/sizes") return Response.json(sizes(this.ctx.storage.sql, sessionId))
     if (url.pathname === "/test/rows")
@@ -138,7 +141,7 @@ class SyncStorageCell extends SessionCell {
         return yield* harness.state
       }),
     )
-    this.alarmReads.push({ isOpen: state.isOpen, ...read(this.ctx.storage.sql, this.ctx.id.name ?? "") })
+    this.alarmReads.push({ isOpen: state.isOpen, ...read(this.ctx.storage.sql, this.watched) })
     return super.alarm()
   }
 }

@@ -13,7 +13,7 @@ const same = Schema.toEquivalence(Credential.Value)
 
 export const replaces = (stored: Credential.Value, next: Credential.Value) => {
   if (stored.type === "oauth" && next.type === "oauth")
-    return stored.methodID !== next.methodID || next.expires > stored.expires
+    return stored.methodID !== next.methodID || stored.access !== next.access || next.expires > stored.expires
   return !same(stored, next)
 }
 

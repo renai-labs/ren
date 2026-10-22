@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Agent as AgentSchema } from "@ren/schema/agent"
-import { Session } from "@ren/schema/session"
+import { Brain } from "@ren/schema/brain"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import type { Settings as SettingsSchema } from "@ren/schema/settings"
 import { eq } from "drizzle-orm"
@@ -71,13 +71,26 @@ const setup = Effect.gen(function* () {
       .update(Database.Schema.agent_session)
       .set({ agent_id: agentId })
       .where(eq(Database.Schema.agent_session.id, sessionId))
-  return { ada, organizationId, factory, elsewhere, sessionId, explore, create, useAgent }
+  return {
+    ada,
+    organizationId,
+    factory,
+    elsewhere,
+    sessionId,
+    brainId: Brain.ofSession(sessionId),
+    explore,
+    create,
+    useAgent,
+  }
 })
+
+const layersOf = (settings: Settings.Interface, brainId: Brain.ID, known: SessionSettings.Known) =>
+  Effect.map(settings.pull(brainId, known), (pulled) => pulled.layers)
 
 const names = (layers: SessionSettings.Layers) =>
   layers.agents.map((agent) => `${agent.name}${agent.isSubagent ? " (subagent)" : ""}`)
 
-describe("Settings.read", () => {
+describe("Settings.pull", () => {
   it.live(
     "a session reads Ren, its org, its space, its agent, the space's subagents and Ren's subagents, each with a hash",
     () =>
@@ -93,7 +106,7 @@ describe("Settings.read", () => {
         const build = yield* s.create("build")
         yield* s.create("reviewer", { isSubagent: true })
         yield* s.useAgent(build.id)
-        const read = yield* settings.read(s.sessionId, {})
+        const read = yield* layersOf(settings, s.brainId, {})
         expect(read.ren.settings).toEqual(
           layer({ instructions: "House rules.", model: { endpointId: "stub", modelId: "stub-model" } }),
         )
@@ -117,13 +130,13 @@ describe("Settings.read", () => {
       yield* write(SettingsRows.ren, { instructions: "House rules." })
       yield* write({ space_id: s.factory.id }, { instructions: "We use Bun." })
       yield* s.create("reviewer", { isSubagent: true })
-      const first = yield* settings.read(s.sessionId, {})
+      const first = yield* layersOf(settings, s.brainId, {})
       const known = {
         ren: first.ren.hash ?? "",
         space: first.space.hash ?? "",
         agents: Object.fromEntries(first.agents.map((agent) => [agent.name, agent.hash])),
       }
-      const again = yield* settings.read(s.sessionId, known)
+      const again = yield* layersOf(settings, s.brainId, known)
       expect(again.ren).toEqual({ hash: first.ren.hash })
       expect(again.space).toEqual({ hash: first.space.hash })
       expect(again.agents).toEqual(
@@ -135,7 +148,7 @@ describe("Settings.read", () => {
         })),
       )
       yield* write({ space_id: s.factory.id }, { instructions: "We use Bun 1.3." })
-      const edited = yield* settings.read(s.sessionId, known)
+      const edited = yield* layersOf(settings, s.brainId, known)
       expect(edited.space.settings).toEqual(layer({ instructions: "We use Bun 1.3." }))
       expect(edited.space.hash).not.toBe(first.space.hash)
       expect(edited.ren).toEqual({ hash: first.ren.hash })
@@ -146,7 +159,7 @@ describe("Settings.read", () => {
     Effect.gen(function* () {
       const settings = yield* Settings.Service
       const s = yield* setup
-      const read = yield* settings.read(s.sessionId, {})
+      const read = yield* layersOf(settings, s.brainId, {})
       expect([read.ren, read.organization, read.space]).toEqual([{ hash: null }, { hash: null }, { hash: null }])
       expect(names(read)).toEqual(["explore (subagent)", "general (subagent)", "ren"])
       expect(read.agents.find((agent) => agent.name === "ren")).toMatchObject({
@@ -160,7 +173,7 @@ describe("Settings.read", () => {
     Effect.gen(function* () {
       const settings = yield* Settings.Service
       const s = yield* setup
-      const hashes = Effect.map(settings.read(s.sessionId, {}), (read) =>
+      const hashes = Effect.map(layersOf(settings, s.brainId, {}), (read) =>
         Object.fromEntries(read.agents.map((agent) => [agent.name, agent.hash])),
       )
       const before = yield* hashes
@@ -185,7 +198,7 @@ describe("Settings.read", () => {
         const joined = yield* memberships.create(s.ada, { agentId: visiting.id, spaceId: s.factory.id })
         yield* agents.archive(s.ada, archived.id)
         yield* s.useAgent(build.id)
-        expect(names(yield* settings.read(s.sessionId, {}))).toEqual([
+        expect(names(yield* layersOf(settings, s.brainId, {}))).toEqual([
           "build",
           "explore (subagent)",
           "general (subagent)",
@@ -193,7 +206,7 @@ describe("Settings.read", () => {
         ])
         yield* memberships.archive(s.ada, joined.id)
         yield* agents.update(s.ada, build.id, { isSubagent: true })
-        expect(names(yield* settings.read(s.sessionId, {}))).toEqual([
+        expect(names(yield* layersOf(settings, s.brainId, {}))).toEqual([
           "build (subagent)",
           "explore (subagent)",
           "general (subagent)",
@@ -210,7 +223,7 @@ describe("Settings.read", () => {
       const s = yield* setup
       const reviewer = yield* s.create("reviewer", { isSubagent: true })
       const hash = Effect.map(
-        settings.read(s.sessionId, {}),
+        layersOf(settings, s.brainId, {}),
         (read) => read.agents.find((agent) => !["ren", "general", "explore"].includes(agent.name))?.hash,
       )
       const before = yield* hash
@@ -231,10 +244,42 @@ describe("Settings.read", () => {
     }),
   )
 
-  it.live("an unknown session fails with NotFound", () =>
+  it.live(
+    "a brain with 3 chats gets a changed space layer once, no bodies for current hashes, and each chat's primary agent",
+    () =>
+      Effect.gen(function* () {
+        const settings = yield* Settings.Service
+        const database = yield* Database.Service
+        const s = yield* setup
+        const owner = { organizationId: s.organizationId, spaceId: s.factory.id, createdBy: s.ada.userId }
+        const second = yield* Seed.session({ ...owner, brainId: s.brainId })
+        const third = yield* Seed.session({ ...owner, brainId: s.brainId })
+        const build = yield* s.create("build")
+        yield* database.db
+          .update(Database.Schema.agent_session)
+          .set({ agent_id: build.id })
+          .where(eq(Database.Schema.agent_session.id, third))
+        yield* write({ space_id: s.factory.id }, { instructions: "We use Bun." })
+        const first = yield* settings.pull(s.brainId, {})
+        expect(first.chats.map((chat) => [chat.id, chat.agent])).toEqual([
+          [s.sessionId, "ren"],
+          [second, "ren"],
+          [third, "build"],
+        ])
+        expect(first.layers.space.settings).toEqual(layer({ instructions: "We use Bun." }))
+        const known = {
+          ...(first.layers.space.hash && { space: first.layers.space.hash }),
+          agents: Object.fromEntries(first.layers.agents.map((agent) => [agent.name, agent.hash])),
+        }
+        const again = yield* settings.pull(s.brainId, known)
+        expect([again.layers.space, ...again.layers.agents].filter((each) => "settings" in each)).toEqual([])
+      }),
+  )
+
+  it.live("an unknown brain fails with NotFound", () =>
     Effect.gen(function* () {
       const settings = yield* Settings.Service
-      expect((yield* Effect.flip(settings.read(Session.ID.create(), {})))._tag).toBe("Settings.NotFound")
+      expect((yield* Effect.flip(settings.pull(Brain.ID.create(), {})))._tag).toBe("Settings.NotFound")
     }),
   )
 })

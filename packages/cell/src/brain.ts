@@ -1,6 +1,6 @@
 export * as Brain from "./brain.js"
 
-import { BrainApi } from "@ren/host-api/brain-api"
+import { BrainApi, hostTokenHeader } from "@ren/host-api/brain-api"
 import { ModelsNotConfiguredError } from "@ren/host-api/errors"
 import { DateTime, Effect, Layer, Option, type Scope } from "effect"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
@@ -23,8 +23,6 @@ type Services =
 
 const prefix = "/ren"
 
-export const hostTokenHeader = "ren-host-token"
-
 export const owns = (pathname: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
 
 const check = Effect.gen(function* () {
@@ -32,7 +30,7 @@ const check = Effect.gen(function* () {
   const info = yield* Cell.Info
   const hostToken = yield* HostToken.Service
   const stored = yield* store.read
-  if (Option.isNone(stored))
+  if (Option.isNone(stored) || stored.value.endpoints.length === 0)
     return Option.some(new ModelsNotConfiguredError({ message: "The brain has no model configuration" }))
   if (info.vars.REN_URL && !(yield* hostToken.isValid))
     return Option.some(new ModelsNotConfiguredError({ message: "The brain’s host token is missing or expired" }))
@@ -78,10 +76,10 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
       .handle("brain.start", (request) =>
         handle(
           Effect.gen(function* () {
-            const harness = yield* Cell.acquire
             const hotReload = yield* HotReload.Service
             yield* hotReload.pull
             yield* configured
+            const harness = yield* Cell.acquire
             return yield* harness.start(request.payload)
           }),
         ),
@@ -129,12 +127,12 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
 )
 
 export const layer = Layer.effect(
-  Cell.Brain,
+  Cell.BrainRoutes,
   Effect.gen(function* () {
     const app = yield* HttpRouter.toHttpEffect(
       HttpApiBuilder.layer(BrainApi).pipe(Layer.provide(handlers), Layer.provide(HttpServer.layerServices)),
     )
     const context = yield* Effect.context<Services>()
-    return Cell.Brain.of({ owns, fetch: HttpEffect.toWebHandler(app.pipe(Effect.provide(context))) })
+    return Cell.BrainRoutes.of({ owns, fetch: HttpEffect.toWebHandler(app.pipe(Effect.provide(context))) })
   }),
 )

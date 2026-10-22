@@ -42,7 +42,7 @@ export interface Rule {
 export interface Instance {
   readonly url: string
   readonly seen: ReadonlyArray<Observed>
-  readonly count: (operation: string) => number
+  readonly count: (operation: string | RegExp) => number
   readonly inject: (match: Match, action: Action, times?: number) => Rule
   readonly partition: (on: boolean) => void
   readonly cutAll: () => number
@@ -227,7 +227,10 @@ export const make = async (initialTarget: string): Promise<Instance> => {
   return {
     url: `http://127.0.0.1:${port}`,
     seen,
-    count: (operation) => seen.filter((entry) => entry.operation === operation).length,
+    count: (operation) =>
+      seen.filter((entry) =>
+        Predicate.isString(operation) ? entry.operation === operation : operation.test(entry.operation),
+      ).length,
     inject: (match, action, times = 1) => {
       const rule: Active = {
         match,

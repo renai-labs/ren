@@ -2,7 +2,6 @@ import { describe, expect } from "bun:test"
 import { Signature } from "@ren/schema/signature"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
-import { Session } from "@ren/schema/session"
 import { ConfigProvider, Effect, Layer, Ref, Schema } from "effect"
 import { Access } from "../src/access.js"
 import { EnvironmentTemplates } from "../src/environment-templates.js"
@@ -136,11 +135,7 @@ describe("EnvironmentTemplates", () => {
         expect((yield* links.create(setup.ada, link).pipe(Effect.flip))._tag).toBe("Primitive.Conflict")
         expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([linked])
         expect((yield* links.list(grace, { ...page, spaceId: setup.space.id })).items).toEqual([])
-        const session = {
-          sessionId: Session.ID.create(),
-          organizationId: setup.organizationId,
-          spaceId: setup.space.id,
-        }
+        const session = yield* Seed.subject(setup.organizationId, setup.space.id)
         yield* environments.bind(session, made.id)
         yield* environments.access(session)
         expect((yield* links.archive(setup.ada, linked.id)).archivedAt).not.toBeNull()
@@ -177,7 +172,7 @@ describe("EnvironmentTemplates", () => {
       const setup = yield* team()
       const made = yield* templates.create(setup.admin, input)
       yield* links.create(setup.ada, { spaceId: setup.space.id, environmentTemplateId: made.id })
-      const session = { sessionId: Session.ID.create(), organizationId: setup.organizationId, spaceId: setup.space.id }
+      const session = yield* Seed.subject(setup.organizationId, setup.space.id)
       yield* environments.bind(session, made.id)
       yield* environments.access(session)
       const environmentId = (yield* Ref.get(probe.provisions)).at(-1)

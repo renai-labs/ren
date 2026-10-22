@@ -2,6 +2,7 @@ export * as HotReload from "./hot-reload.js"
 
 import { BrainSettings } from "@ren/brain/settings"
 import type { PullSession } from "@ren/host-api/ren-host-api"
+import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Option, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { BrainKeys } from "./brain-keys.js"
@@ -43,7 +44,7 @@ export const layer = Layer.effect(
             Effect.flatMap(harness.get, (opened) => opened.sessions).pipe(
               Effect.map((all) =>
                 all.map((session) => ({
-                  id: session.id as PullSession["id"],
+                  id: Session.ID.make(session.id),
                   busy: session.active,
                   progress: session.progress,
                 })),

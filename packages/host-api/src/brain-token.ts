@@ -4,7 +4,7 @@ import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
-import { Effect, Option, Result, Schema } from "effect"
+import { Array, Effect, Option, Result, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
 
 export const ServerClaims = Schema.Struct({
@@ -71,6 +71,11 @@ export const keyIdOf = (token: string) =>
     Option.map((header) => header.kid),
   )
 
-export const publicKeys = Effect.fn("BrainToken.publicKeys")(function* (keys: ReadonlyArray<Signature.PrivateKey>) {
-  return yield* Effect.forEach(keys, Signature.publicKeyOf)
+export const publicKeys = Effect.fn("BrainToken.publicKeys")(function* (
+  keys: Array.NonEmptyReadonlyArray<Signature.PrivateKey>,
+) {
+  const first = yield* Signature.publicKeyOf(Array.headNonEmpty(keys))
+  const rest = yield* Effect.forEach(Array.tailNonEmpty(keys), Signature.publicKeyOf)
+  const all: Array.NonEmptyReadonlyArray<Signature.PublicKey> = [first, ...rest]
+  return all
 })

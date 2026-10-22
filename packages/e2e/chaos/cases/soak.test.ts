@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { TestToken } from "@ren/cell/testing"
+import { FakeRen, TestToken } from "@ren/cell/testing"
+import { Brain } from "@ren/schema/brain"
 import { Result } from "effect"
 import { CloudflareBrain } from "../lib/adapters/cloudflare.js"
 import { SessionDriver } from "../lib/drivers/session.js"
@@ -81,10 +82,12 @@ describe.skipIf(Platform.cloudflare !== undefined || Platform.live !== undefined
   const lane: {
     deployment?: Awaited<ReturnType<typeof CloudflareBrain.deploy>>
     selected?: Awaited<ReturnType<typeof LiveModel.select>>
+    ren?: FakeRen.Instance
   } = {}
 
   beforeAll(async () => {
     lane.selected = await LiveModel.select(process.env.CHAOS_LIVE_MODEL)
+    lane.ren = FakeRen.start()
     lane.deployment = await CloudflareBrain.deploy({
       label: "soak",
       vars: { ALARM_INTERVAL_MS: "30000", WAIT_BUDGET_MS: "600000", PARK_AFTER_MS: "600000" },
@@ -92,13 +95,21 @@ describe.skipIf(Platform.cloudflare !== undefined || Platform.live !== undefined
     })
   }, 600_000)
 
-  afterAll(() => lane.deployment?.remove())
+  afterAll(async () => {
+    await lane.deployment?.remove()
+    await lane.ren?.stop()
+  })
 
   const session = async () => {
     const selected = lane.selected
-    if (!lane.deployment || !selected) throw new Error("the deployment did not start")
+    if (!lane.deployment || !lane.ren || !selected) throw new Error("the deployment did not start")
     if (Result.isFailure(selected)) throw new Error(selected.failure)
-    const opened = await SessionDriver.make(lane.deployment.url)
+    const opened = await SessionDriver.make({
+      kind: "wrangler",
+      url: lane.deployment.url,
+      ren: lane.ren,
+      brain: Brain.ID.create,
+    })
     expect((await opened.configureModels(LiveModel.access(selected.success))).status).toBe(204)
     const model = { endpointId: selected.success.providerId, modelId: selected.success.modelId }
     expect((await opened.start({ model })).status).toBe(200)

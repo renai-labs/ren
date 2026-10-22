@@ -3,12 +3,13 @@ import { Database } from "bun:sqlite"
 import { AbsolutePath, Session, SessionMessage } from "@opencode/client/effect"
 import { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { SqliteReader } from "@ren/brain/sqlite-reader"
-import { SessionToken } from "@ren/host-api/session-token"
+import { BrainToken } from "@ren/host-api/brain-token"
 import { Sync } from "@ren/schema/sync"
 import { Shared, type StubModel, SyncClient } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
 import { Seed } from "@ren/core/testing"
 import type { Auth } from "@ren/schema/auth"
+import { Brain } from "@ren/schema/brain"
 import type { Session as RenSession } from "@ren/schema/session"
 import { Clock, Deferred, Duration, Effect, Fiber, Layer, Logger, Metric, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
@@ -16,7 +17,7 @@ import { TestClock } from "effect/testing"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { cellKey } from "./lib/app.js"
+import { hostToken } from "./lib/app.js"
 import { Proxy } from "./lib/proxy.js"
 import { SyncTest } from "./lib/sync.js"
 
@@ -29,9 +30,9 @@ const folder = Effect.acquireRelease(
   (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
 )
 
-const hostToken = Effect.fnUntraced(function* (sid: RenSession.ID, org: Auth.OrganizationID, seconds: number) {
+const tokenFor = Effect.fnUntraced(function* (sid: RenSession.ID, org: Auth.OrganizationID, seconds: number) {
   const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)
-  return yield* SessionToken.sign(cellKey, { sid, scope: "host", org, iat: now, exp: now + seconds })
+  return yield* hostToken(Brain.ofSession(sid), org, { exp: now + seconds })
 })
 
 const sessionColumns = Object.keys(Sync.OpenCodeSessionRow.fields).join(", ")
@@ -97,7 +98,7 @@ const setup = Effect.fnUntraced(function* () {
   yield* Seed.session(owner, { sessionId: brain.id })
   const server = yield* HttpServer.HttpServer
   const proxy = yield* Proxy.make(HttpServer.formatAddress(server.address))
-  const token = { value: yield* hostToken(brain.id, owner.organizationId, 600) }
+  const token = { value: yield* tokenFor(brain.id, owner.organizationId, 600) }
   const host = { restoring: false }
   const db = new Database(file)
   yield* Effect.addFinalizer(() => Effect.sync(() => db.close()))
@@ -590,12 +591,12 @@ describe("OpenCodeSync", () => {
         const host = yield* setup()
         const sync = yield* host.sync()
         yield* host.turn(host.root)
-        const expired = yield* hostToken(host.brain.id, host.owner.organizationId, -1)
+        const expired = yield* tokenFor(host.brain.id, host.owner.organizationId, -(BrainToken.toleranceSeconds + 60))
         host.proxy.once({ match: isBatch(host.root), before: () => Promise.resolve((host.token.value = expired)) })
         expect(yield* sync.step()).toEqual({ drained: false, failed: true })
         expect(host.proxy.requests.filter(isCommit(host.root))).toHaveLength(1)
         expect((yield* SyncTest.remote(host.brain.id)).sessions).toEqual([])
-        host.token.value = yield* hostToken(host.brain.id, host.owner.organizationId, 600)
+        host.token.value = yield* tokenFor(host.brain.id, host.owner.organizationId, 600)
         expect(yield* sync.step()).toEqual({ drained: true })
         yield* host.expectEqual
       }),

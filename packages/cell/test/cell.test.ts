@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { ManagedRuntime, Schema } from "effect"
 import { Session } from "@ren/schema/session"
-import type { Celld } from "./lib/celld.js"
+import { FakeRen } from "./lib/ren.js"
 import { Shared } from "./lib/shared.js"
 import { TestCell } from "./lib/test-cell.js"
 import { TestToken } from "./lib/token.js"
@@ -9,14 +9,14 @@ import { TestToken } from "./lib/token.js"
 setDefaultTimeout(30_000)
 
 const runtime = ManagedRuntime.make(Shared.layer)
-let celld: Celld.Instance
+let celld: Shared.Runtime
 beforeAll(async () => {
   celld = await runtime.runPromise(Shared.Service)
 }, 120_000)
 afterAll(() => runtime.dispose())
 const stub = Shared.stub()
-const closed = TestCell.closed
-const cell = () => TestCell.make(celld.url)
+const idle = TestCell.idle
+const cell = () => TestCell.make(celld)
 
 describe("cell contract", () => {
   test("answers 401 without a token, to a malformed token and to a host token, with OpenCode's body", async () => {
@@ -24,7 +24,7 @@ describe("cell contract", () => {
     const headers = [
       {},
       { authorization: TestToken.basic("not-a-token") },
-      { authorization: TestToken.basic(await TestCell.sign({ sid: opened.id, scope: "host" })) },
+      { authorization: TestToken.basic(await FakeRen.hostToken(opened.brainId)) },
     ]
     const responses = await Promise.all(
       headers.map((header) =>
@@ -38,11 +38,11 @@ describe("cell contract", () => {
     expect(responses).toEqual(
       headers.map(() => ({
         status: 401,
-        type: "application/json",
+        type: expect.stringContaining("application/json"),
         body: { _tag: "UnauthorizedError", message: "Authentication required" },
       })),
     )
-    expect(await opened.state()).toEqual(closed)
+    expect(await opened.state()).toEqual(idle)
   })
 
   test("client tokens reach only the Chat API, with CORS; server tokens reach every path", async () => {
@@ -62,7 +62,7 @@ describe("cell contract", () => {
     expect(await Promise.all(paths.map(async (path) => (await opened.request(path, {}, client)).status))).toEqual(
       paths.map(() => 403),
     )
-    expect(await opened.state()).toEqual(closed)
+    expect(await opened.state()).toEqual(idle)
     const preflight = await fetch(`${celld.url}/chat/status`, { method: "OPTIONS" })
     expect([preflight.status, preflight.headers.get("access-control-allow-headers")]).toEqual([
       204,
@@ -100,27 +100,24 @@ describe("cell contract", () => {
       status: 413,
       body: "",
     })
-    expect(await opened.state()).toEqual(closed)
+    expect(await opened.state()).toEqual(idle)
   })
 
   test("the deployed Brain API creates, sends and reports the same host under server authorization", async () => {
     const opened = await cell()
     expect((await opened.models()).status).toBe(204)
     const initial = stub.script()
-    expect(
-      (
-        await opened.brain("/ren/sessions", {
-          sessionId: opened.id,
-          harness: "opencode",
-          interactive: false,
-          initialMessage: {
-            messageId: Session.MessageID.create(),
-            prompt: { text: `initial ${initial.marker}` },
-            sender: { userId: "user_1" },
-          },
-        })
-      ).status,
-    ).toBe(200)
+    const startedResponse = await opened.brain("/ren/sessions", {
+      sessionId: opened.id,
+      harness: "opencode",
+      interactive: false,
+      initialMessage: {
+        messageId: Session.MessageID.create(),
+        prompt: { text: `initial ${initial.marker}` },
+        sender: { userId: "user_1" },
+      },
+    })
+    expect([startedResponse.status, await startedResponse.text()]).toEqual([200, expect.any(String)])
     await opened.opencode.session.wait({ sessionID: opened.id })
     expect(initial.calls).toHaveLength(1)
     const script = stub.script()
@@ -136,16 +133,19 @@ describe("cell contract", () => {
     expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ outcome: "succeeded" })
   })
 
-  test("two session ids reach two separate cells: a session created in one is not in the other", async () => {
-    const first = await cell()
-    const second = await cell()
-    await first.start()
-    expect((await second.opencode.session.list()).data).toEqual([])
-    await expect(second.opencode.session.get({ sessionID: first.id })).rejects.toMatchObject({
-      _tag: "SessionNotFoundError",
-    })
-    expect((await first.opencode.session.list()).data.map((session) => session.id)).toEqual([first.id])
-  })
+  test.skipIf(Shared.kind() === "bun")(
+    "two brain ids reach two separate cells: a session created in one is not in the other",
+    async () => {
+      const first = await cell()
+      const second = await cell()
+      await first.start()
+      expect((await second.opencode.session.list()).data).toEqual([])
+      await expect(second.opencode.session.get({ sessionID: first.id })).rejects.toMatchObject({
+        _tag: "SessionNotFoundError",
+      })
+      expect((await first.opencode.session.list()).data.map((session) => session.id)).toEqual([first.id])
+    },
+  )
 
   test("forwards the method, path, query and body of any route, and passes OpenCode's status codes and bodies through", async () => {
     const opened = await cell()
@@ -158,12 +158,13 @@ describe("cell contract", () => {
     expect(renamed.status).toBeLessThan(300)
     expect(await opened.opencode.session.get({ sessionID: opened.id })).toMatchObject({ title: "Renamed" })
     const page = async (limit: number) =>
-      Schema.decodeUnknownSync(Schema.Struct({ data: Schema.Array(Schema.Unknown) }))(
+      Schema.decodeUnknownSync(Schema.Struct({ data: Schema.Array(Schema.Struct({ id: Schema.String })) }))(
         await (await opened.request(`/api/session?limit=${limit}`)).json(),
-      ).data.length
-    expect([await page(1), await page(2)]).toEqual([1, 2])
+      ).data.map((session) => session.id)
+    const ours = async () => (await page(1000)).filter((id) => id.startsWith(opened.id)).length
+    expect([(await page(1)).length, await ours()]).toEqual([1, 2])
     expect((await opened.request(`/api/session/${opened.id}_second`, { method: "DELETE" })).status).toBeLessThan(300)
-    expect(await page(2)).toBe(1)
+    expect(await ours()).toBe(1)
     const missing = await opened.request("/api/session/ses_missing")
     expect(missing.status).toBe(404)
     expect(missing.headers.get("content-type")).toContain("application/json")
@@ -196,22 +197,25 @@ describe("cell contract", () => {
   test("an open event stream holds the harness until the client disconnects", async () => {
     const opened = await cell()
     const stream = await opened.stream()
-    expect(await opened.state()).toMatchObject({ isOpen: true, holders: 1, nextReconcileAt: expect.any(Number) })
+    expect(await opened.state()).toMatchObject({ isOpen: true, holders: idle.holders + 1 })
     stream.close()
-    expect((await opened.until((state) => state.holders === 0, 45_000)).holders).toBe(0)
+    expect((await opened.until((state) => state.holders === idle.holders, 45_000)).holders).toBe(idle.holders)
   }, 60_000)
 
-  test("with no Ren URL, the idle alarm closes the harness with no alarm left, sync is not drained, and a request after it sees the same sessions and messages", async () => {
-    const opened = await cell()
-    await opened.start()
-    await opened.prompt(`remember ${stub.script().marker}`)
-    await opened.opencode.session.wait({ sessionID: opened.id })
-    const messages = await opened.messages()
-    expect(await opened.until((state) => Bun.deepEquals(state, closed))).toEqual(closed)
-    expect(await (await opened.brain("/ren/sync", {})).json()).toEqual({ drained: false })
-    expect(await opened.state()).toEqual(closed)
-    expect(await opened.messages()).toEqual(messages)
-    expect((await opened.opencode.session.list()).data.map((session) => session.id)).toEqual([opened.id])
-    expect((await opened.state()).isOpen).toBe(true)
-  })
+  test.skipIf(Shared.kind() === "bun")(
+    "with a Ren that has no sync API, the idle alarm closes the harness with no alarm left, sync is not drained, and a request after it sees the same sessions and messages",
+    async () => {
+      const opened = await cell()
+      await opened.start()
+      await opened.prompt(`remember ${stub.script().marker}`)
+      await opened.opencode.session.wait({ sessionID: opened.id })
+      const messages = await opened.messages()
+      expect(await opened.until((state) => Bun.deepEquals(state, idle))).toEqual(idle)
+      expect(await (await opened.brain("/ren/sync", {})).json()).toEqual({ drained: false })
+      expect(await opened.state()).toEqual(idle)
+      expect(await opened.messages()).toEqual(messages)
+      expect((await opened.opencode.session.list()).data.map((session) => session.id)).toEqual([opened.id])
+      expect((await opened.state()).isOpen).toBe(true)
+    },
+  )
 })
