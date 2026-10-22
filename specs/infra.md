@@ -136,7 +136,9 @@ Rules that `Infra.Spec` checks across spaces, beyond the agent rules in section 
 4. A cron, webhook or channel names an agent that is in its space, or no agent.
 5. A `from` path in `moved.yaml` does not exist in the spec, and a `to` path does.
 
-An MCP with header auth names a credential in its own `requiredCredentials` (`Mcp.Declaration`).
+An MCP with header or basic auth names credentials from its own `requiredCredentials` (`Mcp.Declaration`). A credential marked `optional` is not asked for at install.
+
+An MCP declares no tool list. Ren reads its tools live with `tools/list` after a credential is connected, and refreshes them on `notifications/tools/list_changed`. A tool is read-only or destructive by its annotations (`readOnlyHint`, `destructiveHint`), or by Composio's tags. A tool with no annotations counts as a write. Annotations are hints, so Ren trusts them only from a trusted server. Overrides are `Permission.Rule` entries in settings.
 
 All slugs use `Primitive.Slug`: lowercase letters and digits joined by single dashes, at most 64 characters. This is the Agent Skills name rule, so a skill folder name is also a valid `SKILL.md` name.
 
@@ -169,8 +171,9 @@ All slugs use `Primitive.Slug`: lowercase letters and digits joined by single da
 2. Installing a listing copies its seeds into the spec as ordinary declarations. Example: the crons of an app listing go into the `crons.yaml` of the installing space. Then `apply` reconciles them like any other declaration.
 3. A seeded cron runs on the agent it names. A cron that names no agent runs on the space's `ren` agent. Validation fails if the named agent is not in the space.
 4. Tasks are not infrastructure. Installing a listing drops its tasks. Reconciling them would reopen tasks that people closed.
-5. A factory gets into the spec as a copy of its files. The copy has no link back to the registry.
-6. "Usecase" is a browse category in the registry. It is not a kind of listing.
+5. Databases and dashboards are templates in the listing. Installing a listing tells the agent to build them. The result is live state that the agent owns. It is not in the spec.
+6. A factory gets into the spec as a copy of its files. The copy has no link back to the registry.
+7. "Usecase" is a browse category in the registry. It is not a kind of listing.
 
 ### 5.5 Drift
 
@@ -231,3 +234,6 @@ All commands are in the `ren infra` group.
 7. **`pull` and bindings.** `pull` writes the spec. Decide whether it also writes `deploy.yaml` with the live channel ids and credential names. It never writes credential values.
 8. **Installing a listing.** The command that copies a listing into a space, and what it writes.
 9. **Agents.** Visual character and voice, and the view order of agents in a space.
+10. **Runtimes.** `specs/runtime/plan.md` (PR #43) moves brains to one sandbox per space, with tools that run in the sandbox. Then a space's environment is its sandbox image, not an `EnvironmentTemplate`, and app packages become an image build. The plan also keeps `space.runtime` out of the public API, so it is not in the spec.
+11. **Secrets in a sandbox.** In a sandbox shared by a space, the agent can read the values of the credentials that the space binds.
+12. **Read-only installs.** A rule that denies every tool that is not read-only needs a permission rule that can match the live classification of a tool.

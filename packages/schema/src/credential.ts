@@ -1,6 +1,6 @@
 export * as Credential from "./credential.js"
 
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 
 export const reservedFieldNames: ReadonlyArray<string> = ["token", "accessToken", "username", "password", "basic"]
 
@@ -16,6 +16,16 @@ export const FieldName = Schema.String.check(
   }),
   Schema.makeFilter((name) => !reservedFieldNames.includes(name) || `"${name}" is reserved.`),
 ).annotate({ identifier: "Credential.FieldName" })
+
+export const Name = Schema.Union([EnvName, FieldName]).annotate({
+  identifier: "Credential.Name",
+  description: "The name of a required credential: an env name or a field name.",
+})
+
+const optional = Schema.Boolean.annotate({
+  description:
+    "An optional credential is not asked for at install. A feature that needs it fails until it is connected.",
+}).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(false)))
 
 export const Ref = Schema.NonEmptyString.annotate({
   identifier: "Credential.Ref",
@@ -34,6 +44,7 @@ export const Env = Schema.Struct({
   kind: Schema.Literal("env"),
   name: EnvName,
   description: Schema.optionalKey(Schema.String),
+  optional,
 }).annotate({ identifier: "Credential.Env" })
 
 export interface Secret extends Schema.Schema.Type<typeof Secret> {}
@@ -41,6 +52,7 @@ export const Secret = Schema.Struct({
   kind: Schema.Literal("secret"),
   name: FieldName,
   description: Schema.optionalKey(Schema.String),
+  optional,
 }).annotate({ identifier: "Credential.Secret" })
 
 export interface OAuthApp extends Schema.Schema.Type<typeof OAuthApp> {}
@@ -48,6 +60,7 @@ export const OAuthApp = Schema.Struct({
   kind: Schema.Literal("oauth_app"),
   name: Schema.NonEmptyString,
   description: Schema.optionalKey(Schema.String),
+  optional,
 }).annotate({ identifier: "Credential.OAuthApp" })
 
 export interface Text extends Schema.Schema.Type<typeof Text> {}
@@ -55,6 +68,7 @@ export const Text = Schema.Struct({
   kind: Schema.Literal("text"),
   name: FieldName,
   description: Schema.optionalKey(Schema.String),
+  optional,
   message: Schema.NonEmptyString,
   placeholder: Schema.optionalKey(Schema.String),
   when: Schema.optionalKey(When),
@@ -72,6 +86,7 @@ export const Select = Schema.Struct({
   kind: Schema.Literal("select"),
   name: FieldName,
   description: Schema.optionalKey(Schema.String),
+  optional,
   message: Schema.NonEmptyString,
   options: Schema.NonEmptyArray(Option),
   when: Schema.optionalKey(When),

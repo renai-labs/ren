@@ -94,24 +94,41 @@ describe("Infra.Spec", () => {
     expect(String(exit)).toContain('A move to "spaces/engineering/agents/qa" names a resource that does not exist.')
   })
 
-  test("rejects an MCP header that names a credential the MCP does not require", () => {
-    const exit = decode({
+  const mcp = (fields: Record<string, unknown>) =>
+    decode({
       engineering: {
         name: "Engineering",
         apps: {
-          posthog: app({
+          langfuse: app({
             mcps: {
-              posthog: {
-                name: "PostHog",
-                description: "Query insights.",
-                transport: { type: "remote", url: "https://mcp.posthog.com/mcp" },
-                auth: { type: "header", name: "Authorization", credential: "apiKey" },
+              langfuse: {
+                name: "Langfuse",
+                description: "Read traces.",
+                transport: { type: "remote", url: "https://cloud.langfuse.com/api/public/mcp" },
+                ...fields,
               },
             },
           }),
         },
       },
     })
-    expect(String(exit)).toContain('The header uses credential "apiKey", which the MCP does not require.')
+
+  test("an MCP authenticates with credentials it requires, by env name", () => {
+    const exit = mcp({
+      auth: { type: "basic", username: "LANGFUSE_PUBLIC_KEY", password: "LANGFUSE_SECRET_KEY" },
+      requiredCredentials: [
+        { kind: "env", name: "LANGFUSE_PUBLIC_KEY" },
+        { kind: "env", name: "LANGFUSE_SECRET_KEY" },
+      ],
+    })
+    expect(Exit.isSuccess(exit)).toBe(true)
+  })
+
+  test("rejects MCP auth that names a credential the MCP does not require", () => {
+    const exit = mcp({
+      auth: { type: "basic", username: "LANGFUSE_PUBLIC_KEY", password: "LANGFUSE_SECRET_KEY" },
+      requiredCredentials: [{ kind: "env", name: "LANGFUSE_PUBLIC_KEY" }],
+    })
+    expect(String(exit)).toContain('The auth uses credential "LANGFUSE_SECRET_KEY", which the MCP does not require.')
   })
 })
