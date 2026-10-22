@@ -11,6 +11,7 @@ import { defineRelationsPart, isNull, type SQL, sql } from "drizzle-orm"
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -18,6 +19,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
 } from "drizzle-orm/pg-core"
 import { agent } from "./agent.sql.js"
@@ -47,6 +49,7 @@ export const task = pgTable(
       .$type<Space.ID>()
       .notNull()
       .references(() => space.id, { onDelete: "cascade" }),
+    parent_id: text().$type<Task.ID>(),
     number: integer().notNull(),
     title: text().notNull(),
     description: text(),
@@ -76,6 +79,17 @@ export const task = pgTable(
   },
   (table) => [
     uniqueIndex(taskNumberConstraint).on(table.organization_id, table.number),
+    unique("task_id_space_id_unique").on(table.id, table.space_id),
+    // oxlint-disable-next-line ren/no-comments -- The space in the key keeps a subtask in its parent's space, and a parent's move carries its subtasks.
+    foreignKey({
+      name: "task_parent_fk",
+      columns: [table.parent_id, table.space_id],
+      foreignColumns: [table.id, table.space_id],
+    })
+      .onUpdate("cascade")
+      .onDelete("cascade"),
+    index("task_parent_id_space_id_idx").on(table.parent_id, table.space_id),
+    check("task_parent_check", sql`${table.parent_id} <> ${table.id}`),
     index("task_space_id_status_idx").on(table.space_id, table.status).where(isNull(table.archived_at)),
     index("task_agent_id_idx").on(table.agent_id).where(isNull(table.archived_at)),
     index("task_owner_id_idx").on(table.owner_id).where(isNull(table.archived_at)),

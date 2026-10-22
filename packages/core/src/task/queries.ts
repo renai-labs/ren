@@ -6,6 +6,7 @@ import type { Auth } from "@ren/schema/auth"
 import type { Space } from "@ren/schema/space"
 import { Task } from "@ren/schema/task"
 import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm"
+import { alias } from "drizzle-orm/pg-core"
 import { DateTime, Effect } from "effect"
 import type { Access } from "../access.js"
 import type { Actor } from "../actor.js"
@@ -34,12 +35,15 @@ export const membershipOf = (actor: Actor.Info) =>
     isNull(TaskPolicy.membership.archived_at),
   )
 
+const parent = alias(Database.Schema.task, "parent_task")
+
 export const select = (transaction: Database.Transaction, actor: Actor.Info) =>
   transaction
     .select({
       task: Database.Schema.task,
       prefix: Database.Schema.task_sequence.prefix,
       membershipId: TaskPolicy.membership.id,
+      parent: { id: parent.id, number: parent.number, title: parent.title },
     })
     .from(Database.Schema.task)
     .innerJoin(
@@ -47,6 +51,7 @@ export const select = (transaction: Database.Transaction, actor: Actor.Info) =>
       eq(Database.Schema.task_sequence.organization_id, Database.Schema.task.organization_id),
     )
     .leftJoin(TaskPolicy.membership, membershipOf(actor))
+    .leftJoin(parent, eq(parent.id, Database.Schema.task.parent_id))
 
 export type Row = Effect.Success<ReturnType<typeof select>>[number]
 
@@ -88,6 +93,35 @@ export const lockForWrite = (
     .where(and(where, visibleTo(access, actor)))
     .for("update", { of: Database.Schema.task })
     .pipe(Effect.flatMap(allowedOne(access, actor, action)))
+
+export const lockParent = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  access: Access.Interface,
+  actor: Actor.Info,
+  parentId: Task.ID | null | undefined,
+) {
+  if (!parentId) return
+  const row = yield* lockForWrite(
+    transaction,
+    access,
+    actor,
+    eq(Database.Schema.task.id, parentId),
+    actions.update,
+  ).pipe(
+    Effect.catchTag("Primitive.NotFound", () =>
+      Effect.fail(new Primitive.Invalid({ message: "The parent task was not found.", field: "parentId" })),
+    ),
+  )
+  if (row.task.parent_id)
+    return yield* new Primitive.Invalid({ message: "A subtask cannot have subtasks.", field: "parentId" })
+  return row
+})
+
+export const byParent = (parentId: Task.ListInput["parentId"]) => {
+  if (parentId === "none") return { where: isNull(Database.Schema.task.parent_id), order: desc }
+  if (parentId) return { where: eq(Database.Schema.task.parent_id, parentId), order: asc }
+  return { where: undefined, order: desc }
+}
 
 export const latestSessions = (transaction: Database.Transaction, taskIds: ReadonlyArray<Task.ID>) =>
   transaction
@@ -151,6 +185,17 @@ export const present = Effect.fnUntraced(function* (
     .from(Database.Schema.task_link)
     .where(inArray(Database.Schema.task_link.task_id, ids))
     .orderBy(asc(Database.Schema.task_link.created_at), asc(Database.Schema.task_link.id))
+  const subtasks = new Map(
+    (yield* transaction
+      .select({
+        parentId: Database.Schema.task.parent_id,
+        total: sql<number>`count(*) filter (where ${Database.Schema.task.status} <> 'dismissed')`.mapWith(Number),
+        done: sql<number>`count(*) filter (where ${Database.Schema.task.status} = 'done')`.mapWith(Number),
+      })
+      .from(Database.Schema.task)
+      .where(and(inArray(Database.Schema.task.parent_id, ids), isNull(Database.Schema.task.archived_at)))
+      .groupBy(Database.Schema.task.parent_id)).map((counts) => [counts.parentId, counts]),
+  )
   const labelsOf = Map.groupBy(labels, (label) => label.taskId)
   const linksOf = Map.groupBy(links, (link) => link.task_id)
   const sessions = new Map(
@@ -159,43 +204,53 @@ export const present = Effect.fnUntraced(function* (
       { id: session.id, state: stateOf(session) },
     ]),
   )
-  return rows.map((row): Task.Info => ({
-    id: row.task.id,
-    organizationId: row.task.organization_id,
-    spaceId: row.task.space_id,
-    number: row.task.number,
-    identifier: `${row.prefix}-${row.task.number}`,
-    title: row.task.title,
-    description: row.task.description,
-    status: row.task.status,
-    priority: row.task.priority,
-    humanReview: row.task.human_review,
-    humanReviewReason: row.task.human_review_reason,
-    dueAt: row.task.due_at && DateTime.fromDateUnsafe(row.task.due_at),
-    agentId: row.task.agent_id,
-    ownerId: row.task.owner_id,
-    session: sessions.get(row.task.id) ?? null,
-    labels: (labelsOf.get(row.task.id) ?? []).map((label) => ({
-      id: label.id,
-      name: label.name,
-      color: label.color,
-      isSystem: !label.organizationId,
-    })),
-    links: (linksOf.get(row.task.id) ?? []).map((link) => ({ id: link.id, kind: link.kind, url: link.url })),
-    createdBy: {
-      userId: row.task.created_by_user_id,
-      agentId: row.task.created_by_agent_id,
-      sessionId: row.task.created_by_session_id,
-    },
-    canUpdate: access.isAllowed({
-      actor,
-      action: actions.update,
-      resource: TaskPolicy.resource(row.membershipId, row.task.space_id),
-    }),
-    createdAt: DateTime.fromDateUnsafe(row.task.created_at),
-    updatedAt: DateTime.fromDateUnsafe(row.task.updated_at),
-    archivedAt: row.task.archived_at && DateTime.fromDateUnsafe(row.task.archived_at),
-  }))
+  return rows.map((row): Task.Info => {
+    const counts = subtasks.get(row.task.id)
+    return {
+      id: row.task.id,
+      organizationId: row.task.organization_id,
+      spaceId: row.task.space_id,
+      parentId: row.task.parent_id,
+      parent: row.parent && {
+        id: row.parent.id,
+        identifier: `${row.prefix}-${row.parent.number}`,
+        title: row.parent.title,
+      },
+      subtasks: counts ? { total: counts.total, done: counts.done } : null,
+      number: row.task.number,
+      identifier: `${row.prefix}-${row.task.number}`,
+      title: row.task.title,
+      description: row.task.description,
+      status: row.task.status,
+      priority: row.task.priority,
+      humanReview: row.task.human_review,
+      humanReviewReason: row.task.human_review_reason,
+      dueAt: row.task.due_at && DateTime.fromDateUnsafe(row.task.due_at),
+      agentId: row.task.agent_id,
+      ownerId: row.task.owner_id,
+      session: sessions.get(row.task.id) ?? null,
+      labels: (labelsOf.get(row.task.id) ?? []).map((label) => ({
+        id: label.id,
+        name: label.name,
+        color: label.color,
+        isSystem: !label.organizationId,
+      })),
+      links: (linksOf.get(row.task.id) ?? []).map((link) => ({ id: link.id, kind: link.kind, url: link.url })),
+      createdBy: {
+        userId: row.task.created_by_user_id,
+        agentId: row.task.created_by_agent_id,
+        sessionId: row.task.created_by_session_id,
+      },
+      canUpdate: access.isAllowed({
+        actor,
+        action: actions.update,
+        resource: TaskPolicy.resource(row.membershipId, row.task.space_id),
+      }),
+      createdAt: DateTime.fromDateUnsafe(row.task.created_at),
+      updatedAt: DateTime.fromDateUnsafe(row.task.updated_at),
+      archivedAt: row.task.archived_at && DateTime.fromDateUnsafe(row.task.archived_at),
+    }
+  })
 })
 
 export const writableSpace = Effect.fnUntraced(function* (

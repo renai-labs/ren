@@ -68,6 +68,9 @@ export const Reason = Schema.Trim.check(
   Schema.isMaxLength(maximumReasonLength, { message: `Use ${maximumReasonLength} characters or fewer.` }),
 ).annotate({ identifier: "Task.Reason" })
 
+const parentDescription =
+  "Makes the task a subtask of this task, which must be in the same space and not be a subtask itself."
+
 const Note = Schema.String.check(
   Schema.isMaxLength(maximumNoteLength, { message: `Use ${maximumNoteLength} characters or fewer.` }),
 )
@@ -92,11 +95,30 @@ export const AgentSession = Schema.Struct({
   description: "The latest session of the task’s agent on this task.",
 })
 
+export interface Parent extends Schema.Schema.Type<typeof Parent> {}
+export const Parent = Schema.Struct({
+  id: ID,
+  identifier: Schema.String,
+  title: Schema.String,
+}).annotate({ identifier: "Task.Parent" })
+
+export interface Subtasks extends Schema.Schema.Type<typeof Subtasks> {}
+export const Subtasks = Schema.Struct({
+  total: Schema.Int,
+  done: Schema.Int,
+}).annotate({
+  identifier: "Task.Subtasks",
+  description: "The task’s live subtasks: `done` of `total`. Dismissed subtasks count in neither.",
+})
+
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
   organizationId: Auth.OrganizationID,
   spaceId: Space.ID,
+  parentId: Schema.NullOr(ID),
+  parent: Schema.NullOr(Parent),
+  subtasks: Schema.NullOr(Subtasks).annotate({ description: "Null when the task has no live subtasks." }),
   number: Schema.Int,
   identifier: Schema.String,
   title: Schema.String,
@@ -134,6 +156,9 @@ export const ListInput = Schema.Struct({
     description:
       "Only tasks that link this URL. A pull request, Linear issue or Slack thread matches however its URL is written.",
   }),
+  parentId: Schema.optional(Schema.Union([ID, Schema.Literal("none")])).annotate({
+    description: "A task ID: only its subtasks, oldest first. `none`: only tasks that are not subtasks.",
+  }),
   ...Pagination.fields(50),
 }).annotate({ identifier: "Task.ListInput" })
 
@@ -153,6 +178,7 @@ export const CreateInput = Schema.Struct({
     description: "The agent that has the task. Creating never starts it.",
   }),
   ownerId: Schema.optional(Auth.UserID).annotate({ description: "The person responsible for the task." }),
+  parentId: Schema.optional(ID).annotate({ description: parentDescription }),
 }).annotate({ identifier: "Task.CreateInput" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
@@ -166,6 +192,9 @@ export const UpdateInput = Schema.Struct({
   addLinks: Schema.optional(Links),
   removeLinks: Schema.optional(Schema.Array(Schema.Union([TaskLink.ID, TaskLink.Url]))).annotate({
     description: "Links to remove, by ID or by URL.",
+  }),
+  parentId: Schema.optional(Schema.NullOr(ID)).annotate({
+    description: `${parentDescription} Null makes it a task of its own. A task that has subtasks cannot become one.`,
   }),
 }).annotate({
   identifier: "Task.UpdateInput",
@@ -181,7 +210,8 @@ export const AssignInput = Schema.Struct({
   agentId: Schema.optional(Schema.NullOr(Agent.ID)).annotate({ description: "The new agent, or null for none." }),
   ownerId: Schema.optional(Schema.NullOr(Auth.UserID)).annotate({ description: "The new owner, or null for none." }),
   spaceId: Schema.optional(Space.ID).annotate({
-    description: "Moves the task to this space. An owner who is not a member of it is cleared.",
+    description:
+      "Moves the task and its subtasks to this space. An owner who is not a member of the space is cleared, and so is a subtask’s agent that the space cannot use. A subtask moves only with its parent.",
   }),
   note: Schema.optional(Note).annotate({
     description: "The instruction for the receiving agent. The trail keeps it; the description stays.",

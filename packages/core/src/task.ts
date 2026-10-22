@@ -6,7 +6,7 @@ import { Session } from "@ren/schema/session"
 import { Task } from "@ren/schema/task"
 import type { TaskEvent } from "@ren/schema/task-event"
 import { TaskLink } from "@ren/schema/task-link"
-import { and, asc, count, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
+import { and, asc, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { Array, Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
 import { Access } from "./access.js"
@@ -154,6 +154,38 @@ const editLinks = Effect.fnUntraced(function* (
   return [{ _tag: "link", added: added.map((ref) => ref.url), removed: removed.map((link) => link.url) }]
 })
 
+const editParent = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  row: TaskQueries.Row,
+  parent: TaskQueries.Row | undefined,
+  parentId: Task.ID | null | undefined,
+): Effect.fn.Return<ReadonlyArray<TaskEvent.Data>, Primitive.Invalid | EffectDrizzleQueryError> {
+  if (Predicate.isUndefined(parentId) || parentId === row.task.parent_id) return []
+  if (parent && parent.task.space_id !== row.task.space_id)
+    return yield* new Primitive.Invalid({ message: "A subtask is in its parent’s space.", field: "parentId" })
+  if (parentId) {
+    const live = yield* transaction
+      .select({ id: Database.Schema.task.id })
+      .from(Database.Schema.task)
+      .where(and(eq(Database.Schema.task.parent_id, row.task.id), isNull(Database.Schema.task.archived_at)))
+      .limit(1)
+    if (live.length > 0)
+      return yield* new Primitive.Invalid({
+        message: "A task with subtasks cannot become a subtask.",
+        field: "parentId",
+      })
+    yield* transaction
+      .update(Database.Schema.task)
+      .set({ parent_id: null })
+      .where(eq(Database.Schema.task.parent_id, row.task.id))
+  }
+  yield* transaction
+    .update(Database.Schema.task)
+    .set({ parent_id: parentId })
+    .where(eq(Database.Schema.task.id, row.task.id))
+  return [{ _tag: "parent", from: row.task.parent_id, to: parentId }]
+})
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -281,6 +313,8 @@ export const layer = Layer.effect(
     ) {
       const spaceId = input.spaceId ?? row.task.space_id
       const moves = spaceId !== row.task.space_id
+      if (moves && row.task.parent_id)
+        return yield* new Primitive.Invalid({ message: "A subtask moves only with its parent.", field: "spaceId" })
       if (moves) yield* TaskQueries.writableSpace(transaction, access, actor, spaceId, actions.assign)
       const agentId = Predicate.isUndefined(input.agentId) ? row.task.agent_id : input.agentId
       const owner = row.task.owner_id
@@ -341,6 +375,65 @@ export const layer = Layer.effect(
               },
             ])
           }
+          if (next.spaceId !== row.task.space_id) {
+            const subtasks = yield* transaction
+              .select({
+                id: Database.Schema.task.id,
+                agentId: Database.Schema.task.agent_id,
+                ownerId: Database.Schema.task.owner_id,
+                toAgentId: Database.Schema.agent.id,
+                toOwnerId: Database.Schema.space_member.user_id,
+              })
+              .from(Database.Schema.task)
+              .leftJoin(
+                Database.Schema.agent,
+                and(
+                  eq(Database.Schema.agent.id, Database.Schema.task.agent_id),
+                  AgentQueries.isUsableIn(next.spaceId, row.task.organization_id),
+                ),
+              )
+              .leftJoin(
+                Database.Schema.space_member,
+                and(
+                  eq(Database.Schema.space_member.user_id, Database.Schema.task.owner_id),
+                  eq(Database.Schema.space_member.space_id, next.spaceId),
+                  isNull(Database.Schema.space_member.archived_at),
+                ),
+              )
+              .where(and(eq(Database.Schema.task.parent_id, id), isNull(Database.Schema.task.archived_at)))
+              .orderBy(asc(Database.Schema.task.id))
+              .for("update", { of: Database.Schema.task })
+            yield* Effect.forEach(subtasks, (subtask) =>
+              Effect.gen(function* () {
+                yield* transaction
+                  .update(Database.Schema.task)
+                  .set({
+                    agent_id: subtask.toAgentId,
+                    owner_id: subtask.toOwnerId,
+                    updated_at: sql`now()`,
+                    ...(subtask.agentId && !subtask.toAgentId && { human_review: false, human_review_reason: null }),
+                  })
+                  .where(eq(Database.Schema.task.id, subtask.id))
+                yield* TaskTrail.record(
+                  transaction,
+                  { id: subtask.id, organizationId: row.task.organization_id },
+                  actor,
+                  [
+                    {
+                      _tag: "assigned",
+                      fromAgentId: subtask.agentId,
+                      toAgentId: subtask.toAgentId,
+                      fromOwnerId: subtask.ownerId,
+                      toOwnerId: subtask.toOwnerId,
+                      fromSpaceId: row.task.space_id,
+                      toSpaceId: next.spaceId,
+                      note: null,
+                    },
+                  ],
+                )
+              }),
+            )
+          }
           return { hasAgent: Boolean(next.agentId), agentChanged: next.agentId !== row.task.agent_id }
         }),
       )
@@ -358,6 +451,7 @@ export const layer = Layer.effect(
     return Service.of({
       list: Effect.fn("Task.list")(function* (actor: Actor.Info, input: Task.ListInput) {
         const linked = input.linkedTo && TaskLink.classify(input.linkedTo)
+        const parent = TaskQueries.byParent(input.parentId)
         const where = and(
           TaskQueries.visibleTo(access, actor),
           input.spaceId ? eq(Database.Schema.task.space_id, input.spaceId) : undefined,
@@ -383,6 +477,7 @@ export const layer = Layer.effect(
                   and ${Database.Schema.task_link.key} = ${linked.key}
               )`
             : undefined,
+          parent.where,
         )
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
@@ -390,7 +485,7 @@ export const layer = Layer.effect(
               return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
             const rows = yield* TaskQueries.select(transaction, actor)
               .where(where)
-              .orderBy(desc(Database.Schema.task.created_at), desc(Database.Schema.task.number))
+              .orderBy(parent.order(Database.Schema.task.created_at), parent.order(Database.Schema.task.number))
               .limit(input.pageSize)
               .offset((input.page - 1) * input.pageSize)
             const totals = yield* transaction
@@ -435,6 +530,9 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             yield* TaskQueries.writableSpace(transaction, access, actor, input.spaceId, actions.create)
             yield* TaskQueries.checkAssignment(transaction, actor.organizationId, input.spaceId, input)
+            const parent = yield* TaskQueries.lockParent(transaction, access, actor, input.parentId)
+            if (parent && parent.task.space_id !== input.spaceId)
+              return yield* new Primitive.Invalid({ message: "A subtask is in its parent’s space.", field: "parentId" })
             const sequence = (yield* transaction
               .insert(Database.Schema.task_sequence)
               .values({
@@ -455,6 +553,7 @@ export const layer = Layer.effect(
               id: task.id,
               organization_id: actor.organizationId,
               space_id: input.spaceId,
+              parent_id: input.parentId,
               number: sequence.number,
               title: input.title,
               description: input.description,
@@ -482,8 +581,16 @@ export const layer = Layer.effect(
       }),
       update: Effect.fn("Task.update")(function* (actor: Actor.Info, id: Task.ID, input: Task.UpdateInput) {
         yield* refuseClosing(actor, input.status)
+        if (input.parentId === id)
+          return yield* new Primitive.Invalid({ message: "A task cannot be its own parent.", field: "parentId" })
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
+            // oxlint-disable-next-line ren/no-comments -- Reparents in one organization take turns, so two tasks made each other's parent cannot lock their rows in opposite orders.
+            if (input.parentId)
+              yield* transaction.execute(
+                sql`select pg_advisory_xact_lock(hashtext('task.parent'), hashtext(${actor.organizationId}))`,
+              )
+            const parent = yield* TaskQueries.lockParent(transaction, access, actor, input.parentId)
             const row = yield* TaskQueries.lockForWrite(
               transaction,
               access,
@@ -513,7 +620,8 @@ export const layer = Layer.effect(
               ? yield* setLabels(transaction, task, input.labels, { canCreate: !actor.agent })
               : []
             const links = yield* editLinks(transaction, task, input.addLinks ?? [], input.removeLinks ?? [])
-            const events = [...content, ...labels, ...links]
+            const reparented = yield* editParent(transaction, row, parent, input.parentId)
+            const events = [...content, ...labels, ...links, ...reparented]
             const fields = new Set(changed.map((change) => change.field))
             const ifChanged = <A>(field: TaskEvent.Field, value: A) => (fields.has(field) ? value : undefined)
             if (events.length > 0)
@@ -544,13 +652,21 @@ export const layer = Layer.effect(
               eq(Database.Schema.task.id, id),
               actions.archive,
             )
+            const subtasks = yield* transaction
+              .select({ id: Database.Schema.task.id })
+              .from(Database.Schema.task)
+              .where(and(eq(Database.Schema.task.parent_id, id), isNull(Database.Schema.task.archived_at)))
+              .orderBy(asc(Database.Schema.task.id))
+              .for("update")
             yield* transaction
               .update(Database.Schema.task)
               .set({ archived_at: sql`now()`, updated_at: sql`now()` })
-              .where(eq(Database.Schema.task.id, id))
-            yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
-              { _tag: "archived" },
-            ])
+              .where(inArray(Database.Schema.task.id, [id, ...subtasks.map((subtask) => subtask.id)]))
+            yield* Effect.forEach([{ id }, ...subtasks], (archived) =>
+              TaskTrail.record(transaction, { id: archived.id, organizationId: row.task.organization_id }, actor, [
+                { _tag: "archived" },
+              ]),
+            )
             return yield* reread(transaction, actor, id)
           }),
         )

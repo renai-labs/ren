@@ -320,6 +320,66 @@ describe("Task assign", () => {
       expect((yield* Effect.flip(tasks.get(carol, created.id)))._tag).toBe("Primitive.NotFound")
     }),
   )
+
+  it.live(
+    "a parent moves with its subtasks, which lose an agent or owner the new space lacks; a subtask cannot move alone",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const members = yield* SpaceMember.Service
+        const activity = yield* TaskActivity.Service
+        const o = yield* org
+        const carol = yield* Seed.actor(o.organizationId, "member")
+        yield* members.create(o.admin, { spaceId: o.factory.id, userId: carol.userId })
+        yield* members.create(o.admin, { spaceId: o.eng.id, userId: o.ada.userId })
+        const plan = yield* o.agent("plan")
+        const parent = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Tasks" })
+        const kept = yield* tasks.create(o.ada, {
+          spaceId: o.factory.id,
+          title: "Labels",
+          parentId: parent.id,
+          agentId: o.ren,
+          ownerId: o.ada.userId,
+        })
+        const cleared = yield* tasks.create(o.ada, {
+          spaceId: o.factory.id,
+          title: "Review",
+          parentId: parent.id,
+          agentId: plan,
+          ownerId: carol.userId,
+        })
+        yield* tasks.review(o.ada, cleared.id, { humanReview: true, reason: "Check it" })
+        expect((yield* Effect.flip(tasks.assign(o.ada, kept.id, { ownerId: null, spaceId: o.eng.id })))._tag).toBe(
+          "Primitive.Invalid",
+        )
+        yield* tasks.assign(o.ada, parent.id, { spaceId: o.eng.id, ownerId: null })
+        expect(yield* tasks.get(o.ada, kept.id)).toMatchObject({
+          spaceId: o.eng.id,
+          agentId: o.ren,
+          ownerId: o.ada.userId,
+        })
+        expect(yield* tasks.get(o.ada, cleared.id)).toMatchObject({
+          spaceId: o.eng.id,
+          agentId: null,
+          ownerId: null,
+          humanReview: false,
+        })
+        expect((yield* activity.list(o.ada, { taskId: cleared.id, ...page })).items.at(-1)).toMatchObject({
+          event: {
+            data: {
+              _tag: "assigned",
+              fromAgentId: plan,
+              toAgentId: null,
+              fromOwnerId: carol.userId,
+              toOwnerId: null,
+              fromSpaceId: o.factory.id,
+              toSpaceId: o.eng.id,
+            },
+          },
+        })
+        expect(TaskFixture.kinds(yield* activity.list(o.ada, { taskId: kept.id, ...page })).at(-1)).toBe("assigned")
+      }),
+  )
 })
 
 describe("Task review", () => {
