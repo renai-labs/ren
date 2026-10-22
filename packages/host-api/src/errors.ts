@@ -1,5 +1,21 @@
 import { Schema } from "effect"
 
+export class TaskNotFoundError extends Schema.TaggedError<TaskNotFoundError>()(
+  "TaskNotFoundError",
+  { message: Schema.String },
+  { httpApiStatus: 404 },
+) {}
+export class TaskConflictError extends Schema.TaggedError<TaskConflictError>()(
+  "TaskConflictError",
+  { message: Schema.String },
+  { httpApiStatus: 409 },
+) {}
+export class TaskInvalidError extends Schema.TaggedError<TaskInvalidError>()(
+  "TaskInvalidError",
+  { message: Schema.String, field: Schema.optional(Schema.String) },
+  { httpApiStatus: 400 },
+) {}
+
 export class ForbiddenError extends Schema.TaggedError<ForbiddenError>()(
   "ForbiddenError",
   { message: Schema.String },

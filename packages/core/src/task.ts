@@ -19,12 +19,16 @@ import { TaskQueries } from "./task/queries.js"
 import { TaskStart } from "./task/start.js"
 import { TaskTrail } from "./task/trail.js"
 
+export interface HandOff {
+  readonly task: Task.Info
+  readonly start: "none" | "started" | "failed"
+}
+
+type AssignError = Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid
+
 export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assign"> & {
-  readonly assign: (
-    actor: Actor.Info,
-    id: Task.ID,
-    input: Task.AssignInput,
-  ) => Effect.Effect<Task.Info, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid>
+  readonly assign: (actor: Actor.Info, id: Task.ID, input: Task.AssignInput) => Effect.Effect<Task.Info, AssignError>
+  readonly handOff: (actor: Actor.Info, id: Task.ID, input: Task.AssignInput) => Effect.Effect<HandOff, AssignError>
 }
 
 export const reviewStart: "continue" | "none" = "continue"
@@ -294,6 +298,63 @@ export const layer = Layer.effect(
         ? Effect.fail(new Primitive.Forbidden({ message: "Only a person marks a task done or dismissed." }))
         : Effect.void
 
+    const handOff = Effect.fn("Task.handOff")(function* (
+      actor: Actor.Info,
+      id: Task.ID,
+      input: Task.AssignInput,
+    ): Effect.fn.Return<HandOff, AssignError> {
+      const assigned = yield* database.transaction((transaction) =>
+        Effect.gen(function* () {
+          const row = yield* TaskQueries.lockForWrite(
+            transaction,
+            access,
+            actor,
+            eq(Database.Schema.task.id, id),
+            actions.assign,
+          )
+          const next = yield* nextAssignment(transaction, actor, row, input)
+          const changed =
+            next.spaceId !== row.task.space_id ||
+            next.agentId !== row.task.agent_id ||
+            next.ownerId !== row.task.owner_id
+          if (changed || input.note) {
+            yield* transaction
+              .update(Database.Schema.task)
+              .set({
+                space_id: next.spaceId,
+                agent_id: next.agentId,
+                owner_id: next.ownerId,
+                updated_at: sql`now()`,
+                ...(!next.agentId && { human_review: false, human_review_reason: null }),
+              })
+              .where(eq(Database.Schema.task.id, id))
+            yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
+              {
+                _tag: "assigned",
+                fromAgentId: row.task.agent_id,
+                toAgentId: next.agentId,
+                fromOwnerId: row.task.owner_id,
+                toOwnerId: next.ownerId,
+                fromSpaceId: row.task.space_id,
+                toSpaceId: next.spaceId,
+                note: input.note ?? null,
+              },
+            ])
+          }
+          return { hasAgent: Boolean(next.agentId), agentChanged: next.agentId !== row.task.agent_id }
+        }),
+      )
+      const start = input.start ?? (assigned.agentChanged ? "continue" : "none")
+      if (start === "none" || !assigned.hasAgent) return { task: yield* read(actor, id), start: "none" }
+      const started = yield* launch(actor, id, start).pipe(
+        Effect.as("started" as const),
+        Effect.catch((error) =>
+          Effect.logWarning("The task’s agent did not start", error).pipe(Effect.as("failed" as const)),
+        ),
+      )
+      return { task: yield* read(actor, id), start: started }
+    })
+
     return Service.of({
       list: Effect.fn("Task.list")(function* (actor: Actor.Info, input: Task.ListInput) {
         const linked = input.linkedTo && TaskLink.classify(input.linkedTo)
@@ -495,51 +556,9 @@ export const layer = Layer.effect(
         )
       }),
       assign: Effect.fn("Task.assign")(function* (actor: Actor.Info, id: Task.ID, input: Task.AssignInput) {
-        const assigned = yield* database.transaction((transaction) =>
-          Effect.gen(function* () {
-            const row = yield* TaskQueries.lockForWrite(
-              transaction,
-              access,
-              actor,
-              eq(Database.Schema.task.id, id),
-              actions.assign,
-            )
-            const next = yield* nextAssignment(transaction, actor, row, input)
-            const changed =
-              next.spaceId !== row.task.space_id ||
-              next.agentId !== row.task.agent_id ||
-              next.ownerId !== row.task.owner_id
-            if (changed || input.note) {
-              yield* transaction
-                .update(Database.Schema.task)
-                .set({
-                  space_id: next.spaceId,
-                  agent_id: next.agentId,
-                  owner_id: next.ownerId,
-                  updated_at: sql`now()`,
-                  ...(!next.agentId && { human_review: false, human_review_reason: null }),
-                })
-                .where(eq(Database.Schema.task.id, id))
-              yield* TaskTrail.record(transaction, { id, organizationId: row.task.organization_id }, actor, [
-                {
-                  _tag: "assigned",
-                  fromAgentId: row.task.agent_id,
-                  toAgentId: next.agentId,
-                  fromOwnerId: row.task.owner_id,
-                  toOwnerId: next.ownerId,
-                  fromSpaceId: row.task.space_id,
-                  toSpaceId: next.spaceId,
-                  note: input.note ?? null,
-                },
-              ])
-            }
-            return { hasAgent: Boolean(next.agentId), agentChanged: next.agentId !== row.task.agent_id }
-          }),
-        )
-        const start = input.start ?? (assigned.agentChanged ? "continue" : "none")
-        if (start === "none" || !assigned.hasAgent) return yield* read(actor, id)
-        return yield* launchAfterCommit(actor, id, start)
+        return (yield* handOff(actor, id, input)).task
       }),
+      handOff,
       start: Effect.fn("Task.start")(function* (actor: Actor.Info, id: Task.ID, input: Task.StartInput) {
         return yield* launch(actor, id, input.mode).pipe(
           Effect.catchTags({ BrainUnavailable: Effect.die, BrainRejectedError: Effect.die }),
