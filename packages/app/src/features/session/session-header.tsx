@@ -250,11 +250,7 @@ export function ChildHeader(props: {
   const open = (id: string) => props.onOpen(id === props.root ? undefined : Session.ID.make(id))
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
-      <IconButton
-        label={`Back to ${parent?.title ?? ""}`}
-        size="small"
-        onClick={() => open(parent?.id ?? props.root)}
-      >
+      <IconButton label={`Back to ${parent?.title ?? ""}`} size="small" onClick={() => open(parent?.id ?? props.root)}>
         <Icon glyph="ArrowLeft" />
       </IconButton>
       <Breadcrumbs.Root>

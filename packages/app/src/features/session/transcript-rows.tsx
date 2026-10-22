@@ -45,7 +45,9 @@ export function useTranscriptRows(props: {
   viewer?: string
   people?: ReadonlyMap<string, Person>
 }) {
-  const messages: ReadonlyMap<string, SessionMessage.Info> = new Map(props.messages.map((message) => [message.id, message]))
+  const messages: ReadonlyMap<string, SessionMessage.Info> = new Map(
+    props.messages.map((message) => [message.id, message]),
+  )
   const turns: TranscriptTurn.Turns = {
     turns: Projection.assistantMessagesByParent(props.messages),
     activeMessageID: props.activeMessageID,

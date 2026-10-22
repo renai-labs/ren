@@ -118,8 +118,10 @@ function SessionInteraction(props: {
   )
 }
 
-const blocked = (requests: ReturnType<typeof ChatView.useRoot>["requests"], permissions: { readonly approving: boolean }) =>
-  Boolean((permissions.approving ? undefined : requests.permission) ?? requests.form)
+const blocked = (
+  requests: ReturnType<typeof ChatView.useRoot>["requests"],
+  permissions: { readonly approving: boolean },
+) => Boolean((permissions.approving ? undefined : requests.permission) ?? requests.form)
 
 interface Find {
   readonly value: string
@@ -452,12 +454,7 @@ export function SessionChat(props: {
       }
       overlay={
         props.child ? (
-          <SessionChild
-            root={props.sessionID}
-            sessionID={props.child}
-            rootTitle={title}
-            onOpen={props.onChild}
-          />
+          <SessionChild root={props.sessionID} sessionID={props.child} rootTitle={title} onOpen={props.onChild} />
         ) : undefined
       }
     />
