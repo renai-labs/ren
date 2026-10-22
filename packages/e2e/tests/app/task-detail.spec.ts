@@ -143,3 +143,49 @@ test("a member starts the task agent and restores its session drawer from the UR
   await page.getByRole("button", { name: "Open agent session", exact: true }).click()
   await expect(page).toHaveURL(sessionURL)
 })
+
+test("a member splits a task into sub-tasks and sees them nested under it in the list", async ({ page }) => {
+  await createOrganization(page.request, { name: "Grace Hopper" })
+  const spaceResponse = await page.request.post(`${serverURL}/spaces`, {
+    headers: { origin: appOrigin },
+    data: { name: "Factory" },
+  })
+  expect(spaceResponse.ok()).toBe(true)
+  const space = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await spaceResponse.json())
+  const create = async (title: string) => {
+    const response = await page.request.post(`${serverURL}/tasks`, {
+      headers: { origin: appOrigin },
+      data: { spaceId: space.id, title },
+    })
+    expect(response.ok()).toBe(true)
+    return Schema.decodeUnknownSync(Schema.Struct({ id: Task.ID, identifier: Schema.String }))(await response.json())
+  }
+  const parent = await create("Ship sub-tasks")
+  const docs = await create("Write the docs")
+
+  await page.goto(`/app/tasks/${parent.id}`)
+  await page.getByRole("button", { name: "Add sub-task", exact: true }).click({ timeout: 30_000 })
+  await page.getByRole("textbox", { name: "Sub-task title", exact: true }).fill("Add labels")
+  await page.getByRole("button", { name: "Create sub-task", exact: true }).click()
+  const subtasks = page.getByRole("region", { name: "Sub-tasks" })
+  await expect(subtasks.getByRole("button", { name: "Add labels", exact: true })).toBeVisible()
+  await expect(subtasks.getByText("0 of 1 sub-task done", { exact: true })).toBeAttached()
+
+  await page.goto(`/app/tasks/${docs.id}`)
+  await page.getByLabel("Parent for Write the docs: No parent", { exact: true }).click({ timeout: 30_000 })
+  await page.getByRole("option", { name: `${parent.identifier} Ship sub-tasks` }).click()
+  await expect(
+    page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: parent.identifier }),
+  ).toBeVisible()
+  await expect(page.getByText("Made this a sub-task.", { exact: true })).toBeVisible()
+
+  await page.goto("/app/tasks")
+  const list = page.getByRole("region", { name: "Tasks" })
+  await expect(list.getByText("0 of 2 sub-tasks done", { exact: true })).toBeAttached({ timeout: 30_000 })
+  await expect(list.getByRole("button", { name: "Add labels", exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "Display options" }).click()
+  await page.getByRole("switch", { name: "Show sub-tasks" }).click()
+  await page.keyboard.press("Escape")
+  await expect(list.getByRole("button", { name: "Add labels", exact: true })).toHaveCount(0)
+  await expect(list.getByRole("button", { name: "Ship sub-tasks", exact: true })).toBeVisible()
+})

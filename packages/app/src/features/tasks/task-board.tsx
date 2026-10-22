@@ -1,5 +1,4 @@
 import type { TaskInfo } from "@ren/client"
-import { Badge } from "@ren/ui/badge"
 import { Board } from "@ren/ui/board"
 import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
@@ -15,6 +14,7 @@ import { useQuery } from "@tanstack/react-query"
 import { RouterContext } from "../../lib/router-context.js"
 import { DueDateControl, LabelsControl, OwnerControl, PriorityControl, StatusControl } from "./task-controls.js"
 import { AttentionTurn } from "./task-attention.js"
+import { TaskBadges } from "./task-list.js"
 import type { TaskListProps } from "./task-list.js"
 import { TaskView } from "./task-view.js"
 import { Tasks } from "./tasks.js"
@@ -137,11 +137,7 @@ function Card(props: Props & { task: TaskInfo }) {
       }
       chips={
         <>
-          {task.humanReview ? (
-            <Badge tone="warning" size="small">
-              Needs review
-            </Badge>
-          ) : null}
+          <TaskBadges task={task} />
           {shown.has("priority") ? <PriorityControl {...control} /> : null}
           {shown.has("labels") ? <LabelsControl {...control} /> : null}
           {shown.has("links")

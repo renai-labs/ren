@@ -13,7 +13,9 @@ import { Keyboard } from "../../platform/keyboard.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { TaskQueries } from "./task-queries.js"
 
-export type Patch = Partial<Pick<TaskInfo, "title" | "description" | "status" | "priority" | "dueAt" | "labels">>
+export type Patch = Partial<
+  Pick<TaskInfo, "title" | "description" | "status" | "priority" | "dueAt" | "labels" | "parentId">
+>
 export type Assignment = { readonly agentId?: string | null; readonly ownerId?: string | null }
 export type BulkOperation =
   | { readonly kind: "status"; readonly status: Task.Status }
@@ -105,6 +107,23 @@ export function useSpaceOwners(spaceId: string, options: { readonly enabled: boo
           ? [{ id: member.userId, name: member.name || member.email, image: member.image ?? undefined }]
           : [],
       ),
+  })
+}
+
+export function useParentCandidates(task: TaskInfo, options: { readonly enabled: boolean }) {
+  const context = RouterContext.useRouterContext()
+  return useQuery({
+    ...Pages.all((number) =>
+      context.api.task.list.queryOptions({
+        ...page,
+        page: number,
+        spaceId: task.spaceId,
+        parentId: "none",
+        includeDone: true,
+      }),
+    ),
+    enabled: options.enabled,
+    select: (result) => result.items.filter((candidate) => candidate.id !== task.id),
   })
 }
 

@@ -21,6 +21,7 @@ export interface View {
   readonly sort: typeof TaskSearch.Sort.Type
   readonly direction: typeof TaskSearch.Direction.Type
   readonly empty: boolean
+  readonly subtasks: boolean
   readonly properties: ReadonlyArray<TaskSearch.Property>
   readonly boardProperties: ReadonlyArray<TaskSearch.Property>
   readonly selected: ReadonlyArray<string>
@@ -37,6 +38,7 @@ export const resolve = (search: TaskSearch.SearchParams, saved: TaskSearch.Filte
   sort: search.sort ?? "created",
   direction: search.direction ?? "desc",
   empty: search.empty ?? false,
+  subtasks: search.subtasks ?? true,
   properties: search.properties ?? defaultProperties,
   boardProperties: search.boardProperties ?? defaultBoardProperties,
   selected: search.selected ?? [],
@@ -50,6 +52,7 @@ export const toSearch = (view: View): TaskSearch.SearchParams => ({
   ...(view.sort !== "created" && { sort: view.sort }),
   ...(view.direction !== "desc" && { direction: view.direction }),
   ...(view.empty && { empty: true }),
+  ...(!view.subtasks && { subtasks: false }),
   ...(!sameValues(view.properties, defaultProperties) && { properties: view.properties }),
   ...(!sameValues(view.boardProperties, defaultBoardProperties) && { boardProperties: view.boardProperties }),
   ...(view.selected.length > 0 && { selected: view.selected }),
@@ -90,6 +93,7 @@ const value = (task: TaskInfo, property: Exclude<FilterProperty, "label">) =>
 export function visible(tasks: ReadonlyArray<TaskInfo>, view: View) {
   const query = view.query.trim()
   const matches = (task: TaskInfo) =>
+    (view.subtasks || task.parentId === null) &&
     (!query ||
       Search.matches(
         [task.identifier, task.title, task.description ?? "", ...task.labels.map((label) => label.name)],
@@ -110,6 +114,32 @@ export function visible(tasks: ReadonlyArray<TaskInfo>, view: View) {
     return sign * a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
   }
   return tasks.filter(matches).toSorted(order)
+}
+
+export interface Entry {
+  readonly task: TaskInfo
+  readonly branch?: "middle" | "last"
+  readonly parent?: string
+}
+
+export function tree(tasks: ReadonlyArray<TaskInfo>): ReadonlyArray<Entry> {
+  const ids = new Set(tasks.map((task) => task.id))
+  const nested = (task: TaskInfo) => task.parentId !== null && ids.has(task.parentId)
+  const children = Map.groupBy(tasks.filter(nested), (task) => task.parentId)
+  return tasks
+    .filter((task) => !nested(task))
+    .flatMap((task) => {
+      const subtasks = children.get(task.id) ?? []
+      const head: Entry = task.parent ? { task, parent: task.parent.title } : { task }
+      return [
+        [head],
+        subtasks.map((subtask, index): Entry => ({
+          task: subtask,
+          branch: index === subtasks.length - 1 ? "last" : "middle",
+        })),
+      ]
+    })
+    .flat()
 }
 
 export interface Group {

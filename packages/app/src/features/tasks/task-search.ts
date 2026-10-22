@@ -47,6 +47,7 @@ export const SearchParams = Schema.Struct({
   sort: lenient(Sort),
   direction: lenient(Direction),
   empty: lenient(Schema.Boolean),
+  subtasks: lenient(Schema.Boolean),
   properties: lenient(Schema.Array(Schema.Literals(properties))),
   boardProperties: lenient(Schema.Array(Schema.Literals(properties))),
   selected: lenient(Schema.Array(Schema.String)),

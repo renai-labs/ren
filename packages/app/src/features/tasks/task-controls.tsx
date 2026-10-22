@@ -379,6 +379,36 @@ export function OwnerControl(props: ControlProps & { owner: Tasks.Person | undef
   )
 }
 
+export function ParentControl(props: ControlProps & { task: TaskInfo }) {
+  const [open, setOpen] = useState(false)
+  const candidates = Tasks.useParentCandidates(props.task, { enabled: open })
+  const glyph = <Icon glyph="Subtask" tone="secondary" />
+  return (
+    <Picker
+      presentation={props.presentation}
+      property="Parent"
+      heading="Set parent task"
+      header="A sub-task stays in its parent’s space."
+      empty="No parent"
+      none="No other tasks in this space."
+      noneIcon={glyph}
+      value={props.task.parentId}
+      current={props.task.parent ? { name: `Sub-task of ${props.task.parent.title}`, glyph } : undefined}
+      subject={subject(props.task)}
+      disabled={props.disabled === true || !props.onChange}
+      state={queryStates[candidates.status]}
+      options={(candidates.data ?? []).map((candidate) => ({
+        id: candidate.id,
+        name: `${candidate.identifier} ${candidate.title}`,
+        icon: <TaskStatusCircle status={candidate.status} />,
+      }))}
+      open={open}
+      onOpenChange={setOpen}
+      onPick={(parentId) => props.onChange?.({ parentId })}
+    />
+  )
+}
+
 export function DueDateControl(props: ControlProps) {
   return (
     <TaskDueDate
