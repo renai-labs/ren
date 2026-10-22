@@ -45,6 +45,7 @@ export function normalizeTransport(
 ) {
   if (SchemaShape.isStreamSchema(schema)) return { schema, effectPortable: true } as const
   if (!Portable.metadataPortable(schema.ast, new Set())) {
+    if (source !== "success" && source !== "error") return { schema, effectPortable: false } as const
     throw new Errors.GenerationError({ reason: `Unportable schema: ${operation}.${source}` })
   }
   const decoded = Schema.toType(schema)

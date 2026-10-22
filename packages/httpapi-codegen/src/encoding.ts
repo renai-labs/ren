@@ -4,7 +4,7 @@ import { SchemaAST, SchemaRepresentation } from "effect"
 
 const encodings = new WeakMap<SchemaAST.AST, string>()
 
-export function representationEncoding(ast: SchemaAST.AST) {
+function representationEncoding(ast: SchemaAST.AST) {
   const cached = encodings.get(ast)
   if (cached !== undefined) return cached
   const encoded = JSON.stringify(SchemaRepresentation.toJson(SchemaRepresentation.toRepresentation(ast)))

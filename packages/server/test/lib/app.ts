@@ -82,6 +82,21 @@ export const signUp = (
   baseURL?: string,
 ) => app.handler(authRequest("/sign-up/email", { email, password: "correct horse battery staple", name }, "", baseURL))
 
+export const call = (
+  app: { readonly handler: (request: Request) => Promise<Response> },
+  cookie: string,
+  method: string,
+  path: string,
+  body?: unknown,
+) =>
+  app.handler(
+    new Request(`http://localhost:4000${path}`, {
+      method,
+      headers: { cookie, "content-type": "application/json" },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    }),
+  )
+
 export const sessionCookie = (response: Response) =>
   response.headers
     .getSetCookie()

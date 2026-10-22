@@ -133,20 +133,20 @@ export const action = <
   const Plural extends string,
   ID extends Schema.Top,
   const Action extends string,
-  Input extends Schema.Top,
-  Result extends Schema.Top,
+  Actions extends { readonly [Key in Action]: { readonly input: Schema.Top; readonly result: Schema.Top } },
 >(
-  definition: Identified<Name, Plural, ID> & {
-    readonly actions: { readonly [Key in Action]: { readonly input: Input; readonly result: Result } }
-  },
+  definition: Identified<Name, Plural, ID> & { readonly actions: Actions },
   action: Action,
+  options?: { readonly invalid: true },
 ) => {
   const identifier = Primitive.action(definition, action)
+  const input: Actions[Action]["input"] = definition.actions[action].input
+  const result: Actions[Action]["result"] = definition.actions[action].result
   return HttpApiEndpoint.post(identifier, `/${definition.plural}/:id/${action}`, {
     params: { id: definition.id },
-    payload: definition.actions[action].input,
-    success: definition.actions[action].result,
-    error: [NotFoundError, ForbiddenError, ConflictError],
+    payload: input,
+    success: result,
+    error: [NotFoundError, ForbiddenError, ConflictError, ...(options?.invalid ? [InvalidRequestError] : [])],
   }).annotateMerge(
     OpenApi.annotations({
       identifier,
