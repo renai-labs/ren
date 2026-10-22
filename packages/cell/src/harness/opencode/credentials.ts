@@ -17,12 +17,14 @@ export const replaces = (stored: Credential.Value, next: Credential.Value) => {
   return !same(stored, next)
 }
 
+export const idOf = (owner: string, integrationID: string) => Credential.ID.make(`cred_ren_${owner}_${integrationID}`)
+
 export const sync = Effect.fn("Credentials.sync")(function* (
   store: Credential.Interface,
   owner: string,
   entries: ReadonlyArray<Entry>,
 ) {
-  const prefix = `cred_ren_${owner}_`
+  const prefix = idOf(owner, "")
   const wanted = new Set(entries.map((entry) => entry.integrationID))
   const stored = new Map(
     (yield* store.all())

@@ -166,6 +166,7 @@ export const make = (
   endpoints: Ref.Ref<ReadonlyArray<Models.Endpoint>>,
   locations: Ref.Ref<ReadonlyArray<LocationModels>>,
   synced: Effect.Effect<void>,
+  renew: (endpointId: string) => Effect.Effect<boolean>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
@@ -355,6 +356,13 @@ export const make = (
             Ref.update(shared.instances, (all) => new Map([...all].filter((entry) => entry.at(1) !== instance))),
           )
         }
+        yield* context.session.hook("retry", (event) =>
+          Effect.gen(function* () {
+            if (event.error.status !== 401 || event.attempt !== 2) return
+            if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
+            if (yield* renew(event.model.providerID)) event.decision = { retry: true, delay: 0 }
+          }),
+        )
         const catalog = { waiting: false }
         const install = Ref.get(endpoints).pipe(
           Effect.flatMap((latest) => Ref.set(models, latest)),
