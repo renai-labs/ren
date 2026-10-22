@@ -4,7 +4,7 @@ import { BunCrypto } from "@effect/platform-bun"
 import { TestEnvironment } from "@ren/executor/testing"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, Effect, Layer, Schedule, Schema } from "effect"
+import { ConfigProvider, type Duration, Effect, Layer, Schedule, Schema } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -56,13 +56,21 @@ interface StackOptions<E, R> {
   readonly config: Record<string, string>
   readonly models: Layer.Layer<Models.Service>
   readonly environments: Layer.Layer<Environments.Service, E, R>
+  readonly lostEvery?: Duration.Input
 }
 
 // oxlint-disable-next-line ren/no-comments -- Each brain is a real Bun brain process on this machine (LocalSandbox), under root. Brains reach Ren on REN_URL, where serve answers.
 export const stack = <E, R>(options: StackOptions<E, R>) =>
   BrainHost.layerSandbox.pipe(
     Layer.provideMerge(BrainLifecycle.layer),
-    Layer.provideMerge(LocalSandbox.layer({ entry, executor, root: options.root })),
+    Layer.provideMerge(
+      LocalSandbox.layer({
+        entry,
+        executor,
+        root: options.root,
+        ...(options.lostEvery && { lostEvery: options.lostEvery }),
+      }),
+    ),
     Layer.provide(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
     Layer.provideMerge(BrainClient.layer),
     Layer.provide(Settings.layer),

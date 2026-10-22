@@ -1,7 +1,7 @@
 export * as LocalSandbox from "./local.js"
 
 import { Brain } from "@ren/schema/brain"
-import { Effect, FiberMap, Layer, Option, Schema } from "effect"
+import { type Duration, Effect, FiberMap, Layer, Option, Schema, Stream } from "effect"
 import { spawn } from "node:child_process"
 import { mkdir, readdir, rm } from "node:fs/promises"
 import { createServer } from "node:net"
@@ -44,7 +44,12 @@ const freePort = Effect.callback<number, SandboxProvider.Failed>((resume) => {
 
 const urlOf = (binding: Binding) => `http://127.0.0.1:${binding.port}`
 
-export const layer = (options: { readonly entry: string; readonly executor: string; readonly root: string }) =>
+export const layer = (options: {
+  readonly entry: string
+  readonly executor: string
+  readonly root: string
+  readonly lostEvery?: Duration.Input
+}) =>
   Layer.effect(
     SandboxProvider.Service,
     Effect.gen(function* () {
@@ -157,6 +162,21 @@ export const layer = (options: { readonly entry: string; readonly executor: stri
           const binding = yield* read(raw)
           return { url: `http://127.0.0.1:${binding.handPort}`, workspace: join(binding.home, "workspace") }
         }),
+        lost: Stream.tick(options.lostEvery ?? "2 seconds").pipe(
+          Stream.mapEffect(() =>
+            Effect.gen(function* () {
+              const names = yield* Effect.promise(() => readdir(options.root).catch(() => []))
+              const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))
+              const bindings = found.flatMap((binding) => (Option.isSome(binding) ? [binding.value] : []))
+              const dead = yield* Effect.filter(bindings, (binding) => Effect.map(isAlive(binding.pid), (alive) => !alive))
+              return dead.map((binding): SandboxProvider.Lost => ({
+                brainId: binding.brainId,
+                generation: binding.generation,
+              }))
+            }),
+          ),
+          Stream.flatMap(Stream.fromIterable),
+        ),
         list: Effect.gen(function* () {
           const names = yield* Effect.promise(() => readdir(options.root).catch(() => []))
           const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))

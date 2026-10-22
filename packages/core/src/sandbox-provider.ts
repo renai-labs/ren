@@ -2,7 +2,7 @@ export * as SandboxProvider from "./sandbox-provider.js"
 
 import type { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
-import { Context, type Duration, type Effect, Schema } from "effect"
+import { Context, type Duration, type Effect, Schema, type Stream } from "effect"
 
 export class Gone extends Schema.TaggedError<Gone>()("SandboxProvider.Gone", { message: Schema.String }) {}
 
@@ -25,6 +25,11 @@ export interface Hand {
   readonly workspace: Environment.Directory
 }
 
+export interface Lost {
+  readonly brainId: Brain.ID
+  readonly generation: number
+}
+
 export interface Listed {
   readonly binding: Schema.Json
   readonly brainId: Brain.ID
@@ -43,6 +48,7 @@ export interface Interface {
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
   readonly status: (binding: Schema.Json) => Effect.Effect<Status, Failed>
   readonly hand: (binding: Schema.Json) => Effect.Effect<Hand, Failed>
+  readonly lost: Stream.Stream<Lost>
   readonly list: Effect.Effect<ReadonlyArray<Listed>, Failed>
 }
 
