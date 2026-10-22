@@ -50,6 +50,12 @@ export function ApplicationSidebar(props: { onSearch: () => void; chats: ReactNo
           label="Spaces"
           render={<Link to="/spaces" />}
         />
+        <ApplicationShell.NavigationItem
+          current={pathname.startsWith("/tasks")}
+          icon={<Icon glyph="Checklist" />}
+          label="Tasks"
+          render={<Link to="/tasks" />}
+        />
       </ApplicationShell.NavigationSection>
       <ApplicationShell.NavigationSection
         title="Chats"
