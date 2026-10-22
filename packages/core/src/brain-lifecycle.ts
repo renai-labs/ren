@@ -5,8 +5,8 @@ import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
-import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm"
-import { Clock, Context, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
+import { and, eq, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
+import { Clock, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
@@ -30,9 +30,15 @@ export interface Interface {
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<SandboxProvider.Hand>>
   readonly check: (brainId: Brain.ID) => Effect.Effect<void>
+  readonly cleanup: Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainLifecycle") {}
+
+const CleanupRun = DurableRunner.make("BrainCleanup", {
+  payload: { day: Schema.String },
+  idempotencyKey: (payload) => `cleanup:${payload.day}`,
+})
 
 const BrainRun = DurableRunner.make("BrainRun", {
   payload: { brainId: Brain.ID, epoch: Schema.Int },
@@ -267,6 +273,104 @@ export const layer = Layer.effect(
 
     yield* provider.lost.pipe(Stream.runForEach(lose), Effect.forkScoped)
 
+    const check = Effect.fn("BrainLifecycle.check")(function* (brainId: Brain.ID) {
+      const row = yield* read(brainId)
+      if (!row.binding) return
+      const status = yield* provider
+        .status(row.binding)
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("The sandbox status is unknown", error).pipe(Effect.as("running" as const)),
+          ),
+        )
+      if (status === "gone") yield* lose({ brainId, generation: row.generation })
+    })
+
+    const rest = Effect.fnUntraced(function* (row: Pick<Row, "id" | "generation" | "binding">) {
+      if (!row.binding) return
+      yield* provider.destroy(row.binding)
+      yield* update(row.id, {
+        generation: row.generation + 1,
+        binding: null,
+        url: null,
+        keep_alive_until: null,
+        phase: "creating",
+      })
+    })
+
+    const cleanup = Effect.gen(function* () {
+      const chats = Database.Schema.agent_session
+      const resting = yield* database.db
+        .select({ id: brains.id, generation: brains.generation, binding: brains.binding })
+        .from(brains)
+        .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, brains.space_id))
+        .where(
+          and(
+            isNotNull(brains.binding),
+            or(
+              isNotNull(Database.Schema.space.archived_at),
+              notExists(
+                database.db
+                  .select({ id: chats.id })
+                  .from(chats)
+                  .where(and(eq(chats.brain_id, brains.id), isNull(chats.archived_at))),
+              ),
+            ),
+          ),
+        )
+        .pipe(Effect.orDie)
+      yield* Effect.forEach(
+        resting,
+        (row) => rest(row).pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of brain ${row.id} failed`, error))),
+        { discard: true },
+      )
+      const listed = yield* provider.list.pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("Cleanup could not list sandboxes", error).pipe(
+            Effect.as<ReadonlyArray<SandboxProvider.Listed>>([]),
+          ),
+        ),
+      )
+      const known = new Map(
+        (yield* database.db
+          .select({ id: brains.id, generation: brains.generation })
+          .from(brains)
+          .where(
+            inArray(
+              brains.id,
+              listed.map((each) => each.brainId),
+            ),
+          )
+          .pipe(Effect.orDie)).map((each) => [each.id, each.generation]),
+      )
+      yield* Effect.forEach(
+        listed.filter((each) => known.get(each.brainId) !== each.generation),
+        (each) =>
+          provider
+            .destroy(each.binding)
+            .pipe(Effect.catch((error) => Effect.logWarning(`Cleanup of a sandbox of ${each.brainId} failed`, error))),
+        { discard: true },
+      )
+      const busy = yield* database.db
+        .selectDistinct({ brainId: chats.brain_id })
+        .from(chats)
+        .innerJoin(Database.Schema.opencode_session, eq(Database.Schema.opencode_session.session_id, chats.id))
+        .where(isNotNull(Database.Schema.opencode_session.time_suspended))
+        .pipe(Effect.orDie)
+      yield* Effect.forEach(busy, (each) => check(each.brainId), { discard: true })
+    }).pipe(Effect.withSpan("BrainLifecycle.cleanup"))
+
+    yield* DurableRunner.register(CleanupRun, (payload) => DurableRunner.supervise(`cleanup:${payload.day}`, cleanup))
+
+    yield* Effect.gen(function* () {
+      const day = DateTime.formatIsoDateUtc(yield* DateTime.now)
+      yield* DurableRunner.ensure(CleanupRun, { day })
+    }).pipe(
+      Effect.repeat(Schedule.spaced("1 hour")),
+      Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      Effect.forkScoped,
+    )
+
     const settle = Effect.fnUntraced(function* (row: Row) {
       const at = yield* now
       if (row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()) return true
@@ -398,18 +502,8 @@ export const layer = Layer.effect(
         if (moving)
           yield* keepAlive(row, timing.busy).pipe(Effect.catch((error) => Effect.logWarning("keepAlive failed", error)))
       }),
-      check: Effect.fn("BrainLifecycle.check")(function* (brainId: Brain.ID) {
-        const row = yield* read(brainId)
-        if (!row.binding) return
-        const status = yield* provider
-          .status(row.binding)
-          .pipe(
-            Effect.catch((error) =>
-              Effect.logWarning("The sandbox status is unknown", error).pipe(Effect.as("running" as const)),
-            ),
-          )
-        if (status === "gone") yield* lose({ brainId, generation: row.generation })
-      }),
+      cleanup,
+      check,
       hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {
         const row = yield* read(brainId)
         if (!row.binding) return Option.none()
