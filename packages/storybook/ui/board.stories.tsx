@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { Board } from "@ren/ui/board"
+import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
 import { IconButton } from "@ren/ui/icon-button"
 import { TaskLabel } from "@ren/ui/task-label"
@@ -8,6 +9,7 @@ import { TaskPriorityIcon } from "@ren/ui/task-priority-icon"
 import { TaskStatusCircle } from "@ren/ui/task-status-circle"
 import { TaskTurn } from "@ren/ui/task-turn"
 import { Text } from "@ren/ui/text"
+import { useState } from "react"
 
 const meta = {
   component: Board.Card,
@@ -53,6 +55,73 @@ const actions = (
 )
 
 export const Card: Story = {}
+export const WithoutTurn: Story = { args: { turn: undefined } }
+export const Populated: Story = {
+  args: {
+    turn: undefined,
+    chips,
+    corner: <Icon glyph="User" tone="secondary" label="Owner Shrey" />,
+    footer: <span>Created Oct 20</span>,
+    actions,
+    pinnedActions: true,
+    title: (
+      <Button appearance="text" wrapping="normal">
+        Add single sign-on for enterprise workspaces
+      </Button>
+    ),
+  },
+}
+export const PopulatedColumns: Story = {
+  ...Populated,
+  decorators: [
+    (Story) => (
+      <div className="flex h-120 w-full">
+        <Board.Root label="Task board">
+          <Board.Column
+            label="Plan"
+            header={
+              <Text purpose="label" element="h2">
+                Plan
+              </Text>
+            }
+          >
+            <Story />
+          </Board.Column>
+          <Board.Column
+            label="Build"
+            header={
+              <Text purpose="label" element="h2">
+                Build
+              </Text>
+            }
+          />
+        </Board.Root>
+      </div>
+    ),
+  ],
+}
+export const Navigation: Story = {
+  render: function Render(args) {
+    const [opened, setOpened] = useState(false)
+    const [updated, setUpdated] = useState(false)
+    return (
+      <>
+        <Board.Card
+          {...args}
+          onOpen={() => setOpened(true)}
+          title={
+            <Button appearance="text" onClick={() => setOpened(true)}>
+              Plan the migration
+            </Button>
+          }
+          actions={<Button onClick={() => setUpdated(true)}>Update task</Button>}
+        />
+        <output>{opened ? "Opened task" : "Task board"}</output>
+        {updated ? <output>Updated task</output> : null}
+      </>
+    )
+  },
+}
 export const Chips: Story = { args: { chips } }
 export const NeedsReview: Story = {
   args: { turn: <TaskTurn state="needs_you" name="Shrey" reason="Ready to merge. QA passed on staging." /> },

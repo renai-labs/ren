@@ -8,6 +8,7 @@ import { Menu } from "@ren/ui/menu"
 import { Popover } from "@ren/ui/popover"
 import { SearchField } from "@ren/ui/search-field"
 import { Select } from "@ren/ui/select"
+import { SegmentedControl } from "@ren/ui/segmented-control"
 import { Separator } from "@ren/ui/separator"
 import { StatusDot } from "@ren/ui/status-dot"
 import { Switch } from "@ren/ui/switch"
@@ -171,15 +172,33 @@ function DisplayPopover(props: ViewProps) {
       />
       <Popover.Content alignment="end" padding="large" label="Task display">
         <div className="flex flex-col gap-4">
-          <DisplaySelect
-            label="Group by"
-            value={props.view.group}
+          <SegmentedControl
+            label="Task layout"
+            width="full"
+            size="small"
+            value={props.view.layout}
+            onValueChange={(layout) => props.onChange({ ...props.view, layout })}
             options={[
-              { value: "agent", label: "Agent" },
-              { value: "status", label: "Status" },
+              { value: "list", label: "List" },
+              { value: "board", label: "Board" },
             ]}
-            onChange={(group) => props.onChange({ ...props.view, group })}
           />
+          {props.view.layout === "board" ? (
+            <div className="flex items-center justify-between gap-2">
+              <Text purpose="body">Group by</Text>
+              <Text purpose="body">Agent (fixed)</Text>
+            </div>
+          ) : (
+            <DisplaySelect
+              label="Group by"
+              value={props.view.group}
+              options={[
+                { value: "agent", label: "Agent" },
+                { value: "status", label: "Status" },
+              ]}
+              onChange={(group) => props.onChange({ ...props.view, group })}
+            />
+          )}
           <DisplaySelect
             label="Order by"
             value={props.view.sort}
@@ -198,16 +217,18 @@ function DisplayPopover(props: ViewProps) {
             ]}
             onChange={(direction) => props.onChange({ ...props.view, direction })}
           />
-          <div className="flex items-center justify-between gap-2">
-            <Text purpose="body" element="label" htmlFor={switchId}>
-              Show empty groups
-            </Text>
-            <Switch
-              id={switchId}
-              checked={props.view.empty}
-              onCheckedChange={(empty) => props.onChange({ ...props.view, empty })}
-            />
-          </div>
+          {props.view.layout === "list" ? (
+            <div className="flex items-center justify-between gap-2">
+              <Text purpose="body" element="label" htmlFor={switchId}>
+                Show empty groups
+              </Text>
+              <Switch
+                id={switchId}
+                checked={props.view.empty}
+                onCheckedChange={(empty) => props.onChange({ ...props.view, empty })}
+              />
+            </div>
+          ) : null}
           <PropertyToggles view={props.view} onChange={props.onChange} />
         </div>
       </Popover.Content>
@@ -240,22 +261,23 @@ function DisplaySelect<T extends string>(props: {
 }
 
 function PropertyToggles(props: ViewProps) {
+  const key = props.view.layout === "board" ? "boardProperties" : "properties"
   return (
     <div
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a fieldset would add a border and a form context the toggles do not use
       role="group"
-      aria-label="List properties"
+      aria-label={props.view.layout === "board" ? "Board properties" : "List properties"}
       className="flex flex-col gap-3"
     >
       <div className="flex items-center gap-2">
-        <Text purpose="body">List properties</Text>
+        <Text purpose="body">{props.view.layout === "board" ? "Board properties" : "List properties"}</Text>
         <span className="flex flex-1 items-center">
           <Separator />
         </span>
       </div>
       <div className="flex flex-wrap gap-1">
         {TaskSearch.properties.map((property) => {
-          const shown = props.view.properties.includes(property)
+          const shown = props.view[key].includes(property)
           return (
             <Button
               key={property}
@@ -266,9 +288,7 @@ function PropertyToggles(props: ViewProps) {
               onClick={() =>
                 props.onChange({
                   ...props.view,
-                  properties: shown
-                    ? props.view.properties.filter((value) => value !== property)
-                    : [...props.view.properties, property],
+                  [key]: shown ? props.view[key].filter((value) => value !== property) : [...props.view[key], property],
                 })
               }
             >

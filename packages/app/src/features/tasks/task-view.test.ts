@@ -30,6 +30,28 @@ const task = (fields: Partial<TaskInfo>): TaskInfo => ({
 })
 
 const names = { agent: (id: string) => ({ agt_plan: "Plan", agt_build: "Build" })[id], owner: () => "Shrey" }
+test("the board keeps factory columns, then only other agents with visible tasks in its space", () => {
+  const done = task({ id: "done", agentId: "build", status: "done" })
+  const rows = [
+    done,
+    task({ agentId: "ren" }),
+    task({ agentId: "archived" }),
+    task({ spaceId: "other", agentId: "foreign" }),
+  ]
+  const groups = TaskView.boardGroups(
+    { id: "spc", agentOrder: ["plan", "build"] },
+    [
+      { id: "plan", name: "Plan" },
+      { id: "build", name: "Build" },
+      { id: "ren", name: "ren" },
+      { id: "empty", name: "Empty" },
+    ],
+    rows,
+  )
+  expect(groups.map((group) => group.id)).toEqual(["none", "plan", "build", "archived", "ren"])
+  expect(groups.find((group) => group.id === "build")?.tasks).toEqual([done])
+  expect(groups.find((group) => group.id === "archived")?.name).toBe("Archived agent")
+})
 const session = (state: "working" | "idle" | "failed") => ({ id: "ses_1", state })
 
 const cases: ReadonlyArray<[string, TaskInfo, TaskTurnProps]> = [

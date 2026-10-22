@@ -16,7 +16,7 @@ import { TaskSearch } from "./task-search.js"
 import { TaskView } from "./task-view.js"
 import type { Tasks } from "./tasks.js"
 
-type TaskListProps = {
+export type TaskListProps = {
   view: TaskView.View
   groups: ReadonlyArray<TaskView.Group>
   catalog: ReturnType<typeof Tasks.useCatalog>
