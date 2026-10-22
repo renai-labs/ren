@@ -8,6 +8,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 | Write Effect code                       | The `effect` skill.                                                          |
 | Write React or interface code           | The `react` and `interface` skills.                                          |
 | Run, debug or verify Ren                | The `ren-dev` skill.                                                         |
+| Review code or prepare commits          | The `ren-dev` skill (scope, review checkpoints and test selection).          |
 | Change design tokens                    | The `sync-with-paper` skill.                                                 |
 | Change lint rules or `oxlint.config.ts` | `script/AGENTS.md`.                                                          |
 | Change Turborepo config                 | `docs/` in the installed `turbo` package. Its behaviour differs from memory. |
