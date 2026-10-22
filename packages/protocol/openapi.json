@@ -3160,6 +3160,30 @@
             "required": false
           },
           {
+            "name": "parentId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Task.ID"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["none"]
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A task ID: only its subtasks, oldest first. `none`: only tasks that are not subtasks."
+            },
+            "required": false
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -6386,7 +6410,7 @@
                 "type": "null"
               }
             ],
-            "description": "Moves the task to this space. An owner who is not a member of it is cleared."
+            "description": "Moves the task and its subtasks to this space. An owner who is not a member of the space is cleared, and so is a subtask’s agent that the space cannot use. A subtask moves only with its parent."
           },
           "note": {
             "anyOf": [
@@ -6513,6 +6537,17 @@
               }
             ],
             "description": "The person responsible for the task."
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Makes the task a subtask of this task, which must be in the same space and not be a subtask itself."
           }
         },
         "required": ["spaceId", "title"],
@@ -6537,6 +6572,37 @@
           },
           "spaceId": {
             "$ref": "#/components/schemas/Space.ID"
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.Parent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subtasks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.Subtasks"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the task has no live subtasks."
           },
           "number": {
             "type": "integer"
@@ -6662,6 +6728,9 @@
           "id",
           "organizationId",
           "spaceId",
+          "parentId",
+          "parent",
+          "subtasks",
           "number",
           "identifier",
           "title",
@@ -6707,6 +6776,22 @@
           }
         },
         "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Task.Parent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Task.ID"
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "identifier", "title"],
         "additionalProperties": false
       },
       "Task.Priority": {
@@ -6795,6 +6880,20 @@
         "type": "string",
         "enum": ["todo", "in_progress", "done", "dismissed"],
         "description": "The state of the whole task, never of one agent. `todo`: no one started it. `in_progress`: the work started and is not finished; a handoff keeps it. `done`: finished. `dismissed`: no one will do it; it stays readable so that it is not suggested again. Only a person sets `done` or `dismissed`."
+      },
+      "Task.Subtasks": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "done": {
+            "type": "integer"
+          }
+        },
+        "required": ["total", "done"],
+        "additionalProperties": false,
+        "description": "The task’s live subtasks: `done` of `total`. Dismissed subtasks count in neither."
       },
       "Task.TitleEncoded": {
         "type": "string"
@@ -6922,6 +7021,24 @@
               }
             ],
             "description": "Links to remove, by ID or by URL."
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Task.ID"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Makes the task a subtask of this task, which must be in the same space and not be a subtask itself. Null makes it a task of its own. A task that has subtasks cannot become one."
           }
         },
         "additionalProperties": false,
@@ -7195,6 +7312,9 @@
             "$ref": "#/components/schemas/TaskEvent.LinksChanged"
           },
           {
+            "$ref": "#/components/schemas/TaskEvent.ParentChanged"
+          },
+          {
             "$ref": "#/components/schemas/TaskEvent.Archived"
           }
         ]
@@ -7310,6 +7430,37 @@
         "required": ["_tag", "added", "removed"],
         "additionalProperties": false,
         "description": "Link URLs."
+      },
+      "TaskEvent.ParentChanged": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["parent"]
+          },
+          "from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["_tag", "from", "to"],
+        "additionalProperties": false
       },
       "TaskEvent.ReviewRequested": {
         "type": "object",

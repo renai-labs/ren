@@ -2,7 +2,8 @@ import { describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import type { Task as TaskSchema } from "@ren/schema/task"
 import { eq } from "drizzle-orm"
-import { Effect } from "effect"
+import { Deferred, Effect, Fiber } from "effect"
+import { SqlClient } from "effect/sql"
 import { Label } from "../src/label.js"
 import { SpaceMember } from "../src/space/member.js"
 import { Task } from "../src/task.js"
@@ -271,6 +272,167 @@ describe("Task", () => {
             ._tag,
         ).toBe("Primitive.Invalid")
       }),
+  )
+})
+
+describe("Subtasks", () => {
+  it.live("two tasks made each other's parent at the same moment: one wins and the other is refused", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const sql = yield* SqlClient.SqlClient
+      const o = yield* org
+      const a = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "A" })
+      const b = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "B" })
+      const locked = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      const holder = yield* Effect.forkChild(
+        sql.withTransaction(
+          Effect.gen(function* () {
+            yield* sql`select id from task where id = ${b.id} for update`
+            yield* Deferred.succeed(locked, undefined)
+            yield* Deferred.await(release)
+          }),
+        ),
+      )
+      yield* Deferred.await(locked)
+      const writes = yield* Effect.forkChild(
+        Effect.all(
+          [
+            Effect.result(tasks.update(o.ada, a.id, { parentId: b.id })),
+            Effect.result(tasks.update(o.ada, b.id, { parentId: a.id })),
+          ],
+          { concurrency: "unbounded" },
+        ),
+      )
+      yield* sql<{ readonly waiting: number }>`select count(*)::int as waiting from pg_stat_activity
+        where datname = current_database() and wait_event_type in ('Lock', 'Advisory')`.pipe(
+        Effect.repeat({ until: (rows) => (rows.at(0)?.waiting ?? 0) >= 2 || writes.pollUnsafe() !== undefined }),
+        Effect.ensuring(Deferred.succeed(release, undefined)),
+      )
+      yield* Fiber.join(holder)
+      const results = yield* Fiber.join(writes)
+      expect(results.map((result) => (result._tag === "Success" ? "Success" : result.failure._tag)).toSorted()).toEqual([
+        "Primitive.Invalid",
+        "Success",
+      ])
+    }),
+  )
+
+  it.live("a subtask names its parent, and the parent counts its live subtasks without the dismissed ones", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const o = yield* org
+      const parent = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Tasks" })
+      const labels = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Labels", parentId: parent.id })
+      yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Review", parentId: parent.id, status: "done" })
+      yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Drop", parentId: parent.id, status: "dismissed" })
+      const archived = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Gone", parentId: parent.id })
+      yield* tasks.archive(o.ada, archived.id)
+      expect(labels).toMatchObject({
+        parentId: parent.id,
+        parent: { id: parent.id, identifier: parent.identifier, title: "Tasks" },
+        subtasks: null,
+      })
+      expect(yield* tasks.get(o.ada, parent.id)).toMatchObject({
+        parentId: null,
+        parent: null,
+        subtasks: { total: 2, done: 1 },
+      })
+    }),
+  )
+
+  it.live(
+    "a parent is a task of the same space that is not a subtask, and a task with subtasks cannot become one",
+    () =>
+      Effect.gen(function* () {
+        const tasks = yield* Task.Service
+        const o = yield* org
+        const parent = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Tasks" })
+        const child = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Labels", parentId: parent.id })
+        const loose = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Review" })
+        const elsewhere = yield* tasks.create(o.admin, { spaceId: o.eng.id, title: "Eng" })
+        const refusals = yield* Effect.all(
+          [
+            tasks.create(o.admin, { spaceId: o.eng.id, title: "Elsewhere", parentId: parent.id }),
+            tasks.update(o.admin, loose.id, { parentId: elsewhere.id }),
+            tasks.update(o.ada, loose.id, { parentId: loose.id }),
+            tasks.update(o.ada, loose.id, { parentId: child.id }),
+            tasks.update(o.ada, parent.id, { parentId: loose.id }),
+          ].map((effect) => Effect.flip(effect)),
+        )
+        for (const error of refusals) expect(error).toMatchObject({ _tag: "Primitive.Invalid", field: "parentId" })
+      }),
+  )
+
+  it.live("the parent filter lists a parent's subtasks oldest first, or only top-level tasks", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const o = yield* org
+      const parent = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Tasks" })
+      const first = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Labels", parentId: parent.id })
+      const second = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Review", parentId: parent.id })
+      const other = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Other" })
+      const ids = (parentId: TaskSchema.ListInput["parentId"]) =>
+        tasks.list(o.ada, { ...page, parentId }).pipe(Effect.map((result) => result.items.map((task) => task.id)))
+      expect(yield* ids(parent.id)).toEqual([first.id, second.id])
+      expect(yield* ids("none")).toEqual([other.id, parent.id])
+      expect(yield* ids(undefined)).toEqual([other.id, second.id, first.id, parent.id])
+    }),
+  )
+
+  it.live("an update sets or clears the parent and writes a parent event; the same parent changes nothing", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const activity = yield* TaskActivity.Service
+      const o = yield* org
+      const parent = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Tasks" })
+      const loose = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Review" })
+      expect((yield* tasks.update(o.ada, loose.id, { parentId: parent.id })).parentId).toBe(parent.id)
+      expect((yield* tasks.update(o.ada, loose.id, { parentId: parent.id })).parentId).toBe(parent.id)
+      expect((yield* tasks.update(o.ada, loose.id, { parentId: null })).parentId).toBeNull()
+      const trail = yield* activity.list(o.ada, { taskId: loose.id, ...page })
+      expect(trail.items.slice(1).map((item) => (item.type === "event" ? item.event.data : undefined))).toEqual([
+        { _tag: "parent", from: null, to: parent.id },
+        { _tag: "parent", from: parent.id, to: null },
+      ])
+    }),
+  )
+
+  it.live("a task that becomes a subtask while it gets a subtask never makes two levels", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const o = yield* org
+      const top = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Top" })
+      const middle = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Middle" })
+      const results = yield* Effect.all(
+        [
+          tasks.update(o.ada, middle.id, { parentId: top.id }),
+          tasks.create(o.ada, { spaceId: o.factory.id, title: "Bottom", parentId: middle.id }),
+        ],
+        { concurrency: "unbounded", mode: "result" },
+      )
+      expect(results.filter((result) => result._tag === "Success")).toHaveLength(1)
+      expect(results.find((result) => result._tag === "Failure")).toMatchObject({
+        failure: { _tag: "Primitive.Invalid", field: "parentId" },
+      })
+    }),
+  )
+
+  it.live("archiving a parent archives its subtasks, each with its own event", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const tasks = yield* Task.Service
+      const o = yield* org
+      const parent = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Tasks" })
+      const child = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Labels", parentId: parent.id })
+      yield* tasks.archive(o.ada, parent.id)
+      expect((yield* Effect.flip(tasks.get(o.ada, child.id)))._tag).toBe("Primitive.NotFound")
+      const trail = yield* database.db
+        .select({ kind: Database.Schema.task_event.kind })
+        .from(Database.Schema.task_event)
+        .where(eq(Database.Schema.task_event.task_id, child.id))
+      expect(trail.map((event) => event.kind)).toEqual(["created", "archived"])
+    }),
   )
 })
 

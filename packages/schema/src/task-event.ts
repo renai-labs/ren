@@ -64,6 +64,11 @@ export const LinksChanged = Schema.TaggedStruct("link", {
   removed: Schema.Array(Schema.String),
 }).annotate({ identifier: "TaskEvent.LinksChanged", description: "Link URLs." })
 
+export const ParentChanged = Schema.TaggedStruct("parent", {
+  from: Schema.NullOr(Task.ID),
+  to: Schema.NullOr(Task.ID),
+}).annotate({ identifier: "TaskEvent.ParentChanged" })
+
 export const Archived = Schema.TaggedStruct("archived", {}).annotate({ identifier: "TaskEvent.Archived" })
 
 export const Data = Schema.Union([
@@ -76,6 +81,7 @@ export const Data = Schema.Union([
   FieldChanged,
   LabelsChanged,
   LinksChanged,
+  ParentChanged,
   Archived,
 ]).annotate({ identifier: "TaskEvent.Data" })
 export type Data = typeof Data.Type

@@ -61,6 +61,8 @@ export type SessionModelVariant = { id: string }
 
 export type TaskID = string
 
+export type TaskSubtasks = { total: number; done: number }
+
 export type TaskStatus = "todo" | "in_progress" | "done" | "dismissed"
 
 export type TaskPriority = "low" | "medium" | "high"
@@ -222,6 +224,10 @@ export type SessionInfo = {
 
 export type SessionModelChoice = { id: string; providerID: string; name: string; variants: Array<SessionModelVariant> }
 
+export type TaskParent = { id: TaskID; identifier: string; title: string }
+
+export type TaskEventParentChanged = { _tag: "parent"; from: TaskID | null; to: TaskID | null }
+
 export type TaskEventStatusChanged = { _tag: "status"; from: TaskStatus; to: TaskStatus }
 
 export type TaskAgentSession = { id: SessionID; state: TaskSessionState }
@@ -295,6 +301,9 @@ export type TaskInfo = {
   id: TaskID
   organizationId: AuthOrganizationID
   spaceId: SpaceID
+  parentId: TaskID | null
+  parent: TaskParent | null
+  subtasks: TaskSubtasks | null
   number: number
   identifier: string
   title: string
@@ -326,6 +335,7 @@ export type TaskEventData =
   | TaskEventFieldChanged
   | TaskEventLabelsChanged
   | TaskEventLinksChanged
+  | TaskEventParentChanged
   | TaskEventArchived
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
@@ -1024,6 +1034,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["spaceId"]
@@ -1037,6 +1048,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["status"]
@@ -1050,6 +1062,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["includeDone"]
@@ -1063,6 +1076,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["priority"]
@@ -1076,6 +1090,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["agentId"]
@@ -1089,6 +1104,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["ownerId"]
@@ -1102,6 +1118,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["label"]
@@ -1115,6 +1132,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["humanReview"]
@@ -1128,9 +1146,24 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["linkedTo"]
+  readonly parentId?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
+    readonly includeDone?: boolean | undefined
+    readonly priority?: ("low" | "medium" | "high") | undefined
+    readonly agentId?: string | undefined
+    readonly ownerId?: string | undefined
+    readonly label?: string | undefined
+    readonly humanReview?: boolean | undefined
+    readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["parentId"]
   readonly page: {
     readonly spaceId?: string | undefined
     readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | undefined
@@ -1141,6 +1174,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["page"]
@@ -1154,6 +1188,7 @@ export type TaskListInput = {
     readonly label?: string | undefined
     readonly humanReview?: boolean | undefined
     readonly linkedTo?: string | undefined
+    readonly parentId?: string | "none" | undefined
     readonly page: number
     readonly pageSize: number
   }["pageSize"]
@@ -1177,6 +1212,7 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["spaceId"]
   readonly title: {
     readonly spaceId: string
@@ -1189,6 +1225,7 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["title"]
   readonly description?: {
     readonly spaceId: string
@@ -1201,6 +1238,7 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["description"]
   readonly status?: {
     readonly spaceId: string
@@ -1213,6 +1251,7 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["status"]
   readonly priority?: {
     readonly spaceId: string
@@ -1225,6 +1264,7 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["priority"]
   readonly labels?: {
     readonly spaceId: string
@@ -1237,6 +1277,7 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["labels"]
   readonly links?: {
     readonly spaceId: string
@@ -1249,6 +1290,7 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["links"]
   readonly dueAt?: {
     readonly spaceId: string
@@ -1261,6 +1303,7 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["dueAt"]
   readonly agentId?: {
     readonly spaceId: string
@@ -1273,6 +1316,7 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["agentId"]
   readonly ownerId?: {
     readonly spaceId: string
@@ -1285,7 +1329,21 @@ export type TaskCreateInput = {
     readonly dueAt?: string | null
     readonly agentId?: string | null
     readonly ownerId?: string | null
+    readonly parentId?: string | null
   }["ownerId"]
+  readonly parentId?: {
+    readonly spaceId: string
+    readonly title: string
+    readonly description?: string | null
+    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly priority?: ("low" | "medium" | "high") | null
+    readonly labels?: ReadonlyArray<string> | null
+    readonly links?: ReadonlyArray<string> | null
+    readonly dueAt?: string | null
+    readonly agentId?: string | null
+    readonly ownerId?: string | null
+    readonly parentId?: string | null
+  }["parentId"]
 }
 
 export type TaskCreateOutput = TaskInfo
@@ -1301,6 +1359,7 @@ export type TaskUpdateInput = {
     readonly dueAt?: string | null | null
     readonly addLinks?: ReadonlyArray<string> | null
     readonly removeLinks?: ReadonlyArray<string | string> | null
+    readonly parentId?: string | null | null
   }["title"]
   readonly description?: {
     readonly title?: string | null
@@ -1311,6 +1370,7 @@ export type TaskUpdateInput = {
     readonly dueAt?: string | null | null
     readonly addLinks?: ReadonlyArray<string> | null
     readonly removeLinks?: ReadonlyArray<string | string> | null
+    readonly parentId?: string | null | null
   }["description"]
   readonly status?: {
     readonly title?: string | null
@@ -1321,6 +1381,7 @@ export type TaskUpdateInput = {
     readonly dueAt?: string | null | null
     readonly addLinks?: ReadonlyArray<string> | null
     readonly removeLinks?: ReadonlyArray<string | string> | null
+    readonly parentId?: string | null | null
   }["status"]
   readonly priority?: {
     readonly title?: string | null
@@ -1331,6 +1392,7 @@ export type TaskUpdateInput = {
     readonly dueAt?: string | null | null
     readonly addLinks?: ReadonlyArray<string> | null
     readonly removeLinks?: ReadonlyArray<string | string> | null
+    readonly parentId?: string | null | null
   }["priority"]
   readonly labels?: {
     readonly title?: string | null
@@ -1341,6 +1403,7 @@ export type TaskUpdateInput = {
     readonly dueAt?: string | null | null
     readonly addLinks?: ReadonlyArray<string> | null
     readonly removeLinks?: ReadonlyArray<string | string> | null
+    readonly parentId?: string | null | null
   }["labels"]
   readonly dueAt?: {
     readonly title?: string | null
@@ -1351,6 +1414,7 @@ export type TaskUpdateInput = {
     readonly dueAt?: string | null | null
     readonly addLinks?: ReadonlyArray<string> | null
     readonly removeLinks?: ReadonlyArray<string | string> | null
+    readonly parentId?: string | null | null
   }["dueAt"]
   readonly addLinks?: {
     readonly title?: string | null
@@ -1361,6 +1425,7 @@ export type TaskUpdateInput = {
     readonly dueAt?: string | null | null
     readonly addLinks?: ReadonlyArray<string> | null
     readonly removeLinks?: ReadonlyArray<string | string> | null
+    readonly parentId?: string | null | null
   }["addLinks"]
   readonly removeLinks?: {
     readonly title?: string | null
@@ -1371,7 +1436,19 @@ export type TaskUpdateInput = {
     readonly dueAt?: string | null | null
     readonly addLinks?: ReadonlyArray<string> | null
     readonly removeLinks?: ReadonlyArray<string | string> | null
+    readonly parentId?: string | null | null
   }["removeLinks"]
+  readonly parentId?: {
+    readonly title?: string | null
+    readonly description?: string | null | null
+    readonly status?: ("todo" | "in_progress" | "done" | "dismissed") | null
+    readonly priority?: ("low" | "medium" | "high") | null | null
+    readonly labels?: ReadonlyArray<string> | null
+    readonly dueAt?: string | null | null
+    readonly addLinks?: ReadonlyArray<string> | null
+    readonly removeLinks?: ReadonlyArray<string | string> | null
+    readonly parentId?: string | null | null
+  }["parentId"]
 }
 
 export type TaskUpdateOutput = TaskInfo

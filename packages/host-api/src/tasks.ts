@@ -37,12 +37,13 @@ export const ReviewInput = Schema.Struct({ id: Task.ID, reason: Task.Reason }).a
 })
 
 export const descriptions = {
-  task_list: "List tasks in this session’s space. By default, only todo and in-progress tasks are returned.",
+  task_list:
+    "List tasks in this session’s space. By default, only todo and in-progress tasks are returned. Pass parentId to list a task’s subtasks.",
   task_get: "Read a task by ID or identifier and a page of its trail, oldest first.",
   task_create:
-    "Create a task in this session’s space. Creating never starts an agent. Do not create a second task for the same work.",
+    "Create a task in this session’s space. Pass parentId to split a task into subtasks, one level deep; each subtask has its own agent and status. Creating never starts an agent. Do not create a second task for the same work.",
   task_update:
-    "Update a task’s content, labels or links. Only a person can mark it done or dismissed. Use task_assign for assignment.",
+    "Update a task’s content, labels, links or parent. Only a person can mark it done or dismissed. Use task_assign for assignment.",
   task_assign:
     "Hand a task to another agent in this space. The description stays; note is the receiving agent’s instruction. By default, changing the agent starts it.",
   task_review:

@@ -459,6 +459,7 @@ type TaskListInput = {
   readonly label?: TaskListRequest["query"]["label"]
   readonly humanReview?: TaskListRequest["query"]["humanReview"]
   readonly linkedTo?: TaskListRequest["query"]["linkedTo"]
+  readonly parentId?: TaskListRequest["query"]["parentId"]
   readonly page: TaskListRequest["query"]["page"]
   readonly pageSize: TaskListRequest["query"]["pageSize"]
 }
@@ -474,6 +475,7 @@ const EndpointTaskList = (raw: RawClient["task"]) => (input: TaskListInput) =>
       label: input["label"],
       humanReview: input["humanReview"],
       linkedTo: input["linkedTo"],
+      parentId: input["parentId"],
       page: input["page"],
       pageSize: input["pageSize"],
     },
@@ -496,6 +498,7 @@ type TaskCreateInput = {
   readonly dueAt?: TaskCreateRequest["payload"]["dueAt"]
   readonly agentId?: TaskCreateRequest["payload"]["agentId"]
   readonly ownerId?: TaskCreateRequest["payload"]["ownerId"]
+  readonly parentId?: TaskCreateRequest["payload"]["parentId"]
 }
 const EndpointTaskCreate = (raw: RawClient["task"]) => (input: TaskCreateInput) =>
   raw["task.create"]({
@@ -510,6 +513,7 @@ const EndpointTaskCreate = (raw: RawClient["task"]) => (input: TaskCreateInput) 
       dueAt: input["dueAt"],
       agentId: input["agentId"],
       ownerId: input["ownerId"],
+      parentId: input["parentId"],
     },
   }).pipe(Effect.mapError(mapClientError))
 
@@ -524,6 +528,7 @@ type TaskUpdateInput = {
   readonly dueAt?: TaskUpdateRequest["payload"]["dueAt"]
   readonly addLinks?: TaskUpdateRequest["payload"]["addLinks"]
   readonly removeLinks?: TaskUpdateRequest["payload"]["removeLinks"]
+  readonly parentId?: TaskUpdateRequest["payload"]["parentId"]
 }
 const EndpointTaskUpdate = (raw: RawClient["task"]) => (input: TaskUpdateInput) =>
   raw["task.update"]({
@@ -537,6 +542,7 @@ const EndpointTaskUpdate = (raw: RawClient["task"]) => (input: TaskUpdateInput) 
       dueAt: input["dueAt"],
       addLinks: input["addLinks"],
       removeLinks: input["removeLinks"],
+      parentId: input["parentId"],
     },
   }).pipe(Effect.mapError(mapClientError))
 
