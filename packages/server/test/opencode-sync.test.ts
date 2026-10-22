@@ -90,6 +90,8 @@ const logs = () => {
   }
 }
 
+const renId = Schema.decodeUnknownSync(Sync.Checkpoint.fields.id)
+
 const setup = Effect.fnUntraced(function* () {
   const file = join(yield* folder, "opencode.db")
   const brain = yield* SyncTest.isolated(BrainTest.make({ database: file }))
@@ -99,7 +101,7 @@ const setup = Effect.fnUntraced(function* () {
   const server = yield* HttpServer.HttpServer
   const proxy = yield* Proxy.make(HttpServer.formatAddress(server.address))
   const token = { value: yield* tokenFor(brain.id, owner.organizationId, 600) }
-  const host = { restoring: false }
+  const host = { restoring: new Set<RenSession.ID>() }
   const db = new Database(file)
   yield* Effect.addFinalizer(() => Effect.sync(() => db.close()))
   const reader = yield* SqliteReader.make(file)
@@ -112,7 +114,13 @@ const setup = Effect.fnUntraced(function* () {
       Effect.sync(() => token.value),
     ).pipe(
       Effect.flatMap((remote) =>
-        OpenCodeSync.make({ remote, reader: input.reader ?? reader, restoring: Effect.sync(() => host.restoring) }),
+        OpenCodeSync.make({
+          remote,
+          reader: input.reader ?? reader,
+          restoring: Effect.sync(() => new Set(host.restoring)),
+          mark: (id, state) =>
+            Effect.sync(() => void (state.isRestoring ? host.restoring.add(id) : host.restoring.delete(id))),
+        }),
       ),
       Effect.provide(FetchHttpClient.layer),
     )
@@ -383,7 +391,6 @@ describe("OpenCodeSync", () => {
         sessionId: host.brain.id,
         exists: () => Effect.succeed(false),
         create: Effect.void,
-        setRestoring: (value) => Effect.sync(() => void (host.host.restoring = value)),
         import: (data) => Effect.sync(() => imported.push(...data.messages)),
       })
       expect(imported.map((message) => message.id)).toEqual(expected.messages.map((message) => message.id))
@@ -411,7 +418,7 @@ describe("OpenCodeSync", () => {
   )
 
   it.live(
-    "a row larger than O2 stops the pass with no commit, logs the row, and increases the counter. The step is not drained. The other sessions of the step sync",
+    "a row larger than O2 marks its chat as unable to sync until it changes. The other chats sync, and the step is not failed (E91)",
     () =>
       Effect.gen(function* () {
         const host = yield* setup()
@@ -426,10 +433,13 @@ describe("OpenCodeSync", () => {
         if (!large) return yield* Effect.die(new Error("The large message is missing"))
         const before = yield* Metric.value(OpenCodeSync.oversizedRows)
         const captured = logs()
-        expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: false, failed: true })
+        expect(yield* sync.step().pipe(Effect.provide(captured.layer))).toEqual({ drained: true })
         expect((yield* Metric.value(OpenCodeSync.oversizedRows)).count).toBe(before.count + 1)
         expect(captured.messages.filter((message) => message.includes(large.id))).toHaveLength(1)
         expect((yield* SyncTest.remote(host.brain.id)).sessions.map((session) => session.id)).toEqual([host.brain.id])
+        host.proxy.clear()
+        expect(yield* sync.step()).toEqual({ drained: true })
+        expect(host.proxy.requests.filter(isStart(child))).toEqual([])
       }),
     60_000,
   )
@@ -560,14 +570,14 @@ describe("OpenCodeSync", () => {
       }),
   )
 
-  it.live("a step does not run while the restore flag is set. A step and a restore never run at the same time", () =>
+  it.live("a step skips a chat while its restore flag is set. A step and a restore never run at the same time", () =>
     Effect.gen(function* () {
       const host = yield* setup()
       const sync = yield* host.sync()
-      host.host.restoring = true
-      expect(yield* sync.step()).toEqual({ drained: false })
-      expect(host.proxy.requests).toEqual([])
-      host.host.restoring = false
+      host.host.restoring.add(renId(host.root))
+      expect(yield* sync.step()).toEqual({ drained: true })
+      expect(host.proxy.requests.filter(isStart(host.root))).toEqual([])
+      host.host.restoring.delete(renId(host.root))
       const entered = yield* Deferred.make<void>()
       const release = yield* Deferred.make<void>()
       const restore = yield* sync
@@ -577,7 +587,7 @@ describe("OpenCodeSync", () => {
       const step = yield* sync.step().pipe(Effect.forkChild)
       yield* Effect.yieldNow.pipe(Effect.repeat({ times: 100 }))
       expect(step.pollUnsafe()).toBeUndefined()
-      expect(host.proxy.requests).toEqual([])
+      expect(host.proxy.requests.filter(isStart(host.root))).toEqual([])
       yield* Deferred.succeed(release, undefined)
       yield* Fiber.join(restore)
       expect(yield* Fiber.join(step)).toEqual({ drained: true })
@@ -628,6 +638,52 @@ describe("OpenCodeSync", () => {
         expect(host.proxy.requests.filter(isStart(child))).toEqual([])
         expect(yield* sync.step()).toEqual({ drained: true })
         yield* host.expectEqual
+      }),
+  )
+  it.live(
+    "a chat whose local counter is lower than Ren's checkpoint is not uploaded, and is flagged for restore (E90)",
+    () =>
+      Effect.gen(function* () {
+        const host = yield* setup()
+        const sync = yield* host.sync()
+        yield* host.turn(host.root)
+        expect(yield* sync.step()).toEqual({ drained: true })
+        const synced = yield* host.expectEqual
+        host.db.run("update event_sequence set seq = seq - 1 where aggregate_id = ?", [host.root])
+        host.proxy.clear()
+        expect(yield* sync.step()).toEqual({ drained: true })
+        expect(host.proxy.requests.filter(isStart(host.root))).toEqual([])
+        expect([...host.host.restoring]).toEqual([renId(host.root)])
+        expect(yield* SyncTest.remote(host.brain.id)).toEqual(synced)
+      }),
+  )
+
+  it.live(
+    "a crash during the restore of one chat leaves only that chat flagged: the next step uploads the others and skips it and its children",
+    () =>
+      Effect.gen(function* () {
+        const host = yield* setup()
+        const sync = yield* host.sync()
+        const other = yield* host.create()
+        yield* Seed.session({ ...host.owner, brainId: Brain.ofSession(renId(host.root)) }, { sessionId: renId(other) })
+        const child = yield* host.create(host.root)
+        expect(yield* sync.step()).toEqual({ drained: true })
+        const restoring = yield* sync
+          .restore({
+            sessionId: renId(host.root),
+            exists: () => Effect.succeed(false),
+            create: Effect.void,
+            import: () => Effect.die(new Error("the brain stops during the restore")),
+          })
+          .pipe(Effect.exit)
+        expect(restoring._tag).toBe("Failure")
+        expect([...host.host.restoring]).toEqual([renId(host.root)])
+        yield* Effect.forEach([host.root, child, other], (id) => host.rename(id, "Changed"))
+        host.proxy.clear()
+        expect(yield* sync.step()).toEqual({ drained: true })
+        expect(host.proxy.requests.filter(isStart(other))).toHaveLength(1)
+        expect(host.proxy.requests.filter(isStart(host.root))).toEqual([])
+        expect(host.proxy.requests.filter(isStart(child))).toEqual([])
       }),
   )
 })

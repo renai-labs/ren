@@ -1,7 +1,8 @@
 export * as Sync from "./sync.js"
 
 import { OpenCodeSync } from "@ren/brain/opencode-sync"
-import { Clock, Context, Duration, Effect, Layer, Option, Random, Ref, type Scope } from "effect"
+import { Session } from "@ren/schema/session"
+import { Clock, Context, Duration, Effect, Layer, Option, Random, Ref, Schema, type Scope } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { BrainStorage } from "./brain-storage.js"
 import { HostToken } from "./host-token.js"
@@ -10,9 +11,7 @@ import { SyncClient } from "./sync-client.js"
 export interface Interface {
   readonly step: Effect.Effect<Option.Option<Duration.Duration>>
   readonly flush: Effect.Effect<boolean>
-  readonly restore: <E, R>(
-    input: Omit<OpenCodeSync.Restore<E, R>, "setRestoring">,
-  ) => Effect.Effect<void, OpenCodeSync.SyncError | E, R>
+  readonly restore: <E, R>(input: OpenCodeSync.Restore<E, R>) => Effect.Effect<void, OpenCodeSync.SyncError | E, R>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/cell/Sync") {}
@@ -25,10 +24,7 @@ const alarmBudget = Duration.seconds(10)
 
 const flushBudget = Duration.seconds(20)
 
-export const make = Effect.fn("Sync.make")(function* (
-  sync: Option.Option<OpenCodeSync.Interface>,
-  setRestoring: (value: boolean) => Effect.Effect<void> = () => Effect.void,
-) {
+export const make = Effect.fn("Sync.make")(function* (sync: Option.Option<OpenCodeSync.Interface>) {
   if (Option.isNone(sync))
     return Service.of({ step: Effect.succeedNone, flush: Effect.succeed(false), restore: () => Effect.void })
   const opened = sync.value
@@ -37,7 +33,7 @@ export const make = Effect.fn("Sync.make")(function* (
     step.throttledUntil ? Duration.millis(Math.max(0, step.throttledUntil - now)) : retryAfter
 
   return Service.of({
-    restore: (input) => opened.restore({ ...input, setRestoring }),
+    restore: opened.restore,
     step: Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
       const step = yield* opened.step({ deadline: now + Duration.toMillis(alarmBudget) }).pipe(
@@ -78,6 +74,8 @@ export const make = Effect.fn("Sync.make")(function* (
 
 const restoringKey = "ren:restoring"
 
+const Restoring = Schema.fromJsonString(Schema.Array(Session.ID))
+
 export const layerWith = (reader: Effect.Effect<OpenCodeSync.Reader, never, Scope.Scope>, url: string | undefined) =>
   Layer.effect(
     Service,
@@ -85,14 +83,27 @@ export const layerWith = (reader: Effect.Effect<OpenCodeSync.Reader, never, Scop
       if (!url) return yield* make(Option.none())
       const hostToken = yield* HostToken.Service
       const storage = yield* BrainStorage.Service
+      const restoring = Effect.promise(() => storage.get(restoringKey)).pipe(
+        Effect.map((stored) => new Set(Schema.decodeUnknownOption(Restoring)(stored).pipe(Option.getOrElse(() => [])))),
+      )
       const opened = yield* OpenCodeSync.make({
         remote: yield* SyncClient.make(url, hostToken.current.pipe(Effect.map(Option.getOrElse(() => "")))).pipe(
           Effect.provide(FetchHttpClient.layer),
         ),
         reader: yield* reader,
-        restoring: Effect.promise(async () => (await storage.get(restoringKey)) === "true"),
+        restoring,
+        mark: (id, state) =>
+          restoring.pipe(
+            Effect.map((current) => [
+              ...[...current].filter((each) => each !== id),
+              ...(state.isRestoring ? [id] : []),
+            ]),
+            Effect.flatMap((next) =>
+              Effect.promise(() => storage.put(restoringKey, Schema.encodeSync(Restoring)(next))),
+            ),
+          ),
       })
-      return yield* make(Option.some(opened), (value) => Effect.promise(() => storage.put(restoringKey, String(value))))
+      return yield* make(Option.some(opened))
     }),
   )
 

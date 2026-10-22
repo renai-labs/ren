@@ -50,7 +50,8 @@ export interface Remote {
 export interface Options {
   readonly remote: Remote
   readonly reader: Reader
-  readonly restoring: Effect.Effect<boolean>
+  readonly restoring: Effect.Effect<ReadonlySet<Session.ID>>
+  readonly mark: (id: Session.ID, state: { readonly isRestoring: boolean }) => Effect.Effect<void>
 }
 
 export class SyncError extends Schema.TaggedError<SyncError>()("OpenCodeSync.SyncError", {
@@ -74,7 +75,6 @@ export interface Restore<E = never, R = never> {
   readonly sessionId: Session.ID
   readonly exists: (id: Session.ID) => Effect.Effect<boolean, E, R>
   readonly create: Effect.Effect<unknown, E, R>
-  readonly setRestoring: (value: boolean) => Effect.Effect<void, E, R>
   readonly import: (data: {
     readonly session: Sync.OpenCodeSessionRow
     readonly messages: ReadonlyArray<Sync.OpenCodeMessageRow>
@@ -137,6 +137,7 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
   const remote = options.remote
   const running = yield* Semaphore.make(1)
   const refused = new Set<Session.ID>()
+  const oversized = new Map<Session.ID, number>()
   const lastPass = new Map<Session.ID, number>()
 
   const read = <A>(evaluate: (query: Query) => A) =>
@@ -191,7 +192,7 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
       if (envelopeBytes + size > Sync.maxBodyBytes) {
         yield* Metric.update(oversizedRows, 1)
         yield* Effect.logError(
-          `Message ${message.id} is ${size} bytes as JSON, more than the ${Sync.maxBodyBytes} bytes that Ren accepts. The session cannot sync.`,
+          `Message ${message.id} is ${size} bytes as JSON, more than the ${Sync.maxBodyBytes} bytes that Ren accepts. The session cannot sync until it changes.`,
         )
         return Option.none()
       }
@@ -219,7 +220,10 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
     const latest = snapshot.seq.at(0)
     if (!latest) return "failed" as const
     const sent = yield* upload(params, snapshot.ids)
-    if (Option.isNone(sent)) return "failed" as const
+    if (Option.isNone(sent)) {
+      oversized.set(session.id, session.seq)
+      return "oversized" as const
+    }
     const row = yield* first(
       Sync.OpenCodeSessionRow,
       `select ${sessionColumns.join(", ")} from session_v2 where id = ?`,
@@ -251,8 +255,8 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
   })
 
   const step = Effect.fn("OpenCodeSync.step")(function* (input: { readonly deadline?: number } = {}) {
-    if (yield* options.restoring) return { drained: false }
     if (!(yield* hasTables)) return { drained: true }
+    const restoring = yield* options.restoring
     const checkpoints = new Map(
       (yield* remote.checkpoints.pipe(
         Effect.mapError(
@@ -271,11 +275,25 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
       const parent = parents.get(id)
       return parent && parents.has(parent) ? depth(parent) + 1 : 0
     }
+    // oxlint-disable-next-line ren/no-comments -- A local copy older than Ren's would replace Ren's newer one (E90): such a chat is flagged for restore, not uploaded.
+    const older = local.filter((session) => {
+      const seq = checkpoints.get(session.id)?.syncSeq
+      return typeof seq === "number" && session.seq < seq
+    })
+    yield* Effect.forEach(older, (session) => options.mark(session.id, { isRestoring: true }), { discard: true })
+    const skipped = new Set([...restoring, ...older.map((session) => session.id)])
+    const isSkipped = (id: Session.ID): boolean => {
+      if (skipped.has(id)) return true
+      const parent = parents.get(id)
+      return parent ? isSkipped(parent) : false
+    }
     const pending = local
       .filter((session) => {
         const checkpoint = checkpoints.get(session.id)
         return (
           !refused.has(session.id) &&
+          !isSkipped(session.id) &&
+          oversized.get(session.id) !== session.seq &&
           (!checkpoint || checkpoint.syncSeq !== session.seq || checkpoint.timeSuspended !== session.time_suspended)
         )
       })
@@ -315,11 +333,11 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
     restore: (input) =>
       running.withPermit(
         Effect.gen(function* () {
-          if (!(yield* options.restoring) && (yield* input.exists(input.sessionId))) return
+          if (!(yield* options.restoring).has(input.sessionId) && (yield* input.exists(input.sessionId))) return
           const tree = yield* remote
             .restore(input.sessionId)
             .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
-          yield* input.setRestoring(true)
+          yield* options.mark(input.sessionId, { isRestoring: true })
           if (!tree.some((row) => row.id === input.sessionId) && !(yield* input.exists(input.sessionId)))
             yield* input.create
           yield* Effect.forEach(
@@ -344,7 +362,7 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
               }),
             { discard: true },
           )
-          yield* input.setRestoring(false)
+          yield* options.mark(input.sessionId, { isRestoring: false })
         }),
       ),
   }
