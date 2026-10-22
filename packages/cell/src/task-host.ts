@@ -34,6 +34,7 @@ export const layer = Layer.effect(
       call: (payload: Input["Type"]) => Effect.Effect<Output["Type"], E, R>,
     ) => ({
       name,
+      options: { codemode: false },
       description: HostTasks.descriptions[name],
       input: Schema.toEncoded(Schema.toCodecJson(input)),
       execute: (value: unknown) =>
