@@ -3012,6 +3012,1486 @@
         "description": "Return the models and variants a session with this ID may start with, before it exists. Pass one as `model` to `session.create`. Once the session runs, `model.list` in the Chat API lists them.",
         "summary": "List models for a new session"
       }
+    },
+    "/tasks": {
+      "get": {
+        "tags": ["task"],
+        "operationId": "task.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Task.Status"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this status. Wins over `includeDone`."
+            },
+            "required": false
+          },
+          {
+            "name": "includeDone",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": ["true", "false"]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Include `done` and `dismissed` tasks. Without it, a list has only the actionable tasks."
+            },
+            "required": false
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Task.Priority"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "agentId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Agent.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "ownerId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Auth.UserID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "label",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Label.NameEncoded"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A label name, in any case."
+            },
+            "required": false
+          },
+          {
+            "name": "humanReview",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": ["true", "false"]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "linkedTo",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TaskLink.Url"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only tasks that link this URL. A pull request, Linear issue or Slack thread matches however its URL is written."
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the tasks that the caller can see.",
+        "summary": "List tasks"
+      },
+      "post": {
+        "tags": ["task"],
+        "operationId": "task.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one task.",
+        "summary": "Create task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Task.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/tasks/{idOrSlug}": {
+      "get": {
+        "tags": ["task"],
+        "operationId": "task.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one task by ID or slug.",
+        "summary": "Get task"
+      }
+    },
+    "/tasks/{id}": {
+      "patch": {
+        "tags": ["task"],
+        "operationId": "task.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Task.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one task.",
+        "summary": "Update task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Task.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["task"],
+        "operationId": "task.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Task.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one task and return it. Archiving an archived task returns it unchanged.",
+        "summary": "Archive task"
+      }
+    },
+    "/tasks/{id}/assign": {
+      "post": {
+        "tags": ["task"],
+        "operationId": "task.assign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Task.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the assign action on one task.",
+        "summary": "assign task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Task.AssignInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/tasks/{id}/start": {
+      "post": {
+        "tags": ["task"],
+        "operationId": "task.start",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Task.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the start action on one task.",
+        "summary": "start task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Task.StartInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/tasks/{id}/review": {
+      "post": {
+        "tags": ["task"],
+        "operationId": "task.review",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Task.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the review action on one task.",
+        "summary": "review task",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Task.ReviewInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/task-comments": {
+      "post": {
+        "tags": ["task-comment"],
+        "operationId": "task-comment.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "TaskComment.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskComment.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one task-comment.",
+        "summary": "Create task-comment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskComment.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/task-comments/{id}": {
+      "patch": {
+        "tags": ["task-comment"],
+        "operationId": "task-comment.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/TaskComment.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "TaskComment.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskComment.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one task-comment.",
+        "summary": "Update task-comment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskComment.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["task-comment"],
+        "operationId": "task-comment.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/TaskComment.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "TaskComment.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskComment.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one task-comment and return it. Archiving an archived task-comment returns it unchanged.",
+        "summary": "Archive task-comment"
+      }
+    },
+    "/task-activities": {
+      "get": {
+        "tags": ["task-activity"],
+        "operationId": "task-activity.list",
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Task.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "TaskActivity.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskActivity.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the task-activities that the caller can see.",
+        "summary": "List task-activities"
+      }
+    },
+    "/labels": {
+      "get": {
+        "tags": ["label"],
+        "operationId": "label.list",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Label.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Label.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the labels that the caller can see.",
+        "summary": "List labels"
+      },
+      "post": {
+        "tags": ["label"],
+        "operationId": "label.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Label.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Label.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one label.",
+        "summary": "Create label",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Label.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/labels/{id}": {
+      "patch": {
+        "tags": ["label"],
+        "operationId": "label.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Label.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Label.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Label.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one label.",
+        "summary": "Update label",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Label.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["label"],
+        "operationId": "label.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Label.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Label.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Label.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one label and return it. Archiving an archived label returns it unchanged.",
+        "summary": "Archive label"
+      }
     }
   },
   "components": {
@@ -3735,6 +5215,179 @@
       "Invitation.State": {
         "type": "string",
         "enum": ["pending", "expired", "accepted", "unavailable", "invalid"]
+      },
+      "Label.ColorEncoded": {
+        "type": "string"
+      },
+      "Label.CreateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/Label.UserNameEncoded"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Label.ColorEncoded"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "Label.ID": {
+        "type": "string",
+        "pattern": "^lbl_"
+      },
+      "Label.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Label.ID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isSystem": {
+            "type": "boolean"
+          },
+          "organizationId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.OrganizationID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "name", "color", "isSystem", "organizationId", "createdAt", "updatedAt", "archivedAt"],
+        "additionalProperties": false
+      },
+      "Label.NameEncoded": {
+        "type": "string"
+      },
+      "Label.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Label.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Label.Summary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Label.ID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isSystem": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "name", "color", "isSystem"],
+        "additionalProperties": false
+      },
+      "Label.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Label.UserNameEncoded"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "color": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Label.ColorEncoded"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Label.UserNameEncoded": {
+        "type": "string"
       },
       "NotFoundErrorEncoded": {
         "type": "object",
@@ -4633,6 +6286,1134 @@
         "required": ["settings"],
         "additionalProperties": false
       },
+      "Task.Actor": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Session.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["userId", "agentId", "sessionId"],
+        "additionalProperties": false,
+        "description": "Who acted: a person, an agent in a session on a person’s behalf, or the system when every field is null."
+      },
+      "Task.AgentSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Session.ID"
+          },
+          "state": {
+            "$ref": "#/components/schemas/Task.SessionState"
+          }
+        },
+        "required": ["id", "state"],
+        "additionalProperties": false,
+        "description": "The latest session of the task’s agent on this task."
+      },
+      "Task.AssignInput": {
+        "type": "object",
+        "properties": {
+          "agentId": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Agent.ID"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new agent, or null for none."
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Auth.UserID"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new owner, or null for none."
+          },
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Moves the task to this space. An owner who is not a member of it is cleared."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The instruction for the receiving agent. The trail keeps it; the description stays."
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["new", "continue", "none"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether to start the agent. The default is `continue` when the agent changes, else `none`."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Task.CreateInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "title": {
+            "$ref": "#/components/schemas/Task.TitleEncoded"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.Status"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.Priority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labels": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Task.LabelNameEncoded"
+                },
+                "maxItems": 16
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "links": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TaskLink.Url"
+                },
+                "maxItems": 32
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dueAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The agent that has the task. Creating never starts it."
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The person responsible for the task."
+          }
+        },
+        "required": ["spaceId", "title"],
+        "additionalProperties": false
+      },
+      "Task.Decision": {
+        "type": "string",
+        "enum": ["approved", "changes_requested"]
+      },
+      "Task.ID": {
+        "type": "string",
+        "pattern": "^tsk_"
+      },
+      "Task.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Task.ID"
+          },
+          "organizationId": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/Task.Status"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.Priority"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "humanReview": {
+            "type": "boolean"
+          },
+          "humanReviewReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dueAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ownerId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.AgentSession"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Label.Summary"
+            }
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskLink.Info"
+            }
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/Task.Actor"
+          },
+          "canUpdate": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "spaceId",
+          "number",
+          "identifier",
+          "title",
+          "description",
+          "status",
+          "priority",
+          "humanReview",
+          "humanReviewReason",
+          "dueAt",
+          "agentId",
+          "ownerId",
+          "session",
+          "labels",
+          "links",
+          "createdBy",
+          "canUpdate",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Task.LabelNameEncoded": {
+        "type": "string"
+      },
+      "Task.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Task.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Task.Priority": {
+        "type": "string",
+        "enum": ["low", "medium", "high"]
+      },
+      "Task.ReasonEncoded": {
+        "type": "string"
+      },
+      "Task.ReviewInput": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "humanReview": {
+                "type": "boolean",
+                "enum": [true]
+              },
+              "reason": {
+                "$ref": "#/components/schemas/Task.ReasonEncoded"
+              }
+            },
+            "required": ["humanReview", "reason"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "humanReview": {
+                "type": "boolean",
+                "enum": [false]
+              },
+              "decision": {
+                "$ref": "#/components/schemas/Task.Decision"
+              },
+              "comment": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 20000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "start": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": ["continue", "none"]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Whether to continue the agent’s latest session with the decision. Without it, Ren’s default applies."
+              }
+            },
+            "required": ["humanReview", "decision"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "Turn human review on, with the reason a person must act, or off, with a person’s decision. Only a person turns it off."
+      },
+      "Task.SessionState": {
+        "type": "string",
+        "enum": ["working", "idle", "failed"]
+      },
+      "Task.StartInput": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/Task.StartMode"
+          }
+        },
+        "required": ["mode"],
+        "additionalProperties": false
+      },
+      "Task.StartMode": {
+        "type": "string",
+        "enum": ["new", "continue"],
+        "description": "`new` opens a new session for the task’s agent. `continue` resumes the agent’s latest session on this task, or opens one when there is none."
+      },
+      "Task.Status": {
+        "type": "string",
+        "enum": ["todo", "in_progress", "done", "dismissed"],
+        "description": "The state of the whole task, never of one agent. `todo`: no one started it. `in_progress`: the work started and is not finished; a handoff keeps it. `done`: finished. `dismissed`: no one will do it; it stays readable so that it is not suggested again. Only a person sets `done` or `dismissed`."
+      },
+      "Task.TitleEncoded": {
+        "type": "string"
+      },
+      "Task.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.TitleEncoded"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task.Status"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Task.Priority"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labels": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Task.LabelNameEncoded"
+                },
+                "maxItems": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replaces the task’s labels."
+          },
+          "dueAt": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "addLinks": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TaskLink.Url"
+                },
+                "maxItems": 32
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "removeLinks": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TaskLink.ID"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TaskLink.Url"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Links to remove, by ID or by URL."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Change the task’s content. Assignment has its own action, `assign`."
+      },
+      "TaskActivity.Info": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/TaskEvent.ID"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["event"]
+              },
+              "event": {
+                "$ref": "#/components/schemas/TaskEvent.Info"
+              }
+            },
+            "required": ["id", "type", "event"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/TaskComment.ID"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["comment"]
+              },
+              "comment": {
+                "$ref": "#/components/schemas/TaskComment.Info"
+              }
+            },
+            "required": ["id", "type", "comment"],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "TaskActivity.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskActivity.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "TaskComment.Body": {
+        "type": "string",
+        "maxLength": 20000,
+        "description": "Markdown."
+      },
+      "TaskComment.CreateInput": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "$ref": "#/components/schemas/Task.ID"
+          },
+          "body": {
+            "$ref": "#/components/schemas/TaskComment.Body"
+          }
+        },
+        "required": ["taskId", "body"],
+        "additionalProperties": false
+      },
+      "TaskComment.ID": {
+        "type": "string",
+        "pattern": "^tcm_"
+      },
+      "TaskComment.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/TaskComment.ID"
+          },
+          "taskId": {
+            "$ref": "#/components/schemas/Task.ID"
+          },
+          "body": {
+            "type": "string"
+          },
+          "author": {
+            "$ref": "#/components/schemas/Task.Actor"
+          },
+          "editedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "canUpdate": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "taskId", "body", "author", "editedAt", "canUpdate", "createdAt", "updatedAt", "archivedAt"],
+        "additionalProperties": false
+      },
+      "TaskComment.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/TaskComment.Body"
+          }
+        },
+        "required": ["body"],
+        "additionalProperties": false
+      },
+      "TaskEvent.Archived": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["archived"]
+          }
+        },
+        "required": ["_tag"],
+        "additionalProperties": false
+      },
+      "TaskEvent.Assigned": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["assigned"]
+          },
+          "fromAgentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "toAgentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fromOwnerId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "toOwnerId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fromSpaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "toSpaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "_tag",
+          "fromAgentId",
+          "toAgentId",
+          "fromOwnerId",
+          "toOwnerId",
+          "fromSpaceId",
+          "toSpaceId",
+          "note"
+        ],
+        "additionalProperties": false
+      },
+      "TaskEvent.Created": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["created"]
+          }
+        },
+        "required": ["_tag"],
+        "additionalProperties": false
+      },
+      "TaskEvent.Data": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/TaskEvent.Created"
+          },
+          {
+            "$ref": "#/components/schemas/TaskEvent.Assigned"
+          },
+          {
+            "$ref": "#/components/schemas/TaskEvent.Started"
+          },
+          {
+            "$ref": "#/components/schemas/TaskEvent.StatusChanged"
+          },
+          {
+            "$ref": "#/components/schemas/TaskEvent.ReviewRequested"
+          },
+          {
+            "$ref": "#/components/schemas/TaskEvent.Reviewed"
+          },
+          {
+            "$ref": "#/components/schemas/TaskEvent.FieldChanged"
+          },
+          {
+            "$ref": "#/components/schemas/TaskEvent.LabelsChanged"
+          },
+          {
+            "$ref": "#/components/schemas/TaskEvent.LinksChanged"
+          },
+          {
+            "$ref": "#/components/schemas/TaskEvent.Archived"
+          }
+        ]
+      },
+      "TaskEvent.Field": {
+        "type": "string",
+        "enum": ["title", "description", "priority", "dueAt"]
+      },
+      "TaskEvent.FieldChanged": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["field"]
+          },
+          "field": {
+            "$ref": "#/components/schemas/TaskEvent.Field"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["_tag", "field", "from", "to"],
+        "additionalProperties": false
+      },
+      "TaskEvent.ID": {
+        "type": "string",
+        "pattern": "^tev_"
+      },
+      "TaskEvent.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/TaskEvent.ID"
+          },
+          "taskId": {
+            "$ref": "#/components/schemas/Task.ID"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TaskEvent.Data"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/Task.Actor"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "taskId", "data", "actor", "createdAt"],
+        "additionalProperties": false
+      },
+      "TaskEvent.LabelsChanged": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["label"]
+          },
+          "from": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["_tag", "from", "to"],
+        "additionalProperties": false,
+        "description": "Label names before and after."
+      },
+      "TaskEvent.LinksChanged": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["link"]
+          },
+          "added": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["_tag", "added", "removed"],
+        "additionalProperties": false,
+        "description": "Link URLs."
+      },
+      "TaskEvent.ReviewRequested": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["review_requested"]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "reason"],
+        "additionalProperties": false
+      },
+      "TaskEvent.Reviewed": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["reviewed"]
+          },
+          "decision": {
+            "$ref": "#/components/schemas/Task.Decision"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["_tag", "decision", "comment"],
+        "additionalProperties": false
+      },
+      "TaskEvent.Started": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["started"]
+          },
+          "agentId": {
+            "$ref": "#/components/schemas/Agent.ID"
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/Session.ID"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Task.StartMode"
+          }
+        },
+        "required": ["_tag", "agentId", "sessionId", "mode"],
+        "additionalProperties": false
+      },
+      "TaskEvent.StatusChanged": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["status"]
+          },
+          "from": {
+            "$ref": "#/components/schemas/Task.Status"
+          },
+          "to": {
+            "$ref": "#/components/schemas/Task.Status"
+          }
+        },
+        "required": ["_tag", "from", "to"],
+        "additionalProperties": false
+      },
+      "TaskLink.ID": {
+        "type": "string",
+        "pattern": "^tlk_"
+      },
+      "TaskLink.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/TaskLink.ID"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TaskLink.Kind"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "kind", "url"],
+        "additionalProperties": false
+      },
+      "TaskLink.Kind": {
+        "type": "string",
+        "enum": ["github_pr", "linear_issue", "slack_thread", "url"]
+      },
+      "TaskLink.Url": {
+        "type": "string",
+        "maxLength": 2048
+      },
       "UnauthorizedErrorEncoded": {
         "type": "object",
         "properties": {
@@ -4705,6 +7486,18 @@
     },
     {
       "name": "chat"
+    },
+    {
+      "name": "task"
+    },
+    {
+      "name": "task-comment"
+    },
+    {
+      "name": "task-activity"
+    },
+    {
+      "name": "label"
     }
   ]
 }

@@ -74,6 +74,38 @@ import type {
   ChatAccessOutput,
   ChatModelsInput,
   ChatModelsOutput,
+  TaskListInput,
+  TaskListOutput,
+  TaskGetInput,
+  TaskGetOutput,
+  TaskCreateInput,
+  TaskCreateOutput,
+  TaskUpdateInput,
+  TaskUpdateOutput,
+  TaskArchiveInput,
+  TaskArchiveOutput,
+  TaskAssignInput,
+  TaskAssignOutput,
+  TaskStartInput,
+  TaskStartOutput,
+  TaskReviewInput,
+  TaskReviewOutput,
+  TaskCommentCreateInput,
+  TaskCommentCreateOutput,
+  TaskCommentUpdateInput,
+  TaskCommentUpdateOutput,
+  TaskCommentArchiveInput,
+  TaskCommentArchiveOutput,
+  TaskActivityListInput,
+  TaskActivityListOutput,
+  LabelListInput,
+  LabelListOutput,
+  LabelCreateInput,
+  LabelCreateOutput,
+  LabelUpdateInput,
+  LabelUpdateOutput,
+  LabelArchiveInput,
+  LabelArchiveOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -655,6 +687,240 @@ export function make(options: ClientOptions) {
             path: `/sessions/${encodeURIComponent(input.id)}/models`,
             successStatus: 200,
             declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    task: {
+      list: (input: TaskListInput, requestOptions?: RequestOptions) =>
+        request<TaskListOutput>(
+          {
+            method: "GET",
+            path: `/tasks`,
+            query: {
+              spaceId: input["spaceId"],
+              status: input["status"],
+              includeDone: input["includeDone"],
+              priority: input["priority"],
+              agentId: input["agentId"],
+              ownerId: input["ownerId"],
+              label: input["label"],
+              humanReview: input["humanReview"],
+              linkedTo: input["linkedTo"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: TaskGetInput, requestOptions?: RequestOptions) =>
+        request<TaskGetOutput>(
+          {
+            method: "GET",
+            path: `/tasks/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: TaskCreateInput, requestOptions?: RequestOptions) =>
+        request<TaskCreateOutput>(
+          {
+            method: "POST",
+            path: `/tasks`,
+            body: {
+              spaceId: input["spaceId"],
+              title: input["title"],
+              description: input["description"],
+              status: input["status"],
+              priority: input["priority"],
+              labels: input["labels"],
+              links: input["links"],
+              dueAt: input["dueAt"],
+              agentId: input["agentId"],
+              ownerId: input["ownerId"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: TaskUpdateInput, requestOptions?: RequestOptions) =>
+        request<TaskUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/tasks/${encodeURIComponent(input.id)}`,
+            body: {
+              title: input["title"],
+              description: input["description"],
+              status: input["status"],
+              priority: input["priority"],
+              labels: input["labels"],
+              dueAt: input["dueAt"],
+              addLinks: input["addLinks"],
+              removeLinks: input["removeLinks"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: TaskArchiveInput, requestOptions?: RequestOptions) =>
+        request<TaskArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/tasks/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      assign: (input: TaskAssignInput, requestOptions?: RequestOptions) =>
+        request<TaskAssignOutput>(
+          {
+            method: "POST",
+            path: `/tasks/${encodeURIComponent(input.id)}/assign`,
+            body: {
+              agentId: input["agentId"],
+              ownerId: input["ownerId"],
+              spaceId: input["spaceId"],
+              note: input["note"],
+              start: input["start"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      start: (input: TaskStartInput, requestOptions?: RequestOptions) =>
+        request<TaskStartOutput>(
+          {
+            method: "POST",
+            path: `/tasks/${encodeURIComponent(input.id)}/start`,
+            body: { mode: input["mode"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      review: (input: TaskReviewInput, requestOptions?: RequestOptions) =>
+        request<TaskReviewOutput>(
+          {
+            method: "POST",
+            path: `/tasks/${encodeURIComponent(input.id)}/review`,
+            body: input["payload"],
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "task-comment": {
+      create: (input: TaskCommentCreateInput, requestOptions?: RequestOptions) =>
+        request<TaskCommentCreateOutput>(
+          {
+            method: "POST",
+            path: `/task-comments`,
+            body: { taskId: input["taskId"], body: input["body"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: TaskCommentUpdateInput, requestOptions?: RequestOptions) =>
+        request<TaskCommentUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/task-comments/${encodeURIComponent(input.id)}`,
+            body: { body: input["body"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: TaskCommentArchiveInput, requestOptions?: RequestOptions) =>
+        request<TaskCommentArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/task-comments/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "task-activity": {
+      list: (input: TaskActivityListInput, requestOptions?: RequestOptions) =>
+        request<TaskActivityListOutput>(
+          {
+            method: "GET",
+            path: `/task-activities`,
+            query: { taskId: input["taskId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    label: {
+      list: (input: LabelListInput, requestOptions?: RequestOptions) =>
+        request<LabelListOutput>(
+          {
+            method: "GET",
+            path: `/labels`,
+            query: { page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: LabelCreateInput, requestOptions?: RequestOptions) =>
+        request<LabelCreateOutput>(
+          {
+            method: "POST",
+            path: `/labels`,
+            body: { name: input["name"], color: input["color"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: LabelUpdateInput, requestOptions?: RequestOptions) =>
+        request<LabelUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/labels/${encodeURIComponent(input.id)}`,
+            body: { name: input["name"], color: input["color"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: LabelArchiveInput, requestOptions?: RequestOptions) =>
+        request<LabelArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/labels/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
             empty: false,
           },
           requestOptions,

@@ -37,6 +37,22 @@ import type {
   SessionArchiveInput,
   ChatAccessInput,
   ChatModelsInput,
+  TaskListInput,
+  TaskGetInput,
+  TaskCreateInput,
+  TaskUpdateInput,
+  TaskArchiveInput,
+  TaskAssignInput,
+  TaskStartInput,
+  TaskReviewInput,
+  TaskCommentCreateInput,
+  TaskCommentUpdateInput,
+  TaskCommentArchiveInput,
+  TaskActivityListInput,
+  LabelListInput,
+  LabelCreateInput,
+  LabelUpdateInput,
+  LabelArchiveInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -405,6 +421,146 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["chat", "models", input] as const,
             queryFn: (context) => client["chat"]["models"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    task: {
+      list: {
+        queryKey: (input?: TaskListInput) =>
+          input === undefined ? (["task", "list"] as const) : (["task", "list", input] as const),
+        queryOptions: (input: TaskListInput) =>
+          queryOptions({
+            queryKey: ["task", "list", input] as const,
+            queryFn: (context) => client["task"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: TaskGetInput) =>
+          input === undefined ? (["task", "get"] as const) : (["task", "get", input] as const),
+        queryOptions: (input: TaskGetInput) =>
+          queryOptions({
+            queryKey: ["task", "get", input] as const,
+            queryFn: (context) => client["task"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["task", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task", "create"] as const,
+            mutationFn: (input: TaskCreateInput) => client["task"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["task", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task", "update"] as const,
+            mutationFn: (input: TaskUpdateInput) => client["task"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["task", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task", "archive"] as const,
+            mutationFn: (input: TaskArchiveInput) => client["task"]["archive"](input),
+          }),
+      },
+      assign: {
+        mutationKey: () => ["task", "assign"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task", "assign"] as const,
+            mutationFn: (input: TaskAssignInput) => client["task"]["assign"](input),
+          }),
+      },
+      start: {
+        mutationKey: () => ["task", "start"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task", "start"] as const,
+            mutationFn: (input: TaskStartInput) => client["task"]["start"](input),
+          }),
+      },
+      review: {
+        mutationKey: () => ["task", "review"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task", "review"] as const,
+            mutationFn: (input: TaskReviewInput) => client["task"]["review"](input),
+          }),
+      },
+    },
+    "task-comment": {
+      create: {
+        mutationKey: () => ["task-comment", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task-comment", "create"] as const,
+            mutationFn: (input: TaskCommentCreateInput) => client["task-comment"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["task-comment", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task-comment", "update"] as const,
+            mutationFn: (input: TaskCommentUpdateInput) => client["task-comment"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["task-comment", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["task-comment", "archive"] as const,
+            mutationFn: (input: TaskCommentArchiveInput) => client["task-comment"]["archive"](input),
+          }),
+      },
+    },
+    "task-activity": {
+      list: {
+        queryKey: (input?: TaskActivityListInput) =>
+          input === undefined ? (["task-activity", "list"] as const) : (["task-activity", "list", input] as const),
+        queryOptions: (input: TaskActivityListInput) =>
+          queryOptions({
+            queryKey: ["task-activity", "list", input] as const,
+            queryFn: (context) => client["task-activity"]["list"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    label: {
+      list: {
+        queryKey: (input?: LabelListInput) =>
+          input === undefined ? (["label", "list"] as const) : (["label", "list", input] as const),
+        queryOptions: (input: LabelListInput) =>
+          queryOptions({
+            queryKey: ["label", "list", input] as const,
+            queryFn: (context) => client["label"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["label", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["label", "create"] as const,
+            mutationFn: (input: LabelCreateInput) => client["label"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["label", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["label", "update"] as const,
+            mutationFn: (input: LabelUpdateInput) => client["label"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["label", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["label", "archive"] as const,
+            mutationFn: (input: LabelArchiveInput) => client["label"]["archive"](input),
           }),
       },
     },

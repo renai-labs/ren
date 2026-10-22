@@ -448,6 +448,240 @@ const adaptGroupChat = (raw: RawClient["chat"]) => ({
   models: EndpointChatModels(raw),
 })
 
+type TaskListRequest = Parameters<RawClient["task"]["task.list"]>[0]
+type TaskListInput = {
+  readonly spaceId?: TaskListRequest["query"]["spaceId"]
+  readonly status?: TaskListRequest["query"]["status"]
+  readonly includeDone?: TaskListRequest["query"]["includeDone"]
+  readonly priority?: TaskListRequest["query"]["priority"]
+  readonly agentId?: TaskListRequest["query"]["agentId"]
+  readonly ownerId?: TaskListRequest["query"]["ownerId"]
+  readonly label?: TaskListRequest["query"]["label"]
+  readonly humanReview?: TaskListRequest["query"]["humanReview"]
+  readonly linkedTo?: TaskListRequest["query"]["linkedTo"]
+  readonly page: TaskListRequest["query"]["page"]
+  readonly pageSize: TaskListRequest["query"]["pageSize"]
+}
+const EndpointTaskList = (raw: RawClient["task"]) => (input: TaskListInput) =>
+  raw["task.list"]({
+    query: {
+      spaceId: input["spaceId"],
+      status: input["status"],
+      includeDone: input["includeDone"],
+      priority: input["priority"],
+      agentId: input["agentId"],
+      ownerId: input["ownerId"],
+      label: input["label"],
+      humanReview: input["humanReview"],
+      linkedTo: input["linkedTo"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type TaskGetRequest = Parameters<RawClient["task"]["task.get"]>[0]
+type TaskGetInput = { readonly idOrSlug: TaskGetRequest["params"]["idOrSlug"] }
+const EndpointTaskGet = (raw: RawClient["task"]) => (input: TaskGetInput) =>
+  raw["task.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type TaskCreateRequest = Parameters<RawClient["task"]["task.create"]>[0]
+type TaskCreateInput = {
+  readonly spaceId: TaskCreateRequest["payload"]["spaceId"]
+  readonly title: TaskCreateRequest["payload"]["title"]
+  readonly description?: TaskCreateRequest["payload"]["description"]
+  readonly status?: TaskCreateRequest["payload"]["status"]
+  readonly priority?: TaskCreateRequest["payload"]["priority"]
+  readonly labels?: TaskCreateRequest["payload"]["labels"]
+  readonly links?: TaskCreateRequest["payload"]["links"]
+  readonly dueAt?: TaskCreateRequest["payload"]["dueAt"]
+  readonly agentId?: TaskCreateRequest["payload"]["agentId"]
+  readonly ownerId?: TaskCreateRequest["payload"]["ownerId"]
+}
+const EndpointTaskCreate = (raw: RawClient["task"]) => (input: TaskCreateInput) =>
+  raw["task.create"]({
+    payload: {
+      spaceId: input["spaceId"],
+      title: input["title"],
+      description: input["description"],
+      status: input["status"],
+      priority: input["priority"],
+      labels: input["labels"],
+      links: input["links"],
+      dueAt: input["dueAt"],
+      agentId: input["agentId"],
+      ownerId: input["ownerId"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type TaskUpdateRequest = Parameters<RawClient["task"]["task.update"]>[0]
+type TaskUpdateInput = {
+  readonly id: TaskUpdateRequest["params"]["id"]
+  readonly title?: TaskUpdateRequest["payload"]["title"]
+  readonly description?: TaskUpdateRequest["payload"]["description"]
+  readonly status?: TaskUpdateRequest["payload"]["status"]
+  readonly priority?: TaskUpdateRequest["payload"]["priority"]
+  readonly labels?: TaskUpdateRequest["payload"]["labels"]
+  readonly dueAt?: TaskUpdateRequest["payload"]["dueAt"]
+  readonly addLinks?: TaskUpdateRequest["payload"]["addLinks"]
+  readonly removeLinks?: TaskUpdateRequest["payload"]["removeLinks"]
+}
+const EndpointTaskUpdate = (raw: RawClient["task"]) => (input: TaskUpdateInput) =>
+  raw["task.update"]({
+    params: { id: input["id"] },
+    payload: {
+      title: input["title"],
+      description: input["description"],
+      status: input["status"],
+      priority: input["priority"],
+      labels: input["labels"],
+      dueAt: input["dueAt"],
+      addLinks: input["addLinks"],
+      removeLinks: input["removeLinks"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type TaskArchiveRequest = Parameters<RawClient["task"]["task.archive"]>[0]
+type TaskArchiveInput = { readonly id: TaskArchiveRequest["params"]["id"] }
+const EndpointTaskArchive = (raw: RawClient["task"]) => (input: TaskArchiveInput) =>
+  raw["task.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type TaskAssignRequest = Parameters<RawClient["task"]["task.assign"]>[0]
+type TaskAssignInput = {
+  readonly id: TaskAssignRequest["params"]["id"]
+  readonly agentId?: TaskAssignRequest["payload"]["agentId"]
+  readonly ownerId?: TaskAssignRequest["payload"]["ownerId"]
+  readonly spaceId?: TaskAssignRequest["payload"]["spaceId"]
+  readonly note?: TaskAssignRequest["payload"]["note"]
+  readonly start?: TaskAssignRequest["payload"]["start"]
+}
+const EndpointTaskAssign = (raw: RawClient["task"]) => (input: TaskAssignInput) =>
+  raw["task.assign"]({
+    params: { id: input["id"] },
+    payload: {
+      agentId: input["agentId"],
+      ownerId: input["ownerId"],
+      spaceId: input["spaceId"],
+      note: input["note"],
+      start: input["start"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type TaskStartRequest = Parameters<RawClient["task"]["task.start"]>[0]
+type TaskStartInput = {
+  readonly id: TaskStartRequest["params"]["id"]
+  readonly mode: TaskStartRequest["payload"]["mode"]
+}
+const EndpointTaskStart = (raw: RawClient["task"]) => (input: TaskStartInput) =>
+  raw["task.start"]({ params: { id: input["id"] }, payload: { mode: input["mode"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type TaskReviewRequest = Parameters<RawClient["task"]["task.review"]>[0]
+type TaskReviewInput = {
+  readonly id: TaskReviewRequest["params"]["id"]
+  readonly payload: TaskReviewRequest["payload"]
+}
+const EndpointTaskReview = (raw: RawClient["task"]) => (input: TaskReviewInput) =>
+  raw["task.review"]({ params: { id: input["id"] }, payload: input["payload"] } as TaskReviewRequest).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+const adaptGroupTask = (raw: RawClient["task"]) => ({
+  list: EndpointTaskList(raw),
+  get: EndpointTaskGet(raw),
+  create: EndpointTaskCreate(raw),
+  update: EndpointTaskUpdate(raw),
+  archive: EndpointTaskArchive(raw),
+  assign: EndpointTaskAssign(raw),
+  start: EndpointTaskStart(raw),
+  review: EndpointTaskReview(raw),
+})
+
+type TaskCommentCreateRequest = Parameters<RawClient["task-comment"]["task-comment.create"]>[0]
+type TaskCommentCreateInput = {
+  readonly taskId: TaskCommentCreateRequest["payload"]["taskId"]
+  readonly body: TaskCommentCreateRequest["payload"]["body"]
+}
+const EndpointTaskCommentCreate = (raw: RawClient["task-comment"]) => (input: TaskCommentCreateInput) =>
+  raw["task-comment.create"]({ payload: { taskId: input["taskId"], body: input["body"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type TaskCommentUpdateRequest = Parameters<RawClient["task-comment"]["task-comment.update"]>[0]
+type TaskCommentUpdateInput = {
+  readonly id: TaskCommentUpdateRequest["params"]["id"]
+  readonly body: TaskCommentUpdateRequest["payload"]["body"]
+}
+const EndpointTaskCommentUpdate = (raw: RawClient["task-comment"]) => (input: TaskCommentUpdateInput) =>
+  raw["task-comment.update"]({ params: { id: input["id"] }, payload: { body: input["body"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type TaskCommentArchiveRequest = Parameters<RawClient["task-comment"]["task-comment.archive"]>[0]
+type TaskCommentArchiveInput = { readonly id: TaskCommentArchiveRequest["params"]["id"] }
+const EndpointTaskCommentArchive = (raw: RawClient["task-comment"]) => (input: TaskCommentArchiveInput) =>
+  raw["task-comment.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupTaskComment = (raw: RawClient["task-comment"]) => ({
+  create: EndpointTaskCommentCreate(raw),
+  update: EndpointTaskCommentUpdate(raw),
+  archive: EndpointTaskCommentArchive(raw),
+})
+
+type TaskActivityListRequest = Parameters<RawClient["task-activity"]["task-activity.list"]>[0]
+type TaskActivityListInput = {
+  readonly taskId: TaskActivityListRequest["query"]["taskId"]
+  readonly page: TaskActivityListRequest["query"]["page"]
+  readonly pageSize: TaskActivityListRequest["query"]["pageSize"]
+}
+const EndpointTaskActivityList = (raw: RawClient["task-activity"]) => (input: TaskActivityListInput) =>
+  raw["task-activity.list"]({
+    query: { taskId: input["taskId"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupTaskActivity = (raw: RawClient["task-activity"]) => ({ list: EndpointTaskActivityList(raw) })
+
+type LabelListRequest = Parameters<RawClient["label"]["label.list"]>[0]
+type LabelListInput = {
+  readonly page: LabelListRequest["query"]["page"]
+  readonly pageSize: LabelListRequest["query"]["pageSize"]
+}
+const EndpointLabelList = (raw: RawClient["label"]) => (input: LabelListInput) =>
+  raw["label.list"]({ query: { page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type LabelCreateRequest = Parameters<RawClient["label"]["label.create"]>[0]
+type LabelCreateInput = {
+  readonly name: LabelCreateRequest["payload"]["name"]
+  readonly color?: LabelCreateRequest["payload"]["color"]
+}
+const EndpointLabelCreate = (raw: RawClient["label"]) => (input: LabelCreateInput) =>
+  raw["label.create"]({ payload: { name: input["name"], color: input["color"] } }).pipe(Effect.mapError(mapClientError))
+
+type LabelUpdateRequest = Parameters<RawClient["label"]["label.update"]>[0]
+type LabelUpdateInput = {
+  readonly id: LabelUpdateRequest["params"]["id"]
+  readonly name?: LabelUpdateRequest["payload"]["name"]
+  readonly color?: LabelUpdateRequest["payload"]["color"]
+}
+const EndpointLabelUpdate = (raw: RawClient["label"]) => (input: LabelUpdateInput) =>
+  raw["label.update"]({ params: { id: input["id"] }, payload: { name: input["name"], color: input["color"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type LabelArchiveRequest = Parameters<RawClient["label"]["label.archive"]>[0]
+type LabelArchiveInput = { readonly id: LabelArchiveRequest["params"]["id"] }
+const EndpointLabelArchive = (raw: RawClient["label"]) => (input: LabelArchiveInput) =>
+  raw["label.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupLabel = (raw: RawClient["label"]) => ({
+  list: EndpointLabelList(raw),
+  create: EndpointLabelCreate(raw),
+  update: EndpointLabelUpdate(raw),
+  archive: EndpointLabelArchive(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -463,6 +697,10 @@ const adaptClient = (raw: RawClient) => ({
   "agent-membership": adaptGroupAgentMembership(raw["agent-membership"]),
   session: adaptGroupSession(raw["session"]),
   chat: adaptGroupChat(raw["chat"]),
+  task: adaptGroupTask(raw["task"]),
+  "task-comment": adaptGroupTaskComment(raw["task-comment"]),
+  "task-activity": adaptGroupTaskActivity(raw["task-activity"]),
+  label: adaptGroupLabel(raw["label"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

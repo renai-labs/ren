@@ -6,6 +6,7 @@ import { EnvironmentTemplateGroup } from "./groups/environment-template.js"
 import { EnvironmentProviderGroup } from "./groups/environment-provider.js"
 import { HealthGroup } from "./groups/health.js"
 import { InvitationGroup } from "./groups/invitation.js"
+import { LabelGroup } from "./groups/label.js"
 import { MeGroup } from "./groups/me.js"
 import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
 import { SessionGroup } from "./groups/session.js"
@@ -13,6 +14,9 @@ import { SpaceGroup } from "./groups/space.js"
 import { SpaceEnvironmentTemplateGroup } from "./groups/space-environment-template.js"
 import { SpaceMemberGroup } from "./groups/space-member.js"
 import { SpaceSettingsGroup } from "./groups/space-settings.js"
+import { TaskGroup } from "./groups/task.js"
+import { TaskActivityGroup } from "./groups/task-activity.js"
+import { TaskCommentGroup } from "./groups/task-comment.js"
 
 export const Api = HttpApi.make("server")
   .add(HealthGroup)
@@ -29,6 +33,10 @@ export const Api = HttpApi.make("server")
   .add(AgentMembershipGroup)
   .add(SessionGroup)
   .add(ChatGroup)
+  .add(TaskGroup)
+  .add(TaskCommentGroup)
+  .add(TaskActivityGroup)
+  .add(LabelGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren API",

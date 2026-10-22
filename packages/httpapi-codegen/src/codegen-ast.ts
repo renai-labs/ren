@@ -1,7 +1,6 @@
 export * as CodegenAst from "./codegen-ast.js"
 
-import { Schema, SchemaAST, SchemaRepresentation } from "effect"
-import { Encoding } from "./encoding.js"
+import { Array, Match, Record, Schema, SchemaAST, SchemaRepresentation } from "effect"
 import { SchemaShape } from "./schema-shape.js"
 
 type Recursive = SchemaAST.AST & { recur(recur: (ast: SchemaAST.AST) => SchemaAST.AST): unknown }
@@ -34,6 +33,58 @@ function normalizeDeclaration(ast: SchemaAST.Declaration, recur: (ast: SchemaAST
   return Schema.make<Schema.Top>(recursed).annotate({ identifier }).ast
 }
 
+const keywordWithoutChecks = <Keyword extends SchemaRepresentation.Representation>(keyword: Keyword) => ({
+  ...keyword,
+  checks: [],
+})
+
+function withoutChecks(representation: SchemaRepresentation.Representation): SchemaRepresentation.Representation {
+  return Match.valueTags(representation, {
+    Reference: (reference) => reference,
+    Suspend: (suspend) => ({ ...suspend, thunk: withoutChecks(suspend.thunk) }),
+    Declaration: (declaration) => ({
+      ...declaration,
+      checks: [],
+      typeParameters: declaration.typeParameters.map(withoutChecks),
+    }),
+    TemplateLiteral: (template) => ({ ...template, checks: [], parts: template.parts.map(withoutChecks) }),
+    Arrays: (arrays) => ({
+      ...arrays,
+      checks: [],
+      elements: arrays.elements.map((element) => ({ ...element, type: withoutChecks(element.type) })),
+      rest: arrays.rest.map(withoutChecks),
+    }),
+    Objects: (objects) => ({
+      ...objects,
+      checks: [],
+      propertySignatures: objects.propertySignatures.map((property) => ({
+        ...property,
+        type: withoutChecks(property.type),
+      })),
+      indexSignatures: objects.indexSignatures.map((index) => ({
+        parameter: withoutChecks(index.parameter),
+        type: withoutChecks(index.type),
+      })),
+    }),
+    Union: (union) => ({ ...union, checks: [], types: union.types.map(withoutChecks) }),
+    Null: keywordWithoutChecks,
+    Undefined: keywordWithoutChecks,
+    Void: keywordWithoutChecks,
+    Never: keywordWithoutChecks,
+    Unknown: keywordWithoutChecks,
+    Any: keywordWithoutChecks,
+    String: keywordWithoutChecks,
+    Number: keywordWithoutChecks,
+    Boolean: keywordWithoutChecks,
+    BigInt: keywordWithoutChecks,
+    Symbol: keywordWithoutChecks,
+    Literal: keywordWithoutChecks,
+    UniqueSymbol: keywordWithoutChecks,
+    ObjectKeyword: keywordWithoutChecks,
+    Enum: keywordWithoutChecks,
+  })
+}
+
 function codegenAsts(roots: ReadonlyArray<SchemaAST.AST>) {
   const cache = new WeakMap<SchemaAST.AST, SchemaAST.AST>()
   const references = new Map<string, SchemaAST.AST>()
@@ -42,18 +93,22 @@ function codegenAsts(roots: ReadonlyArray<SchemaAST.AST>) {
     if (cached !== undefined) return cached
     const identifier = SchemaAST.resolveIdentifier(ast)
     const output = normalize(ast)
-    const referenceKey =
-      identifier === undefined
-        ? undefined
-        : `${identifier}\0${ast.context?.isOptional === true}\0${ast.context?.isMutable === true}\0${Encoding.representationEncoding(output)}`
-    const reference = referenceKey === undefined ? undefined : references.get(referenceKey)
-    if (reference !== undefined) {
-      cache.set(ast, reference)
-      return reference
+    if (identifier === undefined) {
+      cache.set(ast, output)
+      return output
     }
-    cache.set(ast, output)
-    if (referenceKey !== undefined) references.set(referenceKey, output)
-    return output
+    const document = SchemaRepresentation.toRepresentation(output)
+    const encoding = JSON.stringify(
+      SchemaRepresentation.toJson({
+        representation: withoutChecks(document.representation),
+        references: Record.map(document.references, withoutChecks),
+      }),
+    )
+    const referenceKey = `${identifier}\0${ast.context?.isOptional === true}\0${ast.context?.isMutable === true}\0${encoding}`
+    const reference = references.get(referenceKey) ?? output
+    cache.set(ast, reference)
+    references.set(referenceKey, reference)
+    return reference
   }
   const normalize = (ast: SchemaAST.AST): SchemaAST.AST => {
     const declared =
@@ -69,5 +124,9 @@ export function codegenRepresentations(roots: ReadonlyArray<SchemaAST.AST>) {
   const asts = codegenAsts(roots)
   const first = asts[0]
   if (first === undefined) throw new Error("Codegen produced no AST")
-  return SchemaRepresentation.toRepresentations([first, ...asts.slice(1)])
+  const document = SchemaRepresentation.toRepresentations([first, ...asts.slice(1)])
+  return {
+    representations: Array.map(document.representations, withoutChecks),
+    references: Record.map(document.references, withoutChecks),
+  }
 }

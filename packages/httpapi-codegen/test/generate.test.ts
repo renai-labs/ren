@@ -48,6 +48,26 @@ async function emittedModule(output: Types.Output) {
 }
 
 describe("HttpApiCodegen.generate", () => {
+  test("keeps custom input validation in the imported API while emitting Promise wire inputs", async () => {
+    const contract = Compile.compile(
+      api(
+        HttpApiEndpoint.post("create", "/session", {
+          payload: Schema.Struct({
+            title: Schema.String.check(Schema.makeFilter((value) => value.trim() !== "" || "Title required")),
+          }),
+          success: Schema.String,
+        }),
+      ),
+    )
+    const effect = EmitEffectImported.emitEffectImported(contract, { module: "@example/api", api: "Api" })
+    expect(file(effect, "client.ts")).toContain("HttpApiClient.make(Api, options)")
+    await using emitted = await emittedModule(EmitPromise.emitPromise(contract))
+    const recorded = recorder(() => Response.json("created"))
+    const client = emitted.module.Ren.make({ baseUrl: "http://localhost", fetch: recorded.fetch })
+    expect(await client.session.create({ title: "Task" })).toBe("created")
+    expect(await recorded.requests[0]?.json()).toEqual({ title: "Task" })
+  })
+
   test("emits an Effect client against an imported API", () => {
     const output = EmitEffectImported.emitEffectImported(
       Compile.compile(
