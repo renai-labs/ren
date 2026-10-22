@@ -1,0 +1,207 @@
+export * as TaskQueries from "./queries.js"
+
+import { Database } from "@ren/db/database"
+import type { Agent } from "@ren/schema/agent"
+import type { Auth } from "@ren/schema/auth"
+import type { Space } from "@ren/schema/space"
+import { Task } from "@ren/schema/task"
+import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm"
+import { DateTime, Effect } from "effect"
+import type { Access } from "../access.js"
+import type { Actor } from "../actor.js"
+import { AgentQueries } from "../agent/queries.js"
+import { Primitive } from "../primitive.js"
+import { TaskPolicy } from "./policy.js"
+
+export const notFound = new Primitive.NotFound({ message: "Task not found." })
+
+export const actorOf = (actor: Actor.Info): Task.Actor => ({
+  userId: actor.userId,
+  agentId: actor.agent?.agentId ?? null,
+  sessionId: actor.agent?.sessionId ?? null,
+})
+
+const actions = {
+  get: Primitive.action(Task.definition, "get"),
+  update: Primitive.action(Task.definition, "update"),
+}
+
+export const membershipOf = (actor: Actor.Info) =>
+  and(
+    eq(TaskPolicy.membership.space_id, Database.Schema.task.space_id),
+    eq(TaskPolicy.membership.user_id, actor.userId),
+    isNull(TaskPolicy.membership.archived_at),
+  )
+
+export const select = (transaction: Database.Transaction, actor: Actor.Info) =>
+  transaction
+    .select({
+      task: Database.Schema.task,
+      prefix: Database.Schema.task_sequence.prefix,
+      membershipId: TaskPolicy.membership.id,
+    })
+    .from(Database.Schema.task)
+    .innerJoin(
+      Database.Schema.task_sequence,
+      eq(Database.Schema.task_sequence.organization_id, Database.Schema.task.organization_id),
+    )
+    .leftJoin(TaskPolicy.membership, membershipOf(actor))
+
+export type Row = Effect.Success<ReturnType<typeof select>>[number]
+
+export const visibleTo = (access: Access.Interface, actor: Actor.Info) =>
+  and(
+    eq(Database.Schema.task.organization_id, actor.organizationId),
+    isNull(Database.Schema.task.archived_at),
+    TaskPolicy.filter(access.plan(actor, actions.get)),
+  )
+
+const allowedOne = (access: Access.Interface, actor: Actor.Info, action: string) =>
+  Effect.fnUntraced(function* (rows: ReadonlyArray<Row>) {
+    const row = rows.at(0)
+    if (!row) return yield* notFound
+    if (!access.isAllowed({ actor, action, resource: TaskPolicy.resource(row.membershipId, row.task.space_id) }))
+      return yield* new Primitive.Forbidden({ message: "You cannot change this task." })
+    return row
+  })
+
+export const find = (
+  transaction: Database.Transaction,
+  access: Access.Interface,
+  actor: Actor.Info,
+  where: SQL,
+  action: string,
+) =>
+  select(transaction, actor)
+    .where(and(where, visibleTo(access, actor)))
+    .pipe(Effect.flatMap(allowedOne(access, actor, action)))
+
+export const lockForWrite = (
+  transaction: Database.Transaction,
+  access: Access.Interface,
+  actor: Actor.Info,
+  where: SQL,
+  action: string,
+) =>
+  select(transaction, actor)
+    .where(and(where, visibleTo(access, actor)))
+    .for("update", { of: Database.Schema.task })
+    .pipe(Effect.flatMap(allowedOne(access, actor, action)))
+
+export const present = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  access: Access.Interface,
+  actor: Actor.Info,
+  rows: ReadonlyArray<Row>,
+) {
+  if (rows.length === 0) return []
+  const ids = rows.map((row) => row.task.id)
+  const labels = yield* transaction
+    .select({
+      taskId: Database.Schema.task_label.task_id,
+      id: Database.Schema.label.id,
+      name: Database.Schema.label.name,
+      color: Database.Schema.label.color,
+      organizationId: Database.Schema.label.organization_id,
+    })
+    .from(Database.Schema.task_label)
+    .innerJoin(Database.Schema.label, eq(Database.Schema.label.id, Database.Schema.task_label.label_id))
+    .where(inArray(Database.Schema.task_label.task_id, ids))
+    .orderBy(sql`lower(${Database.Schema.label.name})`, asc(Database.Schema.label.id))
+  const links = yield* transaction
+    .select()
+    .from(Database.Schema.task_link)
+    .where(inArray(Database.Schema.task_link.task_id, ids))
+    .orderBy(asc(Database.Schema.task_link.created_at), asc(Database.Schema.task_link.id))
+  const labelsOf = Map.groupBy(labels, (label) => label.taskId)
+  const linksOf = Map.groupBy(links, (link) => link.task_id)
+  return rows.map((row): Task.Info => ({
+    id: row.task.id,
+    organizationId: row.task.organization_id,
+    spaceId: row.task.space_id,
+    number: row.task.number,
+    identifier: `${row.prefix}-${row.task.number}`,
+    title: row.task.title,
+    description: row.task.description,
+    status: row.task.status,
+    priority: row.task.priority,
+    humanReview: row.task.human_review,
+    humanReviewReason: row.task.human_review_reason,
+    dueAt: row.task.due_at && DateTime.fromDateUnsafe(row.task.due_at),
+    agentId: row.task.agent_id,
+    ownerId: row.task.owner_id,
+    session: null,
+    labels: (labelsOf.get(row.task.id) ?? []).map((label) => ({
+      id: label.id,
+      name: label.name,
+      color: label.color,
+      isSystem: !label.organizationId,
+    })),
+    links: (linksOf.get(row.task.id) ?? []).map((link) => ({ id: link.id, kind: link.kind, url: link.url })),
+    createdBy: {
+      userId: row.task.created_by_user_id,
+      agentId: row.task.created_by_agent_id,
+      sessionId: row.task.created_by_session_id,
+    },
+    canUpdate: access.isAllowed({
+      actor,
+      action: actions.update,
+      resource: TaskPolicy.resource(row.membershipId, row.task.space_id),
+    }),
+    createdAt: DateTime.fromDateUnsafe(row.task.created_at),
+    updatedAt: DateTime.fromDateUnsafe(row.task.updated_at),
+    archivedAt: row.task.archived_at && DateTime.fromDateUnsafe(row.task.archived_at),
+  }))
+})
+
+export const writableSpace = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  access: Access.Interface,
+  actor: Actor.Info,
+  spaceId: Space.ID,
+  action: string,
+) {
+  const space = yield* AgentQueries.visibleSpace(transaction, access, actor, spaceId)
+  if (!access.isAllowed({ actor, action, resource: TaskPolicy.resource(space.membershipId, spaceId) }))
+    return yield* new Primitive.Forbidden({ message: "You cannot change tasks in this space." })
+})
+
+export const checkAssignment = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  organizationId: Auth.OrganizationID,
+  spaceId: Space.ID,
+  assignment: { readonly agentId?: Agent.ID | null | undefined; readonly ownerId?: Auth.UserID | null | undefined },
+) {
+  const agents = assignment.agentId
+    ? yield* transaction
+        .select({ id: Database.Schema.agent.id })
+        .from(Database.Schema.agent)
+        .where(
+          and(
+            eq(Database.Schema.agent.id, assignment.agentId),
+            isNull(Database.Schema.agent.archived_at),
+            eq(Database.Schema.agent.is_subagent, false),
+            or(
+              isNull(Database.Schema.agent.organization_id),
+              and(eq(Database.Schema.agent.organization_id, organizationId), AgentQueries.isInSpace(spaceId)),
+            ),
+          ),
+        )
+    : undefined
+  if (agents?.length === 0)
+    return yield* new Primitive.Invalid({ message: "This agent is not available in the space.", field: "agentId" })
+  const owners = assignment.ownerId
+    ? yield* transaction
+        .select({ id: Database.Schema.space_member.id })
+        .from(Database.Schema.space_member)
+        .where(
+          and(
+            eq(Database.Schema.space_member.space_id, spaceId),
+            eq(Database.Schema.space_member.user_id, assignment.ownerId),
+            isNull(Database.Schema.space_member.archived_at),
+          ),
+        )
+    : undefined
+  if (owners?.length === 0)
+    return yield* new Primitive.Invalid({ message: "The owner must be a member of the space.", field: "ownerId" })
+})

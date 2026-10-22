@@ -81,7 +81,7 @@ export const visibleSpace = Effect.fnUntraced(function* (
       ),
     )
     .for("share", { of: Database.Schema.space })).at(0)
-  if (!row || !access.isAllowed({ actor, action: getSpace, resource: SpacePolicy.resource(row.membershipId) }))
+  if (!row || !access.isAllowed({ actor, action: getSpace, resource: SpacePolicy.resource(row.membershipId, spaceId) }))
     return yield* new Primitive.NotFound({ message: "Space not found." })
-  return { isMember: Boolean(row.membershipId) }
+  return { isMember: Boolean(row.membershipId), membershipId: row.membershipId }
 })

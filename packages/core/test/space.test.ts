@@ -3,6 +3,7 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
+import { Session } from "@ren/schema/session"
 import { and, eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Access } from "../src/access.js"
@@ -267,6 +268,27 @@ describe("Space archive and agents", () => {
         .set({ archived_at: new Date() })
         .where(eq(Database.Schema.agent.id, agentId))
       expect((yield* spaces.archive(ada, factory.id)).archivedAt).not.toBeNull()
+    }),
+  )
+})
+
+describe("Space and agents acting in a session", () => {
+  it.live("an agent reads only its session's space, and policies that do not name agents deny it", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const organizationId = yield* Seed.organization()
+      const admin = yield* user(organizationId, "admin")
+      const factory = yield* spaces.create(admin, { name: "Factory" })
+      const other = yield* spaces.create(admin, { name: "Other" })
+      const agent = {
+        ...admin,
+        agent: { agentId: Agent.ID.create(), sessionId: Session.ID.create(), spaceId: factory.id },
+      }
+      expect((yield* spaces.get(agent, factory.id)).id).toBe(factory.id)
+      expect((yield* Effect.flip(spaces.get(agent, other.id)))._tag).toBe("Primitive.NotFound")
+      expect((yield* Effect.flip(spaces.update(agent, factory.id, { name: "Mine" })))._tag).toBe("Primitive.Forbidden")
+      expect((yield* Effect.flip(spaces.create(agent, { name: "New" })))._tag).toBe("Primitive.Forbidden")
+      expect((yield* spaces.list(agent, page)).items).toEqual([])
     }),
   )
 })

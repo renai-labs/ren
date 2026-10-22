@@ -72,7 +72,7 @@ export const layer = Layer.effect(
     const toInfo =
       (actor: Actor.Info) =>
       (row: Row): Space.Info => {
-        const resource = SpacePolicy.resource(row.membershipId)
+        const resource = SpacePolicy.resource(row.membershipId, row.space.id)
         const isAllowed = (action: string) => access.isAllowed({ actor, action, resource })
         return {
           id: row.space.id,
@@ -111,7 +111,7 @@ export const layer = Layer.effect(
         .for("update", { of: Database.Schema.space })
       const row = rows.at(0)
       if (!row) return
-      const resource = SpacePolicy.resource(row.membershipId)
+      const resource = SpacePolicy.resource(row.membershipId, row.space.id)
       if (!access.isAllowed({ actor, action: actions.get, resource })) return
       return { row, resource }
     })
