@@ -16,4 +16,4 @@ const optionRowBase =
 export const optionRow = `${optionRowBase} text-text-primary data-highlighted:bg-fill-secondary`
 
 export const revealOnContainerHover =
-  "focus-visible:opacity-100 data-checked:opacity-100 data-popup-open:opacity-100 sm:opacity-0 sm:group-hover/surface:opacity-100 sm:group-hover/board-card:opacity-100"
+  "focus-visible:opacity-100 data-checked:opacity-100 data-popup-open:opacity-100 sm:opacity-0 sm:group-hover/surface:opacity-100 sm:group-hover/board-card:opacity-100 sm:group-hover/task-row:opacity-100"

@@ -39,6 +39,7 @@ const textVariants = cva("", {
     activity: { none: "", active: "animate-ink-pulsation motion-reduce:animate-none", shimmer: "animate-shimmer" },
     visibility: { visible: "", assistive: "sr-only" },
     letterCase: { unchanged: "", uppercase: "tracking-normal uppercase", capitalized: "capitalize" },
+    measure: { natural: "", identifier: "max-w-32 min-w-20 shrink-0" },
   },
   defaultVariants: {
     purpose: "body",
@@ -50,6 +51,7 @@ const textVariants = cva("", {
     activity: "none",
     visibility: "visible",
     letterCase: "unchanged",
+    measure: "natural",
   },
 })
 
@@ -74,6 +76,7 @@ export type TextProps = Omit<HTMLAttributes<HTMLElement>, "className" | "style" 
   activity?: "none" | "active" | "shimmer"
   visibility?: "visible" | "assistive"
   letterCase?: "unchanged" | "uppercase" | "capitalized"
+  measure?: "natural" | "identifier"
   element?: Element
   leadingIcon?: ReactNode
   htmlFor?: string
@@ -93,6 +96,7 @@ export function Text(props: TextProps) {
     activity,
     visibility,
     letterCase,
+    measure,
     element,
     leadingIcon,
     children,
@@ -114,6 +118,7 @@ export function Text(props: TextProps) {
           activity,
           visibility,
           letterCase,
+          measure,
         }),
       )}
       aria-busy={activity === "active" || activity === "shimmer" || undefined}

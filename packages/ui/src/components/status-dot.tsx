@@ -19,8 +19,13 @@ const statusDotVariants = cva("inline-block size-2 shrink-0 rounded-full", {
   defaultVariants: { tone: "neutral", activity: "none" },
 })
 
-export function StatusDot(props: { tone?: StatusTone | undefined; label?: string; activity?: "none" | "pulse" }) {
-  return (
+export function StatusDot(props: {
+  tone?: StatusTone | undefined
+  label?: string
+  activity?: "none" | "pulse"
+  frame?: "none" | "icon"
+}) {
+  const dot = (
     <span
       data-slot="badge-marker"
       role={props.label === undefined ? undefined : "img"}
@@ -29,4 +34,6 @@ export function StatusDot(props: { tone?: StatusTone | undefined; label?: string
       className={composeClasses(statusDotVariants({ tone: props.tone, activity: props.activity }))}
     />
   )
+  if (props.frame !== "icon") return dot
+  return <span className="grid size-4 shrink-0 place-items-center">{dot}</span>
 }

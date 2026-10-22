@@ -23,6 +23,7 @@ export type { ListFrame, ListState } from "../lib/list-chrome.js"
 
 export type RootProps = ListStatusProps & {
   frame?: ListFrame
+  height?: "content" | "limited"
   label?: string | undefined
   children?: ReactNode
 }
@@ -34,7 +35,10 @@ export function Root(props: RootProps) {
       data-slot="list"
       role={ready ? "list" : undefined}
       aria-label={props.label}
-      className={composeClasses(listChrome({ frame: props.frame }), listLayout({ frame: props.frame }))}
+      className={composeClasses(
+        listChrome({ frame: props.frame }),
+        listLayout({ frame: props.frame, height: props.height }),
+      )}
     >
       {ready ? props.children : <ListStatus {...props} />}
     </div>

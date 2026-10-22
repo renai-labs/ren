@@ -21,6 +21,20 @@ const relativeUnits: ReadonlyArray<{ unit: Intl.RelativeTimeFormatUnit; size: nu
   { unit: "year", size: 365 * DAY },
 ]
 
+export function civilDate(date: Date) {
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, "0"))
+    .join("-")
+}
+
+export function parseCivilDate(value: string) {
+  const parts = value.split("-").map(Number)
+  const year = parts[0]
+  const month = parts[1]
+  const day = parts[2]
+  return year && month && day ? new Date(year, month - 1, day) : undefined
+}
+
 export function toDate(value: DateInput) {
   return value instanceof Date ? value : new Date(value)
 }

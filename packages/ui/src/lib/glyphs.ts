@@ -157,6 +157,7 @@ import {
   SignalLow,
   SignalMedium,
   SignalNone,
+  UnassignedPerson,
 } from "./task-glyphs.js"
 
 export const glyphs = {
@@ -168,6 +169,7 @@ export const glyphs = {
   SignalLow,
   SignalMedium,
   SignalHigh,
+  UnassignedPerson,
   Linear,
   Activity: IconActivity,
   AlertCircle: IconAlertCircle,

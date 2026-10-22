@@ -35,8 +35,9 @@ const layout = {
   height: { content: "", limited: "max-h-64" },
 }
 
-const panelVariants = cva("group/surface border border-border-primary bg-background-secondary", {
+const panelVariants = cva("group/surface border border-border-primary", {
   variants: {
+    level: { raised: "bg-background-secondary", page: "bg-background-primary" },
     radius: { container: "rounded-container", control: "rounded-control" },
     padding,
     interaction: {
@@ -48,6 +49,7 @@ const panelVariants = cva("group/surface border border-border-primary bg-backgro
     ...layout,
   },
   defaultVariants: {
+    level: "raised",
     radius: "container",
     padding: "none",
     interaction: "none",
@@ -60,6 +62,7 @@ const panelVariants = cva("group/surface border border-border-primary bg-backgro
 
 export type PanelProps = BaseProps &
   LayoutProps & {
+    level?: "raised" | "page"
     radius?: "container" | "control"
     elevation?: "flat" | "raised"
     interaction?: "none" | "hover" | "selected"
@@ -67,12 +70,14 @@ export type PanelProps = BaseProps &
   }
 
 export function Panel(props: PanelProps) {
-  const { radius, padding, interaction, elevation, growth, overflow, height, element, ...rest } = props
+  const { level, radius, padding, interaction, elevation, growth, overflow, height, element, ...rest } = props
   const Tag = element ?? "div"
   return (
     <Tag
       data-slot="surface"
-      className={composeClasses(panelVariants({ radius, padding, interaction, elevation, growth, overflow, height }))}
+      className={composeClasses(
+        panelVariants({ level, radius, padding, interaction, elevation, growth, overflow, height }),
+      )}
       {...rest}
     />
   )

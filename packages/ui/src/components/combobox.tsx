@@ -21,7 +21,7 @@ const popupVariants = cva(
     "flex max-h-(--available-height) min-h-0 max-w-[calc(100vw-var(--ren-spacing-8))] flex-col overflow-hidden",
   ),
   {
-    variants: { width: { trigger: "w-(--anchor-width) min-w-56", medium: "w-72", large: "w-96" } },
+    variants: { width: { trigger: "w-(--anchor-width) min-w-56", small: "w-64", medium: "w-72", large: "w-96" } },
     defaultVariants: { width: "medium" },
   },
 )
@@ -41,7 +41,7 @@ export type ListProps = Selection &
 
 export type PopoverProps = ListProps & {
   trigger?: ReactElement
-  width?: "trigger" | "medium" | "large"
+  width?: "trigger" | "small" | "medium" | "large"
   alignment?: "start" | "end"
   open?: boolean
   defaultOpen?: boolean
