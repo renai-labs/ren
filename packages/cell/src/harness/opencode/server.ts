@@ -26,6 +26,8 @@ import manifest from "../../../package.json"
 import type { FileSystem } from "@opencode/schema/filesystem"
 import { SessionID } from "@opencode/schema/session-id"
 import { Harness } from "../harness.js"
+import { Credentials } from "./credentials.js"
+import { ModelCredentials } from "./model-credentials.js"
 import { RenPlugin } from "./plugin.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 
@@ -117,7 +119,16 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   const services = yield* runtime.contextEffect
   const plugins = Context.get(services, SdkPlugins.Service)
   const endpoints = yield* Ref.make(initial)
-  const reloads = yield* Ref.make<ReadonlyArray<Effect.Effect<void>>>([])
+  const locations = yield* Ref.make<ReadonlyArray<RenPlugin.LocationModels>>([])
+  const credentials = Context.get(services, Credential.Service)
+  // oxlint-disable-next-line ren/no-comments -- A credential stays while any Location still has its endpoint installed (E64).
+  const synced = Effect.gen(function* () {
+    const latest = yield* Ref.get(endpoints)
+    const installed = yield* Effect.forEach(yield* Ref.get(locations), (location) => Ref.get(location.installed))
+    const byId = new Map([...installed.flat(), ...latest].map((endpoint) => [endpoint.id, endpoint]))
+    const inUse = [...byId.values()]
+    yield* Credentials.sync(credentials, ModelCredentials.owner, ModelCredentials.entries(inUse))
+  })
   const loaded = yield* Deferred.make<void>()
   const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
   const chats = Option.isSome(options.saved)
@@ -142,7 +153,8 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   yield* plugins.register(
     RenPlugin.make(
       endpoints,
-      reloads,
+      locations,
+      synced,
       loaded,
       refreshKey,
       connections,
@@ -167,7 +179,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       located(sessionId, FileSystemSearch.Service).pipe(Effect.flatMap((search) => search.find(input))),
     webSearchProviders: (sessionId) =>
       located(sessionId, WebSearch.Service).pipe(Effect.flatMap((websearch) => websearch.providers())),
-    credentials: Context.get(services, Credential.Service),
+    credentials,
     sessions,
     workspaces: Context.get(services, Workspace.Service),
     hasEnvironmentConnections: Option.isSome(connections),
@@ -177,8 +189,9 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     chats,
     configure: (next) =>
       Ref.set(endpoints, next).pipe(
-        Effect.andThen(Ref.get(reloads)),
-        Effect.flatMap((all) => Effect.all(all, { discard: true })),
+        Effect.andThen(Ref.get(locations)),
+        Effect.flatMap((all) => Effect.forEach(all, (location) => location.offer, { discard: true })),
+        Effect.andThen(synced),
       ),
   }
 })

@@ -19,12 +19,10 @@ import { ModelStore } from "../../model-store.js"
 import { Sync } from "../../sync.js"
 import { Harness } from "../harness.js"
 import { OpenCodeChat } from "./chat.js"
-import { Credentials } from "./credentials.js"
 import { OpenCodeRows } from "./opencode-rows.js"
 import { RenPlugin } from "./plugin.js"
 import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
-import { ModelCredentials } from "./model-credentials.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { SessionSettings } from "./session-settings.js"
 
@@ -35,10 +33,7 @@ const environmentInstructionKey = "ren.environment"
 const notSupported = (sessionId: string) =>
   new BrainRejectedError({ message: `Session ${sessionId} cannot change its environment: not supported yet` })
 
-const environmentInstructions = (
-  server: OpenCodeServer.Instance,
-  environmentDirectory: Option.Option<string>,
-) => {
+const environmentInstructions = (server: OpenCodeServer.Instance, environmentDirectory: Option.Option<string>) => {
   if (Option.isSome(environmentDirectory))
     return {
       [environmentInstructionKey]: `Your file and shell tools run on a separate machine, in ${environmentDirectory.value}. You have full access to that machine.`,
@@ -354,7 +349,6 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   const mutations = yield* Semaphore.make(1)
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (next: ReadonlyArray<Models.Endpoint>) {
     yield* server.configure(next)
-    yield* Credentials.sync(server.credentials, ModelCredentials.owner, ModelCredentials.entries(next))
   })
   yield* configure(endpoints)
 

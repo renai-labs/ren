@@ -49,6 +49,21 @@ interface Instance {
   readonly installed: Ref.Ref<Option.Option<Chat>>
 }
 
+// oxlint-disable-next-line ren/no-comments -- The model list one Location installed (E64). A new list waits for the Location's running turns to end.
+export interface LocationModels {
+  readonly installed: Ref.Ref<ReadonlyArray<Models.Endpoint>>
+  readonly offer: Effect.Effect<void>
+}
+
+// oxlint-disable-next-line ren/no-comments -- OpenCode 2 ends a turn with an execution event and does not publish session.idle.
+const turnEnded = (event: { readonly type: string; readonly data: unknown }) =>
+  event.type === "session.execution.succeeded" ||
+  event.type === "session.execution.failed" ||
+  event.type === "session.execution.interrupted"
+    ? Option.getOrUndefined(Schema.decodeUnknownOption(Schema.Struct({ sessionID: Schema.String }))(event.data))
+        ?.sessionID
+    : undefined
+
 export interface Confinement {
   readonly workspace: string
   readonly allow: ReadonlyArray<string>
@@ -149,7 +164,8 @@ export const chats = Effect.fnUntraced(function* (saved: ReadonlyMap<string, Cha
 
 export const make = (
   endpoints: Ref.Ref<ReadonlyArray<Models.Endpoint>>,
-  reloads: Ref.Ref<ReadonlyArray<Effect.Effect<void>>>,
+  locations: Ref.Ref<ReadonlyArray<LocationModels>>,
+  synced: Effect.Effect<void>,
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
@@ -198,16 +214,14 @@ export const make = (
             }),
           )
         }
-        if (Option.isSome(connections))
-          yield* context.event.subscribe().pipe(
-            Stream.runForEach((event) => {
-              if (event.type !== "session.idle" || !event.location?.workspaceID) return Effect.void
-              const sessionId = RenWorkspaceDriver.sessionIdOf(event.location.workspaceID)
-              if (Session.ID.make(event.data.sessionID) !== sessionId) return Effect.void
-              return connections.value.release(sessionId)
-            }),
-            Effect.forkScoped,
+        const turns = { running: new Set<string>(), ended: [] as Array<(sessionID: string) => Effect.Effect<void>> }
+        const workspaceID = context.location.workspaceID
+        if (Option.isSome(connections) && workspaceID) {
+          const own = RenWorkspaceDriver.sessionIdOf(workspaceID)
+          turns.ended.push((sessionID) =>
+            Session.ID.make(sessionID) === own ? connections.value.release(own) : Effect.void,
           )
+        }
         yield* context.session.hook("context", (event) =>
           Effect.sync(() => {
             const speakers = event.messages.map((message) =>
@@ -228,9 +242,10 @@ export const make = (
             })
           }),
         )
-        yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(endpoints)))
+        const models = yield* Ref.make(yield* Ref.get(endpoints))
+        yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(models)))
         yield* integration.transform((editor) => {
-          for (const integrationID of Ref.getUnsafe(endpoints).map((endpoint) => endpoint.id))
+          for (const integrationID of Ref.getUnsafe(models).map((endpoint) => endpoint.id))
             editor.method.update({
               integrationID,
               method: { id: ModelCredentials.method, type: "oauth", label: "Ren" },
@@ -329,14 +344,7 @@ export const make = (
           yield* context.session.hook("prompt", (event) =>
             Effect.flatMap(Ref.get(shared.turnStarted), (started) => started(event.sessionID)),
           )
-          yield* context.event.subscribe().pipe(
-            Stream.runForEach((event) => {
-              if (event.type !== "session.idle" || event.location?.directory !== context.location.directory)
-                return Effect.void
-              return Effect.flatMap(Ref.get(shared.turnEnded), (ended) => ended(event.data.sessionID))
-            }),
-            Effect.forkScoped,
-          )
+          turns.ended.push((sessionID) => Effect.flatMap(Ref.get(shared.turnEnded), (ended) => ended(sessionID)))
           const instance = {
             reload: Effect.all([context.agent.reload(), context.reference.reload()], { discard: true }),
             session: context.session,
@@ -347,9 +355,37 @@ export const make = (
             Ref.update(shared.instances, (all) => new Map([...all].filter((entry) => entry.at(1) !== instance))),
           )
         }
-        const reload = Effect.andThen(integration.reload(), provider.reload())
-        yield* Ref.update(reloads, (all) => [...all, reload])
-        yield* Effect.addFinalizer(() => Ref.update(reloads, (all) => all.filter((each) => each !== reload)))
+        const catalog = { waiting: false }
+        const install = Ref.get(endpoints).pipe(
+          Effect.flatMap((latest) => Ref.set(models, latest)),
+          Effect.andThen(integration.reload()),
+          Effect.andThen(provider.reload()),
+          Effect.andThen(synced),
+        )
+        turns.ended.push(() => {
+          if (turns.running.size > 0 || !catalog.waiting) return Effect.void
+          catalog.waiting = false
+          return install
+        })
+        yield* context.session.hook("prompt", (event) => Effect.sync(() => void turns.running.add(event.sessionID)))
+        yield* context.event.subscribe().pipe(
+          Stream.runForEach((event) => {
+            const sessionID = turnEnded(event)
+            if (!sessionID || !turns.running.delete(sessionID)) return Effect.void
+            return Effect.forEach(turns.ended, (each) => each(sessionID), { discard: true })
+          }),
+          Effect.forkScoped,
+        )
+        const location: LocationModels = {
+          installed: models,
+          offer: Effect.suspend(() => {
+            if (turns.running.size === 0) return install
+            catalog.waiting = true
+            return Effect.void
+          }),
+        }
+        yield* Ref.update(locations, (all) => [...all, location])
+        yield* Effect.addFinalizer(() => Ref.update(locations, (all) => all.filter((each) => each !== location)))
         yield* Deferred.succeed(loaded, undefined)
       }),
   })
