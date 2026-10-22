@@ -21,6 +21,7 @@ export const Phase = Schema.Literals([
   "replacing",
   "ready",
   "failed",
+  "capacity",
 ]).annotate({ identifier: "Brain.Phase" })
 export type Phase = typeof Phase.Type
 

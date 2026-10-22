@@ -3036,6 +3036,67 @@
         }
       }
     },
+    "/spaces/{id}/chat/prepare": {
+      "post": {
+        "tags": ["chat"],
+        "operationId": "chat.prepare",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Start waking the brain of a space whose chats share one brain, so a new chat there starts faster. Call it when someone begins a new chat. Ren wakes each brain at most once per 5 minutes.",
+        "summary": "Wake a space's brain"
+      }
+    },
     "/sessions/{id}/models": {
       "get": {
         "tags": ["chat"],

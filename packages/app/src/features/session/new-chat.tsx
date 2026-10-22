@@ -27,6 +27,8 @@ export function NewChat(props: { name: string; userId: string }) {
   const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: 100 }))
   const models = useQuery(context.api.chat.models.queryOptions({ id: sessionID }))
   const create = useMutation(context.api.session.create.mutationOptions())
+  const prepare = useMutation(context.api.chat.prepare.mutationOptions())
+  const prepared = useRef(new Set<string>())
   const platform = Platform.usePlatform()
   const mobile = Viewport.useMobile()
   const input = useRef<HTMLTextAreaElement>(null)
@@ -38,6 +40,10 @@ export function NewChat(props: { name: string; userId: string }) {
   const model = Composer.model(draft, undefined, list)
   const text = draft.text.trim()
   const change = (next: Composer.Draft) => {
+    if (spaceId && next.text.trim() && !prepared.current.has(spaceId)) {
+      prepared.current.add(spaceId)
+      prepare.mutate({ id: spaceId })
+    }
     setDraft(next)
     const encoded = Composer.encode(next)
     if (encoded) platform.drafts?.set(SessionDrafts.fresh, encoded)

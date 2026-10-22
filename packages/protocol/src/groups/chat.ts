@@ -1,4 +1,5 @@
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { SessionModel } from "@ren/schema/session/model"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
@@ -34,6 +35,20 @@ export const ChatGroup = HttpApiGroup.make("chat")
         summary: "Retry a failed session",
         description:
           "Start the session’s brain again after `chat.access` returned `failed`, and start the session with `message` as its first message. A session that already started ignores `message`.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("chat.prepare", "/spaces/:id/chat/prepare", {
+      params: { id: Space.ID },
+      success: HttpApiSchema.NoContent,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "chat.prepare",
+        summary: "Wake a space's brain",
+        description:
+          "Start waking the brain of a space whose chats share one brain, so a new chat there starts faster. Call it when someone begins a new chat. Ren wakes each brain at most once per 5 minutes.",
       }),
     ),
   )

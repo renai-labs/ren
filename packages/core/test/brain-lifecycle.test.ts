@@ -34,7 +34,9 @@ const database = ManagedRuntime.make(Testing.layer)
 const port = await Effect.runPromise(Host.freePort)
 const root = await mkdtemp(join(tmpdir(), "ren-core-brains-"))
 
-const ren = async (options: { readonly lostEvery?: Duration.Input } = {}) =>
+const ren = async (
+  options: { readonly lostEvery?: Duration.Input; readonly maxRunning?: number; readonly root?: string } = {},
+) =>
   ManagedRuntime.make(
     Host.serve(port).pipe(
       Layer.provideMerge(Host.stack({ port, root, config: {}, models, environments: Host.noTemplates, ...options })),
@@ -281,6 +283,62 @@ describe("brain runs", () => {
     await current.runPromise(BrainHost.Service.use((host) => host.start(input, placement)))
     await script.called(1)
     await current.dispose()
+  })
+
+  test("a start gives up when its creator can no longer see the space, and the brain does not start", async () => {
+    const found = await seeded()
+    const current = await ren()
+    await database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .delete(Database.Schema.member)
+          .where(eq(Database.Schema.member.organizationId, found.organizationId))
+      }),
+    )
+    const input = { sessionId: found.sessionId, harness: "opencode" as const, interactive: false }
+    const placement = { organizationId: found.organizationId, spaceId: found.spaceId, brainId: found.brainId }
+    await current.runPromise(BrainHost.Service.use((host) => host.start(input, placement)))
+    await current.runPromise(
+      BrainHost.StartRun.poll(
+        await Effect.runPromise(BrainHost.StartRun.executionId({ input, placement, epoch: 0 })),
+      ).pipe(
+        Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("100 millis") }),
+        Effect.timeoutOrElse({
+          duration: "20 seconds",
+          orElse: () => Effect.die(new Error("The start did not give up")),
+        }),
+      ),
+    )
+    expect((await row(found.brainId)).binding).toBeNull()
+    await current.dispose()
+  })
+
+  test("a brain waits for capacity without counting a failure, and starts once a sandbox stops", async () => {
+    const first = await seeded()
+    const second = await seeded()
+    const own = await mkdtemp(join(tmpdir(), "ren-core-brains-"))
+    const current = await ren({ maxRunning: 1, root: own })
+    const lifecycle = (use: (lifecycle: BrainLifecycle.Interface) => Effect.Effect<unknown, unknown>) =>
+      current.runPromise(BrainLifecycle.Service.use(use))
+    await lifecycle((each) => each.ensure(first.brainId))
+    const running = await reaches(first.brainId, "ready")
+    const waiting = await lifecycle((each) =>
+      each.access(second.brainId).pipe(
+        Effect.repeat({
+          until: (access) => access._tag === "Starting" && access.phase === "waiting for capacity",
+          schedule: Schedule.spaced("200 millis"),
+        }),
+        Effect.timeout("20 seconds"),
+      ),
+    )
+    expect(waiting).toEqual({ _tag: "Starting", phase: "waiting for capacity" })
+    expect((await row(second.brainId)).failures).toBe(0)
+    process.kill(-pidOf(running.binding), "SIGKILL")
+    await reaches(second.brainId, "ready")
+    await current.runPromise(Effect.scoped(Layer.build(Host.destroyBrains)))
+    await current.dispose()
+    await rm(own, { recursive: true, force: true })
   })
 
   test("a brain run that ended runs again when the brain needs it", async () => {

@@ -21,7 +21,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 import {
   ByteSize,
   Cause,
@@ -39,13 +39,17 @@ import {
 } from "effect"
 import { HttpClientError } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
+import { Access } from "./access.js"
 import { BrainClient } from "./brain-client.js"
 import { BrainLifecycle } from "./brain-lifecycle.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Environments } from "./environments.js"
 import { Models } from "./models.js"
 import type { SandboxProvider } from "./sandbox-provider.js"
+import { Primitive } from "./primitive.js"
 import { Settings } from "./settings.js"
+import { SpacePolicy } from "./space/policy.js"
+import { SpaceQueries } from "./space/queries.js"
 
 export {
   BrainRejectedError,
@@ -161,6 +165,8 @@ export const StartRun = DurableRunner.make("StartRun", {
 
 type StartPayload = Omit<(typeof StartRun)["payloadSchema"]["Type"], "epoch">
 
+const spaceGet = Primitive.action(Space.definition, "get")
+
 const failedAsUnavailable = (cause: BrainFailed) => Effect.fail(new BrainUnavailable({ cause }))
 
 interface Locator {
@@ -181,6 +187,7 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
     maxFileSize: Config.ByteSize("BRAIN_MAX_FILE_SIZE").pipe(Config.withDefault(ByteSize.megabytes(10))),
   })
   const database = yield* Database.Service
+  const access = yield* Access.Service
   const client = yield* BrainClient.Service
   const models = yield* Models.Service
   const settings = yield* Settings.Service
@@ -234,8 +241,40 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
     }))
   })
 
+  const creatorSees = Effect.fnUntraced(function* (sessionId: Session.ID, placement: Placement) {
+    return yield* database.transaction((transaction) =>
+      Effect.gen(function* () {
+        const createdBy = (yield* transaction
+          .select({ userId: Database.Schema.agent_session.created_by })
+          .from(Database.Schema.agent_session)
+          .where(eq(Database.Schema.agent_session.id, sessionId))).at(0)?.userId
+        if (!createdBy) return false
+        const member = yield* SpaceQueries.organizationMember(transaction, placement.organizationId, createdBy)
+        if (!member) return false
+        const actor = { userId: createdBy, organizationId: placement.organizationId, roles: [member.role] }
+        const visible = yield* transaction
+          .select({ id: Database.Schema.space.id })
+          .from(Database.Schema.space)
+          .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+          .where(
+            and(
+              eq(Database.Schema.space.id, placement.spaceId),
+              eq(Database.Schema.space.organization_id, placement.organizationId),
+              isNull(Database.Schema.space.archived_at),
+              SpacePolicy.filter(access.plan(actor, spaceGet)),
+            ),
+          )
+        return visible.length > 0
+      }),
+    )
+  })
+
   const startNow = Effect.fn("BrainHost.startNow")(function* (input: Session.StartInput, placement: Placement) {
     const subject = { sessionId: input.sessionId, organizationId: placement.organizationId }
+    if (!(yield* creatorSees(input.sessionId, placement)))
+      return yield* new BrainRejectedError({
+        message: `The creator of ${input.sessionId} can no longer see its space`,
+      })
     const target = yield* locator.target(placement.brainId)
     const requested = input.environmentTemplateId
     const binding = requested
@@ -461,7 +500,7 @@ export const layer = Layer.effect(
       retry: () => Effect.void,
     })
   }),
-)
+).pipe(Layer.provide(Access.layer))
 
 export const layerSandbox = Layer.effect(
   Service,
@@ -500,7 +539,7 @@ export const layerSandbox = Layer.effect(
       retry: lifecycle.retry,
     })
   }),
-)
+).pipe(Layer.provide(Access.layer))
 
 export const hostAuthentication = Layer.effect(
   HostAuthentication,

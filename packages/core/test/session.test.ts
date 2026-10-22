@@ -1,10 +1,12 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { Shared, TestToken } from "@ren/cell/testing"
+import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import { eq } from "drizzle-orm"
 import { Auth } from "@ren/schema/auth"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Layer, Option } from "effect"
+import { Effect, Layer, Option, Schedule } from "effect"
 import { Access } from "../src/access.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Models } from "../src/models.js"
@@ -169,5 +171,40 @@ describe("Session", () => {
       expect((yield* sessions.archive(admin, second)).archivedAt).not.toBeNull()
       expect((yield* sessions.list(ada, { spaceId: general.id, ...page })).items).toEqual([])
     }),
+  )
+  it.live(
+    "typing in a new chat wakes the space's brain for a member of the space, and is not found for anyone else",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const spaces = yield* Space.Service
+        const database = yield* Database.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* member(organizationId)
+        const grace = yield* member(organizationId)
+        const team = yield* spaces.create(ada, { name: "Team" })
+        const script = stub.script()
+        yield* sessions.create(ada, {
+          id: Session.ID.create(),
+          spaceId: team.id,
+          message: { id: SessionMessage.ID.create(), text: `plan ${script.marker}` },
+        })
+        yield* Effect.promise(() => script.called())
+        const brain = Database.Schema.brain
+        yield* database.db.update(brain).set({ phase: "resuming" }).where(eq(brain.space_id, team.id))
+        yield* sessions.prepare(ada, team.id)
+        const phase = database.db
+          .select({ phase: brain.phase })
+          .from(brain)
+          .where(eq(brain.space_id, team.id))
+          .pipe(Effect.map((rows) => rows.at(0)?.phase))
+        expect(
+          yield* phase.pipe(
+            Effect.repeat({ until: (found) => found === "ready", schedule: Schedule.spaced("100 millis") }),
+            Effect.timeout("30 seconds"),
+          ),
+        ).toBe("ready")
+        expect((yield* sessions.prepare(grace, team.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+      }),
   )
 })
