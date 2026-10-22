@@ -53,6 +53,8 @@ export function useCreateHotkey(onCreate: () => void, options: { readonly enable
 
 export const describe = (error: unknown) => (error instanceof Error ? error.message : "Try again.")
 
+export const catalogOptions = TaskSearch.catalogOptions
+
 export function useCatalog(organizationId: string) {
   const context = RouterContext.useRouterContext()
   const options = TaskSearch.catalogOptions(context.api)
