@@ -140,7 +140,9 @@ describe("EnvironmentTemplates", () => {
         yield* environments.access(session, Option.none())
         expect((yield* links.archive(setup.ada, linked.id)).archivedAt).not.toBeNull()
         expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([])
-        expect((yield* environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
+        expect((yield* environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe(
+          "Environments.NotFound",
+        )
       }),
   )
 

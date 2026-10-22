@@ -111,7 +111,11 @@ const stackOf = async (config: CoreConfig) => {
     },
     models,
     environments: Environments.layer.pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),
-  }).pipe(Layer.provide(Layer.succeedContext(await database.runPromise(Effect.context<Database.Service | SqlClient.SqlClient>()))))
+  }).pipe(
+    Layer.provide(
+      Layer.succeedContext(await database.runPromise(Effect.context<Database.Service | SqlClient.SqlClient>())),
+    ),
+  )
 }
 
 type Stack = Layer.Success<Awaited<ReturnType<typeof stackOf>>>

@@ -26,6 +26,11 @@ export type MessageID = Session.MessageID
 export type Interface = Primitive.Interface<typeof Session.definition> & {
   readonly access: (actor: Actor.Info, id: Session.ID) => Effect.Effect<Session.ClientAccess, Primitive.NotFound>
   readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
+  readonly retry: (
+    actor: Actor.Info,
+    id: Session.ID,
+    message: Session.FirstMessage | undefined,
+  ) => Effect.Effect<void, Primitive.NotFound>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Session") {}
@@ -235,6 +240,31 @@ export const layer = Layer.effect(
         )
       }),
       models: Effect.fn("Session.models")(models),
+      retry: Effect.fn("Session.retry")(function* (
+        actor: Actor.Info,
+        id: Session.ID,
+        message: Session.FirstMessage | undefined,
+      ) {
+        const row = yield* read(actor, id)
+        yield* brain.retry(id)
+        if (!message || row.opencode) return
+        const start = yield* Schema.decodeUnknownEffect(Session.StartInput)(
+          row.session.start_input ?? { sessionId: id, harness: row.session.harness },
+        ).pipe(Effect.orDie)
+        yield* brain
+          .start(
+            {
+              ...start,
+              initialMessage: {
+                messageId: Session.MessageID.make(message.id),
+                prompt: { text: message.text },
+                sender: { userId: actor.userId },
+              },
+            },
+            { organizationId: actor.organizationId, spaceId: row.session.space_id, brainId: row.session.brain_id },
+          )
+          .pipe(Effect.catchTag("BrainRejectedError", Effect.die))
+      }),
       access: Effect.fn("Session.access")(function* (actor: Actor.Info, id: Session.ID) {
         yield* read(actor, id)
         const user = (yield* database.transaction((transaction) =>

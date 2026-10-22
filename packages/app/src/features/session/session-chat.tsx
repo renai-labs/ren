@@ -11,7 +11,7 @@ import { StateMessage } from "@ren/ui/state-message"
 import { TaskProgress, type TaskStatus } from "@ren/ui/task-progress"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Effect, Option, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useDeferredValue, useRef, useState } from "react"
@@ -330,7 +330,21 @@ export function SessionChat(props: {
   const onUndo = () => void undo().then(restore, Failure.toast("Could not undo the last message"))
   const onRedo = () => void redo().catch(Failure.toast("Could not restore the undone messages"))
   const onCompact = () => void compact().catch(Failure.toast("Could not compact the chat"))
-  const retry = Chat.useRetry(props.sessionID)
+  const reopen = Chat.useRetry(props.sessionID)
+  const restart = useMutation(context.api.chat.retry.mutationOptions())
+  const retry = () => {
+    const message = SessionDrafts.takePending(platform.drafts, props.sessionID)
+    restart.mutate(
+      { id: props.sessionID, ...(Option.isSome(message) && { message: message.value }) },
+      {
+        onSuccess: () => {
+          platform.drafts?.remove(SessionDrafts.pending(props.sessionID))
+          reopen()
+        },
+        onError: Failure.toast("Could not start this chat again"),
+      },
+    )
+  }
   const blocking = blocked(chat.requests, { approving: Chat.useAutoApprove(props.sessionID).enabled })
   const people = usePeople(props.organizationId, props.viewer, messages)
 

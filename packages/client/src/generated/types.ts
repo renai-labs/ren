@@ -1037,6 +1037,13 @@ export type ChatAccessInput = { readonly id: { readonly id: string }["id"] }
 
 export type ChatAccessOutput = SessionClientAccess
 
+export type ChatRetryInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly message?: { readonly message?: { readonly id: string; readonly text: string } | undefined }["message"]
+}
+
+export type ChatRetryOutput = void
+
 export type ChatModelsInput = { readonly id: { readonly id: string }["id"] }
 
 export type ChatModelsOutput = Array<SessionModelChoice>

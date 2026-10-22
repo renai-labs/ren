@@ -479,7 +479,11 @@ export const layer = Layer.effect(
       retry: Effect.fn("BrainLifecycle.retry")(function* (brainId: Brain.ID) {
         const row = yield* read(brainId)
         if (row.phase === "failed")
-          yield* update(brainId, { phase: row.binding ? "resuming" : "creating", failures: 0 })
+          yield* update(brainId, {
+            phase: row.binding ? "resuming" : "creating",
+            failures: 0,
+            run_epoch: row.run_epoch + 1,
+          })
         yield* ensure(brainId)
       }),
       observe: Effect.fn("BrainLifecycle.observe")(function* (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) {
