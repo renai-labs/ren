@@ -14,6 +14,7 @@ export const filterProperties = ["status", "priority", "space", "agent", "owner"
 export type FilterProperty = (typeof filterProperties)[number]
 
 export interface View {
+  readonly layout: "list" | "board"
   readonly query: string
   readonly filters: TaskSearch.Filters
   readonly group: typeof TaskSearch.Group.Type
@@ -21,12 +22,15 @@ export interface View {
   readonly direction: typeof TaskSearch.Direction.Type
   readonly empty: boolean
   readonly properties: ReadonlyArray<TaskSearch.Property>
+  readonly boardProperties: ReadonlyArray<TaskSearch.Property>
   readonly selected: ReadonlyArray<string>
 }
 
 const defaultProperties: ReadonlyArray<TaskSearch.Property> = ["status", "priority", "owner", "labels"]
+const defaultBoardProperties: ReadonlyArray<TaskSearch.Property> = [...defaultProperties, "created"]
 
 export const resolve = (search: TaskSearch.SearchParams, saved: TaskSearch.Filters): View => ({
+  layout: search.layout ?? "list",
   query: search.q ?? "",
   filters: search.filters ?? saved,
   group: search.group ?? "agent",
@@ -34,10 +38,12 @@ export const resolve = (search: TaskSearch.SearchParams, saved: TaskSearch.Filte
   direction: search.direction ?? "desc",
   empty: search.empty ?? false,
   properties: search.properties ?? defaultProperties,
+  boardProperties: search.boardProperties ?? defaultBoardProperties,
   selected: search.selected ?? [],
 })
 
 export const toSearch = (view: View): TaskSearch.SearchParams => ({
+  ...(view.layout === "board" && { layout: view.layout }),
   ...(view.query && { q: view.query }),
   filters: view.filters,
   ...(view.group !== "agent" && { group: view.group }),
@@ -45,6 +51,7 @@ export const toSearch = (view: View): TaskSearch.SearchParams => ({
   ...(view.direction !== "desc" && { direction: view.direction }),
   ...(view.empty && { empty: true }),
   ...(!sameValues(view.properties, defaultProperties) && { properties: view.properties }),
+  ...(!sameValues(view.boardProperties, defaultBoardProperties) && { boardProperties: view.boardProperties }),
   ...(view.selected.length > 0 && { selected: view.selected }),
 })
 
@@ -111,6 +118,30 @@ export interface Group {
   readonly agentId: string | null
   readonly status?: Task.Status
   readonly tasks: ReadonlyArray<TaskInfo>
+}
+
+export function boardGroups(
+  space: { readonly id: string; readonly agentOrder: ReadonlyArray<string> },
+  agents: ReadonlyArray<{ readonly id: string; readonly name: string }>,
+  tasks: ReadonlyArray<TaskInfo>,
+): Group[] {
+  const rows = tasks.filter((task) => task.spaceId === space.id)
+  const names = new Map(agents.map((agent) => [agent.id, agent.name]))
+  const extra = [...new Set(rows.flatMap((task) => task.agentId ?? []))]
+    .filter((id) => !space.agentOrder.includes(id))
+    .toSorted(
+      (a, b) =>
+        (names.get(a) ?? "Archived agent").localeCompare(names.get(b) ?? "Archived agent") || a.localeCompare(b),
+    )
+  return [
+    { id: none, name: "No agent", agentId: null, tasks: rows.filter((task) => task.agentId === null) },
+    ...[...space.agentOrder, ...extra].map((id) => ({
+      id,
+      name: names.get(id) ?? "Archived agent",
+      agentId: id,
+      tasks: rows.filter((task) => task.agentId === id),
+    })),
+  ]
 }
 
 function agentGroups(

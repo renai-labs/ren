@@ -41,6 +41,7 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
           <Tabs.Link render={<Link to="/spaces/$spaceId/members" params={params} />} count={space.data.memberCount}>
             Members
           </Tabs.Link>
+          <Tabs.Link render={<Link to="/spaces/$spaceId/factory" params={params} />}>Factory</Tabs.Link>
         </Tabs.Navigation>
       }
     >

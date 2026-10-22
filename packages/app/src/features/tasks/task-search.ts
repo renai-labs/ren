@@ -40,6 +40,7 @@ const lenient = <S extends Schema.Top>(schema: S) =>
   Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)))
 
 export const SearchParams = Schema.Struct({
+  layout: lenient(Schema.Literals(["list", "board"])),
   q: lenient(Schema.String),
   filters: lenient(Filters),
   group: lenient(Group),
@@ -47,6 +48,7 @@ export const SearchParams = Schema.Struct({
   direction: lenient(Direction),
   empty: lenient(Schema.Boolean),
   properties: lenient(Schema.Array(Schema.Literals(properties))),
+  boardProperties: lenient(Schema.Array(Schema.Literals(properties))),
   selected: lenient(Schema.Array(Schema.String)),
 })
 export type SearchParams = typeof SearchParams.Type

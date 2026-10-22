@@ -6,6 +6,7 @@ import { IconButton } from "@ren/ui/icon-button"
 import { LoadingMessage } from "@ren/ui/loading-message"
 import { PageShell } from "@ren/ui/page-shell"
 import { StateMessage } from "@ren/ui/state-message"
+import { Select } from "@ren/ui/select"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate, useRouteContext, useSearch } from "@tanstack/react-router"
@@ -16,6 +17,7 @@ import { ArchiveTasksDialog } from "./archive-tasks-dialog.js"
 import { BulkActionBar } from "./task-bulk-bar.js"
 import { TaskCreateDialog } from "./task-create-dialog.js"
 import { TaskList } from "./task-list.js"
+import { TaskBoard } from "./task-board.js"
 import { TaskSearch } from "./task-search.js"
 import { TaskQueries } from "./task-queries.js"
 import { TaskView } from "./task-view.js"
@@ -63,6 +65,7 @@ function Page(props: {
   const actions = Tasks.useTaskActions()
   const navigate = useNavigate()
   const list = useQuery(TaskQueries.listOptions(context.api, props.view.filters))
+  const spaceId = TaskView.preferredSpace(props.view.filters)
   const query = useDeferredValue(props.view.query)
   const [dialog, setDialog] = useState<Dialog>(null)
   const selected = new Set(props.view.selected)
@@ -70,6 +73,7 @@ function Page(props: {
   const [busy, setBusy] = useState(false)
   const tasks = list.data?.items ?? []
   const view = { ...props.view, query }
+  const TaskCollection = view.layout === "board" ? TaskBoard : TaskList
   const rows = TaskView.visible(tasks, view)
   const options = TaskView.filterOptions({ tasks, catalog })
   const selectedRows = rows.filter((task) => selected.has(task.id))
@@ -86,23 +90,36 @@ function Page(props: {
   }
   return (
     <PageShell.Root
-      layout="workspace"
+      layout={view.layout === "board" ? "board" : "workspace"}
       title="Tasks"
       actions={
         <Actions disabled={!hasSpaces} onCreate={() => openCreate({})}>
+          {hasSpaces && view.layout === "board" ? (
+            <Select.Root
+              label="Board space"
+              placeholder="Choose a space"
+              value={spaceId}
+              size="compact"
+              width="compact"
+              options={catalog.spaces.map((entry) => ({ value: entry.id, label: entry.name }))}
+              onValueChange={(id) =>
+                props.onViewChange({ ...props.view, filters: { ...props.view.filters, space: [id] }, selected: [] })
+              }
+            />
+          ) : null}
           {hasSpaces ? <TasksToolbar view={props.view} onChange={props.onViewChange} options={options} /> : null}
         </Actions>
       }
     >
       {hasSpaces ? <ActiveFilters view={props.view} onChange={props.onViewChange} options={options} /> : null}
-      <section aria-label="Tasks" className="flex min-w-0 flex-col gap-4">
+      <section aria-label="Tasks" className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
         <Collection
           state={TaskView.collectionState({ status: list.status, spaces: creatable.length, tasks, rows })}
           view={view}
           onRetry={() => void list.refetch()}
           onCreate={() => openCreate({})}
         >
-          <TaskList
+          <TaskCollection
             view={view}
             groups={TaskView.groups(view, catalog.agents, tasks, rows)}
             catalog={catalog}
@@ -116,6 +133,7 @@ function Page(props: {
             onCreate={openCreate}
             onOpen={(task) => void navigate({ to: "/tasks/$taskId", params: { taskId: task.id } })}
             actions={actions}
+            onArchive={(task) => setDialog({ kind: "archive", tasks: [task] })}
           />
           <SelectionBar
             tasks={selectedRows}
@@ -226,7 +244,7 @@ function Collection(props: {
     )
   if (props.state === "failed")
     return <StateMessage state="failed" placement="section" title="Couldn’t load tasks." onRetry={props.onRetry} />
-  if (props.state === "ready") return props.children
+  if (props.state === "ready" || props.view.layout === "board") return props.children
   return (
     <>
       {props.state === "no-results" ? (

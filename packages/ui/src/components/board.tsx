@@ -47,6 +47,7 @@ const actionVariants = cva("ml-auto flex items-center gap-1 transition-standard"
 })
 
 export type CardProps = {
+  onOpen?: () => void
   selected?: boolean
   pinnedActions?: boolean
   meta?: ReactNode
@@ -61,7 +62,17 @@ export type CardProps = {
 
 export function Card(props: CardProps) {
   return (
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- the title button is the keyboard path; the card surface is a pointer shortcut
     <article
+      onClick={(event) => {
+        const target = event.target
+        if (!(target instanceof Element) || !event.currentTarget.contains(target)) return
+        if (
+          target.closest("button, a, input, select, textarea, label, [role=menuitem], [role=option], [role=checkbox]")
+        )
+          return
+        props.onOpen?.()
+      }}
       data-slot="board-card"
       data-selected={props.selected || undefined}
       className={composeClasses(cardVariants({ selected: props.selected === true }))}
