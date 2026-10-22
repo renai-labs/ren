@@ -2,7 +2,7 @@ export * as RenHostApiTest from "./ren-host-api.js"
 
 import { CurrentHost, RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
-import { TestSettings } from "@ren/cell/testing"
+import { TestHostApi, TestSettings } from "@ren/cell/testing"
 import { Effect, Layer } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { BrainHost } from "../../src/brain-host.js"
@@ -53,6 +53,6 @@ const forgetful = HttpApiBuilder.group(SyncApi, "sync", (group) =>
 
 export const layer = (around: Around = (_endpoint, effect) => effect) =>
   Layer.mergeAll(
-    HttpApiBuilder.layer(RenHostApi).pipe(Layer.provide(handlers(around))),
+    HttpApiBuilder.layer(TestHostApi.withoutTasks).pipe(Layer.provide(handlers(around))),
     HttpApiBuilder.layer(SyncApi).pipe(Layer.provide(forgetful)),
   ).pipe(Layer.provide(BrainHost.hostAuthentication))

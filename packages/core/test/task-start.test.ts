@@ -264,6 +264,22 @@ describe("Task assign", () => {
     }),
   )
 
+  it.live("a hand-off says whether the agent started, without failing the assign when the start fails", () =>
+    Effect.gen(function* () {
+      const tasks = yield* Task.Service
+      const o = yield* org
+      const plan = yield* o.agent("plan")
+      const script = harness.stub.script()
+      const open = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: `Plan ${script.marker}` })
+      expect((yield* tasks.handOff(o.ada, open.id, { agentId: plan })).start).toBe("started")
+      yield* Effect.promise(() => script.called())
+      expect((yield* tasks.handOff(o.ada, open.id, { ownerId: o.ada.userId })).start).toBe("none")
+      const done = yield* tasks.create(o.ada, { spaceId: o.factory.id, title: "Done", status: "done" })
+      const failed = yield* tasks.handOff(o.ada, done.id, { agentId: plan })
+      expect(failed).toMatchObject({ start: "failed", task: { agentId: plan, session: null } })
+    }),
+  )
+
   it.live("a member of both spaces moves a task; an owner outside the new space is cleared; an agent cannot move", () =>
     Effect.gen(function* () {
       const tasks = yield* Task.Service

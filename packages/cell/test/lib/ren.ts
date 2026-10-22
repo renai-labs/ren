@@ -15,6 +15,7 @@ import type { SessionSettings } from "@ren/schema/session/settings"
 import { Effect, Layer, Option, Redacted } from "effect"
 import { HttpRouter, HttpServer } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
+import { TestHostApi } from "./host-api.js"
 import { TestSettings } from "./settings.js"
 import { TestToken } from "./token.js"
 
@@ -139,7 +140,7 @@ export const start = () => {
     }),
   )
   const api = HttpRouter.toWebHandler(
-    HttpApiBuilder.layer(RenHostApi).pipe(
+    HttpApiBuilder.layer(TestHostApi.withoutTasks).pipe(
       Layer.provide(handlers),
       Layer.provide(authentication),
       Layer.provide(HttpServer.layerServices),

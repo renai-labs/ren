@@ -30,6 +30,7 @@ import { Harness } from "../harness.js"
 import { RenPlugin } from "./plugin.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { SessionSettings } from "./session-settings.js"
+import type { TaskHost } from "../../task-host.js"
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
   storage: DurableObjectStorage,
@@ -38,6 +39,7 @@ export const open = Effect.fn("OpenCodeServer.open")(function* (
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
   settings: Option.Option<Pick<BrainSettings.Host, "read">>,
+  tasks: Option.Option<TaskHost.Service["Service"]> = Option.none(),
 ) {
   const options = {
     storage,
@@ -57,6 +59,7 @@ export const open = Effect.fn("OpenCodeServer.open")(function* (
     refreshKey,
     connections,
     settings,
+    tasks,
   )
 })
 
@@ -75,6 +78,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
   settings: Option.Option<Pick<BrainSettings.Host, "read">> = Option.none(),
+  tasks: Option.Option<TaskHost.Service["Service"]> = Option.none(),
 ): Effect.fn.Return<Instance, Error, Scope.Scope> {
   const runtime = yield* Effect.acquireRelease(
     Effect.sync(() => ManagedRuntime.make(routes)),
@@ -122,7 +126,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     located(sessionId, Location.Service).pipe(
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
     )
-  yield* plugins.register(RenPlugin.make(endpoints, reloads, loaded, refreshKey, connections, shared, approvals))
+  yield* plugins.register(RenPlugin.make(endpoints, reloads, loaded, refreshKey, connections, shared, approvals, tasks))
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
   yield* Effect.promise(() => fetch(new Request("http://opencode/api/agent")))
   yield* Deferred.await(loaded)

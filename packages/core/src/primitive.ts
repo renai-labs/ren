@@ -4,7 +4,7 @@ import { Primitive } from "@ren/schema/primitive"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { Cause, Effect, Option, Schema } from "effect"
 import { SqlError } from "effect/sql"
-import { Actor } from "./actor.js"
+import type { Actor } from "./actor.js"
 
 export const action = Primitive.action
 
