@@ -1,7 +1,7 @@
 import { Session } from "@ren/schema/session"
 import { SessionModel } from "@ren/schema/session/model"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { NotFoundError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
@@ -19,6 +19,21 @@ export const ChatGroup = HttpApiGroup.make("chat")
         summary: "Open a session’s chat",
         description:
           "Return the URL of the session’s brain and a short-lived token for the Chat API. Ask again before `expiresAt`.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("chat.retry", "/sessions/:id/chat/retry", {
+      params: { id: Session.ID },
+      payload: Schema.Struct({ message: Schema.optional(Session.FirstMessage) }),
+      success: HttpApiSchema.NoContent,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "chat.retry",
+        summary: "Retry a failed session",
+        description:
+          "Start the session’s brain again after `chat.access` returned `failed`, and start the session with `message` as its first message. A session that already started ignores `message`.",
       }),
     ),
   )

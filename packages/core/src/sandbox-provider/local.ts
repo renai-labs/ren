@@ -168,7 +168,9 @@ export const layer = (options: {
               const names = yield* Effect.promise(() => readdir(options.root).catch(() => []))
               const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))
               const bindings = found.flatMap((binding) => (Option.isSome(binding) ? [binding.value] : []))
-              const dead = yield* Effect.filter(bindings, (binding) => Effect.map(isAlive(binding.pid), (alive) => !alive))
+              const dead = yield* Effect.filter(bindings, (binding) =>
+                Effect.map(isAlive(binding.pid), (alive) => !alive),
+              )
               return dead.map((binding): SandboxProvider.Lost => ({
                 brainId: binding.brainId,
                 generation: binding.generation,

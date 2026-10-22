@@ -71,7 +71,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
         ...(options.lostEvery && { lostEvery: options.lostEvery }),
       }),
     ),
-    Layer.provide(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
+    Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
     Layer.provideMerge(BrainClient.layer),
     Layer.provide(Settings.layer),
     Layer.provide(options.models),

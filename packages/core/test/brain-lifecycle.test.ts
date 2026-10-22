@@ -7,7 +7,7 @@ import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
-import { type Duration, Effect, Layer, ManagedRuntime, Schedule, Schema } from "effect"
+import { type Duration, Effect, Layer, ManagedRuntime, Option, Schedule, Schema } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -83,7 +83,7 @@ const seeded = () =>
       const creator = yield* Seed.user()
       const brainId = Brain.ID.create()
       const sessionId = yield* Seed.session({ organizationId, spaceId, createdBy: creator.id, brainId })
-      return { brainId, sessionId, spaceId }
+      return { brainId, sessionId, spaceId, organizationId }
     }),
   )
 
@@ -238,6 +238,48 @@ describe("brain runs", () => {
     expect(isAlive(pid)).toBe(true)
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.cleanup))
     expect(isAlive(pid)).toBe(false)
+    await current.dispose()
+  })
+
+  test("a start for a failed brain gives up, and Retry with the first message starts the chat", async () => {
+    const found = await seeded()
+    const current = await ren()
+    await database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .update(Database.Schema.brain)
+          .set({ phase: "failed", failures: 3, failure: "the template is broken", run_epoch: 1 })
+          .where(eq(Database.Schema.brain.id, found.brainId))
+      }),
+    )
+    const script = stub.script({ reply: "started" })
+    const input = {
+      sessionId: found.sessionId,
+      harness: "opencode" as const,
+      interactive: false,
+      initialMessage: {
+        messageId: Session.MessageID.create(),
+        prompt: { text: `${script.marker} hello` },
+        sender: { userId: "user_1" },
+      },
+    }
+    const placement = { organizationId: found.organizationId, spaceId: found.spaceId, brainId: found.brainId }
+    await current.runPromise(BrainHost.Service.use((host) => host.start(input, placement)))
+    await current.runPromise(
+      BrainHost.StartRun.poll(
+        await Effect.runPromise(BrainHost.StartRun.executionId({ input, placement, epoch: 1 })),
+      ).pipe(
+        Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("100 millis") }),
+        Effect.timeoutOrElse({
+          duration: "20 seconds",
+          orElse: () => Effect.die(new Error("The start did not give up")),
+        }),
+      ),
+    )
+    await current.runPromise(BrainHost.Service.use((host) => host.retry(found.sessionId)))
+    await current.runPromise(BrainHost.Service.use((host) => host.start(input, placement)))
+    await script.called(1)
     await current.dispose()
   })
 

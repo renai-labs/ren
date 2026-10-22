@@ -75,6 +75,7 @@ export function NewChat(props: { name: string; userId: string }) {
               if (!text || !spaceId || create.isPending) return
               Attention.ask(platform)
               const message = { id: SessionMessage.ID.create(), text }
+              SessionDrafts.keepPending(platform.drafts, sessionID, message)
               startTransition(() => setSent(text))
               create.mutate(
                 { id: sessionID, spaceId, message, ...(model && { model }) },
