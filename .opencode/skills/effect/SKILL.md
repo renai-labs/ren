@@ -19,6 +19,7 @@ Use the vendored Effect v4 source, not memory or older Effect v2/v3 examples.
 ## Guidelines
 
 - Use `Effect.gen(function* () { ... })` for multi-step workflows.
+- Express ordered writes and event recording as sequential `yield*` statements in the same transaction. Before finishing, remove forwarding wrappers, single-use currying and intermediate results added only to fit a pipeline.
 - Use `Effect.fn("Name")` for service methods and important workflows.
 - Define services as `class Service extends Context.Service<Service, Interface>()("@ren/<package>/<Name>") {}` with an explicit `layer`.
 - Bind services to named variables before calling methods. Do not nest service yields such as `(yield* X.Service).method()`.
@@ -28,8 +29,16 @@ Use the vendored Effect v4 source, not memory or older Effect v2/v3 examples.
 - Use Effect `Schema` for API and domain shapes, branded schemas for IDs, and tagged schema errors for domain errors.
 - Keep HTTP handlers thin: decode input, call services, map errors. Business rules live in `@ren/core` services.
 - Prefer Effect platform abstractions (`HttpClient`, `FileSystem`, `SqlClient`) over ad hoc promises.
+- Reuse an existing typed client for transport. Decode at the boundary and keep domain translation separate; do not wrap typed results in unknown envelopes to decode them again.
 - Keep layer composition explicit.
 - Do not introduce `any`, non-null assertions, unchecked casts or older Effect APIs to satisfy types.
+
+## Async correctness
+
+- Across each async boundary, identify what can change before the result is applied. Check a version and apply its conditional write under the same lock or transaction; keep network requests outside the lock.
+- Reject stale snapshots rather than overwriting newer live state. Compute order-dependent metadata from the order actually consumed, not the order initially queued.
+- Preserve expected error categories. Use `orDie` only for failures that are defects, not for an entire workflow that can also reject user input.
+- Distinguish failed work from pending or throttled work so failures retain backoff. Signal readiness only after the resource or subscription is ready.
 
 ## Testing patterns
 
