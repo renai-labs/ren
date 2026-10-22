@@ -71,6 +71,7 @@ The task stores two fields: `humanReview` (boolean) and `humanReviewReason` (tex
 - The decision takes `start: "continue" | "none"`. With `continue`, Ren continues the agent's latest session with a message: the decision, the comment, and whether the description changed after the request. With `none`, the agent stays idle until someone starts it.
 - The default is `continue` for now. We want to try both, so the default lives in one place in core, `Task.reviewStart`, and no other code assumes it. When the `FeatureFlags` service exists ([runtime plan §2.8](runtime/plan.md#28-feature-flags)), a flag targeted by space replaces the constant, and the flag is listed in [runtime/README.md](runtime/README.md#feature-flags). The app sends no `start` unless the user changes it, so it follows the default.
 - Review does not block a handoff. It is a signal for people, not a lock.
+- Turning review on again with the same reason changes nothing. A decision when no review is open is refused with a conflict.
 - Turning review on writes a `review_requested` event with the reason. A decision writes a `reviewed` event with the decision and the comment. The comment is stored only on the event. The dashboard takes the "Human" time from the time between the two events.
 
 ## Who has the turn
@@ -107,7 +108,8 @@ A human who works on the task in person removes the agent (rule 4). Ren cannot s
 ## Agents and the factory order
 
 - A task's agent is any primary agent (not a subagent) that is usable in the task's space: an agent that the space owns, an agent shared into it through `agent_membership`, or the global `ren` agent. `ren` is always usable, in every space.
-- The factory order is a new space field, `agentOrder`: an ordered list of agent IDs. Each ID must be usable in the space. `ren` is in the order only if a user adds it. A space with no agents of its own has the default order `[ren]`.
+- The factory order is a new space field, `agentOrder`: an ordered list of agent IDs. Each ID must be usable in the space; an update with any other ID is refused, and a repeated ID counts once. `ren` is in the order only if a user adds it. When no ID in the stored list is usable and the space owns no live primary agent, the order is the live global primary agents, which today is `[ren]`.
+- `agentOrder` holds plain strings, not `Agent.ID`: `schema/agent` imports `schema/space`, so `Space.Info` cannot import `Agent.ID` without an import cycle.
 - A read drops IDs that are no longer usable (an archived agent, an agent no longer shared). It does not rewrite the stored list.
 - Only a user who can update the space changes the order.
 - An agent that someone archives stays on its tasks. The UI shows it as archived, and a start is refused (v1 L104).
@@ -138,12 +140,13 @@ The factory order is not enforced in this iteration. Any agent can hand off to a
 
 `task.start` with `mode: new | continue` starts the task's agent on it.
 
-- It needs an actionable task (`todo` or `in_progress`) with an agent that the caller can use. Else it is refused.
+- It needs an actionable task (`todo` or `in_progress`) with an agent that is live and usable in the task's space. Else it is refused with a conflict.
 - `new` always opens a new session (v1 L69).
-- `continue` resumes the latest live session of this agent on this task, or opens a new one when none exists. It is never an error (v1 L70, L71).
+- `continue` resumes the latest live session of this agent on this task, in the task's current space, or opens a new one when none exists. It is never an error (v1 L70, L71). The start message joins the session's queue, so it waits for a turn that is running.
 - Each agent continues in its own session. Plan, then Build, then Plan again resumes the first Plan session (v1 L72).
-- A start records the session in `task_session` and writes a `started` event with the initiator as actor and the agent, session and mode as data (v1 L79).
-- The first start sets `todo` to `in_progress` in the same transaction.
+- A start records the session in `task_session` and writes a `started` event with the initiator as actor and the agent, session and mode as data (v1 L79). The rows are written only after the host accepts the start, so a failed start records nothing (v1 L73).
+- The first start sets `todo` to `in_progress` in the same transaction, with a `status` event after the `started` event.
+- A task that an agent creates records the agent's session in `task_session` (v1 L73, L74), so a later `continue` of that agent resumes it.
 - A session for the global `ren` agent is a session with no `agentId`, as today. `task_session.agent_id` still stores the `ren` agent ID, so that lookups and usage work for `ren` as for any agent.
 
 ### Start message
@@ -187,7 +190,7 @@ As in v1 (v1 L89–L97):
 
 ## Links
 
-As in v1 (v1 L81–L88): a task links GitHub pull requests, Linear issues, Slack threads and plain URLs. Each link has a kind and a canonical key; the pair (task, kind, key) is unique. Links change only with `addLinks` and `removeLinks`. A task has at most 32 links. The app shows links but does not add them (v1 parity).
+As in v1 (v1 L81–L88): a task links GitHub pull requests, Linear issues, Slack threads and plain URLs. Each link has a kind and a canonical key; the pair (task, kind, key) is unique. Links change only with `addLinks` and `removeLinks`. A task has at most 32 links. The `link` events are the only record of who added or removed a link; a link row has no creator. Creating a task with links writes a `link` event for them, by the creator. The app shows links but does not add them (v1 parity).
 
 **TODO (channels):** v1 routes a message in a linked thread to the task's agent (v1 hand-offs). v2 has no channels yet. Links are stored now; routing comes with channels.
 
@@ -253,10 +256,10 @@ New tables in `packages/db/src/task.sql.ts`:
 | `task_sequence` | `organization_id` (key), `prefix`, `last_number`.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `label`         | `id` (`lbl_`), `organization_id` (null for system labels), `name`, `color`, timestamps, `archived_at`. Unique (`organization_id`, lower(`name`)) for live rows.                                                                                                                                                                                                                                                                                                                                           |
 | `task_label`    | `task_id`, `label_id`. Unique pair.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `task_link`     | `id` (`tlk_`), `task_id`, `organization_id`, `kind`, `key`, `url`, `created_by`, `created_at`. Unique (`task_id`, `kind`, `key`). Index (`organization_id`, `kind`, `key`).                                                                                                                                                                                                                                                                                                                               |
+| `task_link`     | `id` (`tlk_`), `task_id`, `organization_id`, `kind`, `key`, `url`, `created_at`. No creator: the `link` events record who added it. Unique (`task_id`, `kind`, `key`). Index (`organization_id`, `kind`, `key`).                                                                                                                                                                                                                                                                                          |
 | `task_comment`  | `id` (`tcm_`), `task_id`, `body`, `author_id` (user), `author_agent_id`, `author_session_id`, `edited_at`, timestamps, `archived_at`.                                                                                                                                                                                                                                                                                                                                                                     |
 | `task_event`    | `id` (`tev_`), `task_id` (no foreign key, so the trail outlives the task), `organization_id`, `kind`, `data` (jsonb), `actor_user_id`, `actor_agent_id`, `actor_session_id`, `created_at`.                                                                                                                                                                                                                                                                                                                |
-| `task_session`  | `session_id` (key), `task_id`, `agent_id`, `created_at`. One row for each session that a task start opened or that created the task.                                                                                                                                                                                                                                                                                                                                                                      |
+| `task_session`  | `task_id`, `session_id`, `agent_id`, `created_at`. Key (`task_id`, `session_id`): one session that creates several tasks links to each of them. One row for each session that a task start opened or that created the task.                                                                                                                                                                                                                                                                               |
 
 Changed tables: `space` gets `agent_order` (jsonb, an array of agent IDs, default empty).
 
@@ -268,6 +271,7 @@ Deleting an organization deletes all of these. Deleting a user, agent or session
 - Writes follow the space's existing policy. Read-only roles read only (v1 L7).
 - An archived task leaves every list, and a get returns not found. Its events stay (v1 L9, L10).
 - `done` and `dismissed` need a user actor with no agent.
+- An agent acting in a session gets only the policy statements marked `agents: true`, and only in its session's space: `Access.plan` carries the space, each policy's filter adds it, and `isAllowed` refuses a resource of another space. Any other statement denies agents, so a service that ignores the agent cannot widen its reach. Agents get every task action except `archive`, and also `task-comment.create`, `task-activity.list`, `label.list` and `space.get`. Roles still come from the session's creator, so an admin's agent has admin rights inside its space.
 
 ## API
 
@@ -281,7 +285,7 @@ New primitives in `@ren/schema`, with groups in `@ren/protocol` and handlers in 
 | `label`         | `list`, `create`, `update`, `archive`.                                                                                                                        |
 | `space`         | `update` takes `agentOrder`; `Space.Info` returns it.                                                                                                         |
 
-A primitive action returns its record, so `assign` and `start` return the task, not v1's `message` and `started`. The task's `session` field (the agent's latest session on the task, and its state: working, idle or failed) shows what started, and it also feeds the turn line. The agent tools in `RenHostApi` are not primitives, so they add the one-line `message` (v1 L67).
+A primitive action returns its record, so `assign` and `start` return the task, not v1's `message` and `started`. The task's `session` field (the agent's latest live session on the task, and its state: working, idle or failed) shows what started, and it also feeds the turn line. A session that the host has not synced yet counts as working. `assign` is the only action that can fail with a validation error (an agent that the space cannot use, or an owner who is not a member), so only its endpoint declares `InvalidRequestError`. The agent tools in `RenHostApi` are not primitives, so they add the one-line `message` (v1 L67). `task_assign` takes it from `Task.handOff`, which reports whether the agent started; a start that fails does not fail the hand-off.
 
 `task.list` filters: space, status, priority, agent, owner, label, human review, linked URL, parent (phase 2). The default is the actionable statuses. A `status` filter wins (v1 L32, L35). Order: newest created first (v1 L34). Pages use the standard `Pagination` fields.
 
