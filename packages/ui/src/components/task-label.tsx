@@ -6,18 +6,14 @@ import { Badge } from "./badge.js"
 import { StatusDot } from "./status-dot.js"
 import { Tooltip } from "./tooltip.js"
 
-export { swatches } from "../lib/label-color.js"
+export { labelDisplay as display, labelTone as tone, swatches } from "../lib/label-color.js"
 
 export type Label = { id: string; name: string; color?: string | null }
 
 export function Pill(props: { label: Label }) {
   return (
     <Tooltip.Root content={labelDisplay(props.label.name)}>
-      <span
-        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard users need the tooltip to read truncated labels
-        tabIndex={0}
-        className="flex min-w-0 rounded-full focus-visible:outline-2 focus-visible:outline-accent-primary"
-      >
+      <span className="flex min-w-0">
         <Badge appearance="tag" size="medium" shape="pill" marker="dot" markerTone={labelTone(props.label)}>
           {labelDisplay(props.label.name)}
         </Badge>
@@ -71,11 +67,7 @@ export function Chips(props: { labels: ReadonlyArray<Label> }) {
       ))}
       {hidden.length > 0 ? (
         <Tooltip.Root content={hidden.map((label) => labelDisplay(label.name)).join(", ")}>
-          <span
-            // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard users need the tooltip to read hidden labels
-            tabIndex={0}
-            className="flex rounded-full focus-visible:outline-2 focus-visible:outline-accent-primary"
-          >
+          <span className="flex">
             <Badge appearance="tag" size="medium" shape="pill" tone="muted">
               +{hidden.length}
             </Badge>
@@ -96,20 +88,11 @@ export function Chips(props: { labels: ReadonlyArray<Label> }) {
 }
 
 export function Dots(props: { labels: ReadonlyArray<Label> }) {
-  if (props.labels.length === 0) return null
   return (
-    <Tooltip.Root content={props.labels.map((label) => labelDisplay(label.name)).join(", ")}>
-      <span
-        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- keyboard users need the tooltip to identify label dots
-        tabIndex={0}
-        role="img"
-        aria-label={props.labels.map((label) => labelDisplay(label.name)).join(", ")}
-        className="flex shrink-0 items-center gap-1 rounded-full focus-visible:outline-2 focus-visible:outline-accent-primary"
-      >
-        {props.labels.slice(0, 3).map((label) => (
-          <StatusDot key={label.id} tone={labelTone(label)} />
-        ))}
-      </span>
-    </Tooltip.Root>
+    <span aria-hidden className="flex shrink-0 items-center gap-1">
+      {props.labels.slice(0, 3).map((label) => (
+        <StatusDot key={label.id} tone={labelTone(label)} />
+      ))}
+    </span>
   )
 }

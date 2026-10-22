@@ -99,6 +99,31 @@ export function SignalHigh(props: GlyphProps) {
   return <SignalBars level={3} attributes={props} />
 }
 
+export function UnassignedPerson(props: GlyphProps) {
+  return (
+    <svg viewBox="0 0 16 16" {...props} stroke={undefined}>
+      <circle
+        cx="8"
+        cy="8"
+        r="7.1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeDasharray="2.2 1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="8" cy="6.6" r="2.2" fill="currentColor" />
+      <path
+        d="M4.4 12.4a4.3 4.3 0 0 1 7.2 0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 export function Linear(props: GlyphProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" {...props} stroke={undefined}>
