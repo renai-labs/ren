@@ -1,6 +1,7 @@
 import { getDefaultSelectors } from "eslint-plugin-better-tailwindcss/api/defaults"
 import { MatcherType, SelectorKind } from "eslint-plugin-better-tailwindcss/api/types"
 import type { Settings } from "eslint-plugin-better-tailwindcss/api/types"
+import { builtinModules } from "node:module"
 import { defineConfig } from "oxlint"
 
 const vendored = {
@@ -12,8 +13,25 @@ const serverOnly = {
   message:
     "Client-side packages never import core, db, server or the internal Host and Environment APIs. Go through @ren/client.",
 }
+const platformImports = {
+  regex: `^(node:|bun(:|$)|(${builtinModules.filter((name) => !name.startsWith("node:")).join("|")})(/|$))`,
+  message: "This module is browser-safe. Node and Bun APIs belong in the host or platform layer.",
+}
+const chatImports = [
+  vendored,
+  platformImports,
+  {
+    regex: "^@ren/(?!schema(/|$)|protocol(/|$)|client(/|$))",
+    message: "Chat depends on schema, protocol and client only.",
+  },
+]
 const packageBoundaries = [
   { files: ["packages/schema/**"], regex: "^@ren/", message: "Schema imports nothing from Ren." },
+  {
+    files: ["packages/schema/src/**"],
+    regex: `^@ren/|${platformImports.regex}`,
+    message: "Schema imports nothing from Ren and uses no Node or Bun APIs.",
+  },
   {
     files: ["packages/protocol/**"],
     regex: "^@ren/(core|db|server)(/|$)",
@@ -81,8 +99,7 @@ const packageBoundaries = [
   },
   {
     files: ["packages/chat/src/**"],
-    regex:
-      "^(@ren/(?!schema(/|$)|protocol(/|$)|client(/|$))|node:|bun(:|$)|(fs|path|os|child_process|crypto|url|buffer|stream|events|http|https|net|zlib|worker_threads)(/|$))",
+    regex: `^@ren/(?!schema(/|$)|protocol(/|$)|client(/|$))|${platformImports.regex}`,
     message:
       "The chat runtime runs on web, desktop and mobile. It depends on schema, protocol, client and effect, and on React only in src/react.ts.",
   },
@@ -484,6 +501,7 @@ export default defineConfig({
     "import/no-default-export": "error",
     "unicorn/filename-case": ["error", { case: "kebabCase" }],
     "ren/no-comments": "error",
+    "ren/no-node-modules-import": "error",
     "eslint/no-console": "error",
     "eslint/require-yield": "off",
 
@@ -672,6 +690,49 @@ export default defineConfig({
       },
     },
     {
+      files: ["packages/schema/src/**", "packages/chat/src/**"],
+      rules: { "no-restricted-globals": ["error", reflect, ...serverGlobals] },
+    },
+    {
+      files: ["packages/chat/src/**"],
+      excludeFiles: ["packages/chat/src/react.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            patterns: [
+              ...chatImports,
+              { regex: "^(react(/|$)|@effect/atom-react(/|$))", message: "React bindings belong in src/react.ts." },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: ["packages/chat/src/{reducer,hydrate,outbox,projection}.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "effect",
+                importNames: ["Effect"],
+                message: "Keep state transitions and projections synchronous and pure. ChatSession runs effects.",
+              },
+            ],
+            patterns: [
+              ...chatImports,
+              {
+                regex: "^(effect/reactivity(/|$)|@effect/|react(/|$))",
+                message: "Atoms, subscriptions and React belong outside pure chat modules.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: ["packages/util/src/**"],
       rules: { "no-restricted-globals": ["error", reflect, ...serverGlobals] },
     },
@@ -688,6 +749,7 @@ export default defineConfig({
       rules: {
         "better-tailwindcss/no-restricted-classes": ["error", { restrict: [importantClass, appClasses] }],
         "ren/feature-boundaries": "error",
+        "ren/narrow-chat-state": "error",
         "react/forbid-component-props": [
           "error",
           {

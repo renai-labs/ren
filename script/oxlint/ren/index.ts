@@ -1,7 +1,9 @@
 import { definePlugin } from "@oxlint/plugins"
 import { featureBoundaries } from "./rules/feature-boundaries.ts"
 import { interfaceCopy } from "./rules/interface-copy.ts"
+import { narrowChatState } from "./rules/narrow-chat-state.ts"
 import { noComments } from "./rules/no-comments.ts"
+import { noNodeModulesImport } from "./rules/no-node-modules-import.ts"
 import { noLookupInLoop } from "./rules/no-lookup-in-loop.ts"
 import { noSortForExtremum } from "./rules/no-sort-for-extremum.ts"
 import { requireCompanionClass } from "./rules/require-companion-class.ts"
@@ -13,7 +15,9 @@ import { storyLocation } from "./rules/story-location.ts"
 export const rules = {
   "feature-boundaries": featureBoundaries,
   "interface-copy": interfaceCopy,
+  "narrow-chat-state": narrowChatState,
   "no-comments": noComments,
+  "no-node-modules-import": noNodeModulesImport,
   "no-lookup-in-loop": noLookupInLoop,
   "no-sort-for-extremum": noSortForExtremum,
   "require-companion-class": requireCompanionClass,
