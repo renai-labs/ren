@@ -5,8 +5,8 @@ import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm"
-import { Clock, Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
+import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm"
+import { Clock, Context, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
@@ -29,6 +29,7 @@ export interface Interface {
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<SandboxProvider.Hand>>
+  readonly check: (brainId: Brain.ID) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainLifecycle") {}
@@ -126,15 +127,17 @@ export const layer = Layer.effect(
     })
 
     const create = Effect.fnUntraced(function* (row: Row) {
-      const created = yield* provider.create({ brainId: row.id, generation: row.generation, env: yield* env(row) }).pipe(
-        Effect.map(Option.some),
-        Effect.catchTag("SandboxProvider.Capacity", (error) =>
-          Effect.logWarning(`Waiting for capacity: ${error.message}`).pipe(
-            Effect.andThen(Effect.sleep(error.retryAfter)),
-            Effect.as(Option.none<SandboxProvider.Created>()),
+      const created = yield* provider
+        .create({ brainId: row.id, generation: row.generation, env: yield* env(row) })
+        .pipe(
+          Effect.map(Option.some),
+          Effect.catchTag("SandboxProvider.Capacity", (error) =>
+            Effect.logWarning(`Waiting for capacity: ${error.message}`).pipe(
+              Effect.andThen(Effect.sleep(error.retryAfter)),
+              Effect.as(Option.none<SandboxProvider.Created>()),
+            ),
           ),
-        ),
-      )
+        )
       if (Option.isNone(created)) return false
       yield* update(row.id, {
         provider: provider.kind,
@@ -197,11 +200,27 @@ export const layer = Layer.effect(
       return true
     })
 
+    const interruptBusy = (transaction: Database.Transaction, brainId: Brain.ID, at: Date) =>
+      transaction
+        .update(Database.Schema.opencode_session)
+        .set({ time_suspended: null, idle_outcome: "interrupted", time_idle: at.getTime() })
+        .where(
+          and(
+            inArray(
+              Database.Schema.opencode_session.session_id,
+              transaction
+                .select({ id: Database.Schema.agent_session.id })
+                .from(Database.Schema.agent_session)
+                .where(eq(Database.Schema.agent_session.brain_id, brainId)),
+            ),
+            isNotNull(Database.Schema.opencode_session.time_suspended),
+          ),
+        )
+
     const replace = Effect.fnUntraced(function* (row: Row) {
       yield* database
         .transaction((transaction) =>
           Effect.gen(function* () {
-            const at = yield* now
             yield* transaction
               .update(brains)
               .set({
@@ -212,19 +231,7 @@ export const layer = Layer.effect(
                 phase: "creating",
               })
               .where(eq(brains.id, row.id))
-            const busy = transaction
-              .select({ id: Database.Schema.agent_session.id })
-              .from(Database.Schema.agent_session)
-              .where(eq(Database.Schema.agent_session.brain_id, row.id))
-            yield* transaction
-              .update(Database.Schema.opencode_session)
-              .set({ time_suspended: null, idle_outcome: "interrupted", time_idle: at.getTime() })
-              .where(
-                and(
-                  inArray(Database.Schema.opencode_session.session_id, busy),
-                  isNotNull(Database.Schema.opencode_session.time_suspended),
-                ),
-              )
+            yield* interruptBusy(transaction, row.id, yield* now)
           }),
         )
         .pipe(Effect.orDie)
@@ -234,6 +241,31 @@ export const layer = Layer.effect(
           .pipe(Effect.catch((error) => Effect.logWarning("Destroying the replaced sandbox failed", error)))
       return false
     })
+
+    const lose = Effect.fn("BrainLifecycle.lose")(function* (lost: SandboxProvider.Lost) {
+      yield* database
+        .transaction((transaction) =>
+          Effect.gen(function* () {
+            const marked = yield* transaction
+              .update(brains)
+              .set({ phase: "replacing" })
+              .where(
+                and(
+                  eq(brains.id, lost.brainId),
+                  eq(brains.generation, lost.generation),
+                  notInArray(brains.phase, ["creating", "replacing"]),
+                ),
+              )
+              .returning({ id: brains.id })
+            if (marked.length === 0) return
+            yield* Effect.logWarning(`The sandbox of brain ${lost.brainId} is gone; its busy chats are interrupted`)
+            yield* interruptBusy(transaction, lost.brainId, yield* now)
+          }),
+        )
+        .pipe(Effect.orDie)
+    })
+
+    yield* provider.lost.pipe(Stream.runForEach(lose), Effect.forkScoped)
 
     const settle = Effect.fnUntraced(function* (row: Row) {
       const at = yield* now
@@ -365,6 +397,18 @@ export const layer = Layer.effect(
           )
         if (moving)
           yield* keepAlive(row, timing.busy).pipe(Effect.catch((error) => Effect.logWarning("keepAlive failed", error)))
+      }),
+      check: Effect.fn("BrainLifecycle.check")(function* (brainId: Brain.ID) {
+        const row = yield* read(brainId)
+        if (!row.binding) return
+        const status = yield* provider
+          .status(row.binding)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("The sandbox status is unknown", error).pipe(Effect.as("running" as const)),
+            ),
+          )
+        if (status === "gone") yield* lose({ brainId, generation: row.generation })
       }),
       hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {
         const row = yield* read(brainId)

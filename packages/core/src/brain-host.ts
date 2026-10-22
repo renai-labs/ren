@@ -164,6 +164,7 @@ interface Locator {
   readonly prepare: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: PullRequest["sessions"]) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<SandboxProvider.Hand>>
+  readonly unavailable: (brainId: Brain.ID) => Effect.Effect<void>
 }
 
 const make = Effect.fnUntraced(function* (locator: Locator) {
@@ -216,10 +217,12 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
   })
 
   const handOf = Effect.fnUntraced(function* (brainId: Brain.ID, generation: number) {
-    return Option.map(
-      yield* locator.hand(brainId),
-      (hand): Environments.Hand => ({ brainId, generation, url: hand.url, workspace: hand.workspace }),
-    )
+    return Option.map(yield* locator.hand(brainId), (hand): Environments.Hand => ({
+      brainId,
+      generation,
+      url: hand.url,
+      workspace: hand.workspace,
+    }))
   })
 
   const startNow = Effect.fn("BrainHost.startNow")(function* (input: Session.StartInput, placement: Placement) {
@@ -243,6 +246,7 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
     const api = yield* client.brain(target)
     yield* call(api.brain["brain.start"]({ payload })).pipe(
       Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainUnavailable({ cause }))),
+      Effect.tapErrorTag("BrainUnavailable", () => locator.unavailable(placement.brainId)),
       Effect.tapErrorTag("BrainRejectedError", () =>
         Option.exists(binding, (found) => found.isNew) ? environments.unbind(subject) : Effect.void,
       ),
@@ -284,7 +288,7 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
       const api = yield* client.brain(target)
       return yield* call(
         api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
-      )
+      ).pipe(Effect.tapErrorTag("BrainUnavailable", () => locator.unavailable(session.brainId)))
     }),
     access: Effect.fn("BrainHost.access")(function* (
       sessionId: Session.ID,
@@ -314,7 +318,9 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
       const session = yield* brainOf(sessionId)
       const target = yield* locator.target(session.brainId)
       const api = yield* client.brain(target)
-      return yield* call(api.brain["brain.sync"]())
+      return yield* call(api.brain["brain.sync"]()).pipe(
+        Effect.tapErrorTag("BrainUnavailable", () => locator.unavailable(session.brainId)),
+      )
     }),
     authenticateHost: Effect.fn("BrainHost.authenticateHost")(function* (hostToken: Redacted.Redacted) {
       const claims = yield* client.verify(Redacted.value(hostToken))
@@ -432,6 +438,7 @@ export const layer = Layer.effect(
       prepare: () => Effect.void,
       observe: () => Effect.void,
       hand: () => Effect.succeedNone,
+      unavailable: () => Effect.void,
     })
   }),
 )
@@ -463,6 +470,7 @@ export const layerSandbox = Layer.effect(
         }),
       observe: lifecycle.observe,
       hand: lifecycle.hand,
+      unavailable: lifecycle.check,
     })
   }),
 )
