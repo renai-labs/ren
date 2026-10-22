@@ -199,6 +199,7 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
         brainId: Database.Schema.agent_session.brain_id,
         organizationId: Database.Schema.agent_session.organization_id,
         spaceId: Database.Schema.agent_session.space_id,
+        startedAt: Database.Schema.agent_session.started_at,
       })
       .from(Database.Schema.agent_session)
       .where(eq(Database.Schema.agent_session.id, sessionId))
@@ -293,6 +294,18 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
     } satisfies StartBody
     const api = yield* client.brain(target)
     yield* call(api.brain["brain.start"]({ payload })).pipe(
+      Effect.andThen(
+        database.db
+          .update(Database.Schema.agent_session)
+          .set({ started_at: new Date() })
+          .where(
+            and(
+              eq(Database.Schema.agent_session.id, input.sessionId),
+              isNull(Database.Schema.agent_session.started_at),
+            ),
+          )
+          .pipe(Effect.orDie),
+      ),
       Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainUnavailable({ cause }))),
       Effect.tapErrorTag("BrainUnavailable", () => locator.unavailable(placement.brainId)),
       Effect.tapErrorTag("BrainRejectedError", () =>
@@ -351,6 +364,7 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
       const state = yield* locator.access(session.brainId)
       if (state._tag === "Starting") return { status: "starting", phase: state.phase } satisfies Session.ClientAccess
       if (state._tag === "Failed") return { status: "failed", reason: state.reason } satisfies Session.ClientAccess
+      if (!session.startedAt) return { status: "starting", phase: "starting the chat" } satisfies Session.ClientAccess
       const signed = yield* client.clientToken(state.target, {
         sid: sessionId,
         sub: member.userId,

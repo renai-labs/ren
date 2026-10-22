@@ -59,6 +59,7 @@ export const agent_session = pgTable(
     sync_upload_open: boolean().notNull().default(false),
     created_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
+    started_at: timestamp().defaultNow(),
   },
   (table) => [
     index("agent_session_root_id_idx").on(table.root_id),

@@ -1,0 +1,1 @@
+ALTER TABLE "agent_session" ADD COLUMN "started_at" timestamp DEFAULT now();

@@ -149,6 +149,7 @@ export const session = Effect.fnUntraced(function* (
     root_id: id,
     harness: "opencode",
     start_input: { sessionId: id, harness: "opencode", ...start },
+    started_at: null,
   })
   return id
 })

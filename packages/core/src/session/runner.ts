@@ -104,6 +104,7 @@ export const layer = Layer.effect(
                 harness: input.harness,
                 agent_id: options.agentId,
                 start_input: startInput,
+                started_at: null,
               })
               .onConflictDoNothing()
               .returning({ id: Database.Schema.agent_session.id })

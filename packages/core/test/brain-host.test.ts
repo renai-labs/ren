@@ -142,6 +142,20 @@ describe("BrainHost on local brains", () => {
     }),
   )
 
+  local.live("access is ready only once the chat has started on its brain, so its first read finds it", () =>
+    Effect.gen(function* () {
+      const brain = yield* BrainHost.Service
+      const chat = yield* created(`open ${stub.script().marker}`)
+      const access = yield* Host.ready(brain.access(chat.sessionId, { userId: chat.owner.createdBy }))
+      const read = yield* Effect.promise(() =>
+        fetch(`${access.url}/chat/session/${chat.sessionId}`, {
+          headers: { authorization: TestToken.basic(access.token) },
+        }),
+      )
+      expect(read.status).toBe(200)
+    }),
+  )
+
   local.live("an access token reads its chat through the Chat API and names its member", () =>
     Effect.gen(function* () {
       const brain = yield* BrainHost.Service
