@@ -38,12 +38,7 @@ const notSupported = (sessionId: string) =>
 const environmentInstructions = (
   server: OpenCodeServer.Instance,
   environmentDirectory: Option.Option<string>,
-  directory: string,
 ) => {
-  if (server.nativeTools && Option.isNone(environmentDirectory))
-    return {
-      [environmentInstructionKey]: `Your file and shell tools run on this machine. Work in ${directory}; other chats may share the machine.`,
-    }
   if (Option.isSome(environmentDirectory))
     return {
       [environmentInstructionKey]: `Your file and shell tools run on a separate machine, in ${environmentDirectory.value}. You have full access to that machine.`,
@@ -224,7 +219,6 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
 ) {
   const sessionID = Session.ID.make(input.sessionId)
   const directory = AbsolutePath.make(server.directoryOf(input.sessionId))
-  if (server.nativeTools) yield* Effect.promise(() => mkdir(directory, { recursive: true }))
   const session = yield* findSession(client, sessionID)
   const start = input.model ?? null
   const override = overrideOf(session, start)
@@ -234,6 +228,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   const model = chosen && RenPlugin.modelRef(chosen)
   const metadata = SessionSettings.metadata(session, { start, model: override, interactive: input.interactive })
   const environmentDirectory = yield* environmentDirectoryOf(server, input, session)
+  if (Option.isNone(environmentDirectory)) yield* server.makeDirectory(directory)
   const permissions = deniedActions(server, input, environmentDirectory).map((action) => ({
     action,
     resource: "*",
@@ -255,7 +250,7 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   })
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    environmentInstructions(server, environmentDirectory, directory),
+    environmentInstructions(server, environmentDirectory),
   )
   yield* Effect.forEach(
     changes.put,
@@ -334,17 +329,17 @@ export const layer = (storage: DurableObjectStorage) =>
   layerWith((endpoints, refreshKey, connections, config, settings) =>
     OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
-      nativeTools: false,
       directoryOf: (sessionId) => `/workspace/${sessionId}`,
     }),
   )
 
-export const layerProcess = (database: string, workspace: string) =>
-  layerWith((endpoints, refreshKey, _connections, config, settings) =>
-    OpenCodeServer.openProcess(database, config, endpoints, refreshKey, {
+export const layerProcess = (database: string, confinement: RenPlugin.Confinement) =>
+  layerWith((endpoints, refreshKey, connections, config, settings) =>
+    OpenCodeServer.openProcess(database, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
-      nativeTools: true,
-      directoryOf: (sessionId) => `${workspace}/${sessionId}`,
+      directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
+      confinement,
+      makeDirectory: (directory) => Effect.promise(() => mkdir(directory, { recursive: true })),
     }),
   )
 

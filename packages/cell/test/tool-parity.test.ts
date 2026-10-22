@@ -19,10 +19,11 @@ import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http
 import { createServer, connect } from "node:net"
 import { lstat, mkdir, mkdtemp, readdir, realpath, symlink } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { Env } from "../src/env.js"
 import type { Harness } from "../src/harness/harness.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
+import type { RenPlugin } from "../src/harness/opencode/plugin.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 import { Pid } from "./lib/pid.js"
@@ -72,7 +73,7 @@ const embedded = (replacements: Parameters<typeof createEmbeddedRoutes>[1]) =>
     replacements,
   ).pipe(Layer.provide(HttpServer.layerServices))
 
-const open = Effect.fnUntraced(function* () {
+const open = Effect.fnUntraced(function* (confinement?: RenPlugin.Confinement) {
   const context = yield* Layer.build(TestAccess.memory(new Map()))
   const memory = Context.get(context, TestAccess.Memory)
   const opens = yield* Ref.make(0)
@@ -95,7 +96,7 @@ const open = Effect.fnUntraced(function* () {
     endpoints,
     () => Effect.succeedNone,
     Option.some(environments),
-    { saved: Option.none(), nativeTools: false, directoryOf: () => local },
+    { saved: Option.none(), directoryOf: () => local, ...(confinement && { confinement }) },
   )
   return {
     harness: yield* OpenCodeHarness.make(host, endpoints),
@@ -138,8 +139,8 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
       sessions: Context.get(services, OpenCodeSession.Service),
       workspaces: Context.get(services, Workspace.Service),
       hasEnvironmentConnections: false,
-      nativeTools: true,
       directoryOf: () => directory,
+      makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
       activate: () => Effect.void,
       chats: Option.none(),
       configure: () => Effect.void,
@@ -818,6 +819,29 @@ it.live("J51 a session reads a file that another session wrote on the same sandb
     )
     expect(lastToolResult(answer)).toContain("1: shared")
   }),
+)
+
+it.live(
+  "B20 a chat on the brain's own hand is denied another chat's folder and the brain's state, and allowed /tmp",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open({ workspace, allow: ["/tmp/"] })
+      const first = yield* begin(opened)
+      const second = yield* begin(opened)
+      yield* first.turn(stub.script(shell("echo first-chat-only > f.txt")))
+      const read = (path: string) =>
+        second.turn(stub.script({ tool: { name: "read", input: { path } } })).pipe(Effect.map(lastToolResult))
+      const scratch = `/tmp/ren-b20-${crypto.randomUUID()}.txt`
+      const written = lastToolResult(
+        yield* second.turn(stub.script({ tool: { name: "write", input: { path: scratch, content: "scratch\n" } } })),
+      )
+      const other = yield* read(join(folder(first.sessionId), "f.txt"))
+      expect(other).toContain("its own folder")
+      expect(other).not.toContain("first-chat-only")
+      expect(yield* read(join(dirname(workspace), ".ren", "brain.env"))).toContain("its own folder")
+      expect(written).toContain("Created file successfully")
+      expect(yield* Effect.promise(() => text(scratch))).toBe("scratch\n")
+    }),
 )
 
 test.todo("J51 a session reads another session's file by that session's /workspace/<session> path", () =>

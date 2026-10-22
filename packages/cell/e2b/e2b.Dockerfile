@@ -6,9 +6,9 @@ RUN apt-get update \
 
 COPY ren.tar.gz /tmp/ren.tar.gz
 RUN mkdir -p /opt/ren && tar -xzf /tmp/ren.tar.gz -C /opt/ren && rm /tmp/ren.tar.gz \
-  && cd /opt/ren && bun install --frozen-lockfile --production --filter @ren/cell --ignore-scripts
+  && cd /opt/ren && bun install --frozen-lockfile --production --filter @ren/cell --filter @ren/executor --ignore-scripts
 
 COPY start.sh /opt/ren/start.sh
 RUN chmod 0755 /opt/ren/start.sh
 
-ENV BRAIN_PORT=4800
+ENV BRAIN_PORT=4800 EXECUTOR_PORT=4100

@@ -1,7 +1,5 @@
 import { DurableObject } from "cloudflare:workers"
-import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import { Effect, Layer, ManagedRuntime } from "effect"
-import { FetchHttpClient } from "effect/http"
+import { Layer, ManagedRuntime } from "effect"
 import { Brain } from "./brain.js"
 import { BrainKeys } from "./brain-keys.js"
 import { Cell } from "./cell.js"
@@ -11,19 +9,11 @@ import { OpenCodeHarness } from "./harness/opencode/harness.js"
 import { HostAccess } from "./host-access.js"
 import { HotReload } from "./hot-reload.js"
 
-const ren = Layer.unwrap(
-  Effect.gen(function* () {
-    const info = yield* Cell.Info
-    if (!info.vars.REN_URL) return Layer.empty
-    return EnvironmentConnections.layer.pipe(Layer.provide(HostAccess.layer), Layer.provide(FetchHttpClient.layer))
-  }),
-)
-
 export class SessionCell extends DurableObject {
   readonly runtime = ManagedRuntime.make(
     Layer.mergeAll(Brain.layer, Chat.layer).pipe(
       Layer.provideMerge(HotReload.layer),
-      Layer.provideMerge(OpenCodeHarness.layer(this.ctx.storage).pipe(Layer.provide(ren))),
+      Layer.provideMerge(OpenCodeHarness.layer(this.ctx.storage).pipe(Layer.provide(HostAccess.connections))),
       Layer.provideMerge(Layer.mergeAll(ChatSettings.layer, BrainKeys.layer)),
       Layer.provideMerge(Cell.layer(this.ctx.storage, this.ctx.id.name, this.env)),
     ),

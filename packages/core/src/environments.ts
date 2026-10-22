@@ -5,6 +5,7 @@ import { EnvironmentToken } from "@ren/environment-api/environment-token"
 import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
+import type { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
@@ -23,6 +24,13 @@ export interface Placement {
   readonly spaceId: Space.ID
 }
 
+export interface Hand {
+  readonly brainId: Brain.ID
+  readonly generation: number
+  readonly url: string
+  readonly workspace: Environment.Directory
+}
+
 interface Bound {
   readonly directory: Environment.Directory
   readonly isNew: boolean
@@ -33,10 +41,17 @@ export interface Interface {
     placement: Subject & Placement,
     environmentTemplateId: EnvironmentTemplate.ID,
   ) => Effect.Effect<Bound, NotFound | Changed>
-  readonly findDirectory: (subject: Subject) => Effect.Effect<Option.Option<Environment.Directory>>
+  readonly findDirectory: (
+    subject: Subject,
+    hand: Option.Option<Hand>,
+  ) => Effect.Effect<Option.Option<Environment.Directory>>
   readonly unbind: (subject: Subject) => Effect.Effect<void>
-  readonly access: (subject: Subject) => Effect.Effect<Environment.Access, NotFound | Unavailable>
+  readonly access: (
+    subject: Subject,
+    hand: Option.Option<Hand>,
+  ) => Effect.Effect<Environment.Access, NotFound | Unavailable>
   readonly release: (subject: Subject) => Effect.Effect<void>
+  readonly executorVariables: (environmentId: Environment.ID) => Effect.Effect<Readonly<Record<string, string>>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Environments") {}
@@ -99,6 +114,27 @@ export const layer = Layer.effect(
           return Option.some({ key, publicKeys: [first, ...rest] as const })
         }),
     })
+
+    const signingKeys = Option.match(signing, {
+      onNone: () => Effect.die(new Error("ENVIRONMENT_KEYS has no signing key")),
+      onSome: Effect.succeed,
+    })
+
+    const expiry = Effect.map(Clock.currentTimeMillis, (now) =>
+      Math.floor((now + Duration.toMillis(config.lifetime)) / 1000),
+    )
+
+    const isBound = (subject: Subject) =>
+      database.db
+        .select({ sessionId: sessions.session_id })
+        .from(sessions)
+        .where(isSessionOf(subject))
+        .pipe(
+          Effect.orDie,
+          Effect.map((rows) => rows.length > 0),
+        )
+
+    const handDirectory = (hand: Hand, sessionId: Session.ID) => `${hand.workspace}/${sessionId}`
 
     const checkAvailable = Effect.fnUntraced(function* (
       placement: Subject & Placement,
@@ -211,8 +247,26 @@ export const layer = Layer.effect(
 
     const grantAccess = Effect.fnUntraced(function* (
       subject: Subject,
+      hand: Option.Option<Hand>,
       options: { readonly isRetry: boolean },
     ): Effect.fn.Return<Environment.Access, NotFound | Unavailable> {
+      if (Option.isSome(hand) && !(yield* isBound(subject))) {
+        const keys = yield* signingKeys
+        const exp = yield* expiry
+        return {
+          directory: handDirectory(hand.value, subject.sessionId),
+          url: new URL(hand.value.url),
+          token: Redacted.make(
+            yield* EnvironmentToken.sign(keys.key, {
+              environment: Environment.ofBrain(hand.value.brainId),
+              brain: hand.value.brainId,
+              exp,
+            }),
+          ),
+          expiresAt: DateTime.makeUnsafe(exp * 1000),
+          generation: hand.value.generation,
+        } satisfies Environment.Access
+      }
       const templateRows = yield* database.db
         .select({ provider: templates.provider })
         .from(sessions)
@@ -224,10 +278,7 @@ export const layer = Layer.effect(
         return yield* new NotFound({
           message: `Session ${subject.sessionId} has no environment template this Ren can run`,
         })
-      const keys = yield* Option.match(signing, {
-        onNone: () => Effect.die(new Error("ENVIRONMENT_KEYS has no signing key")),
-        onSome: Effect.succeed,
-      })
+      const keys = yield* signingKeys
       const assigned = yield* assign(subject)
       const unavailableBecause = (error: EnvironmentProvider.Failed) =>
         new Unavailable({ message: `The environment of session ${subject.sessionId} is unavailable: ${error.message}` })
@@ -259,8 +310,8 @@ export const layer = Layer.effect(
         ),
         Effect.catchTag("EnvironmentProvider.Failed", (error) => Effect.fail(unavailableBecause(error))),
       )
-      if (Option.isNone(endpoint)) return yield* grantAccess(subject, { isRetry: true })
-      const exp = Math.floor(((yield* Clock.currentTimeMillis) + Duration.toMillis(config.lifetime)) / 1000)
+      if (Option.isNone(endpoint)) return yield* grantAccess(subject, hand, { isRetry: true })
+      const exp = yield* expiry
       return {
         directory: directoryOf(subject.sessionId),
         url: endpoint.value.url,
@@ -305,7 +356,9 @@ export const layer = Layer.effect(
           message: `Session ${placement.sessionId} cannot change its environment template or space: not supported yet`,
         })
       }),
-      findDirectory: Effect.fn("Environments.findDirectory")(function* (subject: Subject) {
+      findDirectory: Effect.fn("Environments.findDirectory")(function* (subject: Subject, hand: Option.Option<Hand>) {
+        if (Option.isSome(hand) && !(yield* isBound(subject)))
+          return Option.some(handDirectory(hand.value, subject.sessionId))
         const rows = yield* database.db
           .select({ environmentTemplateId: sessions.environment_template_id, provider: templates.provider })
           .from(sessions)
@@ -321,8 +374,8 @@ export const layer = Layer.effect(
       unbind: Effect.fn("Environments.unbind")(function* (subject: Subject) {
         yield* database.db.delete(sessions).where(isSessionOf(subject)).pipe(Effect.orDie)
       }),
-      access: Effect.fn("Environments.access")(function* (subject: Subject) {
-        return yield* grantAccess(subject, { isRetry: false })
+      access: Effect.fn("Environments.access")(function* (subject: Subject, hand: Option.Option<Hand>) {
+        return yield* grantAccess(subject, hand, { isRetry: false })
       }),
       release: Effect.fn("Environments.release")(function* (subject: Subject) {
         yield* database.db
@@ -330,6 +383,10 @@ export const layer = Layer.effect(
           .set({ idle_at: sql`now()` })
           .where(and(isSessionOf(subject), isNull(sessions.idle_at)))
           .pipe(Effect.orDie)
+      }),
+      executorVariables: Effect.fn("Environments.executorVariables")(function* (environmentId: Environment.ID) {
+        const keys = yield* signingKeys
+        return ExecutorVariables.make(environmentId, keys.publicKeys)
       }),
     })
   }),

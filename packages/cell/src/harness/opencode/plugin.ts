@@ -28,6 +28,7 @@ import {
 import type { Harness } from "../harness.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
+import { basename } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 
 const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
@@ -48,10 +49,14 @@ interface Instance {
   readonly installed: Ref.Ref<Option.Option<Chat>>
 }
 
+export interface Confinement {
+  readonly workspace: string
+  readonly allow: ReadonlyArray<string>
+}
+
 export interface Chats {
   readonly latest: Ref.Ref<ReadonlyMap<string, Chat>>
   readonly instances: Ref.Ref<ReadonlyMap<string, Instance>>
-  readonly directoryOf: (sessionId: string) => string
   readonly turnEnded: Ref.Ref<(sessionId: string) => Effect.Effect<void>>
   readonly turnStarted: Ref.Ref<(sessionId: string) => Effect.Effect<void>>
   readonly install: (sessionId: string) => Effect.Effect<void>
@@ -107,10 +112,7 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
   })
 })
 
-export const chats = Effect.fnUntraced(function* (
-  directoryOf: (sessionId: string) => string,
-  saved: ReadonlyMap<string, Chat>,
-) {
+export const chats = Effect.fnUntraced(function* (saved: ReadonlyMap<string, Chat>) {
   const latest = yield* Ref.make<ReadonlyMap<string, Chat>>(saved)
   const instances = yield* Ref.make<ReadonlyMap<string, Instance>>(new Map())
   const turnEnded = yield* Ref.make<(sessionId: string) => Effect.Effect<void>>(() => Effect.void)
@@ -119,14 +121,13 @@ export const chats = Effect.fnUntraced(function* (
   return {
     latest,
     instances,
-    directoryOf,
     turnEnded,
     turnStarted,
     install: (sessionId) =>
       installs.withPermit(
         Effect.gen(function* () {
           const next = (yield* Ref.get(latest)).get(sessionId)
-          const instance = (yield* Ref.get(instances)).get(directoryOf(sessionId))
+          const instance = (yield* Ref.get(instances)).get(sessionId)
           if (!next || !instance) return
           const previous = Option.getOrUndefined(yield* Ref.getAndSet(instance.installed, Option.some(next)))
           if (JSON.stringify(previous?.resolved) !== JSON.stringify(next.resolved)) yield* instance.reload
@@ -153,7 +154,7 @@ export const make = (
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
   settings: Option.Option<Chats>,
-  options: { readonly nativeTools: boolean },
+  confinement: Option.Option<Confinement>,
   approvals: (
     sessionId: string,
   ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
@@ -165,7 +166,7 @@ export const make = (
         const tool = context.tool
         const integration = context.integration
         const provider = context.provider
-        if (Option.isNone(connections) && !options.nativeTools)
+        if (Option.isNone(connections))
           yield* tool.transform((editor) => {
             for (const id of environmentTools) editor.remove(id)
           })
@@ -182,6 +183,21 @@ export const make = (
               })
             }),
           )
+        const folder = context.location.directory
+        if (Option.isSome(confinement) && folder.startsWith(`${confinement.value.workspace}/`)) {
+          const allow = confinement.value.allow
+          yield* context.permission.hook("evaluate", (event) =>
+            Effect.sync(() => {
+              if (event.action !== "external_directory" || event.effect === "deny") return
+              if (event.resources.every((resource) => allow.some((prefix) => resource.startsWith(prefix)))) {
+                event.effect = "allow"
+                return
+              }
+              event.effect = "deny"
+              event.message = `This chat works only in its own folder, ${folder}, and in ${allow.join(", ")}`
+            }),
+          )
+        }
         if (Option.isSome(connections))
           yield* context.event.subscribe().pipe(
             Stream.runForEach((event) => {
@@ -226,10 +242,10 @@ export const make = (
         if (Option.isSome(settings)) {
           const shared = settings.value
           const directory = context.location.directory
-          const sessionId = [...(yield* Ref.get(shared.latest)).keys()].find(
-            (id) => shared.directoryOf(id) === directory,
-          )
-          const saved = sessionId ? (yield* Ref.get(shared.latest)).get(sessionId) : undefined
+          const sessionId = context.location.workspaceID
+            ? RenWorkspaceDriver.sessionIdOf(context.location.workspaceID)
+            : basename(directory)
+          const saved = (yield* Ref.get(shared.latest)).get(sessionId)
           const installed = yield* Ref.make(Option.fromUndefinedOr(saved))
           const agentOf = (name: string | undefined) =>
             Option.flatMap(Ref.getUnsafe(installed), (chat) =>
@@ -326,7 +342,7 @@ export const make = (
             session: context.session,
             installed,
           }
-          yield* Ref.update(shared.instances, (all) => new Map([...all, [directory, instance]]))
+          yield* Ref.update(shared.instances, (all) => new Map([...all, [sessionId, instance]]))
           yield* Effect.addFinalizer(() =>
             Ref.update(shared.instances, (all) => new Map([...all].filter((entry) => entry.at(1) !== instance))),
           )

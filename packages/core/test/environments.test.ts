@@ -65,9 +65,9 @@ describe("Environments", () => {
       const session = yield* subjectIn(organizationId)
       const binding = yield* subject.environments.bind(session, environmentTemplateId)
       expect(binding).toEqual({ directory: `/workspace/${session.sessionId}`, isNew: true })
-      expect(yield* subject.environments.findDirectory(session)).toEqual(Option.some(binding.directory))
+      expect(yield* subject.environments.findDirectory(session, Option.none())).toEqual(Option.some(binding.directory))
       expect(
-        yield* subject.environments.findDirectory({ ...session, organizationId: yield* Seed.organization() }),
+        yield* subject.environments.findDirectory({ ...session, organizationId: yield* Seed.organization() }, Option.none()),
       ).toEqual(Option.none())
       expect(yield* Ref.get(subject.probe.provisions)).toEqual([])
     }),
@@ -89,7 +89,7 @@ describe("Environments", () => {
         expect(
           (yield* subject.environments.bind(yield* subjectIn(organizationId), foreign).pipe(Effect.flip))._tag,
         ).toBe("Environments.NotFound")
-        expect((yield* subject.environments.access(yield* subjectIn(organizationId)).pipe(Effect.flip))._tag).toBe(
+        expect((yield* subject.environments.access(yield* subjectIn(organizationId), Option.none()).pipe(Effect.flip))._tag).toBe(
           "Environments.NotFound",
         )
       }),
@@ -107,13 +107,13 @@ describe("Environments", () => {
         "Environments.NotFound",
       )
       yield* subject.environments.bind(session, environmentTemplateId)
-      yield* subject.environments.access(session)
+      yield* subject.environments.access(session, Option.none())
       yield* database.db
         .update(Database.Schema.space_environment_template)
         .set({ archived_at: new Date() })
         .where(eq(Database.Schema.space_environment_template.environment_template_id, environmentTemplateId))
-      expect((yield* subject.environments.access(session).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
-      expect(yield* subject.environments.findDirectory(session)).toEqual(Option.none())
+      expect((yield* subject.environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
+      expect(yield* subject.environments.findDirectory(session, Option.none())).toEqual(Option.none())
     }),
   )
 
@@ -127,8 +127,8 @@ describe("Environments", () => {
         const session = yield* subjectIn(organizationId)
         yield* subject.environments.bind(session, environmentTemplateId)
         const before = Date.now()
-        const access = yield* subject.environments.access(session)
-        const again = yield* subject.environments.access(session)
+        const access = yield* subject.environments.access(session, Option.none())
+        const again = yield* subject.environments.access(session, Option.none())
         const provisions = yield* Ref.get(subject.probe.provisions)
         expect(provisions.length).toBe(1)
         expect([access.directory, access.generation]).toEqual([`/workspace/${session.sessionId}`, 1])
@@ -149,7 +149,7 @@ describe("Environments", () => {
       const session = yield* subjectIn(organizationId)
       yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
       const before = Date.now()
-      const access = yield* subject.environments.access(session)
+      const access = yield* subject.environments.access(session, Option.none())
       expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeLessThanOrEqual(20_000)
       expect(DateTime.toEpochMillis(access.expiresAt) - before).toBeGreaterThan(18_000)
     }),
@@ -164,7 +164,7 @@ describe("Environments", () => {
       yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
         discard: true,
       })
-      yield* Effect.forEach(sessions, (session) => subject.environments.access(session), { concurrency: "unbounded" })
+      yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()), { concurrency: "unbounded" })
       const made = yield* environmentsOf(environmentTemplateId)
       expect(made.map((environment) => environment.sessions).toSorted((left, right) => left - right)).toEqual([1, 2, 2])
       expect((yield* Ref.get(subject.probe.provisions)).length).toBe(3)
@@ -180,11 +180,11 @@ describe("Environments", () => {
       yield* Effect.forEach(sessions, (session) => subject.environments.bind(session, environmentTemplateId), {
         discard: true,
       })
-      const first = yield* Effect.forEach(sessions, (session) => subject.environments.access(session))
+      const first = yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
       const lost = (yield* Ref.get(subject.probe.provisions))[0]
       if (!lost) return yield* Effect.die(new Error("no environment was made"))
       yield* Ref.set(subject.probe.gone, new Set([lost]))
-      const replaced = yield* Effect.forEach(sessions, (session) => subject.environments.access(session))
+      const replaced = yield* Effect.forEach(sessions, (session) => subject.environments.access(session, Option.none()))
       expect(replaced.map((access) => access.generation)).toEqual([2, 2])
       expect(replaced.at(0)?.url.href).not.toBe(first.at(0)?.url.href)
       expect(replaced.at(1)?.url.href).toBe(replaced.at(0)?.url.href)
@@ -199,13 +199,13 @@ describe("Environments", () => {
       const session = yield* subjectIn(organizationId)
       yield* subject.environments.bind(session, yield* Seed.environmentTemplate(organizationId))
       yield* Ref.set(subject.probe.failing, true)
-      const failed = yield* subject.environments.access(session).pipe(Effect.flip)
+      const failed = yield* subject.environments.access(session, Option.none()).pipe(Effect.flip)
       expect([failed._tag, failed.message]).toEqual([
         "Environments.Unavailable",
         `The environment of session ${session.sessionId} is unavailable: the test provider fails`,
       ])
       yield* Ref.set(subject.probe.failing, false)
-      expect((yield* subject.environments.access(session)).generation).toBe(1)
+      expect((yield* subject.environments.access(session, Option.none())).generation).toBe(1)
     }),
   )
 
@@ -223,7 +223,7 @@ describe("Environments", () => {
           .update(Database.Schema.environment_template)
           .set({ archived_at: new Date() })
           .where(eq(Database.Schema.environment_template.id, environmentTemplateId))
-        expect((yield* subject.environments.access(session).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
+        expect((yield* subject.environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
         const elsewhere = yield* Seed.environmentTemplate(organizationId, { provider: "e2b" })
         expect(
           (yield* subject.environments.bind(yield* subjectIn(organizationId), elsewhere).pipe(Effect.flip))._tag,

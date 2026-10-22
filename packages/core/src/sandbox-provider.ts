@@ -1,6 +1,7 @@
 export * as SandboxProvider from "./sandbox-provider.js"
 
 import type { Brain } from "@ren/schema/brain"
+import type { Environment } from "@ren/schema/environment"
 import { Context, type Duration, type Effect, Schema } from "effect"
 
 export class Gone extends Schema.TaggedError<Gone>()("SandboxProvider.Gone", { message: Schema.String }) {}
@@ -17,6 +18,11 @@ export type Status = "running" | "paused" | "gone"
 export interface Created {
   readonly binding: Schema.Json
   readonly url: string
+}
+
+export interface Hand {
+  readonly url: string
+  readonly workspace: Environment.Directory
 }
 
 export interface Listed {
@@ -36,6 +42,7 @@ export interface Interface {
   readonly keepAlive: (binding: Schema.Json, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
   readonly status: (binding: Schema.Json) => Effect.Effect<Status, Failed>
+  readonly hand: (binding: Schema.Json) => Effect.Effect<Hand, Failed>
   readonly list: Effect.Effect<ReadonlyArray<Listed>, Failed>
 }
 

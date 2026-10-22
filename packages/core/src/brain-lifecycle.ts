@@ -3,11 +3,13 @@ export * as BrainLifecycle from "./brain-lifecycle.js"
 import { Database } from "@ren/db/database"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
+import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { Clock, Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
+import { Environments } from "./environments.js"
 import { SandboxProvider } from "./sandbox-provider.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("BrainLifecycle.Unavailable", {
@@ -25,6 +27,7 @@ export interface Interface {
   readonly ready: (brainId: Brain.ID) => Effect.Effect<BrainClient.Target, Unavailable>
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
+  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<SandboxProvider.Hand>>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainLifecycle") {}
@@ -51,6 +54,7 @@ export const layer = Layer.effect(
     const provider = yield* SandboxProvider.Service
     const client = yield* BrainClient.Service
     const runner = yield* DurableRunner.Service
+    const environments = yield* Environments.Service
 
     const read = (brainId: Brain.ID) =>
       database.db
@@ -105,15 +109,18 @@ export const layer = Layer.effect(
     const waitFor = <A, E>(effect: Effect.Effect<A, E>, within: Duration.Duration) =>
       effect.pipe(Effect.retry({ schedule: Schedule.spaced(timing.poll) }), Effect.timeoutOption(within))
 
-    const env = (row: Row) => ({
-      REN_URL: client.renUrl,
-      REN_BRAIN_ID: row.id,
-      REN_BRAIN_GENERATION: String(row.generation),
-      BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(client.publicKeys),
+    const env = Effect.fnUntraced(function* (row: Row) {
+      return {
+        REN_URL: client.renUrl,
+        REN_BRAIN_ID: row.id,
+        REN_BRAIN_GENERATION: String(row.generation),
+        BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)(client.publicKeys),
+        ...(yield* environments.executorVariables(Environment.ofBrain(row.id))),
+      }
     })
 
     const create = Effect.fnUntraced(function* (row: Row) {
-      const created = yield* provider.create({ brainId: row.id, generation: row.generation, env: env(row) }).pipe(
+      const created = yield* provider.create({ brainId: row.id, generation: row.generation, env: yield* env(row) }).pipe(
         Effect.map(Option.some),
         Effect.catchTag("SandboxProvider.Capacity", (error) =>
           Effect.logWarning(`Waiting for capacity: ${error.message}`).pipe(
@@ -336,6 +343,11 @@ export const layer = Layer.effect(
           )
         if (moving)
           yield* keepAlive(row, timing.busy).pipe(Effect.catch((error) => Effect.logWarning("keepAlive failed", error)))
+      }),
+      hand: Effect.fn("BrainLifecycle.hand")(function* (brainId: Brain.ID) {
+        const row = yield* read(brainId)
+        if (!row.binding) return Option.none()
+        return Option.some(yield* provider.hand(row.binding).pipe(Effect.orDie))
       }),
     })
   }),
