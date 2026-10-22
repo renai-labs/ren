@@ -9,7 +9,7 @@ import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import { Context, Effect, Layer, Option, Predicate, Queue, Stream, Struct } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
-import { mkdtemp, realpath } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ChatSettings } from "../src/chat-settings.js"
@@ -63,7 +63,11 @@ const open = Effect.fnUntraced(function* (
     access.endpoints,
     () => Effect.succeedNone,
     Option.none(),
-    { saved: Option.some(settings.saved), nativeTools: false, directoryOf: () => directory },
+    {
+      saved: Option.some(settings.saved),
+      directoryOf: (sessionId) => join(directory, sessionId),
+      makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
+    },
   )
   const harness = yield* OpenCodeHarness.make(server, access.endpoints, Option.some(settings))
   const client = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(

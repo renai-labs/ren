@@ -9,6 +9,7 @@ const sources = [
   "packages/schema",
   "packages/host-api",
   "packages/environment-api",
+  "packages/executor",
   "packages/protocol",
 ]
 await rm(target, { recursive: true, force: true })

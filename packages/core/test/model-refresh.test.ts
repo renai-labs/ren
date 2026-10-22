@@ -34,7 +34,7 @@ const it = testEffect(
   SessionRunner.layer.pipe(
     Layer.provideMerge(BrainRegistry.layer),
     Layer.provideMerge(
-      Host.layerWith({}, models, Host.noEnvironments, (endpoint, effect) =>
+      Host.layerWith({}, models, Host.noTemplates, (endpoint, effect) =>
         endpoint === "models.refresh" ? Effect.tap(effect, () => Ref.update(refreshes, (count) => count + 1)) : effect,
       ),
     ),

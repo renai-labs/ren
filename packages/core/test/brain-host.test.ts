@@ -113,7 +113,7 @@ const closedPort = Effect.promise(async () => {
 })
 
 const cell = (url: string, config: Record<string, string> = {}) =>
-  Host.cellLayer({ CELL_URL: url, ...config }, fixed, Host.noEnvironments)
+  Host.cellLayer({ CELL_URL: url, ...config }, fixed, Host.noTemplates)
 
 const seeded = Effect.gen(function* () {
   const owner = yield* Seed.owner()

@@ -42,6 +42,7 @@ import { BrainLifecycle } from "./brain-lifecycle.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Environments } from "./environments.js"
 import { Models } from "./models.js"
+import type { SandboxProvider } from "./sandbox-provider.js"
 import { Settings } from "./settings.js"
 
 export {
@@ -148,6 +149,7 @@ interface Locator {
   readonly run: <E>(key: string, effect: Effect.Effect<void, E>) => Effect.Effect<void>
   readonly prepare: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: PullRequest["sessions"]) => Effect.Effect<void>
+  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<SandboxProvider.Hand>>
 }
 
 const make = Effect.fnUntraced(function* (locator: Locator) {
@@ -199,8 +201,16 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
       return yield* new BrainRejectedError({ message: "A message’s files total more than 10 MB" })
   })
 
+  const handOf = Effect.fnUntraced(function* (brainId: Brain.ID, generation: number) {
+    return Option.map(
+      yield* locator.hand(brainId),
+      (hand): Environments.Hand => ({ brainId, generation, url: hand.url, workspace: hand.workspace }),
+    )
+  })
+
   const startNow = Effect.fn("BrainHost.startNow")(function* (input: Session.StartInput, placement: Placement) {
     const subject = { sessionId: input.sessionId, organizationId: placement.organizationId }
+    const target = yield* locator.target(placement.brainId)
     const requested = input.environmentTemplateId
     const binding = requested
       ? Option.some(
@@ -208,12 +218,14 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
             .bind({ ...subject, spaceId: placement.spaceId }, requested)
             .pipe(Effect.mapError((error) => new BrainRejectedError({ message: error.message }))),
         )
-      : Option.map(yield* environments.findDirectory(subject), (directory) => ({ directory, isNew: false }))
+      : Option.map(
+          yield* environments.findDirectory(subject, yield* handOf(placement.brainId, target.generation)),
+          (directory) => ({ directory, isNew: false }),
+        )
     const payload = {
       ...Struct.omit(input, ["environmentTemplateId"]),
       ...Option.match(binding, { onNone: () => ({}), onSome: (found) => ({ directory: found.directory }) }),
     } satisfies StartBody
-    const target = yield* locator.target(placement.brainId)
     const api = yield* client.brain(target)
     yield* call(api.brain["brain.start"]({ payload })).pipe(
       Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainUnavailable({ cause }))),
@@ -349,7 +361,7 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
       sessionId: Session.ID,
     ) {
       const subject = yield* inBrain(host, sessionId)
-      return yield* environments.access(subject).pipe(
+      return yield* environments.access(subject, yield* handOf(host.brainId, host.generation)).pipe(
         Effect.catchTags({
           "Environments.NotFound": (error) => Effect.fail(new EnvironmentNotFoundError({ message: error.message })),
           "Environments.Unavailable": (error) =>
@@ -404,6 +416,7 @@ export const layer = Layer.effect(
       run: (_key, effect) => effect.pipe(Effect.ignore),
       prepare: () => Effect.void,
       observe: () => Effect.void,
+      hand: () => Effect.succeedNone,
     })
   }),
 )
@@ -426,6 +439,7 @@ export const layerSandbox = Layer.effect(
           yield* lifecycle.ensure(brainId)
         }),
       observe: lifecycle.observe,
+      hand: lifecycle.hand,
     })
   }),
 )

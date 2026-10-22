@@ -31,8 +31,9 @@ import { RenWorkspaceDriver } from "./workspace-driver.js"
 
 export interface Options {
   readonly saved: Option.Option<Effect.Effect<ReadonlyMap<string, RenPlugin.Chat>>>
-  readonly nativeTools: boolean
   readonly directoryOf: (sessionId: string) => string
+  readonly confinement?: RenPlugin.Confinement
+  readonly makeDirectory?: (directory: string) => Effect.Effect<void>
 }
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
@@ -69,19 +70,23 @@ export const openProcess = Effect.fn("OpenCodeServer.openProcess")(function* (
   config: string,
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
+  connections: Option.Option<EnvironmentConnections.Interface>,
   options: Options,
 ) {
   return yield* make(
-    createEmbeddedRoutes({
-      app: { name: "ren-brain", version: manifest.version },
-      database: { path: database },
-      config: { project: false, content: config },
-      models: { fetch: false },
-      fs: { filewatcher: false, fff: false },
-    }).pipe(Layer.provide(HttpServer.layerServices)),
+    createEmbeddedRoutes(
+      {
+        app: { name: "ren-brain", version: manifest.version },
+        database: { path: database },
+        config: { project: false, content: config },
+        models: { fetch: false },
+        fs: { filewatcher: false, fff: false },
+      },
+      Option.match(connections, { onNone: () => [], onSome: RenWorkspaceDriver.replacements }),
+    ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     refreshKey,
-    Option.none(),
+    connections,
     options,
   )
 })
@@ -102,7 +107,6 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   connections: Option.Option<EnvironmentConnections.Interface>,
   options: Options = {
     saved: Option.none(),
-    nativeTools: false,
     directoryOf: (sessionId) => `/workspace/${sessionId}`,
   },
 ): Effect.fn.Return<Instance, Error, Scope.Scope> {
@@ -117,7 +121,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   const loaded = yield* Deferred.make<void>()
   const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
   const chats = Option.isSome(options.saved)
-    ? Option.some(yield* RenPlugin.chats(options.directoryOf, yield* options.saved.value))
+    ? Option.some(yield* RenPlugin.chats(yield* options.saved.value))
     : Option.none()
   const sessions = Context.get(services, Session.Service)
   const instances = Context.get(services, OpenCodeInstance.Service)
@@ -143,7 +147,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       refreshKey,
       connections,
       chats,
-      { nativeTools: options.nativeTools },
+      Option.fromUndefinedOr(options.confinement),
       approvals,
     ),
   )
@@ -167,8 +171,8 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     sessions,
     workspaces: Context.get(services, Workspace.Service),
     hasEnvironmentConnections: Option.isSome(connections),
-    nativeTools: options.nativeTools,
     directoryOf: options.directoryOf,
+    makeDirectory: options.makeDirectory ?? (() => Effect.void),
     activate: (sessionId) => located(sessionId, Effect.void),
     chats,
     configure: (next) =>
@@ -204,8 +208,8 @@ export interface Instance {
   readonly sessions: Session.Interface
   readonly workspaces: Workspace.Interface
   readonly hasEnvironmentConnections: boolean
-  readonly nativeTools: boolean
   readonly directoryOf: (sessionId: string) => string
+  readonly makeDirectory: (directory: string) => Effect.Effect<void>
   readonly activate: (sessionId: string) => Effect.Effect<void, Harness.NotFound>
   readonly chats: Option.Option<RenPlugin.Chats>
   readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>

@@ -9,7 +9,12 @@ HttpRouter.serve(Server.layer).pipe(
   Layer.provide(HttpServer.layerServices),
   Layer.provide(Sandbox.layer),
   Layer.provide(BunServices.layer),
-  Layer.provide(BunHttpServer.layerConfig({ port: Config.Port("PORT").pipe(Config.withDefault(EnvironmentApi.port)) })),
+  Layer.provide(
+    BunHttpServer.layerConfig({
+      port: Config.Port("PORT").pipe(Config.withDefault(EnvironmentApi.port)),
+      hostname: Config.String("EXECUTOR_HOST").pipe(Config.withDefault("0.0.0.0")),
+    }),
+  ),
   Layer.launch,
   BunRuntime.runMain,
 )

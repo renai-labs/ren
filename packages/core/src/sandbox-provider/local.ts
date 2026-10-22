@@ -3,15 +3,18 @@ export * as LocalSandbox from "./local.js"
 import { Brain } from "@ren/schema/brain"
 import { Effect, FiberMap, Layer, Option, Schema } from "effect"
 import { spawn } from "node:child_process"
-import { closeSync, openSync } from "node:fs"
 import { mkdir, readdir, rm } from "node:fs/promises"
 import { createServer } from "node:net"
 import { join } from "node:path"
 import { SandboxProvider } from "../sandbox-provider.js"
 
+const loop = (entry: string, log: string) =>
+  `while true; do bun ${JSON.stringify(entry)} >>${JSON.stringify(log)} 2>&1; sleep 1; done`
+
 const Binding = Schema.Struct({
   pid: Schema.Int,
   port: Schema.Int,
+  handPort: Schema.Int,
   home: Schema.String,
   brainId: Brain.ID,
   generation: Schema.Int,
@@ -41,7 +44,7 @@ const freePort = Effect.callback<number, SandboxProvider.Failed>((resume) => {
 
 const urlOf = (binding: Binding) => `http://127.0.0.1:${binding.port}`
 
-export const layer = (options: { readonly entry: string; readonly root: string }) =>
+export const layer = (options: { readonly entry: string; readonly executor: string; readonly root: string }) =>
   Layer.effect(
     SandboxProvider.Service,
     Effect.gen(function* () {
@@ -73,26 +76,46 @@ export const layer = (options: { readonly entry: string; readonly root: string }
           if (Option.isSome(existing) && (yield* isAlive(existing.value.pid)))
             return { binding: Schema.encodeSync(Binding)(existing.value), url: urlOf(existing.value) }
           yield* Effect.tryPromise({
-            try: () => mkdir(join(home, ".ren"), { recursive: true }),
+            try: () =>
+              Promise.all([
+                mkdir(join(home, ".ren"), { recursive: true }),
+                mkdir(join(home, "workspace"), { recursive: true }),
+              ]),
             catch: failed,
           })
           const port = yield* freePort
-          const log = openSync(join(home, ".ren", "brain.log"), "a")
-          const child = spawn("sh", ["-c", `while true; do bun ${JSON.stringify(options.entry)}; sleep 1; done`], {
-            detached: true,
-            stdio: ["ignore", log, log],
-            env: {
-              PATH: process.env.PATH,
-              HOME: home,
-              REN_HOME: home,
-              PORT: String(port),
-              ...input.env,
+          const handPort = yield* freePort
+          const state = join(home, ".ren")
+          const child = spawn(
+            "sh",
+            [
+              "-c",
+              `(export PORT=${handPort}; ${loop(options.executor, join(state, "executor.log"))}) & ${loop(options.entry, join(state, "brain.log"))}`,
+            ],
+            {
+              detached: true,
+              stdio: "ignore",
+              env: {
+                PATH: process.env.PATH,
+                HOME: home,
+                REN_HOME: home,
+                PORT: String(port),
+                EXECUTOR_HOST: "127.0.0.1",
+                EXECUTOR_WORKSPACE: join(home, "workspace"),
+                ...input.env,
+              },
             },
-          })
-          closeSync(log)
+          )
           child.unref()
           if (!child.pid) return yield* new SandboxProvider.Failed({ message: "The brain process did not start" })
-          const binding: Binding = { pid: child.pid, port, home, brainId: input.brainId, generation: input.generation }
+          const binding: Binding = {
+            pid: child.pid,
+            port,
+            handPort,
+            home,
+            brainId: input.brainId,
+            generation: input.generation,
+          }
           yield* Effect.promise(() => Bun.write(bindingFile(home), Schema.encodeSync(BindingFile)(binding)))
           return { binding: Schema.encodeSync(Binding)(binding), url: urlOf(binding) }
         }),
@@ -129,6 +152,10 @@ export const layer = (options: { readonly entry: string; readonly root: string }
           const binding = yield* read(raw)
           if (!(yield* isAlive(binding.pid))) return "gone" as const
           return paused.has(binding.pid) ? ("paused" as const) : ("running" as const)
+        }),
+        hand: Effect.fn("LocalSandbox.hand")(function* (raw) {
+          const binding = yield* read(raw)
+          return { url: `http://127.0.0.1:${binding.handPort}`, workspace: join(binding.home, "workspace") }
         }),
         list: Effect.gen(function* () {
           const names = yield* Effect.promise(() => readdir(options.root).catch(() => []))

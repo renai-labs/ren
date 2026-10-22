@@ -79,7 +79,7 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
     endpoints,
     () => Effect.succeedNone,
     Option.some(environments),
-    { saved: Option.none(), nativeTools: false, directoryOf: () => local },
+    { saved: Option.none(), directoryOf: () => local },
   )
   return {
     harness: yield* OpenCodeHarness.make(host, endpoints),

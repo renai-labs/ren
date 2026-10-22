@@ -92,7 +92,7 @@ export const make = Effect.fnUntraced(function* (
     [],
     Context.get(services, ModelRefresh.Service),
     Option.none(),
-    { saved: Option.none(), nativeTools: false, directoryOf: () => directory },
+    { saved: Option.none(), directoryOf: () => directory },
   )
   const harness = yield* OpenCodeHarness.make(host, [])
   const waits = yield* Queue.unbounded<number>()

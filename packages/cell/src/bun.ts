@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite"
+import { Global } from "@opencode/util/global"
 import type { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { Deferred, Duration, Effect, Exit, Layer, ManagedRuntime, Option, Schema, Scope, Stream } from "effect"
 import { mkdirSync } from "node:fs"
@@ -15,6 +16,7 @@ import { Env } from "./env.js"
 import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
 import { OpenCodeHarness } from "./harness/opencode/harness.js"
+import { HostAccess } from "./host-access.js"
 import { HotReload } from "./hot-reload.js"
 import { Reconcile } from "./reconcile.js"
 import { Scheduler } from "./scheduler.js"
@@ -48,6 +50,8 @@ const storage = BrainStorage.Service.of({
 
 const harnessDatabase = join(state, "opencode.db")
 
+const caches = [".bun", ".npm", ".cache"].map((name) => join(home, name))
+
 const reader = Effect.sync((): OpenCodeSync.Reader => {
   const opened: { database: Database | undefined } = { database: undefined }
   return {
@@ -78,7 +82,17 @@ const base = Layer.mergeAll(Cell.activityLayer, Cell.hostLayer).pipe(
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(Brain.layer, Chat.layer, Scheduler.layer).pipe(
     Layer.provideMerge(HotReload.layer),
-    Layer.provideMerge(OpenCodeHarness.layerProcess(harnessDatabase, workspace)),
+    Layer.provideMerge(
+      OpenCodeHarness.layerProcess(harnessDatabase, {
+        workspace,
+        allow: [
+          "/tmp/",
+          ...[Global.Path.data, Global.Path.cache, Global.Path.config, Global.Path.tmp, ...caches].map(
+            (path) => `${path}/`,
+          ),
+        ],
+      }).pipe(Layer.provide(HostAccess.connections)),
+    ),
     Layer.provideMerge(Sync.layerWith(reader, vars.REN_URL)),
     Layer.provideMerge(Layer.mergeAll(ChatSettings.layer, BrainKeys.layer)),
     Layer.provideMerge(base),

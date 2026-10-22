@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test"
 import { Signature } from "@ren/schema/signature"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
-import { ConfigProvider, Effect, Layer, Ref, Schema } from "effect"
+import { ConfigProvider, Effect, Layer, Option, Ref, Schema } from "effect"
 import { Access } from "../src/access.js"
 import { EnvironmentTemplates } from "../src/environment-templates.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
@@ -137,10 +137,10 @@ describe("EnvironmentTemplates", () => {
         expect((yield* links.list(grace, { ...page, spaceId: setup.space.id })).items).toEqual([])
         const session = yield* Seed.subject(setup.organizationId, setup.space.id)
         yield* environments.bind(session, made.id)
-        yield* environments.access(session)
+        yield* environments.access(session, Option.none())
         expect((yield* links.archive(setup.ada, linked.id)).archivedAt).not.toBeNull()
         expect((yield* links.list(setup.ada, { ...page, spaceId: setup.space.id })).items).toEqual([])
-        expect((yield* environments.access(session).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
+        expect((yield* environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
       }),
   )
 
@@ -174,13 +174,13 @@ describe("EnvironmentTemplates", () => {
       yield* links.create(setup.ada, { spaceId: setup.space.id, environmentTemplateId: made.id })
       const session = yield* Seed.subject(setup.organizationId, setup.space.id)
       yield* environments.bind(session, made.id)
-      yield* environments.access(session)
+      yield* environments.access(session, Option.none())
       const environmentId = (yield* Ref.get(probe.provisions)).at(-1)
       const archived = yield* templates.archive(setup.admin, made.id)
       expect(archived.archivedAt).not.toBeNull()
       expect(yield* templates.archive(setup.admin, made.id)).toEqual(archived)
       expect((yield* templates.get(setup.admin, made.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
-      expect((yield* environments.access(session).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
+      expect((yield* environments.access(session, Option.none()).pipe(Effect.flip))._tag).toBe("Environments.NotFound")
       expect((yield* Ref.get(probe.destroyed)).at(-1)).toBe(environmentId)
     }),
   )

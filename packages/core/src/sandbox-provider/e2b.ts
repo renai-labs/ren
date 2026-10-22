@@ -1,5 +1,6 @@
 export * as E2BSandbox from "./e2b.js"
 
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Brain } from "@ren/schema/brain"
 import { Config, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
@@ -201,6 +202,7 @@ export const layer = Layer.effect(
         )
         return detail.state === "paused" ? ("paused" as const) : ("running" as const)
       }),
+      hand: () => Effect.succeed({ url: `http://127.0.0.1:${EnvironmentApi.port}`, workspace: "/home/user/workspace" }),
       list: list({}, "running,paused").pipe(
         Effect.map((sandboxes) =>
           sandboxes.flatMap((sandbox) => {

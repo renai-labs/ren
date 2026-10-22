@@ -1,8 +1,10 @@
 export * as HostAccess from "./host-access.js"
 
 import { EnvironmentAccess } from "@ren/brain/environment/access"
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import type { Session } from "@ren/schema/session"
 import { Effect, Layer, Option } from "effect"
+import { FetchHttpClient } from "effect/http"
 import { Cell } from "./cell.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
@@ -51,5 +53,13 @@ export const layer = Layer.effect(
         )
       }),
     })
+  }),
+)
+
+export const connections = Layer.unwrap(
+  Effect.gen(function* () {
+    const info = yield* Cell.Info
+    if (!info.vars.REN_URL) return Layer.empty
+    return EnvironmentConnections.layer.pipe(Layer.provide(layer), Layer.provide(FetchHttpClient.layer))
   }),
 )

@@ -1,10 +1,13 @@
 export * as Environment from "./environment.js"
 
 import { Schema } from "effect"
+import type { Brain } from "./brain.js"
 import { Identifier } from "./identifier.js"
 
 export const ID = Identifier.make("env", "Environment.ID")
 export type ID = typeof ID.Type
+
+export const ofBrain = (brainId: Brain.ID) => ID.make(`env_${Identifier.suffix(brainId)}`)
 
 export const Directory = Schema.String.check(Schema.isStartingWith("/")).annotate({
   identifier: "Environment.Directory",

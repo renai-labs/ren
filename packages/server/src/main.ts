@@ -31,9 +31,12 @@ const sandbox = Layer.unwrap(
     const entry = yield* Config.String("LOCAL_BRAIN_ENTRY").pipe(
       Config.withDefault(join(import.meta.dir, "../../cell/src/bun.ts")),
     )
+    const executor = yield* Config.String("LOCAL_EXECUTOR_ENTRY").pipe(
+      Config.withDefault(join(import.meta.dir, "../../executor/src/main.ts")),
+    )
     return BrainHost.layerSandbox.pipe(
       Layer.provide(BrainLifecycle.layer),
-      Layer.provide(provider === "e2b" ? E2BSandbox.layer : LocalSandbox.layer({ entry, root })),
+      Layer.provide(provider === "e2b" ? E2BSandbox.layer : LocalSandbox.layer({ entry, executor, root })),
       Layer.provide(DurableRunner.layerMemory),
     )
   }),
