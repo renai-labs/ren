@@ -28,6 +28,7 @@ export const brain = pgTable(
     binding: jsonb().$type<Schema.Json>(),
     url: text(),
     generation: integer().notNull().default(1),
+    run_epoch: integer().notNull().default(0),
     phase: text().$type<Brain.Phase>().notNull().default("creating"),
     failures: integer().notNull().default(0),
     failure: text(),

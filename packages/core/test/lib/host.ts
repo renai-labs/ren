@@ -1,5 +1,6 @@
 export * as Host from "./host.js"
 
+import { BunCrypto } from "@effect/platform-bun"
 import { TestEnvironment } from "@ren/executor/testing"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
@@ -62,7 +63,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
   BrainHost.layerSandbox.pipe(
     Layer.provideMerge(BrainLifecycle.layer),
     Layer.provideMerge(LocalSandbox.layer({ entry, executor, root: options.root })),
-    Layer.provide(DurableRunner.layerMemory),
+    Layer.provide(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
     Layer.provideMerge(BrainClient.layer),
     Layer.provide(Settings.layer),
     Layer.provide(options.models),

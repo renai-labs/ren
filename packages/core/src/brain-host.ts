@@ -16,11 +16,11 @@ import {
 } from "@ren/host-api/errors"
 import type { Host } from "@ren/host-api/host"
 import { CurrentHost, HostAuthentication, type PullReply, type PullRequest } from "@ren/host-api/ren-host-api"
-import type { Auth } from "@ren/schema/auth"
-import type { Brain } from "@ren/schema/brain"
+import { Auth } from "@ren/schema/auth"
+import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { and, eq } from "drizzle-orm"
 import {
   ByteSize,
@@ -34,9 +34,11 @@ import {
   Redacted,
   Schedule,
   Schema,
+  type Scope,
   Struct,
 } from "effect"
 import { HttpClientError } from "effect/http"
+import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
 import { BrainLifecycle } from "./brain-lifecycle.js"
 import { DurableRunner } from "./durable-runner.js"
@@ -143,10 +145,22 @@ const call = <A, E>(
     ),
   )
 
+const StartRun = DurableRunner.make("StartRun", {
+  payload: {
+    input: Session.StartInput,
+    placement: Schema.Struct({ organizationId: Auth.OrganizationID, spaceId: Space.ID, brainId: Brain.ID }),
+  },
+  idempotencyKey: (payload) => `start:${payload.input.sessionId}:${payload.input.initialMessage?.messageId ?? ""}`,
+})
+
+type StartPayload = (typeof StartRun)["payloadSchema"]["Type"]
+
 interface Locator {
   readonly target: (brainId: Brain.ID) => Effect.Effect<BrainClient.Target, BrainUnavailable>
   readonly access: (brainId: Brain.ID) => Effect.Effect<BrainLifecycle.Access>
-  readonly run: <E>(key: string, effect: Effect.Effect<void, E>) => Effect.Effect<void>
+  readonly starter: (
+    now: (payload: StartPayload) => Effect.Effect<void, BrainUnavailable>,
+  ) => Effect.Effect<(payload: StartPayload) => Effect.Effect<void>, never, Scope.Scope>
   readonly prepare: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: PullRequest["sessions"]) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<SandboxProvider.Hand>>
@@ -245,22 +259,23 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
         Effect.map((rows) => Option.fromNullishOr(rows.at(0)?.id)),
       )
 
+  const startRun = yield* locator.starter((payload) =>
+    startNow(payload.input, payload.placement).pipe(
+      Effect.catchTag("BrainRejectedError", (error) =>
+        Effect.logError(`The brain rejected the start of ${payload.input.sessionId}: ${error.message}`),
+      ),
+      Effect.catchTag("BrainUnavailable", (error) =>
+        Effect.logWarning(`The brain of ${payload.input.sessionId} is unavailable; the start retries`).pipe(
+          Effect.andThen(Effect.fail(error)),
+        ),
+      ),
+    ),
+  )
+
   return Service.of({
     start: Effect.fn("BrainHost.start")(function* (input: Session.StartInput, placement: Placement) {
       if (input.initialMessage) yield* validatePrompt(input.initialMessage.prompt)
-      yield* locator.run(
-        `start:${input.sessionId}`,
-        startNow(input, placement).pipe(
-          Effect.catchTag("BrainRejectedError", (error) =>
-            Effect.logError(`The brain rejected the start of ${input.sessionId}: ${error.message}`),
-          ),
-          Effect.catchTag("BrainUnavailable", (error) =>
-            Effect.logWarning(`The brain of ${input.sessionId} is unavailable; the start retries`).pipe(
-              Effect.andThen(Effect.fail(error)),
-            ),
-          ),
-        ),
-      )
+      yield* startRun({ input, placement })
     }),
     send: Effect.fn("BrainHost.send")(function* (input: Session.SendInput) {
       yield* validatePrompt(input.prompt)
@@ -413,7 +428,7 @@ export const layer = Layer.effect(
     return yield* make({
       target,
       access: (brainId) => Effect.map(target(brainId), (found) => ({ _tag: "Ready", target: found }) as const),
-      run: (_key, effect) => effect.pipe(Effect.ignore),
+      starter: (now) => Effect.succeed((payload) => now(payload).pipe(Effect.ignore)),
       prepare: () => Effect.void,
       observe: () => Effect.void,
       hand: () => Effect.succeedNone,
@@ -425,12 +440,20 @@ export const layerSandbox = Layer.effect(
   Service,
   Effect.gen(function* () {
     const lifecycle = yield* BrainLifecycle.Service
-    const runner = yield* DurableRunner.Service
+    const engine = yield* WorkflowEngine.WorkflowEngine
     const prepared = new Map<Brain.ID, number>()
     return yield* make({
       target: (brainId) => lifecycle.ready(brainId).pipe(Effect.mapError((cause) => new BrainUnavailable({ cause }))),
       access: lifecycle.access,
-      run: runner.ensure,
+      starter: (now) =>
+        DurableRunner.register(StartRun, (payload) =>
+          DurableRunner.supervise(`start:${payload.input.sessionId}`, now(payload)),
+        ).pipe(
+          Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+          Effect.as((payload: StartPayload) =>
+            DurableRunner.ensure(StartRun, payload).pipe(Effect.provideService(WorkflowEngine.WorkflowEngine, engine)),
+          ),
+        ),
       prepare: (brainId) =>
         Effect.gen(function* () {
           const now = Date.now()
