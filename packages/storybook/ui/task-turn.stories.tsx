@@ -22,6 +22,21 @@ export const NeedsYou: Story = {
     reason: "Plan approval. The plan is in the description.\nOpen risks: SCIM, MFA.",
   },
 }
+export const NeedsYouSingleLine: Story = {
+  args: {
+    state: "needs_you",
+    name: "Shrey",
+    reason: "Plan approval. The plan is in the description and lists the open risks.",
+    truncation: "single-line",
+  },
+  decorators: [
+    (Story) => (
+      <div className="flex w-60">
+        <Story />
+      </div>
+    ),
+  ],
+}
 export const OwnerWorking: Story = { args: { state: "owner_working", name: "Shrey" } }
 export const Done: Story = { args: { state: "done" } }
 export const Dismissed: Story = { args: { state: "dismissed" } }

@@ -2,20 +2,20 @@ import type { TaskInfo } from "@ren/client"
 import { Task } from "@ren/schema/task"
 import { Breadcrumbs } from "@ren/ui/breadcrumbs"
 import { Button } from "@ren/ui/button"
-import { Icon } from "@ren/ui/icon"
+import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import { LoadingMessage } from "@ren/ui/loading-message"
 import { Menu } from "@ren/ui/menu"
 import { Notice } from "@ren/ui/notice"
 import { PageShell } from "@ren/ui/page-shell"
+import { StateMessage } from "@ren/ui/state-message"
 import { TaskLinkBadge } from "@ren/ui/task-link-badge"
-import { TaskTurn } from "@ren/ui/task-turn"
-import { Text } from "@ren/ui/text"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
-import type { ReactNode } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { TaskActivity } from "./task-activity.js"
+import { AttentionNotice, AttentionTurn } from "./task-attention.js"
 import {
   AgentControl,
   DueDateControl,
@@ -24,10 +24,9 @@ import {
   PriorityControl,
   StatusControl,
 } from "./task-controls.js"
-import { TaskDetail } from "./task-detail.js"
 import { TaskView } from "./task-view.js"
 import { TaskReview } from "./task-review.js"
-import { TaskDescription, TaskTextEditor } from "./task-text-editor.js"
+import { TaskDescription, TaskTextEditor, TaskTitleEditor } from "./task-text-editor.js"
 import { Tasks } from "./tasks.js"
 
 type PageProps = {
@@ -36,11 +35,8 @@ type PageProps = {
   organizationId: string
   onOpenSession: (id: string) => void
   onArchived: () => void
-  // ast-grep-ignore: no-render-props -- the task hands its current session ID to the route, which composes the session feature
-  renderSessionAttention: (id: string, turn: ReactNode) => ReactNode
 }
 
-const titleSchema = Schema.Struct({ value: Task.Title })
 const reasonSchema = Schema.Struct({ value: Task.Reason })
 
 export function TaskDetailPage(props: PageProps) {
@@ -50,9 +46,16 @@ export function TaskDetailPage(props: PageProps) {
   if (!detail.data)
     return (
       <PageShell.Root title="Task">
-        <Notice tone={detail.isError ? "danger" : "neutral"}>
-          {detail.isError ? "Couldn’t load this task." : "Loading task…"}
-        </Notice>
+        {detail.isError ? (
+          <StateMessage
+            state="failed"
+            placement="section"
+            title="Couldn’t load this task."
+            onRetry={() => void detail.refetch()}
+          />
+        ) : (
+          <LoadingMessage placement="section" title="Loading task…" />
+        )}
       </PageShell.Root>
     )
   return <Detail key={detail.data.id} {...props} task={detail.data} catalog={catalog} refreshError={detail.isError} />
@@ -60,26 +63,30 @@ export function TaskDetailPage(props: PageProps) {
 
 type DetailProps = PageProps & { task: TaskInfo; catalog: ReturnType<typeof Tasks.useCatalog>; refreshError: boolean }
 
+function useHeaderActions() {
+  const context = RouterContext.useRouterContext()
+  return {
+    update: Tasks.useTaskMutation(context.api.task.update.mutationOptions()),
+    assign: Tasks.useTaskMutation(context.api.task.assign.mutationOptions()),
+    start: Tasks.useTaskMutation(context.api.task.start.mutationOptions()),
+    archive: Tasks.useTaskMutation(context.api.task.archive.mutationOptions()),
+  }
+}
+
 function Detail(props: DetailProps) {
+  const context = RouterContext.useRouterContext()
   const task = props.task
-  const actions = TaskDetail.useActions()
+  const actions = Tasks.useTaskActions()
+  const header = useHeaderActions()
+  const review = Tasks.useTaskMutation(context.api.task.review.mutationOptions())
   const [requesting, setRequesting] = useState(false)
-  const turn = (
-    <TaskTurn
-      {...TaskView.turn(task, {
-        agent: props.catalog.agentName,
-        owner: (id) => props.catalog.person(id)?.name,
-        userId: props.userId,
-      })}
-    />
-  )
-  const error = actions.update.error ?? actions.assign.error ?? actions.start.error ?? actions.archive.error
+  const error = header.update.error ?? header.assign.error ?? header.start.error
   return (
     <PageShell.Record
       banner={
         <DetailHeader
           task={task}
-          actions={actions}
+          actions={header}
           onRequestReview={() => setRequesting(true)}
           onArchived={props.onArchived}
         />
@@ -92,14 +99,25 @@ function Detail(props: DetailProps) {
         ) : null}
         {error ? <Notice tone="danger">{Tasks.describe(error)}</Notice> : null}
         <div className="flex flex-col gap-4">
-          <TaskTitle task={task} actions={actions} />
-          {task.session && TaskDetail.isActionable(task) ? props.renderSessionAttention(task.session.id, turn) : turn}
+          <TaskTitleEditor
+            value={task.title}
+            {...(task.canUpdate && { onSave: (title: string) => actions.update(task, { title }) })}
+          />
+          <AttentionTurn
+            task={task}
+            owner={TaskView.attentionOwner(task, props.userId, props.catalog.person)}
+            turn={TaskView.turn(task, {
+              agent: props.catalog.agentName,
+              owner: (id) => props.catalog.person(id)?.name,
+              userId: props.userId,
+            })}
+          />
+          <AttentionNotice task={task} onOpen={props.onOpenSession} />
           <SessionLink session={task.session} onOpen={props.onOpenSession} />
           <TaskDescription
             value={task.description}
             {...(task.canUpdate && {
-              onSave: (description: string) =>
-                actions.update.mutateAsync({ id: task.id, description: description || null }),
+              onSave: (description: string) => actions.update(task, { description: description || null }),
             })}
           />
         </div>
@@ -109,7 +127,7 @@ function Detail(props: DetailProps) {
             label="Review reason"
             value=""
             schema={reasonSchema}
-            onSave={(reason) => actions.review.mutateAsync({ id: task.id, payload: { humanReview: true, reason } })}
+            onSave={(reason) => review.mutateAsync({ id: task.id, payload: { humanReview: true, reason } })}
             onCancel={() => setRequesting(false)}
           />
         ) : null}
@@ -122,25 +140,15 @@ function Detail(props: DetailProps) {
 function Properties(props: {
   task: TaskInfo
   catalog: ReturnType<typeof Tasks.useCatalog>
-  actions: ReturnType<typeof TaskDetail.useActions>
+  actions: ReturnType<typeof Tasks.useTaskActions>
 }) {
   const task = props.task
   const controls = {
     task,
     presentation: "row" as const,
     disabled: !task.canUpdate,
-    onChange: (patch: Tasks.Patch) =>
-      props.actions.update.mutateAsync({
-        id: task.id,
-        title: patch.title,
-        description: patch.description,
-        status: patch.status,
-        priority: patch.priority,
-        dueAt: patch.dueAt,
-        ...(patch.labels && { labels: patch.labels.map((label) => label.name) }),
-      }),
-    onAssign: (assignment: Tasks.Assignment) =>
-      props.actions.assign.mutateAsync({ id: task.id, ...assignment, start: "none" }),
+    onChange: (patch: Tasks.Patch) => props.actions.update(task, patch),
+    onAssign: (assignment: Tasks.Assignment) => props.actions.assign(task, assignment),
   }
   return (
     <aside aria-label="Task properties" className="flex flex-col gap-6">
@@ -148,7 +156,10 @@ function Properties(props: {
         <div className="flex flex-col items-start gap-1">
           <StatusControl {...controls} />
           <PriorityControl {...controls} />
-          <AgentControl {...controls} agentName={task.agentId ? props.catalog.agentName(task.agentId) : undefined} />
+          <AgentControl
+            {...controls}
+            agentName={task.agentId ? (props.catalog.agentName(task.agentId) ?? "Archived agent") : undefined}
+          />
           <OwnerControl {...controls} owner={task.ownerId ? props.catalog.person(task.ownerId) : undefined} />
           <DueDateControl {...controls} />
         </div>
@@ -171,12 +182,13 @@ function Properties(props: {
 
 function DetailHeader(props: {
   task: TaskInfo
-  actions: ReturnType<typeof TaskDetail.useActions>
+  actions: ReturnType<typeof useHeaderActions>
   onRequestReview: () => void
   onArchived: () => void
 }) {
   const task = props.task
   const actions = props.actions
+  const [archiving, setArchiving] = useState(false)
   return (
     <>
       <div className="min-w-0 flex-1">
@@ -190,7 +202,7 @@ function DetailHeader(props: {
           <Menu.Root>
             <Menu.Trigger
               render={
-                <Button disabled={!task.agentId || !TaskDetail.isActionable(task) || actions.start.isPending}>
+                <Button disabled={!task.agentId || !TaskView.isActionable(task) || actions.start.isPending}>
                   {actions.start.isPending ? "Starting agent…" : "Start agent"}
                 </Button>
               }
@@ -220,17 +232,24 @@ function DetailHeader(props: {
               <Menu.Item onSelect={() => actions.assign.mutate({ id: task.id, agentId: null, start: "none" })}>
                 Take over
               </Menu.Item>
-              <Menu.Item disabled={!TaskDetail.isActionable(task)} onSelect={props.onRequestReview}>
+              <Menu.Item disabled={!TaskView.isActionable(task)} onSelect={props.onRequestReview}>
                 Request human review
               </Menu.Item>
-              <Menu.Item
-                disabled={actions.archive.isPending}
-                onSelect={() => actions.archive.mutate({ id: task.id }, { onSuccess: props.onArchived })}
-              >
+              <Menu.Item tone="danger" onSelect={() => setArchiving(true)}>
                 Archive task
               </Menu.Item>
             </Menu.Popup>
           </Menu.Root>
+          <ConfirmationDialog
+            open={archiving}
+            onOpenChange={setArchiving}
+            title="Archive task?"
+            description={`“${task.title}” will be removed from Tasks.`}
+            confirmLabel="Archive"
+            tone="danger"
+            onConfirm={() => actions.archive.mutateAsync({ id: task.id })}
+            onConfirmed={props.onArchived}
+          />
         </>
       ) : null}
     </>
@@ -245,41 +264,6 @@ function SessionLink(props: { session: TaskInfo["session"]; onOpen: (id: string)
       <Button appearance="plain" size="small" onClick={() => props.onOpen(session.id)}>
         Open agent session
       </Button>
-    </div>
-  )
-}
-
-function TaskTitle(props: { task: TaskInfo; actions: ReturnType<typeof TaskDetail.useActions> }) {
-  const [editing, setEditing] = useState(false)
-  if (editing)
-    return (
-      <TaskTextEditor
-        label="Title"
-        value={props.task.title}
-        schema={titleSchema}
-        onSave={(title) => props.actions.update.mutateAsync({ id: props.task.id, title })}
-        onCancel={() => setEditing(false)}
-      />
-    )
-  return (
-    <div className="flex flex-col items-start gap-2">
-      <Text purpose="title" element="h1">
-        {props.task.canUpdate ? (
-          <Button
-            appearance="text"
-            wrapping="normal"
-            aria-label={`Edit title: ${props.task.title}`}
-            onClick={() => setEditing(true)}
-          >
-            <Text purpose="title" element="span">
-              {props.task.title}
-            </Text>
-            <Icon glyph="Pencil" tone="secondary" />
-          </Button>
-        ) : (
-          props.task.title
-        )}
-      </Text>
     </div>
   )
 }

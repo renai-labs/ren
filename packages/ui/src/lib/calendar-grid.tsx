@@ -20,7 +20,7 @@ const classNames = {
   caption_label: "text-sm font-medium",
   month_grid: "w-full border-collapse",
   weekdays: "grid grid-cols-7",
-  weekday: "py-1 text-center text-xs font-normal text-text-secondary",
+  weekday: "py-1 text-center text-xs font-regular text-text-secondary",
   weeks: "flex flex-col gap-1",
   week: "grid grid-cols-7",
   day: "group/day flex p-0",
@@ -32,15 +32,15 @@ function Chevron(props: ChevronProps) {
   return <Icon glyph={props.orientation === "left" ? "ChevronLeft" : "ChevronRight"} />
 }
 
-export type CalendarGridProps = { value: string; onSelect: (value: string) => void }
+export type CalendarGridProps = { value: string; onSelect: (value: string) => void; initialFocus?: "none" | "day" }
 
 export function CalendarGrid(props: CalendarGridProps) {
   const selected = parseCivilDate(props.value)
   return (
     <DayPicker
       mode="single"
-      // oxlint-disable-next-line jsx-a11y/no-autofocus -- the calendar opens in a popover to pick a day, so focus moves to the grid
-      autoFocus
+      // oxlint-disable-next-line jsx-a11y/no-autofocus -- a caller that opens the calendar to pick a day moves focus into the grid
+      autoFocus={props.initialFocus === "day"}
       {...(selected && { selected, defaultMonth: selected })}
       onSelect={(date) => {
         if (date) props.onSelect(civilDate(date))

@@ -1,13 +1,7 @@
-import type { MouseEvent, ReactNode } from "react"
+import type { ReactNode } from "react"
 import { Button } from "./button.js"
 
 const controls = "button, a, input, select, textarea, label, [role=menuitem], [role=option], [role=checkbox]"
-
-const openOnSurfaceClick = (event: MouseEvent<HTMLElement>, open: () => void) => {
-  const target = event.target
-  if (!(target instanceof Element) || !event.currentTarget.contains(target) || target.closest(controls)) return
-  open()
-}
 
 export type TaskRowProps = {
   title: string
@@ -29,7 +23,12 @@ export function TaskRow(props: TaskRowProps) {
       role="listitem"
       data-slot="task-row"
       data-selected={props.selected || undefined}
-      onClick={(event) => openOnSurfaceClick(event, props.onOpen)}
+      onClick={(event) => {
+        const target = event.target
+        if (!(target instanceof Element) || !event.currentTarget.contains(target) || target.closest(controls)) return
+        if (target.ownerDocument.getSelection()?.isCollapsed === false) return
+        props.onOpen()
+      }}
       className="group/task-row flex min-h-11 min-w-0 items-center gap-2 rounded-control px-2 transition-standard hover:bg-fill-primary data-selected:bg-fill-primary"
     >
       {props.selection ? <div className="flex shrink-0">{props.selection}</div> : null}

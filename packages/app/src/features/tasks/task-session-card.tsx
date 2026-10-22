@@ -1,37 +1,89 @@
 import { Card } from "@ren/ui/card"
 import { StatusDot } from "@ren/ui/status-dot"
-import { useQuery } from "@tanstack/react-query"
+import { Button } from "@ren/ui/button"
+import { Notice } from "@ren/ui/notice"
+import { Text } from "@ren/ui/text"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { RouterContext } from "../../lib/router-context.js"
+import { SessionSummary } from "../../lib/session-summary.js"
+import { Tasks } from "./tasks.js"
+
+const modes = { new: "New session", continue: "Continued session", created: "Session that created this task" }
 
 export function TaskSessionCard(props: {
   sessionId: string
   agentName: string | undefined
-  mode: "new" | "continue"
+  mode: "new" | "continue" | "created"
   onOpen: (id: string) => void
 }) {
   const context = RouterContext.useRouterContext()
+  const client = useQueryClient()
   const session = useQuery({
     ...context.api.session.get.queryOptions({ idOrSlug: props.sessionId }),
     refetchInterval: 5000,
   })
   const busy = session.data?.status === "busy"
+  const preview = useQuery({ ...SessionSummary.previewOptions(context, props.sessionId), enabled: session.isSuccess })
+  const stop = useMutation({
+    mutationFn: async () =>
+      (await SessionSummary.client(context, props.sessionId)).session.interrupt({ sessionID: props.sessionId }),
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: context.api.session.get.queryKey({ idOrSlug: props.sessionId }) }),
+        client.invalidateQueries({ queryKey: context.api.task.get.queryKey() }),
+        client.invalidateQueries({ queryKey: context.api.task.list.queryKey() }),
+      ]),
+  })
   return (
-    <Card.Root
-      title={session.data?.title ?? "Agent session"}
-      description={`${props.agentName ?? "Archived agent"} · ${props.mode === "new" ? "New session" : "Continued session"}`}
-      metadata={
-        session.isError ? (
-          "Session unavailable"
-        ) : (
-          <>
-            <StatusDot tone={busy ? "success" : "neutral"} />
-            {busy ? "Working" : "Idle"}
-          </>
-        )
-      }
-      interaction="button"
-      label={`Open session: ${session.data?.title ?? "Agent session"}`}
-      onSelect={() => props.onOpen(props.sessionId)}
-    />
+    <div className="flex flex-col gap-2">
+      <Card.Root
+        title={session.data?.title ?? "Agent session"}
+        description={<Description agentName={props.agentName} mode={props.mode} preview={preview.data} />}
+        metadata={<Status status={session.status} busy={busy} />}
+        interaction="button"
+        label={`Open session: ${session.data?.title ?? "Agent session"}`}
+        {...(!session.isError && { onSelect: () => props.onOpen(props.sessionId) })}
+        actions={
+          busy && session.data?.capabilities.interrupt ? (
+            <Button
+              appearance="outline"
+              size="small"
+              pending={stop.isPending}
+              pendingLabel="Stopping…"
+              onClick={() => stop.mutate()}
+            >
+              Stop session
+            </Button>
+          ) : undefined
+        }
+      />
+      {stop.error ? <Notice tone="danger">{Tasks.describe(stop.error)}</Notice> : null}
+    </div>
+  )
+}
+
+function Description(props: { agentName: string | undefined; mode: keyof typeof modes; preview: string | undefined }) {
+  return (
+    <>
+      <Text purpose="body">
+        {props.agentName ?? "Archived agent"} · {modes[props.mode]}
+      </Text>
+      {props.preview ? (
+        <Text purpose="body" truncation="single-line" title={props.preview}>
+          {props.preview}
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
+function Status(props: { status: "error" | "pending" | "success"; busy: boolean }) {
+  if (props.status === "error") return "Session unavailable"
+  if (props.status === "pending") return "Loading session…"
+  return (
+    <>
+      <StatusDot tone={props.busy ? "success" : "neutral"} />
+      {props.busy ? "Working" : "Idle"}
+    </>
   )
 }

@@ -1,16 +1,17 @@
 export * as Tasks from "./tasks.js"
 
-import type { LabelSummary, TaskCreateInput, TaskInfo, TaskPage } from "@ren/client"
+import type { AgentInfo, LabelSummary, TaskCreateInput, TaskInfo } from "@ren/client"
 import { Pagination } from "@ren/schema/pagination"
 import type { Task } from "@ren/schema/task"
 import { Toast } from "@ren/ui/toast"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import type { UseMutationOptions } from "@tanstack/react-query"
 import { Struct } from "effect"
-import type { QueryClient, QueryKey } from "@tanstack/react-query"
 import { Auth } from "../../lib/auth.js"
+import { Pages } from "../../lib/pages.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { RouterContext } from "../../lib/router-context.js"
-import { TaskSearch } from "./task-search.js"
+import { TaskQueries } from "./task-queries.js"
 
 export type Patch = Partial<Pick<TaskInfo, "title" | "description" | "status" | "priority" | "dueAt" | "labels">>
 export type Assignment = { readonly agentId?: string | null; readonly ownerId?: string | null }
@@ -33,6 +34,12 @@ export interface Person {
 
 const page = { page: 1, pageSize: Pagination.maximumPageSize }
 
+const toAgent = (agent: AgentInfo): Agent => ({
+  id: agent.id,
+  name: agent.name,
+  isGlobal: agent.organizationId === null,
+})
+
 const overlays = "[role=dialog], [role=alertdialog], [role=menu], [role=listbox]"
 
 const isBareKey = (event: KeyboardEvent) =>
@@ -53,17 +60,11 @@ export function useCreateHotkey(onCreate: () => void, options: { readonly enable
 
 export const describe = (error: unknown) => (error instanceof Error ? error.message : "Try again.")
 
-export const catalogOptions = TaskSearch.catalogOptions
-
 export function useCatalog(organizationId: string) {
   const context = RouterContext.useRouterContext()
-  const options = TaskSearch.catalogOptions(context.api)
+  const options = TaskQueries.catalogOptions(context.api)
   const spaces = useQuery(options[0]).data?.items ?? []
-  const agents = (useQuery(options[1]).data?.items ?? []).map((agent) => ({
-    id: agent.id,
-    name: agent.name,
-    isGlobal: agent.organizationId === null,
-  }))
+  const agents = (useQuery(options[1]).data?.items ?? []).map(toAgent)
   const labels = useQuery(options[2]).data?.items ?? []
   const people = (useQuery(Auth.organizationOptions(context.auth, organizationId)).data?.members ?? []).map(
     (member) => ({
@@ -85,15 +86,18 @@ export function useCatalog(organizationId: string) {
 export function useSpaceAgents(spaceId: string | undefined, options: { readonly enabled: boolean }) {
   const context = RouterContext.useRouterContext()
   return useQuery({
-    ...context.api.agent.list.queryOptions({ ...page, isSubagent: false, ...(spaceId && { spaceId }) }),
+    ...Pages.all((number) =>
+      context.api.agent.list.queryOptions({ ...page, page: number, isSubagent: false, ...(spaceId && { spaceId }) }),
+    ),
     enabled: options.enabled,
+    select: (result) => result.items.map(toAgent),
   })
 }
 
 export function useSpaceOwners(spaceId: string, options: { readonly enabled: boolean }) {
   const context = RouterContext.useRouterContext()
   return useQuery({
-    ...context.api["space-member"].list.queryOptions({ ...page, spaceId }),
+    ...Pages.all((number) => context.api["space-member"].list.queryOptions({ ...page, page: number, spaceId })),
     enabled: options.enabled && spaceId !== "",
     select: (result) =>
       result.items.flatMap((member) =>
@@ -106,7 +110,10 @@ export function useSpaceOwners(spaceId: string, options: { readonly enabled: boo
 
 export function useLabels(options: { readonly enabled: boolean }) {
   const context = RouterContext.useRouterContext()
-  return useQuery({ ...context.api.label.list.queryOptions(page), enabled: options.enabled })
+  return useQuery({
+    ...Pages.all((number) => context.api.label.list.queryOptions({ ...page, page: number })),
+    enabled: options.enabled,
+  })
 }
 
 export function useCreateLabel() {
@@ -118,22 +125,20 @@ export function useCreateLabel() {
   })
 }
 
-type Snapshot = ReadonlyArray<readonly [QueryKey, unknown]>
+function useRefresh() {
+  const context = RouterContext.useRouterContext()
+  const client = useQueryClient()
+  return () =>
+    Promise.all([
+      client.invalidateQueries({ queryKey: context.api.task.get.queryKey() }),
+      client.invalidateQueries({ queryKey: context.api.task.list.queryKey() }),
+      client.invalidateQueries({ queryKey: context.api["task-activity"].list.queryKey() }),
+      client.invalidateQueries({ queryKey: context.api.label.list.queryKey() }),
+    ])
+}
 
-async function patchLists(queryClient: QueryClient, key: QueryKey, id: string, patch: Partial<TaskInfo> | null) {
-  await queryClient.cancelQueries({ queryKey: key })
-  const snapshot: Snapshot = queryClient.getQueriesData({ queryKey: key })
-  queryClient.setQueriesData<TaskPage>({ queryKey: key }, (data) =>
-    data
-      ? {
-          ...data,
-          items: patch
-            ? data.items.map((task) => (task.id === id ? { ...task, ...patch } : task))
-            : data.items.filter((task) => task.id !== id),
-        }
-      : data,
-  )
-  return snapshot
+export function useTaskMutation<A, I>(options: UseMutationOptions<A, Error, I>) {
+  return useMutation({ ...options, onSuccess: useRefresh() })
 }
 
 const labelNames = (labels: ReadonlyArray<LabelSummary>) => labels.map((label) => label.name)
@@ -147,61 +152,19 @@ const plural = (count: number) => `${count} ${count === 1 ? "task" : "tasks"}`
 
 export function useTaskActions() {
   const context = RouterContext.useRouterContext()
-  const queryClient = useQueryClient()
-  const lists = context.api.task.list.queryKey()
-  const updateTask = useMutation(context.api.task.update.mutationOptions())
-  const assignTask = useMutation(context.api.task.assign.mutationOptions())
-  const createTask = useMutation(context.api.task.create.mutationOptions())
-  const archiveTask = useMutation(context.api.task.archive.mutationOptions())
-  const refresh = (options: { readonly labels: boolean }) =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: lists }),
-      queryClient.invalidateQueries({ queryKey: context.api.task.get.queryKey() }),
-      ...(options.labels ? [queryClient.invalidateQueries({ queryKey: context.api.label.list.queryKey() })] : []),
-    ])
-  const optimistic = async (
-    id: string,
-    patch: Partial<TaskInfo> | null,
-    run: () => Promise<unknown>,
-    failure: { readonly title: string; readonly labels: boolean },
-  ) => {
-    const snapshot = await patchLists(queryClient, lists, id, patch)
-    await run().then(
-      () => refresh({ labels: failure.labels }),
-      (error: unknown) => {
-        for (const entry of snapshot) queryClient.setQueryData(entry[0], entry[1])
-        Toast.manager.add({ type: "error", title: failure.title, description: describe(error) })
-        return refresh({ labels: failure.labels })
-      },
-    )
-  }
-  const update = (task: TaskInfo, patch: Patch) =>
-    optimistic(
-      task.id,
-      patch,
-      () =>
-        updateTask.mutateAsync({
-          id: task.id,
-          ...Struct.omit(patch, ["labels"]),
-          ...(patch.labels && { labels: labelNames(patch.labels) }),
-        }),
-      { title: "Couldn’t update task", labels: patch.labels !== undefined },
-    )
-  const assign = (task: TaskInfo, assignment: Assignment) =>
-    optimistic(task.id, assignment, () => assignTask.mutateAsync({ id: task.id, ...assignment, start: "none" }), {
-      title: "Couldn’t assign task",
-      labels: false,
+  const refresh = useRefresh()
+  const updating = useTaskMutation(context.api.task.update.mutationOptions())
+  const assigning = useTaskMutation(context.api.task.assign.mutationOptions())
+  const creating = useTaskMutation(context.api.task.create.mutationOptions())
+  const update = (task: Pick<TaskInfo, "id">, patch: Patch) =>
+    updating.mutateAsync({
+      id: task.id,
+      ...Struct.omit(patch, ["labels"]),
+      ...(patch.labels && { labels: labelNames(patch.labels) }),
     })
-  const create = async (input: TaskCreateInput) => {
-    const task = await createTask.mutateAsync(input)
-    await refresh({ labels: (input.labels?.length ?? 0) > 0 })
-    return task
-  }
-  const archive = async (task: TaskInfo) => {
-    await archiveTask.mutateAsync({ id: task.id })
-    await patchLists(queryClient, lists, task.id, null)
-    await refresh({ labels: false })
-  }
+  const assign = (task: Pick<TaskInfo, "id">, assignment: Assignment) =>
+    assigning.mutateAsync({ id: task.id, ...assignment, start: "none" })
+  const create = (input: TaskCreateInput) => creating.mutateAsync(input)
   const bulk = async (tasks: ReadonlyArray<TaskInfo>, operation: BulkOperation) => {
     const targets = tasks.filter((task) => {
       if (operation.kind === "status") return task.status !== operation.status
@@ -209,12 +172,12 @@ export function useTaskActions() {
       return true
     })
     const results = await settle(targets, (task) => {
-      if (operation.kind === "status") return updateTask.mutateAsync({ id: task.id, status: operation.status })
+      if (operation.kind === "status") return context.client.task.update({ id: task.id, status: operation.status })
       if (operation.kind === "move")
-        return assignTask.mutateAsync({ id: task.id, agentId: operation.agentId, start: "none" })
-      return archiveTask.mutateAsync({ id: task.id })
+        return context.client.task.assign({ id: task.id, agentId: operation.agentId, start: "none" })
+      return context.client.task.archive({ id: task.id })
     })
-    await refresh({ labels: false })
+    await refresh()
     const failed = targets.filter((_task, index) => results[index]?.status === "rejected")
     const reason = results.find((result) => result.status === "rejected")
     const verb = { status: "Updated", move: "Moved", archive: "Archived" }[operation.kind]
@@ -222,6 +185,7 @@ export function useTaskActions() {
     else
       Toast.manager.add({
         type: "error",
+        timeout: 0,
         title: `${verb} ${targets.length - failed.length} of ${plural(targets.length)}`,
         description: `${failed.length} failed and ${failed.length === 1 ? "remains" : "remain"} selected. ${describe(
           reason?.status === "rejected" ? reason.reason : undefined,
@@ -229,5 +193,5 @@ export function useTaskActions() {
       })
     return failed
   }
-  return { update, assign, create, archive, bulk, isCreating: createTask.isPending }
+  return { update, assign, create, bulk, isCreating: creating.isPending }
 }

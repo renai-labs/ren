@@ -7,7 +7,7 @@ import { Form } from "@ren/ui/form"
 import { Notice } from "@ren/ui/notice"
 import { Schema } from "effect"
 import { useState } from "react"
-import { TaskDetail } from "./task-detail.js"
+import { RouterContext } from "../../lib/router-context.js"
 import { Tasks } from "./tasks.js"
 
 export function TaskReview(props: { task: TaskInfo }) {
@@ -36,11 +36,12 @@ function ReviewActions(props: { task: TaskInfo }) {
 }
 
 function ReviewDecision(props: { task: TaskInfo; decision: Task.Decision; onCancel: () => void }) {
-  const actions = TaskDetail.useActions()
+  const context = RouterContext.useRouterContext()
+  const review = Tasks.useTaskMutation(context.api.task.review.mutationOptions())
   return (
     <ReviewDecisionForm
       decision={props.decision}
-      onSubmit={(payload) => actions.review.mutateAsync({ id: props.task.id, payload })}
+      onSubmit={(payload) => review.mutateAsync({ id: props.task.id, payload })}
       onCancel={props.onCancel}
     />
   )

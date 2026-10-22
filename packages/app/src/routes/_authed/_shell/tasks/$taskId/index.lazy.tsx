@@ -1,7 +1,6 @@
 import { createLazyFileRoute } from "@tanstack/react-router"
 import { Session } from "@ren/schema/session"
 import { SessionPanel } from "../../../../../features/session/session-panel.js"
-import { SessionAttention } from "../../../../../features/session/session-attention.js"
 import { TaskDetailPage } from "../../../../../features/tasks/task-detail-page.js"
 
 export const Route = createLazyFileRoute("/_authed/_shell/tasks/$taskId/")({ component: TaskRoute })
@@ -23,12 +22,6 @@ function TaskRoute() {
         organizationId={context.me.organization.id}
         onOpenSession={openSession}
         onArchived={() => void navigate({ to: "/tasks" })}
-        // ast-grep-ignore: no-render-props -- the task supplies its current session ID so the route can compose the session feature
-        renderSessionAttention={(id, turn) => (
-          <SessionAttention key={id} sessionId={id} onOpen={() => openSession(id)}>
-            {turn}
-          </SessionAttention>
-        )}
       />
       {search.session ? (
         <SessionPanel
@@ -37,7 +30,10 @@ function TaskRoute() {
           child={search.child}
           onChild={(child) =>
             void navigate({
-                search: (previous) => ({ ...(previous.session && { session: previous.session }), ...(child && { child }) }),
+              search: (previous) => ({
+                ...(previous.session && { session: previous.session }),
+                ...(child && { child }),
+              }),
               replace: true,
             })
           }

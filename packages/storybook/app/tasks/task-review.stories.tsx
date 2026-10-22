@@ -32,5 +32,5 @@ const meta = { component: ReviewExample, args: { decision: "approved" } } satisf
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const Approve: Story = { render: () => <ReviewExample decision="approved" /> }
-export const RequestChanges: Story = { render: () => <ReviewExample decision="changes_requested" /> }
+export const Approve: Story = {}
+export const RequestChanges: Story = { args: { decision: "changes_requested" } }

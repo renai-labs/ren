@@ -8,9 +8,9 @@ import { List } from "@ren/ui/list"
 import { TaskLinkBadge } from "@ren/ui/task-link-badge"
 import { TaskRow } from "@ren/ui/task-row"
 import { TaskStatusCircle } from "@ren/ui/task-status-circle"
-import { TaskTurn } from "@ren/ui/task-turn"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
+import { AttentionTurn } from "./task-attention.js"
 import { DueDateControl, LabelsControl, OwnerControl, PriorityControl, StatusControl } from "./task-controls.js"
 import { TaskSearch } from "./task-search.js"
 import { TaskView } from "./task-view.js"
@@ -121,13 +121,17 @@ function Row(
         </>
       }
       turn={
-        <TaskTurn
-          {...TaskView.turn(task, {
-            agent: props.catalog.agentName,
-            owner: (id) => props.catalog.person(id)?.name,
-            userId: props.userId,
-          })}
-          truncation="single-line"
+        <AttentionTurn
+          task={task}
+          owner={TaskView.attentionOwner(task, props.userId, props.catalog.person)}
+          turn={{
+            ...TaskView.turn(task, {
+              agent: props.catalog.agentName,
+              owner: (id) => props.catalog.person(id)?.name,
+              userId: props.userId,
+            }),
+            truncation: "single-line",
+          }}
         />
       }
       trailing={

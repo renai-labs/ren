@@ -21,6 +21,7 @@ export interface View {
   readonly direction: typeof TaskSearch.Direction.Type
   readonly empty: boolean
   readonly properties: ReadonlyArray<TaskSearch.Property>
+  readonly selected: ReadonlyArray<string>
 }
 
 const defaultProperties: ReadonlyArray<TaskSearch.Property> = ["status", "priority", "owner", "labels"]
@@ -33,6 +34,7 @@ export const resolve = (search: TaskSearch.SearchParams, saved: TaskSearch.Filte
   direction: search.direction ?? "desc",
   empty: search.empty ?? false,
   properties: search.properties ?? defaultProperties,
+  selected: search.selected ?? [],
 })
 
 export const toSearch = (view: View): TaskSearch.SearchParams => ({
@@ -43,6 +45,7 @@ export const toSearch = (view: View): TaskSearch.SearchParams => ({
   ...(view.direction !== "desc" && { direction: view.direction }),
   ...(view.empty && { empty: true }),
   ...(!sameValues(view.properties, defaultProperties) && { properties: view.properties }),
+  ...(view.selected.length > 0 && { selected: view.selected }),
 })
 
 export const sameValues = (a: ReadonlyArray<string>, b: ReadonlyArray<string>) =>
@@ -122,7 +125,7 @@ function agentGroups(
     ...ids
       .map((id) => ({
         id,
-        name: known.get(id) ?? "Agent",
+        name: known.get(id) ?? "Archived agent",
         agentId: id,
         tasks: rows.filter((row) => row.agentId === id),
       }))
@@ -176,14 +179,14 @@ export function filterOptions(input: {
     agent: [
       { value: none, label: "No agent" },
       ...sorted([
-        ...input.tasks.flatMap((task) => (task.agentId ? [{ value: task.agentId, label: "Agent" }] : [])),
+        ...input.tasks.flatMap((task) => (task.agentId ? [{ value: task.agentId, label: "Archived agent" }] : [])),
         ...input.catalog.agents.map((agent) => ({ value: agent.id, label: agent.name })),
       ]),
     ],
     owner: [
       { value: none, label: "No owner" },
       ...sorted([
-        ...input.tasks.flatMap((task) => (task.ownerId ? [{ value: task.ownerId, label: task.ownerId }] : [])),
+        ...input.tasks.flatMap((task) => (task.ownerId ? [{ value: task.ownerId, label: "Former member" }] : [])),
         ...input.catalog.people.map((person) => ({ value: person.id, label: person.name, image: person.image })),
       ]),
     ],
@@ -204,9 +207,15 @@ export const groups = (
   rows: ReadonlyArray<TaskInfo>,
 ) => (view.group === "status" ? statusGroups(rows) : agentGroups(agents, tasks, rows, view))
 
-export const preferredSpace = (filters: TaskSearch.Filters) => (filters.space.length === 1 ? (filters.space[0] ?? "") : "")
+export const preferredSpace = (filters: TaskSearch.Filters) =>
+  filters.space.length === 1 ? (filters.space[0] ?? "") : ""
+
+export const isActionable = (task: TaskInfo) => task.status === "todo" || task.status === "in_progress"
 
 export type CollectionState = "loading" | "no-spaces" | "failed" | "no-tasks" | "no-results" | "ready"
+
+export const attentionOwner = (task: TaskInfo, userId: string, person: (id: string) => { name: string } | undefined) =>
+  task.ownerId && task.ownerId !== userId ? person(task.ownerId)?.name : undefined
 
 export function collectionState(input: {
   readonly status: "pending" | "error" | "success"
@@ -238,7 +247,7 @@ export function turn(
       reason: task.humanReviewReason ?? "",
     }
   if (task.agentId) {
-    const name = people.agent(task.agentId) ?? "Agent"
+    const name = people.agent(task.agentId) ?? "Archived agent"
     if (!task.session) return { state: "not_started", name }
     return { state: ({ working: "working", idle: "idle", failed: "stopped" } as const)[task.session.state], name }
   }

@@ -47,6 +47,15 @@ export const Plain: Story = {}
 export const CardFrame: Story = { args: { frame: "card" } }
 export const Divided: Story = { args: { frame: "divided" } }
 export const Ruled: Story = { args: { frame: "ruled" } }
+export const Flush: Story = { args: { frame: "flush" } }
+export const LimitedHeight: Story = {
+  args: {
+    height: "limited",
+    children: Array.from({ length: 16 }, (_, index) => `Session ${index + 1}`).map((title) => (
+      <List.Item key={title} title={title} onActivate={() => undefined} />
+    )),
+  },
+}
 export const Compact: Story = { args: { children: fileRows(() => ({ density: "compact" })) } }
 export const Spacious: Story = {
   args: {
