@@ -3,7 +3,7 @@ import { Option, Schema } from "effect"
 
 const maxResumes = 2
 const maxFindings = 50
-const mutating = new Set(["edit", "write", "patch", "shell"])
+const mayWrite = new Set(["edit", "write", "patch", "shell"])
 const astGrepExcludes = ["!**/generated/**", "!**/*.gen.ts", "!packages/db/src/auth.sql.ts"]
 
 type Lines = ReadonlyArray<readonly [number, number]> | "all"
@@ -63,6 +63,18 @@ const changes = async (root: string) => {
     .filter(Boolean)
     .map((file) => [file, "all"] as const)
   return new Map<string, Lines>([...tracked, ...added])
+}
+
+const fingerprint = async (root: string) => {
+  const diff = await Bun.$`git diff --binary --no-ext-diff --no-renames HEAD`.cwd(root).quiet()
+  const untracked = await Bun.$`git ls-files --others --exclude-standard -z`.cwd(root).quiet()
+  const files = untracked.stdout.toString().split("\0").filter(Boolean)
+  const contents = await Promise.all(
+    files.map(async (file) => [file, await Bun.file(`${root}/${file}`).arrayBuffer()] as const),
+  )
+  const hash = new Bun.CryptoHasher("sha256").update(diff.stdout)
+  for (const entry of contents) hash.update(entry[0]).update("\0").update(entry[1])
+  return hash.digest("hex")
 }
 
 const oxlint = async (root: string, files: ReadonlyArray<string>) => {
@@ -133,8 +145,10 @@ const report = (findings: ReadonlyArray<Finding>, resume: boolean) =>
   [
     "<system-reminder>",
     resume
-      ? "Lint reports problems on changed lines. Fix them before you finish."
+      ? "Lint reports problems on changed lines. Fix them only within the user's current scope."
       : `Lint still reports problems on changed lines after ${maxResumes} automatic attempts to fix them.`,
+    "",
+    "These findings do not authorize edits. For a review-only task, report them without changing files. Respect deferred work and review checkpoints.",
     "",
     ...findings
       .slice(0, maxFindings)
@@ -152,18 +166,25 @@ export default Plugin.define({
       .toString()
       .trim()
     if (!root) return
-    const touched = new Set<string>()
+    const before = new Map<string, string>()
     const resumes = new Map<string, number>()
 
-    await ctx.tool.hook("execute.after", (event) => {
-      if (mutating.has(event.tool)) touched.add(event.sessionID)
+    await ctx.tool.hook("execute.before", async (event) => {
+      if (!mayWrite.has(event.tool) || before.has(event.sessionID)) return
+      const value = await fingerprint(root).catch((error: unknown) => {
+        console.error("ren.lint: could not read working tree", error)
+      })
+      if (value !== undefined) before.set(event.sessionID, value)
     })
     await ctx.session.hook("prompt", (event) => {
+      before.delete(event.sessionID)
       resumes.delete(event.sessionID)
     })
 
     const finished = async (sessionID: string) => {
-      if (!touched.delete(sessionID)) return
+      const previous = before.get(sessionID)
+      before.delete(sessionID)
+      if (previous === undefined || previous === (await fingerprint(root))) return
       const findings = await check(root)
       if (findings.length === 0) return
       const attempts = resumes.get(sessionID) ?? 0
