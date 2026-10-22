@@ -7,6 +7,7 @@ import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"
 import { AgentMembership } from "@ren/core/agent/membership"
 import { BrainHost } from "@ren/core/brain-host"
+import { BrainRegistry } from "@ren/core/brain-registry"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
@@ -15,7 +16,6 @@ import { OrganizationSettings } from "@ren/core/organization-settings"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
-import { Settings } from "@ren/core/settings"
 import { Space } from "@ren/core/space"
 import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
@@ -39,7 +39,7 @@ import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handle
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
-import { HostSettingsHandler } from "./handlers/ren-host/settings.js"
+import { HostPullHandler } from "./handlers/ren-host/pull.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
 import { SessionHandler } from "./handlers/api/session.js"
 import { SpaceHandler } from "./handlers/api/space.js"
@@ -108,16 +108,17 @@ export const layer = Layer.mergeAll(
         SpaceSettings.layer,
         Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
           Layer.provide(SessionRunner.layer),
+          Layer.provide(BrainRegistry.layer),
         ),
         OrganizationSettings.layer,
         Agent.layer,
         AgentMembership.layer,
-        Session.layer.pipe(Layer.provide(SessionRunner.layer)),
+        Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
       ]),
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(
-      Layer.provide([HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler, HostSettingsHandler]),
-      Layer.provide([BrainHost.hostAuthentication, Settings.layer]),
+      Layer.provide([HostPullHandler, HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
+      Layer.provide(BrainHost.hostAuthentication),
     ),
     AuthRoute,
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),

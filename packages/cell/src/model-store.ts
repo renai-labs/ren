@@ -1,24 +1,20 @@
 export * as ModelStore from "./model-store.js"
 
+import { BrainToken } from "@ren/host-api/brain-token"
 import { Models } from "@ren/schema/models"
-import { Context, Effect, Layer, Option, Result, Schema, SynchronizedRef } from "effect"
-import { Base64Url } from "effect/encoding"
+import { Context, Effect, Layer, Option, SynchronizedRef } from "effect"
 import { KeyValueStore } from "effect/persistence"
+import { BrainStorage } from "./brain-storage.js"
 
 const accessKey = "ren:models"
+const hashKey = "ren:models-hash"
 const hostTokenKey = "ren:host-token"
-
-export class Storage extends Context.Service<
-  Storage,
-  {
-    readonly get: (key: string) => Promise<string | undefined>
-    readonly put: (key: string, value: string) => Promise<void>
-    readonly delete: (key: string) => Promise<unknown>
-  }
->()("@ren/cell/ModelStore/Storage") {}
 
 export interface Interface {
   readonly read: Effect.Effect<Option.Option<Models.Access>>
+  readonly hash: Effect.Effect<Option.Option<string>>
+  readonly install: (access: Models.Access, hash: string) => Effect.Effect<void>
+  readonly forget: Effect.Effect<void>
   readonly readHostToken: Effect.Effect<Option.Option<string>>
   readonly write: (access: Models.Access, hostToken: string | undefined) => Effect.Effect<void>
   readonly writeIfUnchanged: (
@@ -34,20 +30,13 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/cell/ModelStore") {}
 
-const Expiry = Schema.fromJsonString(Schema.Struct({ exp: Schema.Int }))
-
-const expiry = (token: string) =>
-  Option.fromNullishOr(token.split(".").at(0)).pipe(
-    Option.flatMap((part) => Result.getSuccess(Base64Url.decodeString(part))),
-    Option.flatMap(Schema.decodeUnknownOption(Expiry)),
-    Option.match({ onNone: () => Number.NEGATIVE_INFINITY, onSome: (claims) => claims.exp }),
-  )
+const expiry = (token: string) => Option.getOrElse(BrainToken.expiry(token), () => Number.NEGATIVE_INFINITY)
 
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const storage = yield* Storage
-    const keys = [accessKey, hostTokenKey]
+    const storage = yield* BrainStorage.Service
+    const keys = [accessKey, hashKey, hostTokenKey]
     const get = (key: string) => Effect.promise(() => storage.get(key))
     const remove = (key: string) => Effect.promise(() => storage.delete(key)).pipe(Effect.asVoid)
     const store = KeyValueStore.makeStringOnly({
@@ -71,6 +60,11 @@ export const layer = Layer.effect(
         )
     return Service.of({
       read: access.get(accessKey).pipe(Effect.orDie, Effect.withSpan("ModelStore.read")),
+      hash: store.get(hashKey).pipe(Effect.map(Option.fromNullishOr), Effect.orDie),
+      install: Effect.fn("ModelStore.install")(function* (next: Models.Access, hash: string) {
+        yield* access.set(accessKey, next).pipe(Effect.andThen(store.set(hashKey, hash)), Effect.orDie)
+      }),
+      forget: store.remove(hashKey).pipe(Effect.orDie),
       readHostToken: SynchronizedRef.get(storedHostToken).pipe(Effect.withSpan("ModelStore.readHostToken")),
       write: Effect.fn("ModelStore.write")(function* (next: Models.Access, hostToken: string | undefined) {
         yield* SynchronizedRef.updateEffect(storedHostToken, () => put(next, hostToken))

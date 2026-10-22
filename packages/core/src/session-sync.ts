@@ -58,13 +58,13 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SessionSync") {}
 
-const forbidden = new ForbiddenError({ message: "The session is not in the scope of the host token" })
+const forbidden = new ForbiddenError({ message: "The session is not on the brain of the host token" })
 
 const stale = new StaleUploadError({ message: "The upload is not the current open upload of the session" })
 
 const inScope = (host: Host) =>
   and(
-    eq(Database.Schema.agent_session.root_id, host.sessionId),
+    eq(Database.Schema.agent_session.brain_id, host.brainId),
     eq(Database.Schema.agent_session.organization_id, host.organizationId),
   )
 
@@ -136,6 +136,7 @@ export const layer = Layer.effect(
                   created_by: parent.created_by,
                   parent_id: parent.id,
                   root_id: parent.root_id,
+                  brain_id: parent.brain_id,
                   harness: input.harness,
                 })
                 .onConflictDoNothing()

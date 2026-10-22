@@ -2,7 +2,7 @@ export * as ExecutorVariables from "./executor-variables.js"
 
 import type { Environment } from "@ren/schema/environment"
 import { Schema } from "effect"
-import { Signature } from "./signature.js"
+import { Signature } from "@ren/schema/signature"
 
 export const environmentId = "EXECUTOR_ENVIRONMENT_ID"
 

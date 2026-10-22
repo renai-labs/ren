@@ -2,6 +2,7 @@ export * as Chat from "./chat.js"
 
 import { ChatApi } from "@ren/protocol/chat"
 import { ConflictError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
+import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { Clock, Deferred, Effect, Layer, Option, Predicate, Ref, Result, Schema, Stream } from "effect"
 import { Base64Url } from "effect/encoding"
@@ -18,9 +19,20 @@ const userHeader = "ren-user"
 
 const userNameHeader = "ren-user-name"
 
-export const setMember = (headers: Headers, member: { readonly sub?: string; readonly name?: string }) => {
+const sessionHeader = "ren-session"
+
+const expiresHeader = "ren-token-expires"
+
+export const setMember = (
+  headers: Headers,
+  member: { readonly sub?: string; readonly name?: string; readonly sid?: string; readonly exp?: number },
+) => {
   headers.delete(userHeader)
   headers.delete(userNameHeader)
+  headers.delete(sessionHeader)
+  headers.delete(expiresHeader)
+  if (member.sid) headers.set(sessionHeader, member.sid)
+  if (member.exp) headers.set(expiresHeader, String(member.exp))
   if (!member.sub) return
   headers.set(userHeader, member.sub)
   if (member.name) headers.set(userNameHeader, Base64Url.encode(member.name))
@@ -32,7 +44,10 @@ const frame = <const Type extends "server.heartbeat">(type: Type) =>
   Effect.map(Clock.currentTimeMillis, (created) => ({ id: `evt_${type}_${created}`, created, type, data: {} }))
 
 export const frames = (input: {
-  readonly live: Stream.Stream<SessionEvent.Event | typeof SessionEvent.Connected.Type, Error>
+  readonly live: Stream.Stream<
+    SessionEvent.Event | typeof SessionEvent.Connected.Type | typeof SessionEvent.Ended.Type,
+    Error
+  >
   readonly active: Effect.Effect<boolean>
   readonly idleMs: number
   readonly heartbeatMs: number
@@ -76,18 +91,84 @@ export const frames = (input: {
     }),
   )
 
-const events = Stream.unwrap(
-  Effect.gen(function* () {
-    const info = yield* Cell.Info
-    const harness = yield* Cell.acquire
-    return frames({
-      live: harness.chat.events,
-      active: harness.chat.active,
-      idleMs: info.vars.CHAT_IDLE_MS,
-      heartbeatMs: info.vars.CHAT_HEARTBEAT_MS,
-    })
-  }),
-)
+const sessionOf = (event: SessionEvent.Event | typeof SessionEvent.Connected.Type): string | undefined => {
+  const data: unknown = event.data
+  if (!Predicate.isObject(data)) return undefined
+  if (Predicate.hasProperty(data, "sessionID") && Predicate.isString(data.sessionID)) return data.sessionID
+  for (const key of ["info", "form"] as const)
+    if (Predicate.hasProperty(data, key) && Predicate.isObject(data[key])) {
+      const inner = data[key]
+      if (Predicate.hasProperty(inner, "sessionID") && Predicate.isString(inner.sessionID)) return inner.sessionID
+    }
+  return undefined
+}
+
+const isWithin = Effect.fnUntraced(function* (harness: Harness.Instance, root: string, sessionId: string) {
+  let current: string | undefined = sessionId
+  for (let depth = 0; current && depth < 32; depth++) {
+    if (current === root) return true
+    const found: Option.Option<{ readonly parentID?: string }> = yield* harness.chat
+      .get(Session.ID.make(current))
+      .pipe(Effect.option)
+    current = Option.getOrUndefined(found)?.parentID
+  }
+  return false
+})
+
+const scopeOf = Effect.map(HttpServerRequest.HttpServerRequest, (request) => ({
+  sid: Option.fromNullishOr(request.headers[sessionHeader]),
+  exp: Option.fromNullishOr(request.headers[expiresHeader]).pipe(Option.map(Number)),
+}))
+
+const events = (scope: Effect.Success<typeof scopeOf>) =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      const info = yield* Cell.Info
+      const harness = yield* Cell.acquire
+      const allowed = new Set(Option.toArray(scope.sid))
+      const shells = new Map<string, string>()
+      const live = Option.isNone(scope.sid)
+        ? harness.chat.events
+        : harness.chat.events.pipe(
+            Stream.filter((event) => {
+              if (event.type === "session.created" && event.data.parentID && allowed.has(event.data.parentID))
+                allowed.add(event.data.sessionID)
+              if (event.type === "shell.created") shells.set(event.data.info.id, event.data.info.sessionID)
+              const owner =
+                event.type === "shell.exited" || event.type === "shell.deleted"
+                  ? shells.get(event.data.id)
+                  : sessionOf(event)
+              return owner === undefined ? event.type.startsWith("server.") : allowed.has(owner)
+            }),
+          )
+      const expiring = Option.match(scope.exp, {
+        onNone: () => live,
+        onSome: (exp) =>
+          Stream.merge(
+            live,
+            Stream.fromEffect(
+              Effect.gen(function* () {
+                const now = yield* Clock.currentTimeMillis
+                yield* Effect.sleep(Math.max(0, exp * 1000 - now))
+                return {
+                  id: `evt_stream.ended_${exp}`,
+                  created: exp * 1000,
+                  type: "stream.ended",
+                  data: { reason: "closing" },
+                } as const
+              }),
+            ),
+            { haltStrategy: "either" },
+          ),
+      })
+      return frames({
+        live: expiring,
+        active: harness.chat.active,
+        idleMs: info.vars.CHAT_IDLE_MS,
+        heartbeatMs: info.vars.CHAT_HEARTBEAT_MS,
+      })
+    }),
+  )
 
 const sender = Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
   Option.map(Option.fromNullishOr(request.headers[userHeader]), (userId): Harness.Sender => {
@@ -124,7 +205,9 @@ const harnessed = Effect.map(
 const handlers = Layer.mergeAll(
   HttpApiBuilder.group(ChatApi, "event", (group) =>
     Effect.map(Effect.context<Services>(), (context) =>
-      group.handle("event.subscribe", () => Effect.succeed(events.pipe(Stream.provideContext(context)))),
+      group.handle("event.subscribe", () =>
+        Effect.map(scopeOf, (scope) => events(scope).pipe(Stream.provideContext(context))),
+      ),
     ),
   ),
   HttpApiBuilder.group(ChatApi, "model", (group) =>
@@ -134,7 +217,18 @@ const handlers = Layer.mergeAll(
     Effect.map(harnessed, (run) =>
       group
         .handle("session.get", (request) => run((harness) => harness.chat.get(request.params.sessionID).pipe(notFound)))
-        .handle("session.status", () => run((harness) => harness.chat.status))
+        .handle("session.status", () =>
+          run((harness) =>
+            Effect.gen(function* () {
+              const family = yield* harness.chat.status
+              const scope = yield* scopeOf
+              if (Option.isNone(scope.sid)) return family
+              const root = scope.sid.value
+              const kept = yield* Effect.filter(Object.keys(family), (id) => isWithin(harness, root, id))
+              return Object.fromEntries(kept.flatMap((id) => (family[id] ? [[id, family[id]] as const] : [])))
+            }),
+          ),
+        )
         .handle("session.messages", (request) =>
           run((harness) =>
             harness.chat
@@ -211,8 +305,8 @@ const handlers = Layer.mergeAll(
         .handle("session.model.switch", (request) =>
           run((harness) =>
             Effect.gen(function* () {
-              const info = yield* Cell.Info
-              if (request.params.sessionID !== info.sessionId)
+              const session = yield* harness.chat.get(request.params.sessionID).pipe(notFound)
+              if (session.parentID)
                 return yield* new InvalidRequestError({ message: "A subagent’s model comes from its parent session" })
               const model = request.payload.model
               yield* harness
@@ -332,6 +426,21 @@ export const layer = Layer.effect(
       HttpApiBuilder.layer(ChatApi).pipe(Layer.provide(handlers), Layer.provide(HttpServer.layerServices)),
     )
     const context = yield* Effect.context<Services>()
-    return Cell.Chat.of({ owns, fetch: HttpEffect.toWebHandler(app.pipe(Effect.provide(context))) })
+    const handler = HttpEffect.toWebHandler(app.pipe(Effect.provide(context)))
+    const forbidden = Effect.fnUntraced(function* (request: Request) {
+      const sid = request.headers.get(sessionHeader)
+      const target = /^\/chat\/session\/([^/]+)/.exec(new URL(request.url).pathname)?.at(1)
+      if (!sid || !target) return false
+      return !(yield* Effect.scoped(Effect.flatMap(Cell.acquire, (harness) => isWithin(harness, sid, target))))
+    })
+    return Cell.Chat.of({
+      owns,
+      fetch: (request) =>
+        Effect.runPromise(forbidden(request).pipe(Effect.provide(context))).then((isForbidden) =>
+          isForbidden
+            ? Response.json({ _tag: "ForbiddenError", message: "The token is for another chat" }, { status: 403 })
+            : handler(request),
+        ),
+    })
   }),
 )

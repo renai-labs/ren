@@ -2,7 +2,7 @@ export * as TestEnvironment from "./test-environment.js"
 
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
 import { EnvironmentToken } from "@ren/environment-api/environment-token"
-import { Signature } from "@ren/environment-api/signature"
+import { Signature } from "@ren/schema/signature"
 import type { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { ConfigProvider, DateTime, Effect, Layer, Redacted, Schema } from "effect"

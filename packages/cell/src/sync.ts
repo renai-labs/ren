@@ -1,8 +1,9 @@
 export * as Sync from "./sync.js"
 
 import { OpenCodeSync } from "@ren/brain/opencode-sync"
-import { Clock, Context, Duration, Effect, Layer, Option, Random, Ref } from "effect"
+import { Clock, Context, Duration, Effect, Layer, Option, Random, Ref, type Scope } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { BrainStorage } from "./brain-storage.js"
 import { HostToken } from "./host-token.js"
 import { SyncClient } from "./sync-client.js"
 
@@ -75,19 +76,25 @@ export const make = Effect.fn("Sync.make")(function* (
   })
 })
 
-export const layer = (storage: DurableObjectStorage, url: string | undefined) =>
+const restoringKey = "ren:restoring"
+
+export const layerWith = (reader: Effect.Effect<OpenCodeSync.Reader, never, Scope.Scope>, url: string | undefined) =>
   Layer.effect(
     Service,
     Effect.gen(function* () {
       if (!url) return yield* make(Option.none())
       const hostToken = yield* HostToken.Service
+      const storage = yield* BrainStorage.Service
       const opened = yield* OpenCodeSync.make({
         remote: yield* SyncClient.make(url, hostToken.current.pipe(Effect.map(Option.getOrElse(() => "")))).pipe(
           Effect.provide(FetchHttpClient.layer),
         ),
-        reader: { read: (read) => read((query, ...bindings) => storage.sql.exec(query, ...bindings)) },
-        restoring: Effect.promise(async () => (await storage.get<boolean>("ren:restoring")) ?? false),
+        reader: yield* reader,
+        restoring: Effect.promise(async () => (await storage.get(restoringKey)) === "true"),
       })
-      return yield* make(Option.some(opened), (value) => Effect.promise(() => storage.put("ren:restoring", value)))
+      return yield* make(Option.some(opened), (value) => Effect.promise(() => storage.put(restoringKey, String(value))))
     }),
   )
+
+export const layer = (storage: DurableObjectStorage, url: string | undefined) =>
+  layerWith(Effect.succeed({ read: (read) => read((query, ...bindings) => storage.sql.exec(query, ...bindings)) }), url)

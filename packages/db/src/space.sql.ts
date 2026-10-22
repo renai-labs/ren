@@ -1,6 +1,7 @@
 import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import { Primitive } from "@ren/schema/primitive"
+import type { Brain } from "@ren/schema/brain"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
 import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
@@ -20,6 +21,7 @@ export const space = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text().notNull(),
     description: text(),
+    brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),

@@ -2,10 +2,9 @@ export * as Environments from "./environments.js"
 
 import { ExecutorVariables } from "@ren/environment-api/executor-variables"
 import { EnvironmentToken } from "@ren/environment-api/environment-token"
-import { Signature } from "@ren/environment-api/signature"
+import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
-import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
@@ -132,9 +131,11 @@ export const layer = Layer.effect(
               environmentId: sessions.environment_id,
               idleAt: sessions.idle_at,
               generation: sessions.generation,
+              brainId: Database.Schema.agent_session.brain_id,
             })
             .from(sessions)
             .innerJoin(spaces, eq(spaces.id, sessions.space_id))
+            .innerJoin(Database.Schema.agent_session, eq(Database.Schema.agent_session.id, sessions.session_id))
             .where(and(eq(sessions.session_id, subject.sessionId), eq(spaces.organization_id, subject.organizationId)))
             .for("update", { of: sessions })
           const session = sessionRows.at(0)
@@ -191,6 +192,7 @@ export const layer = Layer.effect(
             environmentId,
             providerBinding: environment.at(0)?.binding ?? null,
             generation: session.generation,
+            brainId: session.brainId,
           }
         }),
       )
@@ -265,7 +267,7 @@ export const layer = Layer.effect(
         token: Redacted.make(
           yield* EnvironmentToken.sign(keys.key, {
             environment: assigned.environmentId,
-            brain: Brain.ofSession(subject.sessionId),
+            brain: assigned.brainId,
             exp,
           }),
         ),

@@ -1,38 +1,36 @@
 export * as BrainSettings from "./settings.js"
 
-import type { Permission } from "@ren/schema/permission"
-import type { Reference } from "@ren/schema/reference"
+import { Permission } from "@ren/schema/permission"
+import { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import type { Settings } from "@ren/schema/settings"
-import { Array, Effect, Option, Ref, Schema, Semaphore } from "effect"
-
-export class PullError extends Schema.TaggedError<PullError>()("BrainSettings.PullError", {
-  message: Schema.String,
-}) {}
+import { Array, Option, Result, Schema } from "effect"
 
 export class Unconfigured extends Schema.TaggedError<Unconfigured>()("BrainSettings.Unconfigured", {
   message: Schema.String,
 }) {}
 
-export class UnknownModel extends Schema.TaggedError<UnknownModel>()("BrainSettings.UnknownModel", {
+export interface Agent extends Schema.Schema.Type<typeof Agent> {}
+export const Agent = Schema.Struct({
+  name: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  instructions: Schema.Array(Schema.String),
+  permissions: Permission.RuleList,
   model: Session.Model,
-  message: Schema.String,
-}) {}
+}).annotate({ identifier: "BrainSettings.Agent" })
 
-export interface Agent {
-  readonly name: string
-  readonly description: string | null
-  readonly instructions: ReadonlyArray<string>
-  readonly permissions: Permission.RuleList
-  readonly model: Session.Model
-}
+export interface Resolved extends Schema.Schema.Type<typeof Resolved> {}
+export const Resolved = Schema.Struct({
+  primary: Agent,
+  subagents: Schema.Array(Agent),
+  references: Reference.List,
+}).annotate({ identifier: "BrainSettings.Resolved" })
 
-export interface Resolved {
-  readonly primary: Agent
-  readonly subagents: ReadonlyArray<Agent>
-  readonly references: Reference.List
-}
+export interface Chat extends Schema.Schema.Type<typeof ChatSettings> {}
+export const ChatSettings = Schema.Struct({ resolved: Resolved, interactive: Schema.Boolean }).annotate({
+  identifier: "BrainSettings.ChatSettings",
+})
 
 export interface Request {
   readonly action: string
@@ -44,23 +42,43 @@ export interface Decision {
   readonly message?: string
 }
 
-export interface Host {
-  readonly read: (known: SessionSettings.Known) => Effect.Effect<SessionSettings.Layers, PullError>
-  readonly available: (model: Session.Model) => Effect.Effect<boolean>
-}
-
-export type Failure = PullError | Unconfigured | UnknownModel
-
-export interface Interface {
-  readonly pull: Effect.Effect<Resolved, Failure>
-  readonly setModel: (model: Option.Option<Session.Model>) => Effect.Effect<Resolved, Failure>
-}
-
-interface Layers {
+export interface Layers {
   readonly ren: SessionSettings.Layer
   readonly organization: SessionSettings.Layer
   readonly space: SessionSettings.Layer
   readonly agents: ReadonlyArray<SessionSettings.AgentLayer & { readonly settings: Settings.Info }>
+}
+
+export interface Placement {
+  readonly agent: string | null
+  readonly model: Option.Option<Session.Model>
+}
+
+export type Lookup = (model: Session.Model) => Option.Option<{ readonly variants: ReadonlyArray<string> }>
+
+export const empty: Layers = { ren: { hash: null }, organization: { hash: null }, space: { hash: null }, agents: [] }
+
+export const known = (layers: Layers): SessionSettings.Known => ({
+  ...(layers.ren.hash && { ren: layers.ren.hash }),
+  ...(layers.organization.hash && { organization: layers.organization.hash }),
+  ...(layers.space.hash && { space: layers.space.hash }),
+  agents: Object.fromEntries(layers.agents.map((agent) => [agent.name, agent.hash])),
+})
+
+const kept = <A extends SessionSettings.Layer>(next: A, previous: A | undefined) =>
+  next.settings || !next.hash || !previous ? next : previous
+
+export const merge = (before: Layers, read: SessionSettings.Layers): Layers => {
+  const previous = new Map(before.agents.map((agent) => [agent.name, agent.settings]))
+  return {
+    ren: kept(read.ren, before.ren),
+    organization: kept(read.organization, before.organization),
+    space: kept(read.space, before.space),
+    agents: read.agents.flatMap((agent) => {
+      const settings = agent.settings ?? previous.get(agent.name)
+      return settings ? [{ ...agent, settings }] : []
+    }),
+  }
 }
 
 const matches = (input: string, pattern: string) => {
@@ -80,43 +98,57 @@ const union = (rules: ReadonlyArray<Permission.Rule>) =>
     (left, right) => left.action === right.action && left.resource === right.resource && left.effect === right.effect,
   )
 
-const resolve = (layers: Layers, override: Option.Option<Session.Model>): Effect.Effect<Resolved, Unconfigured> =>
-  Effect.gen(function* () {
-    const primary = layers.agents.find((agent) => !agent.isSubagent)
-    if (!primary) return yield* new Unconfigured({ message: "Ren is not configured: the session has no agent." })
-    const shared = [layers.ren, layers.organization, layers.space].flatMap((layer) =>
-      layer.settings ? [layer.settings] : [],
-    )
-    const own = [...shared, primary.settings]
-    const model = Option.getOrUndefined(override) ?? own.findLast((settings) => settings.model)?.model
-    if (!model) return yield* new Unconfigured({ message: "Ren is not configured: no layer sets a model." })
-    const instructions = (all: ReadonlyArray<Settings.Info>) =>
-      all.flatMap((settings) => (settings.instructions?.trim() ? [settings.instructions] : []))
-    const permissions = union(own.flatMap((settings) => settings.permissions))
-    return {
-      primary: {
-        name: primary.name,
-        description: primary.description,
-        instructions: instructions(own),
-        permissions,
-        model,
-      },
-      subagents: layers.agents
-        .filter((agent) => agent.isSubagent)
-        .map((agent) => ({
-          name: agent.name,
-          description: agent.description,
-          instructions: instructions([...shared, agent.settings]),
-          permissions: union([...permissions, ...agent.settings.permissions]),
-          model: agent.settings.model ?? model,
-        })),
-      references: Array.fromIterable(
-        new Map(
-          own.flatMap((settings) => settings.references.map((reference) => [reference.alias, reference] as const)),
-        ).values(),
-      ).toSorted((left, right) => left.alias.localeCompare(right.alias)),
-    }
+const available = (lookup: Lookup, model: Session.Model | undefined): Option.Option<Session.Model> => {
+  if (!model) return Option.none()
+  return Option.map(lookup(model), (found) => {
+    if (!model.variant || found.variants.includes(model.variant)) return model
+    const first = found.variants.at(0)
+    return { endpointId: model.endpointId, modelId: model.modelId, ...(first && { variant: first }) }
   })
+}
+
+export const resolve = (layers: Layers, chat: Placement, lookup: Lookup): Result.Result<Resolved, Unconfigured> => {
+  const primary =
+    layers.agents.find((agent) => !agent.isSubagent && agent.name === chat.agent) ??
+    layers.agents.find((agent) => !agent.isSubagent)
+  if (!primary) return Result.fail(new Unconfigured({ message: "Ren is not configured: the chat has no agent." }))
+  const shared = [layers.ren, layers.organization, layers.space].flatMap((layer) =>
+    layer.settings ? [layer.settings] : [],
+  )
+  const own = [...shared, primary.settings]
+  const candidates = [Option.getOrUndefined(chat.model), ...own.toReversed().map((settings) => settings.model)]
+  const model = candidates.reduce<Option.Option<Session.Model>>(
+    (found, candidate) => (Option.isSome(found) ? found : available(lookup, candidate)),
+    Option.none(),
+  )
+  if (Option.isNone(model)) return Result.fail(new Unconfigured({ message: "No available model is set." }))
+  const instructions = (all: ReadonlyArray<Settings.Info>) =>
+    all.flatMap((settings) => (settings.instructions?.trim() ? [settings.instructions] : []))
+  const permissions = union(own.flatMap((settings) => settings.permissions))
+  return Result.succeed({
+    primary: {
+      name: primary.name,
+      description: primary.description,
+      instructions: instructions(own),
+      permissions,
+      model: model.value,
+    },
+    subagents: layers.agents
+      .filter((agent) => agent.isSubagent)
+      .map((agent) => ({
+        name: agent.name,
+        description: agent.description,
+        instructions: instructions([...shared, agent.settings]),
+        permissions: union([...permissions, ...agent.settings.permissions]),
+        model: Option.getOrElse(available(lookup, agent.settings.model), () => model.value),
+      })),
+    references: Array.fromIterable(
+      new Map(
+        own.flatMap((settings) => settings.references.map((reference) => [reference.alias, reference] as const)),
+      ).values(),
+    ).toSorted((left, right) => left.alias.localeCompare(right.alias)),
+  })
+}
 
 const rank = { allow: 0, ask: 1, deny: 2 } as const
 
@@ -145,63 +177,3 @@ export const hiddenTools = (agent: Agent, denied: Permission.RuleList, tools: Re
       (rule) => rule.effect === "deny" && rule.resource === "*" && matches(tool, rule.action),
     ),
   )
-
-const checkModel = (host: Host, model: Session.Model) =>
-  Effect.flatMap(host.available(model), (available) =>
-    available
-      ? Effect.void
-      : Effect.fail(
-          new UnknownModel({
-            model,
-            message: `The model ${model.endpointId}/${model.modelId}${model.variant ? ` (${model.variant})` : ""} is not available.`,
-          }),
-        ),
-  )
-
-const kept = <A extends SessionSettings.Layer>(next: A, previous: A | undefined) =>
-  next.settings || !next.hash || !previous ? next : previous
-
-export const make = Effect.fnUntraced(function* (host: Host, options: { readonly model?: Session.Model } = {}) {
-  const none = { hash: null }
-  const cache = yield* Ref.make<Layers>({ ren: none, organization: none, space: none, agents: [] })
-  const override = yield* Ref.make(Option.fromUndefinedOr(options.model))
-  const pulls = yield* Semaphore.make(1)
-  const refresh = Effect.fnUntraced(function* (model: Option.Option<Session.Model>) {
-    const before = yield* Ref.get(cache)
-    const read = yield* host.read({
-      ...(before.ren.hash && { ren: before.ren.hash }),
-      ...(before.organization.hash && { organization: before.organization.hash }),
-      ...(before.space.hash && { space: before.space.hash }),
-      agents: Object.fromEntries(before.agents.map((agent) => [agent.name, agent.hash])),
-    })
-    const previous = new Map(before.agents.map((agent) => [agent.name, agent.settings]))
-    const layers: Layers = {
-      ren: kept(read.ren, before.ren),
-      organization: kept(read.organization, before.organization),
-      space: kept(read.space, before.space),
-      agents: yield* Effect.forEach(read.agents, (agent) => {
-        const settings = agent.settings ?? previous.get(agent.name)
-        return settings
-          ? Effect.succeed({ ...agent, settings })
-          : Effect.die(new Error(`Ren sent agent ${agent.name} without settings the brain does not have`))
-      }),
-    }
-    const resolved = yield* resolve(layers, model)
-    yield* Effect.forEach([resolved.primary, ...resolved.subagents], (agent) => checkModel(host, agent.model), {
-      discard: true,
-    })
-    yield* Ref.set(cache, layers)
-    yield* Ref.set(override, model)
-    return resolved
-  })
-  return {
-    pull: pulls.withPermit(Effect.flatMap(Ref.get(override), refresh)),
-    setModel: (model) =>
-      pulls.withPermit(
-        Effect.gen(function* () {
-          if (Option.isSome(model)) yield* checkModel(host, model.value)
-          return yield* refresh(model)
-        }),
-      ),
-  } satisfies Interface
-})

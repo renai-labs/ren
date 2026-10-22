@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { EnvironmentToken } from "@ren/environment-api/environment-token"
-import { Signature } from "@ren/environment-api/signature"
+import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"

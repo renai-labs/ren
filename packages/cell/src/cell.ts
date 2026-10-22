@@ -1,6 +1,6 @@
 export * as Cell from "./cell.js"
 
-import { Session } from "@ren/schema/session"
+import { Brain as BrainSchema } from "@ren/schema/brain"
 import {
   Clock,
   Context,
@@ -18,7 +18,11 @@ import {
   Semaphore,
 } from "effect"
 import { FetchHttpClient } from "effect/http"
+import type { State as BrainApiState } from "@ren/host-api/brain-api"
+import manifest from "../package.json"
+import { BrainStorage } from "./brain-storage.js"
 import { Env } from "./env.js"
+import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
@@ -30,7 +34,9 @@ export class Info extends Context.Service<
   Info,
   {
     readonly storage: Pick<DurableObjectStorage, "getAlarm" | "setAlarm">
-    readonly sessionId: Session.ID
+    readonly brainId: BrainSchema.ID
+    readonly generation: number
+    readonly version: string
     readonly vars: Env.Vars
   }
 >()("@ren/cell/Cell/Info") {}
@@ -70,16 +76,15 @@ export const acquire = Effect.gen(function* () {
 
 export const state = Effect.gen(function* () {
   const info = yield* Info
-  const activity = yield* Activity
   const harness = yield* Harness.Service
   const opened = yield* harness.state
-  const alarm = yield* Effect.promise(() => info.storage.getAlarm())
   return {
+    brain: info.brainId,
+    generation: info.generation,
+    version: info.version,
     isOpen: opened.isOpen,
     holders: opened.holders,
-    waitingSince: Option.getOrNull(yield* Ref.get(activity.waitingSince)),
-    nextReconcileAt: alarm ? DateTime.makeUnsafe(alarm) : null,
-  } satisfies Session.HostState
+  } satisfies BrainApiState
 })
 
 export const fetch = Effect.fn("Cell.fetch")(function* (request: Request) {
@@ -177,35 +182,41 @@ export const alarm = Effect.fn("Cell.alarm")(function* () {
   yield* resync
 })
 
+export const activityLayer = Layer.effect(
+  Activity,
+  Effect.all({
+    requests: Ref.make(0),
+    wait: FiberHandle.make<void>(),
+    waitingSince: Ref.make(Option.none<DateTime.Utc>()),
+    configuring: Semaphore.make(1),
+    closedIdle: Ref.make(false),
+  }),
+)
+
+export const hostLayer = Layer.unwrap(
+  Effect.gen(function* () {
+    const cell = yield* Info
+    return ModelRefresh.layer(cell.vars.REN_URL).pipe(
+      Layer.provideMerge(HostToken.layer(cell.vars.REN_URL)),
+      Layer.provideMerge(ModelStore.layer),
+      Layer.provideMerge(Fence.layer),
+      Layer.provide(FetchHttpClient.layer),
+    )
+  }),
+)
+
 export const layer = (storage: DurableObjectStorage, name: string | undefined, env: unknown) => {
   const info = Layer.effect(
     Info,
     Effect.gen(function* () {
-      if (!name) return yield* Effect.die(new Error("A session cell has no name, so no session id"))
+      if (!name) return yield* Effect.die(new Error("A brain cell has no name, so no brain id"))
       return {
         storage,
-        sessionId: yield* Schema.decodeUnknownEffect(Session.ID)(name).pipe(Effect.orDie),
+        brainId: yield* Schema.decodeUnknownEffect(BrainSchema.ID)(name).pipe(Effect.orDie),
+        generation: 1,
+        version: manifest.version,
         vars: yield* Schema.decodeUnknownEffect(Env.Vars)(env).pipe(Effect.orDie),
       }
-    }),
-  )
-  const refresh = Layer.unwrap(
-    Effect.gen(function* () {
-      const cell = yield* Info
-      return ModelRefresh.layer(cell.vars.REN_URL).pipe(
-        Layer.provideMerge(HostToken.layer(cell.vars.REN_URL, cell.vars.CELL_KEYS)),
-        Layer.provide(FetchHttpClient.layer),
-      )
-    }),
-  )
-  const activity = Layer.effect(
-    Activity,
-    Effect.all({
-      requests: Ref.make(0),
-      wait: FiberHandle.make<void>(),
-      waitingSince: Ref.make(Option.none<DateTime.Utc>()),
-      configuring: Semaphore.make(1),
-      closedIdle: Ref.make(false),
     }),
   )
   const sync = Layer.unwrap(
@@ -214,10 +225,9 @@ export const layer = (storage: DurableObjectStorage, name: string | undefined, e
       return Sync.layer(storage, cell.vars.REN_URL)
     }),
   )
-  const models = ModelStore.layer.pipe(Layer.provideMerge(Layer.succeed(ModelStore.Storage, storage)))
-  return Layer.mergeAll(activity, sync).pipe(
-    Layer.provideMerge(refresh),
-    Layer.provideMerge(models),
+  return Layer.mergeAll(activityLayer, sync).pipe(
+    Layer.provideMerge(hostLayer),
+    Layer.provideMerge(Layer.succeed(BrainStorage.Service, storage)),
     Layer.provideMerge(info),
   )
 }

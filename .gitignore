@@ -35,3 +35,7 @@ test-results/
 .celld/
 .dev.vars
 .wrangler/
+
+# Staged E2B brain template context
+packages/cell/e2b/ren/
+packages/cell/e2b/ren.tar.gz

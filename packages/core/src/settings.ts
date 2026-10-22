@@ -1,6 +1,7 @@
 export * as Settings from "./settings.js"
 
 import { Database } from "@ren/db/database"
+import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
 import { Settings } from "@ren/schema/settings"
@@ -10,11 +11,19 @@ import { AgentQueries } from "./agent/queries.js"
 
 export class NotFound extends Schema.TaggedError<NotFound>()("Settings.NotFound", { message: Schema.String }) {}
 
+export interface Chat {
+  readonly id: Session.ID
+  readonly agent: string | null
+  readonly archived: boolean
+}
+
+export interface Pulled {
+  readonly layers: SessionSettings.Layers
+  readonly chats: ReadonlyArray<Chat>
+}
+
 export interface Interface {
-  readonly read: (
-    sessionId: Session.ID,
-    known: SessionSettings.Known,
-  ) => Effect.Effect<SessionSettings.Layers, NotFound>
+  readonly pull: (brainId: Brain.ID, known: SessionSettings.Known) => Effect.Effect<Pulled, NotFound>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Settings") {}
@@ -32,18 +41,32 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
 
     return Service.of({
-      read: Effect.fn("Settings.read")(function* (sessionId: Session.ID, known: SessionSettings.Known) {
+      pull: Effect.fn("Settings.pull")(function* (brainId: Brain.ID, known: SessionSettings.Known) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const session = (yield* transaction
+            const brain = (yield* transaction
               .select({
-                organizationId: Database.Schema.agent_session.organization_id,
-                spaceId: Database.Schema.agent_session.space_id,
+                organizationId: Database.Schema.brain.organization_id,
+                spaceId: Database.Schema.brain.space_id,
+              })
+              .from(Database.Schema.brain)
+              .where(eq(Database.Schema.brain.id, brainId))).at(0)
+            if (!brain) return yield* new NotFound({ message: `Brain ${brainId} not found.` })
+            const sessions = yield* transaction
+              .select({
+                id: Database.Schema.agent_session.id,
                 agentId: Database.Schema.agent_session.agent_id,
+                archivedAt: Database.Schema.agent_session.archived_at,
               })
               .from(Database.Schema.agent_session)
-              .where(eq(Database.Schema.agent_session.id, sessionId))).at(0)
-            if (!session) return yield* new NotFound({ message: `Session ${sessionId} not found.` })
+              .where(
+                and(
+                  eq(Database.Schema.agent_session.brain_id, brainId),
+                  isNull(Database.Schema.agent_session.parent_id),
+                ),
+              )
+              .orderBy(asc(Database.Schema.agent_session.created_at), asc(Database.Schema.agent_session.id))
+            const owned = sessions.flatMap((session) => (session.agentId ? [session.agentId] : []))
             const rows = yield* transaction
               .select({
                 ownerId: Database.Schema.settings.owner_id,
@@ -54,12 +77,13 @@ export const layer = Layer.effect(
               .where(
                 inArray(Database.Schema.settings.owner_id, [
                   Database.Schema.renOwner,
-                  session.organizationId,
-                  session.spaceId,
+                  brain.organizationId,
+                  brain.spaceId,
                 ]),
               )
             const agents = yield* transaction
               .select({
+                id: Database.Schema.agent.id,
                 name: Database.Schema.agent.name,
                 description: Database.Schema.agent.description,
                 isSubagent: Database.Schema.agent.is_subagent,
@@ -75,40 +99,52 @@ export const layer = Layer.effect(
                   or(
                     isNull(Database.Schema.agent.organization_id),
                     and(
-                      eq(Database.Schema.agent.organization_id, session.organizationId),
-                      AgentQueries.isInSpace(session.spaceId),
-                      session.agentId
-                        ? or(eq(Database.Schema.agent.is_subagent, true), eq(Database.Schema.agent.id, session.agentId))
+                      eq(Database.Schema.agent.organization_id, brain.organizationId),
+                      AgentQueries.isInSpace(brain.spaceId),
+                      owned.length > 0
+                        ? or(eq(Database.Schema.agent.is_subagent, true), inArray(Database.Schema.agent.id, owned))
                         : eq(Database.Schema.agent.is_subagent, true),
                     ),
                   ),
                 ),
               )
               .orderBy(asc(Database.Schema.agent.name))
-            const hasOwnAgent = agents.some((agent) => !agent.isGlobal && !agent.isSubagent)
-            const owned = (ownerId: string, knownHash: string | undefined) => {
+            const globalPrimary = agents.find((agent) => agent.isGlobal && !agent.isSubagent)
+            const chats = sessions.map((session) => ({
+              id: session.id,
+              agent:
+                (session.agentId && agents.find((agent) => agent.id === session.agentId)?.name) ??
+                globalPrimary?.name ??
+                null,
+              archived: session.archivedAt !== null,
+            }))
+            const used = new Set(chats.flatMap((chat) => (chat.agent ? [chat.agent] : [])))
+            const layer = (ownerId: string, knownHash: string | undefined) => {
               const row = rows.find((each) => each.ownerId === ownerId)
               return row ? changed({ hash: row.hash }, row.settings, knownHash) : Effect.succeed({ hash: null })
             }
             return {
-              ren: yield* owned(Database.Schema.renOwner, known.ren),
-              organization: yield* owned(session.organizationId, known.organization),
-              space: yield* owned(session.spaceId, known.space),
-              agents: yield* Effect.forEach(
-                agents.filter((agent) => agent.isSubagent || !agent.isGlobal || !hasOwnAgent),
-                (agent) =>
-                  changed(
-                    {
-                      name: agent.name,
-                      description: agent.description,
-                      isSubagent: agent.isSubagent,
-                      hash: agent.hash,
-                    },
-                    agent.settings ?? {},
-                    known.agents?.[agent.name],
-                  ),
-              ),
-            } satisfies SessionSettings.Layers
+              layers: {
+                ren: yield* layer(Database.Schema.renOwner, known.ren),
+                organization: yield* layer(brain.organizationId, known.organization),
+                space: yield* layer(brain.spaceId, known.space),
+                agents: yield* Effect.forEach(
+                  agents.filter((agent) => agent.isSubagent || used.has(agent.name)),
+                  (agent) =>
+                    changed(
+                      {
+                        name: agent.name,
+                        description: agent.description,
+                        isSubagent: agent.isSubagent,
+                        hash: agent.hash,
+                      },
+                      agent.settings ?? {},
+                      known.agents?.[agent.name],
+                    ),
+                ),
+              } satisfies SessionSettings.Layers,
+              chats,
+            }
           }),
         )
       }),

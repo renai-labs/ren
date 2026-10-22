@@ -1,6 +1,6 @@
 export * as Signature from "./signature.js"
 
-import { Clock, Effect, Option, Schema } from "effect"
+import { Clock, Effect, Option, Predicate, Schema } from "effect"
 import { decodeProtectedHeader, jwtVerify, SignJWT } from "jose"
 
 const keyAlgorithm = "Ed25519"
@@ -43,6 +43,8 @@ export const generate = Effect.fn("Signature.generate")(function* (id: string) {
   if (!("publicKey" in pair)) return yield* Effect.die(new Error("Ed25519 generated one key, not a key pair"))
   const publicKey = yield* Effect.promise(() => crypto.subtle.exportKey("raw", pair.publicKey))
   const privateKey = yield* Effect.promise(() => crypto.subtle.exportKey("pkcs8", pair.privateKey))
+  if (!(publicKey instanceof ArrayBuffer) || !(privateKey instanceof ArrayBuffer))
+    return yield* Effect.die(new Error("Ed25519 exported a key that is not raw bytes"))
   return {
     publicKey: { id, key: new Uint8Array(publicKey) } satisfies PublicKey,
     privateKey: { id, key: new Uint8Array(privateKey) } satisfies PrivateKey,
@@ -54,7 +56,10 @@ export const publicKeyOf = Effect.fn("Signature.publicKeyOf")(function* (key: Pr
     crypto.subtle.importKey("pkcs8", new Uint8Array(key.key), keyAlgorithm, true, ["sign"]),
   )
   const jwk = yield* Effect.promise(() => crypto.subtle.exportKey("jwk", subtle))
-  return yield* Schema.decodeUnknownEffect(PublicKey)({ id: key.id, key: jwk.x }).pipe(Effect.orDie)
+  return yield* Schema.decodeUnknownEffect(PublicKey)({
+    id: key.id,
+    key: Predicate.hasProperty(jwk, "x") ? jwk.x : undefined,
+  }).pipe(Effect.orDie)
 })
 
 export const sign = Effect.fn("Signature.sign")(function* (
@@ -71,7 +76,12 @@ export const sign = Effect.fn("Signature.sign")(function* (
 
 export const verify = Effect.fn("Signature.verify")(function* <
   C extends { readonly kid: string; readonly exp: number },
->(keys: ReadonlyArray<PublicKey>, claims: Schema.Decoder<C>, token: string): Effect.fn.Return<Option.Option<C>> {
+>(
+  keys: ReadonlyArray<PublicKey>,
+  claims: Schema.Decoder<C>,
+  token: string,
+  options: { readonly toleranceSeconds?: number } = {},
+): Effect.fn.Return<Option.Option<C>> {
   const header = yield* Effect.option(Effect.try(() => decodeProtectedHeader(token)))
   if (Option.isNone(header)) return Option.none()
   const key = keys.find((candidate) => candidate.id === header.value.kid)
@@ -82,7 +92,12 @@ export const verify = Effect.fn("Signature.verify")(function* <
   const now = yield* Clock.currentTimeMillis
   const verified = yield* Effect.option(
     Effect.tryPromise(() =>
-      jwtVerify(token, subtle, { algorithms: [tokenAlgorithm], requiredClaims: ["exp"], currentDate: new Date(now) }),
+      jwtVerify(token, subtle, {
+        algorithms: [tokenAlgorithm],
+        requiredClaims: ["exp"],
+        currentDate: new Date(now),
+        clockTolerance: options.toleranceSeconds ?? 0,
+      }),
     ),
   )
   return verified.pipe(

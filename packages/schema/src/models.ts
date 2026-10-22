@@ -16,6 +16,9 @@ export type Protocol = typeof Protocol.Type
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: Schema.NonEmptyString,
+  upstreamId: Schema.optionalKey(
+    Schema.NonEmptyString.annotate({ description: "The name sent upstream. Defaults to the id." }),
+  ),
   name: Schema.optionalKey(Schema.NonEmptyString),
   limit: Schema.optionalKey(
     Schema.Struct({

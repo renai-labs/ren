@@ -8,7 +8,7 @@ import { ModelStore } from "./model-store.js"
 
 export class Service extends Context.Service<Service, Harness.Refresh>()("@ren/cell/ModelRefresh") {}
 
-const window = Duration.minutes(5)
+const window = Duration.hours(3)
 
 const make = Effect.fn("ModelRefresh.make")(function* (url: string | undefined) {
   const store = yield* ModelStore.Service

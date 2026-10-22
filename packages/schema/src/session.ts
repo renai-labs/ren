@@ -100,12 +100,26 @@ export const Started = Schema.Struct({ sessionId: ID, harness: Harness }).annota
 export interface Accepted extends Schema.Schema.Type<typeof Accepted> {}
 export const Accepted = Schema.Struct({ messageId: MessageID }).annotate({ identifier: "Session.Accepted" })
 
-export interface ClientAccess extends Schema.Schema.Type<typeof ClientAccess> {}
-export const ClientAccess = Schema.Struct({
+export interface ReadyAccess extends Schema.Schema.Type<typeof ReadyAccess> {}
+export const ReadyAccess = Schema.Struct({
+  status: Schema.Literal("ready"),
   url: Schema.String,
   token: Schema.String,
   expiresAt: Schema.DateTimeUtc,
-}).annotate({ identifier: "Session.ClientAccess" })
+}).annotate({ identifier: "Session.ReadyAccess" })
+
+export const ClientAccess = Schema.Union([
+  ReadyAccess,
+  Schema.Struct({
+    status: Schema.Literal("starting"),
+    phase: Schema.String.annotate({ description: "What the brain is doing. Ask again in 2 seconds." }),
+  }).annotate({ identifier: "Session.StartingAccess" }),
+  Schema.Struct({
+    status: Schema.Literal("failed"),
+    reason: Schema.String,
+  }).annotate({ identifier: "Session.FailedAccess" }),
+]).annotate({ identifier: "Session.ClientAccess" })
+export type ClientAccess = typeof ClientAccess.Type
 
 export interface HostState extends Schema.Schema.Type<typeof HostState> {}
 export const HostState = Schema.Struct({

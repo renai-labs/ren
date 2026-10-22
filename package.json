@@ -17,6 +17,7 @@
     "typecheck": "bun turbo typecheck --concurrency=3 && tsgo --noEmit",
     "check": "bun run lint && bun run typecheck",
     "generate": "bun run script/generate.ts",
+    "keys": "bun run packages/schema/script/keys.ts",
     "format": "bun run script/format.ts",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"

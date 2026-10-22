@@ -7,16 +7,16 @@ export const HostEnvironmentsHandler = HttpApiBuilder.group(RenHostApi, "environ
   Effect.gen(function* () {
     const brain = yield* BrainHost.Service
     return handlers
-      .handle("environments.access", () =>
+      .handle("environments.access", (request) =>
         Effect.gen(function* () {
           const host = yield* CurrentHost
-          return yield* brain.accessEnvironment(host)
+          return yield* brain.accessEnvironment(host, request.params.id)
         }),
       )
-      .handle("environments.release", () =>
+      .handle("environments.release", (request) =>
         Effect.gen(function* () {
           const host = yield* CurrentHost
-          yield* brain.releaseEnvironment(host)
+          yield* brain.releaseEnvironment(host, request.params.id)
         }),
       )
   }),

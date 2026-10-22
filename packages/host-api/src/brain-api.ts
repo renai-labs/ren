@@ -27,6 +27,15 @@ export const SetModelBody = Schema.Struct({ model: Schema.NullOr(Session.Model) 
   identifier: "Brain.SetModelBody",
 })
 
+export interface State extends Schema.Schema.Type<typeof State> {}
+export const State = Schema.Struct({
+  brain: Brain.ID,
+  generation: Schema.Int,
+  version: Schema.String,
+  isOpen: Schema.Boolean,
+  holders: Schema.Int,
+}).annotate({ identifier: "Brain.State" })
+
 export const Synced = Schema.Struct({ drained: Schema.Boolean }).annotate({ identifier: "Brain.Synced" })
 export type Synced = typeof Synced.Type
 
@@ -73,24 +82,12 @@ const BrainGroup = HttpApiGroup.make("brain")
     ),
   )
   .add(
-    HttpApiEndpoint.put("brain.configureModels", "/ren/models", {
-      payload: Brain.ModelGrant,
-    }).annotateMerge(
+    HttpApiEndpoint.post("brain.wake", "/ren/wake").annotateMerge(
       OpenApi.annotations({
-        identifier: "brain.configureModels",
-        summary: "Configure models",
+        identifier: "brain.wake",
+        summary: "Wake the brain",
         description:
-          "Store the brain’s model endpoints and apply them and their API keys to the open harness. The host token lets the host refresh expiring keys.",
-      }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.delete("brain.removeModels", "/ren/models").annotateMerge(
-      OpenApi.annotations({
-        identifier: "brain.removeModels",
-        summary: "Remove models",
-        description:
-          "Delete the brain’s model configuration and its credentials. Start and send fail until a configuration is stored again.",
+          "Ren calls this first after it resumes a paused brain. The brain drops its cached model keys, pulls and syncs, then answers, also when the pull or the sync failed.",
       }),
     ),
   )
@@ -105,11 +102,11 @@ const BrainGroup = HttpApiGroup.make("brain")
     ),
   )
   .add(
-    HttpApiEndpoint.get("brain.state", "/ren/state", { success: Session.HostState }).annotateMerge(
+    HttpApiEndpoint.get("brain.state", "/ren/state", { success: State }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.state",
         summary: "Read the host's state",
-        description: "Read host activity without opening the harness.",
+        description: "Read the brain's identity, version and activity without opening the harness.",
       }),
     ),
   )

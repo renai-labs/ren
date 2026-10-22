@@ -4,7 +4,7 @@ import { Environment } from "@ren/schema/environment"
 import { Effect, Option } from "effect"
 import { TestClock } from "effect/testing"
 import { EnvironmentToken } from "../src/environment-token.js"
-import { Signature } from "../src/signature.js"
+import { Signature } from "@ren/schema/signature"
 
 const pair = await Effect.runPromise(Signature.generate("active"))
 const now = 1_800_000_000

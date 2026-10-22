@@ -41,6 +41,8 @@ const respondedLimit = 1_000
 const autoApproveRetries = 2
 const refreshBefore = 60_000
 
+const startingPollMs = 2_000
+
 export class AccessFailed extends Data.TaggedError("ChatSession.AccessFailed")<{ readonly cause: unknown }> {}
 
 export interface Options {
@@ -142,7 +144,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const histories = new Map<string, Deferred.Deferred<void, unknown>>()
   const sends = { tail: Deferred.makeUnsafe<void>() }
   Deferred.doneUnsafe(sends.tail, Effect.void)
-  const cached: { current: Option.Option<{ readonly access: Session.ClientAccess; readonly client: Client }> } = {
+  const cached: { current: Option.Option<{ readonly access: Session.ReadyAccess; readonly client: Client }> } = {
     current: Option.none(),
   }
 
@@ -158,7 +160,21 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         DateTime.toEpochMillis(cached.current.value.access.expiresAt) - now > refreshBefore
       )
         return cached.current.value.client
-      const access = yield* options.access.pipe(Effect.mapError((cause) => new AccessFailed({ cause })))
+      const access = yield* options.access.pipe(
+        Effect.mapError((cause) => new AccessFailed({ cause })),
+        Effect.flatMap((answer) => {
+          if (answer.status === "ready") return Effect.succeed(Option.some(answer))
+          if (answer.status === "failed") return Effect.fail(new AccessFailed({ cause: new Error(answer.reason) }))
+          return Effect.sleep(startingPollMs).pipe(Effect.as(Option.none<Session.ReadyAccess>()))
+        }),
+        Effect.repeat({ until: Option.isSome }),
+        Effect.flatMap((answer) =>
+          Option.match(answer, {
+            onNone: () => Effect.fail(new AccessFailed({ cause: new Error("The brain did not start") })),
+            onSome: Effect.succeed,
+          }),
+        ),
+      )
       const authorized = HttpClient.mapRequest(http, HttpClientRequest.basicAuth("ren", access.token)).pipe(
         HttpClient.transform((response, request) =>
           response.pipe(

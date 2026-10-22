@@ -53,3 +53,15 @@ export class SyncUnavailableError extends Schema.TaggedError<SyncUnavailableErro
   { message: Schema.String },
   { httpApiStatus: 503 },
 ) {}
+
+export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
+  "UnauthorizedError",
+  { message: Schema.String },
+  { httpApiStatus: 401 },
+) {}
+
+export class GenerationRetiredError extends Schema.TaggedError<GenerationRetiredError>()(
+  "GenerationRetiredError",
+  { message: Schema.String },
+  { httpApiStatus: 403 },
+) {}
