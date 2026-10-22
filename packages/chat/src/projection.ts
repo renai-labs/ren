@@ -2,7 +2,7 @@ export * as Projection from "./projection.js"
 
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
-import { Effect, Option, Predicate, Schema } from "effect"
+import { Exit, Option, Predicate, Schema } from "effect"
 import { TimelineDetail } from "./timeline-detail.js"
 import { TimelineRow } from "./timeline-row.js"
 import { ToolState } from "./tool-state.js"
@@ -58,7 +58,7 @@ export interface Projection {
 const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
 const decodeString = Schema.decodeUnknownOption(Schema.String)
 const lenient = <S extends Schema.Top>(schema: S) =>
-  Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)))
+  Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Exit.succeed(Option.none()))))
 const decodeErrorEnvelope = Schema.decodeUnknownOption(
   Schema.Struct({ error: Schema.optionalKey(Schema.Unknown), message: lenient(Schema.String) }),
 )
