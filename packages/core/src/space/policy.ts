@@ -1,12 +1,13 @@
 export * as SpacePolicy from "./policy.js"
 
+import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { Space } from "@ren/schema/space"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { SpaceMember } from "@ren/schema/space-member"
-import { isNotNull, or, sql } from "drizzle-orm"
+import { and, eq, isNotNull, or, sql } from "drizzle-orm"
 import type { Access } from "../access.js"
 import { SpaceQueries } from "./queries.js"
 
@@ -24,7 +25,9 @@ export const organizationRoles = Auth.Role.literals
 
 const organizationActions = Primitive.actions(Space.definition, ["list", "create"])
 
-const spaceActions = Primitive.actions(Space.definition, ["get", "update", "archive"])
+const readActions = Primitive.actions(Space.definition, ["get"])
+
+const spaceActions = Primitive.actions(Space.definition, ["update", "archive"])
 
 const memberActions = Primitive.actions(SpaceMember.definition)
 
@@ -35,6 +38,8 @@ export const documents = [
     primitive: Space.definition.name,
     statements: [
       { actions: organizationActions, roles: organizationRoles, on: Policy.everywhere },
+      { actions: readActions, roles: administratorRoles, on: Policy.everywhere, agents: true },
+      { actions: readActions, roles: organizationRoles, on: spaceMember.name, agents: true },
       { actions: spaceActions, roles: administratorRoles, on: Policy.everywhere },
       { actions: spaceActions, roles: organizationRoles, on: spaceMember.name },
     ],
@@ -57,11 +62,15 @@ export const documents = [
 
 export const organization: Access.Resource = { relationships: [] }
 
-export const resource = (membershipId: Space.MembershipID | null): Access.Resource => ({
+export const resource = (membershipId: Space.MembershipID | null, spaceId: Space.ID): Access.Resource => ({
   relationships: spaceMember.holds(membershipId) ? [spaceMember.name] : [],
+  spaceId,
 })
 
 export const filter = (plan: Access.Plan) =>
-  plan.isAllowedEverywhere
-    ? undefined
-    : (or(...plan.allowedWhere.map((relationship) => conditions.get(relationship))) ?? sql`false`)
+  and(
+    plan.spaceId ? eq(Database.Schema.space.id, plan.spaceId) : undefined,
+    plan.isAllowedEverywhere
+      ? undefined
+      : (or(...plan.allowedWhere.map((relationship) => conditions.get(relationship))) ?? sql`false`),
+  )

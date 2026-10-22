@@ -9,6 +9,10 @@ export const Statement = Schema.Struct({
   actions: Schema.Array(Schema.String).check(Schema.isNonEmpty()),
   roles: Schema.NonEmptyArray(Schema.String),
   on: Schema.String,
+  agents: Schema.optional(Schema.Boolean).annotate({
+    description:
+      "Whether an agent acting in a session also gets this statement, within the session’s space. Without it, agents are denied.",
+  }),
 }).annotate({ identifier: "Policy.Statement" })
 
 export interface Document extends Schema.Schema.Type<typeof Document> {}
@@ -36,7 +40,7 @@ export const describe = (documents: ReadonlyArray<Document>) =>
       ...document.statements.map((statement) => {
         const actions = statement.actions.map((action) => action.slice(document.primitive.length + 1))
         const scope = statement.on === everywhere ? "on all" : `when ${statement.on}`
-        return `  ${either(statement.roles)} may ${either(actions)}, ${scope}`
+        return `  ${either(statement.roles)}${statement.agents ? " and their agents" : ""} may ${either(actions)}, ${scope}`
       }),
       "",
     ]),

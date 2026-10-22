@@ -73,7 +73,7 @@ export const layer = Layer.effect(
         .for("share", { of: Database.Schema.space })
       const row = rows.at(0)
       if (!row) return
-      const resource = SpacePolicy.resource(row.membershipId)
+      const resource = SpacePolicy.resource(row.membershipId, spaceId)
       if (!access.isAllowed({ actor, action: actions.getSpace, resource })) return
       return resource
     })
