@@ -99,8 +99,7 @@ const reasoningDuration = (content: SessionMessage.Reasoning) =>
       )
     : undefined
 
-const streaming = (message: SessionMessage.Info | undefined) =>
-  message?.type === "assistant" && !message.time.completed
+const streaming = (message: SessionMessage.Info | undefined) => message?.type === "assistant" && !message.time.completed
 
 function Reasoning(props: { content: SessionMessage.Reasoning; streaming: boolean; open?: boolean }) {
   return (
@@ -360,7 +359,9 @@ function UserMessage(props: { shared: Shared; data: RowData }) {
         {props.data.caption ? `${props.data.caption} · ` : ""}
         <Time value={DateTime.toEpochMillis(message.time.created)} format="time-of-day" />
       </Text>
-      {pending ? <PendingActions shared={props.shared} message={message} updating={props.data.updating === true} /> : null}
+      {pending ? (
+        <PendingActions shared={props.shared} message={message} updating={props.data.updating === true} />
+      ) : null}
     </ConversationShell.Message>
   )
 }
