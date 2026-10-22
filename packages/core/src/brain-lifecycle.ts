@@ -7,6 +7,7 @@ import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm"
 import { Clock, Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
+import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Environments } from "./environments.js"
@@ -32,6 +33,11 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/BrainLifecycle") {}
 
+const BrainRun = DurableRunner.make("BrainRun", {
+  payload: { brainId: Brain.ID, epoch: Schema.Int },
+  idempotencyKey: (payload) => `brain:${payload.brainId}:${payload.epoch}`,
+})
+
 export const timing = {
   boot: Duration.seconds(120),
   wake: Duration.seconds(60),
@@ -53,7 +59,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const provider = yield* SandboxProvider.Service
     const client = yield* BrainClient.Service
-    const runner = yield* DurableRunner.Service
+    const engine = yield* WorkflowEngine.WorkflowEngine
     const environments = yield* Environments.Service
 
     const read = (brainId: Brain.ID) =>
@@ -266,7 +272,23 @@ export const layer = Layer.effect(
         ),
       )
 
-    const ensure = (brainId: Brain.ID) => runner.ensure(`brain:${brainId}`, run(brainId))
+    yield* DurableRunner.register(BrainRun, (payload) =>
+      DurableRunner.supervise(`brain:${payload.brainId}`, run(payload.brainId)).pipe(
+        Effect.andThen(
+          database.db
+            .update(brains)
+            .set({ run_epoch: payload.epoch + 1 })
+            .where(and(eq(brains.id, payload.brainId), eq(brains.run_epoch, payload.epoch)))
+            .pipe(Effect.orDie),
+        ),
+      ),
+    )
+
+    const ensure = (brainId: Brain.ID) =>
+      read(brainId).pipe(
+        Effect.flatMap((row) => DurableRunner.ensure(BrainRun, { brainId, epoch: row.run_epoch })),
+        Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
+      )
 
     const touch = Effect.fnUntraced(function* (row: Row) {
       yield* update(row.id, { last_active_at: yield* now })

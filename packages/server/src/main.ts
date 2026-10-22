@@ -37,7 +37,7 @@ const sandbox = Layer.unwrap(
     return BrainHost.layerSandbox.pipe(
       Layer.provide(BrainLifecycle.layer),
       Layer.provide(provider === "e2b" ? E2BSandbox.layer : LocalSandbox.layer({ entry, executor, root })),
-      Layer.provide(DurableRunner.layerMemory),
+      Layer.provide(DurableRunner.layerEffect),
     )
   }),
 )

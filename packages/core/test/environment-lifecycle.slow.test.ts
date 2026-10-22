@@ -3,6 +3,7 @@ import { Shared } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import { SqlClient } from "effect/sql"
 import { TestEnvironment } from "@ren/executor/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
@@ -110,7 +111,7 @@ const stackOf = async (config: CoreConfig) => {
     },
     models,
     environments: Environments.layer.pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),
-  }).pipe(Layer.provide(Layer.succeedContext(await database.runPromise(Effect.context<Database.Service>()))))
+  }).pipe(Layer.provide(Layer.succeedContext(await database.runPromise(Effect.context<Database.Service | SqlClient.SqlClient>()))))
 }
 
 type Stack = Layer.Success<Awaited<ReturnType<typeof stackOf>>>

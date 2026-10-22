@@ -53,13 +53,12 @@ Environment given to a new brain: `REN_URL`, `REN_BRAIN_ID`, `REN_BRAIN_GENERATI
 
 ### `DurableRunner` (E71, E75)
 
-```ts
-export interface Interface {
-  readonly ensure: <I>(run: Run<I>, key: string, input: I) => Effect.Effect<void> // start, or join a running run with this key
-}
-```
+A run is an Effect workflow: a name, a payload schema and a key (`DurableRunner.make`). The owner registers its handler at layer build (`DurableRunner.register`); `DurableRunner.ensure(run, payload)` starts the run or joins the running execution with that key. `layerEffect` is `ClusterWorkflowEngine` on `SingleRunner` with Postgres storage: a run continues after a Ren restart, and one execution per key runs across all replicas. `layerMemory` is for tests.
 
-A `Run` is a function of core: it calls `BrainLifecycle.step` until it returns `done`. The engine runs one run per key, reruns it after a crash, and retries with backoff.
+A key that finished does not run again; the engine returns the stored result. ren-v1's Temporal (`USE_EXISTING`) started a new run after the previous one closed. To get that behaviour, a run that must run again has a counter in its key (user decision, item 3):
+
+- `brain:<brainId>:<run_epoch>`. The run adds 1 to `brain.run_epoch` when it ends, not when it is interrupted.
+- `start:<sessionId>:<first message id>`. A restart of a lost chat has a new first message.
 
 ### Runs
 
@@ -72,7 +71,7 @@ A `Run` is a function of core: it calls `BrainLifecycle.step` until it returns `
 
 ### `BrainLifecycle.step`
 
-State lives on the `brain` row: `phase`, `generation`, `provider`, `binding`, `key_ids` (piece C), `keep_alive_until`, `last_progress_at`.
+State lives on the `brain` row: `phase`, `generation`, `run_epoch`, `provider`, `binding`, `key_ids` (piece C), `keep_alive_until`, `last_progress_at`.
 
 | Phase        | One action                                                                                                                                             | Next                                               |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
