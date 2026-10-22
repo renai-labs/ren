@@ -17,6 +17,7 @@
     "@base-ui/react": "catalog:",
     "@playwright/test": "catalog:",
     "@ren/app": "workspace:*",
+    "@ren/schema": "workspace:*",
     "@ren/ui": "workspace:*",
     "@ren/util": "workspace:*",
     "@storybook/react-vite": "catalog:",
