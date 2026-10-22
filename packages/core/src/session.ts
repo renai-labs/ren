@@ -26,6 +26,7 @@ export type MessageID = Session.MessageID
 export type Interface = Primitive.Interface<typeof Session.definition> & {
   readonly access: (actor: Actor.Info, id: Session.ID) => Effect.Effect<Session.ClientAccess, Primitive.NotFound>
   readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
+  readonly prepare: (actor: Actor.Info, spaceId: Space.ID) => Effect.Effect<void, Primitive.NotFound>
   readonly retry: (
     actor: Actor.Info,
     id: Session.ID,
@@ -117,6 +118,24 @@ export const layer = Layer.effect(
       return row
     })
 
+    const visibleSpace = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: Space.ID) {
+      const space = yield* database.transaction((transaction) =>
+        transaction
+          .select({ id: Database.Schema.space.id, membershipId: SpaceQueries.membership.id })
+          .from(Database.Schema.space)
+          .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+          .where(
+            and(
+              eq(Database.Schema.space.id, spaceId),
+              eq(Database.Schema.space.organization_id, actor.organizationId),
+              isNull(Database.Schema.space.archived_at),
+              SpacePolicy.filter(access.plan(actor, spaceGet)),
+            ),
+          ),
+      )
+      if (space.length === 0) return yield* spaceNotFound
+    })
+
     const read = (actor: Actor.Info, id: Session.ID) =>
       database.transaction((transaction) => find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
 
@@ -156,21 +175,7 @@ export const layer = Layer.effect(
         return toInfo(yield* read(actor, idOrSlug))
       }),
       create: Effect.fn("Session.create")(function* (actor: Actor.Info, input: Session.CreateInput) {
-        const space = yield* database.transaction((transaction) =>
-          transaction
-            .select({ id: Database.Schema.space.id, membershipId: SpaceQueries.membership.id })
-            .from(Database.Schema.space)
-            .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
-            .where(
-              and(
-                eq(Database.Schema.space.id, input.spaceId),
-                eq(Database.Schema.space.organization_id, actor.organizationId),
-                isNull(Database.Schema.space.archived_at),
-                SpacePolicy.filter(access.plan(actor, spaceGet)),
-              ),
-            ),
-        )
-        if (space.length === 0) return yield* spaceNotFound
+        yield* visibleSpace(actor, input.spaceId)
         const model = input.model
         if (
           model &&
@@ -240,6 +245,10 @@ export const layer = Layer.effect(
         )
       }),
       models: Effect.fn("Session.models")(models),
+      prepare: Effect.fn("Session.prepare")(function* (actor: Actor.Info, spaceId: Space.ID) {
+        yield* visibleSpace(actor, spaceId)
+        yield* brain.prepare(spaceId)
+      }),
       retry: Effect.fn("Session.retry")(function* (
         actor: Actor.Info,
         id: Session.ID,

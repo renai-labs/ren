@@ -57,6 +57,7 @@ interface StackOptions<E, R> {
   readonly models: Layer.Layer<Models.Service>
   readonly environments: Layer.Layer<Environments.Service, E, R>
   readonly lostEvery?: Duration.Input
+  readonly maxRunning?: number
 }
 
 // oxlint-disable-next-line ren/no-comments -- Each brain is a real Bun brain process on this machine (LocalSandbox), under root. Brains reach Ren on REN_URL, where serve answers.
@@ -69,6 +70,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
         executor,
         root: options.root,
         ...(options.lostEvery && { lostEvery: options.lostEvery }),
+        ...(options.maxRunning && { maxRunning: options.maxRunning }),
       }),
     ),
     Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),

@@ -21,6 +21,11 @@ export const ChatHandler = HttpApiBuilder.group(Api, "chat", (handlers) =>
           Effect.catchTag("Primitive.NotFound", (error) => Effect.fail(new NotFoundError({ message: error.message }))),
         ),
       )
+      .handle("chat.prepare", (request) =>
+        Effect.flatMap(Primitive.currentActor, (actor) => sessions.prepare(actor, request.params.id)).pipe(
+          Effect.catchTag("Primitive.NotFound", (error) => Effect.fail(new NotFoundError({ message: error.message }))),
+        ),
+      )
       .handle("chat.models", (request) =>
         Effect.flatMap(Primitive.currentActor, (actor) => sessions.models(actor, request.params.id)),
       )

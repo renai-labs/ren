@@ -74,6 +74,8 @@ import type {
   ChatAccessOutput,
   ChatRetryInput,
   ChatRetryOutput,
+  ChatPrepareInput,
+  ChatPrepareOutput,
   ChatModelsInput,
   ChatModelsOutput,
   TaskListInput,
@@ -693,6 +695,17 @@ export function make(options: ClientOptions) {
             method: "POST",
             path: `/sessions/${encodeURIComponent(input.id)}/chat/retry`,
             body: { message: input["message"] },
+            successStatus: 204,
+            declaredStatuses: [401, 403, 404],
+            empty: true,
+          },
+          requestOptions,
+        ),
+      prepare: (input: ChatPrepareInput, requestOptions?: RequestOptions) =>
+        request<ChatPrepareOutput>(
+          {
+            method: "POST",
+            path: `/spaces/${encodeURIComponent(input.id)}/chat/prepare`,
             successStatus: 204,
             declaredStatuses: [401, 403, 404],
             empty: true,

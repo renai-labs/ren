@@ -454,6 +454,11 @@ const EndpointChatRetry = (raw: RawClient["chat"]) => (input: ChatRetryInput) =>
     Effect.mapError(mapClientError),
   )
 
+type ChatPrepareRequest = Parameters<RawClient["chat"]["chat.prepare"]>[0]
+type ChatPrepareInput = { readonly id: ChatPrepareRequest["params"]["id"] }
+const EndpointChatPrepare = (raw: RawClient["chat"]) => (input: ChatPrepareInput) =>
+  raw["chat.prepare"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
 type ChatModelsRequest = Parameters<RawClient["chat"]["chat.models"]>[0]
 type ChatModelsInput = { readonly id: ChatModelsRequest["params"]["id"] }
 const EndpointChatModels = (raw: RawClient["chat"]) => (input: ChatModelsInput) =>
@@ -462,6 +467,7 @@ const EndpointChatModels = (raw: RawClient["chat"]) => (input: ChatModelsInput) 
 const adaptGroupChat = (raw: RawClient["chat"]) => ({
   access: EndpointChatAccess(raw),
   retry: EndpointChatRetry(raw),
+  prepare: EndpointChatPrepare(raw),
   models: EndpointChatModels(raw),
 })
 

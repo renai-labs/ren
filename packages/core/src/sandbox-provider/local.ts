@@ -1,7 +1,7 @@
 export * as LocalSandbox from "./local.js"
 
 import { Brain } from "@ren/schema/brain"
-import { type Duration, Effect, FiberMap, Layer, Option, Schema, Stream } from "effect"
+import { Duration, Effect, FiberMap, Layer, Option, Schema, Stream } from "effect"
 import { spawn } from "node:child_process"
 import { mkdir, readdir, rm } from "node:fs/promises"
 import { createServer } from "node:net"
@@ -49,6 +49,7 @@ export const layer = (options: {
   readonly executor: string
   readonly root: string
   readonly lostEvery?: Duration.Input
+  readonly maxRunning?: number
 }) =>
   Layer.effect(
     SandboxProvider.Service,
@@ -80,6 +81,19 @@ export const layer = (options: {
           const existing = yield* stored(home)
           if (Option.isSome(existing) && (yield* isAlive(existing.value.pid)))
             return { binding: Schema.encodeSync(Binding)(existing.value), url: urlOf(existing.value) }
+          if (options.maxRunning) {
+            const names = yield* Effect.promise(() => readdir(options.root).catch(() => []))
+            const found = yield* Effect.forEach(names, (name) => stored(join(options.root, name)))
+            const running = yield* Effect.filter(
+              found.flatMap((each) => (Option.isSome(each) ? [each.value] : [])),
+              (each) => Effect.map(isAlive(each.pid), (alive) => alive && !paused.has(each.pid)),
+            )
+            if (running.length >= options.maxRunning)
+              return yield* new SandboxProvider.Capacity({
+                message: `${running.length} local brains run; the limit is ${options.maxRunning}`,
+                retryAfter: Duration.seconds(1),
+              })
+          }
           yield* Effect.tryPromise({
             try: () =>
               Promise.all([

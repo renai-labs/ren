@@ -1044,6 +1044,10 @@ export type ChatRetryInput = {
 
 export type ChatRetryOutput = void
 
+export type ChatPrepareInput = { readonly id: { readonly id: string }["id"] }
+
+export type ChatPrepareOutput = void
+
 export type ChatModelsInput = { readonly id: { readonly id: string }["id"] }
 
 export type ChatModelsOutput = Array<SessionModelChoice>

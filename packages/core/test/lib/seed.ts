@@ -64,6 +64,7 @@ export const space = Effect.fnUntraced(function* (organizationId: Auth.Organizat
 export const owner = Effect.fnUntraced(function* () {
   const organizationId = yield* organization()
   const creator = yield* user()
+  yield* member(organizationId, creator.id, "owner")
   return { organizationId, spaceId: yield* space(organizationId), createdBy: creator.id }
 })
 
@@ -120,6 +121,16 @@ export const session = Effect.fnUntraced(function* (
   const database = yield* Database.Service
   const id = start.sessionId ?? Session.ID.create()
   const brainId = owner.brainId ?? Brain.ofSession(id)
+  const isMember = yield* database.db
+    .select({ id: Database.Schema.member.id })
+    .from(Database.Schema.member)
+    .where(
+      and(
+        eq(Database.Schema.member.organizationId, owner.organizationId),
+        eq(Database.Schema.member.userId, owner.createdBy),
+      ),
+    )
+  if (isMember.length === 0) yield* member(owner.organizationId, owner.createdBy, "owner")
   yield* database.db
     .insert(Database.Schema.brain)
     .values({

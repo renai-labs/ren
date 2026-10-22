@@ -132,16 +132,21 @@ export const layer = Layer.effect(
       }
     })
 
+    // oxlint-disable-next-line ren/no-comments -- Capacity is not a failure (E88): the brain shows "waiting for capacity", and the step that hit it runs again after Retry-After.
+    const waitForCapacity = Effect.fnUntraced(function* (row: Row, error: SandboxProvider.Capacity) {
+      yield* Effect.logWarning(`Waiting for capacity: ${error.message}`)
+      yield* update(row.id, { phase: "capacity" })
+      yield* Effect.sleep(error.retryAfter)
+      yield* update(row.id, { phase: row.phase })
+    })
+
     const create = Effect.fnUntraced(function* (row: Row) {
       const created = yield* provider
         .create({ brainId: row.id, generation: row.generation, env: yield* env(row) })
         .pipe(
           Effect.map(Option.some),
           Effect.catchTag("SandboxProvider.Capacity", (error) =>
-            Effect.logWarning(`Waiting for capacity: ${error.message}`).pipe(
-              Effect.andThen(Effect.sleep(error.retryAfter)),
-              Effect.as(Option.none<SandboxProvider.Created>()),
-            ),
+            waitForCapacity(row, error).pipe(Effect.as(Option.none<SandboxProvider.Created>())),
           ),
         )
       if (Option.isNone(created)) return false
@@ -175,16 +180,15 @@ export const layer = Layer.effect(
     const resume = Effect.fnUntraced(function* (row: Row) {
       if (!row.binding) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
       const connected = yield* provider.connect(row.binding).pipe(
-        Effect.map(Option.some),
-        Effect.catchTag("SandboxProvider.Gone", () => Effect.succeedNone),
+        Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
+        Effect.catchTag("SandboxProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
         Effect.catchTag("SandboxProvider.Capacity", (error) =>
-          Effect.sleep(error.retryAfter).pipe(
-            Effect.andThen(Effect.fail(new SandboxProvider.Failed({ message: error.message }))),
-          ),
+          waitForCapacity(row, error).pipe(Effect.as({ _tag: "Waited" } as const)),
         ),
       )
-      if (Option.isNone(connected)) return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
-      yield* update(row.id, { url: connected.value.url, keep_alive_until: null })
+      if (connected._tag === "Waited") return false
+      if (connected._tag === "Gone") return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+      yield* update(row.id, { url: connected.url, keep_alive_until: null })
       yield* keepAlive({ ...row, keep_alive_until: null }, timing.idle)
       yield* update(row.id, { phase: "waking" })
       return false
@@ -385,6 +389,7 @@ export const layer = Layer.effect(
       replacing: replace,
       ready: settle,
       failed: () => Effect.succeed(true),
+      capacity: (row) => update(row.id, { phase: row.binding ? "resuming" : "creating" }).pipe(Effect.as(false)),
     } satisfies Record<Brain.Phase, (row: Row) => Effect.Effect<boolean, unknown>>
 
     const step = Effect.fn("BrainLifecycle.step")(function* (brainId: Brain.ID) {
@@ -453,8 +458,8 @@ export const layer = Layer.effect(
       }
       if (row.phase === "failed") return { _tag: "Failed", reason: row.failure ?? "The brain failed" } as const
       yield* ensure(brainId)
-      const phase = row.phase === "ready" ? "resuming" : row.phase
-      return { _tag: "Starting", phase } as const
+      const shown: Partial<Record<Brain.Phase, string>> = { ready: "resuming", capacity: "waiting for capacity" }
+      return { _tag: "Starting", phase: shown[row.phase] ?? row.phase } as const
     })
 
     return Service.of({
