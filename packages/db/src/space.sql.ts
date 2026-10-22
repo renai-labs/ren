@@ -1,8 +1,9 @@
+import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import { Primitive } from "@ren/schema/primitive"
 import type { Space } from "@ren/schema/space"
 import { defineRelationsPart, isNull, sql } from "drizzle-orm"
-import { check, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
+import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { organization, user } from "./auth.sql.js"
 
 export const spaceMemberUserConstraint = "space_member_space_id_user_id_uidx"
@@ -19,6 +20,7 @@ export const space = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text().notNull(),
     description: text(),
+    agent_order: jsonb().$type<ReadonlyArray<Agent.ID>>().notNull().default([]),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),

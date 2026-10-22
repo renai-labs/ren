@@ -2,6 +2,7 @@ export * as RenSettings from "./ren.js"
 
 import { Database } from "@ren/db/database"
 import { Agent } from "@ren/schema/agent"
+import { Label } from "@ren/schema/label"
 import type { Settings } from "@ren/schema/settings"
 import { and, eq, isNull, notInArray, sql } from "drizzle-orm"
 import { Effect } from "effect"
@@ -21,6 +22,10 @@ export interface Defaults {
 
 export const apply = Effect.fnUntraced(function* (transaction: Database.Transaction, defaults: Defaults) {
   yield* SettingsRows.write(transaction, SettingsRows.ren, defaults.settings)
+  yield* transaction
+    .insert(Database.Schema.label)
+    .values(Label.system.map((label) => ({ id: label.id, name: label.name })))
+    .onConflictDoNothing({ target: Database.Schema.label.id })
   yield* transaction
     .update(Database.Schema.agent)
     .set({ archived_at: sql`now()`, updated_at: sql`now()` })

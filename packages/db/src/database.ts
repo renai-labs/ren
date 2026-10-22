@@ -12,6 +12,7 @@ import { sessionRelations } from "./session.sql.js"
 import { settingsRelations } from "./settings.sql.js"
 import { spaceRelations } from "./space.sql.js"
 import { spaceEnvironmentTemplateRelations } from "./space-environment-template.sql.js"
+import { taskRelations } from "./task.sql.js"
 
 const make = makeWithDefaults({
   relations: {
@@ -22,6 +23,7 @@ const make = makeWithDefaults({
     ...spaceEnvironmentTemplateRelations,
     ...agentRelations,
     ...settingsRelations,
+    ...taskRelations,
   },
 })
 
