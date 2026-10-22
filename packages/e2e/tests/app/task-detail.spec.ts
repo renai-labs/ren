@@ -18,15 +18,30 @@ test("a member follows a task's trail, comments and decides a review from its de
   })
   expect(created.ok()).toBe(true)
   const task = Schema.decodeUnknownSync(Schema.Struct({ id: Task.ID }))(await created.json())
-  await page.goto(`/app/tasks/${task.id}`)
-  await expect(page.getByRole("heading", { name: "Plan the migration", level: 1 })).toBeVisible({ timeout: 30_000 })
+  await page.goto("/app/tasks")
+  await page.getByRole("button", { name: "Plan the migration", exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/tasks/${task.id}`))
+  await expect(page.getByRole("textbox", { name: "Task title", exact: true })).toHaveValue("Plan the migration", {
+    timeout: 30_000,
+  })
   await expect(page.getByText("Created the task.", { exact: true })).toBeVisible()
   await expect(page.getByRole("button", { name: "Start agent", exact: true })).toBeDisabled()
+
+  await Promise.all(
+    Array.from({ length: 101 }, (_, index) =>
+      page.request
+        .post(`${serverURL}/task-comments`, {
+          headers: { origin: appOrigin },
+          data: { taskId: task.id, body: `Earlier note ${index}` },
+        })
+        .then((response) => expect(response.ok()).toBe(true)),
+    ),
+  )
 
   await page.getByRole("button", { name: "Add comment", exact: true }).click()
   await page.getByRole("textbox", { name: "Comment", exact: true }).fill("The rollback plan is ready.")
   await page.getByRole("button", { name: "Save comment", exact: true }).click()
-  const comment = page.getByRole("article", { name: "Comment by Grace Hopper" })
+  const comment = page.getByRole("article", { name: "Comment by Grace Hopper" }).filter({ hasText: "rollback" })
   await expect(comment).toContainText("The rollback plan is ready.")
   await comment.getByRole("button", { name: "Edit comment", exact: true }).click()
   await comment.getByRole("textbox", { name: "Comment", exact: true }).fill("The rollback plan includes a backup.")
@@ -50,6 +65,43 @@ test("a member follows a task's trail, comments and decides a review from its de
   await expect(comment).toContainText("The rollback plan includes a backup.")
   await comment.getByRole("button", { name: "Delete comment", exact: true }).click()
   await expect(comment).toHaveCount(0)
+})
+
+test("the list polls all pages and restores selection after reload", async ({ page }) => {
+  await createOrganization(page.request, { name: "Katherine Johnson" })
+  const response = await page.request.post(`${serverURL}/spaces`, {
+    headers: { origin: appOrigin },
+    data: { name: "Navigation" },
+  })
+  expect(response.ok()).toBe(true)
+  const space = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await response.json())
+  await page.goto("/app/tasks")
+  await page.getByRole("button", { name: "New task", exact: true }).first().focus()
+  await page.keyboard.press("c")
+  await page.getByRole("textbox", { name: "Task title", exact: true }).fill("Keep this older task reachable")
+  await page.getByRole("button", { name: "Create task", exact: true }).click()
+  await expect(page.getByRole("button", { name: "Keep this older task reachable", exact: true })).toBeVisible()
+  await Promise.all(
+    Array.from({ length: 101 }, (_, index) =>
+      page.request
+        .post(`${serverURL}/tasks`, {
+          headers: { origin: appOrigin },
+          data: { spaceId: space.id, title: `Newer task ${index}` },
+        })
+        .then((created) => expect(created.ok()).toBe(true)),
+    ),
+  )
+  await expect(page.getByRole("button", { name: "Newer task 100", exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole("button", { name: "Keep this older task reachable", exact: true })).toBeVisible()
+  const selected = page.getByRole("checkbox", { name: "Select Keep this older task reachable", exact: true })
+  await selected.click()
+  await expect(selected).toBeChecked()
+  await page.reload()
+  await expect(page.getByRole("checkbox", { name: "Select Keep this older task reachable", exact: true })).toBeChecked()
+  await page.getByRole("button", { name: "Keep this older task reachable", exact: true }).click()
+  await expect(page.getByRole("textbox", { name: "Task title", exact: true })).toHaveValue(
+    "Keep this older task reachable",
+  )
 })
 
 test("a member starts the task agent and restores its session drawer from the URL", async ({ page }) => {

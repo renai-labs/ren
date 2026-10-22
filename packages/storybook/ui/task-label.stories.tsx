@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite"
 import { TaskLabel } from "@ren/ui/task-label"
+import { List } from "@ren/ui/list"
+import { StatusDot } from "@ren/ui/status-dot"
 
 const labels = [
   { id: "lbl_1", name: "frontend", color: "#6f72d9" },
@@ -35,6 +37,23 @@ export const ChipsOverflow: Story = {
   ),
 }
 export const Dots: Story = { render: () => <TaskLabel.Dots labels={labels} /> }
+export const PickerOptions: Story = {
+  render: () => (
+    <div className="w-64">
+      <List.Root frame="flush" label="Labels">
+        {labels.map((label) => (
+          <List.Item
+            key={label.id}
+            density="compact"
+            leading={<StatusDot tone={TaskLabel.tone(label)} />}
+            title={TaskLabel.display(label.name)}
+            onActivate={() => undefined}
+          />
+        ))}
+      </List.Root>
+    </div>
+  ),
+}
 export const Colors: Story = {
   render: () => (
     <div className="flex flex-wrap gap-1">

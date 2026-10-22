@@ -24,26 +24,20 @@ export type TimeProps = {
 }
 
 export function Time(props: TimeProps) {
+  const dateTime = formatDateTime(props.value, { timeZone: props.timeZone })
+  const title = props.label === undefined ? undefined : `${props.label}: ${dateTime}`
   if (props.format === "relative" || props.format === "elapsed") {
     return (
       <RelativeTime
         value={props.value}
         format={props.format}
-        timeZone={props.timeZone}
         relativeStyle={props.relativeStyle ?? "long"}
-        label={props.label}
+        title={title ?? dateTime}
       />
     )
   }
   return (
-    <TimeElement
-      value={props.value}
-      title={
-        props.label === undefined
-          ? undefined
-          : `${props.label}: ${formatDateTime(props.value, { timeZone: props.timeZone })}`
-      }
-    >
+    <TimeElement value={props.value} title={title}>
       {formatAbsolute(props.value, props.format, props.timeZone)}
     </TimeElement>
   )
@@ -60,14 +54,12 @@ function formatAbsolute(value: DateInput, format: AbsoluteFormat, timeZone: stri
 function RelativeTime(props: {
   value: DateInput
   format: RelativeFormat
-  timeZone: string | undefined
   relativeStyle: "long" | "narrow"
-  label: string | undefined
+  title: string
 }) {
   const now = useSyncExternalStore(subscribeClock, readClock, readClock)
-  const dateTime = formatDateTime(props.value, { timeZone: props.timeZone })
   return (
-    <TimeElement value={props.value} title={props.label === undefined ? dateTime : `${props.label}: ${dateTime}`}>
+    <TimeElement value={props.value} title={props.title}>
       {props.format === "relative"
         ? formatRelative(props.value, now, props.relativeStyle)
         : formatElapsed(props.value, now)}

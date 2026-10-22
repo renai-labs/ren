@@ -1,16 +1,20 @@
 import type { TaskActor, TaskCommentInfo, TaskEventData, TaskInfo } from "@ren/client"
 import { TaskComment } from "@ren/schema/task-comment"
 import { Button } from "@ren/ui/button"
+import { Disclosure } from "@ren/ui/disclosure"
 import { Document } from "@ren/ui/document"
+import { LoadingMessage } from "@ren/ui/loading-message"
 import { Notice } from "@ren/ui/notice"
 import { PageShell } from "@ren/ui/page-shell"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
-import { useInfiniteQuery } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 import { Schema } from "effect"
 import { RouterContext } from "../../lib/router-context.js"
-import { TaskDetail } from "./task-detail.js"
+import { Pages } from "../../lib/pages.js"
+import { TaskHistory } from "./task-history.js"
+import type { ReactNode } from "react"
 import { TaskTextEditor } from "./task-text-editor.js"
 import { TaskView } from "./task-view.js"
 import { Tasks } from "./tasks.js"
@@ -24,21 +28,10 @@ export function TaskActivity(props: {
   onOpenSession: (id: string) => void
 }) {
   const context = RouterContext.useRouterContext()
-  const options = context.api["task-activity"].list.queryOptions({ taskId: props.task.id, page: 1, pageSize: 50 })
-  const history = useInfiniteQuery({
-    // ast-grep-ignore: no-query-key-literal -- infinite data needs a distinct cache shape; the generated prefix keeps activity invalidation shared
-    queryKey: [...options.queryKey, "timeline"],
-    initialPageParam: 1,
-    queryFn: (input) =>
-      context.queryClient.query({
-        ...context.api["task-activity"].list.queryOptions({
-          taskId: props.task.id,
-          page: input.pageParam,
-          pageSize: 50,
-        }),
-        staleTime: 0,
-      }),
-    getNextPageParam: (last) => (last.page * last.pageSize < last.total ? last.page + 1 : undefined),
+  const history = useQuery({
+    ...Pages.all((page) =>
+      context.api["task-activity"].list.queryOptions({ taskId: props.task.id, page, pageSize: 100 }),
+    ),
     refetchInterval: 5000,
   })
   const actorName = (actor: TaskActor) => {
@@ -47,13 +40,7 @@ export function TaskActivity(props: {
   }
   return (
     <PageShell.Section title="Activity">
-      {history.isPending ? (
-        <output>
-          <Text purpose="body" tone="secondary">
-            Loading activity…
-          </Text>
-        </output>
-      ) : null}
+      {history.isPending ? <LoadingMessage placement="section" title="Loading activity…" /> : null}
       {history.isError ? (
         <Notice
           tone="danger"
@@ -67,48 +54,58 @@ export function TaskActivity(props: {
         </Notice>
       ) : null}
       <div className="flex flex-col gap-6">
-        {history.data?.pages
-          .flatMap((page) => page.items)
-          .map((item) =>
-            item.type === "comment" ? (
-              <Comment key={item.id} comment={item.comment} author={actorName(item.comment.author)} />
-            ) : (
-              <div key={item.id} className="flex flex-col gap-2">
-                <Text purpose="caption" tone="secondary">
-                  <Text purpose="label" element="span">
-                    {actorName(item.event.actor)}
+        {TaskHistory.groups(history.data?.items ?? []).map((group) => (
+          <ActivityGroup key={group.id} quiet={group.quiet}>
+            {group.items.map((item) =>
+              item.type === "comment" ? (
+                <Comment key={item.id} comment={item.comment} author={actorName(item.comment.author)} />
+              ) : (
+                <div key={item.id} className="flex flex-col gap-2">
+                  <Text purpose="caption" tone="secondary">
+                    <Text purpose="label" element="span">
+                      {actorName(item.event.actor)}
+                    </Text>
+                    {" · "}
+                    <Time value={item.event.createdAt} format="relative" />
                   </Text>
-                  {" · "}
-                  <Time value={item.event.createdAt} format="relative" />
-                </Text>
-                <Event
-                  data={item.event.data}
-                  agentName={props.catalog.agentName}
-                  personName={(id) => props.catalog.person(id)?.name}
-                  onOpenSession={props.onOpenSession}
-                />
-              </div>
-            ),
-          )}
+                  {item.event.data._tag === "created" && item.event.actor.sessionId ? (
+                    <TaskSessionCard
+                      sessionId={item.event.actor.sessionId}
+                      agentName={item.event.actor.agentId ? props.catalog.agentName(item.event.actor.agentId) : "Ren"}
+                      mode="created"
+                      onOpen={props.onOpenSession}
+                    />
+                  ) : null}
+                  <Event
+                    data={item.event.data}
+                    agentName={props.catalog.agentName}
+                    personName={(id) => props.catalog.person(id)?.name}
+                    onOpenSession={props.onOpenSession}
+                  />
+                </div>
+              ),
+            )}
+          </ActivityGroup>
+        ))}
       </div>
-      {history.hasNextPage ? (
-        <div>
-          <Button
-            appearance="outline"
-            disabled={history.isFetchingNextPage}
-            onClick={() => void history.fetchNextPage()}
-          >
-            {history.isFetchingNextPage ? "Loading activity…" : "Load more activity"}
-          </Button>
-        </div>
-      ) : null}
       {props.task.canUpdate ? <CommentComposer taskId={props.task.id} /> : null}
     </PageShell.Section>
   )
 }
 
+function ActivityGroup(props: { quiet: boolean; children: ReadonlyArray<ReactNode> }) {
+  if (!props.quiet || props.children.length <= 3) return props.children
+  return (
+    <div className="flex flex-col gap-4">
+      <Disclosure summary={`Show ${props.children.length - 3} earlier events`}>{props.children.slice(0, -3)}</Disclosure>
+      {props.children.slice(-3)}
+    </div>
+  )
+}
+
 function CommentComposer(props: { taskId: string }) {
-  const actions = TaskDetail.useActions()
+  const context = RouterContext.useRouterContext()
+  const create = Tasks.useTaskMutation(context.api["task-comment"].create.mutationOptions())
   const [composing, setComposing] = useState(false)
   if (composing)
     return (
@@ -116,7 +113,7 @@ function CommentComposer(props: { taskId: string }) {
         label="Comment"
         value=""
         schema={commentSchema}
-        onSave={(body) => actions.comment.mutateAsync({ taskId: props.taskId, body })}
+        onSave={(body) => create.mutateAsync({ taskId: props.taskId, body })}
         onCancel={() => setComposing(false)}
       />
     )
@@ -231,28 +228,23 @@ function AssignmentEvent(props: {
 
 function FieldEvent(props: { data: Extract<TaskEventData, { _tag: "field" }> }) {
   return (
-    <details>
-      <summary>
-        <Text purpose="body" element="span">
-          Changed {props.data.field === "dueAt" ? "due date" : props.data.field}.
-        </Text>
-      </summary>
-      <div className="flex flex-col gap-3 pt-3">
-        <Text purpose="caption" tone="secondary">
-          Before
-        </Text>
-        <Document.Markdown content={props.data.from ?? "Empty"} />
-        <Text purpose="caption" tone="secondary">
-          After
-        </Text>
-        <Document.Markdown content={props.data.to ?? "Empty"} />
-      </div>
-    </details>
+    <Disclosure summary={`Changed ${props.data.field === "dueAt" ? "due date" : props.data.field}.`}>
+      <Text purpose="caption" tone="secondary">
+        Before
+      </Text>
+      <Document.Markdown content={props.data.from ?? "Empty"} />
+      <Text purpose="caption" tone="secondary">
+        After
+      </Text>
+      <Document.Markdown content={props.data.to ?? "Empty"} />
+    </Disclosure>
   )
 }
 
 function Comment(props: { comment: TaskCommentInfo; author: string }) {
-  const actions = TaskDetail.useActions()
+  const context = RouterContext.useRouterContext()
+  const edit = Tasks.useTaskMutation(context.api["task-comment"].update.mutationOptions())
+  const archive = Tasks.useTaskMutation(context.api["task-comment"].archive.mutationOptions())
   const [editing, setEditing] = useState(false)
   return (
     <article aria-label={`Comment by ${props.author}`} className="flex flex-col gap-3">
@@ -269,7 +261,7 @@ function Comment(props: { comment: TaskCommentInfo; author: string }) {
           label="Comment"
           value={props.comment.body}
           schema={commentSchema}
-          onSave={(body) => actions.editComment.mutateAsync({ id: props.comment.id, body })}
+          onSave={(body) => edit.mutateAsync({ id: props.comment.id, body })}
           onCancel={() => setEditing(false)}
         />
       ) : (
@@ -283,16 +275,14 @@ function Comment(props: { comment: TaskCommentInfo; author: string }) {
           <Button
             appearance="plain"
             size="small"
-            disabled={actions.archiveComment.isPending}
-            onClick={() => actions.archiveComment.mutate({ id: props.comment.id })}
+            disabled={archive.isPending}
+            onClick={() => archive.mutate({ id: props.comment.id })}
           >
             Delete comment
           </Button>
         </div>
       ) : null}
-      {actions.archiveComment.error ? (
-        <Notice tone="danger">{Tasks.describe(actions.archiveComment.error)}</Notice>
-      ) : null}
+      {archive.error ? <Notice tone="danger">{Tasks.describe(archive.error)}</Notice> : null}
     </article>
   )
 }

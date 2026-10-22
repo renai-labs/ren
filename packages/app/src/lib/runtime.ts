@@ -12,16 +12,19 @@ export interface Context {
   readonly platform: Platform.Info
   readonly queryClient: QueryClient
   readonly api: ReturnType<typeof RenQuery.make>
+  readonly client: ReturnType<typeof Ren.make>
   readonly auth: Auth.Client
 }
 
 export function make(platform: Platform.Info) {
+  const client = Ren.make({ baseUrl: platform.serverUrl, fetch: platform.fetch })
   const context: Context = {
     platform,
     queryClient: new QueryClient({
       defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
     }),
-    api: RenQuery.make(Ren.make({ baseUrl: platform.serverUrl, fetch: platform.fetch })),
+    api: RenQuery.make(client),
+    client,
     auth: Auth.createClient(platform),
   }
   const router = createRouter({

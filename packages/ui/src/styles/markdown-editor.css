@@ -1,0 +1,182 @@
+.mdxeditor.ren-markdown-editor {
+  --accentBase: var(--ren-color-fill-primary);
+  --accentBgSubtle: var(--ren-color-fill-primary);
+  --accentBg: var(--ren-color-fill-primary);
+  --accentBgHover: var(--ren-color-fill-primary);
+  --accentBgActive: var(--ren-color-fill-secondary);
+  --accentLine: var(--ren-color-border-primary);
+  --accentBorder: var(--ren-color-border-secondary);
+  --accentBorderHover: var(--ren-color-accent-primary);
+  --accentSolid: var(--ren-color-accent-primary);
+  --accentSolidHover: var(--ren-color-accent-primary);
+  --accentText: var(--ren-color-accent-primary);
+  --accentTextContrast: var(--ren-color-text-primary);
+  --basePageBg: var(--ren-color-bg-primary);
+  --baseBase: var(--ren-color-bg-primary);
+  --baseBgSubtle: var(--ren-color-fill-primary);
+  --baseBg: var(--ren-color-fill-primary);
+  --baseBgHover: var(--ren-color-fill-primary);
+  --baseBgActive: var(--ren-color-fill-secondary);
+  --baseLine: var(--ren-color-border-primary);
+  --baseBorder: var(--ren-color-border-primary);
+  --baseBorderHover: var(--ren-color-border-secondary);
+  --baseSolid: var(--ren-color-text-secondary);
+  --baseSolidHover: var(--ren-color-text-secondary);
+  --baseText: var(--ren-color-text-secondary);
+  --baseTextContrast: var(--ren-color-text-primary);
+  --font-mono: var(--ren-font-mono);
+  color: var(--ren-color-text-primary);
+  font-family: var(--ren-font-sans);
+  background: transparent;
+}
+
+.ren-markdown-editor-content {
+  min-height: calc(var(--ren-spacing-12) + var(--ren-spacing-8));
+  padding: var(--ren-spacing-2);
+  color: var(--ren-color-text-primary);
+  font-size: var(--ren-text-base);
+  line-height: var(--ren-leading-base);
+  overflow-wrap: anywhere;
+}
+
+.ren-markdown-editor-content:focus-visible {
+  outline: 2px solid var(--ren-color-accent-primary);
+  border-radius: var(--ren-radius-control);
+}
+
+.ren-markdown-editor .mdxeditor-root-contenteditable > .ren-markdown-editor-content {
+  color: var(--ren-color-text-secondary);
+  white-space: pre-wrap;
+}
+
+.ren-markdown-editor-content h1 {
+  margin-block: 0 var(--ren-spacing-3);
+  font-size: var(--ren-text-title);
+  font-weight: var(--ren-font-weight-medium);
+  line-height: var(--ren-leading-title);
+}
+
+.ren-markdown-editor-content h2 {
+  margin-block: var(--ren-spacing-3) var(--ren-spacing-2);
+  font-size: var(--ren-text-base);
+  font-weight: var(--ren-font-weight-medium);
+  line-height: var(--ren-leading-base);
+}
+
+.ren-markdown-editor-content h3,
+.ren-markdown-editor-content h4,
+.ren-markdown-editor-content h5,
+.ren-markdown-editor-content h6 {
+  margin-block: var(--ren-spacing-3) var(--ren-spacing-2);
+  font-size: var(--ren-text-sm);
+  font-weight: var(--ren-font-weight-medium);
+  line-height: var(--ren-leading-sm);
+}
+
+.ren-markdown-editor-content p {
+  margin-block: 0 var(--ren-spacing-3);
+}
+
+.ren-markdown-editor-content ul,
+.ren-markdown-editor-content ol {
+  margin-block: 0 var(--ren-spacing-3);
+  padding-inline-start: var(--ren-spacing-6);
+}
+
+.ren-markdown-editor-content ul {
+  list-style: disc;
+}
+
+.ren-markdown-editor-content ol {
+  list-style: decimal;
+}
+
+.ren-markdown-editor-content a {
+  color: var(--ren-color-accent-primary);
+}
+
+.ren-markdown-editor-content code {
+  font-family: var(--ren-font-mono);
+}
+
+.ren-markdown-editor-content :not(pre) > code {
+  padding: var(--ren-spacing-1) var(--ren-spacing-1);
+  border-radius: var(--ren-radius-control);
+  background: var(--ren-color-fill-primary);
+  font-size: var(--ren-text-xs);
+}
+
+.ren-markdown-editor [class*="_codeMirrorWrapper_"] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-block: 0 var(--ren-spacing-3);
+  border: 1px solid var(--ren-color-border-primary);
+  border-radius: var(--ren-radius-control);
+  background: var(--ren-color-fill-primary);
+}
+
+.ren-markdown-editor .cm-editor {
+  background: transparent;
+  color: var(--ren-color-text-primary);
+  font-family: var(--ren-font-mono);
+  font-size: var(--ren-text-xs);
+  line-height: var(--ren-leading-sm);
+}
+
+.ren-markdown-editor .cm-editor .cm-content {
+  padding-block: var(--ren-spacing-3);
+  caret-color: var(--ren-color-text-primary);
+  color: var(--ren-color-text-primary);
+}
+
+.ren-markdown-editor .cm-editor .cm-line {
+  padding-inline: var(--ren-spacing-3);
+  color: var(--ren-color-text-primary);
+}
+
+.ren-markdown-editor .cm-editor .cm-gutters {
+  display: none;
+}
+
+.ren-markdown-editor .cm-editor .cm-activeLine {
+  background: transparent;
+}
+
+.ren-markdown-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+.ren-markdown-editor [class*="_codeMirrorToolbar_"] {
+  position: static;
+  display: flex;
+  order: -1;
+  justify-content: flex-end;
+  gap: var(--ren-spacing-1);
+  padding: var(--ren-spacing-1) var(--ren-spacing-1) 0;
+  border-radius: var(--ren-radius-control);
+  background: transparent;
+}
+
+.ren-markdown-editor [class*="_codeMirrorToolbar_"] [class*="_selectTrigger_"] {
+  height: var(--ren-spacing-6);
+  padding-inline: var(--ren-spacing-2);
+  border: 0;
+  border-radius: var(--ren-radius-control);
+  background: transparent;
+  color: var(--ren-color-text-secondary);
+  font-family: var(--ren-font-sans);
+  font-size: var(--ren-text-xs);
+}
+
+@media (hover: hover) {
+  .ren-markdown-editor [class*="_codeMirrorToolbar_"] button:hover {
+    background: var(--ren-color-fill-primary);
+    color: var(--ren-color-text-primary);
+  }
+}
+
+.ren-markdown-editor [class*="_codeMirrorToolbar_"] svg {
+  width: var(--ren-spacing-4);
+  height: var(--ren-spacing-4);
+}

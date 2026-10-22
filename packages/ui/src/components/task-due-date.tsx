@@ -13,11 +13,9 @@ import { Separator } from "./separator.js"
 
 export type TaskControlPresentation = "chip" | "row" | "icon"
 
-const triggers = {
-  chip: { appearance: "chip", shape: "pill", size: "small" },
-  row: { appearance: "property", shape: "pill", size: "small" },
-  icon: { appearance: "plain", shape: "square", size: "small" },
-} as const
+const appearances = { chip: "chip", row: "property", icon: "plain" } as const
+
+const placeholders = { chip: "Due date", row: "Set due date", icon: "" }
 
 const fallbackError = "Couldn’t save the due date. Try again."
 
@@ -37,24 +35,23 @@ export function TaskDueDate(props: TaskDueDateProps) {
   const today = civilDate(new Date(useSyncExternalStore(subscribeClock, readClock, readClock)))
   const value = props.value ?? ""
   const display = value ? formatDateShort(`${value}T00:00:00Z`, { timeZone: "UTC" }) : ""
+  const overdue = value !== "" && value < today && props.closed !== true
   const locked = props.disabled === true || props.onChange === undefined
   const blocked = locked || pending
   const save = (next: string) => {
     if (blocked) return
     setPending(true)
     setError(null)
-    void Promise.resolve(next === "" ? null : next)
-      .then((saved) => props.onChange?.(saved))
-      .then(
-        () => {
-          setPending(false)
-          setOpen(false)
-        },
-        (cause: unknown) => {
-          setPending(false)
-          setError(cause instanceof Error ? cause.message : fallbackError)
-        },
-      )
+    void Promise.try(() => props.onChange?.(next || null)).then(
+      () => {
+        setPending(false)
+        setOpen(false)
+      },
+      (cause: unknown) => {
+        setPending(false)
+        setError((cause instanceof Error && cause.message) || fallbackError)
+      },
+    )
   }
   return (
     <Popover.Root
@@ -70,15 +67,17 @@ export function TaskDueDate(props: TaskDueDateProps) {
           <Trigger
             presentation={props.presentation}
             display={display}
-            overdue={value !== "" && value < today && props.closed !== true}
+            overdue={overdue}
             disabled={locked}
-            label={`${props.label}: ${display ? `due ${display}` : "no due date"}`}
+            label={[display || placeholders[props.presentation], overdue ? "overdue" : "", props.label]
+              .filter(Boolean)
+              .join(", ")}
           />
         }
       />
       <Popover.Content alignment="start" label="Due date">
         <div className="flex flex-col gap-3">
-          <Calendar value={value} onSelect={save} />
+          <Calendar value={value} onSelect={save} initialFocus="day" />
           <Notice tone="danger" placement="inline">
             {error}
           </Notice>
@@ -110,52 +109,43 @@ function Trigger(
   },
 ) {
   const { presentation, display, overdue, label, ...rest } = props
-  const trigger = triggers[presentation]
-  if (presentation === "icon")
-    return (
-      <Select.Button
-        {...rest}
-        {...trigger}
-        indicator="none"
-        shape={display ? "fit" : "square"}
-        invalid={overdue}
-        visibility={display ? "always" : "on-container-hover"}
-        label={label}
-        placeholder={<Icon glyph="Calendar" />}
-      >
-        {display ? (
-          <Badge
-            appearance={overdue ? "subtle" : "tag"}
-            tone={overdue ? "danger" : "neutral"}
-            size="medium"
-            shape="pill"
-            icon={<Icon glyph="Calendar" />}
-          >
-            {display}
-          </Badge>
-        ) : null}
-      </Select.Button>
-    )
+  const icon = presentation === "icon"
+  const iconShape = display ? "fit" : "square"
+  const glyph = <Icon glyph={overdue ? "AlertCircle" : "Calendar"} />
+  const content = icon ? (
+    <Badge
+      appearance={overdue ? "subtle" : "tag"}
+      tone={overdue ? "danger" : "neutral"}
+      size="medium"
+      shape="pill"
+      icon={glyph}
+    >
+      {display}
+    </Badge>
+  ) : (
+    <>
+      {glyph}
+      {display}
+    </>
+  )
   return (
     <Select.Button
       {...rest}
-      {...trigger}
+      appearance={appearances[presentation]}
+      size="small"
+      shape={icon ? iconShape : "pill"}
       indicator="none"
       invalid={overdue}
+      visibility={icon && !display ? "on-container-hover" : "always"}
       label={label}
       placeholder={
         <>
           <Icon glyph="Calendar" />
-          {presentation === "row" ? "Set due date" : "Due date"}
+          {placeholders[presentation]}
         </>
       }
     >
-      {display ? (
-        <>
-          <Icon glyph="Calendar" />
-          {display}
-        </>
-      ) : null}
+      {display ? content : null}
     </Select.Button>
   )
 }

@@ -27,8 +27,6 @@ import type { ReactNode } from "react"
 import { TaskView } from "./task-view.js"
 import { Tasks } from "./tasks.js"
 
-type Presentation = TaskControlPresentation
-
 export type Values = Pick<
   TaskInfo,
   "spaceId" | "title" | "status" | "priority" | "agentId" | "ownerId" | "labels" | "dueAt"
@@ -36,7 +34,7 @@ export type Values = Pick<
 
 export type ControlProps = {
   task: Values
-  presentation: Presentation
+  presentation: TaskControlPresentation
   disabled?: boolean
   onChange?: ((patch: Tasks.Patch) => unknown) | undefined
   onAssign?: ((assignment: Tasks.Assignment) => unknown) | undefined
@@ -71,56 +69,95 @@ export function PropertyControls(
 }
 
 export function StatusControl(props: ControlProps) {
+  const save = usePropertySave(props.onChange)
   return (
-    <Select.Root<Task.Status>
-      value={props.task.status}
-      disabled={props.disabled === true || !props.onChange}
-      onValueChange={(status) => props.onChange?.({ status })}
-      label={`Status for ${subject(props.task)}: ${TaskView.statusLabel[props.task.status]}`}
-      {...triggers[props.presentation]}
-      {...(props.presentation === "icon" && { renderValue: (option) => option?.icon })}
-      options={TaskView.statuses.map((status) => ({
-        value: status,
-        icon: <TaskStatusCircle status={status} />,
-        label: TaskView.statusLabel[status],
-      }))}
-    />
+    <>
+      <Select.Root<Task.Status>
+        value={props.task.status}
+        disabled={props.disabled === true || !props.onChange || save.pending}
+        onValueChange={(status) => save.change({ status })}
+        label={`Status for ${subject(props.task)}: ${TaskView.statusLabel[props.task.status]}`}
+        {...triggers[props.presentation]}
+        {...(props.presentation === "icon" && { renderValue: (option) => option?.icon })}
+        options={TaskView.statuses.map((status) => ({
+          value: status,
+          icon: <TaskStatusCircle status={status} />,
+          label: TaskView.statusLabel[status],
+        }))}
+      />
+      {save.error ? (
+        <Notice tone="danger" placement="inline">
+          {save.error}
+        </Notice>
+      ) : null}
+    </>
   )
 }
 
 export function PriorityControl(props: ControlProps) {
+  const save = usePropertySave(props.onChange)
   return (
-    <Select.Root<Task.Priority | typeof TaskView.none>
-      value={props.task.priority ?? TaskView.none}
-      disabled={props.disabled === true || !props.onChange}
-      onValueChange={(value) => props.onChange?.({ priority: value === TaskView.none ? null : value })}
-      label={`Priority for ${subject(props.task)}: ${TaskView.priorityLabel(props.task.priority)}`}
-      {...triggers[props.presentation]}
-      {...(props.presentation === "icon" && { renderValue: (option) => option?.icon })}
-      {...(props.presentation === "chip" &&
-        !props.task.priority && {
-          renderValue: () => (
-            <>
-              <TaskPriorityIcon priority={null} />
-              <Text purpose="caption" tone="secondary" element="span">
-                Priority
-              </Text>
-            </>
-          ),
-        })}
-      options={[
-        { value: TaskView.none, icon: <TaskPriorityIcon priority={null} />, label: TaskView.priorityLabel(null) },
-        ...TaskView.priorities.map((priority) => ({
-          value: priority,
-          icon: <TaskPriorityIcon priority={priority} />,
-          label: TaskView.priorityLabel(priority),
-        })),
-      ]}
-    />
+    <>
+      <Select.Root<Task.Priority | typeof TaskView.none>
+        value={props.task.priority ?? TaskView.none}
+        disabled={props.disabled === true || !props.onChange || save.pending}
+        onValueChange={(value) => save.change({ priority: value === TaskView.none ? null : value })}
+        label={`Priority for ${subject(props.task)}: ${TaskView.priorityLabel(props.task.priority)}`}
+        {...triggers[props.presentation]}
+        {...(props.presentation === "icon" && { renderValue: (option) => option?.icon })}
+        {...(props.presentation === "chip" &&
+          !props.task.priority && {
+            renderValue: () => (
+              <>
+                <TaskPriorityIcon priority={null} />
+                <Text purpose="caption" tone="secondary" element="span">
+                  Priority
+                </Text>
+              </>
+            ),
+          })}
+        options={[
+          { value: TaskView.none, icon: <TaskPriorityIcon priority={null} />, label: TaskView.priorityLabel(null) },
+          ...TaskView.priorities.map((priority) => ({
+            value: priority,
+            icon: <TaskPriorityIcon priority={priority} />,
+            label: TaskView.priorityLabel(priority),
+          })),
+        ]}
+      />
+      {save.error ? (
+        <Notice tone="danger" placement="inline">
+          {save.error}
+        </Notice>
+      ) : null}
+    </>
   )
 }
 
-function triggerContent(presentation: Presentation, glyph: ReactNode, text: string) {
+function usePropertySave(onChange: ControlProps["onChange"]) {
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  return {
+    pending,
+    error,
+    change: (patch: Tasks.Patch) => {
+      if (pending) return
+      setPending(true)
+      setError(null)
+      void Promise.resolve()
+        .then(() => onChange?.(patch))
+        .then(
+          () => setPending(false),
+          (cause: unknown) => {
+            setPending(false)
+            setError(Tasks.describe(cause))
+          },
+        )
+    },
+  }
+}
+
+function triggerContent(presentation: TaskControlPresentation, glyph: ReactNode, text: string) {
   if (presentation === "icon") return glyph
   return (
     <>
@@ -185,7 +222,7 @@ function AssignFooter(props: { saving: Saving | null; onRetry: (saving: Saving) 
 }
 
 type PickerProps = {
-  presentation: Presentation
+  presentation: TaskControlPresentation
   property: string
   heading: string
   header?: string
@@ -280,9 +317,7 @@ function pickerButton(
 
 const queryStates = { pending: "loading", error: "failed", success: "ready" } as const
 
-const queryState = (status: keyof typeof queryStates) => queryStates[status]
-
-function AgentControl(props: ControlProps & { agentName: string | undefined }) {
+export function AgentControl(props: ControlProps & { agentName: string | undefined }) {
   const [open, setOpen] = useState(false)
   const agents = Tasks.useSpaceAgents(props.task.spaceId || undefined, { enabled: open })
   const glyph = <Icon glyph="Bot" tone="secondary" />
@@ -299,8 +334,8 @@ function AgentControl(props: ControlProps & { agentName: string | undefined }) {
       current={props.agentName === undefined ? undefined : { name: props.agentName, glyph }}
       subject={subject(props.task)}
       disabled={props.disabled === true || !props.onAssign}
-      state={queryState(agents.status)}
-      options={(agents.data?.items ?? []).map((agent) => ({ id: agent.id, name: agent.name, icon: glyph }))}
+      state={queryStates[agents.status]}
+      options={(agents.data ?? []).map((agent) => ({ id: agent.id, name: agent.name, icon: glyph }))}
       open={open}
       onOpenChange={setOpen}
       onPick={(agentId) => props.onAssign?.({ agentId })}
@@ -331,7 +366,7 @@ export function OwnerControl(props: ControlProps & { owner: Tasks.Person | undef
       }
       subject={subject(props.task)}
       disabled={props.disabled === true || !props.onAssign}
-      state={queryState(owners.status)}
+      state={queryStates[owners.status]}
       options={(owners.data ?? []).map((person) => ({
         id: person.id,
         name: person.name,
@@ -388,6 +423,7 @@ export function LabelsControl(props: ControlProps) {
   const [naming, setNaming] = useState<string | null>(null)
   const [color, setColor] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
   const labels = Tasks.useLabels({ enabled: open })
   const create = Tasks.useCreateLabel()
   const selected = draft ?? props.task.labels
@@ -403,15 +439,27 @@ export function LabelsControl(props: ControlProps) {
     setError(problem)
     if (problem === null) setDraft(next)
   }
-  const commit = () => {
-    if (
-      draft &&
+  const commit = async () => {
+    if (pending) return
+    const changed =
+      draft !== null &&
       !TaskView.sameValues(
         draft.map((label) => label.id),
         props.task.labels.map((label) => label.id),
       )
-    )
-      void props.onChange?.({ labels: [...draft] })
+    setPending(true)
+    const saved =
+      !changed ||
+      (await Promise.try(() => props.onChange?.({ labels: [...draft] })).then(
+        () => true,
+        (cause: unknown) => {
+          setError(Tasks.describe(cause))
+          return false
+        },
+      ))
+    setPending(false)
+    if (!saved) return
+    setOpen(false)
     setDraft(null)
     setQuery("")
     setError(null)
@@ -434,8 +482,12 @@ export function LabelsControl(props: ControlProps) {
     <Popover.Root
       open={open}
       onOpenChange={(next) => {
-        if (next) setDraft(props.task.labels)
-        else commit()
+        if (pending) return
+        if (!next) {
+          void commit()
+          return
+        }
+        setDraft(props.task.labels)
         setNaming(null)
         setOpen(next)
       }}

@@ -37,6 +37,18 @@ story("formats relative and elapsed time with the full date as a title", async (
   await expect((await visit("ui-time--elapsed")).locator("time")).toHaveText("2d")
 })
 
+story("a label prefixes the full date in the title", async ({ visit, page }) => {
+  await expect((await visit("ui-time--labelled")).locator("time")).toHaveAttribute(
+    "title",
+    "Created: Mar 5, 2026, 9:30 AM",
+  )
+  await page.clock.setFixedTime("2022-03-06T14:30:00Z")
+  await expect((await visit("ui-time--relative-labelled")).locator("time")).toHaveAttribute(
+    "title",
+    "Updated: Mar 5, 2019, 9:30 AM",
+  )
+})
+
 story("renders a dash for invalid input in every format", async ({ visit }) => {
   for (const format of ["date", "short-date", "date-time", "time-of-day", "relative", "elapsed"]) {
     const time = (await visit("ui-time--invalid", { args: { format } })).locator("time")

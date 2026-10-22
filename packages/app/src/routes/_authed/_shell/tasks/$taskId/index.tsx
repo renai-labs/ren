@@ -2,14 +2,14 @@ import { createFileRoute } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { Session } from "@ren/schema/session"
 import { RouteError } from "../../../../../components/error-page.js"
-import { Tasks } from "../../../../../features/tasks/tasks.js"
 
 export const Route = createFileRoute("/_authed/_shell/tasks/$taskId/")({
   validateSearch: Schema.toStandardSchemaV1(
     Schema.Struct({ session: Schema.optionalKey(Session.ID), child: Schema.optionalKey(Session.ID) }),
   ),
-  loader: (options) => {
-    const catalog = Tasks.catalogOptions(options.context.api)
+  loader: async (options) => {
+    const queries = await import("../../../../../features/tasks/task-queries.js")
+    const catalog = queries.TaskQueries.catalogOptions(options.context.api)
     return Promise.all([
       options.context.queryClient.query(options.context.api.task.get.queryOptions({ idOrSlug: options.params.taskId })),
       options.context.queryClient.query(catalog[0]),

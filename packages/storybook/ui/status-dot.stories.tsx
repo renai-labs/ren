@@ -17,3 +17,4 @@ export const Warning: Story = { args: { tone: "warning" } }
 export const Danger: Story = { args: { tone: "danger" } }
 export const Labelled: Story = { args: { tone: "warning", label: "Keys missing" } }
 export const Pulse: Story = { args: { tone: "accent", activity: "pulse" } }
+export const IconFrame: Story = { args: { tone: "accent", frame: "icon", label: "frontend" } }

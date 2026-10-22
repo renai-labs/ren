@@ -1,21 +1,21 @@
 export * as TaskLabel from "./task-label.js"
 
 import { useEffect, useEffectEvent, useRef, useState } from "react"
-import { labelDisplay, labelTone } from "../lib/label-color.js"
+import { display, tone } from "../lib/label-color.js"
 import { Badge } from "./badge.js"
 import { StatusDot } from "./status-dot.js"
 import { Tooltip } from "./tooltip.js"
 
-export { labelDisplay as display, labelTone as tone, swatches } from "../lib/label-color.js"
+export { display, swatches, tone } from "../lib/label-color.js"
 
 export type Label = { id: string; name: string; color?: string | null }
 
 export function Pill(props: { label: Label }) {
   return (
-    <Tooltip.Root content={labelDisplay(props.label.name)}>
+    <Tooltip.Root content={display(props.label.name)}>
       <span className="flex min-w-0">
-        <Badge appearance="tag" size="medium" shape="pill" marker="dot" markerTone={labelTone(props.label)}>
-          {labelDisplay(props.label.name)}
+        <Badge appearance="tag" size="medium" shape="pill" marker="dot" markerTone={tone(props.label)}>
+          {display(props.label.name)}
         </Badge>
       </span>
     </Tooltip.Root>
@@ -66,7 +66,7 @@ export function Chips(props: { labels: ReadonlyArray<Label> }) {
         <Pill key={label.id} label={label} />
       ))}
       {hidden.length > 0 ? (
-        <Tooltip.Root content={hidden.map((label) => labelDisplay(label.name)).join(", ")}>
+        <Tooltip.Root content={hidden.map((label) => display(label.name)).join(", ")}>
           <span className="flex">
             <Badge appearance="tag" size="medium" shape="pill" tone="muted">
               +{hidden.length}
@@ -77,8 +77,8 @@ export function Chips(props: { labels: ReadonlyArray<Label> }) {
       <span aria-hidden="true" className="pointer-events-none invisible absolute flex gap-1" ref={measurement}>
         {props.labels.map((label) => (
           <span key={label.id} className="flex shrink-0">
-            <Badge appearance="tag" size="medium" shape="pill" marker="dot" markerTone={labelTone(label)}>
-              {labelDisplay(label.name)}
+            <Badge appearance="tag" size="medium" shape="pill" marker="dot" markerTone={tone(label)}>
+              {display(label.name)}
             </Badge>
           </span>
         ))}
@@ -91,7 +91,7 @@ export function Dots(props: { labels: ReadonlyArray<Label> }) {
   return (
     <span aria-hidden className="flex shrink-0 items-center gap-1">
       {props.labels.slice(0, 3).map((label) => (
-        <StatusDot key={label.id} tone={labelTone(label)} />
+        <StatusDot key={label.id} tone={tone(label)} />
       ))}
     </span>
   )

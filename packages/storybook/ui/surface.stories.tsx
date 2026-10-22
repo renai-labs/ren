@@ -21,6 +21,13 @@ export const PanelSmall: Story = { render: () => <Surface.Panel padding="small">
 export const PanelCompact: Story = { render: () => <Surface.Panel padding="compact">{sample}</Surface.Panel> }
 export const PanelRow: Story = { render: () => <Surface.Panel padding="row">{sample}</Surface.Panel> }
 export const PanelLarge: Story = { render: () => <Surface.Panel padding="large">{sample}</Surface.Panel> }
+export const PanelPage: Story = {
+  render: () => (
+    <Surface.Panel level="page" padding="medium">
+      {sample}
+    </Surface.Panel>
+  ),
+}
 export const PanelControl: Story = {
   render: () => (
     <Surface.Panel radius="control" padding="medium">

@@ -30,6 +30,7 @@
     "@base-ui/react": "catalog:",
     "@daypicker/react": "catalog:",
     "@fontsource/ibm-plex-mono": "catalog:",
+    "@mdxeditor/editor": "catalog:",
     "@streamdown/cjk": "catalog:",
     "@streamdown/code": "catalog:",
     "@streamdown/math": "catalog:",

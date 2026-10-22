@@ -22,4 +22,6 @@ export const RelativeNarrow: Story = {
   args: { format: "relative", value: "2019-03-05T14:30:00Z", relativeStyle: "narrow" },
 }
 export const Elapsed: Story = { args: { format: "elapsed", value: "2019-03-05T14:30:00Z" } }
+export const Labelled: Story = { args: { format: "short-date", label: "Created" } }
+export const RelativeLabelled: Story = { args: { format: "relative", value: "2019-03-05T14:30:00Z", label: "Updated" } }
 export const Invalid: Story = { args: { value: "not a date" } }

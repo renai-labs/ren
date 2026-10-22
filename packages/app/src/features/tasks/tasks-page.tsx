@@ -6,7 +6,6 @@ import { IconButton } from "@ren/ui/icon-button"
 import { LoadingMessage } from "@ren/ui/loading-message"
 import { PageShell } from "@ren/ui/page-shell"
 import { StateMessage } from "@ren/ui/state-message"
-import { Text } from "@ren/ui/text"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate, useRouteContext, useSearch } from "@tanstack/react-router"
@@ -18,6 +17,7 @@ import { BulkActionBar } from "./task-bulk-bar.js"
 import { TaskCreateDialog } from "./task-create-dialog.js"
 import { TaskList } from "./task-list.js"
 import { TaskSearch } from "./task-search.js"
+import { TaskQueries } from "./task-queries.js"
 import { TaskView } from "./task-view.js"
 import { Tasks } from "./tasks.js"
 import { ActiveFilters, TasksToolbar } from "./tasks-toolbar.js"
@@ -61,13 +61,14 @@ function Page(props: {
   const context = RouterContext.useRouterContext()
   const catalog = Tasks.useCatalog(props.organizationId)
   const actions = Tasks.useTaskActions()
-  const list = useQuery(context.api.task.list.queryOptions(TaskSearch.listInput(props.view.filters)))
+  const navigate = useNavigate()
+  const list = useQuery(TaskQueries.listOptions(context.api, props.view.filters))
   const query = useDeferredValue(props.view.query)
   const [dialog, setDialog] = useState<Dialog>(null)
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  const selected = new Set(props.view.selected)
+  const setSelected = (next: ReadonlySet<string>) => props.onViewChange({ ...props.view, selected: [...next] })
   const [busy, setBusy] = useState(false)
-  const page = list.data ?? { items: [], total: 0 }
-  const tasks = page.items
+  const tasks = list.data?.items ?? []
   const view = { ...props.view, query }
   const rows = TaskView.visible(tasks, view)
   const options = TaskView.filterOptions({ tasks, catalog })
@@ -80,7 +81,8 @@ function Page(props: {
     if (busy || targets.length === 0) return
     setBusy(true)
     const failed = await actions.bulk(targets, operation).finally(() => setBusy(false))
-    setSelected(new Set(failed.map((task) => task.id)))
+    const done = new Set(targets.filter((task) => !failed.includes(task)).map((task) => task.id))
+    setSelected(new Set(props.view.selected.filter((id) => !done.has(id))))
   }
   return (
     <PageShell.Root
@@ -106,18 +108,15 @@ function Page(props: {
             catalog={catalog}
             userId={props.userId}
             selected={selected}
-            onToggleSelected={(id) =>
-              setSelected((current) => {
-                const next = new Set(current)
-                if (!next.delete(id)) next.add(id)
-                return next
-              })
-            }
+            onToggleSelected={(id) => {
+              const next = new Set(selected)
+              if (!next.delete(id)) next.add(id)
+              setSelected(next)
+            }}
             onCreate={openCreate}
-            onOpen={() => undefined}
+            onOpen={(task) => void navigate({ to: "/tasks/$taskId", params: { taskId: task.id } })}
             actions={actions}
           />
-          <Truncation shown={tasks.length} total={page.total} />
           <SelectionBar
             tasks={selectedRows}
             busy={busy}
@@ -153,10 +152,7 @@ function Dialogs(props: {
     <>
       {props.dialog?.kind === "create" ? (
         <TaskCreateDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) props.onClose()
-          }}
+          onClose={props.onClose}
           spaces={props.spaces}
           spaceId={props.spaceId}
           preset={props.dialog.preset}
@@ -189,15 +185,6 @@ function Actions(props: { disabled: boolean; onCreate: () => void; children: Rea
   )
 }
 
-function Truncation(props: { shown: number; total: number }) {
-  if (props.total <= props.shown) return null
-  return (
-    <Text purpose="caption">
-      Showing the newest {props.shown} of {props.total} tasks. Filter by space or status to see the rest.
-    </Text>
-  )
-}
-
 function SelectionBar(
   props: Omit<Parameters<typeof BulkActionBar>[0], "count" | "agents"> & {
     tasks: ReadonlyArray<TaskInfo>
@@ -214,11 +201,7 @@ function SelectionBar(
       agents={
         space === undefined
           ? props.agents.filter((agent) => agent.isGlobal)
-          : (spaceAgents.data?.items ?? []).map((agent) => ({
-              id: agent.id,
-              name: agent.name,
-              isGlobal: agent.organizationId === null,
-            }))
+          : (spaceAgents.data ?? [])
       }
     />
   )

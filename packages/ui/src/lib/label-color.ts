@@ -13,7 +13,7 @@ export const swatches = palette.map((swatch) => ({
   tone: swatch.tone,
 }))
 
-export function labelTone(label: { name: string; color?: string | null }): BadgeTone {
+export function tone(label: { name: string; color?: string | null }): BadgeTone {
   if (label.color) {
     const color = Number.parseInt(label.color.slice(1), 16)
     return palette.reduce((best, swatch) => {
@@ -31,7 +31,7 @@ export function labelTone(label: { name: string; color?: string | null }): Badge
   return palette[hash % palette.length]?.tone ?? "neutral"
 }
 
-export function labelDisplay(name: string): string {
+export function display(name: string): string {
   if (name === "ren-improve") return "improvement"
   if (name === "ren-fix") return "fix"
   return name
