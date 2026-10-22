@@ -211,7 +211,6 @@
         "@ren/db": "workspace:*",
         "@ren/environment-api": "workspace:*",
         "@ren/executor": "workspace:*",
-        "@ren/host-api": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/server": "workspace:*",
         "@ren/util": "workspace:*",

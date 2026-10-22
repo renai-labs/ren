@@ -16,13 +16,15 @@
     "packages/cell": {
       "entry": [
         "src/worker.ts",
+        "src/bun.ts",
+        "e2b/stage.ts",
         "test/lib/environment-worker.ts",
         "test/lib/sync-storage-worker.ts",
         "test/lib/crash-host.ts",
         "test/**/*.test.ts",
         "test/lib/preload.ts"
       ],
-      "ignoreBinaries": ["celld"],
+      "ignoreBinaries": ["celld", "e2b"],
       "ignoreDependencies": ["cloudflare"]
     },
     "packages/core": {

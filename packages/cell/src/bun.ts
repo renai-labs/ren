@@ -59,18 +59,10 @@ const reader = Effect.sync((): OpenCodeSync.Reader => {
   }
 })
 
-const alarm: { at: number | null } = { at: null }
-
 const info = Layer.succeed(
   Cell.Info,
   Cell.Info.of({
-    storage: {
-      getAlarm: () => Promise.resolve(alarm.at),
-      setAlarm: (at: number | Date) => {
-        alarm.at = Number(at)
-        return Promise.resolve()
-      },
-    },
+    storage: { getAlarm: () => Promise.resolve(null), setAlarm: () => Promise.resolve() },
     brainId,
     generation: vars.REN_BRAIN_GENERATION,
     version: manifest.version,
@@ -182,11 +174,7 @@ const handle = (request: Request): Promise<Response> => {
           generation: vars.REN_BRAIN_GENERATION,
         })
         if (checked instanceof Response) return checked
-        const brain = yield* Cell.Brain
-        const chat = yield* Cell.Chat
-        if (brain.owns(pathname)) return yield* Effect.promise(() => brain.fetch(checked.request))
-        if (chat.owns(pathname)) return yield* Effect.promise(() => chat.fetch(checked.request))
-        return new Response(null, { status: 404 })
+        return yield* Cell.fetch(checked.request)
       }),
     )
     .then((response) => (isChat ? Entry.withCors(response) : response))
@@ -209,7 +197,6 @@ process.on("SIGTERM", () => {
     })
 })
 
-runtime.runPromise(boot).catch((error: unknown) => {
-  console.error("The brain failed to boot", error)
-  process.exit(1)
-})
+runtime
+  .runPromise(boot.pipe(Effect.tapCause((cause) => Effect.logError("The brain failed to boot", cause))))
+  .catch(() => process.exit(1))

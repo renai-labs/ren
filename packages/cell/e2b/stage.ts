@@ -3,7 +3,14 @@ import { dirname, join } from "node:path"
 
 const root = join(import.meta.dir, "../../..")
 const target = join(import.meta.dir, "ren")
-const sources = ["packages/cell", "packages/brain", "packages/schema", "packages/host-api", "packages/environment-api", "packages/protocol"]
+const sources = [
+  "packages/cell",
+  "packages/brain",
+  "packages/schema",
+  "packages/host-api",
+  "packages/environment-api",
+  "packages/protocol",
+]
 await rm(target, { recursive: true, force: true })
 const listed = await Bun.$`git ls-files --cached --others --exclude-standard`.cwd(root).text()
 const files = listed
@@ -25,4 +32,4 @@ await Promise.all(
 )
 await Bun.$`tar -czf ${join(import.meta.dir, "ren.tar.gz")} -C ${target} .`
 await rm(target, { recursive: true, force: true })
-console.log(`Staged ${files.length} files in ren.tar.gz`)
+process.stdout.write(`Staged ${files.length} files in ren.tar.gz\n`)

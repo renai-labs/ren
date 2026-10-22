@@ -4,6 +4,10 @@ import { PgClient } from "@effect/sql-pg"
 import { OpenCode } from "@opencode/client"
 import { Signature } from "@ren/schema/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
+import { BrainClient } from "@ren/core/brain-client"
+import { BrainRegistry } from "@ren/core/brain-registry"
+import { Settings } from "@ren/core/settings"
+import { Brain } from "@ren/schema/brain"
 import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"
 import { BrainHost } from "@ren/core/brain-host"
@@ -32,6 +36,7 @@ import { SessionDriver } from "./drivers/session.js"
 import { FaultProxy } from "./faults/proxy.js"
 import { Process } from "./process.js"
 import { ChaosEnvironments } from "./provider/environments.js"
+import { ChaosModels } from "./provider/models.js"
 import { ModelProvider } from "./provider/model.js"
 import { Wait } from "./wait.js"
 
@@ -106,6 +111,7 @@ export const start = async (options: {
     ),
   )
   const owner = await databaseRuntime.runPromise(Seed.owner())
+  await direct`UPDATE space SET brain_scope = 'session' WHERE id = ${owner.spaceId}`
   await databaseRuntime.runPromise(
     Seed.ren({
       instructions:
@@ -115,8 +121,12 @@ export const start = async (options: {
 
   const provider = await ModelProvider.start()
   const baseUrl = `${new URL(provider.url).origin}/v1`
-  const grants = new Map<Session.ID, Models.Access>()
-  const stubAccess = () => Shared.access({ stub: Shared.apiKey(`real-${crypto.randomUUID()}`) }, baseUrl)
+  const grants: { -readonly [K in keyof ChaosModels.Grants]: ChaosModels.Grants[K] } = {
+    fallback: Shared.access({ stub: Shared.apiKey(`real-${crypto.randomUUID()}`) }, baseUrl),
+    brains: {},
+  }
+  const modelsFile = path.join(os.tmpdir(), `${name}-models.json`)
+  await ChaosModels.write(modelsFile, grants)
 
   const sandboxes = await Promise.all(
     options.environments.map(async (environment) => {
@@ -179,11 +189,18 @@ export const start = async (options: {
 
   const serverPort = await freePort()
   const renProxy = await FaultProxy.make(`http://127.0.0.1:${serverPort}`)
-  const cell = await Wrangler.make({ ...Shared.vars(baseUrl), REN_URL: renProxy.url })
+  const brainKey = await Effect.runPromise(Signature.generate("chaos"))
+  const cell = await Wrangler.make({
+    ...Shared.vars(baseUrl),
+    BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([brainKey.publicKey]),
+    REN_URL: renProxy.url,
+  })
   const forgetCell = Process.onInterrupt(cell.crash)
 
   const keys = {
-    CELL_KEYS: TestToken.vars.CELL_KEYS,
+    BRAIN_KEYS: JSON.stringify([encodedKey(brainKey.privateKey)]),
+    REN_URL: renProxy.url,
+    SANDBOX_PROVIDER: "cell",
     ENVIRONMENT_KEYS: JSON.stringify([encodedKey(TestEnvironment.keys.privateKey)]),
     ...(options.tokenLifetime && { ENVIRONMENT_TOKEN_LIFETIME: options.tokenLifetime }),
   }
@@ -206,6 +223,7 @@ export const start = async (options: {
         SIGNUP_MX_CHECK: "false",
         CELL_URL: cell.url,
         [ChaosEnvironments.fileVariable]: environmentsFile,
+        [ChaosModels.fileVariable]: modelsFile,
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -230,23 +248,16 @@ export const start = async (options: {
   await startServer()
 
   const databaseContext = await databaseRuntime.runPromise(Effect.context<Database.Service>())
-  const models = Layer.succeed(
-    Models.Service,
-    Models.Service.of({
-      catalog: () => Effect.succeed({ endpoints: [] }),
-      grant: (subject) => Effect.sync(() => grants.get(subject.sessionId) ?? stubAccess()),
-      refreshIfDue: () => Effect.succeedNone,
-      revoke: () => Effect.void,
-    }),
-  )
   const core = <A, E>(effect: Effect.Effect<A, E, BrainHost.Service | SessionRunner.Service>) =>
     Effect.runPromise(
       effect.pipe(
         Effect.provide(
           Layer.fresh(SessionRunner.layer).pipe(
+            Layer.provideMerge(BrainRegistry.layer),
             Layer.provideMerge(
               Layer.fresh(BrainHost.layer).pipe(
-                Layer.provide(models),
+                Layer.provide([BrainClient.layer, Settings.layer]),
+                Layer.provide(ChaosModels.layer),
                 Layer.provide(
                   Environments.layer.pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
                 ),
@@ -257,6 +268,7 @@ export const start = async (options: {
                       ...keys,
                       CELL_URL: cell.url,
                       [ChaosEnvironments.fileVariable]: environmentsFile,
+                      [ChaosModels.fileVariable]: modelsFile,
                     }),
                   ),
                 ),
@@ -316,7 +328,11 @@ export const start = async (options: {
 
   const session = async (sessionOptions: SessionOptions = {}) => {
     const sessionId = Session.ID.create()
-    if (sessionOptions.models) grants.set(sessionId, sessionOptions.models)
+    const brainId = Brain.ofSession(sessionId)
+    if (sessionOptions.models) {
+      grants.brains = { ...grants.brains, [brainId]: sessionOptions.models }
+      await ChaosModels.write(modelsFile, grants)
+    }
     const environment = sessionOptions.environment === false ? undefined : (sessionOptions.environment ?? first)
     const input = (startOptions: StartOptions = {}): SessionSchema.StartInput => ({
       sessionId,
@@ -329,7 +345,7 @@ export const start = async (options: {
       ...(startOptions.model && { model: startOptions.model }),
     })
     const startSession = (startOptions?: StartOptions) =>
-      core(BrainHost.Service.use((brain) => brain.start(input(startOptions), owner)))
+      core(BrainHost.Service.use((brain) => brain.start(input(startOptions), { ...owner, brainId })))
     await core(
       SessionRunner.Service.use((sessions) =>
         sessions.create(owner, input(sessionOptions.start), {
@@ -337,7 +353,8 @@ export const start = async (options: {
         }),
       ),
     )
-    const access = await core(BrainHost.Service.use((brain) => brain.access(sessionId)))
+    const access = await core(BrainHost.Service.use((brain) => brain.access(sessionId, { userId: owner.createdBy })))
+    if (access.status !== "ready") throw new Error(`the brain of ${sessionId} is ${access.status}`)
     const opencode = OpenCode.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
     const send = (text: string) =>
       core(
@@ -410,7 +427,7 @@ export const start = async (options: {
     cell,
     renProxy,
     session,
-    issued: () => renProxy.count("POST /host/environment/access"),
+    issued: () => renProxy.count(/^POST \/host\/sessions\/[^/]+\/environment\/access$/),
     serverLog: () => server.log,
     restartServer: async () => {
       await stopServer()

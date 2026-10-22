@@ -2,7 +2,6 @@ export * as RenHostApiTest from "./ren-host-api.js"
 
 import { CurrentHost, RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
-import { TestSettings } from "@ren/cell/testing"
 import { Effect, Layer } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { BrainHost } from "../../src/brain-host.js"
@@ -21,11 +20,17 @@ const handlers = (around: Around) =>
     HttpApiBuilder.group(RenHostApi, "environments", (group) =>
       Effect.map(BrainHost.Service, (brain) =>
         group
-          .handle("environments.access", () =>
-            around("environments.access", Effect.flatMap(CurrentHost, brain.accessEnvironment)),
+          .handle("environments.access", (request) =>
+            around(
+              "environments.access",
+              Effect.flatMap(CurrentHost, (host) => brain.accessEnvironment(host, request.params.id)),
+            ),
           )
-          .handle("environments.release", () =>
-            around("environments.release", Effect.flatMap(CurrentHost, brain.releaseEnvironment)),
+          .handle("environments.release", (request) =>
+            around(
+              "environments.release",
+              Effect.flatMap(CurrentHost, (host) => brain.releaseEnvironment(host, request.params.id)),
+            ),
           ),
       ),
     ),
@@ -34,8 +39,15 @@ const handlers = (around: Around) =>
         group.handle("host.refresh", () => around("host.refresh", Effect.flatMap(CurrentHost, brain.refreshHostToken))),
       ),
     ),
-    HttpApiBuilder.group(RenHostApi, "settings", (group) =>
-      Effect.succeed(group.handle("settings.read", () => Effect.succeed(TestSettings.layers()))),
+    HttpApiBuilder.group(RenHostApi, "pull", (group) =>
+      Effect.map(BrainHost.Service, (brain) =>
+        group.handle("pull", (request) =>
+          around(
+            "pull",
+            Effect.flatMap(CurrentHost, (host) => brain.pull(host, request.payload)),
+          ),
+        ),
+      ),
     ),
   )
 

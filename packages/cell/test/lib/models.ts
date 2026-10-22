@@ -2,6 +2,7 @@ export * as ModelsTest from "./models.js"
 
 import { Brain } from "@ren/schema/brain"
 import { Deferred, Effect, Layer, Queue, Schema } from "effect"
+import { BrainStorage } from "../../src/brain-storage.js"
 import { ModelStore } from "../../src/model-store.js"
 
 export interface Exchange {
@@ -13,8 +14,8 @@ export const storage = (stored = new Map<string, string>()) =>
   ModelStore.layer.pipe(
     Layer.provideMerge(
       Layer.succeed(
-        ModelStore.Storage,
-        ModelStore.Storage.of({
+        BrainStorage.Service,
+        BrainStorage.Service.of({
           get: (key) => Promise.resolve(stored.get(key)),
           put: (key, value) => Promise.resolve(void stored.set(key, value)),
           delete: (key) => Promise.resolve(stored.delete(key)),

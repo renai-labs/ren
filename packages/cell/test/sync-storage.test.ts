@@ -1,10 +1,8 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { Sync } from "@ren/schema/sync"
 import { Schema } from "effect"
-import { Celld } from "./lib/celld.js"
 import { Shared } from "./lib/shared.js"
 import { TestCell } from "./lib/test-cell.js"
-import { Wrangler } from "./lib/wrangler.js"
 
 setDefaultTimeout(120_000)
 
@@ -19,10 +17,10 @@ const files = Bun.serve({
       headers: { "content-type": "text/plain" },
     }),
 })
-let cell: Celld.Instance
+let cell: Shared.Runtime
 
 beforeAll(async () => {
-  cell = wrangler ? await Wrangler.make(Shared.vars(stub.url), worker) : await Celld.make(Shared.vars(), worker)
+  cell = await Shared.make({ worker })
 }, 180_000)
 
 afterAll(async () => {
@@ -67,7 +65,8 @@ const Sizes = Schema.Struct({
 
 type Opened = Awaited<ReturnType<typeof TestCell.make>>
 
-const read = async (opened: Opened) => Schema.decodeUnknownSync(Read)(await (await opened.request("/test/read")).json())
+const read = async (opened: Opened) =>
+  Schema.decodeUnknownSync(Read)(await (await opened.request(`/test/read?session=${opened.id}`)).json())
 
 const alarmRead = async (
   opened: Opened,
@@ -86,7 +85,7 @@ const alarmRead = async (
 }
 
 const turn = async (behaviour: Parameters<typeof stub.script>[0] = {}) => {
-  const opened = await TestCell.make(cell.url)
+  const opened = await TestCell.make(cell)
   await opened.start()
   const script = stub.script(behaviour)
   await opened.prompt(`sync ${script.marker}`)
@@ -98,26 +97,34 @@ const ids = async (opened: Opened) => (await opened.messages()).map((message) =>
 
 describe("the sync read of the OpenCode tables in a Durable Object", () => {
   test("S2-05: before OpenCode opens the first time, the read finds no OpenCode tables and does not fail", async () => {
-    const opened = await TestCell.make(cell.url)
-    const response = await opened.request("/test/read")
+    const opened = await TestCell.make(cell)
+    const response = await opened.request(`/test/read?session=${opened.id}`)
     expect(response.status).toBe(200)
     expect(Schema.decodeUnknownSync(Read)(await response.json())).toEqual({ tables: { value: [] } })
-    expect(await opened.state()).toEqual(TestCell.closed)
+    expect(await opened.state()).toEqual(opened.idle)
   })
 
   test("S2-03: the alarm reads E and L while OpenCode is open and after OpenCode closed, and L is the message list of OpenCode", async () => {
-    const opened = await TestCell.make(cell.url)
+    const opened = await TestCell.make(cell)
+    expect((await opened.request(`/test/watch?session=${opened.id}`)).status).toBe(204)
     await opened.start()
     const script = stub.script({ hold: true })
     await opened.prompt(`hold ${script.marker}`)
     await script.called()
-    const during = await alarmRead(opened, (entry) => entry.isOpen && entry.checkpoint !== undefined)
+    const during = await alarmRead(
+      opened,
+      (entry) =>
+        entry.isOpen &&
+        entry.checkpoint !== undefined &&
+        "value" in entry.checkpoint &&
+        entry.checkpoint.value.l.length >= 2,
+    )
     script.release()
     await opened.opencode.session.wait({ sessionID: opened.id })
     const messages = await ids(opened)
     const open = await read(opened)
-    await opened.until((state) => Bun.deepEquals(state, TestCell.closed))
-    expect((await opened.request("/test/alarm")).status).toBe(204)
+    await opened.until((state) => Bun.deepEquals(state, opened.idle))
+    expect((await opened.request(`/test/alarm?session=${opened.id}`)).status).toBe(204)
     const closed = await alarmRead(opened, (entry) => !entry.isOpen)
     expect(during.checkpoint).toEqual({ value: { e: expect.any(Number), l: messages.slice(0, 2) } })
     expect(open.checkpoint).toEqual({ value: { e: expect.any(Number), l: messages } })
@@ -158,7 +165,7 @@ const large = async (behaviour: Parameters<typeof stub.script>[0]) => {
   await cell.kill()
   await cell.start()
   const opened = await turn(behaviour)
-  return Schema.decodeUnknownSync(Sizes)(await (await opened.request("/test/sizes")).json())
+  return Schema.decodeUnknownSync(Sizes)(await (await opened.request(`/test/sizes?session=${opened.id}`)).json())
 }
 
 const fetched = (bytes: number) => ({
@@ -170,7 +177,7 @@ const fetched = (bytes: number) => ({
 
 describe("S4-04: large message rows in a Durable Object", () => {
   test("the largest value that SQLite binds: celld refuses one byte over 2,200,000; Wrangler takes 3 MB", async () => {
-    const opened = await TestCell.make(cell.url)
+    const opened = await TestCell.make(cell)
     const bind = async (bytes: number) => (await opened.request(`/test/bind?bytes=${bytes}`)).json()
     expect(await Promise.all([2_200_000, 2_200_001, 3_000_000].map(bind))).toEqual(
       wrangler

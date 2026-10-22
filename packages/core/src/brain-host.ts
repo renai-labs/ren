@@ -313,19 +313,23 @@ const make = Effect.fnUntraced(function* (locator: Locator) {
           Effect.catchTag("Settings.NotFound", (error) => Effect.fail(new ForbiddenError({ message: error.message }))),
         )
       const access = yield* models.grant(host.brainId, host.organizationId).pipe(
-        Effect.tapError((error) => Effect.logWarning("Model access is unavailable for a pull", error)),
-        Effect.orElseSucceed(() => Models.Access.make({ endpoints: [] })),
+        Effect.map(Option.some),
+        Effect.catch((error) =>
+          Effect.logWarning("Model access is unavailable for a pull; the brain keeps its models", error).pipe(
+            Effect.as(Option.none<Models.Access>()),
+          ),
+        ),
       )
-      const hash = yield* Models.hash(access)
       yield* database.db
         .update(Database.Schema.brain)
         .set({ key_ids: [...request.keyIds] })
         .where(eq(Database.Schema.brain.id, host.brainId))
         .pipe(Effect.orDie)
       yield* locator.observe(host.brainId, request.sessions)
+      const hash = Option.isSome(access) ? yield* Models.hash(access.value) : (request.models ?? "")
       return {
         publicKeys: client.publicKeys,
-        models: hash === request.models ? { hash } : { hash, access },
+        models: Option.isNone(access) || hash === request.models ? { hash } : { hash, access: access.value },
         layers: pulled.layers,
         chats: pulled.chats,
       } satisfies PullReply

@@ -1,6 +1,5 @@
 import { expect, setDefaultTimeout, test } from "bun:test"
 import { TestAccess } from "@ren/brain/testing"
-import { AbsolutePath } from "@opencode/client/effect"
 import { Credential } from "@opencode/core/credential"
 import { EnvironmentFiles } from "@opencode/core/environment/files"
 import { EnvironmentLocal } from "@opencode/core/environment/local"
@@ -96,9 +95,10 @@ const open = Effect.fnUntraced(function* () {
     endpoints,
     () => Effect.succeedNone,
     Option.some(environments),
+    { saved: Option.none(), nativeTools: false, directoryOf: () => local },
   )
   return {
-    harness: yield* OpenCodeHarness.make(host, endpoints, AbsolutePath.make(local)),
+    harness: yield* OpenCodeHarness.make(host, endpoints),
     memory,
     opens: Ref.get(opens),
     environments,
@@ -138,11 +138,13 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
       sessions: Context.get(services, OpenCodeSession.Service),
       workspaces: Context.get(services, Workspace.Service),
       hasEnvironmentConnections: false,
-      settings: Option.none(),
+      nativeTools: true,
+      directoryOf: () => directory,
+      activate: () => Effect.void,
+      chats: Option.none(),
       configure: () => Effect.void,
     },
     endpoints,
-    AbsolutePath.make(directory),
   )
 })
 

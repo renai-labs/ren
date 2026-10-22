@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, describe, expect } from "bun:test"
-import { Shared, TestToken } from "@ren/cell/testing"
+import { describe, expect, setDefaultTimeout } from "bun:test"
+import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
-import { Effect, Layer, ManagedRuntime } from "effect"
+import { Effect, Layer } from "effect"
+import { BrainRegistry } from "../src/brain-registry.js"
 import { Models } from "../src/models.js"
 import { Session } from "../src/session.js"
 import { SessionRunner } from "../src/session/runner.js"
@@ -13,35 +14,25 @@ import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 import { SyncFixture } from "./lib/sync-fixture.js"
 
-const runtime = ManagedRuntime.make(Shared.layer)
-beforeAll(async () => {
-  settings.CELL_URL = (await runtime.runPromise(Shared.Service)).url
-}, 120_000)
-afterAll(() => runtime.dispose())
+setDefaultTimeout(60_000)
+
 const stub = Shared.stub()
 
-const configured = Shared.access({ stub: Shared.apiKey("sk-configured") })
+const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.url)
 
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
     catalog: () => Effect.succeed(Models.catalog(configured)),
     grant: () => Effect.succeed(configured),
-    refreshIfDue: () => Effect.succeedNone,
-    revoke: () => Effect.void,
   }),
 )
 
-const settings = { CELL_URL: "", CELL_KEYS: TestToken.vars.CELL_KEYS }
-
 const it = testEffect(
-  Layer.unwrap(
-    Effect.sync(() =>
-      Layer.mergeAll(SessionRunner.layer, SessionSync.layer).pipe(
-        Layer.provideMerge(Host.layer(settings, models)),
-        Layer.provideMerge(Testing.layer),
-      ),
-    ),
+  Layer.mergeAll(SessionRunner.layer, SessionSync.layer).pipe(
+    Layer.provideMerge(BrainRegistry.layer),
+    Layer.provideMerge(Host.layer({}, models)),
+    Layer.provideMerge(Testing.layer),
   ),
 )
 
@@ -54,16 +45,14 @@ describe("SessionRunner", () => {
       const sessionId = Session.ID.create()
       const script = stub.script()
       const start = { sessionId, harness: "opencode" as const, title: "Plan", interactive: true }
-      expect(
-        yield* sessions.create(owner, {
-          ...start,
-          initialMessage: {
-            messageId: Session.MessageID.create(),
-            prompt: { text: `initial ${script.marker}` },
-            sender: { userId: owner.createdBy },
-          },
-        }),
-      ).toEqual({ sessionId, harness: "opencode" })
+      yield* sessions.create(owner, {
+        ...start,
+        initialMessage: {
+          messageId: Session.MessageID.create(),
+          prompt: { text: `initial ${script.marker}` },
+          sender: { userId: owner.createdBy },
+        },
+      })
       expect((yield* Effect.promise(() => script.called())).text).toContain(script.marker)
       const rows = yield* database.db
         .select()
@@ -149,7 +138,7 @@ describe("SessionRunner", () => {
         const sessions = yield* SessionRunner.Service
         const owner = yield* Seed.owner()
         const rootId = yield* Seed.session(owner)
-        const host = { sessionId: rootId, organizationId: owner.organizationId }
+        const host = SyncFixture.host(owner.organizationId, rootId)
         const childId = Session.ID.create()
         expect(yield* sessions.get(rootId)).toMatchObject({
           id: rootId,

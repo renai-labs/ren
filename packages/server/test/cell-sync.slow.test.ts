@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect } from "bun:test"
 import { SQL } from "bun"
 import { OpenCode } from "@opencode/client"
-import { SessionToken } from "@ren/host-api/session-token"
+import { hostTokenHeader } from "@ren/host-api/brain-api"
 import { Sync } from "@ren/schema/sync"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { BrainHost } from "@ren/core/brain-host"
@@ -9,11 +9,13 @@ import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { Seed } from "@ren/core/testing"
 import { Brain } from "@ren/schema/brain"
-import type { Database } from "@ren/db/database"
-import { Deferred, Effect, Queue, Redacted, Schema } from "effect"
+import { Signature } from "@ren/schema/signature"
+import { Database } from "@ren/db/database"
+import { eq } from "drizzle-orm"
+import { Deferred, Effect, Queue, Schema } from "effect"
 import { HttpServer } from "effect/http"
 import { SqlClient } from "effect/sql"
-import { cellKey } from "./lib/app.js"
+import { brainKey, hostToken, sign } from "./lib/app.js"
 import { Proxy } from "./lib/proxy.js"
 import { SyncTest } from "./lib/sync.js"
 
@@ -35,7 +37,7 @@ beforeAll(async () => {
   state.celld = await Celld.make(
     {
       ...Shared.vars(),
-      CELL_KEYS: JSON.stringify([cellKey]),
+      BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([brainKey.publicKey]),
       REN_URL: `http://host.docker.internal:${ren.port}`,
     },
     "test/lib/sync-storage-worker.ts",
@@ -72,8 +74,14 @@ const setup = Effect.fnUntraced(function* () {
   yield* Seed.ren()
   const sessions = yield* SessionRunner.Service
   const brain = yield* BrainHost.Service
+  const database = yield* Database.Service
+  yield* database.db
+    .update(Database.Schema.space)
+    .set({ brain_scope: "session" })
+    .where(eq(Database.Schema.space.id, owner.spaceId))
   const id = Session.ID.create()
-  const client = TestToken.basic(yield* SessionToken.sign(cellKey, { sid: id, scope: "server", exp: seconds(3600) }))
+  const brainId = Brain.ofSession(id)
+  const client = TestToken.basic(yield* sign({ scope: "server", brain: brainId, gen: 1, exp: seconds(3600) }))
   const opencode = OpenCode.make({ baseUrl: celld().url, headers: { authorization: client } })
   const commits = yield* Queue.unbounded<void>()
   proxy.observe((request, status) => {
@@ -122,7 +130,7 @@ const setup = Effect.fnUntraced(function* () {
       ),
     )
   }
-  return { proxy, owner, brain, id, opencode, local, idle, message, create, held, converged }
+  return { proxy, owner, brain, brainId, id, client, opencode, local, idle, message, create, held, converged }
 })
 
 const restart = Effect.promise(async () => {
@@ -161,7 +169,7 @@ describe("cell sync", () => {
       const cell = yield* setup()
       yield* cell.create(`go ${stub.script().marker}`)
       yield* cell.idle
-      expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
+      expect(yield* cell.brain.flush(cell.id)).toEqual({ drained: true })
       const expected = yield* cell.local
       expect(yield* SyncTest.remote(cell.id)).toEqual(expected)
       expect(types(expected)).toEqual(["user", "assistant", "idle"])
@@ -247,59 +255,23 @@ describe("cell sync", () => {
       }),
   )
 
-  it.live("let the host token expire while Ren is down. The next call from Ren completes the sync", () =>
-    Effect.gen(function* () {
-      const cell = yield* setup()
-      cell.proxy.block((request) => request.path !== "/host/settings")
-      yield* Seed.session(cell.owner, { sessionId: cell.id })
-      const server = TestToken.basic(
-        yield* SessionToken.sign(cellKey, { sid: cell.id, scope: "server", exp: seconds(600) }),
-      )
-      const expired = yield* SessionToken.sign(cellKey, {
-        sid: cell.id,
-        scope: "host",
-        org: cell.owner.organizationId,
-        iat: seconds(-660),
-        exp: seconds(-60),
-      })
-      const valid = yield* SessionToken.sign(cellKey, {
-        sid: cell.id,
-        scope: "host",
-        org: cell.owner.organizationId,
-        iat: seconds(0),
-        exp: seconds(600),
-      })
-      const call = (method: string, path: string, body: unknown, hostToken = valid) =>
-        Effect.promise(async () => {
-          const response = await fetch(`${celld().url}${path}`, {
-            method,
-            headers: { authorization: server, "content-type": "application/json", "ren-host-token": hostToken },
-            body: JSON.stringify(body),
-          })
-          if (!response.ok) throw new Error(`${path} answered ${response.status}: ${await response.text()}`)
-        })
-      yield* call("PUT", "/ren/models", Schema.encodeSync(Brain.ModelGrant)({ access: Shared.access() }))
-      yield* Effect.promise(() => cell.opencode.session.create({ id: cell.id, location: { directory: "/workspace" } }))
-      yield* call("POST", "/ren/sessions", {
-        sessionId: cell.id,
-        harness: "opencode",
-        title: "Sync",
-        interactive: false,
-        initialMessage: cell.message(`go ${stub.script().marker}`),
-      })
-      yield* cell.idle
-      yield* call(
-        "PUT",
-        "/ren/models",
-        Schema.encodeSync(Brain.ModelGrant)({ access: Shared.access(), hostToken: Redacted.make(expired) }),
-        expired,
-      )
-      const refused = yield* status(cell.proxy, checkpoints)
-      cell.proxy.unblock()
-      expect(yield* refused).toBe(403)
-      expect(yield* SyncTest.remote(cell.id)).toEqual({ sessions: [], messages: [] })
-      expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
-      expect(yield* SyncTest.remote(cell.id)).toEqual(yield* cell.local)
-    }),
+  it.live(
+    "a brain whose host token expired cannot sync, and the next call from Ren brings a token that completes it",
+    () =>
+      Effect.gen(function* () {
+        const cell = yield* setup()
+        yield* Seed.session(cell.owner, { sessionId: cell.id })
+        const expired = yield* hostToken(cell.brainId, cell.owner.organizationId, { exp: seconds(-120) })
+        const greeted = yield* Effect.promise(() =>
+          fetch(`${celld().url}/ren/state`, { headers: { authorization: cell.client, [hostTokenHeader]: expired } }),
+        )
+        expect(greeted.status).toBe(200)
+        yield* Effect.promise(() =>
+          cell.opencode.session.create({ id: cell.id, location: { directory: "/workspace" } }),
+        )
+        expect(yield* SyncTest.remote(cell.id)).toEqual({ sessions: [], messages: [] })
+        expect(yield* cell.brain.flush(cell.id)).toEqual({ drained: true })
+        expect(yield* SyncTest.remote(cell.id)).toEqual(yield* cell.local)
+      }),
   )
 })

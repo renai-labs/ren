@@ -110,13 +110,13 @@ export const layer = Layer.effect(
               )
               .orderBy(asc(Database.Schema.agent.name))
             const globalPrimary = agents.find((agent) => agent.isGlobal && !agent.isSubagent)
+            const primaries = new Map(
+              agents.flatMap((agent) => (agent.isSubagent ? [] : [[agent.id, agent.name] as const])),
+            )
             const chats = sessions.map((session) => ({
               id: session.id,
-              agent:
-                (session.agentId && agents.find((agent) => agent.id === session.agentId)?.name) ??
-                globalPrimary?.name ??
-                null,
-              archived: session.archivedAt !== null,
+              agent: (session.agentId && primaries.get(session.agentId)) ?? globalPrimary?.name ?? null,
+              archived: Boolean(session.archivedAt),
             }))
             const used = new Set(chats.flatMap((chat) => (chat.agent ? [chat.agent] : [])))
             const layer = (ownerId: string, knownHash: string | undefined) => {

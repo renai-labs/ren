@@ -53,7 +53,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
       const environment = current().environment
       const random = Wait.random("lifecycle", seed)
       const access = () => stack.access(Stack.freshKey("lifecycle"), Date.now() + 4 * 60_000)
-      stack.issuer.next(() => ({ type: "grant", access: access() }))
+      stack.ren.refresh(() => ({ type: "grant", access: access() }))
       const session = await stack.session({ models: access(), environment })
       const healing: Array<Promise<void>> = []
       const later = (ms: number, heal: () => Promise<void> | void) =>
@@ -90,8 +90,8 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
           later(random.integer(2_000, 10_000), () => environment.proxy.partition(false))
         },
         "ren-down": async () => {
-          stack.issuerProxy.partition(true)
-          later(random.integer(2_000, 10_000), () => stack.issuerProxy.partition(false))
+          stack.renProxy.partition(true)
+          later(random.integer(2_000, 10_000), () => stack.renProxy.partition(false))
         },
         "short-token": async () => {
           environment.publish(environment.generation(), 20_000)
@@ -112,7 +112,7 @@ describe.skipIf(Platform.wrangler !== undefined)("seeded process, lifecycle and 
       await Promise.all(healing)
       await environment.instance.thaw()
       environment.proxy.partition(false)
-      stack.issuerProxy.partition(false)
+      stack.renProxy.partition(false)
       environment.publish(environment.generation(), 3_600_000)
       await session.closed(240_000)
       const read = await session.messages()

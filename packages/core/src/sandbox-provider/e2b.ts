@@ -105,8 +105,8 @@ export const layer = Layer.effect(
       accessToken: Option.Option<string>,
       env: Readonly<Record<string, string>>,
     ) {
-      const content = Object.entries(env)
-        .map((entry) => `${entry[0]}=${quote(entry[1])}`)
+      const content = Object.keys(env)
+        .map((name) => `${name}=${quote(env[name] ?? "")}`)
         .join("\n")
       const form = new FormData()
       form.append("file", new Blob([`${content}\n`]), "brain.env")

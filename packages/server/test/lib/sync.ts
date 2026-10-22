@@ -3,6 +3,7 @@ export * as SyncTest from "./sync.js"
 import { test } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
 import type { Sync } from "@ren/schema/sync"
+import { BrainRegistry } from "@ren/core/brain-registry"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { Database } from "@ren/db/database"
@@ -22,7 +23,7 @@ const make = (cellURL?: string) =>
         ),
       ),
     ),
-    SessionRunner.layer,
+    SessionRunner.layer.pipe(Layer.provide(BrainRegistry.layer)),
   ).pipe(
     Layer.provideMerge(services),
     Layer.provide(FetchHttpClient.layer),

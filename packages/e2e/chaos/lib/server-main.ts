@@ -1,9 +1,10 @@
 import { BunHttpServer, BunRuntime } from "@effect/platform-bun"
+import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
-import { Models } from "@ren/core/models"
+import { Settings } from "@ren/core/settings"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
@@ -12,10 +13,12 @@ import { Routes } from "@ren/server/routes"
 import { Config, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { ChaosEnvironments } from "./provider/environments.js"
+import { ChaosModels } from "./provider/models.js"
 
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([BrainHost.layer, Mailer.layer, SignupGuard.layer]),
-  Layer.provide([Models.layerNone, Environments.layer]),
+  Layer.provide([BrainClient.layer, Settings.layer]),
+  Layer.provide([ChaosModels.layer, Environments.layer]),
   Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, Postgres.layer]),

@@ -49,7 +49,7 @@ export const layer = Layer.effect(
     const read = <A>(key: string, schema: Schema.Codec<A, string>, fallback: A) =>
       Effect.promise(() => storage.get(key)).pipe(
         Effect.map((text) =>
-          text === undefined ? fallback : Option.getOrElse(Schema.decodeUnknownOption(schema)(text), () => fallback),
+          !text ? fallback : Option.getOrElse(Schema.decodeUnknownOption(schema)(text), () => fallback),
         ),
       )
     const layers = yield* Ref.make<BrainSettings.Layers>(yield* read(layersKey, StoredLayers, BrainSettings.empty))

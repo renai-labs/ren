@@ -1,19 +1,22 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
-import { AbsolutePath, OpenCode, Session } from "@opencode/client/effect"
+import { OpenCode, Session } from "@opencode/client/effect"
 import { Permission } from "@opencode/schema/permission"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
+import { BrainSettings } from "@ren/brain/settings"
 import { testEffect } from "@ren/executor/testing"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
-import { Effect, Layer, Option, Predicate, Queue, Stream, Struct } from "effect"
+import { Context, Effect, Layer, Option, Predicate, Queue, Stream, Struct } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { ChatSettings } from "../src/chat-settings.js"
 import { OpenCodeEvents } from "../src/harness/opencode/events.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
+import { ModelsTest } from "./lib/models.js"
 import { TestSettings } from "./lib/settings.js"
 import { Shared } from "./lib/shared.js"
 import type { StubModel } from "./lib/stub-model.js"
@@ -31,9 +34,10 @@ const open = Effect.fnUntraced(function* (
     readonly sessionId?: RenSession.ID
     readonly interactive?: boolean
     readonly start?: boolean
+    readonly stored?: Map<string, string>
+    readonly directory?: string
   } = {},
 ) {
-  const state = { layers: initial }
   const access = Struct.evolve(Shared.access(undefined, stub.url), {
     endpoints: (endpoints) =>
       endpoints.map((endpoint) =>
@@ -42,7 +46,13 @@ const open = Effect.fnUntraced(function* (
         }),
       ),
   })
-  const directory = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-settings-"))))
+  const directory =
+    options.directory ?? (yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-settings-")))))
+  const settings = Context.get(
+    yield* Layer.build(ChatSettings.layer.pipe(Layer.provide(ModelsTest.storage(options.stored)))),
+    ChatSettings.Service,
+  )
+  yield* settings.save(BrainSettings.merge(BrainSettings.empty, initial), [])
   const server = yield* OpenCodeServer.make(
     createEmbeddedRoutes({
       database: { path: options.database ?? ":memory:" },
@@ -53,9 +63,9 @@ const open = Effect.fnUntraced(function* (
     access.endpoints,
     () => Effect.succeedNone,
     Option.none(),
-    Option.some({ read: () => Effect.sync(() => state.layers) }),
+    { saved: Option.some(settings.saved), nativeTools: false, directoryOf: () => directory },
   )
-  const harness = yield* OpenCodeHarness.make(server, access.endpoints, AbsolutePath.make(directory))
+  const harness = yield* OpenCodeHarness.make(server, access.endpoints, Option.some(settings))
   const client = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
     Effect.provide(Layer.fresh(FetchHttpClient.layer)),
     Effect.provideService(
@@ -83,7 +93,12 @@ const open = Effect.fnUntraced(function* (
         sender: { userId: "user_1" },
       })
       .pipe(Effect.andThen(client.session.wait({ sessionID })), Effect.orDie)
-  return { state, server, harness, client, sessionId, sessionID, turn }
+  const pull = (layers: SessionSettings.Layers) =>
+    Effect.gen(function* () {
+      yield* settings.save(BrainSettings.merge(yield* settings.layers, layers), [])
+      yield* harness.applySettings([{ id: sessionId, agent: null, archived: false }])
+    })
+  return { server, harness, client, sessionId, sessionID, turn, pull }
 })
 
 describe("settings in the cell", () => {
@@ -107,26 +122,31 @@ describe("settings in the cell", () => {
 
   it.live("reopening restores the override and non-interactive policy before direct prompts and model edits", () =>
     Effect.gen(function* () {
-      const directory = yield* Effect.promise(() => mkdtemp(join(tmpdir(), "ren-settings-reopen-")))
+      const directory = yield* Effect.promise(async () =>
+        realpath(await mkdtemp(join(tmpdir(), "ren-settings-reopen-"))),
+      )
       const database = join(directory, "opencode.db")
       const sessionId = RenSession.ID.create()
       const sessionID = Session.ID.make(sessionId)
+      const stored = new Map<string, string>()
       const layers = TestSettings.layers({
         ren: { permissions: [{ action: "subagent", resource: "explore", effect: "ask" }] },
       })
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const first = yield* open(layers, { database, sessionId, interactive: false })
+          const first = yield* open(layers, { database, sessionId, interactive: false, stored, directory })
           yield* first.harness.setModel(sessionId, Option.some({ endpointId: "stub", modelId: "stub-other" }))
         }),
       )
-      const opened = yield* open(layers, { database, sessionId, start: false })
-      opened.state.layers = TestSettings.layers({
-        ren: {
-          instructions: "Pulled after reopening.",
-          permissions: [{ action: "subagent", resource: "explore", effect: "ask" }],
-        },
-      })
+      const opened = yield* open(layers, { database, sessionId, start: false, stored, directory })
+      yield* opened.pull(
+        TestSettings.layers({
+          ren: {
+            instructions: "Pulled after reopening.",
+            permissions: [{ action: "subagent", resource: "explore", effect: "ask" }],
+          },
+        }),
+      )
       const child = stub.script()
       const turn = stub.script()
       yield* opened.client.session.prompt({ sessionID, text: `${turn.marker} go` }).pipe(Effect.orDie)
@@ -147,7 +167,7 @@ describe("settings in the cell", () => {
   it.live("after start, OpenCode runs Ren's main agent, with Ren's subagents and OpenCode's hidden helpers", () =>
     Effect.gen(function* () {
       const opened = yield* open(TestSettings.layers())
-      const agents = (yield* opened.client.agent.list().pipe(Effect.orDie)).data
+      const agents = yield* opened.server.agents(opened.sessionId).pipe(Effect.orDie)
       expect(
         agents
           .filter((agent) => !agent.hidden)
@@ -162,13 +182,13 @@ describe("settings in the cell", () => {
     }),
   )
 
-  it.live("the layers' instructions reach the model, and an edit applies at the next prompt", () =>
+  it.live("the layers' instructions reach the model, and a pulled edit applies at the next turn", () =>
     Effect.gen(function* () {
       const opened = yield* open(TestSettings.layers({ ren: { instructions: "House rules." } }))
       const first = stub.script()
       yield* opened.turn(first)
       expect(first.calls[0]?.system).toContain("House rules.")
-      opened.state.layers = TestSettings.layers({ ren: { instructions: "New rules." } })
+      yield* opened.pull(TestSettings.layers({ ren: { instructions: "New rules." } }))
       const second = stub.script()
       yield* opened.turn(second)
       expect(second.calls[0]?.system).toContain("New rules.")
@@ -321,7 +341,7 @@ describe("settings in the cell", () => {
         expect((yield* until(["permission.asked", "session.execution.succeeded"])).type).toBe(
           "session.execution.succeeded",
         )
-        opened.state.layers = asking("deny")
+        yield* opened.pull(asking("deny"))
         const third = stub.script(fetchOnce("third"))
         yield* send(third)
         expect((yield* until(["permission.asked", "session.execution.succeeded"])).type).toBe(

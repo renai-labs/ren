@@ -1,12 +1,14 @@
 export * as TestCell from "./test-cell.js"
 
 import { OpenCode } from "@opencode/client"
-import { BrainApi } from "@ren/host-api/brain-api"
+import { BrainApi, hostTokenHeader } from "@ren/host-api/brain-api"
 import { Brain } from "@ren/schema/brain"
-import { DateTime, Effect, Redacted, Schema } from "effect"
+import { DateTime, Effect } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import type { Models } from "@ren/schema/models"
+import { Session } from "@ren/schema/session"
+import { FakeRen } from "./ren.js"
 import { Shared } from "./shared.js"
 import { TestToken } from "./token.js"
 
@@ -17,16 +19,38 @@ interface State {
   readonly nextReconcileAt: number | null
 }
 
-export const closed: State = { isOpen: false, holders: 0, waitingSince: null, nextReconcileAt: null }
+export const idleOf = (kind: Shared.Runtime["kind"]): State =>
+  kind === "bun"
+    ? { isOpen: true, holders: 1, waitingSince: null, nextReconcileAt: null }
+    : { isOpen: false, holders: 0, waitingSince: null, nextReconcileAt: null }
 
-export const sign = (payload: Record<string, unknown>, secret: string = TestToken.keys[0].secret) =>
-  TestToken.sign(secret, { kid: "active", scope: "client", exp: Math.floor(Date.now() / 1000) + 600, ...payload })
+export const idle = idleOf(Shared.kind())
 
-export const make = async (url: string) => {
+export interface Target {
+  readonly kind: Shared.Runtime["kind"]
+  readonly url: string
+  readonly ren: FakeRen.Instance
+  readonly brain: () => Brain.ID
+}
+
+export const make = async (target: Target) => {
+  const url = target.url
+  const brain = target.brain()
   const id = `ses_${crypto.randomUUID().replaceAll("-", "")}`
-  const client = await sign({ sid: id })
-  const server = TestToken.basic(await sign({ sid: id, scope: "server" }))
+  const client = await TestToken.sign({
+    scope: "client",
+    brain,
+    gen: 1,
+    sid: Session.ID.make(id),
+    sub: "user_1",
+    exp: TestToken.exp(),
+  })
+  const server = TestToken.basic(await TestToken.sign({ scope: "server", brain, gen: 1, exp: TestToken.exp() }))
   const opencode = OpenCode.make({ baseUrl: url, headers: { authorization: server } })
+  const greeted = await fetch(`${url}/ren/state`, {
+    headers: { authorization: server, [hostTokenHeader]: await FakeRen.hostToken(brain) },
+  })
+  if (greeted.status !== 200) throw new Error(`/ren/state answered ${greeted.status}: ${await greeted.text()}`)
   const state = (): Promise<State> =>
     Effect.gen(function* () {
       const http = yield* HttpClient.HttpClient
@@ -49,10 +73,19 @@ export const make = async (url: string) => {
     await Bun.sleep(25)
     return until(predicate, timeout - 25)
   }
+  const settled = async (timeout = 60_000): Promise<State> => {
+    const reached = await until((current) => Bun.deepEquals(current, idleOf(target.kind)), timeout)
+    if (target.kind !== "bun" || Object.keys(await opencode.session.active()).length === 0) return reached
+    if (timeout <= 0) throw new Error("a turn never ended")
+    await Bun.sleep(25)
+    return settled(timeout - 25)
+  }
   const prompt = (text: string, input: { readonly delivery?: "queue" } = {}) =>
     opencode.session.prompt({ sessionID: id, text, ...input })
   return {
     id,
+    idle: idleOf(target.kind),
+    brainId: brain,
     client,
     brain: (path: string, body: unknown, authorization = server) =>
       fetch(`${url}${path}`, {
@@ -60,22 +93,25 @@ export const make = async (url: string) => {
         headers: { authorization, "content-type": "application/json" },
         body: JSON.stringify(body),
       }),
-    models: (access: Models.Access = Shared.access(), hostToken?: string) =>
-      fetch(`${url}/ren/models`, {
-        method: "PUT",
-        headers: { authorization: server, "content-type": "application/json" },
-        body: JSON.stringify(
-          Schema.encodeSync(Schema.toCodecJson(Brain.ModelGrant))({
-            access,
-            ...(hostToken && { hostToken: Redacted.make(hostToken) }),
-          }),
-        ),
-      }),
-    removeModels: () => fetch(`${url}/ren/models`, { method: "DELETE", headers: { authorization: server } }),
+    models: async (access: Models.Access = Shared.access(), hostToken?: string) => {
+      target.ren.models(access, brain)
+      return fetch(`${url}/ren/wake`, {
+        method: "POST",
+        headers: {
+          authorization: server,
+          [hostTokenHeader]: hostToken ?? (await FakeRen.hostToken(brain)),
+        },
+      })
+    },
+    removeModels: () => {
+      target.ren.models({ endpoints: [] }, brain)
+      return fetch(`${url}/ren/wake`, { method: "POST", headers: { authorization: server } })
+    },
     server,
     opencode,
     state,
     until,
+    settled,
     prompt,
     request: (path: string, init: { readonly method?: string; readonly body?: string } = {}, authorization = server) =>
       fetch(`${url}${path}`, {
@@ -83,7 +119,12 @@ export const make = async (url: string) => {
         headers: { authorization, "content-type": "application/json" },
       }),
     start: async () => {
-      await opencode.session.create({ id })
+      const response = await fetch(`${url}/ren/sessions`, {
+        method: "POST",
+        headers: { authorization: server, "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: id, harness: "opencode", interactive: true }),
+      })
+      if (response.status !== 200) throw new Error(`start answered ${response.status}: ${await response.text()}`)
     },
     messages: async () => (await opencode.message.list({ sessionID: id, order: "asc" })).data,
     stream: async () => {

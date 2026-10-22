@@ -15,16 +15,14 @@ export const layer = Layer.sync(Service, () => {
     job: Effect.fnUntraced(function* (name, run) {
       const queue = yield* Queue.sliding<void>(1)
       triggers.set(name, queue)
-      yield* Effect.gen(function* () {
-        while (true) {
-          const delay = yield* run.pipe(
-            Effect.catchCause((cause) =>
-              Effect.logError(`Job ${name} failed`, cause).pipe(Effect.as(Duration.seconds(30))),
-            ),
-          )
-          yield* Effect.raceFirst(Effect.sleep(delay), Queue.take(queue))
-        }
-      }).pipe(Effect.forkScoped)
+      yield* run.pipe(
+        Effect.catchCause((cause) =>
+          Effect.logError(`Job ${name} failed`, cause).pipe(Effect.as(Duration.seconds(30))),
+        ),
+        Effect.flatMap((delay) => Effect.raceFirst(Effect.sleep(delay), Queue.take(queue))),
+        Effect.forever,
+        Effect.forkScoped,
+      )
     }),
     trigger: (name) => {
       const queue = triggers.get(name)

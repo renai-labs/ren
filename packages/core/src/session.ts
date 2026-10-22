@@ -79,7 +79,7 @@ export const layer = Layer.effect(
     const brain = yield* BrainHost.Service
     const catalog = yield* Models.Service
 
-    const models = (actor: Actor.Info, _id: Session.ID) =>
+    const models = (actor: Actor.Info) =>
       catalog.catalog(actor.organizationId).pipe(
         Effect.orDie,
         Effect.map((found) =>
@@ -169,7 +169,7 @@ export const layer = Layer.effect(
         const model = input.model
         if (
           model &&
-          !(yield* models(actor, input.id)).some(
+          !(yield* models(actor)).some(
             (item) =>
               item.id === model.id &&
               item.providerID === model.providerID &&

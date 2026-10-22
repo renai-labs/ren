@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, expect } from "bun:test"
 import { OpenCode } from "@opencode/client"
-import { SyncUnavailableError } from "@ren/host-api/errors"
-import { SessionToken } from "@ren/host-api/session-token"
+import { Signature } from "@ren/schema/signature"
 import { Sync } from "@ren/schema/sync"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
 import { BrainHost } from "@ren/core/brain-host"
@@ -11,7 +10,7 @@ import { Seed } from "@ren/core/testing"
 import { Deferred, Effect, Fiber, Schema } from "effect"
 import { HttpServer } from "effect/http"
 import { SqlClient } from "effect/sql"
-import { cellKey } from "./lib/app.js"
+import { brainKey, hostToken, sign } from "./lib/app.js"
 import { Proxy } from "./lib/proxy.js"
 import { SyncTest } from "./lib/sync.js"
 
@@ -28,7 +27,11 @@ beforeAll(async () => {
   ren.port = probe.port ?? 0
   await probe.stop(true)
   state.celld = await Celld.make(
-    { ...Shared.vars(), CELL_KEYS: JSON.stringify([cellKey]), REN_URL: `http://host.docker.internal:${ren.port}` },
+    {
+      ...Shared.vars(),
+      BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([brainKey.publicKey]),
+      REN_URL: `http://host.docker.internal:${ren.port}`,
+    },
     "test/lib/sync-storage-worker.ts",
   )
 }, 180_000)
@@ -55,14 +58,6 @@ const setup = Effect.fnUntraced(function* () {
   const sessions = yield* SessionRunner.Service
   const brain = yield* BrainHost.Service
   const id = Session.ID.create()
-  const authorization = TestToken.basic(
-    yield* SessionToken.sign(cellKey, {
-      sid: id,
-      scope: "server",
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    }),
-  )
-  const opencode = OpenCode.make({ baseUrl: celld().url, headers: { authorization } })
   const input = {
     sessionId: id,
     harness: "opencode" as const,
@@ -74,6 +69,12 @@ const setup = Effect.fnUntraced(function* () {
       sender: { userId: owner.createdBy },
     },
   }
+  yield* sessions.create(owner, input)
+  const placement = { ...owner, brainId: (yield* sessions.get(id)).brainId }
+  const authorization = TestToken.basic(
+    yield* sign({ scope: "server", brain: placement.brainId, gen: 1, exp: Math.floor(Date.now() / 1000) + 3600 }),
+  )
+  const opencode = OpenCode.make({ baseUrl: celld().url, headers: { authorization } })
   const local = Effect.promise(async () => {
     const response = await fetch(`${celld().url}/test/rows`, { headers: { authorization } })
     const rows = Schema.decodeUnknownSync(Rows)(await response.json())
@@ -88,9 +89,8 @@ const setup = Effect.fnUntraced(function* () {
     await celld().kill()
     await celld().start()
   })
-  yield* sessions.create(owner, input)
   yield* Effect.promise(() => opencode.session.wait({ sessionID: id }))
-  return { proxy, owner, sessions, brain, id, input, opencode, local, lose }
+  return { proxy, owner, placement, sessions, brain, id, input, opencode, local, lose }
 })
 
 it.live(
@@ -105,42 +105,38 @@ it.live(
         cell.opencode.session.prompt({ sessionID: child.id, text: `child ${stub.script().marker}` }),
       )
       yield* Effect.promise(() => cell.opencode.session.wait({ sessionID: child.id }))
-      expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
+      expect(yield* cell.brain.flush(cell.id)).toEqual({ drained: true })
       const before = yield* cell.local
       yield* cell.lose
-      yield* cell.brain.start(cell.input, cell.owner)
+      yield* cell.brain.start(cell.input, cell.placement)
       const restored = yield* cell.local
       expect(restored.sessions.map((row) => row.id)).toEqual(before.sessions.map((row) => row.id))
       expect(restored.messages.map((row) => row.id).toSorted()).toEqual(before.messages.map((row) => row.id).toSorted())
-      yield* cell.brain.send(
-        {
-          sessionId: cell.id,
-          delivery: "queue",
-          messageId: Session.MessageID.create(),
-          prompt: { text: `next ${stub.script().marker}` },
-          sender: { userId: cell.owner.createdBy },
-        },
-        cell.owner.organizationId,
-      )
+      yield* cell.brain.send({
+        sessionId: cell.id,
+        delivery: "queue",
+        messageId: Session.MessageID.create(),
+        prompt: { text: `next ${stub.script().marker}` },
+        sender: { userId: cell.owner.createdBy },
+      })
       yield* Effect.promise(() => cell.opencode.session.wait({ sessionID: cell.id }))
-      expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
+      expect(yield* cell.brain.flush(cell.id)).toEqual({ drained: true })
       expect(yield* SyncTest.remote(cell.id)).toEqual(yield* cell.local)
     }),
 )
 
-it.live("P5-02: unavailable Ren fails start without making an empty session, and BrainHost retries restore", () =>
+it.live("P5-02: a start while Ren is unavailable makes no empty session, and the next start restores", () =>
   Effect.gen(function* () {
     const cell = yield* setup()
-    yield* cell.brain.flush(cell.id, cell.owner.organizationId)
+    yield* cell.brain.flush(cell.id)
     const before = yield* cell.local
     yield* cell.lose
     yield* Effect.promise(cell.proxy.down)
-    const refused = yield* Effect.flip(cell.brain.start(cell.input, cell.owner))
-    expect(refused instanceof BrainHost.BrainUnavailable && refused.cause).toBeInstanceOf(SyncUnavailableError)
+    yield* cell.brain.start(cell.input, cell.placement)
     expect((yield* cell.local).sessions).toEqual([])
     cell.proxy.up()
     cell.proxy.once({ match: (request) => request.path === "/host/sync/restore", fault: "fail" })
-    yield* cell.brain.start(cell.input, cell.owner)
+    yield* cell.brain.start(cell.input, cell.placement)
     expect((yield* cell.local).messages.map((row) => row.id)).toEqual(before.messages.map((row) => row.id))
   }),
 )
@@ -151,7 +147,7 @@ it.live("P5-03: a kill between parent and child imports resumes with only the mi
     const child = yield* Effect.promise(() =>
       cell.opencode.session.create({ parentID: cell.id, location: { directory: "/workspace" } }),
     )
-    yield* cell.brain.flush(cell.id, cell.owner.organizationId)
+    yield* cell.brain.flush(cell.id)
     yield* cell.lose
     cell.proxy.clear()
     const entered = yield* Deferred.make<void>()
@@ -161,19 +157,19 @@ it.live("P5-03: a kill between parent and child imports resumes with only the mi
       match: (request) => request.path === `/host/sync/sessions/${child.id}/messages`,
       before: () => Effect.runPromise(Deferred.succeed(entered, undefined)).then(() => held.promise),
     })
-    const starting = yield* Effect.forkChild(Effect.exit(cell.brain.start(cell.input, cell.owner)))
+    const starting = yield* Effect.forkChild(Effect.exit(cell.brain.start(cell.input, cell.placement)))
     yield* Deferred.await(entered)
     expect((yield* cell.local).sessions.map((row) => row.id)).toEqual([cell.id])
     yield* Effect.promise(() => celld().kill())
     held.resolve()
     yield* Fiber.join(starting)
     yield* Effect.promise(() => celld().start())
-    yield* cell.brain.start(cell.input, cell.owner)
+    yield* cell.brain.start(cell.input, cell.placement)
     expect((yield* cell.local).sessions).toHaveLength(2)
     expect(
       cell.proxy.requests.filter((request) => request.path === `/host/sync/sessions/${cell.id}/messages`),
     ).toHaveLength(1)
-    expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
+    expect(yield* cell.brain.flush(cell.id)).toEqual({ drained: true })
     expect(yield* SyncTest.remote(cell.id)).toEqual(yield* cell.local)
   }),
 )
@@ -181,14 +177,8 @@ it.live("P5-03: a kill between parent and child imports resumes with only the mi
 it.live("P5-04: restore invalidates a late batch from the lost cell", () =>
   Effect.gen(function* () {
     const cell = yield* setup()
-    yield* cell.brain.flush(cell.id, cell.owner.organizationId)
-    const token = yield* SessionToken.sign(cellKey, {
-      sid: cell.id,
-      scope: "host",
-      org: cell.owner.organizationId,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    })
+    yield* cell.brain.flush(cell.id)
+    const token = yield* hostToken(cell.placement.brainId, cell.owner.organizationId)
     const request = (path: string, body: unknown) =>
       Effect.promise(() =>
         fetch(`${cell.proxy.url}/host/sync/sessions/${cell.id}/uploads${path}`, {
@@ -202,7 +192,7 @@ it.live("P5-04: restore invalidates a late batch from the lost cell", () =>
       Schema.decodeUnknownSync(Schema.Struct({ upload: Schema.Int }))(await response.json()),
     )
     yield* cell.lose
-    yield* cell.brain.start(cell.input, cell.owner)
+    yield* cell.brain.start(cell.input, cell.placement)
     const late = yield* request(`/${upload.upload}/messages`, { messages: [] })
     expect(late.status).toBe(409)
     expect(yield* Effect.promise(() => late.json())).toMatchObject({ _tag: "StaleUploadError" })
@@ -215,11 +205,11 @@ it.live("P5-05: an uncommitted root is created before its committed child is imp
     const child = yield* Effect.promise(() =>
       cell.opencode.session.create({ parentID: cell.id, location: { directory: "/workspace" } }),
     )
-    yield* cell.brain.flush(cell.id, cell.owner.organizationId)
+    yield* cell.brain.flush(cell.id)
     const sql = yield* SqlClient.SqlClient
     yield* sql`delete from opencode_session where session_id = ${cell.id}`
     yield* cell.lose
-    yield* cell.brain.start(cell.input, cell.owner)
+    yield* cell.brain.start(cell.input, cell.placement)
     expect((yield* cell.local).sessions.map((row) => row.id).toSorted()).toEqual(
       [cell.id, Session.ID.make(child.id)].toSorted(),
     )
@@ -235,11 +225,11 @@ it.live("P5-06: restore skips descendants of a missing parent and restores other
     const missing = yield* create(cell.id)
     const skipped = yield* create(missing.id)
     const sibling = yield* create(cell.id)
-    yield* cell.brain.flush(cell.id, cell.owner.organizationId)
+    yield* cell.brain.flush(cell.id)
     const sql = yield* SqlClient.SqlClient
     yield* sql`delete from opencode_session where session_id = ${missing.id}`
     yield* cell.lose
-    yield* cell.brain.start(cell.input, cell.owner)
+    yield* cell.brain.start(cell.input, cell.placement)
     expect((yield* cell.local).sessions.map((row) => row.id).toSorted()).toEqual(
       [cell.id, Session.ID.make(sibling.id)].toSorted(),
     )
@@ -250,7 +240,7 @@ it.live("P5-06: restore skips descendants of a missing parent and restores other
 it.live("P5-07: send restores through saved start_input and does not resubmit an accepted message ID", () =>
   Effect.gen(function* () {
     const cell = yield* setup()
-    yield* cell.brain.flush(cell.id, cell.owner.organizationId)
+    yield* cell.brain.flush(cell.id)
     const before = yield* cell.local
     yield* cell.lose
     yield* cell.sessions.send({ sessionId: cell.id, delivery: "queue", ...cell.input.initialMessage })
@@ -263,24 +253,21 @@ it.live("P5-09: a busy session restores as idle and the next pass updates Ren", 
     const cell = yield* setup()
     const script = stub.script({ hold: true })
     yield* Effect.addFinalizer(() => Effect.sync(script.release))
-    yield* cell.brain.send(
-      {
-        sessionId: cell.id,
-        delivery: "queue",
-        messageId: Session.MessageID.create(),
-        prompt: { text: `busy ${script.marker}` },
-        sender: { userId: cell.owner.createdBy },
-      },
-      cell.owner.organizationId,
-    )
+    yield* cell.brain.send({
+      sessionId: cell.id,
+      delivery: "queue",
+      messageId: Session.MessageID.create(),
+      prompt: { text: `busy ${script.marker}` },
+      sender: { userId: cell.owner.createdBy },
+    })
     yield* Effect.promise(() => script.called())
-    yield* cell.brain.flush(cell.id, cell.owner.organizationId)
+    yield* cell.brain.flush(cell.id)
     expect(yield* SyncTest.status(cell.id)).toBe("busy")
     yield* cell.lose
     script.release()
-    yield* cell.brain.start(cell.input, cell.owner)
+    yield* cell.brain.start(cell.input, cell.placement)
     expect((yield* cell.local).sessions[0]?.time_suspended).toBeNull()
-    expect(yield* cell.brain.flush(cell.id, cell.owner.organizationId)).toEqual({ drained: true })
+    expect(yield* cell.brain.flush(cell.id)).toEqual({ drained: true })
     expect(yield* SyncTest.status(cell.id)).toBe("idle")
   }),
 )

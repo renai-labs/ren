@@ -42,7 +42,7 @@ const environmentsWith = Effect.fnUntraced(function* (
 })
 
 const subjectIn = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
-  return { sessionId: Session.ID.create(), organizationId, spaceId: yield* Seed.team(organizationId) }
+  return yield* Seed.subject(organizationId, yield* Seed.team(organizationId))
 })
 
 const environmentsOf = Effect.fnUntraced(function* (environmentTemplateId: EnvironmentTemplate.ID) {

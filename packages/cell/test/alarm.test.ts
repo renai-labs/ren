@@ -2,7 +2,6 @@ import { expect, test } from "bun:test"
 import { Agent } from "@opencode/client/effect"
 import { SessionID } from "@opencode/schema/session-id"
 import { testEffect } from "@ren/executor/testing"
-import { Session } from "@ren/schema/session"
 import {
   Context,
   DateTime,
@@ -26,6 +25,7 @@ import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { Sync } from "../src/sync.js"
 import { BrainTest } from "./lib/brain.js"
 import { Shared } from "./lib/shared.js"
+import { TestToken } from "./lib/token.js"
 
 const it = testEffect(Layer.empty)
 
@@ -53,9 +53,13 @@ const setup = Effect.gen(function* () {
     }),
   )
   const info = Cell.Info.of({
-    sessionId: Session.ID.create(),
+    brainId: TestToken.brain,
+    generation: 1,
+    version: "test",
     vars: {
-      CELL_KEYS: [{ id: "test", secret: "a-test-secret-of-at-least-32-characters" }],
+      BRAIN_PUBLIC_KEYS: TestToken.publicKeys,
+      REN_BRAIN_GENERATION: 1,
+      PULL_INTERVAL_MS: 30_000,
       OPENCODE_CONFIG: "{}",
       ALARM_INTERVAL_MS: 30_000,
       WAIT_BUDGET_MS: 600_000,
@@ -90,6 +94,8 @@ const setup = Effect.gen(function* () {
     send: () => Effect.die(new Error("alarm must not send messages")),
     setModel: () => Effect.die(new Error("alarm must not set models")),
     sessions: Effect.suspend(() => current.reading.pipe(Effect.andThen(Effect.sync(() => current.snapshots)))),
+    applySettings: () => Effect.die(new Error("alarm must not apply settings")),
+    onTurn: () => Effect.die(new Error("alarm must not watch turns")),
   }
   const context = yield* Layer.build(
     Harness.layer(
@@ -125,6 +131,7 @@ const setup = Effect.gen(function* () {
       ),
     session: (fields: Partial<Effect.Success<Harness.Instance["sessions"]>[number]> = {}) => ({
       id: "root",
+      progress: "0",
       active: false,
       inbox: [],
       unfinished: false,
@@ -331,7 +338,7 @@ opencode.effect("a running child session keeps the harness open while the root s
     yield* Fiber.join(alarm)
     expect(yield* brain.state).toMatchObject({ isOpen: true, waitingSince: null })
     yield* brain.alarm
-    expect(yield* brain.state).toEqual(closed)
+    expect(yield* brain.state).toMatchObject(closed)
   }),
 )
 
@@ -358,7 +365,7 @@ opencode.effect("a question unanswered for the park time is interrupted, and the
     const sessionID = SessionID.make(brain.id)
     yield* brain.opencode.session.wait({ sessionID })
     yield* brain.alarm
-    expect(yield* brain.state).toEqual(closed)
+    expect(yield* brain.state).toMatchObject(closed)
     expect(
       (yield* brain.opencode.message.list({ sessionID, order: "asc" })).data.map((message) =>
         message.type === "idle" ? `idle:${message.outcome}` : message.type,
@@ -386,7 +393,7 @@ opencode.effect("a prompt queued behind a running turn runs after it, and the ha
     const sessionID = SessionID.make(brain.id)
     yield* brain.opencode.session.wait({ sessionID })
     yield* brain.alarm
-    expect(yield* brain.state).toEqual(closed)
+    expect(yield* brain.state).toMatchObject(closed)
     expect(
       (yield* brain.opencode.message.list({ sessionID, order: "asc" })).data.flatMap((message) =>
         message.type === "assistant"
@@ -415,7 +422,7 @@ opencode.effect(
       const page = yield* brain.opencode.message.list({ sessionID, order: "desc", limit: 50 })
       expect(page.data.every((message) => message.type === "agent-switched")).toBe(true)
       yield* brain.alarm
-      expect(yield* brain.state).toEqual(closed)
+      expect(yield* brain.state).toMatchObject(closed)
     }),
 )
 

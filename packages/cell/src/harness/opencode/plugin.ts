@@ -3,9 +3,8 @@ export * as RenPlugin from "./plugin.js"
 import { Message } from "@opencode/ai/schema/messages"
 import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
-import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Agent, Model, Provider } from "@opencode/client/effect"
-import { SessionID as OpenCodeSessionID } from "@opencode/schema/session-id"
+import { SessionID } from "@opencode/schema/session-id"
 import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
@@ -14,7 +13,6 @@ import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import {
   Clock,
-  DateTime,
   Deferred,
   Effect,
   Option,
@@ -28,12 +26,11 @@ import {
   Struct,
 } from "effect"
 import type { Harness } from "../harness.js"
+import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 
 const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
-
-export const method = IntegrationMethodID.make("ren")
 
 export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("ManagedKeyError", {
   message: Schema.String,
@@ -98,14 +95,15 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
   refreshKey: Harness.Refresh,
 ) {
   const refreshed = yield* refreshKey(endpointId)
-  if (Option.isSome(refreshed))
-    return Struct.evolve(credential, {
-      access: () => Redacted.value(refreshed.value.key),
-      expires: () => (refreshed.value.expiresAt ? DateTime.toEpochMillis(refreshed.value.expiresAt) : never),
+  if (Option.isNone(refreshed))
+    return yield* new ManagedKeyError({
+      message: `The model key for endpoint ${endpointId} expired, and Ren gave no new key`,
     })
-  if ((yield* Clock.currentTimeMillis) < credential.expires) return credential
-  return yield* new ManagedKeyError({
-    message: `The model key for endpoint ${endpointId} expired at ${DateTime.formatIso(DateTime.makeUnsafe(credential.expires))}`,
+  const now = yield* Clock.currentTimeMillis
+  const expiresAt = refreshed.value.expiresAt
+  return Struct.evolve(credential, {
+    access: () => Redacted.value(refreshed.value.key),
+    expires: () => (expiresAt ? ModelCredentials.renewAt(expiresAt, now) : never),
   })
 })
 
@@ -132,7 +130,7 @@ export const chats = Effect.fnUntraced(function* (
           if (!next || !instance) return
           const previous = Option.getOrUndefined(yield* Ref.getAndSet(instance.installed, Option.some(next)))
           if (JSON.stringify(previous?.resolved) !== JSON.stringify(next.resolved)) yield* instance.reload
-          const sessionID = OpenCodeSessionID.make(sessionId)
+          const sessionID = SessionID.make(sessionId)
           const info = Option.getOrUndefined(yield* instance.session.get({ sessionID }).pipe(Effect.option))
           if (!info) return
           if (info.agent !== next.resolved.primary.name)
@@ -155,7 +153,7 @@ export const make = (
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
   settings: Option.Option<Chats>,
-  nativeTools: boolean,
+  options: { readonly nativeTools: boolean },
   approvals: (
     sessionId: string,
   ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
@@ -167,7 +165,7 @@ export const make = (
         const tool = context.tool
         const integration = context.integration
         const provider = context.provider
-        if (Option.isNone(connections) && !nativeTools)
+        if (Option.isNone(connections) && !options.nativeTools)
           yield* tool.transform((editor) => {
             for (const id of environmentTools) editor.remove(id)
           })
@@ -219,7 +217,7 @@ export const make = (
           for (const integrationID of Ref.getUnsafe(endpoints).map((endpoint) => endpoint.id))
             editor.method.update({
               integrationID,
-              method: { id: method, type: "oauth", label: "Ren" },
+              method: { id: ModelCredentials.method, type: "oauth", label: "Ren" },
               authorize: () =>
                 new ManagedKeyError({ message: "Ren issues this credential; it cannot be signed in to" }),
               refresh: (credential) => refresh(integrationID, credential, refreshKey),
@@ -330,7 +328,7 @@ export const make = (
           }
           yield* Ref.update(shared.instances, (all) => new Map([...all, [directory, instance]]))
           yield* Effect.addFinalizer(() =>
-            Ref.update(shared.instances, (all) => new Map([...all].filter((entry) => entry[1] !== instance))),
+            Ref.update(shared.instances, (all) => new Map([...all].filter((entry) => entry.at(1) !== instance))),
           )
         }
         const reload = Effect.andThen(integration.reload(), provider.reload())

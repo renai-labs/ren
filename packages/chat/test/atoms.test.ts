@@ -36,6 +36,7 @@ const setup = Effect.gen(function* () {
     runtime: Atom.runtime(http),
     access: () =>
       Effect.sync(() => ({
+        status: "ready" as const,
         url: "http://cell",
         token: "a-client-token",
         expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),

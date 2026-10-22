@@ -3,7 +3,20 @@ export * as Models from "./models.js"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Models } from "@ren/schema/models"
-import { Config, Context, DateTime, Duration, Effect, FileSystem, Layer, Path, Ref, Schema, Stream } from "effect"
+import {
+  Config,
+  Context,
+  DateTime,
+  Duration,
+  Effect,
+  FileSystem,
+  Layer,
+  Path,
+  Ref,
+  Schema,
+  Stream,
+  Struct,
+} from "effect"
 
 export { Access, Catalog, Endpoint, catalog } from "@ren/schema/models"
 
@@ -25,7 +38,7 @@ const encodeAccess = Schema.encodeSync(Models.Access)
 export const hash = Effect.fn("Models.hash")(function* (access: Models.Access) {
   const encoded = encodeAccess(access)
   const content = JSON.stringify({
-    endpoints: encoded.endpoints.map((endpoint) => ({ ...endpoint, apiKey: null })),
+    endpoints: encoded.endpoints.map((endpoint) => Struct.omit(endpoint, ["apiKey"])),
   })
   const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", new TextEncoder().encode(content)))
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")
@@ -81,10 +94,9 @@ export const layerConfig = Layer.effect(
         const access = yield* Ref.get(current)
         const expiresAt = DateTime.addDuration(yield* DateTime.now, keyLifetime)
         return Models.Access.make({
-          endpoints: access.endpoints.map((endpoint) => ({
-            ...endpoint,
-            apiKey: { key: endpoint.apiKey.key, expiresAt },
-          })),
+          endpoints: access.endpoints.map((endpoint) =>
+            Struct.evolve(endpoint, { apiKey: (apiKey) => ({ key: apiKey.key, expiresAt }) }),
+          ),
         })
       }),
     })

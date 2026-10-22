@@ -1,11 +1,9 @@
 export * as SessionDriver from "./session.js"
 
 import type { OpenCodeClient, OpenCodeEvent, SessionMessageInfo } from "@opencode/client"
-import { Brain } from "@ren/schema/brain"
 import { TestCell } from "@ren/cell/testing"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Redacted, Schema } from "effect"
 import type { ModelProvider } from "../provider/model.js"
 import { Wait } from "../wait.js"
 
@@ -20,8 +18,6 @@ export interface SendOptions {
   readonly messageId?: Session.MessageID
   readonly delivery?: Session.Delivery
 }
-
-const encodeModels = Schema.encodeSync(Schema.toCodecJson(Brain.ModelGrant))
 
 export const messages = async (opencode: OpenCodeClient, sessionID: string) =>
   (await opencode.message.list({ sessionID, order: "asc", limit: 200 })).data
@@ -44,10 +40,8 @@ export const toolNames = (read: ReadonlyArray<SessionMessageInfo>) =>
 
 export const lastIdle = (read: ReadonlyArray<SessionMessageInfo>) => read.findLast((message) => message.type === "idle")
 
-export type Repair = (sessionId: Session.ID) => Promise<{ readonly access: Models.Access; readonly hostToken: string }>
-
-export const make = async (url: string, provider?: ModelProvider.Instance, repair?: Repair) => {
-  const cell = await TestCell.make(url)
+export const make = async (target: TestCell.Target, provider?: ModelProvider.Instance) => {
+  const cell = await TestCell.make(target)
   const post = async (text: string, messageId: Session.MessageID, options: SendOptions) => {
     const response = await cell.brain(`/ren/sessions/${cell.id}/messages`, {
       messageId,
@@ -57,22 +51,9 @@ export const make = async (url: string, provider?: ModelProvider.Instance, repai
     })
     return { messageId, status: response.status, body: await response.text() }
   }
-  const configureModels = (access: Models.Access, hostToken?: string) =>
-    fetch(`${url}/ren/models`, {
-      method: "PUT",
-      headers: { authorization: cell.server, "content-type": "application/json" },
-      body: JSON.stringify(
-        encodeModels({ access, ...(hostToken !== undefined && { hostToken: Redacted.make(hostToken) }) }),
-      ),
-    })
-  const send = async (text: string, options: SendOptions = {}) => {
-    const messageId = options.messageId ?? Session.MessageID.create()
-    const sent = await post(text, messageId, options)
-    if (sent.status !== 409 || !repair || !sent.body.includes("ModelsNotConfiguredError")) return sent
-    const repaired = await repair(Session.ID.make(cell.id))
-    await configureModels(repaired.access, repaired.hostToken)
-    return post(text, messageId, options)
-  }
+  const configureModels = (access: Models.Access, hostToken?: string) => cell.models(access, hostToken)
+  const send = (text: string, options: SendOptions = {}) =>
+    post(text, options.messageId ?? Session.MessageID.create(), options)
   const read = () => messages(cell.opencode, cell.id)
   return {
     ...cell,
@@ -99,7 +80,7 @@ export const make = async (url: string, provider?: ModelProvider.Instance, repai
       await Wait.deadline(`session ${cell.id} to settle`, ms, cell.opencode.session.wait({ sessionID: cell.id }))
       return read()
     },
-    closed: (ms = 30_000) => cell.until((state) => Bun.deepEquals(state, TestCell.closed), ms),
+    closed: (ms = 30_000) => cell.until((state) => Bun.deepEquals(state, cell.idle), ms),
     turn: async (steps: ReadonlyArray<ModelProvider.Step>, text = "work", options: SendOptions = {}) => {
       if (!provider) throw new Error("a scripted turn needs the chaos model provider")
       const script = provider.script(steps)

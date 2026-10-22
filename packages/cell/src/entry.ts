@@ -21,7 +21,7 @@ export const withCors = (response: Response) => {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
-export interface Checked {
+interface Checked {
   readonly brain: Brain.ID
   readonly request: Request
 }
@@ -31,7 +31,7 @@ const unauthorized = () =>
 
 const forbidden = (message: string) => Response.json({ _tag: "ForbiddenError", message }, { status: 403 })
 
-export const check = Effect.fn("Entry.check")(function* (
+const authorize = Effect.fnUntraced(function* (
   request: Request,
   options: {
     readonly keys: Effect.Effect<ReadonlyArray<Signature.PublicKey>>
@@ -39,30 +39,21 @@ export const check = Effect.fn("Entry.check")(function* (
     readonly generation: number
   },
 ) {
-  const isChat = Chat.owns(new URL(request.url).pathname)
   const token = Token.read(request.headers.get("authorization"))
   const claims = Option.isSome(token) ? yield* BrainToken.verify(yield* options.keys, token.value) : Option.none()
   if (Option.isNone(claims) || claims.value.scope === "host") return unauthorized()
   if (Option.isSome(options.brain) && claims.value.brain !== options.brain.value)
     return forbidden("The token is for another brain")
   if (claims.value.gen !== options.generation) return forbidden("The token is for another generation of this brain")
-  if (claims.value.scope !== "server" && !isChat) return forbidden("A client token reaches only the Chat API")
-  const headers = new Headers(request.headers)
-  headers.delete("authorization")
-  Chat.setMember(
-    headers,
-    claims.value.scope === "client"
-      ? {
-          sub: claims.value.sub,
-          sid: claims.value.sid,
-          exp: claims.value.exp,
-          ...(claims.value.name && { name: claims.value.name }),
-        }
-      : {},
-  )
-  const oversized = Number(headers.get("content-length")) > Session.maxBodyBytes
+  if (claims.value.scope !== "server" && !Chat.owns(new URL(request.url).pathname))
+    return forbidden("A client token reaches only the Chat API")
+  return claims.value
+})
+
+const bounded = Effect.fnUntraced(function* (body: ReadableStream<Uint8Array> | null, declared: number) {
+  const oversized = declared > Session.maxBodyBytes
   const chunks: Array<Uint8Array<ArrayBuffer>> = []
-  const reader: ReadableStreamDefaultReader<Uint8Array> | undefined = request.body?.getReader()
+  const reader = body?.getReader()
   let bytes = 0
   if (reader) {
     let chunk = yield* Effect.promise(() => reader.read())
@@ -74,14 +65,32 @@ export const check = Effect.fn("Entry.check")(function* (
       chunk = yield* Effect.promise(() => reader.read())
     }
   }
-  if (oversized || bytes > Session.maxBodyBytes) return new Response(null, { status: 413 })
+  if (oversized || bytes > Session.maxBodyBytes) return Option.none()
+  return Option.some(reader ? new Blob(chunks) : null)
+})
+
+export const check = Effect.fn("Entry.check")(function* (
+  request: Request,
+  options: {
+    readonly keys: Effect.Effect<ReadonlyArray<Signature.PublicKey>>
+    readonly brain: Option.Option<Brain.ID>
+    readonly generation: number
+  },
+) {
+  const claims = yield* authorize(request, options)
+  if (claims instanceof Response) return claims
+  const headers = new Headers(request.headers)
+  headers.delete("authorization")
+  Chat.setMember(
+    headers,
+    claims.scope === "client"
+      ? { sub: claims.sub, sid: claims.sid, exp: claims.exp, ...(claims.name && { name: claims.name }) }
+      : {},
+  )
+  const body = yield* bounded(request.body, Number(headers.get("content-length")))
+  if (Option.isNone(body)) return new Response(null, { status: 413 })
   return {
-    brain: claims.value.brain,
-    request: new Request(request.url, {
-      method: request.method,
-      headers,
-      body: reader ? new Blob(chunks) : null,
-      signal: request.signal,
-    }),
+    brain: claims.brain,
+    request: new Request(request.url, { method: request.method, headers, body: body.value, signal: request.signal }),
   } satisfies Checked
 })

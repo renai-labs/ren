@@ -1,12 +1,12 @@
 export * as BrainTest from "./brain.js"
 
-import { AbsolutePath, OpenCode } from "@opencode/client/effect"
+import { OpenCode } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/host-api/brain-api"
 import { ChatApi } from "@ren/protocol/chat"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
-import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Redacted, Ref, Schema, Semaphore } from "effect"
+import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Ref, Schema, Semaphore } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -19,7 +19,9 @@ import { Env } from "../../src/env.js"
 import { Harness } from "../../src/harness/harness.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../../src/harness/opencode/server.js"
+import { Fence } from "../../src/fence.js"
 import { HostToken } from "../../src/host-token.js"
+import { HotReload } from "../../src/hot-reload.js"
 import { ModelRefresh } from "../../src/model-refresh.js"
 import { ModelStore } from "../../src/model-store.js"
 import { Sync } from "../../src/sync.js"
@@ -45,13 +47,17 @@ export const make = Effect.fnUntraced(function* (
   const services = yield* Layer.build(
     Layer.mergeAll(
       ModelRefresh.layer(issuer.url).pipe(
-        Layer.provideMerge(HostToken.layer(issuer.url, TestToken.keys)),
+        Layer.provideMerge(HostToken.layer(issuer.url)),
+        Layer.provideMerge(Fence.layer),
         Layer.provide(FetchHttpClient.layer),
       ),
+      Layer.succeed(HotReload.Service, HotReload.Service.of({ pull: Effect.void })),
       Layer.succeed(
         Cell.Info,
         Cell.Info.of({
-          sessionId: id,
+          brainId: TestToken.brain,
+          generation: 1,
+          version: "test",
           vars,
           storage: {
             getAlarm: () => Promise.resolve(alarm.at),
@@ -75,7 +81,7 @@ export const make = Effect.fnUntraced(function* (
       Layer.effect(Sync.Service, Sync.make(Option.none())),
     ).pipe(Layer.provideMerge(ModelsTest.storage())),
   )
-  yield* Context.get(services, ModelStore.Service).write(Shared.access(undefined, Shared.stub().url), undefined)
+  yield* Context.get(services, ModelStore.Service).install(Shared.access(undefined, Shared.stub().url), "test")
   const host = yield* OpenCodeServer.make(
     createEmbeddedRoutes({
       database: { path: options.database ?? ":memory:" },
@@ -86,8 +92,9 @@ export const make = Effect.fnUntraced(function* (
     [],
     Context.get(services, ModelRefresh.Service),
     Option.none(),
+    { saved: Option.none(), nativeTools: false, directoryOf: () => directory },
   )
-  const harness = yield* OpenCodeHarness.make(host, [], AbsolutePath.make(directory))
+  const harness = yield* OpenCodeHarness.make(host, [])
   const waits = yield* Queue.unbounded<number>()
   const cell = Context.merge(
     services,
@@ -111,7 +118,10 @@ export const make = Effect.fnUntraced(function* (
     Effect.provide(Brain.handlers.pipe(Layer.provide(Layer.succeedContext(cell)))),
     Effect.provide(HttpServer.layerServices),
   )
-  const web = Context.get(yield* Layer.build(Brain.layer.pipe(Layer.provide(Layer.succeedContext(cell)))), Cell.Brain)
+  const web = Context.get(
+    yield* Layer.build(Brain.layer.pipe(Layer.provide(Layer.succeedContext(cell)))),
+    Cell.BrainRoutes,
+  )
   const chatWeb = Context.get(yield* Layer.build(Chat.layer.pipe(Layer.provide(Layer.succeedContext(cell)))), Cell.Chat)
   const chatFetch = (path: string, init: RequestInit = {}, user: string | undefined = "user_1", name?: string) => {
     const request = new Request(`http://cell${path}`, init)
@@ -149,18 +159,23 @@ export const make = Effect.fnUntraced(function* (
       ),
     ),
   )
+  const install = (access: Models.Access, hostToken?: string) =>
+    Effect.gen(function* () {
+      const store = Context.get(services, ModelStore.Service)
+      yield* store.write(access, hostToken)
+      yield* store.install(access, `test-${Date.now()}`)
+      const opened = Context.get(cell, Harness.Service)
+      if ((yield* opened.state).isOpen)
+        yield* Effect.scoped(Effect.flatMap(opened.get, (instance) => instance.configure(access.endpoints)))
+    })
   return {
     id,
     directory,
     issuer,
     configureModels: (apiKeys?: Readonly<Record<string, Models.ApiKey>>, hostToken?: string) =>
-      client.brain["brain.configureModels"]({
-        payload: {
-          access: Shared.access(apiKeys, Shared.stub().url),
-          ...(hostToken && { hostToken: Redacted.make(hostToken) }),
-        },
-      }),
-    removeModels: client.brain["brain.removeModels"](),
+      install(Shared.access(apiKeys, Shared.stub().url), hostToken),
+    install,
+    removeModels: install({ endpoints: [] }),
     state: client.brain["brain.state"](),
     alarm: Effect.sync(() => {
       alarm.at = null

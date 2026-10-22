@@ -1,20 +1,70 @@
 export * as Shared from "./shared.js"
 
+import { BunBrain } from "./bun-brain.js"
 import { Celld } from "./celld.js"
+import { FakeRen } from "./ren.js"
 import { StubModel } from "./stub-model.js"
 import { TestToken } from "./token.js"
 import { Wrangler } from "./wrangler.js"
+import { Brain } from "@ren/schema/brain"
 import type { Models } from "@ren/schema/models"
 import { Context, DateTime, Effect, Layer, Redacted } from "effect"
 
-export class Service extends Context.Service<Service, Celld.Instance>()("@ren/cell/test/Shared") {}
+export interface Runtime extends Celld.Instance {
+  readonly kind: "bun" | "celld" | "wrangler"
+  readonly ren: FakeRen.Instance
+  readonly brain: () => Brain.ID
+}
+
+export class Service extends Context.Service<Service, Runtime>()("@ren/cell/test/Shared") {}
+
+export const kind = (): Runtime["kind"] => {
+  if (process.env.CELL_RUNTIME === "wrangler") return "wrangler"
+  if (process.env.CELL_RUNTIME === "celld") return "celld"
+  return "bun"
+}
+
+export const make = async (
+  options: { readonly vars?: Readonly<Record<string, string>>; readonly worker?: string } = {},
+): Promise<Runtime> => {
+  const runtime = options.worker && kind() === "bun" ? "celld" : kind()
+  const ren = FakeRen.start({ hostname: runtime === "celld" ? "0.0.0.0" : "127.0.0.1" })
+  const local = runtime === "celld" ? stub().cellUrl : stub().url
+  ren.models(access(undefined, local))
+  const renUrl = runtime === "celld" ? ren.url.replace("127.0.0.1", "host.docker.internal") : ren.url
+  const env = { ...vars(local), REN_URL: renUrl, ...options.vars }
+  if (runtime === "bun") {
+    const brain = Brain.ID.create()
+    const instance = await BunBrain.make(env, { brain })
+    return {
+      ...instance,
+      kind: runtime,
+      ren,
+      brain: () => brain,
+      dispose: async () => {
+        await instance.dispose()
+        await ren.stop()
+      },
+    }
+  }
+  const instance =
+    runtime === "wrangler" ? await Wrangler.make(env, options.worker) : await Celld.make(env, options.worker)
+  return {
+    ...instance,
+    kind: runtime,
+    ren,
+    brain: () => Brain.ID.create(),
+    dispose: async () => {
+      await instance.dispose()
+      await ren.stop()
+    },
+  }
+}
 
 export const layer = Layer.effect(
   Service,
   Effect.acquireRelease(
-    Effect.promise(() =>
-      process.env.CELL_RUNTIME === "wrangler" ? Wrangler.make(vars(stub().url)) : Celld.make(vars()),
-    ),
+    Effect.promise(() => make()),
     (instance) => Effect.promise(instance.dispose),
   ),
 )
@@ -70,7 +120,7 @@ export const apiKey = (key: string, expiresAtMs?: number): Models.ApiKey => ({
 
 export const access = (
   apiKeys: Readonly<Record<string, Models.ApiKey>> = { stub: apiKey("stub-key") },
-  baseUrl = stub().cellUrl,
+  baseUrl = kind() === "celld" ? stub().cellUrl : stub().url,
 ): Models.Access => ({
   endpoints: Object.entries(apiKeys).map((entry) => ({
     id: entry[0],

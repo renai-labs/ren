@@ -97,7 +97,7 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
   test("a turn longer than several short grants renews the key before each model call, with no client attached", async () => {
     const stack = current().stack
     const issued: Array<string> = []
-    stack.issuer.next(() => {
+    stack.ren.refresh(() => {
       const key = Stack.freshKey("short")
       issued.push(key)
       return { type: "grant", access: stack.access(key, Date.now() + windowMs + 2_000) }

@@ -1,15 +1,15 @@
 import { describe, expect } from "bun:test"
 import { BunHttpServer } from "@effect/platform-bun"
-import { ForbiddenError, StaleUploadError } from "@ren/host-api/errors"
-import { SessionToken } from "@ren/host-api/session-token"
+import { ForbiddenError, StaleUploadError, UnauthorizedError } from "@ren/host-api/errors"
 import { SyncApi } from "@ren/host-api/sync-api"
 import { Seed, SyncFixture, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
+import { Brain } from "@ren/schema/brain"
 import { Clock, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpRouter } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { Routes } from "../src/routes.js"
-import { cellKey, environment, services } from "./lib/app.js"
+import { environment, hostToken, services, sign } from "./lib/app.js"
 
 const it = testEffect(
   HttpRouter.serve(Routes.layer, { disableListenLog: true, disableLogger: true }).pipe(
@@ -26,14 +26,11 @@ const expiry = Clock.currentTimeMillis.pipe(Effect.map((now) => Math.floor(now /
 const root = Effect.fnUntraced(function* () {
   const owner = yield* Seed.owner()
   const rootId = yield* Seed.session(owner)
-  const hostToken = yield* SessionToken.sign(cellKey, {
-    sid: rootId,
-    scope: "host",
-    org: owner.organizationId,
-    iat: Math.floor((yield* Clock.currentTimeMillis) / 1000),
-    exp: yield* expiry,
-  })
-  return { owner, rootId, client: yield* client(hostToken) }
+  return {
+    owner,
+    rootId,
+    client: yield* client(yield* hostToken(Brain.ofSession(rootId), owner.organizationId)),
+  }
 })
 
 const client = (bearer: string) =>
@@ -82,12 +79,12 @@ describe("SyncApi", () => {
         sync["sync.startUpload"]({ params: { id: other }, payload: { harness: "opencode", parentId: null } }),
         sync["sync.restore"]({ payload: { sessionId: other } }),
         sync["sync.messages"]({ params: { id: other }, query: { limit: 10 } }),
-        Effect.flatMap(
-          client(yield* SessionToken.sign(cellKey, { sid: host.rootId, scope: "server", exp: yield* expiry })),
-          (server) => server.sync["sync.checkpoints"](),
-        ),
       ]
       for (const attempt of attempts) expect(yield* Effect.flip(attempt)).toBeInstanceOf(ForbiddenError)
+      const server = yield* client(
+        yield* sign({ scope: "server", brain: Brain.ofSession(host.rootId), gen: 1, exp: yield* expiry }),
+      )
+      expect(yield* Effect.flip(server.sync["sync.checkpoints"]())).toBeInstanceOf(UnauthorizedError)
       expect((yield* sync["sync.checkpoints"]()).sessions.map((session) => session.id)).toEqual([host.rootId])
     }),
   )

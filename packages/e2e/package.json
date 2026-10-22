@@ -18,7 +18,6 @@
     "@effect/sql-pg": "catalog:",
     "@playwright/test": "catalog:",
     "@ren/brain": "workspace:*",
-    "@ren/host-api": "workspace:*",
     "@ren/environment-api": "workspace:*",
     "@ren/cell": "workspace:*",
     "@ren/core": "workspace:*",
