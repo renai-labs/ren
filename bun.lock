@@ -226,7 +226,6 @@
       "dependencies": {
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
-        "jose": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -290,6 +289,7 @@
       "version": "0.0.0",
       "dependencies": {
         "effect": "catalog:",
+        "jose": "catalog:",
         "ulid": "catalog:",
       },
       "devDependencies": {

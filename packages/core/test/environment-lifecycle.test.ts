@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { Signature } from "@ren/environment-api/signature"
+import { Signature } from "@ren/schema/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import type { StubModel } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"

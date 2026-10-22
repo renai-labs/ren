@@ -3,12 +3,14 @@ export * as SessionRunner from "./runner.js"
 import { Database } from "@ren/db/database"
 import type { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
+import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { and, eq, isNull } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
 import { AgentQueries } from "../agent/queries.js"
 import { BrainHost } from "../brain-host.js"
+import { BrainRegistry } from "../brain-registry.js"
 import { OpenCodeStore } from "./opencode-store.js"
 
 export class NotFound extends Schema.TaggedError<NotFound>()("SessionRunner.NotFound", { message: Schema.String }) {}
@@ -26,6 +28,7 @@ export interface Owner {
 export interface Info extends Owner {
   readonly id: Session.ID
   readonly rootId: Session.ID
+  readonly brainId: Brain.ID
   readonly parentId: Session.ID | null
   readonly harness: Session.Harness
   readonly title: string | null
@@ -40,10 +43,7 @@ export interface Interface {
     owner: Owner,
     input: Session.StartInput,
     options?: { readonly agentId?: Agent.ID },
-  ) => Effect.Effect<
-    Session.Started,
-    AlreadyExists | NotFound | BrainHost.BrainUnavailable | BrainHost.BrainRejectedError
-  >
+  ) => Effect.Effect<void, AlreadyExists | NotFound | BrainHost.BrainRejectedError>
   readonly send: (
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, NotFound | BrainHost.BrainUnavailable | BrainHost.BrainRejectedError>
@@ -61,6 +61,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const brain = yield* BrainHost.Service
+    const registry = yield* BrainRegistry.Service
 
     return Service.of({
       create: Effect.fn("SessionRunner.create")(function* (
@@ -71,6 +72,7 @@ export const layer = Layer.effect(
         const startInput = yield* Schema.encodeEffect(Session.StartInput)(Struct.omit(input, ["initialMessage"])).pipe(
           Effect.orDie,
         )
+        const brainId = yield* registry.assign({ ...owner, sessionId: input.sessionId })
         const created = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             if (
@@ -98,6 +100,7 @@ export const layer = Layer.effect(
                 space_id: owner.spaceId,
                 created_by: owner.createdBy,
                 root_id: input.sessionId,
+                brain_id: brainId,
                 harness: input.harness,
                 agent_id: options.agentId,
                 start_input: startInput,
@@ -107,7 +110,7 @@ export const layer = Layer.effect(
           }),
         )
         if (created.length === 0) return yield* alreadyExists
-        return yield* brain.start(input, owner)
+        yield* brain.start(input, { ...owner, brainId })
       }),
       send: Effect.fn("SessionRunner.send")(function* (input: Session.SendInput) {
         const row = (yield* database.transaction((transaction) =>
@@ -115,13 +118,14 @@ export const layer = Layer.effect(
             .select({
               organizationId: Database.Schema.agent_session.organization_id,
               spaceId: Database.Schema.agent_session.space_id,
+              brainId: Database.Schema.agent_session.brain_id,
               startInput: Database.Schema.agent_session.start_input,
             })
             .from(Database.Schema.agent_session)
             .where(eq(Database.Schema.agent_session.id, input.sessionId)),
         )).at(0)
         if (!row) return yield* notFound
-        return yield* brain.send(input, row.organizationId).pipe(
+        return yield* brain.send(input).pipe(
           Effect.catchTag("SessionNotStartedError", (error) =>
             Effect.gen(function* () {
               if (!row.startInput)
@@ -132,15 +136,7 @@ export const layer = Layer.effect(
                 )
               const start = yield* Schema.decodeEffect(Session.StartInput)(row.startInput).pipe(Effect.orDie)
               yield* brain.start(start, row)
-              return yield* brain
-                .send(input, row.organizationId)
-                .pipe(
-                  Effect.catchTag("SessionNotStartedError", (cause) =>
-                    Effect.die(
-                      new Error(`Session ${input.sessionId} is not started on its host after a start`, { cause }),
-                    ),
-                  ),
-                )
+              return yield* new BrainHost.BrainUnavailable({ cause: error })
             }),
           ),
         )
@@ -160,6 +156,7 @@ export const layer = Layer.effect(
           spaceId: row.session.space_id,
           createdBy: row.session.created_by,
           rootId: row.session.root_id,
+          brainId: row.session.brain_id,
           harness: row.session.harness,
           parentId: row.session.parent_id,
           title: row.opencode?.title ?? null,

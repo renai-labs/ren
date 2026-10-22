@@ -4879,6 +4879,10 @@
         "type": "string",
         "pattern": "^usr_"
       },
+      "Brain.Scope": {
+        "type": "string",
+        "enum": ["session", "space"]
+      },
       "ConflictErrorEncoded": {
         "type": "object",
         "properties": {
@@ -5541,20 +5545,17 @@
         "minLength": 1
       },
       "Session.ClientAccess": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string"
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Session.ReadyAccess"
           },
-          "token": {
-            "type": "string"
+          {
+            "$ref": "#/components/schemas/Session.StartingAccess"
           },
-          "expiresAt": {
-            "type": "string"
+          {
+            "$ref": "#/components/schemas/Session.FailedAccess"
           }
-        },
-        "required": ["url", "token", "expiresAt"],
-        "additionalProperties": false
+        ]
       },
       "Session.CreateInput": {
         "type": "object",
@@ -5588,6 +5589,20 @@
           }
         },
         "required": ["id", "spaceId"],
+        "additionalProperties": false
+      },
+      "Session.FailedAccess": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["failed"]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["status", "reason"],
         "additionalProperties": false
       },
       "Session.FirstMessage": {
@@ -5717,6 +5732,41 @@
           }
         },
         "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Session.ReadyAccess": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ready"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": ["status", "url", "token", "expiresAt"],
+        "additionalProperties": false
+      },
+      "Session.StartingAccess": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["starting"]
+          },
+          "phase": {
+            "type": "string",
+            "description": "What the brain is doing. Ask again in 2 seconds."
+          }
+        },
+        "required": ["status", "phase"],
         "additionalProperties": false
       },
       "Session.Status": {
@@ -5902,6 +5952,9 @@
               }
             ]
           },
+          "brainScope": {
+            "$ref": "#/components/schemas/Brain.Scope"
+          },
           "memberCount": {
             "type": "integer"
           },
@@ -5956,6 +6009,7 @@
           "organizationId",
           "name",
           "description",
+          "brainScope",
           "memberCount",
           "membershipId",
           "agentOrder",
@@ -6037,6 +6091,16 @@
                     "type": "null"
                   }
                 ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "brainScope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Brain.Scope"
               },
               {
                 "type": "null"

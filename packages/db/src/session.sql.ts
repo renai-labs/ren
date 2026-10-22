@@ -1,5 +1,6 @@
 import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
+import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { defineRelationsPart } from "drizzle-orm"
@@ -18,6 +19,7 @@ import {
 } from "drizzle-orm/pg-core"
 import { agent } from "./agent.sql.js"
 import { organization, user } from "./auth.sql.js"
+import { brain } from "./brain.sql.js"
 import { space } from "./space.sql.js"
 
 export const agent_session = pgTable(
@@ -46,6 +48,10 @@ export const agent_session = pgTable(
     agent_id: text()
       .$type<Agent.ID>()
       .references(() => agent.id, { onDelete: "set null" }),
+    brain_id: text()
+      .$type<Brain.ID>()
+      .notNull()
+      .references(() => brain.id, { onDelete: "cascade" }),
     harness: text().$type<Session.Harness>().notNull(),
     start_input: jsonb().$type<Omit<typeof Session.StartInput.Encoded, "initialMessage">>(),
     sync_seq: bigint({ mode: "number" }),
@@ -57,6 +63,7 @@ export const agent_session = pgTable(
   (table) => [
     index("agent_session_root_id_idx").on(table.root_id),
     index("agent_session_agent_id_idx").on(table.agent_id),
+    index("agent_session_brain_id_idx").on(table.brain_id),
   ],
 )
 

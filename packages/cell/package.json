@@ -14,7 +14,8 @@
     "deploy:cloudflare": "wrangler deploy",
     "test": "bun ../../script/test.ts",
     "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/cell.test.ts test/environment-lifecycle-cell.test.ts test/sync-storage.test.ts",
-    "typecheck": "tsgo -b"
+    "typecheck": "tsgo -b",
+    "template:e2b": "bun e2b/stage.ts && cd e2b && e2b template create ren-brain-dev -d e2b.Dockerfile -c /opt/ren/start.sh --ready-cmd 'pgrep -f /opt/ren/start.sh' --cpu-count 2 --memory-mb 2048"
   },
   "dependencies": {
     "@opencode/ai": "catalog:",

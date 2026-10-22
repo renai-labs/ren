@@ -5,7 +5,7 @@ import { Plugin } from "@opencode/plugin/effect"
 import type { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Agent, Model, Provider } from "@opencode/client/effect"
-import type { Session as OpenCodeSession } from "@opencode/schema/session"
+import { SessionID as OpenCodeSessionID } from "@opencode/schema/session-id"
 import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
@@ -43,28 +43,21 @@ const never = Number.MAX_SAFE_INTEGER
 
 const rank = { allow: 0, ask: 1, deny: 2 } as const
 
-export interface Settings {
-  readonly configure: (session: {
-    readonly sessionId: OpenCodeSession.ID
-    readonly interactive: boolean
-    readonly model: Option.Option<Session.Model>
-  }) => Effect.Effect<BrainSettings.Resolved, BrainSettings.Failure>
-  readonly pull: Effect.Effect<BrainSettings.Resolved, BrainSettings.Failure>
-  readonly setModel: (
-    model: Option.Option<Session.Model>,
-  ) => Effect.Effect<BrainSettings.Resolved, BrainSettings.Failure>
-}
+export type Chat = BrainSettings.Chat
 
 interface Instance {
   readonly reload: Effect.Effect<void>
   readonly session: Plugin.Context["session"]
+  readonly installed: Ref.Ref<Option.Option<Chat>>
 }
 
-interface Shared {
-  readonly current: Ref.Ref<Option.Option<BrainSettings.Resolved>>
-  readonly attached: Ref.Ref<Option.Option<{ readonly sessionId: OpenCodeSession.ID; readonly interactive: boolean }>>
-  readonly instances: Ref.Ref<ReadonlyArray<Instance>>
-  readonly control: Settings
+export interface Chats {
+  readonly latest: Ref.Ref<ReadonlyMap<string, Chat>>
+  readonly instances: Ref.Ref<ReadonlyMap<string, Instance>>
+  readonly directoryOf: (sessionId: string) => string
+  readonly turnEnded: Ref.Ref<(sessionId: string) => Effect.Effect<void>>
+  readonly turnStarted: Ref.Ref<(sessionId: string) => Effect.Effect<void>>
+  readonly install: (sessionId: string) => Effect.Effect<void>
 }
 
 export const sameModel = (
@@ -116,46 +109,43 @@ export const refresh = Effect.fn("RenPlugin.refresh")(function* (
   })
 })
 
-export const settings = Effect.fnUntraced(function* (brain: BrainSettings.Interface) {
-  const current = yield* Ref.make(Option.none<BrainSettings.Resolved>())
-  const attached = yield* Ref.make(
-    Option.none<{ readonly sessionId: OpenCodeSession.ID; readonly interactive: boolean }>(),
-  )
-  const instances = yield* Ref.make<ReadonlyArray<Instance>>([])
-  const changes = yield* Semaphore.make(1)
-  const apply = (update: Effect.Effect<BrainSettings.Resolved, BrainSettings.Failure>) =>
-    Effect.gen(function* () {
-      const next = yield* update
-      const session = Option.getOrUndefined(yield* Ref.get(attached))
-      const previous = Option.getOrUndefined(yield* Ref.getAndSet(current, Option.some(next)))
-      const all = yield* Ref.get(instances)
-      if (JSON.stringify(previous) !== JSON.stringify(next))
-        yield* Effect.forEach(all, (instance) => instance.reload, { discard: true })
-      const api = all.at(0)?.session
-      const info =
-        session && api && Option.getOrUndefined(yield* api.get({ sessionID: session.sessionId }).pipe(Effect.option))
-      if (!session || !api || !info) return next
-      if (info.agent !== next.primary.name)
-        yield* api
-          .switchAgent({ sessionID: session.sessionId, agent: Agent.ID.make(next.primary.name) })
-          .pipe(Effect.orDie)
-      if (!sameModel(info.model, next.primary.model))
-        yield* api.switchModel({ sessionID: session.sessionId, model: modelRef(next.primary.model) }).pipe(Effect.orDie)
-      return next
-    })
+export const chats = Effect.fnUntraced(function* (
+  directoryOf: (sessionId: string) => string,
+  saved: ReadonlyMap<string, Chat>,
+) {
+  const latest = yield* Ref.make<ReadonlyMap<string, Chat>>(saved)
+  const instances = yield* Ref.make<ReadonlyMap<string, Instance>>(new Map())
+  const turnEnded = yield* Ref.make<(sessionId: string) => Effect.Effect<void>>(() => Effect.void)
+  const turnStarted = yield* Ref.make<(sessionId: string) => Effect.Effect<void>>(() => Effect.void)
+  const installs = yield* Semaphore.make(1)
   return {
-    current,
-    attached,
+    latest,
     instances,
-    control: {
-      configure: (session) =>
-        changes.withPermit(
-          Ref.set(attached, Option.some(session)).pipe(Effect.andThen(apply(brain.setModel(session.model)))),
-        ),
-      pull: changes.withPermit(apply(brain.pull)),
-      setModel: (model) => changes.withPermit(apply(brain.setModel(model))),
-    },
-  } satisfies Shared
+    directoryOf,
+    turnEnded,
+    turnStarted,
+    install: (sessionId) =>
+      installs.withPermit(
+        Effect.gen(function* () {
+          const next = (yield* Ref.get(latest)).get(sessionId)
+          const instance = (yield* Ref.get(instances)).get(directoryOf(sessionId))
+          if (!next || !instance) return
+          const previous = Option.getOrUndefined(yield* Ref.getAndSet(instance.installed, Option.some(next)))
+          if (JSON.stringify(previous?.resolved) !== JSON.stringify(next.resolved)) yield* instance.reload
+          const sessionID = OpenCodeSessionID.make(sessionId)
+          const info = Option.getOrUndefined(yield* instance.session.get({ sessionID }).pipe(Effect.option))
+          if (!info) return
+          if (info.agent !== next.resolved.primary.name)
+            yield* instance.session
+              .switchAgent({ sessionID, agent: Agent.ID.make(next.resolved.primary.name) })
+              .pipe(Effect.orDie)
+          if (!sameModel(info.model, next.resolved.primary.model))
+            yield* instance.session
+              .switchModel({ sessionID, model: modelRef(next.resolved.primary.model) })
+              .pipe(Effect.orDie)
+        }),
+      ),
+  } satisfies Chats
 })
 
 export const make = (
@@ -164,7 +154,8 @@ export const make = (
   loaded: Deferred.Deferred<void>,
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
-  settings: Option.Option<Shared>,
+  settings: Option.Option<Chats>,
+  nativeTools: boolean,
   approvals: (
     sessionId: string,
   ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
@@ -176,7 +167,7 @@ export const make = (
         const tool = context.tool
         const integration = context.integration
         const provider = context.provider
-        if (Option.isNone(connections))
+        if (Option.isNone(connections) && !nativeTools)
           yield* tool.transform((editor) => {
             for (const id of environmentTools) editor.remove(id)
           })
@@ -236,16 +227,22 @@ export const make = (
         })
         if (Option.isSome(settings)) {
           const shared = settings.value
+          const directory = context.location.directory
+          const sessionId = [...(yield* Ref.get(shared.latest)).keys()].find(
+            (id) => shared.directoryOf(id) === directory,
+          )
+          const saved = sessionId ? (yield* Ref.get(shared.latest)).get(sessionId) : undefined
+          const installed = yield* Ref.make(Option.fromUndefinedOr(saved))
           const agentOf = (name: string | undefined) =>
-            Option.flatMap(Ref.getUnsafe(shared.current), (resolved) =>
+            Option.flatMap(Ref.getUnsafe(installed), (chat) =>
               Option.fromUndefinedOr(
-                !name || name === resolved.primary.name
-                  ? resolved.primary
-                  : resolved.subagents.find((agent) => agent.name === name),
+                !name || name === chat.resolved.primary.name
+                  ? chat.resolved.primary
+                  : chat.resolved.subagents.find((agent) => agent.name === name),
               ),
             )
           yield* context.agent.transform((editor) => {
-            const resolved = Option.getOrUndefined(Ref.getUnsafe(shared.current))
+            const resolved = Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved
             if (!resolved) return
             for (const agent of editor.list()) if (!agent.hidden) editor.remove(agent.id)
             for (const agent of [resolved.primary, ...resolved.subagents])
@@ -257,7 +254,7 @@ export const make = (
             editor.default(resolved.primary.name)
           })
           yield* context.reference.transform((editor) => {
-            for (const reference of Option.getOrUndefined(Ref.getUnsafe(shared.current))?.references ?? [])
+            for (const reference of Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.references ?? [])
               editor.add(reference.alias, {
                 type: "git",
                 repository: reference.repository,
@@ -290,9 +287,9 @@ export const make = (
                 agent,
                 { action: event.action, resources: event.resources },
                 {
-                  interactive: Option.match(Ref.getUnsafe(shared.attached), {
+                  interactive: Option.match(Ref.getUnsafe(installed), {
                     onNone: () => true,
-                    onSome: (session) => session.interactive,
+                    onSome: (chat) => chat.interactive,
                   }),
                   denied: [],
                 },
@@ -316,22 +313,24 @@ export const make = (
             }),
           )
           yield* context.session.hook("prompt", (event) =>
-            Effect.gen(function* () {
-              const session = Option.getOrUndefined(yield* Ref.get(shared.attached))
-              if (session?.sessionId !== event.sessionID) return
-              yield* shared.control.pull.pipe(
-                Effect.catch((error) => Effect.logWarning(`Kept the last settings: ${error.message}`)),
-                Effect.asVoid,
-              )
+            Effect.flatMap(Ref.get(shared.turnStarted), (started) => started(event.sessionID)),
+          )
+          yield* context.event.subscribe().pipe(
+            Stream.runForEach((event) => {
+              if (event.type !== "session.idle" || event.location?.directory !== context.location.directory)
+                return Effect.void
+              return Effect.flatMap(Ref.get(shared.turnEnded), (ended) => ended(event.data.sessionID))
             }),
+            Effect.forkScoped,
           )
           const instance = {
             reload: Effect.all([context.agent.reload(), context.reference.reload()], { discard: true }),
             session: context.session,
+            installed,
           }
-          yield* Ref.update(shared.instances, (all) => [...all, instance])
+          yield* Ref.update(shared.instances, (all) => new Map([...all, [directory, instance]]))
           yield* Effect.addFinalizer(() =>
-            Ref.update(shared.instances, (all) => all.filter((each) => each !== instance)),
+            Ref.update(shared.instances, (all) => new Map([...all].filter((entry) => entry[1] !== instance))),
           )
         }
         const reload = Effect.andThen(integration.reload(), provider.reload())

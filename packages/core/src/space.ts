@@ -82,6 +82,7 @@ export const layer = Layer.effect(
           organizationId: row.space.organization_id,
           name: row.space.name,
           description: row.space.description,
+          brainScope: row.space.brain_scope,
           memberCount: row.memberCount,
           membershipId: row.membershipId,
           agentOrder: row.agentOrder,
@@ -204,7 +205,12 @@ export const layer = Layer.effect(
             }
             const updated = yield* transaction
               .update(Database.Schema.space)
-              .set({ name: input.name, description: input.description, updated_at: sql`now()` })
+              .set({
+                name: input.name,
+                description: input.description,
+                brain_scope: input.brainScope,
+                updated_at: sql`now()`,
+              })
               .where(eq(Database.Schema.space.id, id))
               .returning()
             if (updated.length === 0) return yield* notFound

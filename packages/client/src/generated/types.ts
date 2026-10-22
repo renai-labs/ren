@@ -10,6 +10,8 @@ export type InvitationState = "pending" | "expired" | "accepted" | "unavailable"
 
 export type SpaceID = string
 
+export type BrainScope = "session" | "space"
+
 export type SpaceMembershipID = string
 
 export type SpaceAssignmentID = string
@@ -55,7 +57,11 @@ export type SessionCapabilitiesInfo = {
   files: boolean
 }
 
-export type SessionClientAccess = { url: string; token: string; expiresAt: string }
+export type SessionReadyAccess = { status: "ready"; url: string; token: string; expiresAt: string }
+
+export type SessionStartingAccess = { status: "starting"; phase: string }
+
+export type SessionFailedAccess = { status: "failed"; reason: string }
 
 export type SessionModelVariant = { id: string }
 
@@ -118,6 +124,7 @@ export type SpaceInfo = {
   organizationId: AuthOrganizationID
   name: string
   description: string | null
+  brainScope: BrainScope
   memberCount: number
   membershipId: SpaceMembershipID | null
   agentOrder: Array<string>
@@ -221,6 +228,8 @@ export type SessionInfo = {
   updatedAt: string
   archivedAt: string | null
 }
+
+export type SessionClientAccess = SessionReadyAccess | SessionStartingAccess | SessionFailedAccess
 
 export type SessionModelChoice = { id: string; providerID: string; name: string; variants: Array<SessionModelVariant> }
 
@@ -460,17 +469,26 @@ export type SpaceUpdateInput = {
     readonly agentOrder?: ReadonlyArray<string> | undefined
     readonly name?: string | undefined
     readonly description?: string | null | undefined
+    readonly brainScope?: ("session" | "space") | undefined
   }["agentOrder"]
   readonly name?: {
     readonly agentOrder?: ReadonlyArray<string> | undefined
     readonly name?: string | undefined
     readonly description?: string | null | undefined
+    readonly brainScope?: ("session" | "space") | undefined
   }["name"]
   readonly description?: {
     readonly agentOrder?: ReadonlyArray<string> | undefined
     readonly name?: string | undefined
     readonly description?: string | null | undefined
+    readonly brainScope?: ("session" | "space") | undefined
   }["description"]
+  readonly brainScope?: {
+    readonly agentOrder?: ReadonlyArray<string> | undefined
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
+    readonly brainScope?: ("session" | "space") | undefined
+  }["brainScope"]
 }
 
 export type SpaceUpdateOutput = SpaceInfo

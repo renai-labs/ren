@@ -2,7 +2,7 @@ export * as ExecutorAdapter from "./executor.js"
 
 import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { EnvironmentToken } from "@ren/environment-api/environment-token"
-import { Signature } from "@ren/environment-api/signature"
+import { Signature } from "@ren/schema/signature"
 import { Image, TestEnvironment } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"

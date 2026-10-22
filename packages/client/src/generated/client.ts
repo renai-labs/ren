@@ -258,7 +258,12 @@ export function make(options: ClientOptions) {
           {
             method: "PATCH",
             path: `/spaces/${encodeURIComponent(input.id)}`,
-            body: { agentOrder: input["agentOrder"], name: input["name"], description: input["description"] },
+            body: {
+              agentOrder: input["agentOrder"],
+              name: input["name"],
+              description: input["description"],
+              brainScope: input["brainScope"],
+            },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,

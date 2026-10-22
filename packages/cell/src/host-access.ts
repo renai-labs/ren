@@ -17,21 +17,14 @@ export const layer = Layer.effect(
     const host = yield* HostToken.client(info.vars.REN_URL)
     const withHostToken = Effect.fnUntraced(function* (sessionId: Session.ID) {
       const unavailable = (message: string) => new EnvironmentAccess.Unavailable({ sessionId, message })
-      if (sessionId !== info.sessionId)
-        return yield* unavailable(`This cell holds session ${info.sessionId}, not ${sessionId}`)
       const token = yield* hostToken.current
       if (Option.isNone(token)) return yield* unavailable("the cell has no valid host token")
       return { token: token.value, unavailable }
     })
     return EnvironmentAccess.Service.of({
       open: Effect.fn("HostAccess.open")(function* (sessionId) {
-        if (sessionId !== info.sessionId)
-          return yield* new EnvironmentAccess.NotFound({
-            sessionId,
-            message: `This cell holds session ${info.sessionId}, not ${sessionId}`,
-          })
         const presented = yield* withHostToken(sessionId)
-        return yield* host.environments["environments.access"]().pipe(
+        return yield* host.environments["environments.access"]({ params: { id: sessionId } }).pipe(
           HostToken.withToken(presented.token),
           Effect.timeout(HostToken.renAnswersWithin),
           Effect.catchTag("EnvironmentNotFoundError", (error) =>
@@ -51,7 +44,7 @@ export const layer = Layer.effect(
       }),
       release: Effect.fn("HostAccess.release")(function* (sessionId) {
         const presented = yield* withHostToken(sessionId)
-        return yield* host.environments["environments.release"]().pipe(
+        return yield* host.environments["environments.release"]({ params: { id: sessionId } }).pipe(
           HostToken.withToken(presented.token),
           Effect.timeout(HostToken.renAnswersWithin),
           Effect.mapError((error) => presented.unavailable(error.message)),

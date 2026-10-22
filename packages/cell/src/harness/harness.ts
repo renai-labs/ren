@@ -1,6 +1,7 @@
 export * as Harness from "./harness.js"
 
 import type { StartBody } from "@ren/host-api/brain-api"
+import type { PullChat } from "@ren/host-api/ren-host-api"
 import type { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from "@ren/host-api/errors"
 import type { Form } from "@ren/schema/form"
 import type { Models } from "@ren/schema/models"
@@ -20,6 +21,7 @@ import type { Reconcile } from "../reconcile.js"
 
 interface SessionState extends Reconcile.Snapshot {
   readonly id: string
+  readonly progress: string
   readonly resend: (id: string) => Effect.Effect<void>
   readonly wait: (ms: number) => Effect.Effect<void>
   readonly interrupt: Effect.Effect<void>
@@ -141,6 +143,11 @@ export interface Instance {
     model: Option.Option<Session.Model>,
   ) => Effect.Effect<void, BrainRejectedError | SessionNotStartedError>
   readonly sessions: Effect.Effect<ReadonlyArray<SessionState>>
+  readonly applySettings: (chats: ReadonlyArray<PullChat>) => Effect.Effect<void>
+  readonly onTurn: (hooks: {
+    readonly started: (sessionId: string) => Effect.Effect<void>
+    readonly ended: (sessionId: string) => Effect.Effect<void>
+  }) => Effect.Effect<void>
 }
 
 export interface Interface {

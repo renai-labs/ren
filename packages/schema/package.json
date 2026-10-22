@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "effect": "catalog:",
+    "jose": "catalog:",
     "ulid": "catalog:"
   },
   "devDependencies": {

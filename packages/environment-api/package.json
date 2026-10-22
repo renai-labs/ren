@@ -9,14 +9,12 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "keys": "bun run script/keys.ts",
     "test": "bun test --only-failures",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "@ren/schema": "workspace:*",
-    "effect": "catalog:",
-    "jose": "catalog:"
+    "effect": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

@@ -4,17 +4,18 @@ import { AbsolutePath, Agent, Session, SessionMessage } from "@opencode/client/e
 import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
-import type { BrainSettings } from "@ren/brain/settings"
 import type { SessionCreateInput, SessionListInput, SessionUpdateInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from "@ren/host-api/errors"
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
+import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
-import { Clock, Effect, Layer, Option, Semaphore, Stream, Struct } from "effect"
+import { Clock, DateTime, Effect, Layer, Option, Ref, type Scope, Semaphore, Stream, Struct } from "effect"
+import { mkdir } from "node:fs/promises"
 import { Cell } from "../../cell.js"
+import { ChatSettings } from "../../chat-settings.js"
 import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
-import { SettingsHost } from "../../settings-host.js"
 import { Sync } from "../../sync.js"
 import { Harness } from "../harness.js"
 import { OpenCodeChat } from "./chat.js"
@@ -34,7 +35,15 @@ const environmentInstructionKey = "ren.environment"
 const notSupported = (sessionId: string) =>
   new BrainRejectedError({ message: `Session ${sessionId} cannot change its environment: not supported yet` })
 
-const environmentInstructions = (server: OpenCodeServer.Instance, environmentDirectory: Option.Option<string>) => {
+const environmentInstructions = (
+  server: OpenCodeServer.Instance,
+  environmentDirectory: Option.Option<string>,
+  directory: string,
+) => {
+  if (server.nativeTools && Option.isNone(environmentDirectory))
+    return {
+      [environmentInstructionKey]: `Your file and shell tools run on this machine. Work in ${directory}; other chats may share the machine.`,
+    }
   if (Option.isSome(environmentDirectory))
     return {
       [environmentInstructionKey]: `Your file and shell tools run on a separate machine, in ${environmentDirectory.value}. You have full access to that machine.`,
@@ -69,7 +78,7 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
   if (
     model &&
     !(yield* client.model.list().pipe(Effect.orDie)).data.some(
-      (item) => item.providerID === model.endpointId && item.modelID === model.modelId,
+      (item) => item.providerID === model.endpointId && item.id === model.modelId,
     )
   )
     return yield* new BrainRejectedError({ message: `Unknown model: ${model.endpointId}/${model.modelId}` })
@@ -129,17 +138,44 @@ const overrideOf = (session: Option.Option<Session.Info>, start: Model | null) =
   return saved && JSON.stringify(saved.start) === JSON.stringify(start) ? saved.model : start
 }
 
+const lookupOf = (client: OpenCodeClient) =>
+  client.model.list().pipe(
+    Effect.orDie,
+    Effect.map(
+      (page) => (model: Model) =>
+        Option.fromUndefinedOr(
+          page.data.find((item) => item.providerID === model.endpointId && item.id === model.modelId),
+        ).pipe(Option.map((item) => ({ variants: item.variants.map((variant) => variant.id) }))),
+    ),
+  )
+
 const resolve = (
   client: OpenCodeClient,
-  server: OpenCodeServer.Instance,
-  session: { readonly sessionId: Session.ID; readonly interactive: boolean },
+  settings: Option.Option<ChatSettings.Interface>,
+  sessionId: Session.ID,
   override: Model | null,
 ) =>
-  Option.match(server.settings, {
+  Option.match(settings, {
     onNone: () => rejectUnknownModel(client, override ?? undefined).pipe(Effect.as(undefined)),
-    onSome: (settings) =>
-      settings.configure({ ...session, model: Option.fromNullishOr(override) }).pipe(Effect.mapError(rejected)),
+    onSome: (chats) =>
+      lookupOf(client).pipe(
+        Effect.flatMap((lookup) => chats.resolve(sessionId, Option.fromNullishOr(override), lookup)),
+        Effect.mapError(rejected),
+      ),
   })
+
+const remember = Effect.fnUntraced(function* (
+  server: OpenCodeServer.Instance,
+  settings: Option.Option<ChatSettings.Interface>,
+  sessionId: string,
+  chat: RenPlugin.Chat | undefined,
+  options: { readonly install: boolean },
+) {
+  if (!chat || Option.isNone(server.chats)) return
+  yield* Ref.update(server.chats.value.latest, (all) => new Map([...all, [sessionId, chat]]))
+  if (Option.isSome(settings)) yield* settings.value.keep(sessionId, chat)
+  if (options.install) yield* server.chats.value.install(sessionId)
+})
 
 const update = Effect.fnUntraced(function* (
   client: OpenCodeClient,
@@ -159,14 +195,16 @@ const update = Effect.fnUntraced(function* (
 const start = Effect.fn("OpenCodeHarness.start")(function* (
   client: OpenCodeClient,
   server: OpenCodeServer.Instance,
+  settings: Option.Option<ChatSettings.Interface>,
   input: StartBody,
-  directory: AbsolutePath,
 ) {
   const sessionID = Session.ID.make(input.sessionId)
+  const directory = AbsolutePath.make(server.directoryOf(input.sessionId))
+  if (server.nativeTools) yield* Effect.promise(() => mkdir(directory, { recursive: true }))
   const session = yield* findSession(client, sessionID)
   const start = input.model ?? null
   const override = overrideOf(session, start)
-  const resolved = yield* resolve(client, server, { sessionId: sessionID, interactive: input.interactive }, override)
+  const resolved = yield* resolve(client, settings, sessionID, override)
   const agent = resolved && Agent.ID.make(resolved.primary.name)
   const chosen = resolved?.primary.model ?? override ?? undefined
   const model = chosen && RenPlugin.modelRef(chosen)
@@ -188,9 +226,12 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
     })
   if (Option.isSome(session))
     yield* update(client, session.value, { title: input.title, permissions, metadata }, { agent, model: chosen })
+  yield* remember(server, settings, input.sessionId, resolved && { resolved, interactive: input.interactive }, {
+    install: true,
+  })
   const changes = InstructionEntries.changes(
     yield* client.session.instructions.entry.list({ sessionID }).pipe(Effect.orDie),
-    environmentInstructions(server, environmentDirectory),
+    environmentInstructions(server, environmentDirectory, directory),
   )
   yield* Effect.forEach(
     changes.put,
@@ -236,43 +277,57 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
   return { messageId: input.messageId }
 })
 
-const open = Effect.fn("OpenCodeHarness.open")(function* (
-  storage: DurableObjectStorage,
-  config: string,
+type Opener = (
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
-  settings: Option.Option<Pick<BrainSettings.Host, "read">>,
-) {
-  return yield* make(
-    yield* OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, settings),
-    endpoints,
-  )
-})
+  config: string,
+  settings: Option.Option<ChatSettings.Interface>,
+) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
 
-export const layer = (storage: DurableObjectStorage) =>
+const layerWith = (opener: Opener) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const cell = yield* Cell.Info
       const store = yield* ModelStore.Service
       const refreshKey = yield* ModelRefresh.Service
       const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
-      const settings = yield* Effect.serviceOption(SettingsHost.Service)
+      const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
       return Harness.layer(
         store.read.pipe(
           Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
           Effect.flatMap((endpoints) =>
-            open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey, connections, settings),
+            opener(endpoints, refreshKey, connections, cell.vars.OPENCODE_CONFIG, settings).pipe(
+              Effect.flatMap((server) => make(server, endpoints, settings)),
+            ),
           ),
         ),
       )
     }),
   )
 
+export const layer = (storage: DurableObjectStorage) =>
+  layerWith((endpoints, refreshKey, connections, config, settings) =>
+    OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, {
+      saved: Option.map(settings, (each) => each.saved),
+      nativeTools: false,
+      directoryOf: (sessionId) => `/workspace/${sessionId}`,
+    }),
+  )
+
+export const layerProcess = (database: string, workspace: string) =>
+  layerWith((endpoints, refreshKey, _connections, config, settings) =>
+    OpenCodeServer.openProcess(database, config, endpoints, refreshKey, {
+      saved: Option.map(settings, (each) => each.saved),
+      nativeTools: true,
+      directoryOf: (sessionId) => `${workspace}/${sessionId}`,
+    }),
+  )
+
 export const make = Effect.fn("OpenCodeHarness.make")(function* (
   server: OpenCodeServer.Instance,
   endpoints: ReadonlyArray<Models.Endpoint>,
-  directory: AbsolutePath = AbsolutePath.make("/workspace"),
+  settings: Option.Option<ChatSettings.Interface> = Option.none(),
 ) {
   const client = server.client
   const state = { firstAskedAt: new Map<string, number>() }
@@ -296,7 +351,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               .restore({
                 sessionId: input.sessionId,
                 exists: (id) => findSession(client, Session.ID.make(id)).pipe(Effect.map(Option.isSome)),
-                create: start(client, server, Struct.omit(input, ["initialMessage"]), directory),
+                create: start(client, server, settings, Struct.omit(input, ["initialMessage"])),
                 import: (data) =>
                   Effect.gen(function* () {
                     const info = OpenCodeRows.session(data.session)
@@ -317,7 +372,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               )
           // oxlint-disable-next-line ren/no-comments -- Phase 5 explicitly defers workspace restoration until OpenCode's import API accepts it.
           // TODO: Restore the ren workspace for sessions with an environment when the import API supports workspace locations.
-          return yield* start(client, server, input, directory)
+          return yield* start(client, server, settings, input)
         }),
       ),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
@@ -329,9 +384,21 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           if (Option.isNone(session))
             return yield* new SessionNotStartedError({ message: `Session ${sessionId} has not been started` })
           const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
-          if (Option.isSome(server.settings))
-            yield* server.settings.value.setModel(model).pipe(Effect.mapError(rejected))
-          if (Option.isNone(server.settings) && Option.isSome(model)) {
+          if (Option.isSome(settings)) {
+            if (Option.isSome(model) && Option.isNone((yield* lookupOf(client))(model.value)))
+              return yield* new BrainRejectedError({
+                message: `Unknown model: ${model.value.endpointId}/${model.value.modelId}`,
+              })
+            const resolved = yield* resolve(client, settings, sessionID, Option.getOrNull(model))
+            yield* remember(
+              server,
+              settings,
+              sessionId,
+              resolved && { resolved, interactive: saved?.interactive ?? true },
+              { install: true },
+            )
+          }
+          if (Option.isNone(settings) && Option.isSome(model)) {
             yield* rejectUnknownModel(client, model.value)
             yield* client.session.switchModel({ sessionID, model: RenPlugin.modelRef(model.value) }).pipe(Effect.orDie)
           }
@@ -347,6 +414,53 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
             .pipe(Effect.orDie)
         }),
       ),
+    applySettings: Effect.fn("OpenCodeHarness.applySettings")(function* (chats: ReadonlyArray<PullChat>) {
+      if (Option.isNone(server.chats) || Option.isNone(settings)) return
+      const lookup = yield* lookupOf(client)
+      const active = new Set(Object.keys(yield* client.session.active().pipe(Effect.orDie)))
+      yield* Effect.forEach(
+        chats,
+        (chat) =>
+          Effect.gen(function* () {
+            const session = yield* findSession(client, Session.ID.make(chat.id))
+            if (Option.isNone(session)) return
+            if (chat.archived) {
+              if (active.has(chat.id))
+                yield* client.session.interrupt({ sessionID: session.value.id }).pipe(Effect.orDie)
+              return
+            }
+            const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
+            const resolved = yield* settings.value.resolve(chat.id, Option.fromNullishOr(saved?.model), lookup).pipe(
+              Effect.tapError((error) => Effect.logWarning(`Chat ${chat.id} keeps its settings: ${error.message}`)),
+              Effect.option,
+            )
+            if (Option.isNone(resolved)) return
+            const chats = server.chats
+            if (Option.isNone(chats)) return
+            yield* Ref.update(
+              chats.value.latest,
+              (all) =>
+                new Map([...all, [chat.id, { resolved: resolved.value, interactive: saved?.interactive ?? true }]]),
+            )
+            if (!active.has(chat.id)) yield* chats.value.install(chat.id)
+          }),
+        { discard: true },
+      )
+    }),
+    onTurn: (hooks) =>
+      Option.match(server.chats, {
+        onNone: () => Effect.void,
+        onSome: (chats) =>
+          Effect.all(
+            [
+              Ref.set(chats.turnStarted, hooks.started),
+              Ref.set(chats.turnEnded, (sessionId) =>
+                chats.install(sessionId).pipe(Effect.andThen(hooks.ended(sessionId))),
+              ),
+            ],
+            { discard: true },
+          ),
+      }),
     sessions: Effect.gen(function* () {
       const roots = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>
         client.session.list({ parentID: null, cursor }).pipe(
@@ -371,6 +485,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           return {
             id: info.id,
             inbox,
+            progress: String(DateTime.toEpochMillis(info.time.updated)),
             unfinished: Option.isSome(lastRelevantMessage) && lastRelevantMessage.value.type !== "idle",
           }
         }),
@@ -385,7 +500,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         ...snapshots,
         ...active
           .filter((id) => !snapshots.some((session) => session.id === id))
-          .map((id) => ({ id, inbox: [], unfinished: false })),
+          .map((id) => ({ id, inbox: [], progress: "", unfinished: false })),
       ].map((session) => {
         const questionAgesMs = forms
           .filter((form) => form.sessionID === session.id)
@@ -393,6 +508,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         return {
           id: session.id,
           active: active.includes(session.id),
+          progress: session.progress,
           unfinished: session.unfinished,
           questionAgeMs: questionAgesMs.reduce<number | undefined>(
             (oldest, ms) => Math.max(oldest ?? ms, ms),

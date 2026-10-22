@@ -3,7 +3,7 @@ export * as EnvironmentToken from "./environment-token.js"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Schema } from "effect"
-import { Signature } from "./signature.js"
+import { Signature } from "@ren/schema/signature"
 
 export interface Claims extends Schema.Schema.Type<typeof Claims> {}
 export const Claims = Schema.Struct({

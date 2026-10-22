@@ -2,6 +2,7 @@ export * as Space from "./space.js"
 
 import { Schema } from "effect"
 import { Auth } from "./auth.js"
+import { Brain } from "./brain.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
@@ -28,6 +29,7 @@ export const Info = Schema.Struct({
   organizationId: Auth.OrganizationID,
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
+  brainScope: Brain.Scope,
   memberCount: Schema.Int,
   membershipId: Schema.NullOr(MembershipID),
   agentOrder: AgentOrder,
@@ -63,6 +65,7 @@ export const UpdateInput = Schema.Struct({
   ),
   name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NullOr(Schema.String)),
+  brainScope: Schema.optional(Brain.Scope),
 }).annotate({ identifier: "Space.UpdateInput" })
 
 export const definition = Primitive.define({

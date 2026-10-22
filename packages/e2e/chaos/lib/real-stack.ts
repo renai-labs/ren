@@ -2,7 +2,7 @@ export * as RealStack from "./real-stack.js"
 
 import { PgClient } from "@effect/sql-pg"
 import { OpenCode } from "@opencode/client"
-import { Signature } from "@ren/environment-api/signature"
+import { Signature } from "@ren/schema/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"

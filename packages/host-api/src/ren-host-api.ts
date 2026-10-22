@@ -1,34 +1,93 @@
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
-import type { Session } from "@ren/schema/session"
+import { Models } from "@ren/schema/models"
+import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
-import { Context } from "effect"
+import { Signature } from "@ren/schema/signature"
+import { Context, Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { Host } from "./host.js"
 import {
   EnvironmentNotFoundError,
   EnvironmentUnavailableError,
   ForbiddenError,
+  GenerationRetiredError,
   ModelsUnavailableError,
+  UnauthorizedError,
 } from "./errors.js"
 
 export class CurrentHost extends Context.Service<
   CurrentHost,
-  { readonly sessionId: Session.ID; readonly organizationId: Auth.OrganizationID }
+  { readonly brainId: Brain.ID; readonly organizationId: Auth.OrganizationID; readonly generation: number }
 >()("@ren/host-api/CurrentHost") {}
 
 export class HostAuthentication extends HttpApiMiddleware.Service<HostAuthentication, { provides: CurrentHost }>()(
   "@ren/host-api/HostAuthentication",
   {
-    error: ForbiddenError,
+    error: [UnauthorizedError, ForbiddenError, GenerationRetiredError],
     security: {
       bearer: HttpApiSecurity.bearer.pipe(
-        HttpApiSecurity.annotate(OpenApi.Description, "The host token that came with the brain's model access."),
+        HttpApiSecurity.annotate(OpenApi.Description, "The brain's host token, signed by Ren."),
       ),
     },
   },
 ) {}
+
+export interface PullSession extends Schema.Schema.Type<typeof PullSession> {}
+export const PullSession = Schema.Struct({
+  id: Session.ID,
+  busy: Schema.Boolean,
+  progress: Schema.String.annotate({
+    description: "An opaque counter from the harness. It changes when a turn makes progress.",
+  }),
+}).annotate({ identifier: "Host.PullSession" })
+
+export interface PullRequest extends Schema.Schema.Type<typeof PullRequest> {}
+export const PullRequest = Schema.Struct({
+  version: Schema.String.annotate({ description: "The brain's version." }),
+  keyIds: Schema.Array(Schema.String).annotate({ description: "The ids of the public keys the brain holds." }),
+  models: Schema.NullOr(Schema.String).annotate({ description: "The models hash the brain has." }),
+  layers: SessionSettings.Known,
+  sessions: Schema.Array(PullSession),
+}).annotate({ identifier: "Host.PullRequest" })
+
+export interface PullModels extends Schema.Schema.Type<typeof PullModels> {}
+export const PullModels = Schema.Struct({
+  hash: Schema.String,
+  access: Schema.optionalKey(Models.Access),
+}).annotate({ identifier: "Host.PullModels" })
+
+export interface PullChat extends Schema.Schema.Type<typeof PullChat> {}
+export const PullChat = Schema.Struct({
+  id: Session.ID,
+  agent: Schema.NullOr(Schema.String).annotate({ description: "The name of the chat's primary agent." }),
+  archived: Schema.Boolean,
+}).annotate({ identifier: "Host.PullChat" })
+
+export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}
+export const PullReply = Schema.Struct({
+  publicKeys: Schema.Array(Signature.PublicKey),
+  models: PullModels,
+  layers: SessionSettings.Layers,
+  chats: Schema.Array(PullChat),
+}).annotate({ identifier: "Host.PullReply" })
+
+const SessionParams = { id: Session.ID }
+
+const PullGroup = HttpApiGroup.make("pull")
+  .add(
+    HttpApiEndpoint.post("pull", "/host/pull", { payload: PullRequest, success: PullReply }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "pull",
+        summary: "Pull a brain's settings and models",
+        description:
+          "Send the hashes the brain has and the state of its chats. The reply sends each settings layer and the models; a body comes only when its hash changed. It lists the brain's chats with their primary agent.",
+      }),
+    ),
+  )
+  .middleware(HostAuthentication)
+  .annotateMerge(OpenApi.annotations({ title: "pull" }))
 
 const ModelsGroup = HttpApiGroup.make("models")
   .add(
@@ -38,8 +97,8 @@ const ModelsGroup = HttpApiGroup.make("models")
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "models.refresh",
-        summary: "Refresh a brain’s models",
-        description: "Grant fresh model access for the brain named by a host token, with a fresh host token.",
+        summary: "Refresh a brain's models",
+        description: "Grant fresh model access for the brain named by a host token.",
       }),
     ),
   )
@@ -48,25 +107,28 @@ const ModelsGroup = HttpApiGroup.make("models")
 
 const EnvironmentsGroup = HttpApiGroup.make("environments")
   .add(
-    HttpApiEndpoint.post("environments.access", "/host/environment/access", {
+    HttpApiEndpoint.post("environments.access", "/host/sessions/:id/environment/access", {
+      params: SessionParams,
       success: Environment.Access,
       error: [EnvironmentNotFoundError, EnvironmentUnavailableError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "environments.access",
-        summary: "Get access to a session’s environment",
+        summary: "Get access to a session's environment",
         description:
-          "Name the environment and directory of the session named by a host token, with a fresh environment token. The request has no session field: the session comes only from the host token.",
+          "Name the environment and directory of a session of the brain, with a fresh environment token. Ren checks that the session belongs to the brain of the host token.",
       }),
     ),
   )
   .add(
-    HttpApiEndpoint.post("environments.release", "/host/environment/release").annotateMerge(
+    HttpApiEndpoint.post("environments.release", "/host/sessions/:id/environment/release", {
+      params: SessionParams,
+    }).annotateMerge(
       OpenApi.annotations({
         identifier: "environments.release",
-        summary: "Release a session’s seat on its environment",
+        summary: "Release a session's seat on its environment",
         description:
-          "Say that the session named by a host token is idle. Its seat stops counting toward its environment’s sessions per environment until its next access; the session keeps its environment.",
+          "Say that a session of the brain is idle. Its seat stops counting toward its environment's sessions per environment until its next access.",
       }),
     ),
   )
@@ -79,40 +141,23 @@ const HostGroup = HttpApiGroup.make("host")
       OpenApi.annotations({
         identifier: "host.refresh",
         summary: "Refresh a host token",
-        description: "Sign a fresh host token for the brain named by a valid host token, without the model flow.",
+        description: "Sign a fresh host token for the brain named by a valid host token.",
       }),
     ),
   )
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "host" }))
 
-const SettingsGroup = HttpApiGroup.make("settings")
-  .add(
-    HttpApiEndpoint.post("settings.read", "/host/settings", {
-      payload: SessionSettings.Known,
-      success: SessionSettings.Layers,
-    }).annotateMerge(
-      OpenApi.annotations({
-        identifier: "settings.read",
-        summary: "Read a session’s settings layers",
-        description:
-          "Return the hash of each settings layer of the session named by a host token: Ren, its organization, its space and its agents. A layer comes with its settings only when its hash differs from the one the brain sent.",
-      }),
-    ),
-  )
-  .middleware(HostAuthentication)
-  .annotateMerge(OpenApi.annotations({ title: "settings" }))
-
 export const RenHostApi = HttpApi.make("host")
+  .add(PullGroup)
   .add(ModelsGroup)
   .add(EnvironmentsGroup)
   .add(HostGroup)
-  .add(SettingsGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren Host API",
       version: "0.0.0",
       description:
-        "Internal API a session host calls with its host token: to refresh its brain’s models, to get access to its session’s environment, to read its session’s settings and to refresh the host token.",
+        "Internal API a brain calls with its host token: to pull its settings and models, to refresh its model keys and host token, and to get access to a session's environment.",
     }),
   )

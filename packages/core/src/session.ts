@@ -79,8 +79,8 @@ export const layer = Layer.effect(
     const brain = yield* BrainHost.Service
     const catalog = yield* Models.Service
 
-    const models = (actor: Actor.Info, id: Session.ID) =>
-      catalog.catalog({ sessionId: id, organizationId: actor.organizationId }).pipe(
+    const models = (actor: Actor.Info, _id: Session.ID) =>
+      catalog.catalog(actor.organizationId).pipe(
         Effect.orDie,
         Effect.map((found) =>
           found.endpoints.flatMap((endpoint) =>
@@ -204,11 +204,14 @@ export const layer = Layer.effect(
                 const existing = yield* sessions.get(input.id).pipe(Effect.orDie)
                 if (existing.createdBy !== actor.userId || existing.spaceId !== input.spaceId)
                   return yield* new Primitive.Conflict({ message: "A session with this ID already exists." })
-                return yield* brain.start(start, { organizationId: actor.organizationId, spaceId: input.spaceId })
+                return yield* brain.start(start, {
+                  organizationId: actor.organizationId,
+                  spaceId: input.spaceId,
+                  brainId: existing.brainId,
+                })
               }),
             ),
             Effect.catchTags({
-              BrainUnavailable: Effect.die,
               BrainRejectedError: Effect.die,
               "SessionRunner.NotFound": Effect.die,
             }),
