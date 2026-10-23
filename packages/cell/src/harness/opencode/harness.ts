@@ -14,8 +14,11 @@ import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
 import { Clock, DateTime, Effect, Layer, Option, Ref, Schema, type Scope, Semaphore, Stream, Struct } from "effect"
 import { mkdir, rm, stat } from "node:fs/promises"
+import opencode from "../../../node_modules/@opencode/core/package.json"
+import { BrainStorage } from "../../brain-storage.js"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
+import { HarnessStorage } from "../../harness-storage.js"
 import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
 import { Harness } from "../harness.js"
@@ -318,6 +321,8 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
   return { messageId: input.messageId }
 })
 
+export const version = opencode.version
+
 type Opener = (
   endpoints: ReadonlyArray<Models.Endpoint>,
   refreshKey: Harness.Refresh,
@@ -334,8 +339,13 @@ const layerWith = (opener: Opener) =>
       const refreshKey = yield* ModelRefresh.Service
       const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
       const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
+      const prepare = HarnessStorage.prepare(version).pipe(
+        Effect.provideService(BrainStorage.Service, yield* BrainStorage.Service),
+        Effect.provideService(HarnessStorage.Service, yield* HarnessStorage.Service),
+      )
       return Harness.layer(
-        store.read.pipe(
+        prepare.pipe(
+          Effect.andThen(store.read),
           Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
           Effect.flatMap((endpoints) =>
             opener(endpoints, refreshKey, connections, cell.vars.OPENCODE_CONFIG, settings).pipe(
