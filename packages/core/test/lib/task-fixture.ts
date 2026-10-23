@@ -1,7 +1,6 @@
 export * as TaskFixture from "./task-fixture.js"
 
-import { afterAll, beforeAll } from "bun:test"
-import { Shared, TestToken } from "@ren/cell/testing"
+import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Agent } from "@ren/schema/agent"
@@ -9,9 +8,10 @@ import type { Session } from "@ren/schema/session"
 import type { Space as SpaceSchema } from "@ren/schema/space"
 import type { TaskActivity as Activity } from "@ren/schema/task-activity"
 import { and, eq, isNull } from "drizzle-orm"
-import { Effect, Layer, ManagedRuntime } from "effect"
+import { Effect, Layer } from "effect"
 import { Access } from "../../src/access.js"
 import type { Actor } from "../../src/actor.js"
+import { BrainRegistry } from "../../src/brain-registry.js"
 import { Label } from "../../src/label.js"
 import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
@@ -24,37 +24,25 @@ import { testEffect } from "./effect.js"
 import { Host } from "./host.js"
 import { Seed } from "./seed.js"
 
-const configured = Shared.access({ stub: Shared.apiKey("sk-configured") })
-
-const models = Layer.succeed(
-  Models.Service,
-  Models.Service.of({
-    catalog: () => Effect.succeed(Models.catalog(configured)),
-    grant: () => Effect.succeed(configured),
-    refreshIfDue: () => Effect.succeedNone,
-    revoke: () => Effect.void,
-  }),
-)
-
 export const harness = () => {
-  const runtime = ManagedRuntime.make(Shared.layer)
-  const settings = { CELL_URL: "", CELL_KEYS: TestToken.vars.CELL_KEYS }
-  beforeAll(async () => {
-    settings.CELL_URL = (await runtime.runPromise(Shared.Service)).url
-  }, 120_000)
-  afterAll(() => runtime.dispose())
+  const stub = Shared.stub()
+  const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.url)
+  const models = Layer.succeed(
+    Models.Service,
+    Models.Service.of({
+      catalog: () => Effect.succeed(Models.catalog(configured)),
+      grant: () => Effect.succeed(configured),
+    }),
+  )
   return {
-    stub: Shared.stub(),
+    stub,
     it: testEffect(
-      Layer.unwrap(
-        Effect.sync(() =>
-          Layer.mergeAll(Task.layer, TaskComment.layer, TaskActivity.layer, Label.layer).pipe(
-            Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, SessionRunner.layer)),
-            Layer.provideMerge(Host.layer(settings, models)),
-            Layer.provideMerge(Access.layer),
-            Layer.provideMerge(Testing.layer),
-          ),
-        ),
+      Layer.mergeAll(Task.layer, TaskComment.layer, TaskActivity.layer, Label.layer).pipe(
+        Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer, SessionRunner.layer)),
+        Layer.provideMerge(BrainRegistry.layer),
+        Layer.provideMerge(Host.layer({}, models)),
+        Layer.provideMerge(Access.layer),
+        Layer.provideMerge(Testing.layer),
       ),
     ),
   }
