@@ -213,6 +213,53 @@ test("a prompt sent while the brain's URL fails stays pending and is sent once w
     }),
   ))
 
+test("while access is starting the history comes from Ren, a page that is too large is asked again smaller, and at ready the brain's history shows each message once (E108, E111)", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const first = yield* open(brain)
+      yield* first.open(brain.id)
+      yield* first.prompt({ text: stub.script().marker })
+      const done = yield* until(first.state, settled(brain.id))
+      const expected = ChatState.messages(done, brain.id).map((message) => message.id)
+      const ready = { value: false }
+      const limits: Array<number> = []
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () =>
+          Effect.sync(() =>
+            ready.value
+              ? {
+                  status: "ready" as const,
+                  url: "http://cell",
+                  token: "a-client-token",
+                  expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+                }
+              : { status: "starting" as const, phase: "waking" },
+          ),
+        saved: (query) =>
+          Effect.suspend(() => {
+            limits.push(query.limit)
+            if (query.limit > 25) return Effect.fail({ _tag: "TooLargeError", message: "The page is too large" })
+            return brain.chat.session["session.messages"]({
+              params: { sessionID: brain.id },
+              query: { limit: query.limit },
+            })
+          }),
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(http(brain)))
+      yield* chat.open(brain.id).pipe(Effect.forkChild)
+      const saved = yield* until(chat.state, (state) => ChatState.messages(state, brain.id).length > 0)
+      expect(limits).toEqual([100, 50, 25])
+      expect(ChatState.messages(saved, brain.id).map((message) => message.id)).toEqual(expected)
+      ready.value = true
+      yield* until(chat.status, (status) => status === "connected")
+      const live = yield* until(chat.state, settled(brain.id))
+      expect(ChatState.messages(live, brain.id).map((message) => message.id)).toEqual(expected)
+    }),
+  ))
+
 test("after the connection parks, a history read asks for access before any request to the old URL", () =>
   live(
     Effect.gen(function* () {

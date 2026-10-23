@@ -38,6 +38,10 @@ export interface Options<R, ER> {
     sessionID: Session.ID,
     input: { readonly unreachable: boolean },
   ) => Effect.Effect<Session.ClientAccess, unknown, R>
+  readonly saved?: (
+    sessionID: Session.ID,
+    query: { readonly limit: number },
+  ) => Effect.Effect<SessionMessage.Page, unknown, R>
   readonly sender?: SessionMessage.Sender
   readonly detail?: TimelineDetail.Detail
   readonly lifecycle?: (listener: (event: Lifecycle) => void) => () => void
@@ -78,10 +82,14 @@ export const make = <R, ER>(options: Options<R, ER>) => {
         Effect.gen(function* () {
           const context = yield* Effect.context<R>()
           const handed = handoffs.get(sessionID)
+          const saved = options.saved
           handoffs.delete(sessionID)
           const opened = yield* ChatSession.make({
             sessionID,
             access: (input) => options.access(sessionID, input).pipe(Effect.provide(context)),
+            ...(saved && {
+              saved: (query: { readonly limit: number }) => saved(sessionID, query).pipe(Effect.provide(context)),
+            }),
             ...(options.sender && { sender: options.sender }),
             ...(handed && { handoff: handed }),
           })
