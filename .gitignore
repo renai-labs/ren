@@ -39,3 +39,6 @@ test-results/
 # Staged E2B brain template context
 packages/cell/e2b/ren/
 packages/cell/e2b/ren.tar.gz
+
+# Local notes, never committed
+specs/ren-v1-hld/
