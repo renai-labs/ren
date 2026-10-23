@@ -34,7 +34,7 @@ export const make = Effect.fn("SyncClient.make")(function* (url: string, token: 
       sync["sync.commit"]({ params: upload, payload: input }).pipe(Effect.mapError(remoteError)),
     restore: (sessionId) =>
       sync["sync.restore"]({ payload: { sessionId } }).pipe(
-        Effect.map((body) => body.sessions),
+        Effect.map((body) => body.chats),
         Effect.mapError(remoteError),
       ),
     messages: (id, after, limit) =>

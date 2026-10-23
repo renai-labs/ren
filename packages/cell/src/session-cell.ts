@@ -8,10 +8,12 @@ import { ChatSettings } from "./chat-settings.js"
 import { OpenCodeHarness } from "./harness/opencode/harness.js"
 import { HostAccess } from "./host-access.js"
 import { HotReload } from "./hot-reload.js"
+import { Restore } from "./restore.js"
 
 export class SessionCell extends DurableObject {
   readonly runtime = ManagedRuntime.make(
     Layer.mergeAll(Brain.layer, Chat.layer).pipe(
+      Layer.provideMerge(Restore.layer),
       Layer.provideMerge(HotReload.layer),
       Layer.provideMerge(OpenCodeHarness.layer(this.ctx.storage).pipe(Layer.provide(HostAccess.connections))),
       Layer.provideMerge(Layer.mergeAll(ChatSettings.layer, BrainKeys.layer)),

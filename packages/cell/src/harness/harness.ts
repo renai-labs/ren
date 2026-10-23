@@ -15,6 +15,7 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
+import type { Sync } from "@ren/schema/sync"
 import { Context, Effect, Exit, Layer, type Option, Schema, Scope, type Stream } from "effect"
 import { Lease } from "../lease.js"
 import type { Reconcile } from "../reconcile.js"
@@ -130,8 +131,20 @@ export interface Chat {
   readonly removeShell: (sessionId: Session.ID, shellId: Shell.ID) => Effect.Effect<void, NotFound>
 }
 
+// oxlint-disable-next-line ren/no-comments -- What brain core needs from a harness to bring a chat back from Ren (piece E). Rows are the harness's own; only its adapter reads them.
+export interface Transcript {
+  readonly has: (chat: Session.ID) => Effect.Effect<boolean>
+  readonly start: (input: Session.StartInput) => Effect.Effect<void, BrainRejectedError>
+  readonly restore: (data: {
+    readonly chat: Sync.RestoredChat
+    readonly session: Sync.OpenCodeSessionRow
+    readonly messages: ReadonlyArray<Sync.OpenCodeMessageRow>
+  }) => Effect.Effect<void>
+}
+
 export interface Instance {
   readonly chat: Chat
+  readonly transcript: Transcript
   readonly fetch: (request: Request) => Promise<Response>
   readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>
   readonly start: (input: StartBody) => Effect.Effect<Session.Started, BrainRejectedError | SyncUnavailableError>

@@ -6,8 +6,8 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
-import { asc, eq } from "drizzle-orm"
-import { Deferred, Effect, Fiber, Layer, Schedule } from "effect"
+import { and, asc, eq, isNotNull } from "drizzle-orm"
+import { Deferred, Effect, Fiber, Layer, Schedule, Struct } from "effect"
 import { SqlClient } from "effect/sql"
 import { SessionSync } from "../src/session-sync.js"
 import { testEffect } from "./lib/effect.js"
@@ -33,11 +33,22 @@ const stored = Effect.fnUntraced(function* (sessionId: Session.ID) {
       .select()
       .from(Database.Schema.opencode_session)
       .where(eq(Database.Schema.opencode_session.session_id, sessionId))).at(0),
-    messages: yield* database.db
+    messages: (yield* database.db
       .select()
       .from(Database.Schema.opencode_message)
       .where(eq(Database.Schema.opencode_message.session_id, sessionId))
-      .orderBy(asc(Database.Schema.opencode_message.seq), asc(Database.Schema.opencode_message.id)),
+      .orderBy(asc(Database.Schema.opencode_message.seq), asc(Database.Schema.opencode_message.id))).map(
+      (row): Sync.OpenCodeMessageRow => Struct.omit(row, ["removed_at"]),
+    ),
+    removed: (yield* database.db
+      .select({ id: Database.Schema.opencode_message.id })
+      .from(Database.Schema.opencode_message)
+      .where(
+        and(
+          eq(Database.Schema.opencode_message.session_id, sessionId),
+          isNotNull(Database.Schema.opencode_message.removed_at),
+        ),
+      )).map((row) => row.id),
   }
 })
 
@@ -83,7 +94,7 @@ const pages = (
   )
 
 describe("SessionSync", () => {
-  it.live("a pass replaces the Ren copy, so edited rows change and rows it did not send are deleted", () =>
+  it.live("a pass replaces the Ren copy, so edited rows change and rows it did not send are marked removed", () =>
     Effect.gen(function* () {
       const sync = yield* SessionSync.Service
       const { host, rootId } = yield* tree()
@@ -102,8 +113,8 @@ describe("SessionSync", () => {
         time_updated: SyncFixture.now + 9,
       })
       yield* SyncFixture.pass(host, row, 40, [edited, idle])
-      expect((yield* stored(rootId)).messages).toEqual([edited, idle])
-      expect(yield* sync.restore(host, rootId)).toEqual([row])
+      expect(yield* stored(rootId)).toMatchObject({ messages: [edited, reply, idle], removed: [reply.id] })
+      expect((yield* sync.restore(host, rootId)).map((chat) => chat.session)).toEqual([row])
     }),
   )
 
@@ -184,7 +195,7 @@ describe("SessionSync", () => {
       yield* Effect.raceFirst(Fiber.await(restore).pipe(Effect.asVoid), blocked(2))
       yield* release
       yield* Fiber.join(commit)
-      expect(yield* Fiber.join(restore)).toEqual([row])
+      expect((yield* Fiber.join(restore)).map((chat) => chat.session)).toEqual([row])
     }),
   )
 
@@ -205,7 +216,7 @@ describe("SessionSync", () => {
       )
       yield* Effect.raceFirst(Fiber.await(commit).pipe(Effect.asVoid), blocked(2))
       yield* release
-      expect(yield* Fiber.join(restore)).toEqual([])
+      expect((yield* Fiber.join(restore)).map((chat) => chat.session)).toEqual([null])
       expect(yield* Fiber.join(commit)).toBeInstanceOf(StaleUploadError)
       expect((yield* stored(rootId)).opencode).toBeUndefined()
     }),
@@ -375,6 +386,44 @@ describe("SessionSync", () => {
     }),
   )
 
+  it.live(
+    "restore of one chat of a space brain returns its group only, parents first, and leaves another chat's checkpoint",
+    () =>
+      Effect.gen(function* () {
+        const sync = yield* SessionSync.Service
+        const owner = yield* Seed.owner()
+        const brainId = Brain.ID.create()
+        const first = yield* Seed.session({ ...owner, brainId })
+        const second = yield* Seed.session({ ...owner, brainId })
+        const child = Session.ID.create()
+        const host = { brainId, organizationId: owner.organizationId, generation: 1 }
+        yield* SyncFixture.pass(host, SyncFixture.session(first), 4, [])
+        yield* SyncFixture.pass(host, SyncFixture.session(child, { parent_id: first }), 3, [])
+        yield* SyncFixture.pass(host, SyncFixture.session(second), 5, [])
+        expect((yield* sync.restore(host, child)).map((row) => row.id)).toEqual([first, child])
+        expect(
+          Object.fromEntries((yield* sync.checkpoints(host)).map((checkpoint) => [checkpoint.id, checkpoint.syncSeq])),
+        ).toEqual({ [first]: null, [child]: null, [second]: 5 })
+      }),
+  )
+
+  it.live(
+    "a commit without a message marks it removed and keeps its row; restore skips it; a later upload brings it back",
+    () =>
+      Effect.gen(function* () {
+        const { host, rootId } = yield* tree()
+        const kept = SyncFixture.message(rootId, "msg_1", 2)
+        const dropped = SyncFixture.message(rootId, "msg_2", 3)
+        yield* SyncFixture.pass(host, SyncFixture.session(rootId), 5, [kept, dropped])
+        yield* SyncFixture.pass(host, SyncFixture.session(rootId), 6, [kept])
+        expect(yield* stored(rootId)).toMatchObject({ messages: [kept, dropped], removed: ["msg_2"] })
+        expect((yield* pages(host, rootId)).map((row) => row.id)).toEqual(["msg_1"])
+        yield* SyncFixture.pass(host, SyncFixture.session(rootId), 7, [kept, dropped])
+        expect(yield* stored(rootId)).toMatchObject({ messages: [kept, dropped], removed: [] })
+        expect((yield* pages(host, rootId)).map((row) => row.id)).toEqual(["msg_1", "msg_2"])
+      }),
+  )
+
   it.live("a row is the same after an upload and a restore read: JSON text, bigint times and real values", () =>
     Effect.gen(function* () {
       const sync = yield* SessionSync.Service
@@ -392,7 +441,7 @@ describe("SessionSync", () => {
       })
       const message = SyncFixture.message(rootId, "msg_1", 2 ** 40, { data: json })
       yield* SyncFixture.pass(host, row, 2 ** 40, [message])
-      expect(yield* sync.restore(host, rootId)).toEqual([row])
+      expect((yield* sync.restore(host, rootId)).map((chat) => chat.session)).toEqual([row])
       expect(yield* pages(host, rootId)).toEqual([message])
     }),
   )
@@ -414,7 +463,7 @@ describe("SessionSync", () => {
             .set({ created_at: new Date(index * 1000) })
             .where(eq(Database.Schema.agent_session.id, row.id)),
         )
-        expect(yield* sync.restore(host, rootId)).toEqual([root, child, grandchild])
+        expect((yield* sync.restore(host, rootId)).map((chat) => chat.session)).toEqual([root, child, grandchild])
       }),
   )
 })

@@ -3,7 +3,7 @@ export * as OpenCodeStore from "./opencode-store.js"
 import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
-import { and, asc, eq, getColumns, inArray, sql } from "drizzle-orm"
+import { and, asc, eq, getColumns, inArray, isNull, sql } from "drizzle-orm"
 import type { PgTable } from "drizzle-orm/pg-core"
 import { Effect, Record, Struct } from "effect"
 
@@ -57,10 +57,12 @@ export const keepMessages = Effect.fnUntraced(function* (
   ids: ReadonlyArray<string>,
 ) {
   yield* transaction
-    .delete(Database.Schema.opencode_message)
+    .update(Database.Schema.opencode_message)
+    .set({ removed_at: sql`now()` })
     .where(
       and(
         eq(Database.Schema.opencode_message.session_id, sessionId),
+        isNull(Database.Schema.opencode_message.removed_at),
         ids.length > 0 ? sql`${Database.Schema.opencode_message.id} <> all(${sql.param(ids)}::text[])` : undefined,
       ),
     )
@@ -90,11 +92,12 @@ export const messages = (
   limit: number,
 ) =>
   transaction
-    .select()
+    .select(Struct.omit(getColumns(Database.Schema.opencode_message), ["removed_at"]))
     .from(Database.Schema.opencode_message)
     .where(
       and(
         eq(Database.Schema.opencode_message.session_id, sessionId),
+        isNull(Database.Schema.opencode_message.removed_at),
         after &&
           sql`(${Database.Schema.opencode_message.seq}, ${Database.Schema.opencode_message.id}) > (${after.seq}, ${after.id})`,
       ),

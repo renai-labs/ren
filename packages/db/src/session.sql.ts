@@ -53,7 +53,10 @@ export const agent_session = pgTable(
       .notNull()
       .references(() => brain.id, { onDelete: "cascade" }),
     harness: text().$type<Session.Harness>().notNull(),
-    start_input: jsonb().$type<Omit<typeof Session.StartInput.Encoded, "initialMessage">>(),
+    start_input: jsonb().$type<typeof Session.StartInput.Encoded>(),
+    harness_version: text(),
+    revert_message_id: text(),
+    files_reset_at: timestamp(),
     sync_seq: bigint({ mode: "number" }),
     sync_upload: integer().notNull().default(0),
     sync_upload_open: boolean().notNull().default(false),
@@ -113,6 +116,7 @@ export const opencode_message = pgTable(
     type: text().notNull(),
     seq: bigint({ mode: "number" }).notNull(),
     data: text().notNull(),
+    removed_at: timestamp(),
   },
   (table) => [
     primaryKey({ columns: [table.session_id, table.id] }),

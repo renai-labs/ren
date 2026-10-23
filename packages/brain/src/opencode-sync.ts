@@ -43,7 +43,7 @@ export interface Remote {
       readonly ids: ReadonlyArray<string>
     },
   ) => Effect.Effect<void, RemoteError>
-  readonly restore: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Sync.OpenCodeSessionRow>, RemoteError>
+  readonly restore: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Sync.RestoredChat>, RemoteError>
   readonly messages: (id: Session.ID, after: Sync.Cursor | null, limit: number) => Effect.Effect<Page, RemoteError>
 }
 
@@ -74,8 +74,9 @@ export interface Interface {
 export interface Restore<E = never, R = never> {
   readonly sessionId: Session.ID
   readonly exists: (id: Session.ID) => Effect.Effect<boolean, E, R>
-  readonly create: Effect.Effect<unknown, E, R>
+  readonly start: (input: Session.StartInput) => Effect.Effect<unknown, E, R>
   readonly import: (data: {
+    readonly chat: Sync.RestoredChat
     readonly session: Sync.OpenCodeSessionRow
     readonly messages: ReadonlyArray<Sync.OpenCodeMessageRow>
   }) => Effect.Effect<unknown, E, R>
@@ -275,13 +276,7 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
       const parent = parents.get(id)
       return parent && parents.has(parent) ? depth(parent) + 1 : 0
     }
-    // oxlint-disable-next-line ren/no-comments -- A local copy older than Ren's would replace Ren's newer one (E90): such a chat is flagged for restore, not uploaded.
-    const older = local.filter((session) => {
-      const seq = checkpoints.get(session.id)?.syncSeq
-      return typeof seq === "number" && session.seq < seq
-    })
-    yield* Effect.forEach(older, (session) => options.mark(session.id, { isRestoring: true }), { discard: true })
-    const skipped = new Set([...restoring, ...older.map((session) => session.id)])
+    const skipped = new Set(restoring)
     const isSkipped = (id: Session.ID): boolean => {
       if (skipped.has(id)) return true
       const parent = parents.get(id)
@@ -333,36 +328,41 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
     restore: (input) =>
       running.withPermit(
         Effect.gen(function* () {
-          if (!(yield* options.restoring).has(input.sessionId) && (yield* input.exists(input.sessionId))) return
-          const tree = yield* remote
+          const restoring = yield* options.restoring
+          if (!restoring.has(input.sessionId) && (yield* input.exists(input.sessionId))) return
+          const group = yield* remote
             .restore(input.sessionId)
             .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
-          yield* options.mark(input.sessionId, { isRestoring: true })
-          if (!tree.some((row) => row.id === input.sessionId) && !(yield* input.exists(input.sessionId)))
-            yield* input.create
+          const root = group.find((chat) => !chat.parentId)?.id ?? input.sessionId
+          yield* options.mark(root, { isRestoring: true })
           yield* Effect.forEach(
-            tree,
-            (row) =>
+            group,
+            (chat) =>
               Effect.gen(function* () {
-                if (yield* input.exists(row.id)) return
-                if (row.parent_id && !(yield* input.exists(row.parent_id))) {
-                  yield* Effect.logError(`Cannot restore session ${row.id}: parent ${row.parent_id} is missing`)
+                if (yield* input.exists(chat.id)) return
+                if (chat.parentId && !(yield* input.exists(chat.parentId))) {
+                  yield* Effect.logError(`Cannot restore session ${chat.id}: parent ${chat.parentId} is missing`)
+                  return
+                }
+                if (!chat.session) {
+                  if (chat.start) yield* input.start(chat.start)
                   return
                 }
                 const messages: Array<Sync.OpenCodeMessageRow> = []
                 let cursor: Sync.Cursor | null = null
                 do {
                   const page: Page = yield* remote
-                    .messages(row.id, cursor, batchRows)
+                    .messages(chat.id, cursor, batchRows)
                     .pipe(Effect.mapError((error) => new SyncError({ reason: "unavailable", message: error.message })))
                   messages.push(...page.messages)
                   cursor = page.next
                 } while (cursor)
-                yield* input.import({ session: row, messages })
+                yield* input.import({ chat, session: chat.session, messages })
               }),
             { discard: true },
           )
-          yield* options.mark(input.sessionId, { isRestoring: false })
+          yield* options.mark(root, { isRestoring: false })
+          if (root !== input.sessionId) yield* options.mark(input.sessionId, { isRestoring: false })
         }),
       ),
   }

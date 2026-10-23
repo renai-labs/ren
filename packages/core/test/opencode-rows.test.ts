@@ -62,7 +62,7 @@ describe("OpenCode rows in Postgres", () => {
             ],
           },
         })
-        expect(yield* sync.restore(host, rootId)).toEqual([])
+        expect((yield* sync.restore(host, rootId)).map((chat) => chat.session)).toEqual([null])
       }),
   )
 })

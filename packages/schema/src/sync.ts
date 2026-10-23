@@ -49,6 +49,24 @@ export const OpenCodeSessionRow = Schema.Struct({
 })
 export interface OpenCodeSessionRow extends Schema.Schema.Type<typeof OpenCodeSessionRow> {}
 
+export const RestoredChat = Schema.Struct({
+  id: Session.ID,
+  harness: Session.Harness,
+  harnessVersion: Schema.NullOr(Schema.String).annotate({ description: "The harness version of the last upload." }),
+  parentId: Schema.NullOr(Session.ID),
+  revertMessageId: Schema.NullOr(Schema.String).annotate({
+    description: "The first message that a staged revert hides, or null.",
+  }),
+  session: Schema.NullOr(OpenCodeSessionRow).annotate({ description: "Null when the chat has no transcript in Ren." }),
+  start: Schema.optionalKey(Session.StartInput).annotate({
+    description: "Present when the chat has no transcript: the start input, with the first message.",
+  }),
+}).annotate({
+  identifier: "Sync.RestoredChat",
+  description: "One chat of a restored group. Its messages are read page by page with `sync.messages`.",
+})
+export interface RestoredChat extends Schema.Schema.Type<typeof RestoredChat> {}
+
 export const OpenCodeMessageRow = Schema.Struct({
   id: Schema.String,
   session_id: Session.ID,

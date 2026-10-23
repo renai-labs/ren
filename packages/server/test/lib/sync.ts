@@ -8,7 +8,7 @@ import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
-import { eq } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Layer, type Scope, Struct } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
 import { Routes } from "../../src/routes.js"
@@ -79,7 +79,7 @@ export const remote = Effect.fnUntraced(function* (root: Session.ID) {
       Database.Schema.agent_session,
       eq(Database.Schema.agent_session.id, Database.Schema.opencode_message.session_id),
     )
-    .where(eq(Database.Schema.agent_session.root_id, root))
+    .where(and(eq(Database.Schema.agent_session.root_id, root), isNull(Database.Schema.opencode_message.removed_at)))
   return {
     sessions: sortRows(
       sessions.map((row) =>

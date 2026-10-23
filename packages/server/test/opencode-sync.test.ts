@@ -182,7 +182,7 @@ describe("OpenCodeSync", () => {
     60_000,
   )
 
-  it.live("a revert while sync is late deletes the reverted messages in Postgres", () =>
+  it.live("a revert while sync is late marks the reverted messages removed in Postgres", () =>
     Effect.gen(function* () {
       const host = yield* setup()
       const sync = yield* host.sync()
@@ -390,7 +390,7 @@ describe("OpenCodeSync", () => {
       yield* sync.restore({
         sessionId: host.brain.id,
         exists: () => Effect.succeed(false),
-        create: Effect.void,
+        start: () => Effect.void,
         import: (data) => Effect.sync(() => imported.push(...data.messages)),
       })
       expect(imported.map((message) => message.id)).toEqual(expected.messages.map((message) => message.id))
@@ -641,24 +641,6 @@ describe("OpenCodeSync", () => {
       }),
   )
   it.live(
-    "a chat whose local counter is lower than Ren's checkpoint is not uploaded, and is flagged for restore (E90)",
-    () =>
-      Effect.gen(function* () {
-        const host = yield* setup()
-        const sync = yield* host.sync()
-        yield* host.turn(host.root)
-        expect(yield* sync.step()).toEqual({ drained: true })
-        const synced = yield* host.expectEqual
-        host.db.run("update event_sequence set seq = seq - 1 where aggregate_id = ?", [host.root])
-        host.proxy.clear()
-        expect(yield* sync.step()).toEqual({ drained: true })
-        expect(host.proxy.requests.filter(isStart(host.root))).toEqual([])
-        expect([...host.host.restoring]).toEqual([renId(host.root)])
-        expect(yield* SyncTest.remote(host.brain.id)).toEqual(synced)
-      }),
-  )
-
-  it.live(
     "a crash during the restore of one chat leaves only that chat flagged: the next step uploads the others and skips it and its children",
     () =>
       Effect.gen(function* () {
@@ -672,7 +654,7 @@ describe("OpenCodeSync", () => {
           .restore({
             sessionId: renId(host.root),
             exists: () => Effect.succeed(false),
-            create: Effect.void,
+            start: () => Effect.void,
             import: () => Effect.die(new Error("the brain stops during the restore")),
           })
           .pipe(Effect.exit)

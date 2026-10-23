@@ -35,7 +35,7 @@ export const SyncHandler = HttpApiBuilder.group(SyncApi, "sync", (handlers) =>
       )
       .handle("sync.restore", (request) =>
         Effect.gen(function* () {
-          return { sessions: yield* sync.restore(yield* CurrentHost, request.payload.sessionId) }
+          return { chats: yield* sync.restore(yield* CurrentHost, request.payload.sessionId) }
         }),
       )
       .handle("sync.messages", (request) =>

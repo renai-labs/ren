@@ -11,12 +11,12 @@ import { SessionStatus } from "@ren/schema/session/status"
 import { Shell } from "@ren/schema/shell"
 import { Schema, SchemaGetter } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api"
-import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "./errors.js"
+import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError, UnavailableError } from "./errors.js"
 
 const params = { sessionID: Session.ID }
 
 export class ChatAccess extends HttpApiMiddleware.Service<ChatAccess>()("@ren/protocol/chat/ChatAccess", {
-  error: ForbiddenError,
+  error: [ForbiddenError, UnavailableError],
 }) {}
 
 export interface PromptSkill extends Schema.Schema.Type<typeof PromptSkill> {}

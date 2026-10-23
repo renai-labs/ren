@@ -1,7 +1,13 @@
 export * as Chat from "./chat.js"
 
 import { ChatAccess, ChatApi } from "@ren/protocol/chat"
-import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
+import {
+  ConflictError,
+  ForbiddenError,
+  InvalidRequestError,
+  NotFoundError,
+  UnavailableError,
+} from "@ren/protocol/errors"
 import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { Clock, Deferred, Effect, Layer, Option, Predicate, Ref, Result, Schema, Stream } from "effect"
@@ -10,8 +16,9 @@ import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/ht
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
 import { Harness } from "./harness/harness.js"
+import { Restore } from "./restore.js"
 
-type Services = Cell.Info | Cell.Activity | Harness.Service
+type Services = Cell.Info | Cell.Activity | Harness.Service | Restore.Service
 
 const prefix = "/chat"
 
@@ -213,18 +220,36 @@ const harnessed = Effect.map(
 
 const access = Layer.effect(
   ChatAccess,
-  Effect.map(harnessed, (run) =>
-    ChatAccess.of(
+  Effect.gen(function* () {
+    const run = yield* harnessed
+    const restore = yield* Restore.Service
+    return ChatAccess.of(
       Effect.fnUntraced(function* (httpEffect) {
         const scope = yield* scopeOf
         const target = (yield* HttpRouter.params).sessionID
-        if (Option.isNone(scope.sid) || !target) return yield* httpEffect
+        if (!target) return yield* httpEffect
+        yield* restore.ensure(Session.ID.make(Option.getOrElse(scope.sid, () => target))).pipe(
+          Effect.catchTags({
+            "Restore.Unavailable": (error) =>
+              Effect.fail(
+                new UnavailableError({
+                  message: `Ren could not restore the chat: ${error.message}`,
+                  retryAfterMs: 2000,
+                }),
+              ),
+            BrainRejectedError: (error) =>
+              Effect.logError("A restored chat could not start again", error).pipe(
+                Effect.andThen(Effect.fail(new UnavailableError({ message: error.message, retryAfterMs: 2000 }))),
+              ),
+          }),
+        )
+        if (Option.isNone(scope.sid)) return yield* httpEffect
         const root = scope.sid.value
         if (yield* run((harness) => isWithin(harness, root, target))) return yield* httpEffect
         return yield* new ForbiddenError({ message: "The token is for another chat" })
       }),
-    ),
-  ),
+    )
+  }),
 )
 
 const handlers = Layer.mergeAll(

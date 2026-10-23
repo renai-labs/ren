@@ -987,6 +987,14 @@ export type NotFoundError = {
 export const isNotFoundError = (value: unknown): value is NotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "NotFoundError"
 
+export type UnavailableError = {
+  readonly _tag: "UnavailableError"
+  readonly message: string
+  readonly retryAfterMs: number
+}
+export const isUnavailableError = (value: unknown): value is UnavailableError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnavailableError"
+
 export type InvalidRequestError = {
   readonly _tag: "InvalidRequestError"
   readonly message: string

@@ -12,6 +12,7 @@ import { SdkPlugins } from "@opencode/core/plugin/sdk"
 import { Session } from "@opencode/core/session"
 import { Shell } from "@opencode/core/shell"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
+import { SessionTransfer } from "@opencode/core/session/transfer"
 import { Skill } from "@opencode/core/skill"
 import { WebSearch } from "@opencode/core/websearch"
 import { Workspace } from "@opencode/core/workspace"
@@ -99,6 +100,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     | SdkPlugins.Service
     | SessionRestart.Service
     | Session.Service
+    | SessionTransfer.Service
     | Workspace.Service
     | OpenCodeInstance.Service
     | HttpRouter.HttpRouter,
@@ -195,6 +197,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       located(sessionId, WebSearch.Service).pipe(Effect.flatMap((websearch) => websearch.providers())),
     credentials,
     sessions,
+    transfer: Context.get(services, SessionTransfer.Service),
     workspaces: Context.get(services, Workspace.Service),
     hasEnvironmentConnections: Option.isSome(connections),
     directoryOf: options.directoryOf,
@@ -233,6 +236,7 @@ export interface Instance {
   readonly webSearchProviders: (sessionId: string) => Effect.Effect<ReadonlyArray<WebSearch.Provider>, Harness.NotFound>
   readonly credentials: Credential.Interface
   readonly sessions: Session.Interface
+  readonly transfer: SessionTransfer.Interface
   readonly workspaces: Workspace.Interface
   readonly hasEnvironmentConnections: boolean
   readonly directoryOf: (sessionId: string) => string
