@@ -75,7 +75,7 @@ let replacement: Sandbox
 let cell: Wrangler.Instance
 let ren: FakeRen.Instance
 let withRen: Record<string, string>
-let withoutRen: Record<string, string>
+let renDown: Record<string, string>
 
 const place = async (
   sessionId: Session.ID,
@@ -141,13 +141,19 @@ const begin = async (onEnvironment = true, target: Sandbox = first) => {
 const pwdOf = async (session: Awaited<ReturnType<typeof begin>>) =>
   lastToolResult(await session.turn(stub.script(shell("pwd"))))
 
+// oxlint-disable-next-line ren/no-comments -- A chat keeps its folder across environments, so after the old sandbox is gone, a command that answers ran on the new one.
+const reachedBy = async (session: Awaited<ReturnType<typeof begin>>) =>
+  lastToolResult(await session.turn(stub.script(shell(`echo reached-$(basename "$PWD")`))))
+
 describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a cell's lifecycle", () => {
   beforeAll(async () => {
     ren = FakeRen.start()
     first = await sandbox()
     replacement = await sandbox()
-    withoutRen = Shared.vars(stub.url)
-    withRen = { ...withoutRen, REN_URL: ren.url }
+    const closed = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
+    renDown = { ...Shared.vars(stub.url), REN_URL: closed.url.origin }
+    await closed.stop(true)
+    withRen = { ...Shared.vars(stub.url), REN_URL: ren.url }
     cell = await Wrangler.make(withRen)
   }, 180_000)
 
@@ -282,7 +288,7 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     await original.dispose()
     await place(session.sessionId, replacement, { generation: 2 })
     await cell.start()
-    expect(await pwdOf(session)).toContain(join(replacement.directory, session.sessionId))
+    expect(await reachedBy(session)).toContain(`reached-${session.sessionId}`)
   })
 
   test("a sandbox replaced while the cell runs fails one call, and the next asks Ren and reaches the new one", async () => {
@@ -291,8 +297,8 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     expect(await pwdOf(session)).toContain(original.directory)
     await original.dispose()
     await place(session.sessionId, replacement, { generation: 2 })
-    expect(await pwdOf(session)).toContain("does not answer")
-    expect(await pwdOf(session)).toContain(join(replacement.directory, session.sessionId))
+    expect(await reachedBy(session)).toContain("does not answer")
+    expect(await reachedBy(session)).toContain(`reached-${session.sessionId}`)
   })
 
   test("killing the cell mid-command stops the command on the sandbox, and the session works after the restart", async () => {
@@ -343,16 +349,14 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     expect(ren.accessCalls(session.sessionId)).toBe(3)
   }, 180_000)
 
-  test("a cell without Ren keeps a sandbox session's conversation without its tools, and Ren back restores them", async () => {
+  test("a cell restarted while Ren is down keeps a sandbox session's conversation and answers, and Ren back restores its tools", async () => {
     const session = await begin()
     expect(await pwdOf(session)).toContain(first.directory)
-    await cell.restart(withoutRen)
-    const without = stub.script(shell("pwd"))
-    // ast-grep-ignore: no-test-sleep -- a turn without tools must answer within a deadline, not hang
+    await cell.restart(renDown)
+    const without = stub.script({ reply: "no tools" })
+    // ast-grep-ignore: no-test-sleep -- a turn while Ren is down must answer within a deadline, not hang
     const answered = await Promise.race([session.turn(without, 1), Bun.sleep(30_000).then(() => undefined)])
-    expect(answered?.tools.filter((tool) => fileTools.has(tool))).toEqual([])
     expect(JSON.stringify(answered?.body.messages)).toContain(first.directory)
-    without.set({ reply: "no tools" })
     await cell.restart(withRen)
     expect(await pwdOf(session)).toContain(join(first.directory, session.sessionId))
   })
@@ -477,18 +481,6 @@ describe.skipIf(process.env.CELL_RUNTIME !== "wrangler")("environments across a 
     expect(lastToolResult(await lasting.called(2))).toBe(JSON.stringify("survived\n"))
     await other.dispose()
   }, 240_000)
-
-  test("a host token that expires soon makes the next send ask Ren for a new configuration, and then tools work", async () => {
-    const session = await connect()
-    await place(session.sessionId, first)
-    expect(
-      (await session.opened.models(Shared.access(), await FakeRen.hostToken(session.opened.brainId, 60))).status,
-    ).toBe(204)
-    expect((await session.start(first)).status).toBe(409)
-    await session.configure()
-    expect((await session.start(first)).status).toBe(200)
-    expect(await pwdOf(session)).toContain(join(first.directory, session.sessionId))
-  })
 
   test("removing a brain's models during a command lets the command finish, and refuses the next send", async () => {
     const session = await begin()

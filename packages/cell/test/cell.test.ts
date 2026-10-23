@@ -203,7 +203,7 @@ describe("cell contract", () => {
   }, 60_000)
 
   test.skipIf(Shared.kind() === "bun")(
-    "with a Ren that has no sync API, the idle alarm closes the harness with no alarm left, sync is not drained, and a request after it sees the same sessions and messages",
+    "the idle alarm closes the harness with no alarm left, sync is drained, and a request after it sees the same sessions and messages",
     async () => {
       const opened = await cell()
       await opened.start()
@@ -211,7 +211,7 @@ describe("cell contract", () => {
       await opened.opencode.session.wait({ sessionID: opened.id })
       const messages = await opened.messages()
       expect(await opened.until((state) => Bun.deepEquals(state, idle))).toEqual(idle)
-      expect(await (await opened.brain("/ren/sync", {})).json()).toEqual({ drained: false })
+      expect(await (await opened.brain("/ren/sync", {})).json()).toEqual({ drained: true })
       expect(await opened.state()).toEqual(idle)
       expect(await opened.messages()).toEqual(messages)
       expect((await opened.opencode.session.list()).data.map((session) => session.id)).toEqual([opened.id])
