@@ -39,6 +39,12 @@ export class ConflictError extends Schema.TaggedError<ConflictError>()(
   { httpApiStatus: 409 },
 ) {}
 
+export class TooLargeError extends Schema.TaggedError<TooLargeError>()(
+  "TooLargeError",
+  { message: Schema.String },
+  { httpApiStatus: 413 },
+) {}
+
 export class UnavailableError extends Schema.TaggedError<UnavailableError>()(
   "UnavailableError",
   {

@@ -12,7 +12,7 @@ const exceptions = new Map([
   ],
   [
     "chat",
-    "Short-lived access to a session's brain for the Chat API, and the models a new session may use; it reads no session field.",
+    "Short-lived access to a session's brain for the Chat API, the session's saved messages while the brain is not ready, and the models a new session may use.",
   ],
 ])
 

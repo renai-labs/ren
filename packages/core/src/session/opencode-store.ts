@@ -3,7 +3,7 @@ export * as OpenCodeStore from "./opencode-store.js"
 import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
-import { and, asc, eq, getColumns, inArray, isNull, sql } from "drizzle-orm"
+import { and, asc, desc, eq, getColumns, inArray, isNull, sql } from "drizzle-orm"
 import type { PgTable } from "drizzle-orm/pg-core"
 import { Effect, Option, Record, Struct } from "effect"
 
@@ -131,6 +131,56 @@ export const sessions = (transaction: Database.Transaction, ids: ReadonlyArray<S
         })),
       ),
     )
+
+const before = (cursor: Cursor) =>
+  sql`(${Database.Schema.opencode_message.seq}, ${Database.Schema.opencode_message.id}) < (${cursor.seq}, ${cursor.id})`
+
+export const history = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  sessionId: Session.ID,
+  input: { readonly before?: Cursor | undefined; readonly revertMessageId: string | null; readonly limit: number },
+) {
+  const revert = input.revertMessageId
+    ? (yield* transaction
+        .select({ seq: Database.Schema.opencode_message.seq, id: Database.Schema.opencode_message.id })
+        .from(Database.Schema.opencode_message)
+        .where(
+          and(
+            eq(Database.Schema.opencode_message.session_id, sessionId),
+            eq(Database.Schema.opencode_message.id, input.revertMessageId),
+          ),
+        )).at(0)
+    : undefined
+  return yield* transaction
+    .select({
+      seq: Database.Schema.opencode_message.seq,
+      id: Database.Schema.opencode_message.id,
+      bytes: sql<number>`octet_length(${Database.Schema.opencode_message.data})::int`,
+    })
+    .from(Database.Schema.opencode_message)
+    .where(
+      and(
+        eq(Database.Schema.opencode_message.session_id, sessionId),
+        isNull(Database.Schema.opencode_message.removed_at),
+        input.before && before(input.before),
+        revert && before(revert),
+      ),
+    )
+    .orderBy(desc(Database.Schema.opencode_message.seq), desc(Database.Schema.opencode_message.id))
+    .limit(input.limit)
+})
+
+export const messagesOf = (transaction: Database.Transaction, sessionId: Session.ID, ids: ReadonlyArray<string>) =>
+  transaction
+    .select(Struct.omit(getColumns(Database.Schema.opencode_message), ["removed_at"]))
+    .from(Database.Schema.opencode_message)
+    .where(
+      and(
+        eq(Database.Schema.opencode_message.session_id, sessionId),
+        inArray(Database.Schema.opencode_message.id, [...ids]),
+      ),
+    )
+    .orderBy(desc(Database.Schema.opencode_message.seq), desc(Database.Schema.opencode_message.id))
 
 export const messages = (
   transaction: Database.Transaction,

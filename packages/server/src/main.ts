@@ -14,9 +14,11 @@ import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
 import { LocalSandbox } from "@ren/core/sandbox-provider/local"
 import { Settings } from "@ren/core/settings"
 import { SignupGuard } from "@ren/core/signup-guard"
+import { TranscriptCodec } from "@ren/core/transcript-codec"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Postgres } from "@ren/db/postgres"
+import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Config, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { join } from "node:path"
@@ -50,6 +52,7 @@ HttpRouter.serve(Routes.layer).pipe(
     ),
     Mailer.layer,
     SignupGuard.layer,
+    TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([Models.layerConfig, Environments.layer]),

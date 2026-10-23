@@ -2969,6 +2969,134 @@
         "summary": "Open a session’s chat"
       }
     },
+    "/sessions/{id}/messages": {
+      "get": {
+        "tags": ["chat"],
+        "operationId": "chat.messages",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SessionMessage.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionMessage.Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "TooLargeError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TooLargeErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return a page of the messages Ren saved for the session, newest first, as `session.messages` in the Chat API does. Follow `cursor.next` for older messages. Read this while `chat.access` returns `starting` or `failed`. A staged revert hides its messages. `413` means the page is too large: ask for a smaller `limit`. `503` means Ren is busy: ask again after `retryAfterMs`.",
+        "summary": "List a session's saved messages"
+      }
+    },
     "/sessions/{id}/chat/retry": {
       "post": {
         "tags": ["chat"],
@@ -5991,9 +6119,1036 @@
         ],
         "additionalProperties": false
       },
+      "SessionError.Info": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "string"
+              }
+            },
+            "required": ["body"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["type", "message"],
+        "additionalProperties": false
+      },
+      "SessionMessage.AgentAttachment": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "mention": {
+            "$ref": "#/components/schemas/SessionMessage.Mention"
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "SessionMessage.AgentSwitched": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["agent-switched"]
+          },
+          "agent": {
+            "type": "string"
+          },
+          "previous": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "time", "type", "agent"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Assistant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              },
+              "streamed": {
+                "type": "integer"
+              },
+              "completed": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["assistant"]
+          },
+          "agent": {
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/SessionModel.Ref"
+          },
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMessage.Content"
+            }
+          },
+          "snapshot": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "string"
+              },
+              "end": {
+                "type": "string"
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "finish": {
+            "type": "string",
+            "enum": ["stop", "length", "tool-calls", "content-filter", "error", "unknown"]
+          },
+          "cost": {
+            "type": "number"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/SessionMessage.TokenUsage"
+          },
+          "error": {
+            "$ref": "#/components/schemas/SessionError.Info"
+          },
+          "retry": {
+            "$ref": "#/components/schemas/SessionMessage.Retry"
+          }
+        },
+        "required": ["id", "time", "type", "agent", "model", "content"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Compaction": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SessionMessage.CompactionRunning"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.CompactionCompleted"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.CompactionFailed"
+          }
+        ]
+      },
+      "SessionMessage.CompactionCompleted": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["compaction"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["completed"]
+          },
+          "reason": {
+            "type": "string",
+            "enum": ["auto", "manual"]
+          },
+          "model": {
+            "$ref": "#/components/schemas/SessionModel.Ref"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "recent": {
+            "type": "string"
+          },
+          "cost": {
+            "type": "number"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/SessionMessage.TokenUsage"
+          }
+        },
+        "required": ["id", "time", "type", "status", "reason", "summary", "recent"],
+        "additionalProperties": false
+      },
+      "SessionMessage.CompactionFailed": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["compaction"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["failed"]
+          },
+          "reason": {
+            "type": "string",
+            "enum": ["auto", "manual"]
+          },
+          "error": {
+            "$ref": "#/components/schemas/SessionError.Info"
+          },
+          "cost": {
+            "type": "number"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/SessionMessage.TokenUsage"
+          }
+        },
+        "required": ["id", "time", "type", "status", "reason", "error"],
+        "additionalProperties": false
+      },
+      "SessionMessage.CompactionRunning": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["compaction"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running"]
+          },
+          "reason": {
+            "type": "string",
+            "enum": ["auto", "manual"]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "recent": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "time", "type", "status", "reason", "summary", "recent"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Content": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SessionMessage.Text"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.Reasoning"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.Tool"
+          }
+        ]
+      },
+      "SessionMessage.FileAttachment": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SessionMessage.FileSource"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "mention": {
+            "$ref": "#/components/schemas/SessionMessage.Mention"
+          }
+        },
+        "required": ["data", "mime", "source"],
+        "additionalProperties": false
+      },
+      "SessionMessage.FileSource": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["inline"]
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["uri"]
+              },
+              "uri": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "uri"],
+            "additionalProperties": false
+          }
+        ]
+      },
       "SessionMessage.ID": {
         "type": "string",
         "pattern": "^msg_"
+      },
+      "SessionMessage.Idle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["idle"]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["succeeded", "failed", "interrupted"]
+          },
+          "error": {
+            "$ref": "#/components/schemas/SessionError.Info"
+          }
+        },
+        "required": ["id", "time", "type", "outcome"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Info": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SessionMessage.AgentSwitched"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.ModelSwitched"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.User"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.Synthetic"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.System"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.Skill"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.Shell"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.Assistant"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.Compaction"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.Idle"
+          }
+        ]
+      },
+      "SessionMessage.Mention": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "number"
+          },
+          "end": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": ["start", "end", "text"],
+        "additionalProperties": false
+      },
+      "SessionMessage.ModelSwitched": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["model-switched"]
+          },
+          "model": {
+            "$ref": "#/components/schemas/SessionModel.Ref"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/SessionModel.Ref"
+          }
+        },
+        "required": ["id", "time", "type", "model"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMessage.Info"
+            }
+          },
+          "cursor": {
+            "type": "object",
+            "properties": {
+              "previous": {
+                "type": "string"
+              },
+              "next": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["items", "cursor"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Reasoning": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["reasoning"]
+          },
+          "text": {
+            "type": "string"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              },
+              "completed": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["type", "text"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Retry": {
+        "type": "object",
+        "properties": {
+          "attempt": {
+            "type": "integer"
+          },
+          "at": {
+            "type": "integer"
+          },
+          "error": {
+            "$ref": "#/components/schemas/SessionError.Info"
+          }
+        },
+        "required": ["attempt", "at", "error"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Sender": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          }
+        },
+        "required": ["userId"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Shell": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              },
+              "completed": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["shell"]
+          },
+          "shellID": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "exited", "timeout", "killed"]
+          },
+          "exit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "output": {
+            "$ref": "#/components/schemas/SessionMessage.ShellOutput"
+          }
+        },
+        "required": ["id", "time", "type", "shellID", "command", "status"],
+        "additionalProperties": false
+      },
+      "SessionMessage.ShellOutput": {
+        "type": "object",
+        "properties": {
+          "output": {
+            "type": "string"
+          },
+          "cursor": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": ["output", "cursor", "size", "truncated"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Skill": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["skill"]
+          },
+          "skill": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "time", "type", "skill", "name", "text"],
+        "additionalProperties": false
+      },
+      "SessionMessage.SkillAttachment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "mention": {
+            "$ref": "#/components/schemas/SessionMessage.Mention"
+          }
+        },
+        "required": ["id", "name"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Synthetic": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["synthetic"]
+          },
+          "text": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/SessionMessage.SyntheticMetadata"
+          }
+        },
+        "required": ["id", "time", "type", "text"],
+        "additionalProperties": false
+      },
+      "SessionMessage.SyntheticMetadata": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "childID": {
+            "type": "string"
+          },
+          "shellID": {
+            "type": "string"
+          },
+          "jobID": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SessionMessage.System": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["system"]
+          },
+          "text": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "time", "type", "text"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Text": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["text"]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "text"],
+        "additionalProperties": false
+      },
+      "SessionMessage.TokenUsage": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "number"
+          },
+          "output": {
+            "type": "number"
+          },
+          "reasoning": {
+            "type": "number"
+          },
+          "cache": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "number"
+              },
+              "write": {
+                "type": "number"
+              }
+            },
+            "required": ["read", "write"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["input", "output", "reasoning", "cache"],
+        "additionalProperties": false
+      },
+      "SessionMessage.Tool": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["tool"]
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "executed": {
+            "type": "boolean"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SessionMessage.ToolState"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              },
+              "ran": {
+                "type": "integer"
+              },
+              "completed": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["type", "id", "name", "state", "time"],
+        "additionalProperties": false
+      },
+      "SessionMessage.ToolCompleted": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["completed"]
+          },
+          "input": {
+            "type": "object"
+          },
+          "content": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "$ref": "#/components/schemas/SessionMessage.ToolContent"
+              }
+            ],
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/SessionMessage.ToolContent"
+            }
+          },
+          "metadata": {
+            "type": "object"
+          }
+        },
+        "required": ["status", "input", "content"],
+        "additionalProperties": false
+      },
+      "SessionMessage.ToolContent": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SessionMessage.ToolTextContent"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.ToolFileContent"
+          }
+        ]
+      },
+      "SessionMessage.ToolError": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["error"]
+          },
+          "input": {
+            "type": "object"
+          },
+          "error": {
+            "$ref": "#/components/schemas/SessionError.Info"
+          },
+          "content": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "$ref": "#/components/schemas/SessionMessage.ToolContent"
+              }
+            ],
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/SessionMessage.ToolContent"
+            }
+          },
+          "metadata": {
+            "type": "object"
+          }
+        },
+        "required": ["status", "input", "error"],
+        "additionalProperties": false
+      },
+      "SessionMessage.ToolFileContent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["file"]
+          },
+          "uri": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "uri", "mime"],
+        "additionalProperties": false
+      },
+      "SessionMessage.ToolRunning": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["running"]
+          },
+          "input": {
+            "type": "object"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        },
+        "required": ["status", "input", "metadata"],
+        "additionalProperties": false
+      },
+      "SessionMessage.ToolState": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SessionMessage.ToolStreaming"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.ToolRunning"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.ToolCompleted"
+          },
+          {
+            "$ref": "#/components/schemas/SessionMessage.ToolError"
+          }
+        ]
+      },
+      "SessionMessage.ToolStreaming": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["streaming"]
+          },
+          "input": {
+            "type": "string"
+          }
+        },
+        "required": ["status", "input"],
+        "additionalProperties": false
+      },
+      "SessionMessage.ToolTextContent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["text"]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": ["type", "text"],
+        "additionalProperties": false
+      },
+      "SessionMessage.User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SessionMessage.ID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "text": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMessage.FileAttachment"
+            }
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMessage.AgentAttachment"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionMessage.SkillAttachment"
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": ["user"]
+          },
+          "sender": {
+            "$ref": "#/components/schemas/SessionMessage.Sender"
+          }
+        },
+        "required": ["id", "time", "text", "type"],
+        "additionalProperties": false
       },
       "SessionModel.Choice": {
         "type": "object",
@@ -7791,6 +8946,20 @@
         "type": "string",
         "maxLength": 2048
       },
+      "TooLargeErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["TooLargeError"]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "message"],
+        "additionalProperties": false
+      },
       "UnauthorizedErrorEncoded": {
         "type": "object",
         "properties": {
@@ -7803,6 +8972,24 @@
           }
         },
         "required": ["_tag", "message"],
+        "additionalProperties": false
+      },
+      "UnavailableErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["UnavailableError"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryAfterMs": {
+            "type": "integer",
+            "description": "Ask again after this many milliseconds."
+          }
+        },
+        "required": ["_tag", "message", "retryAfterMs"],
         "additionalProperties": false
       }
     },

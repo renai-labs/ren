@@ -10,7 +10,9 @@ import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { Settings } from "@ren/core/settings"
 import { SignupGuard } from "@ren/core/signup-guard"
+import { TranscriptCodec } from "@ren/core/transcript-codec"
 import { Testing } from "@ren/db/testing"
+import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { BrainToken } from "@ren/host-api/brain-token"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
@@ -73,6 +75,7 @@ export const services = Layer.mergeAll(
   Brains.layer.pipe(Layer.provideMerge(BrainHost.layerCell), Layer.provide(DurableRunner.layerMemory)),
   Mailer.layer,
   SignupGuard.layer,
+  TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
 ).pipe(
   Layer.provideMerge([BrainClient.layer, Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer]),

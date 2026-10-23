@@ -36,6 +36,7 @@ import type {
   SessionCreateInput,
   SessionArchiveInput,
   ChatAccessInput,
+  ChatMessagesInput,
   ChatRetryInput,
   ChatPrepareInput,
   ChatModelsInput,
@@ -414,6 +415,15 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["chat", "access"] as const,
             mutationFn: (input: ChatAccessInput) => client["chat"]["access"](input),
+          }),
+      },
+      messages: {
+        queryKey: (input?: ChatMessagesInput) =>
+          input === undefined ? (["chat", "messages"] as const) : (["chat", "messages", input] as const),
+        queryOptions: (input: ChatMessagesInput) =>
+          queryOptions({
+            queryKey: ["chat", "messages", input] as const,
+            queryFn: (context) => client["chat"]["messages"](input, { signal: context.signal }),
           }),
       },
       retry: {

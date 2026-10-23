@@ -1,9 +1,11 @@
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
+import { SessionMessage } from "@ren/schema/session/message"
 import { SessionModel } from "@ren/schema/session/model"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
-import { NotFoundError } from "../errors.js"
+import { MessagesQuery } from "../chat.js"
+import { InvalidRequestError, NotFoundError, TooLargeError, UnavailableError } from "../errors.js"
 import { Exposure } from "../exposure.js"
 import { ActiveOrganization } from "../middleware/active-organization.js"
 import { Authentication } from "../middleware/authentication.js"
@@ -28,6 +30,21 @@ export const ChatGroup = HttpApiGroup.make("chat")
         summary: "Open a session’s chat",
         description:
           "Return the URL of the session’s brain and a short-lived token for the Chat API. Ask again before `expiresAt`.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.get("chat.messages", "/sessions/:id/messages", {
+      params: { id: Session.ID },
+      query: MessagesQuery,
+      success: SessionMessage.Page,
+      error: [NotFoundError, InvalidRequestError, TooLargeError, UnavailableError],
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "chat.messages",
+        summary: "List a session's saved messages",
+        description:
+          "Return a page of the messages Ren saved for the session, newest first, as `session.messages` in the Chat API does. Follow `cursor.next` for older messages. Read this while `chat.access` returns `starting` or `failed`. A staged revert hides its messages. `413` means the page is too large: ask for a smaller `limit`. `503` means Ren is busy: ask again after `retryAfterMs`.",
       }),
     ),
   )

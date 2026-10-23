@@ -9,7 +9,7 @@ import { Session } from "@ren/schema/session"
 import { SessionEvent } from "@ren/schema/session/event"
 import { Effect, Option, Queue, Schema, Stream } from "effect"
 import { OpenCodeEvents } from "../src/harness/opencode/events.js"
-import { Translate } from "../src/harness/opencode/translate.js"
+import { Translate } from "@ren/opencode-transcript/translate"
 import { BrainTest } from "./lib/brain.js"
 import { Shared } from "./lib/shared.js"
 
