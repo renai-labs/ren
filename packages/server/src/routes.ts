@@ -6,7 +6,7 @@ import { Sync } from "@ren/schema/sync"
 import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"
 import { AgentMembership } from "@ren/core/agent/membership"
-import { BrainHost } from "@ren/core/brain-host"
+import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
@@ -118,13 +118,13 @@ export const layer = Layer.mergeAll(
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(
       Layer.provide([HostPullHandler, HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler]),
-      Layer.provide(BrainHost.hostAuthentication),
+      Layer.provide(Brains.hostAuthentication),
     ),
     AuthRoute,
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
-    Layer.provide([BrainHost.hostAuthentication, bodyLimit(Sync.maxBodyBytes), SessionSync.layer]),
+    Layer.provide([Brains.hostAuthentication, bodyLimit(Sync.maxBodyBytes), SessionSync.layer]),
   ),
   Cors,
 ).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))

@@ -11,7 +11,7 @@ import { type Duration, Effect, Layer, ManagedRuntime, Option, Schedule, Schema 
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { BrainHost } from "../src/brain-host.js"
+import { Brains } from "../src/brains.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
 import { Models } from "../src/models.js"
 import { SandboxProvider } from "../src/sandbox-provider.js"
@@ -192,7 +192,7 @@ describe("brain runs", () => {
     const binding = Schema.decodeUnknownSync(Schema.Struct({ pid: Schema.Int }))(ready.binding)
     process.kill(-binding.pid, "SIGKILL")
     const failed = await current.runPromise(
-      BrainHost.Service.use((host) =>
+      Brains.Service.use((host) =>
         host.send({
           sessionId: found.sessionId,
           messageId: Session.MessageID.create(),
@@ -267,10 +267,10 @@ describe("brain runs", () => {
       },
     }
     const placement = { organizationId: found.organizationId, spaceId: found.spaceId, brainId: found.brainId }
-    await current.runPromise(BrainHost.Service.use((host) => host.start(input, placement)))
+    await current.runPromise(Brains.Service.use((host) => host.start(input, placement)))
     await current.runPromise(
-      BrainHost.StartRun.poll(
-        await Effect.runPromise(BrainHost.StartRun.executionId({ input, placement, epoch: 1 })),
+      Brains.StartRun.poll(
+        await Effect.runPromise(Brains.StartRun.executionId({ input, placement, epoch: 1 })),
       ).pipe(
         Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("100 millis") }),
         Effect.timeoutOrElse({
@@ -279,8 +279,8 @@ describe("brain runs", () => {
         }),
       ),
     )
-    await current.runPromise(BrainHost.Service.use((host) => host.retry(found.sessionId)))
-    await current.runPromise(BrainHost.Service.use((host) => host.start(input, placement)))
+    await current.runPromise(Brains.Service.use((host) => host.retry(found.sessionId)))
+    await current.runPromise(Brains.Service.use((host) => host.start(input, placement)))
     await script.called(1)
     await current.dispose()
   })
@@ -298,10 +298,10 @@ describe("brain runs", () => {
     )
     const input = { sessionId: found.sessionId, harness: "opencode" as const, interactive: false }
     const placement = { organizationId: found.organizationId, spaceId: found.spaceId, brainId: found.brainId }
-    await current.runPromise(BrainHost.Service.use((host) => host.start(input, placement)))
+    await current.runPromise(Brains.Service.use((host) => host.start(input, placement)))
     await current.runPromise(
-      BrainHost.StartRun.poll(
-        await Effect.runPromise(BrainHost.StartRun.executionId({ input, placement, epoch: 0 })),
+      Brains.StartRun.poll(
+        await Effect.runPromise(Brains.StartRun.executionId({ input, placement, epoch: 0 })),
       ).pipe(
         Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("100 millis") }),
         Effect.timeoutOrElse({

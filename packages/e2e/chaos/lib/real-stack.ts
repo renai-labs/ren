@@ -11,6 +11,8 @@ import { Brain } from "@ren/schema/brain"
 import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"
 import { BrainHost } from "@ren/core/brain-host"
+import { Brains } from "@ren/core/brains"
+import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
 import { Models } from "@ren/core/models"
@@ -248,37 +250,34 @@ export const start = async (options: {
   await startServer()
 
   const databaseContext = await databaseRuntime.runPromise(Effect.context<Database.Service>())
-  const core = <A, E>(effect: Effect.Effect<A, E, BrainHost.Service | SessionRunner.Service>) =>
-    Effect.runPromise(
-      effect.pipe(
-        Effect.provide(
-          Layer.fresh(SessionRunner.layer).pipe(
-            Layer.provideMerge(BrainRegistry.layer),
-            Layer.provideMerge(
-              Layer.fresh(BrainHost.layer).pipe(
-                Layer.provide([BrainClient.layer, Settings.layer]),
-                Layer.provide(ChaosModels.layer),
-                Layer.provide(
-                  Environments.layer.pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
-                ),
-                Layer.provide(FetchHttpClient.layer),
-                Layer.provide(
-                  ConfigProvider.layer(
-                    ConfigProvider.fromUnknown({
-                      ...keys,
-                      CELL_URL: cell.url,
-                      [ChaosEnvironments.fileVariable]: environmentsFile,
-                      [ChaosModels.fileVariable]: modelsFile,
-                    }),
-                  ),
-                ),
-              ),
+  const coreRuntime = ManagedRuntime.make(
+    Layer.fresh(SessionRunner.layer).pipe(
+      Layer.provideMerge(BrainRegistry.layer),
+      Layer.provideMerge(
+        Layer.fresh(Brains.layer).pipe(
+          Layer.provide(BrainHost.layerCell),
+          Layer.provide(DurableRunner.layerMemory),
+          Layer.provide([BrainClient.layer, Settings.layer]),
+          Layer.provide(ChaosModels.layer),
+          Layer.provide(Environments.layer.pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)))),
+          Layer.provide(FetchHttpClient.layer),
+          Layer.provide(
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown({
+                ...keys,
+                CELL_URL: cell.url,
+                [ChaosEnvironments.fileVariable]: environmentsFile,
+                [ChaosModels.fileVariable]: modelsFile,
+              }),
             ),
-            Layer.provide(Layer.succeedContext(databaseContext)),
           ),
         ),
       ),
-    )
+      Layer.provide(Layer.succeedContext(databaseContext)),
+    ),
+  )
+  const core = <A, E>(effect: Effect.Effect<A, E, Brains.Service | SessionRunner.Service>) =>
+    coreRuntime.runPromise(effect)
   const replaceContainer = async (entry: (typeof sandboxes)[number]) => {
     const environmentId = Environment.ID.create()
     await entry.container.replace(environmentId)
@@ -345,7 +344,7 @@ export const start = async (options: {
       ...(startOptions.model && { model: startOptions.model }),
     })
     const startSession = (startOptions?: StartOptions) =>
-      core(BrainHost.Service.use((brain) => brain.start(input(startOptions), { ...owner, brainId })))
+      core(Brains.Service.use((brain) => brain.start(input(startOptions), { ...owner, brainId })))
     await core(
       SessionRunner.Service.use((sessions) =>
         sessions.create(owner, input(sessionOptions.start), {
@@ -353,7 +352,7 @@ export const start = async (options: {
         }),
       ),
     )
-    const access = await core(BrainHost.Service.use((brain) => brain.access(sessionId, { userId: owner.createdBy })))
+    const access = await core(Brains.Service.use((brain) => brain.access(sessionId, { userId: owner.createdBy })))
     if (access.status !== "ready") throw new Error(`the brain of ${sessionId} is ${access.status}`)
     const opencode = OpenCode.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
     const send = (text: string) =>
@@ -462,6 +461,7 @@ export const start = async (options: {
         ),
       )
       await Promise.all([renProxy.stop(), provider.stop()])
+      await coreRuntime.dispose()
       await databaseRuntime.dispose()
       await direct.close()
       await admin.unsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`)

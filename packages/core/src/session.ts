@@ -9,7 +9,7 @@ import { and, count, desc, eq, isNull, sql, type SQL } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Schema } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
-import { BrainHost } from "./brain-host.js"
+import { Brains } from "./brains.js"
 import { Models } from "./models.js"
 import { Primitive } from "./primitive.js"
 import { SessionRunner } from "./session/runner.js"
@@ -82,7 +82,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const sessions = yield* SessionRunner.Service
-    const brain = yield* BrainHost.Service
+    const brain = yield* Brains.Service
     const catalog = yield* Models.Service
 
     const models = (actor: Actor.Info) =>

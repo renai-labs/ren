@@ -15,7 +15,7 @@ import { Clock, ConfigProvider, Context, Duration, Effect, Fiber, Layer, Option,
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
 import { BrainClient } from "../src/brain-client.js"
-import { BrainHost } from "../src/brain-host.js"
+import { Brains } from "../src/brains.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
@@ -89,7 +89,7 @@ const sendTo = (
   messageId = Session.MessageID.create(),
   files?: ReadonlyArray<Session.File>,
 ) =>
-  BrainHost.Service.use((brain) =>
+  Brains.Service.use((brain) =>
     brain.send({
       sessionId,
       messageId,
@@ -144,7 +144,7 @@ describe("BrainHost on local brains", () => {
 
   local.live("access is ready only once the chat has started on its brain, so its first read finds it", () =>
     Effect.gen(function* () {
-      const brain = yield* BrainHost.Service
+      const brain = yield* Brains.Service
       const chat = yield* created(`open ${stub.script().marker}`)
       const access = yield* Host.ready(brain.access(chat.sessionId, { userId: chat.owner.createdBy }))
       const read = yield* Effect.promise(() =>
@@ -158,7 +158,7 @@ describe("BrainHost on local brains", () => {
 
   local.live("an access token reads its chat through the Chat API and names its member", () =>
     Effect.gen(function* () {
-      const brain = yield* BrainHost.Service
+      const brain = yield* Brains.Service
       const opened = stub.script()
       const chat = yield* created(`open ${opened.marker}`)
       yield* Effect.promise(() => opened.called())
@@ -316,7 +316,7 @@ describe("BrainHost pull", () => {
         .where(eq(Database.Schema.agent_session.id, subject.sessionId))).at(0)?.brainId
       if (!brainId) return yield* Effect.die(new Error("the session has no brain"))
       source.available = false
-      const reply = yield* BrainHost.Service.use((brain) =>
+      const reply = yield* Brains.Service.use((brain) =>
         brain.pull(
           { brainId, organizationId: subject.owner.organizationId, generation: 1 },
           { version: "test", keyIds: [], models: "models-1", layers: { agents: {} }, sessions: [] },
@@ -341,7 +341,7 @@ describe("BrainHost host tokens", () => {
       const sign = (claimsOf: Parameters<typeof BrainToken.sign>[1]) =>
         BrainToken.sign(key, claimsOf).pipe(Effect.map(Redacted.make))
       const outcomes = yield* Effect.gen(function* () {
-        const brain = yield* BrainHost.Service
+        const brain = yield* Brains.Service
         const server = yield* sign({ scope: "server", brain: brainId, gen: 1, exp: 600 })
         const old = yield* sign({
           scope: "host",
@@ -457,10 +457,10 @@ describe("BrainHost environments", () => {
         ),
       ),
     )
-    return Context.get(context, BrainHost.Service)
+    return context
   })
   const startOn = (
-    brain: BrainHost.Interface,
+    context: Effect.Success<ReturnType<typeof hostWith>>,
     subject: Effect.Success<typeof seeded>,
     id: EnvironmentTemplate.ID | undefined,
   ) =>
@@ -471,25 +471,30 @@ describe("BrainHost environments", () => {
         .from(Database.Schema.agent_session)
         .where(eq(Database.Schema.agent_session.id, subject.sessionId))).at(0)?.brainId
       if (!brainId) return yield* Effect.die(new Error("the session has no brain"))
-      return yield* brain.start(
-        {
-          sessionId: subject.sessionId,
-          harness: "opencode",
-          interactive: true,
-          ...(id && { environmentTemplateId: id }),
+      const input = {
+        sessionId: subject.sessionId,
+        harness: "opencode",
+        interactive: true,
+        initialMessage: {
+          messageId: Session.MessageID.create(),
+          prompt: { text: "hello" },
+          sender: { userId: subject.owner.createdBy },
         },
-        { organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, brainId },
-      )
+        ...(id && { environmentTemplateId: id }),
+      } satisfies Session.StartInput
+      const placement = { organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, brainId }
+      yield* Context.get(context, Brains.Service).start(input, placement)
+      yield* Brains.StartRun.execute({ input, placement, epoch: 0 }).pipe(Effect.provideContext(context))
     })
 
   it.live("a start gives the brain the chat's environment directory, also on a later start that names none", () =>
     Effect.gen(function* () {
       const recording = yield* recordingCell()
-      const brain = yield* hostWith(recording.url)
+      const host = yield* hostWith(recording.url)
       const subject = yield* seeded
       const environmentTemplateId = yield* Seed.environmentTemplate(subject.owner.organizationId)
-      yield* startOn(brain, subject, environmentTemplateId)
-      yield* startOn(brain, subject, undefined)
+      yield* startOn(host, subject, environmentTemplateId)
+      yield* startOn(host, subject, undefined)
       expect(recording.starts.map((input) => input.directory)).toEqual([
         `/workspace/${subject.sessionId}`,
         `/workspace/${subject.sessionId}`,
@@ -500,12 +505,12 @@ describe("BrainHost environments", () => {
   it.live("Ren refuses an unknown environment template, or a change of template, before it calls the brain", () =>
     Effect.gen(function* () {
       const recording = yield* recordingCell()
-      const brain = yield* hostWith(recording.url)
+      const host = yield* hostWith(recording.url)
       const subject = yield* seeded
-      yield* startOn(brain, subject, EnvironmentTemplate.ID.create())
+      yield* startOn(host, subject, EnvironmentTemplate.ID.create())
       expect(recording.starts).toEqual([])
-      yield* startOn(brain, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
-      yield* startOn(brain, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
+      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
+      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
       expect(recording.starts).toHaveLength(1)
     }),
   )
@@ -513,13 +518,13 @@ describe("BrainHost environments", () => {
   it.live("two starts at once that name different templates leave the chat on one", () =>
     Effect.gen(function* () {
       const recording = yield* recordingCell()
-      const brain = yield* hostWith(recording.url)
+      const host = yield* hostWith(recording.url)
       const subject = yield* seeded
       const templates = [
         yield* Seed.environmentTemplate(subject.owner.organizationId),
         yield* Seed.environmentTemplate(subject.owner.organizationId),
       ]
-      yield* Effect.forEach(templates, (id) => startOn(brain, subject, id), { concurrency: "unbounded" })
+      yield* Effect.forEach(templates, (id) => startOn(host, subject, id), { concurrency: "unbounded" })
       expect(recording.starts).toHaveLength(1)
     }),
   )
@@ -527,9 +532,9 @@ describe("BrainHost environments", () => {
   it.live("a start that the brain refuses removes the binding that it made", () =>
     Effect.gen(function* () {
       const recording = yield* recordingCell(422)
-      const brain = yield* hostWith(recording.url)
+      const host = yield* hostWith(recording.url)
       const subject = yield* seeded
-      yield* startOn(brain, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
+      yield* startOn(host, subject, yield* Seed.environmentTemplate(subject.owner.organizationId))
       expect(recording.starts).toHaveLength(1)
       const database = yield* Database.Service
       expect(

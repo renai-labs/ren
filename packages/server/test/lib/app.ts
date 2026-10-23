@@ -1,6 +1,8 @@
 import { BunHttpServer, BunServices } from "@effect/platform-bun"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
+import { Brains } from "@ren/core/brains"
+import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
 import { Environments } from "@ren/core/environments"
@@ -67,7 +69,11 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
     { asPrimary: true },
   )
 
-export const services = Layer.mergeAll(BrainHost.layer, Mailer.layer, SignupGuard.layer).pipe(
+export const services = Layer.mergeAll(
+  Brains.layer.pipe(Layer.provideMerge(BrainHost.layerCell), Layer.provide(DurableRunner.layerMemory)),
+  Mailer.layer,
+  SignupGuard.layer,
+).pipe(
   Layer.provideMerge([BrainClient.layer, Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer]),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),

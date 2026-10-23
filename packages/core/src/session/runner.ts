@@ -10,6 +10,7 @@ import { and, eq, isNull } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
 import { AgentQueries } from "../agent/queries.js"
 import { BrainHost } from "../brain-host.js"
+import { Brains } from "../brains.js"
 import { BrainRegistry } from "../brain-registry.js"
 import { OpenCodeStore } from "./opencode-store.js"
 
@@ -43,10 +44,10 @@ export interface Interface {
     owner: Owner,
     input: Session.StartInput,
     options?: { readonly agentId?: Agent.ID },
-  ) => Effect.Effect<void, AlreadyExists | NotFound | BrainHost.BrainRejectedError>
+  ) => Effect.Effect<void, AlreadyExists | NotFound | Brains.BrainRejectedError>
   readonly send: (
     input: Session.SendInput,
-  ) => Effect.Effect<Session.Accepted, NotFound | BrainHost.BrainUnavailable | BrainHost.BrainRejectedError>
+  ) => Effect.Effect<Session.Accepted, NotFound | BrainHost.BrainUnavailable | Brains.BrainRejectedError>
   readonly get: (sessionId: Session.ID) => Effect.Effect<Info, NotFound>
 }
 
@@ -60,7 +61,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
-    const brain = yield* BrainHost.Service
+    const brain = yield* Brains.Service
     const registry = yield* BrainRegistry.Service
 
     return Service.of({
