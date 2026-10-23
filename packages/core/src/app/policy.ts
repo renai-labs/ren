@@ -1,6 +1,7 @@
 export * as AppPolicy from "./policy.js"
 
 import { App } from "@ren/schema/app"
+import { AppRegistry } from "@ren/schema/app-registry"
 import { AppRelease } from "@ren/schema/app-release"
 import { SpaceApp } from "@ren/schema/space-app"
 import { Auth } from "@ren/schema/auth"
@@ -18,6 +19,7 @@ export const documents = [
     primitive: App.definition.name,
     statements: [
       ...statements(Primitive.actions(App.definition, ["list", "get"]), "app.spaceMember"),
+      { actions: Primitive.actions(App.definition, ["list", "get"]), roles: Auth.Role.literals, on: "app.listed" },
       ...statements(Primitive.actions(App.definition, ["create"]), "app.targetMember"),
       ...statements(Primitive.actions(App.definition, ["update", "archive"]), "app.ownerMember"),
       ...statements(Primitive.actions(App.definition, ["transferOwnership"]), "app.ownerAndTargetMember"),
@@ -27,7 +29,18 @@ export const documents = [
     primitive: AppRelease.definition.name,
     statements: [
       ...statements(Primitive.actions(AppRelease.definition, ["list", "get"]), "app.spaceMember"),
+      {
+        actions: Primitive.actions(AppRelease.definition, ["list", "get"]),
+        roles: Auth.Role.literals,
+        on: "app.listed",
+      },
       ...statements(Primitive.actions(AppRelease.definition, ["create"]), "app.ownerMember"),
+    ],
+  },
+  {
+    primitive: AppRegistry.definition.name,
+    statements: [
+      { actions: Primitive.actions(AppRegistry.definition), roles: Auth.Role.literals, on: Policy.everywhere },
     ],
   },
   {
@@ -40,11 +53,13 @@ export interface Holds {
   readonly isOwnerMember: boolean
   readonly isSpaceMember: boolean
   readonly isTargetMember?: boolean
+  readonly isListed?: boolean
 }
 export const resource = (holds: Holds): Access.Resource => ({
   relationships: [
     ...(holds.isOwnerMember ? ["app.ownerMember"] : []),
     ...(holds.isSpaceMember ? ["app.spaceMember"] : []),
+    ...(holds.isListed ? ["app.listed"] : []),
     ...(holds.isTargetMember ? ["app.targetMember"] : []),
     ...(holds.isOwnerMember && holds.isTargetMember ? ["app.ownerAndTargetMember"] : []),
   ],
