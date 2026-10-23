@@ -233,11 +233,8 @@ export const wranglerLayer = (
 
 const LocalBinding = Schema.Struct({ pid: Schema.Int, home: Schema.String })
 
-// oxlint-disable-next-line ren/no-comments -- The brain loses its harness database, as on a new sandbox, and keeps brain.db: its restart loop is held while the brain process goes and the database is deleted.
-export const forgetHarness = Effect.fnUntraced(function* (
-  brainId: Brain.ID,
-  options: { readonly folderOf?: Session.ID } = {},
-) {
+// oxlint-disable-next-line ren/no-comments -- Stops a local brain, changes its disk while no brain process runs, and lets the restart loop boot it again.
+export const restart = Effect.fnUntraced(function* (brainId: Brain.ID, change: (home: string) => Promise<unknown>) {
   const provider = yield* SandboxProvider.Service
   const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === brainId)
   if (!found) return yield* Effect.die(new Error(`Brain ${brainId} has no sandbox`))
@@ -252,19 +249,20 @@ export const forgetHarness = Effect.fnUntraced(function* (
   yield* Effect.sync(brains).pipe(
     Effect.repeat({ until: (left) => left.length === 0, schedule: Schedule.spaced("20 millis") }),
   )
-  yield* Effect.promise(() =>
-    Promise.all(
-      ["opencode.db", "opencode.db-wal", "opencode.db-shm"].map((name) =>
-        rm(join(binding.home, ".ren", name), { force: true }),
-      ),
-    ),
-  )
-  if (options.folderOf)
-    yield* Effect.promise(() =>
-      rm(join(binding.home, "workspace", options.folderOf ?? ""), { recursive: true, force: true }),
-    )
+  yield* Effect.promise(() => change(binding.home))
   process.kill(binding.pid, "SIGCONT")
 })
+
+// oxlint-disable-next-line ren/no-comments -- The brain loses its harness database, as on a new sandbox, and keeps brain.db: the database is deleted while no brain process runs.
+export const forgetHarness = (brainId: Brain.ID, options: { readonly folderOf?: Session.ID } = {}) =>
+  restart(brainId, (home) =>
+    Promise.all([
+      ...["opencode.db", "opencode.db-wal", "opencode.db-shm"].map((name) =>
+        rm(join(home, ".ren", name), { force: true }),
+      ),
+      ...(options.folderOf ? [rm(join(home, "workspace", options.folderOf), { recursive: true, force: true })] : []),
+    ]),
+  )
 
 export const ready = <E, R>(access: Effect.Effect<Session.ClientAccess, E, R>) =>
   access.pipe(

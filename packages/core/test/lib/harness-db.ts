@@ -10,3 +10,13 @@ export const hasChat = (home: string, chat: string) => {
   db.close()
   return found.length > 0
 }
+
+// oxlint-disable-next-line ren/no-comments -- Writes keys in a stopped local brain's brain.db, as an older brain version left them.
+export const setBrainKeys = (home: string, values: Readonly<Record<string, string>>) => {
+  const db = new Database(join(home, ".ren", "brain.db"))
+  const upsert = db.query(
+    "insert into kv (key, value) values (?, ?) on conflict (key) do update set value = excluded.value",
+  )
+  for (const entry of Object.entries(values)) upsert.run(entry[0], entry[1])
+  db.close()
+}

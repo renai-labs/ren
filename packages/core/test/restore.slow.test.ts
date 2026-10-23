@@ -96,6 +96,7 @@ const opened = Effect.fnUntraced(function* (text: string) {
   ).pipe(
     Effect.map((body) => Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Unknown))(body)),
     Effect.repeat({ until: (status) => Object.keys(status).length === 0, schedule: Schedule.spaced("100 millis") }),
+    Effect.retry({ schedule: Schedule.spaced("100 millis"), times: 100 }),
     Effect.orDie,
   )
   const synced = brains
@@ -328,6 +329,34 @@ it.live(
         .from(Database.Schema.agent_session)
         .where(eq(Database.Schema.agent_session.id, chat.sessionId))).at(0)?.at
       expect(reset).toBeInstanceOf(Date)
+    }),
+)
+
+it.live(
+  "a brain that boots on another harness version clears its harness database only when the old version flushed sync, and the chat comes back on its first request",
+  () =>
+    Effect.gen(function* () {
+      const script = stub.script()
+      const chat = yield* opened(`open ${script.marker}`)
+      yield* Effect.promise(() => script.called())
+      yield* chat.idle
+      const before = yield* chat.read
+      yield* chat.synced
+      const provider = yield* SandboxProvider.Service
+      const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === chat.brainId)
+      const home = Schema.decodeUnknownSync(Schema.Struct({ home: Schema.String }))(found?.binding).home
+      const older = "0.0.1-older"
+      yield* Host.restart(chat.brainId, async (folder) =>
+        HarnessDb.setBrainKeys(folder, { "ren:harness-version": older }),
+      )
+      yield* chat.idle
+      expect(HarnessDb.hasChat(home, chat.sessionId)).toBe(true)
+      yield* Host.restart(chat.brainId, async (folder) =>
+        HarnessDb.setBrainKeys(folder, { "ren:harness-version": older, "ren:flushed-version": older }),
+      )
+      yield* chat.idle
+      expect(HarnessDb.hasChat(home, chat.sessionId)).toBe(false)
+      expect(yield* chat.read).toEqual(before)
     }),
 )
 

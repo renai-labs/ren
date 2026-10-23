@@ -131,6 +131,21 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
     expect(closed.checkpoint).toEqual(open.checkpoint)
   })
 
+  test("E100: a cell that opens OpenCode after another harness version clears its tables only when that version flushed sync", async () => {
+    const opened = await turn()
+    const older = "0.0.1-older"
+    const boot = async (flushed: boolean) =>
+      Schema.decodeUnknownSync(Schema.Struct({ isKept: Schema.Boolean }))(
+        await (
+          await opened.request(
+            `/test/older-harness?session=${opened.id}&ren:harness-version=${older}${flushed ? `&ren:flushed-version=${older}` : ""}`,
+          )
+        ).json(),
+      ).isKept
+    expect(await boot(false)).toBe(true)
+    expect(await boot(true)).toBe(false)
+  })
+
   test("S2-04: PRAGMA table_info of session_v2 and session_message lists the columns that sync reads", async () => {
     const opened = await turn()
     expect(await read(opened)).toMatchObject({

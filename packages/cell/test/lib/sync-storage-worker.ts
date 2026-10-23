@@ -106,6 +106,24 @@ class SyncStorageCell extends SessionCell {
       await this.ctx.storage.deleteAll()
       return new Response(null, { status: 204 })
     }
+    if (url.pathname === "/test/older-harness") {
+      await this.runtime.runPromise(Effect.flatMap(Harness.Service, (harness) => harness.close))
+      await Promise.all(
+        [...url.searchParams]
+          .filter((entry) => entry[0].startsWith("ren:"))
+          .map((entry) => this.ctx.storage.put(entry[0], entry[1])),
+      )
+      const isKept = await this.runtime.runPromise(
+        Effect.scoped(Effect.flatMap(Harness.Service, (harness) => harness.get)).pipe(
+          Effect.andThen(
+            Effect.sync(
+              () => [...this.ctx.storage.sql.exec("select id from session_v2 where id = ?", sessionId)].length > 0,
+            ),
+          ),
+        ),
+      )
+      return Response.json({ isKept })
+    }
     if (url.pathname === "/test/watch") return new Response(null, { status: 204 })
     if (url.pathname === "/test/read") return Response.json(read(this.ctx.storage.sql, sessionId))
     if (url.pathname === "/test/sizes") return Response.json(sizes(this.ctx.storage.sql, sessionId))

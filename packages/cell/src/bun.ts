@@ -3,6 +3,7 @@ import { Global } from "@opencode/util/global"
 import type { OpenCodeSync } from "@ren/brain/opencode-sync"
 import { Deferred, Duration, Effect, Exit, Layer, ManagedRuntime, Option, Schema, Scope, Stream } from "effect"
 import { mkdirSync } from "node:fs"
+import { rm } from "node:fs/promises"
 import { join } from "node:path"
 import manifest from "../package.json"
 import { Brain } from "./brain.js"
@@ -16,6 +17,7 @@ import { Entry } from "./entry.js"
 import { Env } from "./env.js"
 import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
+import { HarnessStorage } from "./harness-storage.js"
 import { OpenCodeHarness } from "./harness/opencode/harness.js"
 import { HostAccess } from "./host-access.js"
 import { HotReload } from "./hot-reload.js"
@@ -50,6 +52,15 @@ const storage = BrainStorage.Service.of({
 })
 
 const harnessDatabase = join(state, "opencode.db")
+
+const harnessStorage = Layer.succeed(
+  HarnessStorage.Service,
+  HarnessStorage.Service.of({
+    clear: Effect.promise(() =>
+      Promise.all(["", "-wal", "-shm"].map((suffix) => rm(`${harnessDatabase}${suffix}`, { force: true }))),
+    ),
+  }),
+)
 
 const caches = [".bun", ".npm", ".cache"].map((name) => join(home, name))
 
@@ -93,7 +104,7 @@ const runtime = ManagedRuntime.make(
             (path) => `${path}/`,
           ),
         ],
-      }).pipe(Layer.provide(HostAccess.connections)),
+      }).pipe(Layer.provide([HostAccess.connections, harnessStorage])),
     ),
     Layer.provideMerge(Sync.layerWith(reader, vars.REN_URL)),
     Layer.provideMerge(Layer.mergeAll(ChatSettings.layer, BrainKeys.layer)),
@@ -204,7 +215,11 @@ process.on("SIGTERM", () => {
     .runPromise(
       Effect.gen(function* () {
         const sync = yield* Sync.Service
-        yield* sync.flush.pipe(Effect.timeout("8 seconds"), Effect.ignore)
+        const drained = yield* sync.flush.pipe(
+          Effect.timeout("8 seconds"),
+          Effect.orElseSucceed(() => false),
+        )
+        if (drained) yield* HarnessStorage.flushed(OpenCodeHarness.version)
       }),
     )
     .finally(() => {
