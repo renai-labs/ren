@@ -358,7 +358,10 @@ export const layer = Layer.effect(
         const api = yield* client.brain(target)
         return yield* call(
           api.brain["brain.send"]({ params: { id: input.sessionId }, payload: Struct.omit(input, ["sessionId"]) }),
-        ).pipe(Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)))
+        ).pipe(
+          Effect.catchTag("SyncUnavailableError", (cause) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))),
+          Effect.tapErrorTag("BrainUnavailable", () => brainHost.unavailable(session.brainId)),
+        )
       }),
       access: Effect.fn("Brains.access")(function* (
         sessionId: Session.ID,

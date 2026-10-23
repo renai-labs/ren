@@ -83,7 +83,7 @@ const SyncGroup = HttpApiGroup.make("sync")
   .add(
     HttpApiEndpoint.post("sync.restore", "/host/sync/restore", {
       payload: Schema.Struct({ sessionId: Session.ID }),
-      success: Schema.Struct({ sessions: Schema.Array(Sync.OpenCodeSessionRow) }),
+      success: Schema.Struct({ chats: Schema.Array(Sync.RestoredChat) }),
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "sync.restore",

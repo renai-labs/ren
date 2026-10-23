@@ -39,6 +39,15 @@ export class ConflictError extends Schema.TaggedError<ConflictError>()(
   { httpApiStatus: 409 },
 ) {}
 
+export class UnavailableError extends Schema.TaggedError<UnavailableError>()(
+  "UnavailableError",
+  {
+    message: Schema.String,
+    retryAfterMs: Schema.Int.annotate({ description: "Ask again after this many milliseconds." }),
+  },
+  { httpApiStatus: 503 },
+) {}
+
 export class UnknownError extends Schema.TaggedError<UnknownError>()(
   "UnknownError",
   {

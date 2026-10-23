@@ -58,7 +58,9 @@ describe("SyncApi", () => {
       expect(yield* sync["sync.checkpoints"]()).toEqual({
         sessions: [{ id: host.rootId, syncSeq: 2 ** 40, timeSuspended: SyncFixture.now }],
       })
-      expect(yield* sync["sync.restore"]({ payload: { sessionId: host.rootId } })).toEqual({ sessions: [row] })
+      expect(
+        (yield* sync["sync.restore"]({ payload: { sessionId: host.rootId } })).chats.map((chat) => chat.session),
+      ).toEqual([row])
       const first = yield* sync["sync.messages"]({ params, query: { limit: 2 } })
       expect(first).toEqual({ messages: messages.slice(0, 2), next: { seq: 2 ** 40, id: "msg_b" } })
       expect(

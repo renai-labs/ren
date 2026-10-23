@@ -7,7 +7,7 @@ import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { and, eq, isNull } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
+import { Context, DateTime, Effect, Layer, Schema } from "effect"
 import { AgentQueries } from "../agent/queries.js"
 import { BrainHost } from "../brain-host.js"
 import { Brains } from "../brains.js"
@@ -70,7 +70,7 @@ export const layer = Layer.effect(
         input: Session.StartInput,
         options: { readonly agentId?: Agent.ID } = {},
       ) {
-        const startInput = yield* Schema.encodeEffect(Session.StartInput)(Struct.omit(input, ["initialMessage"])).pipe(
+        const startInput = yield* Schema.encodeEffect(Session.StartInput)(input).pipe(
           Effect.orDie,
         )
         const brainId = yield* registry.assign({ ...owner, sessionId: input.sessionId })

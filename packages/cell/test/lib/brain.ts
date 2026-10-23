@@ -24,6 +24,7 @@ import { HostToken } from "../../src/host-token.js"
 import { HotReload } from "../../src/hot-reload.js"
 import { ModelRefresh } from "../../src/model-refresh.js"
 import { ModelStore } from "../../src/model-store.js"
+import { Restore } from "../../src/restore.js"
 import { Sync } from "../../src/sync.js"
 import { ModelsTest } from "./models.js"
 import { Shared } from "./shared.js"
@@ -99,18 +100,23 @@ export const make = Effect.fnUntraced(function* (
   const cell = Context.merge(
     services,
     yield* Layer.build(
-      Harness.layer(
-        Effect.succeed({
-          ...harness,
-          sessions: harness.sessions.pipe(
-            Effect.map((sessions) =>
-              sessions.map((session) => ({
-                ...session,
-                wait: (ms: number) => Queue.offer(waits, ms).pipe(Effect.andThen(session.wait(ms))),
-              })),
-            ),
+      Restore.layer.pipe(
+        Layer.provideMerge(Layer.succeedContext(services)),
+        Layer.provideMerge(
+          Harness.layer(
+            Effect.succeed({
+              ...harness,
+              sessions: harness.sessions.pipe(
+                Effect.map((sessions) =>
+                  sessions.map((session) => ({
+                    ...session,
+                    wait: (ms: number) => Queue.offer(waits, ms).pipe(Effect.andThen(session.wait(ms))),
+                  })),
+                ),
+              ),
+            }),
           ),
-        }),
+        ),
       ),
     ),
   )

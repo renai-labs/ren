@@ -6,6 +6,7 @@ import { EnvironmentLocal } from "@opencode/core/environment/local"
 import { RipgrepBinary } from "@opencode/core/ripgrep/binary"
 // ast-grep-ignore: no-import-alias -- Ren's Session is imported too, and both are values
 import { Session as OpenCodeSession } from "@opencode/core/session"
+import { SessionTransfer } from "@opencode/core/session/transfer"
 import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { EnvironmentAccess } from "@ren/brain/environment/access"
@@ -137,6 +138,7 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
       webSearchProviders: () => Effect.die(new Error("The tool parity host has no web search")),
       credentials: Context.get(services, Credential.Service),
       sessions: Context.get(services, OpenCodeSession.Service),
+      transfer: Context.get(services, SessionTransfer.Service),
       workspaces: Context.get(services, Workspace.Service),
       hasEnvironmentConnections: false,
       directoryOf: () => directory,

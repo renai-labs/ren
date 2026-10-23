@@ -62,7 +62,7 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Restore.Unav
 1. For each restored chat with a staged revert: `stageRevert(chat, messageId)` (E112).
 1. Remove the restore flag.
 
-Callers: every Chat API handler that names a session (through `harnessed` in `cell/src/chat.ts`) and the Brain API handlers `brain.start`, `brain.send` and `brain.setModel` (`cell/src/brain.ts:76-104`). `OpenCodeHarness.start` stops calling `sync.restore` itself (`cell/src/harness/opencode/harness.ts:365-388`). `Restore.ensure` never runs inside a harness hook or the workspace driver (ren-v1 INV-57).
+Callers: the Chat API's `ChatAccess` middleware, for every route under `/chat/session/:sessionID`, with the client token's chat (`cell/src/chat.ts`); and the Brain API handlers `brain.start`, `brain.send` and `brain.setModel` (`cell/src/brain.ts`). `brain.start` passes `isStarting`: the restore leaves the chat it starts to that start (E138). `OpenCodeHarness.start` stops calling `sync.restore` itself (`cell/src/harness/opencode/harness.ts:365-388`). `Restore.ensure` never runs inside a harness hook or the workspace driver (ren-v1 INV-57).
 
 ### `Transcript` (harness adapter, E100, E103, E104, E109, E112, E115)
 

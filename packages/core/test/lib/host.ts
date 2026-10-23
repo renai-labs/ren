@@ -3,6 +3,7 @@ export * as Host from "./host.js"
 import { BunCrypto } from "@effect/platform-bun"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { TestEnvironment } from "@ren/executor/testing"
+import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
 import { ConfigProvider, type Duration, Effect, Layer, Schedule, Schema } from "effect"
@@ -10,6 +11,7 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { Database } from "@ren/db/database"
 import { BrainClient } from "../../src/brain-client.js"
 import { BrainHost } from "../../src/brain-host.js"
 import { Brains } from "../../src/brains.js"
@@ -94,27 +96,53 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
     ),
   )
 
+const listen = (
+  port: number,
+  api: { readonly handler: (request: Request) => Promise<Response>; readonly dispose: () => Promise<void> },
+) =>
+  Effect.acquireRelease(
+    Effect.sync(() =>
+      Bun.serve({ hostname: "127.0.0.1", port, idleTimeout: 0, fetch: (request) => api.handler(request) }),
+    ),
+    (server) =>
+      Effect.promise(async () => {
+        await server.stop(true)
+        await api.dispose()
+      }),
+  )
+
 // oxlint-disable-next-line ren/no-comments -- The Ren Host API of the BrainHost in context, on port. A test stops it to take Ren down for the brains while it still calls BrainHost itself.
 export const serve = (port: number, around?: RenHostApiTest.Around) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const context = yield* Effect.context<Brains.Service>()
-      const api = HttpRouter.toWebHandler(
-        RenHostApiTest.layer(around).pipe(
-          Layer.provide(Layer.succeedContext(context)),
-          Layer.provide(HttpServer.layerServices),
+      yield* listen(
+        port,
+        HttpRouter.toWebHandler(
+          RenHostApiTest.layer(around).pipe(
+            Layer.provide(Layer.succeedContext(context)),
+            Layer.provide(HttpServer.layerServices),
+          ),
+          { disableLogger: true },
         ),
-        { disableLogger: true },
       )
-      yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          Bun.serve({ hostname: "127.0.0.1", port, idleTimeout: 0, fetch: (request) => api.handler(request) }),
+    }),
+  )
+
+// oxlint-disable-next-line ren/no-comments -- As serve, and the brains sync into Postgres.
+export const serveSynced = (port: number) =>
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const context = yield* Effect.context<Brains.Service | Database.Service>()
+      yield* listen(
+        port,
+        HttpRouter.toWebHandler(
+          RenHostApiTest.layerSynced().pipe(
+            Layer.provide(Layer.succeedContext(context)),
+            Layer.provide(HttpServer.layerServices),
+          ),
+          { disableLogger: true },
         ),
-        (server) =>
-          Effect.promise(async () => {
-            await server.stop(true)
-            await api.dispose()
-          }),
       )
     }),
   )
@@ -141,18 +169,25 @@ export const layerWith = <E, R>(
   models: Layer.Layer<Models.Service>,
   environments: Layer.Layer<Environments.Service, E, R>,
   around?: RenHostApiTest.Around,
+  options: { readonly synced?: boolean } = {},
 ) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const found = yield* freePort
-      return Layer.mergeAll(serve(found, around), destroyBrains, Layer.effectDiscard(Seed.ren())).pipe(
-        Layer.provideMerge(stack({ port: found, root: yield* root, config, models, environments })),
-      )
+      return Layer.mergeAll(
+        options.synced ? serveSynced(found) : serve(found, around),
+        destroyBrains,
+        Layer.effectDiscard(Seed.ren()),
+      ).pipe(Layer.provideMerge(stack({ port: found, root: yield* root, config, models, environments })))
     }),
   )
 
 export const layer = (config: Record<string, string>, models: Layer.Layer<Models.Service>) =>
   layerWith(config, models, noTemplates)
+
+// oxlint-disable-next-line ren/no-comments -- As layer, and the brains sync into Postgres, so a test can restore chats.
+export const layerSynced = (config: Record<string, string>, models: Layer.Layer<Models.Service>) =>
+  layerWith(config, models, noTemplates, undefined, { synced: true })
 
 // oxlint-disable-next-line ren/no-comments -- BrainHost.layerCell reaches every brain at CELL_URL, so a test can put a server that fails on purpose there.
 export const cellLayer = <E, R>(
@@ -193,6 +228,34 @@ export const wranglerLayer = (
   Layer.mergeAll(serve(cell.port), Layer.effectDiscard(Seed.ren())).pipe(
     Layer.provideMerge(cellLayer({ CELL_URL: cell.url, BRAIN_KEYS: cellKeys }, models, noTemplates)),
   )
+
+const LocalBinding = Schema.Struct({ pid: Schema.Int, home: Schema.String })
+
+// oxlint-disable-next-line ren/no-comments -- The brain loses its harness database, as on a new sandbox, and keeps brain.db: its restart loop is held while the brain process goes and the database is deleted.
+export const forgetHarness = Effect.fnUntraced(function* (brainId: Brain.ID) {
+  const provider = yield* SandboxProvider.Service
+  const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === brainId)
+  if (!found) return yield* Effect.die(new Error(`Brain ${brainId} has no sandbox`))
+  const binding = Schema.decodeUnknownSync(LocalBinding)(found.binding)
+  const brains = () =>
+    new TextDecoder()
+      .decode(Bun.spawnSync(["pgrep", "-g", String(binding.pid), "-f", "^bun .*cell/src/bun\\.ts"]).stdout)
+      .split("\n")
+      .filter(Boolean)
+  process.kill(binding.pid, "SIGSTOP")
+  yield* Effect.forEach(brains(), (pid) => Effect.sync(() => process.kill(Number(pid), "SIGKILL")), { discard: true })
+  yield* Effect.sync(brains).pipe(
+    Effect.repeat({ until: (left) => left.length === 0, schedule: Schedule.spaced("20 millis") }),
+  )
+  yield* Effect.promise(() =>
+    Promise.all(
+      ["opencode.db", "opencode.db-wal", "opencode.db-shm"].map((name) =>
+        rm(join(binding.home, ".ren", name), { force: true }),
+      ),
+    ),
+  )
+  process.kill(binding.pid, "SIGCONT")
+})
 
 export const ready = <E, R>(access: Effect.Effect<Session.ClientAccess, E, R>) =>
   access.pipe(

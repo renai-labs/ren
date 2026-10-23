@@ -11,6 +11,7 @@ import { BrainStorage } from "./brain-storage.js"
 import { Cell } from "./cell.js"
 import { Chat } from "./chat.js"
 import { ChatSettings } from "./chat-settings.js"
+import { Restore } from "./restore.js"
 import { Entry } from "./entry.js"
 import { Env } from "./env.js"
 import { Fence } from "./fence.js"
@@ -81,6 +82,7 @@ const base = Layer.mergeAll(Cell.activityLayer, Cell.hostLayer).pipe(
 
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(Brain.layer, Chat.layer, Scheduler.layer).pipe(
+    Layer.provideMerge(Restore.layer),
     Layer.provideMerge(HotReload.layer),
     Layer.provideMerge(
       OpenCodeHarness.layerProcess(harnessDatabase, {

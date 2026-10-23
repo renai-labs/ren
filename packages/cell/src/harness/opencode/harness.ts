@@ -5,18 +5,17 @@ import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import type { SessionCreateInput, SessionListInput, SessionUpdateInput } from "@opencode/client/effect/api"
-import { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from "@ren/host-api/errors"
+import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
-import { Clock, DateTime, Effect, Layer, Option, Ref, type Scope, Semaphore, Stream, Struct } from "effect"
+import { Clock, DateTime, Effect, Layer, Option, Ref, type Scope, Semaphore, Stream } from "effect"
 import { mkdir } from "node:fs/promises"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
 import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
-import { Sync } from "../../sync.js"
 import { Harness } from "../harness.js"
 import { OpenCodeChat } from "./chat.js"
 import { OpenCodeRows } from "./opencode-rows.js"
@@ -369,7 +368,6 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
 ) {
   const client = server.client
   const state = { firstAskedAt: new Map<string, number>() }
-  const sync = yield* Effect.serviceOption(Sync.Service)
   const mutations = yield* Semaphore.make(1)
   const configure = Effect.fn("OpenCodeHarness.configure")(function* (next: ReadonlyArray<Models.Endpoint>) {
     yield* server.configure(next)
@@ -383,36 +381,32 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     start: (input: StartBody) =>
       mutations.withPermit(
         Effect.gen(function* () {
-          if (Option.isSome(sync))
-            yield* sync.value
-              .restore({
-                sessionId: input.sessionId,
-                exists: (id) => findSession(client, Session.ID.make(id)).pipe(Effect.map(Option.isSome)),
-                create: start(client, server, settings, Struct.omit(input, ["initialMessage"])),
-                import: (data) =>
-                  Effect.gen(function* () {
-                    const info = OpenCodeRows.session(data.session)
-                    const messages = yield* Effect.forEach(data.messages, OpenCodeRows.message)
-                    return yield* client.session.import({
-                      info,
-                      messages,
-                      location: { directory: info.location.directory },
-                    })
-                  }).pipe(Effect.orDie),
-              })
-              .pipe(
-                Effect.catchTag("OpenCodeSync.SyncError", (error) =>
-                  Effect.fail(
-                    new SyncUnavailableError({ message: `Ren could not restore the session: ${error.message}` }),
-                  ),
-                ),
-              )
-          // oxlint-disable-next-line ren/no-comments -- Phase 5 explicitly defers workspace restoration until OpenCode's import API accepts it.
-          // TODO: Restore the ren workspace for sessions with an environment when the import API supports workspace locations.
           return yield* start(client, server, settings, input)
         }),
       ),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
+    transcript: {
+      has: (chat) => findSession(client, Session.ID.make(chat)).pipe(Effect.map(Option.isSome)),
+      start: (input) => mutations.withPermit(start(client, server, settings, input)).pipe(Effect.asVoid),
+      // oxlint-disable-next-line ren/no-comments -- The in-process import keeps the chat's workspace link, so its tools stay on its hand (E104); OpenCode's import route drops it.
+      restore: (data) =>
+        mutations.withPermit(
+          Effect.gen(function* () {
+            const info = OpenCodeRows.session(data.session)
+            const messages = yield* Effect.forEach(data.messages, OpenCodeRows.message)
+            const workspaceID = data.session.workspace_id
+              ? yield* server.workspaces.create({
+                  id: RenWorkspaceDriver.workspaceId(data.chat.id),
+                  provider: RenWorkspaceDriver.provider,
+                })
+              : undefined
+            yield* server.transfer.import({
+              data: { info, messages },
+              location: Location.Ref.make({ directory: info.location.directory, workspaceID }),
+            })
+          }).pipe(Effect.orDie),
+        ),
+    },
     setModel: (sessionId: string, model: Option.Option<Model>) =>
       mutations.withPermit(
         Effect.gen(function* () {

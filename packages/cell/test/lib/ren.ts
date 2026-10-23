@@ -225,9 +225,17 @@ export const start = (options: { readonly hostname?: string } = {}) => {
         )
         .handle("sync.restore", (request) =>
           Effect.sync(() => ({
-            sessions: [...synced.sessions.values()]
+            chats: [...synced.sessions.values()]
               .map((entry) => entry.row)
-              .filter((row) => row.id === request.payload.sessionId || row.parent_id === request.payload.sessionId),
+              .filter((row) => row.id === request.payload.sessionId || row.parent_id === request.payload.sessionId)
+              .map((row) => ({
+                id: row.id,
+                harness: "opencode" as const,
+                harnessVersion: null,
+                parentId: row.parent_id,
+                revertMessageId: null,
+                session: row,
+              })),
           })),
         )
         .handle("sync.messages", (request) =>

@@ -4,9 +4,9 @@ import { ForbiddenError, StaleUploadError } from "@ren/host-api/errors"
 import type { CurrentHost } from "@ren/host-api/ren-host-api"
 import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
-import type { Session } from "@ren/schema/session"
+import { Session } from "@ren/schema/session"
 import { and, asc, eq, sql } from "drizzle-orm"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import { OpenCodeStore } from "./session/opencode-store.js"
 
 export { ForbiddenError, StaleUploadError } from "@ren/host-api/errors"
@@ -45,10 +45,7 @@ export interface Interface {
     upload: number,
     input: { readonly session: Sync.OpenCodeSessionRow; readonly seq: number; readonly ids: ReadonlyArray<string> },
   ) => Effect.Effect<void, ForbiddenError | StaleUploadError>
-  readonly restore: (
-    host: Host,
-    sessionId: Session.ID,
-  ) => Effect.Effect<ReadonlyArray<Sync.OpenCodeSessionRow>, ForbiddenError>
+  readonly restore: (host: Host, sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Sync.RestoredChat>, ForbiddenError>
   readonly messages: (
     host: Host,
     sessionId: Session.ID,
@@ -187,19 +184,53 @@ export const layer = Layer.effect(
       restore: Effect.fn("SessionSync.restore")(function* (host: Host, sessionId: Session.ID) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            yield* lock(transaction, host, sessionId)
+            const chat = yield* lock(transaction, host, sessionId)
             const tree = yield* transaction
               .update(Database.Schema.agent_session)
               .set({ sync_seq: null, sync_upload_open: false })
-              .where(inScope(host))
-              .returning({ id: Database.Schema.agent_session.id, parentId: Database.Schema.agent_session.parent_id })
-            const parents = new Map(tree.map((session) => [session.id, session.parentId]))
+              .where(and(eq(Database.Schema.agent_session.root_id, chat.root_id), inScope(host)))
+              .returning({
+                id: Database.Schema.agent_session.id,
+                parentId: Database.Schema.agent_session.parent_id,
+                harness: Database.Schema.agent_session.harness,
+                harnessVersion: Database.Schema.agent_session.harness_version,
+                revertMessageId: Database.Schema.agent_session.revert_message_id,
+                startInput: Database.Schema.agent_session.start_input,
+                createdAt: Database.Schema.agent_session.created_at,
+              })
+            const parents = new Map(tree.map((chat) => [chat.id, chat.parentId]))
             const depth = (id: Session.ID | null): number => (id ? depth(parents.get(id) ?? null) + 1 : 0)
-            const rows = yield* OpenCodeStore.sessions(
-              transaction,
-              tree.map((session) => session.id),
+            const rows = new Map(
+              (yield* OpenCodeStore.sessions(
+                transaction,
+                tree.map((chat) => chat.id),
+              )).map((row) => [row.id, row]),
             )
-            return rows.toSorted((left, right) => depth(left.id) - depth(right.id))
+            return yield* Effect.forEach(
+              tree.toSorted(
+                (left, right) =>
+                  depth(left.id) - depth(right.id) ||
+                  left.createdAt.getTime() - right.createdAt.getTime() ||
+                  (left.id < right.id ? -1 : 1),
+              ),
+              (chat) =>
+                Effect.gen(function* () {
+                  const session = rows.get(chat.id) ?? null
+                  const restored = {
+                    id: chat.id,
+                    harness: chat.harness,
+                    harnessVersion: chat.harnessVersion,
+                    parentId: chat.parentId,
+                    revertMessageId: chat.revertMessageId,
+                    session,
+                  }
+                  if (session || !chat.startInput) return restored satisfies Sync.RestoredChat
+                  return {
+                    ...restored,
+                    start: yield* Schema.decodeUnknownEffect(Session.StartInput)(chat.startInput).pipe(Effect.orDie),
+                  } satisfies Sync.RestoredChat
+                }),
+            )
           }),
         )
       }),

@@ -10,7 +10,7 @@ import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { and, eq } from "drizzle-orm"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import { RenSettings } from "../../src/settings/ren.js"
 
 export const organization = Effect.fnUntraced(function* () {
@@ -116,7 +116,7 @@ export const session = Effect.fnUntraced(function* (
     readonly createdBy: Auth.UserID
     readonly brainId?: Brain.ID
   },
-  start: Omit<Partial<Session.StartInput>, "initialMessage"> = {},
+  start: Partial<Session.StartInput> = {},
 ) {
   const database = yield* Database.Service
   const id = start.sessionId ?? Session.ID.create()
@@ -148,7 +148,12 @@ export const session = Effect.fnUntraced(function* (
     created_by: owner.createdBy,
     root_id: id,
     harness: "opencode",
-    start_input: { sessionId: id, harness: "opencode", ...start },
+    start_input: Schema.encodeSync(Session.StartInput)({
+      sessionId: id,
+      harness: "opencode",
+      interactive: true,
+      ...start,
+    }),
     started_at: null,
   })
   return id

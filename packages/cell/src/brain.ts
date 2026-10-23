@@ -1,7 +1,7 @@
 export * as Brain from "./brain.js"
 
 import { BrainApi, hostTokenHeader } from "@ren/host-api/brain-api"
-import { ModelsNotConfiguredError } from "@ren/host-api/errors"
+import { ModelsNotConfiguredError, SyncUnavailableError } from "@ren/host-api/errors"
 import { DateTime, Effect, Layer, Option, type Scope } from "effect"
 import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
@@ -10,6 +10,7 @@ import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { HotReload } from "./hot-reload.js"
 import { ModelStore } from "./model-store.js"
+import { Restore } from "./restore.js"
 import { Sync } from "./sync.js"
 
 type Services =
@@ -20,6 +21,7 @@ type Services =
   | HostToken.Service
   | Sync.Service
   | HotReload.Service
+  | Restore.Service
 
 const prefix = "/ren"
 
@@ -79,6 +81,16 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
             const hotReload = yield* HotReload.Service
             yield* hotReload.pull
             yield* configured
+            const restore = yield* Restore.Service
+            yield* restore
+              .ensure(request.payload.sessionId, { isStarting: true })
+              .pipe(
+                Effect.catchTag("Restore.Unavailable", (error) =>
+                  Effect.fail(
+                    new SyncUnavailableError({ message: `Ren could not restore the chat: ${error.message}` }),
+                  ),
+                ),
+              )
             const harness = yield* Cell.acquire
             return yield* harness.start(request.payload)
           }),
@@ -88,6 +100,16 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
         handle(
           Effect.gen(function* () {
             yield* configured
+            const restore = yield* Restore.Service
+            yield* restore
+              .ensure(request.params.id)
+              .pipe(
+                Effect.catchTag("Restore.Unavailable", (error) =>
+                  Effect.fail(
+                    new SyncUnavailableError({ message: `Ren could not restore the chat: ${error.message}` }),
+                  ),
+                ),
+              )
             const harness = yield* Cell.acquire
             return yield* harness.send({ ...request.payload, sessionId: request.params.id })
           }),
@@ -97,6 +119,16 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
         handle(
           Effect.gen(function* () {
             yield* configured
+            const restore = yield* Restore.Service
+            yield* restore
+              .ensure(request.params.id)
+              .pipe(
+                Effect.catchTag("Restore.Unavailable", (error) =>
+                  Effect.fail(
+                    new SyncUnavailableError({ message: `Ren could not restore the chat: ${error.message}` }),
+                  ),
+                ),
+              )
             const harness = yield* Cell.acquire
             yield* harness.setModel(request.params.id, Option.fromNullishOr(request.payload.model))
           }),

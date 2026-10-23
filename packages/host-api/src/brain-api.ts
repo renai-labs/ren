@@ -62,7 +62,13 @@ const BrainGroup = HttpApiGroup.make("brain")
       params: { id: Session.ID },
       payload: SendBody,
       success: Session.Accepted,
-      error: [ForbiddenError, BrainRejectedError, SessionNotStartedError, ModelsNotConfiguredError],
+      error: [
+        ForbiddenError,
+        BrainRejectedError,
+        SessionNotStartedError,
+        ModelsNotConfiguredError,
+        SyncUnavailableError,
+      ],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.send",
@@ -75,7 +81,13 @@ const BrainGroup = HttpApiGroup.make("brain")
     HttpApiEndpoint.put("brain.setModel", "/ren/sessions/:id/model", {
       params: { id: Session.ID },
       payload: SetModelBody,
-      error: [ForbiddenError, BrainRejectedError, SessionNotStartedError, ModelsNotConfiguredError],
+      error: [
+        ForbiddenError,
+        BrainRejectedError,
+        SessionNotStartedError,
+        ModelsNotConfiguredError,
+        SyncUnavailableError,
+      ],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "brain.setModel",
