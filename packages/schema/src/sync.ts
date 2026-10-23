@@ -49,6 +49,19 @@ export const OpenCodeSessionRow = Schema.Struct({
 })
 export interface OpenCodeSessionRow extends Schema.Schema.Type<typeof OpenCodeSessionRow> {}
 
+export const OpenCodeInboxRow = Schema.Struct({
+  id: Schema.String,
+  session_id: Session.ID,
+  type: Schema.String,
+  payload: Json,
+  delivery: Schema.String,
+  enqueued_seq: Schema.Int.annotate({ description: "The order of the inbox: a lower value is delivered first." }),
+}).annotate({
+  identifier: "Sync.OpenCodeInboxRow",
+  description: "A message that waits in an OpenCode chat’s inbox, such as a queued prompt (E110).",
+})
+export interface OpenCodeInboxRow extends Schema.Schema.Type<typeof OpenCodeInboxRow> {}
+
 export const RestoredChat = Schema.Struct({
   id: Session.ID,
   harness: Session.Harness,
@@ -61,6 +74,7 @@ export const RestoredChat = Schema.Struct({
   start: Schema.optionalKey(Session.StartInput).annotate({
     description: "Present when the chat has no transcript: the start input, with the first message.",
   }),
+  inbox: Schema.Array(OpenCodeInboxRow).annotate({ description: "The chat’s queued messages, in order." }),
   directory: Schema.optionalKey(Schema.String).annotate({
     description: "With `start`: the folder on the chat’s hand, as a start from Ren would give it.",
   }),

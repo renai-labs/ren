@@ -68,6 +68,24 @@ export const keepMessages = Effect.fnUntraced(function* (
     )
 })
 
+export const keepInbox = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  sessionId: Session.ID,
+  rows: ReadonlyArray<Sync.OpenCodeInboxRow>,
+) {
+  yield* transaction
+    .delete(Database.Schema.opencode_inbox)
+    .where(eq(Database.Schema.opencode_inbox.session_id, sessionId))
+  if (rows.length > 0) yield* transaction.insert(Database.Schema.opencode_inbox).values([...rows])
+})
+
+export const inbox = (transaction: Database.Transaction, ids: ReadonlyArray<Session.ID>) =>
+  transaction
+    .select()
+    .from(Database.Schema.opencode_inbox)
+    .where(inArray(Database.Schema.opencode_inbox.session_id, [...ids]))
+    .orderBy(asc(Database.Schema.opencode_inbox.enqueued_seq))
+
 export const sessions = (transaction: Database.Transaction, ids: ReadonlyArray<Session.ID>) =>
   transaction
     .select({ opencode: Database.Schema.opencode_session, parentId: Database.Schema.agent_session.parent_id })

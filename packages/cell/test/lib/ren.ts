@@ -235,6 +235,7 @@ export const start = (options: { readonly hostname?: string } = {}) => {
                 parentId: row.parent_id,
                 revertMessageId: null,
                 session: row,
+                inbox: [],
               })),
           })),
         )

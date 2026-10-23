@@ -43,7 +43,13 @@ export interface Interface {
     host: Host,
     sessionId: Session.ID,
     upload: number,
-    input: { readonly session: Sync.OpenCodeSessionRow; readonly seq: number; readonly ids: ReadonlyArray<string> },
+    input: {
+      readonly session: Sync.OpenCodeSessionRow
+      readonly seq: number
+      readonly ids: ReadonlyArray<string>
+      readonly inbox?: ReadonlyArray<Sync.OpenCodeInboxRow>
+      readonly revertMessageId?: string | null
+    },
   ) => Effect.Effect<void, ForbiddenError | StaleUploadError>
   readonly restore: (
     host: Host,
@@ -170,7 +176,13 @@ export const layer = Layer.effect(
         host: Host,
         sessionId: Session.ID,
         upload: number,
-        input: { readonly session: Sync.OpenCodeSessionRow; readonly seq: number; readonly ids: ReadonlyArray<string> },
+        input: {
+          readonly session: Sync.OpenCodeSessionRow
+          readonly seq: number
+          readonly ids: ReadonlyArray<string>
+          readonly inbox?: ReadonlyArray<Sync.OpenCodeInboxRow>
+          readonly revertMessageId?: string | null
+        },
       ) {
         yield* database.transaction((transaction) =>
           Effect.gen(function* () {
@@ -178,9 +190,18 @@ export const layer = Layer.effect(
             if (input.session.id !== sessionId) return yield* forbidden
             yield* OpenCodeStore.writeSession(transaction, input.session)
             yield* OpenCodeStore.keepMessages(transaction, sessionId, input.ids)
+            if (input.inbox) {
+              if (input.inbox.some((row) => row.session_id !== sessionId)) return yield* forbidden
+              yield* OpenCodeStore.keepInbox(transaction, sessionId, input.inbox)
+            }
             yield* transaction
               .update(Database.Schema.agent_session)
-              .set({ sync_seq: input.seq, sync_upload_open: false })
+              .set({
+                sync_seq: input.seq,
+                sync_upload_open: false,
+                // ast-grep-ignore: no-nullish-comparison, -- null clears the revert; undefined is a brain that does not send it
+                ...(input.revertMessageId !== undefined && { revert_message_id: input.revertMessageId }),
+              })
               .where(eq(Database.Schema.agent_session.id, sessionId))
           }),
         )
@@ -209,6 +230,10 @@ export const layer = Layer.effect(
               })
             const parents = new Map(tree.map((chat) => [chat.id, chat.parentId]))
             const depth = (id: Session.ID | null): number => (id ? depth(parents.get(id) ?? null) + 1 : 0)
+            const queued = yield* OpenCodeStore.inbox(
+              transaction,
+              tree.map((chat) => chat.id),
+            )
             const rows = new Map(
               (yield* OpenCodeStore.sessions(
                 transaction,
@@ -232,6 +257,7 @@ export const layer = Layer.effect(
                     parentId: chat.parentId,
                     revertMessageId: chat.revertMessageId,
                     session,
+                    inbox: queued.filter((row) => row.session_id === chat.id),
                   }
                   if (session || !chat.startInput) return restored satisfies Sync.RestoredChat
                   const start = yield* Schema.decodeUnknownEffect(Session.StartInput)(chat.startInput).pipe(

@@ -72,7 +72,7 @@ const opened = Effect.fnUntraced(function* (text: string) {
     ).pipe(
       Effect.flatMap((response) =>
         response.ok
-          ? Effect.promise(() => response.json())
+          ? Effect.promise(() => (response.status === 204 ? Promise.resolve(null) : response.json()))
           : Effect.fail(new Error(`${path} answered ${response.status}`)),
       ),
       Effect.retry({ schedule: Schedule.spaced("100 millis"), times: 100 }),
@@ -156,4 +156,63 @@ it.live(
         `/workspace/${chat.sessionId}`,
       )
     }),
+)
+
+it.live("queued messages of a chat come back with it, in order, after its harness database is lost", () =>
+  Effect.gen(function* () {
+    const script = stub.script()
+    const chat = yield* opened(`open ${script.marker}`)
+    yield* Effect.promise(() => script.called())
+    yield* chat.idle
+    const queued = [SessionMessage.ID.create(), SessionMessage.ID.create()]
+    yield* Effect.forEach(queued, (id, index) =>
+      chat.chat("/prompt", {
+        method: "POST",
+        body: JSON.stringify({ id, text: `later ${index}`, delivery: "queue", resume: false }),
+      }),
+    )
+    const inbox = chat.chat("/inbox").pipe(
+      Effect.map((body) => Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ id: Schema.String })))(body)),
+      Effect.map((items) => items.map((item) => item.id)),
+    )
+    expect(yield* inbox).toEqual(queued)
+    yield* chat.synced
+    yield* Host.forgetHarness(chat.brainId)
+    expect(yield* inbox).toEqual(queued)
+  }),
+)
+
+it.live("a staged revert stays staged after a restore, and clearing it brings the hidden messages back", () =>
+  Effect.gen(function* () {
+    const first = stub.script()
+    const chat = yield* opened(`open ${first.marker}`)
+    yield* Effect.promise(() => first.called())
+    yield* chat.idle
+    const second = stub.script()
+    const later = SessionMessage.ID.create()
+    yield* chat.chat("/prompt", {
+      method: "POST",
+      body: JSON.stringify({ id: later, text: second.marker, delivery: "steer" }),
+    })
+    yield* Effect.promise(() => second.called())
+    yield* chat.idle
+    const all = (yield* chat.read).messages
+    const boundary = chat
+      .chat("")
+      .pipe(
+        Effect.map(
+          (body) =>
+            Schema.decodeUnknownSync(
+              Schema.Struct({ revert: Schema.optional(Schema.Struct({ messageID: Schema.String })) }),
+            )(body).revert?.messageID,
+        ),
+      )
+    yield* chat.chat("/revert", { method: "POST", body: JSON.stringify({ messageID: later }) })
+    expect(yield* boundary).toBe(later)
+    yield* chat.synced
+    yield* Host.forgetHarness(chat.brainId)
+    expect([yield* boundary, (yield* chat.read).messages]).toEqual([later, all])
+    yield* chat.chat("/revert", { method: "DELETE" })
+    expect(yield* boundary).toBeUndefined()
+  }),
 )

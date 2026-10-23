@@ -3,6 +3,7 @@ export * as OpenCodeHarness from "./harness.js"
 import { AbsolutePath, Agent, Session, SessionMessage } from "@opencode/client/effect"
 import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
+import { SessionInbox } from "@opencode/schema/session-inbox"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import type { SessionCreateInput, SessionListInput, SessionUpdateInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
@@ -11,7 +12,7 @@ import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
-import { Clock, DateTime, Effect, Layer, Option, Ref, type Scope, Semaphore, Stream, Struct } from "effect"
+import { Clock, DateTime, Effect, Layer, Option, Ref, Schema, type Scope, Semaphore, Stream, Struct } from "effect"
 import { mkdir } from "node:fs/promises"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
@@ -413,6 +414,32 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               data: { info, messages },
               location: Location.Ref.make({ directory: info.location.directory, workspaceID }),
             })
+            // oxlint-disable-next-line ren/no-comments -- Queued messages go back in the chat's inbox with their ids and order, and start no turn (E110).
+            yield* Effect.forEach(
+              data.chat.inbox.filter((row) => row.type === "user"),
+              (row) =>
+                Schema.decodeUnknownEffect(Schema.fromJsonString(SessionInbox.UserPayload))(row.payload).pipe(
+                  Effect.flatMap((payload) =>
+                    client.session.prompt({
+                      text: payload.text,
+                      ...(payload.metadata && { metadata: payload.metadata }),
+                      ...(payload.agents && { agents: payload.agents }),
+                      ...(payload.skills && { skills: payload.skills }),
+                      sessionID: info.id,
+                      id: SessionMessage.ID.make(row.id),
+                      delivery: row.delivery === "steer" ? "steer" : "queue",
+                      resume: false,
+                    }),
+                  ),
+                ),
+              { discard: true },
+            )
+            // oxlint-disable-next-line ren/no-comments -- A revert that was staged, not committed, stays staged (E112).
+            if (data.chat.revertMessageId)
+              yield* client.session.revert.stage({
+                sessionID: info.id,
+                messageID: SessionMessage.ID.make(data.chat.revertMessageId),
+              })
           }).pipe(Effect.orDie),
         ),
     },
