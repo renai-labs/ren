@@ -68,7 +68,14 @@ const SyncGroup = HttpApiGroup.make("sync")
         session: Sync.OpenCodeSessionRow,
         seq: Schema.Int.annotate({ description: "The OpenCode checkpoint that the host read before the messages." }),
         ids: Schema.Array(Schema.String).annotate({
-          description: "The IDs of all messages that the upload sent. Ren deletes the other messages of the session.",
+          description:
+            "The IDs of all messages that the upload sent. Ren marks the other messages of the session removed.",
+        }),
+        revertMessageId: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
+          description: "The first message that the session’s staged revert hides, or null.",
+        }),
+        inbox: Schema.optionalKey(Schema.Array(Sync.OpenCodeInboxRow)).annotate({
+          description: "The session’s queued messages. Ren replaces the ones it has.",
         }),
       }),
       error: StaleUploadError,

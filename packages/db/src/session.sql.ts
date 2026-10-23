@@ -124,6 +124,22 @@ export const opencode_message = pgTable(
   ],
 )
 
+export const opencode_inbox = pgTable(
+  "opencode_inbox",
+  {
+    id: text().notNull(),
+    session_id: text()
+      .$type<Session.ID>()
+      .notNull()
+      .references(() => agent_session.id, { onDelete: "cascade" }),
+    type: text().notNull(),
+    payload: text().notNull(),
+    delivery: text().notNull(),
+    enqueued_seq: bigint({ mode: "number" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.session_id, table.id] })],
+)
+
 export const sessionRelations = defineRelationsPart(
   { organization, user, space, agent, agent_session, opencode_session, opencode_message },
   (r) => ({

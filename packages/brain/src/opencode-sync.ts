@@ -41,6 +41,8 @@ export interface Remote {
       readonly session: Sync.OpenCodeSessionRow
       readonly seq: number
       readonly ids: ReadonlyArray<string>
+      readonly inbox: ReadonlyArray<Sync.OpenCodeInboxRow>
+      readonly revertMessageId: string | null
     },
   ) => Effect.Effect<void, RemoteError>
   readonly restore: (sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Sync.RestoredChat>, RemoteError>
@@ -125,7 +127,13 @@ const Tables = Schema.Array(
 const Snapshot = Schema.Struct({
   seq: Schema.Array(Schema.Struct({ seq: Schema.Int })),
   ids: Schema.Array(Schema.Struct({ id: Schema.String })),
+  inbox: Schema.Array(Sync.OpenCodeInboxRow),
+  revert: Schema.Array(Schema.Struct({ revert: Schema.NullOr(Schema.String) })),
 })
+
+const Revert = Schema.fromJsonString(Schema.Struct({ messageID: Schema.String }))
+
+const inboxColumns = Object.keys(Sync.OpenCodeInboxRow.fields)
 
 const encoder = new TextEncoder()
 
@@ -217,6 +225,13 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
     const snapshot = yield* read((query) => ({
       seq: [...query("select seq from event_sequence where aggregate_id = ?", session.id)],
       ids: [...query("select id from session_message where session_id = ? order by seq, id", session.id)],
+      inbox: [
+        ...query(
+          `select ${inboxColumns.join(", ")} from session_inbox where session_id = ? order by enqueued_seq`,
+          session.id,
+        ),
+      ],
+      revert: [...query("select revert from session_v2 where id = ?", session.id)],
     })).pipe(Effect.flatMap((rows) => decode(Snapshot, rows)))
     const latest = snapshot.seq.at(0)
     if (!latest) return "failed" as const
@@ -231,7 +246,16 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
       session.id,
     )
     if (Option.isNone(row)) return "failed" as const
-    yield* remote.commit(params, { session: row.value, seq: latest.seq, ids: sent.value })
+    const staged = snapshot.revert.at(0)?.revert
+    yield* remote.commit(params, {
+      session: row.value,
+      seq: latest.seq,
+      ids: sent.value,
+      inbox: snapshot.inbox,
+      revertMessageId: staged
+        ? Option.getOrNull(Option.map(Schema.decodeUnknownOption(Revert)(staged), (found) => found.messageID))
+        : null,
+    })
     return "committed" as const
   })
 
