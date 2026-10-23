@@ -8,7 +8,7 @@ import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import type { Signature } from "@ren/schema/signature"
-import { Clock, Duration, Effect, Layer, Option, Queue, Result } from "effect"
+import { Clock, Duration, Effect, Layer, Option, Queue, Result, Schema } from "effect"
 import { eq } from "drizzle-orm"
 import { TestClock } from "effect/testing"
 import { BrainRegistry } from "../src/brain-registry.js"
@@ -125,7 +125,7 @@ describe("Brains on the cell host", () => {
                 const status = gate.open ? 200 : 503
                 Queue.offerUnsafe(answers, status)
                 if (!gate.open) return new Response("busy", { status })
-                const body = (await request.json()) as { readonly sessionId: string }
+                const body = Schema.decodeUnknownSync(Schema.Struct({ sessionId: Schema.String }))(await request.json())
                 return Response.json({ sessionId: body.sessionId, harness: "opencode" })
               },
             }),

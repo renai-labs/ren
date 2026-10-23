@@ -193,7 +193,7 @@ export const serve = (port: number, around?: RenHostApiTest.Around) =>
   )
 
 // oxlint-disable-next-line ren/no-comments -- As serve, and the brains sync into Postgres.
-export const serveSynced = (port: number) =>
+const serveSynced = (port: number) =>
   Layer.effect(
     Outage,
     Effect.gen(function* () {
