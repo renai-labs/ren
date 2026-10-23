@@ -27,11 +27,18 @@ export const lock = Effect.fnUntraced(function* (
     .from(Database.Schema.organization)
     .where(eq(Database.Schema.organization.id, actor.organizationId))
     .for("update")
-  if (options.graph !== false)
-    yield* transaction.execute(
-      sql`select pg_advisory_xact_lock(${gate.namespace}::int, hashtext(${actor.organizationId}))`,
-    )
+  if (options.graph === false) return
+  // oxlint-disable-next-line ren/no-comments -- A registry publication checks the graph of every consumer space, in every organization: it holds this key exclusively, and organization writes share it.
+  yield* transaction.execute(sql`select pg_advisory_xact_lock_shared(${gate.namespace}::int, hashtext('registry'))`)
+  yield* transaction.execute(
+    sql`select pg_advisory_xact_lock(${gate.namespace}::int, hashtext(${actor.organizationId}))`,
+  )
 })
+
+export const registryLock = (transaction: Database.Transaction) =>
+  transaction.execute(sql`select pg_advisory_xact_lock(${gate.namespace}::int, hashtext('registry'))`)
+
+export const isListed = sql<boolean>`exists (select 1 from app_listing where app_listing.app_id = ${Database.Schema.app}.id and app_listing.archived_at is null)`
 
 export const appInfo = (row: typeof Database.Schema.app.$inferSelect): App.Info => {
   return {
@@ -177,6 +184,7 @@ export const find = Effect.fnUntraced(function* (
       app: Database.Schema.app,
       isOwnerMember: isOwnerMember(actor),
       isSpaceMember: isSpaceMember(actor),
+      isListed,
     })
     .from(Database.Schema.app)
     .where(
@@ -186,6 +194,7 @@ export const find = Effect.fnUntraced(function* (
           : eq(Database.Schema.app.slug, idOrSlug),
         or(
           eq(Database.Schema.app.organization_id, actor.organizationId),
+          isListed,
           sql`exists (select 1 from space_app inner join space on space.id = space_app.space_id where space_app.app_id = ${Database.Schema.app}.id and space_app.archived_at is null and space.organization_id = ${actor.organizationId})`,
         ),
         options.includeArchived ? undefined : isNull(Database.Schema.app.archived_at),
