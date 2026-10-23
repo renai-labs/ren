@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Exit, Schema } from "effect"
 import { Infra } from "../src/infra.js"
+import { App } from "../src/app.js"
 
 const agent = { description: "Writes the code." }
 
@@ -68,7 +69,7 @@ describe("Infra.Spec", () => {
   })
 
   test("rejects a skill that two apps define", () => {
-    const skill = { type: "upstream", upstream: { url: "https://github.com/acme/skills.git" } }
+    const skill = { type: "upstream", upstream: { url: "https://github.com/acme/skills.git", path: "." } }
     const exit = decode({
       engineering: { name: "Engineering", apps: { "release-notes": app({ skills: { changelog: skill } }) } },
       support: { name: "Support", apps: { "support-notes": app({ skills: { changelog: skill } }) } },
@@ -130,5 +131,52 @@ describe("Infra.Spec", () => {
       requiredCredentials: [{ kind: "env", name: "LANGFUSE_PUBLIC_KEY" }],
     })
     expect(String(exit)).toContain('The auth uses credential "LANGFUSE_SECRET_KEY", which the MCP does not require.')
+  })
+
+  test("custom dependency cycles report their path", () => {
+    const exit = decode({
+      engineering: {
+        name: "Engineering",
+        apps: {
+          first: app({ dependsOn: ["second"] }),
+          second: app({ dependsOn: ["first"] }),
+        },
+      },
+    })
+    expect(String(exit)).toContain("first -> second -> first")
+    expect(
+      App.dependencyCycles(
+        new Map([
+          ["first", { dependsOn: ["second"] }],
+          ["second", { dependsOn: ["first"] }],
+        ]),
+      ),
+    ).toEqual(["first -> second -> first"])
+  })
+
+  test("an upstream skill requires one safe explicit source directory", () => {
+    for (const path of [
+      undefined,
+      "",
+      "..",
+      "../tools",
+      "/tools",
+      "tools//notes",
+      "tools/../notes",
+      "tools\\notes",
+      "tools/./notes",
+    ]) {
+      const exit = decode({
+        engineering: {
+          name: "Engineering",
+          apps: {
+            notes: app({
+              skills: { notes: { type: "upstream", upstream: { url: "https://github.com/acme/skills", path } } },
+            }),
+          },
+        },
+      })
+      expect(Exit.isFailure(exit)).toBe(true)
+    }
   })
 })
