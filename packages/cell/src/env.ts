@@ -24,4 +24,5 @@ export const Vars = Schema.Struct({
   CHAT_HEARTBEAT_MS: Millis(15_000),
   OPENCODE_CONFIG: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed("{}"))),
   REN_URL: Schema.optional(Schema.String),
+  REN_BRAIN_VERSION: Schema.optional(Schema.String),
 })

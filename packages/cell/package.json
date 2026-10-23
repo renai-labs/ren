@@ -15,7 +15,7 @@
     "test": "bun ../../script/test.ts",
     "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/cell.test.ts test/environment-lifecycle-cell.test.ts test/sync-storage.test.ts",
     "typecheck": "tsgo -b",
-    "template:e2b": "bun e2b/stage.ts && cd e2b && e2b template create ren-brain-dev -d e2b.Dockerfile -c /opt/ren/start.sh --ready-cmd 'pgrep -f /opt/ren/start.sh' --cpu-count 2 --memory-mb 2048"
+    "template:e2b": "bun e2b/stage.ts"
   },
   "dependencies": {
     "@opencode/ai": "catalog:",
@@ -33,11 +33,12 @@
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@ren/executor": "workspace:*",
     "@cloudflare/workers-types": "catalog:",
+    "@ren/executor": "workspace:*",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
+    "e2b": "2.19.4",
     "wrangler": "catalog:"
   }
 }
