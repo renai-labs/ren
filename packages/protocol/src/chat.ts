@@ -10,10 +10,14 @@ import { SessionModel } from "@ren/schema/session/model"
 import { SessionStatus } from "@ren/schema/session/status"
 import { Shell } from "@ren/schema/shell"
 import { Schema, SchemaGetter } from "effect"
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/http-api"
 import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "./errors.js"
 
 const params = { sessionID: Session.ID }
+
+export class ChatAccess extends HttpApiMiddleware.Service<ChatAccess>()("@ren/protocol/chat/ChatAccess", {
+  error: ForbiddenError,
+}) {}
 
 export interface PromptSkill extends Schema.Schema.Type<typeof PromptSkill> {}
 export const PromptSkill = Schema.Struct({
@@ -148,18 +152,6 @@ export const SessionGroup = HttpApiGroup.make("session")
     ),
   )
   .add(
-    HttpApiEndpoint.get("session.status", "/chat/status", {
-      success: SessionStatus.Family,
-    }).annotateMerge(
-      OpenApi.annotations({
-        identifier: "session.status",
-        summary: "Get the status of the session family",
-        description:
-          "Return the sessions of the family that are running. A session that is absent is idle. A retry shows on the running assistant message as `retry`, not here.",
-      }),
-    ),
-  )
-  .add(
     HttpApiEndpoint.get("session.messages", "/chat/session/:sessionID/message", {
       params,
       query: MessagesQuery,
@@ -243,7 +235,7 @@ export const SessionGroup = HttpApiGroup.make("session")
       params,
       payload: PromptInput,
       success: Accepted,
-      error: [NotFoundError, ForbiddenError, ConflictError],
+      error: [NotFoundError, ConflictError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "session.prompt",
@@ -454,6 +446,19 @@ export const SessionGroup = HttpApiGroup.make("session")
       }),
     ),
   )
+  .middleware(ChatAccess)
+  .add(
+    HttpApiEndpoint.get("session.status", "/chat/status", {
+      success: SessionStatus.Family,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "session.status",
+        summary: "Get the status of the session family",
+        description:
+          "Return the sessions of the family that are running. A session that is absent is idle. A retry shows on the running assistant message as `retry`, not here.",
+      }),
+    ),
+  )
   .annotateMerge(OpenApi.annotations({ title: "session" }))
 
 export const ShellGroup = HttpApiGroup.make("shell")
@@ -500,6 +505,7 @@ export const ShellGroup = HttpApiGroup.make("shell")
       }),
     ),
   )
+  .middleware(ChatAccess)
   .annotateMerge(OpenApi.annotations({ title: "shell" }))
 
 const catalog = <const Name extends "agent" | "skill" | "command", S extends Schema.Top>(
@@ -516,6 +522,7 @@ const catalog = <const Name extends "agent" | "skill" | "command", S extends Sch
         error: NotFoundError,
       }).annotateMerge(OpenApi.annotations({ identifier: `${name}.list`, summary, description })),
     )
+    .middleware(ChatAccess)
     .annotateMerge(OpenApi.annotations({ title: name }))
 
 export const AgentGroup = catalog(
@@ -555,6 +562,7 @@ export const FileGroup = HttpApiGroup.make("file")
       }),
     ),
   )
+  .middleware(ChatAccess)
   .annotateMerge(OpenApi.annotations({ title: "file" }))
 
 export const WebSearchGroup = HttpApiGroup.make("websearch")
@@ -572,6 +580,7 @@ export const WebSearchGroup = HttpApiGroup.make("websearch")
       }),
     ),
   )
+  .middleware(ChatAccess)
   .annotateMerge(OpenApi.annotations({ title: "websearch" }))
 
 export const ChatApi = HttpApi.make("chat")

@@ -109,8 +109,8 @@ test("the model learns who speaks when another member sends a message, and the t
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const params = { sessionID: brain.id }
-      const ada = yield* brain.chatAs("user_1", "Ada (ada@example.com)")
-      const grace = yield* brain.chatAs("user_2", "Grace Hopper")
+      const ada = yield* brain.chatAs({ sub: "user_1", name: "Ada (ada@example.com)" })
+      const grace = yield* brain.chatAs({ sub: "user_2", name: "Grace Hopper" })
       const turns = [
         { chat: ada, note: "" },
         { chat: grace, note: '\n\n<message_from user="Grace Hopper" user_id="user_2" />' },
@@ -187,8 +187,8 @@ test("a member's queued message names its speaker to the model after the member 
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const params = { sessionID: brain.id }
-      const ada = yield* brain.chatAs("user_1", "Ada")
-      const grace = yield* brain.chatAs("user_2", "Grace")
+      const ada = yield* brain.chatAs({ sub: "user_1", name: "Ada" })
+      const grace = yield* brain.chatAs({ sub: "user_2", name: "Grace" })
       const held = stub.script({ hold: true })
       yield* ada.session["session.prompt"]({
         params,
@@ -220,8 +220,8 @@ test.todo("a command another member runs names its speaker to the model, and the
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const params = { sessionID: brain.id }
-      const ada = yield* brain.chatAs("user_1", "Ada")
-      const grace = yield* brain.chatAs("user_2", "Grace")
+      const ada = yield* brain.chatAs({ sub: "user_1", name: "Ada" })
+      const grace = yield* brain.chatAs({ sub: "user_2", name: "Grace" })
       yield* ada.session["session.prompt"]({
         params,
         payload: { id: SessionMessage.ID.create(), text: stub.script().marker, delivery: "steer" },
@@ -586,6 +586,37 @@ test("a session outside this brain is not found", () =>
         Effect.exit,
       )
       expect(Exit.isFailure(missing) && missing.cause.toString()).toContain("NotFoundError")
+    }),
+  ))
+
+test("a client token for one chat reads that chat and its child, and gets ForbiddenError for every route of another chat", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const other = Session.ID.create()
+      yield* brain.start({ sessionId: other })
+      const child = yield* brain.opencode.session.create({
+        id: SessionID.make(`${brain.id}_child`),
+        parentID: SessionID.make(brain.id),
+      })
+      const own = yield* brain.chatAs({ sub: "user_1", sid: brain.id })
+      yield* own.session["session.get"]({ params: { sessionID: brain.id } })
+      yield* own.session["session.get"]({ params: { sessionID: Session.ID.make(child.id) } })
+      const params = { sessionID: other }
+      const refused = yield* Effect.all([
+        own.session["session.get"]({ params }).pipe(Effect.flip),
+        own.session["session.messages"]({ params, query: { limit: 20 } }).pipe(Effect.flip),
+        own.session["session.prompt"]({
+          params,
+          payload: { id: SessionMessage.ID.create(), text: "hi", delivery: "steer" },
+        }).pipe(Effect.flip),
+        own.shell["shell.list"]({ params }).pipe(Effect.flip),
+        own.agent["agent.list"]({ params }).pipe(Effect.flip),
+        own.file["file.search"]({ params, query: { query: "a" } }).pipe(Effect.flip),
+        own.websearch["websearch.providers"]({ params }).pipe(Effect.flip),
+      ])
+      expect(refused.map((error) => error._tag)).toEqual(refused.map(() => "ForbiddenError"))
     }),
   ))
 

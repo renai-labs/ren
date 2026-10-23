@@ -95,10 +95,6 @@ export type SessionCapabilitiesInfo = {
   files: boolean
 }
 
-export type SessionStatusIdle = { type: "idle" }
-
-export type SessionStatusBusy = { type: "busy" }
-
 export type SessionMessageText = { type: "text"; text: string }
 
 export type SessionMessageReasoning = {
@@ -114,6 +110,10 @@ export type SessionMessageToolRunning = {
   input: { [x: string]: JsonValue }
   metadata: { [x: string]: JsonValue }
 }
+
+export type SessionStatusIdle = { type: "idle" }
+
+export type SessionStatusBusy = { type: "busy" }
 
 export type ShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
 
@@ -975,6 +975,10 @@ export type SessionMessageInfo =
 
 export type SessionMessagePage = { items: Array<SessionMessageInfo>; cursor: { previous?: string; next?: string } }
 
+export type ForbiddenError = { readonly _tag: "ForbiddenError"; readonly message: string }
+export const isForbiddenError = (value: unknown): value is ForbiddenError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ForbiddenError"
+
 export type NotFoundError = {
   readonly _tag: "NotFoundError"
   readonly message: string
@@ -991,10 +995,6 @@ export type InvalidRequestError = {
 export const isInvalidRequestError = (value: unknown): value is InvalidRequestError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "InvalidRequestError"
 
-export type ForbiddenError = { readonly _tag: "ForbiddenError"; readonly message: string }
-export const isForbiddenError = (value: unknown): value is ForbiddenError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ForbiddenError"
-
 export type ConflictError = {
   readonly _tag: "ConflictError"
   readonly message: string
@@ -1010,8 +1010,6 @@ export type ModelListOutput = Array<SessionModelInfo>
 export type SessionGetInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
 export type SessionGetOutput = SessionInfoInfo
-
-export type SessionStatusOutput = SessionStatusFamily
 
 export type SessionMessagesInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -1338,6 +1336,8 @@ export type SessionFormCancelInput = {
 }
 
 export type SessionFormCancelOutput = void
+
+export type SessionStatusOutput = SessionStatusFamily
 
 export type ShellListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 

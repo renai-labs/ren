@@ -32,9 +32,6 @@ type SessionGetInput = { readonly sessionID: SessionGetRequest["params"]["sessio
 const EndpointSessionGet = (raw: RawClient["session"]) => (input: SessionGetInput) =>
   raw["session.get"]({ params: { sessionID: input["sessionID"] } }).pipe(Effect.mapError(mapClientError))
 
-const EndpointSessionStatus = (raw: RawClient["session"]) => () =>
-  raw["session.status"]({}).pipe(Effect.mapError(mapClientError))
-
 type SessionMessagesRequest = Parameters<RawClient["session"]["session.messages"]>[0]
 type SessionMessagesInput = {
   readonly sessionID: SessionMessagesRequest["params"]["sessionID"]
@@ -244,9 +241,11 @@ const EndpointSessionFormCancel = (raw: RawClient["session"]) => (input: Session
     Effect.mapError(mapClientError),
   )
 
+const EndpointSessionStatus = (raw: RawClient["session"]) => () =>
+  raw["session.status"]({}).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupSession = (raw: RawClient["session"]) => ({
   get: EndpointSessionGet(raw),
-  status: EndpointSessionStatus(raw),
   messages: EndpointSessionMessages(raw),
   message: EndpointSessionMessage(raw),
   children: EndpointSessionChildren(raw),
@@ -273,6 +272,7 @@ const adaptGroupSession = (raw: RawClient["session"]) => ({
   },
   command: EndpointSessionCommand(raw),
   model: { switch: EndpointSessionModelSwitch(raw) },
+  status: EndpointSessionStatus(raw),
 })
 
 type ShellListRequest = Parameters<RawClient["shell"]["shell.list"]>[0]
