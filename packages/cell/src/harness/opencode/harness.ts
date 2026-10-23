@@ -14,6 +14,7 @@ import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
 import { Clock, DateTime, Effect, Layer, Option, Ref, Schema, type Scope, Semaphore, Stream, Struct } from "effect"
 import { mkdir, rm, stat } from "node:fs/promises"
+// oxlint-disable-next-line ren/no-node-modules-import -- @opencode/core exports no package.json and no version, and the harness version must be the installed one.
 import opencode from "../../../node_modules/@opencode/core/package.json"
 import { BrainStorage } from "../../brain-storage.js"
 import { Cell } from "../../cell.js"
