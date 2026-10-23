@@ -1,6 +1,7 @@
 export * as Host from "./host.js"
 
 import { BunCrypto } from "@effect/platform-bun"
+import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { TestEnvironment } from "@ren/executor/testing"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
@@ -172,6 +173,25 @@ export const cellLayer = <E, R>(
         ConfigProvider.fromUnknown({ BRAIN_KEYS: brainKeys, ENVIRONMENT_KEYS: environmentKeys, ...config }),
       ),
     ),
+  )
+
+// oxlint-disable-next-line ren/no-comments -- The workerd cell (wrangler dev), started once per file. It reaches Ren on port, and trusts the cell test keys.
+export const wrangler = async () => {
+  const port = await Effect.runPromise(freePort)
+  const cell = await Wrangler.make({ ...Shared.vars(Shared.stub().url), REN_URL: `http://127.0.0.1:${port}` })
+  return { url: cell.url, port, dispose: cell.dispose }
+}
+
+const cellKeys = JSON.stringify(
+  TestToken.keys.map((key) => ({ id: key.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.key) })),
+)
+
+export const wranglerLayer = (
+  cell: { readonly url: string; readonly port: number },
+  models: Layer.Layer<Models.Service>,
+) =>
+  Layer.mergeAll(serve(cell.port), Layer.effectDiscard(Seed.ren())).pipe(
+    Layer.provideMerge(cellLayer({ CELL_URL: cell.url, BRAIN_KEYS: cellKeys }, models, noTemplates)),
   )
 
 export const ready = <E, R>(access: Effect.Effect<Session.ClientAccess, E, R>) =>

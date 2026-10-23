@@ -90,9 +90,9 @@ Not in this piece:
 
 - `Brains` takes the host-neutral body of today's `BrainHost.make` (`core/src/brain-host.ts`). `BrainHost` takes today's private `Locator` (`brain-host.ts:113-123`) as its interface.
 - `StartRun` (E68) runs on every host. `layerCell` no longer drops a failed start (`brain-host.ts:509`).
-- `DEFAULT_ENVIRONMENT` is deployment config: `{ provider, config }` for one `EnvironmentProvider`, not an org row. `Environments` provisions and pools it like a template's environment (`sessions_per_environment`). Unset and no own hand: the chat has no tools.
+- Not in M2 (E134). `DEFAULT_ENVIRONMENT` is deployment config: `{ provider, config }` for one `EnvironmentProvider`, not an org row. `Environments` provisions and pools it like a template's environment (`sessions_per_environment`). Unset and no own hand: the chat has no tools.
 - One delivery contract for every sender (E133): the sender picks the message id; `Brains` ensures the brain is ready and calls `brain.send`; the brain restores on first request and skips a known id. Ren's own senders (crons, webhooks, channels) use a durable `send:<messageId>` run (E77), built with the first such sender.
-- The E2B REST calls move from `sandbox-provider/e2b.ts` to one shared module; `SandboxProvider.layerE2B` uses it, and so will an E2B `EnvironmentProvider` (piece I).
+- With piece I (E135), the E2B REST calls move from `sandbox-provider/e2b.ts` to one shared module; `SandboxProvider.layerE2B` uses it, and so will an E2B `EnvironmentProvider` (piece I).
 
 ## Behaviour
 
@@ -148,7 +148,7 @@ Write each test first. Each test must fail before its change. No mocks.
 | 10  | live, skipped without `E2B_API_KEY` | A space brain with 5 chats, 2 running shells: log peak memory and CPU of the sandbox (E124).                                                                                                                                                                                                               |
 | 11  | `core/test/brains.test.ts`          | The `Brains` suite (start, send, access, pull) runs once on `BrainHost.layerCell` and once on `layerSandbox` (E125).                                                                                                                                                                                       |
 | 12  | `core/test/brains.test.ts`          | On `layerCell`, a start while the cell answers 503 is delivered once the cell answers; it is not dropped (E125, today `brain-host.ts:509`).                                                                                                                                                                |
-| 13  | `core/test/environments.test.ts`    | A chat without a template: on `layerSandbox` it gets the brain's own hand; on `layerCell` with `DEFAULT_ENVIRONMENT` (Docker) it gets a pooled default environment; on `layerCell` without it, `environments.access` reports no hand (E125).                                                               |
+| 13  | `core/test/brains.test.ts`          | A chat without a template: on `layerSandbox` it gets the brain's own hand; on `layerCell` `accessEnvironment` fails with `EnvironmentNotFoundError` (E125). The `DEFAULT_ENVIRONMENT` case comes with E134.                                                                                                |
 | 14  | `core/test/brain-lifecycle.test.ts` | A wake that never answers while `GET /ren/state` answers: the brain becomes `ready` and is not replaced. Neither answers: it is replaced (E132).                                                                                                                                                           |
 
 Edge cases from ren-v1 that these tests cover: INV-16 (3), INV-105 (7), INV-10 and INV-2 (8: the image is built from the staged tree and must boot before its tag is used), DS-L1 (no replace of a running brain for its build, 3).
