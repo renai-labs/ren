@@ -24,7 +24,11 @@ export const MessageID = Session.MessageID
 export type MessageID = Session.MessageID
 
 export type Interface = Primitive.Interface<typeof Session.definition> & {
-  readonly access: (actor: Actor.Info, id: Session.ID) => Effect.Effect<Session.ClientAccess, Primitive.NotFound>
+  readonly access: (
+    actor: Actor.Info,
+    id: Session.ID,
+    options?: { readonly unreachable?: boolean },
+  ) => Effect.Effect<Session.ClientAccess, Primitive.NotFound>
   readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
   readonly prepare: (actor: Actor.Info, spaceId: Space.ID) => Effect.Effect<void, Primitive.NotFound>
   readonly retry: (
@@ -274,7 +278,11 @@ export const layer = Layer.effect(
           )
           .pipe(Effect.catchTag("BrainRejectedError", Effect.die))
       }),
-      access: Effect.fn("Session.access")(function* (actor: Actor.Info, id: Session.ID) {
+      access: Effect.fn("Session.access")(function* (
+        actor: Actor.Info,
+        id: Session.ID,
+        options: { readonly unreachable?: boolean } = {},
+      ) {
         yield* read(actor, id)
         const user = (yield* database.transaction((transaction) =>
           transaction
@@ -282,10 +290,14 @@ export const layer = Layer.effect(
             .from(Database.Schema.user)
             .where(eq(Database.Schema.user.id, actor.userId)),
         )).at(0)
-        return yield* brain.access(id, {
-          userId: actor.userId,
-          ...(user && { name: user.name.trim() ? `${user.name.trim()} (${user.email})` : user.email }),
-        })
+        return yield* brain.access(
+          id,
+          {
+            userId: actor.userId,
+            ...(user && { name: user.name.trim() ? `${user.name.trim()} (${user.email})` : user.email }),
+          },
+          options,
+        )
       }),
     })
   }),

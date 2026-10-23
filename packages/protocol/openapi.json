@@ -2896,6 +2896,23 @@
               "$ref": "#/components/schemas/Session.ID"
             },
             "required": true
+          },
+          {
+            "name": "unreachable",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": ["true", "false"],
+                  "description": "`true` when the client could not reach the brain at the last URL; Ren checks the sandbox first."
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
           }
         ],
         "security": [

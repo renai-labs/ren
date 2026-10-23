@@ -34,7 +34,10 @@ export interface ShellView extends View {
 
 export interface Options<R, ER> {
   readonly runtime: Atom.AtomRuntime<R | HttpClient.HttpClient, ER>
-  readonly access: (sessionID: Session.ID) => Effect.Effect<Session.ClientAccess, unknown, R>
+  readonly access: (
+    sessionID: Session.ID,
+    input: { readonly unreachable: boolean },
+  ) => Effect.Effect<Session.ClientAccess, unknown, R>
   readonly sender?: SessionMessage.Sender
   readonly detail?: TimelineDetail.Detail
   readonly lifecycle?: (listener: (event: Lifecycle) => void) => () => void
@@ -78,7 +81,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
           handoffs.delete(sessionID)
           const opened = yield* ChatSession.make({
             sessionID,
-            access: options.access(sessionID).pipe(Effect.provide(context)),
+            access: (input) => options.access(sessionID, input).pipe(Effect.provide(context)),
             ...(options.sender && { sender: options.sender }),
             ...(handed && { handoff: handed }),
           })

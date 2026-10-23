@@ -1033,7 +1033,10 @@ export type SessionArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type SessionArchiveOutput = SessionInfo
 
-export type ChatAccessInput = { readonly id: { readonly id: string }["id"] }
+export type ChatAccessInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly unreachable?: { readonly unreachable?: "true" | "false" | undefined }["unreachable"]
+}
 
 export type ChatAccessOutput = SessionClientAccess
 

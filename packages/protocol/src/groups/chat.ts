@@ -12,6 +12,14 @@ export const ChatGroup = HttpApiGroup.make("chat")
   .add(
     HttpApiEndpoint.post("chat.access", "/sessions/:id/chat", {
       params: { id: Session.ID },
+      query: Schema.Struct({
+        unreachable: Schema.optional(
+          Schema.Literals(["true", "false"]).annotate({
+            description:
+              "`true` when the client could not reach the brain at the last URL; Ren checks the sandbox first.",
+          }),
+        ),
+      }),
       success: Session.ClientAccess,
       error: NotFoundError,
     }).annotateMerge(
