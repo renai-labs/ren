@@ -79,6 +79,7 @@ export function SessionChild(props: {
               permissionTitle={chat.requests.permissionTitle}
               form={chat.requests.form}
               formTitle={chat.requests.formTitle}
+              formExpired={chat.requests.formExpired}
               connection={chat.requests.connection}
               onOpen={props.onOpen}
               onAnswered={() => scroller.current?.resume()}

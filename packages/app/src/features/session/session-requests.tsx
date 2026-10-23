@@ -169,6 +169,7 @@ export function SessionRequests(props: {
   permissionTitle: string
   form: Form.Info | undefined
   formTitle: string
+  formExpired: boolean
   connection: number
   onOpen: (sessionID: Session.ID) => void
   onAnswered: () => void
@@ -245,6 +246,11 @@ export function SessionRequests(props: {
     <>
       {webSearch}
       <Source title={props.formTitle} sessionID={owner} viewed={props.sessionID} onOpen={props.onOpen}>
+        {props.formExpired ? (
+          <Text purpose="caption" element="p" tone="secondary">
+            This question expired. Your answer goes to the chat as a new message.
+          </Text>
+        ) : null}
         <Questionnaire
           resetKey={form.id}
           questions={Requests.formQuestions(form)}

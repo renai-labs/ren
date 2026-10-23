@@ -27,6 +27,7 @@ export interface State {
   readonly pending: Readonly<Record<string, ReadonlyArray<SessionInbox.Info>>>
   readonly permissions: Readonly<Record<string, ReadonlyArray<Permission.Request>>>
   readonly forms: Readonly<Record<string, ReadonlyArray<Form.Info>>>
+  readonly expired: Readonly<Record<string, ReadonlyArray<Form.Info>>>
   readonly shells: Readonly<Record<string, Shell.Info>> | undefined
   readonly outbox: ReadonlySet<string>
   readonly compacting: Readonly<Record<string, Compacting>>
@@ -44,6 +45,7 @@ export const empty: State = {
   pending: {},
   permissions: {},
   forms: {},
+  expired: {},
   shells: undefined,
   outbox: new Set(),
   compacting: {},
@@ -160,3 +162,6 @@ const asking = (record: Readonly<Record<string, ReadonlyArray<unknown>>>) =>
 export const permissionSessions = (state: State) => asking(state.permissions)
 
 export const formSessions = (state: State) => asking(state.forms)
+
+// oxlint-disable-next-line ren/no-comments -- Questions whose turn stopped before an answer (E129); an answer goes as a message that quotes them.
+export const expiredForms = (state: State, sessionID: string) => state.expired[sessionID] ?? none

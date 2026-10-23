@@ -38,6 +38,7 @@ const requests = (state: ChatState.State, sessionID: string) => {
     permissionTitle: permission ? childTitle(state, permission.sessionID) : "",
     form,
     formTitle: form ? childTitle(state, form.sessionID) : "",
+    formExpired: form ? Family.isExpired(state, form) : false,
     connection: state.connection,
   }
 }

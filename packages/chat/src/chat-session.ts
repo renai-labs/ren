@@ -63,6 +63,21 @@ const isUnauthorized = (error: unknown) =>
 const isUnreachable = (error: unknown) =>
   isUnauthorized(error) || Option.exists(httpErrorOf(error), (cause) => cause.reason._tag === "TransportError")
 
+// oxlint-disable-next-line ren/no-comments -- The answer to a question whose turn stopped, as a message that quotes each question (E129).
+export const quote = (form: Form.Info, answer: Form.Answer) =>
+  [
+    `An answer to an earlier question, "${form.title}":`,
+    ...form.fields.map((field) => {
+      const value = answer[field.key]
+      const text = Array.isArray(value) ? value.join(", ") : String(value ?? "")
+      const asked = [
+        "title" in field && field.title ? field.title : field.key,
+        ...("description" in field && field.description ? [field.description] : []),
+      ]
+      return [...asked.map((line) => `> ${line}`), text].join("\n")
+    }),
+  ].join("\n\n")
+
 export class AccessFailed extends Data.TaggedError("ChatSession.AccessFailed")<{ readonly cause: unknown }> {}
 
 export interface Options {
@@ -857,6 +872,16 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       ),
     ).pipe(Effect.andThen(execute({ _tag: "Refresh", read: { _tag: "Forms", sessionID } })))
 
+  const forgetExpired = (sessionID: Session.ID, formID: Form.ID) =>
+    update((current) => ({
+      ...current,
+      expired: ChatState.set(
+        current.expired,
+        sessionID,
+        ChatState.expiredForms(current, sessionID).filter((form) => form.id !== formID),
+      ),
+    }))
+
   const replyPermission = (
     sessionID: Session.ID,
     requestID: Permission.RequestID,
@@ -982,14 +1007,23 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         ),
       ),
     replyForm: (sessionID: Session.ID, formID: Form.ID, answer: Form.Answer) =>
-      Effect.flatMap(client, (api) => api.session.form.reply({ sessionID, formID, answer })).pipe(
-        Effect.catchTags({ NotFoundError: () => Effect.void, ConflictError: () => Effect.void }),
-        Effect.andThen(removeForm(sessionID, formID)),
-      ),
+      Effect.gen(function* () {
+        const expired = ChatState.expiredForms(yield* SubscriptionRef.get(state), sessionID).find(
+          (form) => form.id === formID,
+        )
+        if (!expired)
+          return yield* Effect.flatMap(client, (api) => api.session.form.reply({ sessionID, formID, answer })).pipe(
+            Effect.catchTags({ NotFoundError: () => Effect.void, ConflictError: () => Effect.void }),
+            Effect.andThen(removeForm(sessionID, formID)),
+          )
+        yield* forgetExpired(sessionID, formID)
+        yield* prompt({ text: quote(expired, answer) })
+      }),
     cancelForm: (sessionID: Session.ID, formID: Form.ID) =>
       Effect.flatMap(client, (api) => api.session.form.cancel({ sessionID, formID })).pipe(
         Effect.catchTags({ NotFoundError: () => Effect.void, ConflictError: () => Effect.void }),
         Effect.andThen(removeForm(sessionID, formID)),
+        Effect.andThen(forgetExpired(sessionID, formID)),
       ),
     shellOutput: (sessionID: Session.ID, shellID: Shell.ID, cursor: number) =>
       Effect.flatMap(client, (api) => api.shell.output({ sessionID, shellID, cursor })),
