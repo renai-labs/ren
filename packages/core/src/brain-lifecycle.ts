@@ -5,7 +5,7 @@ import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
-import { and, eq, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
+import { and, eq, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
 import { Clock, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
@@ -282,6 +282,29 @@ export const layer = Layer.effect(
     })
 
     yield* provider.lost.pipe(Stream.runForEach(lose), Effect.forkScoped)
+
+    // oxlint-disable-next-line ren/no-comments -- At boot, Ren reaches each running brain once, so its server token carries Ren's current address (E119). Asleep brains learn it at their wake.
+    yield* Effect.gen(function* () {
+      const running = yield* database.db
+        .select()
+        .from(brains)
+        .where(and(eq(brains.phase, "ready"), gt(brains.keep_alive_until, yield* now)))
+        .pipe(Effect.orDie)
+      yield* Effect.forEach(
+        running,
+        (row) =>
+          Option.match(targetOf(row), {
+            onNone: () => Effect.void,
+            onSome: (target) =>
+              client.brain(target).pipe(
+                Effect.flatMap((api) => api.brain["brain.state"]()),
+                Effect.timeout(timing.wake),
+                Effect.catchCause((cause) => Effect.logWarning(`Brain ${row.id} did not answer Ren's boot call`, cause)),
+              ),
+          }),
+        { concurrency: 8, discard: true },
+      )
+    }).pipe(Effect.forkScoped)
 
     const check = Effect.fn("BrainLifecycle.check")(function* (brainId: Brain.ID) {
       const row = yield* read(brainId)

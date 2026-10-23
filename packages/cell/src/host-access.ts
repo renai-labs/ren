@@ -8,6 +8,7 @@ import { FetchHttpClient } from "effect/http"
 import { Cell } from "./cell.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
+import { RenAddress } from "./ren-address.js"
 
 export const layer = Layer.effect(
   EnvironmentAccess.Service,
@@ -16,7 +17,7 @@ export const layer = Layer.effect(
     const hostToken = yield* HostToken.Service
     const store = yield* ModelStore.Service
     if (!info.vars.REN_URL) return yield* Effect.die(new Error("HostAccess needs REN_URL"))
-    const host = yield* HostToken.client(info.vars.REN_URL)
+    const host = yield* HostToken.client(info.vars.REN_URL).pipe(Effect.provide(RenAddress.http))
     const withHostToken = Effect.fnUntraced(function* (sessionId: Session.ID) {
       const unavailable = (message: string) => new EnvironmentAccess.Unavailable({ sessionId, message })
       const token = yield* hostToken.current

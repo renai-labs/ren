@@ -13,6 +13,7 @@ export const ServerClaims = Schema.Struct({
   brain: Brain.ID,
   gen: Schema.Int,
   exp: Schema.Int,
+  ren: Schema.optionalKey(Schema.String).annotate({ description: "Ren’s current address; the brain calls Ren there." }),
 }).annotate({ identifier: "BrainToken.ServerClaims" })
 export type ServerClaims = typeof ServerClaims.Type
 

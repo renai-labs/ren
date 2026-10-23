@@ -6,6 +6,7 @@ import { Session } from "@ren/schema/session"
 import type { Signature } from "@ren/schema/signature"
 import { Effect, Option } from "effect"
 import { Chat } from "./chat.js"
+import { RenAddress } from "./ren-address.js"
 import { Token } from "./token.js"
 
 export const cors = {
@@ -81,6 +82,8 @@ export const check = Effect.fn("Entry.check")(function* (
   if (claims instanceof Response) return claims
   const headers = new Headers(request.headers)
   headers.delete("authorization")
+  headers.delete(RenAddress.header)
+  if (claims.scope === "server" && claims.ren) headers.set(RenAddress.header, claims.ren)
   Chat.setMember(
     headers,
     claims.scope === "client"

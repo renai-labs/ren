@@ -12,6 +12,7 @@ import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
+import { RenAddress } from "./ren-address.js"
 
 export interface Interface {
   readonly pull: Effect.Effect<void>
@@ -31,7 +32,9 @@ export const layer = Layer.effect(
     const harness = yield* Harness.Service
     const url = info.vars.REN_URL
     if (!url) return Service.of({ pull: Effect.void })
-    const host = yield* HostToken.client(url).pipe(Effect.provide(FetchHttpClient.layer))
+    const host = yield* HostToken.client(url).pipe(
+      Effect.provide(RenAddress.http.pipe(Layer.provide(FetchHttpClient.layer))),
+    )
     const pulls = yield* Semaphore.make(1)
 
     const pull = Effect.gen(function* () {

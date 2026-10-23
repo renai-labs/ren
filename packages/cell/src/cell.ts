@@ -29,6 +29,7 @@ import { ModelStore } from "./model-store.js"
 import { ModelRefresh } from "./model-refresh.js"
 import { Reconcile } from "./reconcile.js"
 import { Sync } from "./sync.js"
+import { RenAddress } from "./ren-address.js"
 
 export class Info extends Context.Service<
   Info,
@@ -92,6 +93,8 @@ export const state = Effect.gen(function* () {
 })
 
 export const fetch = Effect.fn("Cell.fetch")(function* (request: Request) {
+  const address = request.headers.get(RenAddress.header)
+  if (address) yield* RenAddress.Service.use((ren) => ren.adopt(address))
   const brain = yield* BrainRoutes
   const chat = yield* Chat
   const pathname = new URL(request.url).pathname
@@ -205,7 +208,9 @@ export const hostLayer = Layer.unwrap(
       Layer.provideMerge(HostToken.layer(cell.vars.REN_URL)),
       Layer.provideMerge(ModelStore.layer),
       Layer.provideMerge(Fence.layer),
+      Layer.provide(RenAddress.http),
       Layer.provide(FetchHttpClient.layer),
+      Layer.provideMerge(RenAddress.layer(cell.vars.REN_URL)),
     )
   }),
 )

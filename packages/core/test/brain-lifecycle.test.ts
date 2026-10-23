@@ -40,11 +40,22 @@ const ren = async (
     readonly maxRunning?: number
     readonly root?: string
     readonly template?: string
+    readonly port?: number
+    readonly around?: Parameters<typeof Host.serve>[1]
   } = {},
 ) =>
   ManagedRuntime.make(
-    Host.serve(port).pipe(
-      Layer.provideMerge(Host.stack({ port, root, config: {}, models, environments: Host.noTemplates, ...options })),
+    Host.serve(options.port ?? port, options.around).pipe(
+      Layer.provideMerge(
+        Host.stack({
+          root,
+          config: {},
+          models,
+          environments: Host.noTemplates,
+          ...options,
+          port: options.port ?? port,
+        }),
+      ),
       Layer.provide(
         Layer.succeedContext(await database.runPromise(Effect.context<Database.Service | SqlClient.SqlClient>())),
       ),
@@ -440,6 +451,25 @@ describe("brain runs", () => {
     const woke = await reaches(paused.brainId, "ready")
     expect([woke.generation, (await row(running.brainId)).generation]).toEqual([1, 1])
     await runtime.dispose()
+  })
+
+  test("Ren started at a new address tells each running brain, and the brain's next pull reaches it without a replace", async () => {
+    const brainId = await newBrain()
+    const first = await ren()
+    await first.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
+    await reaches(brainId, "ready")
+    await first.dispose()
+    const moved = await Effect.runPromise(Host.freePort)
+    const pulled = Promise.withResolvers<void>()
+    const second = await ren({
+      port: moved,
+      around: (endpoint, effect) =>
+        endpoint === "pull" ? effect.pipe(Effect.ensuring(Effect.sync(() => pulled.resolve()))) : effect,
+    })
+    await second.runPromise(BrainLifecycle.Service.use(() => Effect.void))
+    await pulled.promise
+    expect((await row(brainId)).generation).toBe(1)
+    await second.dispose()
   })
 
   test("a brain run that ended runs again when the brain needs it", async () => {

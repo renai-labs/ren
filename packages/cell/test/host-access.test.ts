@@ -15,6 +15,7 @@ import { Fence } from "../src/fence.js"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 import { HostAccess } from "../src/host-access.js"
 import { HostToken } from "../src/host-token.js"
+import { RenAddress } from "../src/ren-address.js"
 import { ModelStore } from "../src/model-store.js"
 import { ModelsTest } from "./lib/models.js"
 import { FakeRen } from "./lib/ren.js"
@@ -45,6 +46,7 @@ const build = Effect.fnUntraced(function* (url: string = ren.url, stored = new M
     HostAccess.layer.pipe(
       Layer.provideMerge(HostToken.layer(url)),
       Layer.provideMerge(Fence.layer),
+      Layer.provideMerge(RenAddress.layer(url)),
       Layer.provide(FetchHttpClient.layer),
       Layer.provideMerge(ModelsTest.storage(stored)),
       Layer.provideMerge(

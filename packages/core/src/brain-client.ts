@@ -44,6 +44,7 @@ export const layer = Layer.effect(
     const config = yield* Config.all({
       keys: Config.schema(Schema.RedactedFromValue(Signature.PrivateKeys), "BRAIN_KEYS"),
       renUrl: Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000")),
+      address: Config.option(Config.String("REN_URL")),
     })
     const keys = Redacted.value(config.keys)
     const publicKeys = yield* BrainToken.publicKeys(keys)
@@ -80,6 +81,7 @@ export const layer = Layer.effect(
                     brain: target.brainId,
                     gen: target.generation,
                     exp: issued + BrainToken.lifetimes.server,
+                    ...Option.match(config.address, { onNone: () => ({}), onSome: (ren) => ({ ren }) }),
                   }),
                 ),
                 HttpClientRequest.setHeader(hostTokenHeader, yield* hostToken(target)),
