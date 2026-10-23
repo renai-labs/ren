@@ -1,0 +1,1 @@
+ALTER TABLE "opencode_inbox" ADD COLUMN "time_created" bigint NOT NULL;

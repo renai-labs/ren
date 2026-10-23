@@ -136,6 +136,7 @@ export const opencode_inbox = pgTable(
     payload: text().notNull(),
     delivery: text().notNull(),
     enqueued_seq: bigint({ mode: "number" }).notNull(),
+    time_created: bigint({ mode: "number" }).notNull(),
   },
   (table) => [primaryKey({ columns: [table.session_id, table.id] })],
 )
