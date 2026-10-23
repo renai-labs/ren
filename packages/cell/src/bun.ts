@@ -70,7 +70,7 @@ const info = Layer.succeed(
     storage: { getAlarm: () => Promise.resolve(null), setAlarm: () => Promise.resolve() },
     brainId,
     generation: vars.REN_BRAIN_GENERATION,
-    version: manifest.version,
+    version: vars.REN_BRAIN_VERSION ?? manifest.version,
     vars,
   }),
 )
