@@ -25,8 +25,11 @@ export function TaskSessionCard(props: {
   const busy = session.data?.status === "busy"
   const preview = useQuery({ ...SessionSummary.previewOptions(context, props.sessionId), enabled: session.isSuccess })
   const stop = useMutation({
-    mutationFn: async () =>
-      (await SessionSummary.client(context, props.sessionId)).session.interrupt({ sessionID: props.sessionId }),
+    mutationFn: async () => {
+      const chat = await SessionSummary.client(context, props.sessionId)
+      if (!chat) throw new Error("The session is not running.")
+      return chat.session.interrupt({ sessionID: props.sessionId })
+    },
     onSuccess: () =>
       Promise.all([
         client.invalidateQueries({ queryKey: context.api.session.get.queryKey({ idOrSlug: props.sessionId }) }),

@@ -10,8 +10,9 @@ export async function client(context: Runtime.Context, sessionID: string) {
     // ast-grep-ignore: no-query-key-literal -- short-lived access tokens are shared between lightweight session reads
     queryKey: [...context.api.chat.access.mutationKey(), sessionID],
     queryFn: () => context.client.chat.access({ id: sessionID }),
-    staleTime: 30_000,
+    staleTime: (query) => (query.state.data?.status === "ready" ? 30_000 : 0),
   })
+  if (access.status !== "ready") return
   return Ren.make({
     baseUrl: access.url,
     headers: { authorization: `Bearer ${access.token}` },
@@ -25,6 +26,7 @@ export function attentionOptions(context: Runtime.Context, sessionID: string) {
     queryKey: [...context.api.session.get.queryKey({ idOrSlug: sessionID }), "attention"],
     queryFn: async (input) => {
       const chat = await client(context, sessionID)
+      if (!chat) return { form: undefined, permission: undefined, reason: undefined }
       const read = async (
         id: string,
       ): Promise<{ form: FormInfo | undefined; permission: PermissionRequest | undefined }> => {
@@ -40,7 +42,8 @@ export function attentionOptions(context: Runtime.Context, sessionID: string) {
           permission: descendants.find((child) => child.permission)?.permission,
         }
       }
-      return read(sessionID)
+      const found = await read(sessionID)
+      return { ...found, reason: found.form?.title ?? (found.permission ? "Permission needed" : undefined) }
     },
     refetchInterval: 5000,
   })
@@ -51,8 +54,7 @@ export function previewOptions(context: Runtime.Context, sessionID: string) {
     // ast-grep-ignore: no-query-key-literal -- previews share the generated session invalidation prefix
     queryKey: [...context.api.session.get.queryKey({ idOrSlug: sessionID }), "preview"],
     queryFn: async (input) => {
-      const chat = await client(context, sessionID)
-      const result = await chat.session.messages({ sessionID, limit: 20 }, { signal: input.signal })
+      const result = await context.client.chat.messages({ id: sessionID, limit: 20 }, { signal: input.signal })
       const message = result.items.findLast((entry) => entry.type === "assistant")
       return (
         message?.content
