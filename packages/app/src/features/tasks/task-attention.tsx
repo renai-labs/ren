@@ -10,13 +10,13 @@ import { TaskView } from "./task-view.js"
 
 function useAttention(task: TaskInfo) {
   const context = RouterContext.useRouterContext()
-  const enabled = task.session !== null && TaskView.isActionable(task)
+  const enabled = task.session?.state === "working" && TaskView.isActionable(task)
   const query = useQuery({ ...SessionSummary.attentionOptions(context, task.session?.id ?? ""), enabled })
   const attention = enabled ? query.data : undefined
   return {
     form: attention?.form,
     permission: attention?.permission,
-    reason: attention?.form?.title ?? (attention?.permission ? "Permission needed" : undefined),
+    reason: attention?.reason,
   }
 }
 
