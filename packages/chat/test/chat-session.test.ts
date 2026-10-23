@@ -5,7 +5,19 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
-import { DateTime, Effect, Layer, Option, Predicate, type Scope, Stream, SubscriptionRef } from "effect"
+import {
+  DateTime,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Predicate,
+  Schedule,
+  Schema,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChatSession } from "../src/chat-session.js"
 import { ChatState } from "../src/chat-state.js"
@@ -110,6 +122,125 @@ test("a prompt shows at once, streams its turn, and the live transcript equals a
     }),
   ))
 
+const logged = (brain: Brain, log: Array<string>) =>
+  FetchHttpClient.layer.pipe(
+    Layer.provide(
+      Layer.succeed(
+        FetchHttpClient.Fetch,
+        Object.assign(
+          (input: string | URL | Request, init?: RequestInit) => {
+            const url = new URL(input instanceof Request ? input.url : String(input))
+            log.push(`${url.origin} ${url.pathname}`)
+            return brain.chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}))
+          },
+          { preconnect: fetch.preconnect },
+        ),
+      ),
+    ),
+  )
+
+test("a prompt sent while the brain's URL fails stays pending and is sent once with the same id after new access; a 401 from an old token does the same", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const fault = { mode: "none" as "none" | "network" | "unauthorized", attempts: 0 }
+      const sent: Array<string> = []
+      const accessed = { count: 0 }
+      const fetching = FetchHttpClient.layer.pipe(
+        Layer.provide(
+          Layer.succeed(
+            FetchHttpClient.Fetch,
+            Object.assign(
+              async (input: string | URL | Request, init?: RequestInit) => {
+                const url = new URL(input instanceof Request ? input.url : String(input))
+                const request = input instanceof Request ? input : new Request(url, init)
+                if (url.pathname.endsWith("/prompt")) {
+                  if (fault.mode !== "none") {
+                    fault.attempts++
+                    if (fault.mode === "network") throw new TypeError("fetch failed")
+                    return Response.json({ _tag: "UnauthorizedError", message: "An old generation" }, { status: 401 })
+                  }
+                  sent.push(
+                    Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await request.clone().json()).id,
+                  )
+                }
+                return brain.chatFetch(`${url.pathname}${url.search}`, request)
+              },
+              { preconnect: fetch.preconnect },
+            ),
+          ),
+        ),
+      )
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () =>
+          Effect.sync(() => {
+            accessed.count++
+            return {
+              status: "ready" as const,
+              url: "http://cell",
+              token: "a-client-token",
+              expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+            }
+          }),
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(fetching))
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const failing = (mode: "network" | "unauthorized") =>
+        Effect.gen(function* () {
+          fault.mode = mode
+          fault.attempts = 0
+          const before = accessed.count
+          const script = stub.script()
+          const sending = yield* chat.prompt({ text: script.marker }).pipe(Effect.forkChild)
+          yield* Effect.sync(() => fault.attempts).pipe(
+            Effect.repeat({ until: (attempts) => attempts >= 2, schedule: Schedule.spaced("50 millis") }),
+          )
+          const pending = ChatState.messages(yield* SubscriptionRef.get(chat.state), brain.id).find(
+            (message) => message.type === "user" && message.text === script.marker,
+          )
+          fault.mode = "none"
+          const id = yield* Fiber.join(sending)
+          yield* Effect.promise(() => script.called())
+          expect(pending?.id).toBe(id)
+          expect(sent.filter((each) => each === id)).toHaveLength(1)
+          expect(accessed.count).toBeGreaterThan(before)
+        })
+      yield* failing("network")
+      yield* failing("unauthorized")
+    }),
+  ))
+
+test("after the connection parks, a history read asks for access before any request to the old URL", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make({ vars: { CHAT_IDLE_MS: "300", CHAT_HEARTBEAT_MS: "50" } })
+      yield* brain.start()
+      const log: Array<string> = []
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () =>
+          Effect.sync(() => {
+            log.push("access")
+            return {
+              status: "ready" as const,
+              url: "http://cell",
+              token: "a-client-token",
+              expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+            }
+          }),
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(logged(brain, log)))
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "parked")
+      const parked = log.length
+      yield* chat.open(brain.id)
+      expect(log.slice(parked).at(0)).toBe("access")
+    }),
+  ))
+
 test("after a request to the brain gets no answer, the next access says the brain is unreachable, and the one after does not", () =>
   live(
     Effect.gen(function* () {
@@ -153,7 +284,7 @@ test("after a request to the brain gets no answer, the next access says the brai
     }),
   ))
 
-test("a prompt that cannot be sent leaves no optimistic row behind", () =>
+test("a prompt that Ren cannot give access for stays pending, so it is not lost (E126)", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
@@ -164,8 +295,8 @@ test("a prompt that cannot be sent leaves no optimistic row behind", () =>
       }).pipe(Effect.provide(http(brain)))
       const failed = yield* chat.prompt({ text: "hello" }).pipe(Effect.flip)
       expect(failed._tag).toBe("ChatSession.AccessFailed")
-      expect(ChatState.messages(yield* SubscriptionRef.get(chat.state), brain.id)).toEqual([])
-      expect((yield* SubscriptionRef.get(chat.state)).outbox.size).toBe(0)
+      expect(ChatState.messages(yield* SubscriptionRef.get(chat.state), brain.id)).toMatchObject([{ text: "hello" }])
+      expect((yield* SubscriptionRef.get(chat.state)).outbox.size).toBe(1)
     }),
   ))
 

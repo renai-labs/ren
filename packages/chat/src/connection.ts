@@ -18,6 +18,8 @@ import {
 
 export type Status = "connecting" | "connected" | "reconnecting" | "parked"
 
+type Ended = (typeof SessionEvent.Ended.Type)["data"]["reason"]
+
 export class Lost extends Data.TaggedError("Connection.Lost")<{ readonly message: string; readonly cause?: unknown }> {}
 
 export interface Options {
@@ -56,7 +58,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const awake = yield* Latch.make(true)
   const forced = yield* Ref.make(false)
   const attempt = yield* Ref.make(0)
-  const current = yield* FiberHandle.make<"ended", Lost>()
+  const current = yield* FiberHandle.make<Ended, Lost>()
   const activity = yield* Ref.make(0)
 
   const touch = Effect.flatMap(Clock.currentTimeMillis, (now) => Ref.set(activity, now))
@@ -100,12 +102,13 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       yield* Ref.set(attempt, 0)
       yield* setStatus("connected")
       yield* publish(opening)
-      const read: Effect.Effect<"ended", Lost> = next.pipe(
+      const read: Effect.Effect<Ended, Lost> = next.pipe(
         Effect.timeoutOrElse({ duration: settings.idleTimeout, orElse: lost("The event stream stalled") }),
         Effect.tap(publish),
-        Effect.flatMap((frames) =>
-          frames.some((frame) => frame.type === "stream.ended") ? Effect.succeed("ended" as const) : read,
-        ),
+        Effect.flatMap((frames) => {
+          const end = frames.find((frame) => frame.type === "stream.ended")
+          return end ? Effect.succeed(end.data.reason) : read
+        }),
       )
       return yield* read
     }).pipe(Effect.scoped)
@@ -116,6 +119,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     const startedAt = yield* Clock.currentTimeMillis
     const fiber = yield* FiberHandle.run(current, connect(count === 0))
     const exit = yield* Fiber.await(fiber)
+    // oxlint-disable-next-line ren/no-comments -- closing: the client token expired (E49), so the runtime reconnects at once with new access; only idle parks (E127).
+    if (Exit.isSuccess(exit) && exit.value === "closing") {
+      yield* Ref.set(attempt, 1)
+      return yield* setStatus("reconnecting")
+    }
     if (Exit.isSuccess(exit)) {
       yield* awake.close
       yield* Ref.set(attempt, 0)
