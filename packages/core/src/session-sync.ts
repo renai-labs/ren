@@ -2,7 +2,7 @@ export * as SessionSync from "./session-sync.js"
 
 import { ForbiddenError, StaleUploadError } from "@ren/host-api/errors"
 import type { CurrentHost } from "@ren/host-api/ren-host-api"
-import type { Sync } from "@ren/schema/sync"
+import { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import { Session } from "@ren/schema/session"
 import { and, asc, eq, sql } from "drizzle-orm"
@@ -66,6 +66,9 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SessionSync") {}
 
 const forbidden = new ForbiddenError({ message: "The session is not on the brain of the host token" })
+
+// oxlint-disable-next-line ren/no-comments -- Half the body limit: the reply carries each row's JSON text inside JSON, so escapes make it larger than the rows.
+const restorePageBytes = Sync.maxBodyBytes / 2
 
 const stale = new StaleUploadError({ message: "The upload is not the current open upload of the session" })
 
@@ -286,12 +289,13 @@ export const layer = Layer.effect(
               .from(Database.Schema.agent_session)
               .where(and(eq(Database.Schema.agent_session.id, sessionId), inScope(host)))
             if (visible.length === 0) return yield* forbidden
-            const messages = yield* OpenCodeStore.messages(transaction, sessionId, input.after, input.limit)
-            const last = messages.at(-1)
-            return {
-              messages,
-              next: last && messages.length === input.limit ? { seq: last.seq, id: last.id } : null,
-            }
+            const page = yield* OpenCodeStore.messages(transaction, sessionId, {
+              after: input.after,
+              limit: input.limit,
+              maxBytes: restorePageBytes,
+            })
+            const last = page.rows.at(-1)
+            return { messages: page.rows, next: last && page.hasMore ? { seq: last.seq, id: last.id } : null }
           }),
         )
       }),

@@ -1,11 +1,13 @@
 import { expect, setDefaultTimeout } from "bun:test"
+import { rm } from "node:fs/promises"
+import { join } from "node:path"
 import { Shared, type StubModel, TestToken } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { SessionMessage } from "@ren/schema/session/message"
 import { eq } from "drizzle-orm"
-import { Effect, Layer, Schedule, Schema } from "effect"
+import { Effect, Fiber, Layer, Schedule, Schema } from "effect"
 import { Access } from "../src/access.js"
 import { BrainClient } from "../src/brain-client.js"
 import { BrainHost } from "../src/brain-host.js"
@@ -111,7 +113,19 @@ const opened = Effect.fnUntraced(function* (text: string) {
       children: found.children.map((each) => each.id).toSorted(),
     })),
   )
-  return { sessionId, messageId, brainId, owner, chat, idle, synced, read }
+  const raw = (path: string, init: RequestInit = {}) =>
+    Effect.promise(async () => {
+      const response = await fetch(`${access.url}/chat/session/${sessionId}${path}`, {
+        ...init,
+        headers: { authorization: TestToken.basic(access.token), "content-type": "application/json" },
+      })
+      return { status: response.status, body: Schema.decodeUnknownSync(Schema.Json)(await response.json()) }
+    })
+  const provider = yield* SandboxProvider.Service
+  const home = Schema.decodeUnknownSync(Schema.Struct({ home: Schema.String }))(
+    (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === brainId)?.binding,
+  ).home
+  return { sessionId, messageId, brainId, owner, home, chat, raw, idle, synced, read }
 })
 
 it.live(
@@ -134,6 +148,192 @@ it.live(
       yield* chat.synced
       yield* Host.forgetHarness(chat.brainId)
       expect(yield* chat.read).toEqual(before)
+    }),
+)
+
+it.live(
+  "a prompt and a session read sent at once to a chat that needs a restore: one restore runs, and the prompt comes after the restored history",
+  () =>
+    Effect.gen(function* () {
+      const outage = yield* Host.Outage
+      const first = stub.script()
+      const chat = yield* opened(`open ${first.marker}`)
+      yield* Effect.promise(() => first.called())
+      yield* chat.idle
+      const before = yield* chat.read
+      yield* chat.synced
+      yield* Host.forgetHarness(chat.brainId)
+      yield* chat.idle
+      const asked = outage.paths.length
+      const next = SessionMessage.ID.create()
+      const reply = stub.script()
+      yield* Effect.all(
+        [
+          chat.chat("/prompt", {
+            method: "POST",
+            body: JSON.stringify({ id: next, text: reply.marker, delivery: "steer" }),
+          }),
+          chat.chat(""),
+        ],
+        { concurrency: "unbounded" },
+      )
+      yield* Effect.promise(() => reply.called())
+      yield* chat.idle
+      const after = (yield* chat.read).messages
+      expect(after.slice(-before.messages.length)).toEqual(before.messages)
+      expect(after.filter((id) => id === next)).toHaveLength(1)
+      expect(after.indexOf(next)).toBeLessThan(after.length - before.messages.length)
+      expect(outage.paths.slice(asked).filter((path) => path === "/host/sync/restore")).toHaveLength(1)
+    }),
+)
+
+it.live(
+  "Ren unreachable during a restore: the request gets 503 with a retry time and the restore flag stays; with Ren back the next request restores",
+  () =>
+    Effect.gen(function* () {
+      const outage = yield* Host.Outage
+      const script = stub.script()
+      const chat = yield* opened(`open ${script.marker}`)
+      yield* Effect.promise(() => script.called())
+      yield* chat.idle
+      const before = yield* chat.read
+      yield* chat.synced
+      yield* Host.forgetHarness(chat.brainId)
+      yield* chat.idle
+      outage.fail((path) => path.endsWith("/messages"))
+      expect(yield* chat.raw("/message")).toMatchObject({
+        status: 503,
+        body: { _tag: "UnavailableError", retryAfterMs: 2000 },
+      })
+      expect(HarnessDb.brainKey(chat.home, "ren:restoring")).toContain(chat.sessionId)
+      outage.clear()
+      expect(yield* chat.read).toEqual(before)
+      expect(HarnessDb.brainKey(chat.home, "ren:restoring")).not.toContain(chat.sessionId)
+    }),
+)
+
+it.live(
+  "a brain killed between the imports of two subagent chats copies only the missing chat at the next request, with no message twice",
+  () =>
+    Effect.gen(function* () {
+      const outage = yield* Host.Outage
+      const first = stub.script()
+      const second = stub.script()
+      const chat = yield* opened(`open ${subagent(first).marker}`)
+      yield* Effect.promise(() => first.called())
+      yield* chat.idle
+      yield* chat.chat("/prompt", {
+        method: "POST",
+        body: JSON.stringify({ id: SessionMessage.ID.create(), text: subagent(second).marker, delivery: "steer" }),
+      })
+      yield* Effect.promise(() => second.called())
+      yield* chat.idle
+      const before = yield* chat.read
+      const later = before.children[1]
+      if (!later) return yield* Effect.die(new Error("The chat has no second subagent chat"))
+      yield* chat.synced
+      yield* Host.forgetHarness(chat.brainId)
+      yield* chat.idle
+      const pages = (id: string) => `/host/sync/sessions/${id}/messages`
+      const held = outage.hold((path) => path === pages(later))
+      const reading = yield* chat.read.pipe(Effect.forkChild)
+      yield* Effect.promise(() => held.entered)
+      yield* Host.restart(chat.brainId, () => Promise.resolve())
+      held.release()
+      expect(yield* Fiber.join(reading)).toEqual(before)
+      expect(
+        [chat.sessionId, ...before.children].map((id) => outage.paths.filter((path) => path === pages(id)).length),
+      ).toEqual([1, 1, 2])
+    }),
+)
+
+it.live(
+  "a chat whose root never committed in Ren but whose subagent chat did: the root starts from its start input, then the subagent chat is imported",
+  () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const child = stub.script()
+      const chat = yield* opened(`open ${subagent(child).marker}`)
+      yield* Effect.promise(() => child.called())
+      yield* chat.idle
+      const before = yield* chat.read
+      yield* chat.synced
+      yield* database.db
+        .delete(Database.Schema.opencode_message)
+        .where(eq(Database.Schema.opencode_message.session_id, chat.sessionId))
+      yield* database.db
+        .delete(Database.Schema.opencode_session)
+        .where(eq(Database.Schema.opencode_session.session_id, chat.sessionId))
+      yield* Host.forgetHarness(chat.brainId)
+      const after = yield* chat.read
+      expect(after.children).toEqual(before.children)
+      expect(after.messages).toContain(chat.messageId)
+    }),
+)
+
+it.live("a chat that was busy when its brain was lost restores idle, and Ren shows it idle after the next sync", () =>
+  Effect.gen(function* () {
+    const database = yield* Database.Service
+    const script = stub.script({ hold: true })
+    yield* Effect.addFinalizer(() => Effect.sync(script.release))
+    const chat = yield* opened(`open ${script.marker}`)
+    yield* Effect.promise(() => script.called())
+    const suspended = database.db
+      .select({ at: Database.Schema.opencode_session.time_suspended })
+      .from(Database.Schema.opencode_session)
+      .where(eq(Database.Schema.opencode_session.session_id, chat.sessionId))
+      .pipe(Effect.map((rows) => rows.at(0)?.at ?? null))
+    yield* suspended.pipe(
+      Effect.repeat({ until: (at) => at !== null, schedule: Schedule.spaced("100 millis") }),
+      Effect.timeout("30 seconds"),
+    )
+    yield* Host.forgetHarness(chat.brainId)
+    script.release()
+    yield* chat.read
+    yield* chat.idle
+    yield* chat.synced
+    expect(yield* suspended).toBeNull()
+  }),
+)
+
+it.live(
+  "on a new sandbox the first request is a prompt to a chat that needs a restore: without Ren's settings it gets 503 and no turn starts; with them the turn runs with the chat's agent, in its own folder",
+  () =>
+    Effect.gen(function* () {
+      const outage = yield* Host.Outage
+      const instructions = `Ren says ${crypto.randomUUID()}`
+      yield* Seed.ren({ instructions })
+      const first = stub.script()
+      const chat = yield* opened(`open ${first.marker}`)
+      yield* Effect.promise(() => first.called())
+      yield* chat.idle
+      yield* chat.synced
+      outage.fail((path) => path === "/host/pull")
+      yield* Host.restart(chat.brainId, (home) =>
+        Promise.all(
+          [
+            ...["", "-wal", "-shm"].map((suffix) => join(home, ".ren", `opencode.db${suffix}`)),
+            join(home, "workspace", chat.sessionId),
+          ].map((path) => rm(path, { recursive: true, force: true })),
+        ).then(() => HarnessDb.deleteBrainKeys(home, ["ren:settings-layers", "ren:chats", "ren:chat-settings"])),
+      )
+      yield* chat.idle
+      const reply = stub.script({
+        tool: { name: "read", input: { path: join(chat.home, "workspace", "ses_other", "f.txt") } },
+      })
+      const prompt = {
+        method: "POST",
+        body: JSON.stringify({ id: SessionMessage.ID.create(), text: reply.marker, delivery: "steer" }),
+      }
+      expect(yield* chat.raw("/prompt", prompt)).toMatchObject({ status: 503, body: { _tag: "UnavailableError" } })
+      expect(reply.calls).toHaveLength(0)
+      outage.clear()
+      expect((yield* chat.raw("/prompt", prompt)).status).toBe(200)
+      const answered = yield* Effect.promise(() => reply.called(2))
+      expect(answered.system).toContain(instructions)
+      expect(JSON.stringify(answered.body.messages.findLast((message) => message.role === "tool")?.content)).toContain(
+        "its own folder",
+      )
     }),
 )
 

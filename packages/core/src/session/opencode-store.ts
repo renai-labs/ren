@@ -3,7 +3,7 @@ export * as OpenCodeStore from "./opencode-store.js"
 import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
-import { and, asc, desc, eq, getColumns, inArray, isNull, sql } from "drizzle-orm"
+import { and, asc, desc, eq, getColumns, inArray, isNull, or, sql } from "drizzle-orm"
 import type { PgTable } from "drizzle-orm/pg-core"
 import { Effect, Option, Record, Struct } from "effect"
 
@@ -182,22 +182,49 @@ export const messagesOf = (transaction: Database.Transaction, sessionId: Session
     )
     .orderBy(desc(Database.Schema.opencode_message.seq), desc(Database.Schema.opencode_message.id))
 
-export const messages = (
+// oxlint-disable-next-line ren/no-comments -- A restore page stops at limit rows or at maxBytes of row data, whichever comes first, and always has at least one row (INV-53).
+export const messages = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   sessionId: Session.ID,
-  after: Cursor | undefined,
-  limit: number,
-) =>
-  transaction
-    .select(Struct.omit(getColumns(Database.Schema.opencode_message), ["removed_at"]))
-    .from(Database.Schema.opencode_message)
+  input: { readonly after: Cursor | undefined; readonly limit: number; readonly maxBytes: number },
+) {
+  const table = Database.Schema.opencode_message
+  const order = sql`order by ${table.seq}, ${table.id}`
+  const ranked = transaction
+    .select({
+      id: table.id,
+      session_id: table.session_id,
+      type: table.type,
+      seq: table.seq,
+      data: table.data,
+      running: sql<string>`sum(octet_length(${table.data})) over (${order})`.as("running"),
+      position: sql<number>`row_number() over (${order})`.as("position"),
+      remaining: sql<number>`(count(*) over ())::int`.as("remaining"),
+    })
+    .from(table)
     .where(
       and(
-        eq(Database.Schema.opencode_message.session_id, sessionId),
-        isNull(Database.Schema.opencode_message.removed_at),
-        after &&
-          sql`(${Database.Schema.opencode_message.seq}, ${Database.Schema.opencode_message.id}) > (${after.seq}, ${after.id})`,
+        eq(table.session_id, sessionId),
+        isNull(table.removed_at),
+        input.after && sql`(${table.seq}, ${table.id}) > (${input.after.seq}, ${input.after.id})`,
       ),
     )
-    .orderBy(asc(Database.Schema.opencode_message.seq), asc(Database.Schema.opencode_message.id))
-    .limit(limit)
+    .as("ranked")
+  const rows = yield* transaction
+    .select({
+      id: ranked.id,
+      session_id: ranked.session_id,
+      type: ranked.type,
+      seq: ranked.seq,
+      data: ranked.data,
+      remaining: ranked.remaining,
+    })
+    .from(ranked)
+    .where(or(eq(ranked.position, 1), sql`${ranked.running} <= ${input.maxBytes}`))
+    .orderBy(asc(ranked.position))
+    .limit(input.limit)
+  return {
+    rows: rows.map((row) => Struct.omit(row, ["remaining"])),
+    hasMore: (rows.at(0)?.remaining ?? 0) > rows.length,
+  }
+})
