@@ -20,3 +20,19 @@ export const setBrainKeys = (home: string, values: Readonly<Record<string, strin
   for (const entry of Object.entries(values)) upsert.run(entry[0], entry[1])
   db.close()
 }
+
+// oxlint-disable-next-line ren/no-comments -- Reads one key of a local brain's brain.db.
+export const brainKey = (home: string, key: string) => {
+  const db = new Database(join(home, ".ren", "brain.db"), { readonly: true })
+  const found = db.query<{ value: string }, [string]>("select value from kv where key = ?").get(key)
+  db.close()
+  return found?.value
+}
+
+// oxlint-disable-next-line ren/no-comments -- Deletes keys in a stopped local brain's brain.db, as on a disk that never had them.
+export const deleteBrainKeys = (home: string, keys: ReadonlyArray<string>) => {
+  const db = new Database(join(home, ".ren", "brain.db"))
+  const remove = db.query("delete from kv where key = ?")
+  for (const key of keys) remove.run(key)
+  db.close()
+}

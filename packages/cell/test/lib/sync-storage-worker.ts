@@ -100,12 +100,6 @@ class SyncStorageCell extends SessionCell {
     const url = new URL(request.url)
     this.watched = url.searchParams.get("session") ?? this.watched
     const sessionId = this.watched
-    if (url.pathname === "/test/lose-storage") {
-      await this.runtime.runPromise(Effect.flatMap(Harness.Service, (harness) => harness.close))
-      await this.ctx.storage.deleteAlarm()
-      await this.ctx.storage.deleteAll()
-      return new Response(null, { status: 204 })
-    }
     if (url.pathname === "/test/older-harness") {
       await this.runtime.runPromise(Effect.flatMap(Harness.Service, (harness) => harness.close))
       await Promise.all(

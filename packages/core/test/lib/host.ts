@@ -6,8 +6,8 @@ import { TestEnvironment } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, type Duration, Effect, Layer, Schedule, Schema } from "effect"
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http"
+import { ConfigProvider, Context, type Duration, Effect, Layer, Schedule, Schema } from "effect"
+import { FetchHttpClient, type HttpClient, HttpRouter, HttpServer } from "effect/http"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -63,6 +63,7 @@ interface StackOptions<E, R> {
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
   readonly template?: string
+  readonly sandbox?: Layer.Layer<SandboxProvider.Service, unknown, HttpClient.HttpClient>
 }
 
 // oxlint-disable-next-line ren/no-comments -- Each brain is a real Bun brain process on this machine (LocalSandbox), under root. Brains reach Ren on REN_URL, where serve answers.
@@ -71,14 +72,15 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
     Layer.provideMerge(BrainHost.layerSandbox),
     Layer.provideMerge(BrainLifecycle.layer),
     Layer.provideMerge(
-      LocalSandbox.layer({
-        entry,
-        executor,
-        root: options.root,
-        ...(options.lostEvery && { lostEvery: options.lostEvery }),
-        ...(options.maxRunning && { maxRunning: options.maxRunning }),
-        ...(options.template && { template: options.template }),
-      }),
+      options.sandbox ??
+        LocalSandbox.layer({
+          entry,
+          executor,
+          root: options.root,
+          ...(options.lostEvery && { lostEvery: options.lostEvery }),
+          ...(options.maxRunning && { maxRunning: options.maxRunning }),
+          ...(options.template && { template: options.template }),
+        }),
     ),
     Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
     Layer.provideMerge(BrainClient.layer),
@@ -98,13 +100,72 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
     ),
   )
 
+interface Fault {
+  readonly match: (path: string) => boolean
+  readonly before: () => Promise<"fail" | "pass">
+}
+
+// oxlint-disable-next-line ren/no-comments -- What the brains' requests to Ren meet: a test fails or holds the requests whose path matches, and reads the paths the brains asked for.
+export class Outage extends Context.Service<
+  Outage,
+  {
+    readonly paths: ReadonlyArray<string>
+    readonly fail: (match: (path: string) => boolean) => void
+    readonly hold: (match: (path: string) => boolean) => {
+      readonly entered: Promise<void>
+      readonly release: () => void
+    }
+    readonly clear: () => void
+  }
+>()("@ren/core/test/Host/Outage") {}
+
+const outage = () => {
+  const paths: Array<string> = []
+  const faults: Array<Fault> = []
+  return {
+    paths,
+    faults,
+    service: Outage.of({
+      paths,
+      fail: (match) => void faults.push({ match, before: () => Promise.resolve("fail") }),
+      hold: (match) => {
+        const entered = Promise.withResolvers<void>()
+        const released = Promise.withResolvers<void>()
+        const fault: Fault = {
+          match,
+          before: () => {
+            faults.splice(faults.indexOf(fault), 1)
+            entered.resolve()
+            return released.promise.then(() => "pass")
+          },
+        }
+        faults.push(fault)
+        return { entered: entered.promise, release: () => released.resolve() }
+      },
+      clear: () => void faults.splice(0),
+    }),
+  }
+}
+
 const listen = (
   port: number,
   api: { readonly handler: (request: Request) => Promise<Response>; readonly dispose: () => Promise<void> },
+  faults: ReturnType<typeof outage> = outage(),
 ) =>
   Effect.acquireRelease(
     Effect.sync(() =>
-      Bun.serve({ hostname: "127.0.0.1", port, idleTimeout: 0, fetch: (request) => api.handler(request) }),
+      Bun.serve({
+        hostname: "127.0.0.1",
+        port,
+        idleTimeout: 0,
+        fetch: async (request) => {
+          const path = new URL(request.url).pathname
+          faults.paths.push(path)
+          const fault = faults.faults.find((each) => each.match(path))
+          if (fault && (await fault.before()) === "fail") return new Response("Ren is down", { status: 503 })
+          return api.handler(request)
+        },
+      }),
     ),
     (server) =>
       Effect.promise(async () => {
@@ -133,9 +194,11 @@ export const serve = (port: number, around?: RenHostApiTest.Around) =>
 
 // oxlint-disable-next-line ren/no-comments -- As serve, and the brains sync into Postgres.
 export const serveSynced = (port: number) =>
-  Layer.effectDiscard(
+  Layer.effect(
+    Outage,
     Effect.gen(function* () {
       const context = yield* Effect.context<Brains.Service | Database.Service>()
+      const faults = outage()
       yield* listen(
         port,
         HttpRouter.toWebHandler(
@@ -145,7 +208,9 @@ export const serveSynced = (port: number) =>
           ),
           { disableLogger: true },
         ),
+        faults,
       )
+      return faults.service
     }),
   )
 

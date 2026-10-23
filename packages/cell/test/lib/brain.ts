@@ -15,6 +15,7 @@ import { HttpApiClient, HttpApiTest } from "effect/http-api"
 import { Brain } from "../../src/brain.js"
 import { Cell } from "../../src/cell.js"
 import { Chat } from "../../src/chat.js"
+import { ChatSettings } from "../../src/chat-settings.js"
 import { Env } from "../../src/env.js"
 import { Harness } from "../../src/harness/harness.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
@@ -80,6 +81,7 @@ export const make = Effect.fnUntraced(function* (
         }),
       ),
       Layer.effect(Sync.Service, Sync.make(Option.none())),
+      ChatSettings.layer,
     ).pipe(Layer.provideMerge(ModelsTest.storage())),
   )
   yield* Context.get(services, ModelStore.Service).install(Shared.access(undefined, Shared.stub().url), "test")
