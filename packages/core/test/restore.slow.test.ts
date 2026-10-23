@@ -6,11 +6,15 @@ import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { eq } from "drizzle-orm"
 import { Effect, Layer, Schedule, Schema } from "effect"
+import { BrainClient } from "../src/brain-client.js"
+import { BrainHost } from "../src/brain-host.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Brains } from "../src/brains.js"
 import { Models } from "../src/models.js"
+import { SandboxProvider } from "../src/sandbox-provider.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { testEffect } from "./lib/effect.js"
+import { HarnessDb } from "./lib/harness-db.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 
@@ -265,4 +269,24 @@ it.live(
         .where(eq(Database.Schema.agent_session.id, chat.sessionId))).at(0)?.at
       expect(reset).toBeInstanceOf(Date)
     }),
+)
+
+it.live("a chat that Ren deleted leaves its brain's harness at the next pull", () =>
+  Effect.gen(function* () {
+    const database = yield* Database.Service
+    const script = stub.script()
+    const chat = yield* opened(`open ${script.marker}`)
+    yield* Effect.promise(() => script.called())
+    yield* chat.idle
+    yield* chat.synced
+    yield* database.db.delete(Database.Schema.agent_session).where(eq(Database.Schema.agent_session.id, chat.sessionId))
+    const host = yield* BrainHost.Service
+    const client = yield* BrainClient.Service
+    const api = yield* client.brain(yield* host.target(chat.brainId).pipe(Effect.orDie))
+    yield* api.brain["brain.wake"]().pipe(Effect.orDie)
+    const provider = yield* SandboxProvider.Service
+    const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === chat.brainId)
+    const home = Schema.decodeUnknownSync(Schema.Struct({ home: Schema.String }))(found?.binding).home
+    expect(HarnessDb.hasChat(home, chat.sessionId)).toBe(false)
+  }),
 )

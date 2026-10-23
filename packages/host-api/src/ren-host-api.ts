@@ -50,6 +50,9 @@ export const PullRequest = Schema.Struct({
   models: Schema.NullOr(Schema.String).annotate({ description: "The models hash the brain has." }),
   layers: SessionSettings.Known,
   sessions: Schema.Array(PullSession),
+  roots: Schema.optionalKey(Schema.Array(Session.ID)).annotate({
+    description: "The root chats the brain’s harness holds. Ren names the ones it deleted in `deleted`.",
+  }),
 }).annotate({ identifier: "Host.PullRequest" })
 
 export interface PullModels extends Schema.Schema.Type<typeof PullModels> {}
@@ -71,6 +74,9 @@ export const PullReply = Schema.Struct({
   models: PullModels,
   layers: SessionSettings.Layers,
   chats: Schema.Array(PullChat),
+  deleted: Schema.Array(Session.ID).annotate({
+    description: "Root chats of the request that Ren no longer has. The brain drops them (E109).",
+  }),
 }).annotate({ identifier: "Host.PullReply" })
 
 const SessionParams = { id: Session.ID }

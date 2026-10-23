@@ -21,7 +21,7 @@ import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
-import { and, eq, isNull } from "drizzle-orm"
+import { and, eq, inArray, isNull } from "drizzle-orm"
 import {
   ByteSize,
   Cause,
@@ -456,12 +456,22 @@ export const layer = Layer.effect(
           .where(eq(Database.Schema.brain.id, host.brainId))
           .pipe(Effect.orDie)
         yield* brainHost.observe(host.brainId, request.sessions)
+        const roots = request.roots ?? []
+        const kept =
+          roots.length === 0
+            ? []
+            : yield* database.db
+                .select({ id: Database.Schema.agent_session.id })
+                .from(Database.Schema.agent_session)
+                .where(inArray(Database.Schema.agent_session.id, [...roots]))
+                .pipe(Effect.orDie)
         const hash = Option.isSome(access) ? yield* Models.hash(access.value) : (request.models ?? "")
         return {
           publicKeys: client.publicKeys,
           models: Option.isNone(access) || hash === request.models ? { hash } : { hash, access: access.value },
           layers: pulled.layers,
           chats: pulled.chats,
+          deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
         } satisfies PullReply
       }),
       refreshModels: Effect.fn("Brains.refreshModels")(function* (host: CurrentHost["Service"]) {

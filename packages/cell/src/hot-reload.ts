@@ -3,9 +3,10 @@ export * as HotReload from "./hot-reload.js"
 import { BrainSettings } from "@ren/brain/settings"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Layer, Option, Semaphore } from "effect"
+import { Clock, Context, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { BrainKeys } from "./brain-keys.js"
+import { BrainStorage } from "./brain-storage.js"
 import { Cell } from "./cell.js"
 import { ChatSettings } from "./chat-settings.js"
 import { Fence } from "./fence.js"
@@ -13,6 +14,12 @@ import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
 import { RenAddress } from "./ren-address.js"
+
+const deletedKey = "ren:deleted"
+
+const folderAfter = Duration.days(7)
+
+const Since = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Number))
 
 export interface Interface {
   readonly pull: Effect.Effect<void>
@@ -36,6 +43,12 @@ export const layer = Layer.effect(
       Effect.provide(RenAddress.http.pipe(Layer.provide(FetchHttpClient.layer))),
     )
     const pulls = yield* Semaphore.make(1)
+    const storage = yield* BrainStorage.Service
+    const deletedSince = Effect.promise(() => storage.get(deletedKey)).pipe(
+      Effect.map((text) =>
+        Option.getOrElse(Schema.decodeUnknownOption(Since)(text ?? "{}"), (): Readonly<Record<string, number>> => ({})),
+      ),
+    )
 
     const pull = Effect.gen(function* () {
       if (yield* fence.isRetired) return
@@ -64,6 +77,7 @@ export const layer = Layer.effect(
             models: Option.getOrNull(yield* store.hash),
             layers: BrainSettings.known(layers),
             sessions,
+            roots: sessions.map((session) => session.id),
           },
         })
         .pipe(HostToken.withToken(token.value), Effect.timeout(HostToken.renAnswersWithin))
@@ -77,6 +91,19 @@ export const layer = Layer.effect(
           const opened = yield* harness.get
           if (access) yield* opened.configure(access.endpoints)
           yield* opened.applySettings(reply.chats)
+          // oxlint-disable-next-line ren/no-comments -- A chat Ren deleted leaves the harness at once, when idle; its folder goes after 7 days of Ren naming it deleted (E109, E114).
+          const busy = new Set(sessions.filter((session) => session.busy).map((session) => session.id))
+          yield* Effect.forEach(
+            reply.deleted.filter((id) => !busy.has(id)),
+            (id) => opened.transcript.drop(id),
+            { discard: true },
+          )
+          const now = yield* Clock.currentTimeMillis
+          const since = yield* deletedSince
+          const next = Object.fromEntries(reply.deleted.map((id) => [id, since[id] ?? now]))
+          const due = reply.deleted.filter((id) => now - (next[id] ?? now) >= Duration.toMillis(folderAfter))
+          yield* Effect.forEach(due, (id) => opened.transcript.removeFolder(id), { discard: true })
+          yield* Effect.promise(() => storage.put(deletedKey, JSON.stringify(next)))
         }),
       )
     }).pipe(

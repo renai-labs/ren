@@ -13,7 +13,7 @@ import type { StartBody } from "@ren/host-api/brain-api"
 import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
 import { Clock, DateTime, Effect, Layer, Option, Ref, Schema, type Scope, Semaphore, Stream, Struct } from "effect"
-import { mkdir, stat } from "node:fs/promises"
+import { mkdir, rm, stat } from "node:fs/promises"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
 import { ModelRefresh } from "../../model-refresh.js"
@@ -390,6 +390,13 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       ),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
     transcript: {
+      drop: (chat) =>
+        mutations.withPermit(client.session.remove({ sessionID: Session.ID.make(chat) }).pipe(Effect.ignore)),
+      // oxlint-disable-next-line ren/no-comments -- Only a folder on the brain's own hand is on this disk; a hand Ren did not create is never touched (E114).
+      removeFolder: (chat) =>
+        server.hasEnvironmentConnections
+          ? Effect.promise(() => rm(server.directoryOf(chat), { recursive: true, force: true }))
+          : Effect.void,
       has: (chat) => findSession(client, Session.ID.make(chat)).pipe(Effect.map(Option.isSome)),
       start: (input) =>
         mutations
