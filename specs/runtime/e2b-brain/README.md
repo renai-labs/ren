@@ -69,6 +69,7 @@ Rules for every piece:
 | H     | LiteLLM port from ren-v1                                                                                                                                                                                                                                                                                     | Not started                                                                |
 | I     | Environment choice in the product (E20): `Space` default template, `Session.CreateInput.environmentTemplateId`, app picker                                                                                                                                                                                   | Not started                                                                |
 | J     | Harness-neutral sync (E30): brain core defines the `Transcript` contract (`changed`, `rows`, `summary`, `restore`); each harness adapter meets it by any means (harness API, reading its storage, a plugin or extension inside the harness). Harness-tagged rows, neutral summary columns on `agent_session` | Not started                                                                |
+| K     | Credentials (REN-1432, REN-1439): egress injection, owners, access, connect flows, composer UX. Summary in §10                                                                                                                                                                                               | Spec written: [../credentials/](../credentials/README.md); build after M2  |
 
 Order: A before B, C and D. B and C before D. D before E. E before M2 (E83). F at any time. G after D. I after B. J before a second harness. H last. Out of scope: tracing (E96).
 
@@ -353,3 +354,99 @@ ren-v1 cases to test, per piece. Ids are from [`../../ren-v1-hld/references/`](.
 | ID  | Decision                               | Needed by |
 | --- | -------------------------------------- | --------- |
 | Q5  | Update REN-1513's text to space scope. | any       |
+
+## 10. Credentials
+
+Status: spec written, not built. Build after M2. Two specs, built together (C34):
+
+| Spec                                                               | Covers                                 | Decisions |
+| ------------------------------------------------------------------ | -------------------------------------- | --------- |
+| [`../credentials/README.md`](../credentials/README.md)             | How a credential reaches a request     | C1 to C52 |
+| [`../credentials/owner-access.md`](../credentials/owner-access.md) | How people own, share and connect them | A1 to A43 |
+
+### 10.1 End to end
+
+```
+ person (app)                    Ren (control plane)                              egress (data plane)                upstream
+ ┌───────────────────┐ connect  ┌─────────────────────────────────────────┐  resolve ┌──────────────────────────────┐
+ │ composer pill      │ ───────▶ │ Credentials: Access, owner rules,        │ ◀──────▶ │                              │
+ │ "2 not connected"  │ OAuth or │ limit 100 per owner                      │ cache 30s│                              │
+ │ card in the chat   │ paste    │ Envelope.seal → credential row           │          │                              │
+ │ secrets page       │          │ { label, owner, hosts, inject, type }    │          │                              │
+ └───────────────────┘          └─────────────────────────────────────────┘          │                              │
+                                                                                      │                              │
+ workload (brain or hand)            host / provider                                  │                              │
+ ┌──────────────────────────────┐ ┌──────────────────────────┐ proof                  │ ① finds ren:<LABEL>          │ real value
+ │ STRIPE_API_KEY=ren:STRIPE_…  │▶│ adds the proof            │ ─────────────────────▶ │ ② asks Ren                   │ ─────────▶ Stripe, Meta,
+ │ MCP header                   │ │ (E2B: proxy login per     │                        │ ③ swaps in the real value    │            MCP, model, git
+ │  Bearer ren:MCP_META_ADS__ACME│ │  sandbox; never inside it)│                        │ or refuses credential_missing│
+ └──────────────▲───────────────┘ └──────────────────────────┘                        └──────────────────────────────┘
+                │ on credential_missing the agent calls ren_connect({ label }) → the app draws a connect card
+```
+
+### 10.2 Decisions in plain words
+
+Where a secret lives:
+
+1. A secret lives only in Ren, encrypted with `Envelope`: local keys now, AWS KMS later (C1, C18).
+2. A brain or a hand holds only placeholders, `ren:<LABEL>`. The egress puts the real value into the request after it leaves the workload (C1, C4).
+3. The host or the provider tells Ren which workload sent a request. The request itself never says it. On E2B this is a proxy login per sandbox that the sandbox cannot see (C2).
+4. Nothing in a brain or a hand renews a token. Ren renews everything (C3).
+5. Protocols that the egress cannot read yet (SSH, Postgres, MySQL) use delivered secrets: the real value goes into the workload, and the UI marks it (C9).
+6. APIs that sign each request with the secret (AWS SigV4, HMAC) are open (README §12).
+
+Who owns a credential:
+
+7. Each credential has one owner: `workload`, `person`, `space` or `org`. There is no vault object (A1).
+8. Ren looks up a label in this order: workload, person, space, org. A lookup never crosses into another space (C5).
+9. A sign-in to a person's own account (Gmail, GitHub) belongs to that person. It works only on a brain that serves that person alone (C28).
+10. To share it, the person moves it to a space. The row keeps whose account it is. When the person leaves the space or the org, Ren deletes it. A pasted key stays (A6, A23).
+11. Only pasted keys can be copied. OAuth credentials only move (A7).
+
+Who may do what:
+
+12. Org credentials: every member may write them. Space credentials: space members and admins. Person credentials: the person; an admin may only see the metadata and delete (A2 to A4).
+13. No API returns a secret, only a key preview (A5).
+14. `delivered`: admins choose it for org credentials; space members and admins for space credentials (A15, A27).
+
+Labels and MCPs:
+
+15. A label is `UPPER_SNAKE_CASE`, unique per owner, and never changes. The display name can change (A12, A22).
+16. An MCP's credential is `MCP_<SLUG>`. An MCP can name another label to share one sign-in, for example `SLACK` for the Slack MCP and the Slack channel (A12).
+17. One MCP can have several connections in one space: `MCP_META_ADS__ACME`, `MCP_META_ADS__GLOBEX`. Each gets its own OpenCode entry with its own placeholder header, so code mode calls each customer's account (A13, A14).
+
+Connecting:
+
+18. OAuth uses the MCP SDK inside Effect, as OpenCode does. Ren identifies itself in this order: the org's OAuth app, a borrowed client, Ren's client metadata document `/oauth/client.json`, dynamic registration (A17, A33).
+19. Ren checks the owner rules before the consent screen. The sign-in `state` works once. The old credential works until the new one is saved (README §6.9).
+20. Managed MCP providers (Composio now, Pipedream later) are layers of one `McpProvider` service. The egress routes to the per-person session URL and adds the headers that the provider layer gives (A36).
+21. Other ways in: pasted keys, client-credentials grants, GitHub user OAuth. A GitHub App installation belongs to the org; each space uses at most one (A20, A31).
+
+Gaps and UX:
+
+22. Ren computes what a chat, or a new chat, needs and what is missing. The app asks again after each change; it does not poll (A8, A28).
+23. In a chat, the egress refuses, the agent calls `ren_connect`, the person connects from the card, and the next request works (A9).
+24. The UX is the same as in ren-v1: the composer pill, the connect dialog, the card, the secrets page, the space tab, the OAuth apps page and Reconnect (A26, `../credentials/references/ux-parity.md`).
+
+Lifecycle:
+
+25. A delete, a move or an offboarding clears the egress cache at once. The next request is denied (A23).
+26. While a brain is asleep, Ren keeps refreshing its credentials. A connect during a turn works on the next request. A new MCP connection appears at the next turn (README §11, `owner-access.md` §14).
+
+Infra:
+
+27. `deploy.yaml` bindings are label aliases to space or org labels, never to a person credential. Connections come from labels, not from `deploy.yaml` (A25).
+
+Deep check against ren-v1 and E2B (README §11a, `owner-access.md` §14a), in plain words:
+
+28. The egress keeps answers in its own memory. If Ren goes down, running chats keep working for up to 15 min with the last good answers (C37).
+29. E2B sends host names to the egress only with `allowOut: ["*"]` and `denyOut: ["0.0.0.0/0"]`. The E2B layer sets this with the proxy on create, update and resume (C38).
+30. Ren tells every egress copy to forget an answer after a delete or a replace, and closes the old sandbox's open connections (C40).
+31. The egress never forwards a request with an unresolved `ren:<LABEL>`. It answers 403 with the label and "call ren_connect" (C42).
+32. Every image trusts the egress certificate in every common place (system, Python, Node, curl, git, AWS) (C44).
+33. GitHub works for `gh` and `git` through `GH_TOKEN`, `GITHUB_TOKEN` and injection by host (C45).
+34. A new key's placeholder env var appears at once, not at turn end (C47). System names like `PATH` cannot be labels (C48).
+35. Hosts are required for every key; no bare `*` (A39). `ren_connect` cannot set hosts (A40).
+36. Removing a member from a space stops their session brain there from using space credentials (A37).
+
+Later (A34): the composer pill, OAuth for MCPs and MCP connections wait until Ren stores which apps and MCPs a space uses. Open: request signing; a KMS signer for the egress certificate authority; budget checks at the egress (REN-1482); whether E2B keeps the proxy login across pause and resume (live test).
