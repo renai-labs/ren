@@ -9,6 +9,7 @@ import { Docker } from "@ren/core/environment-provider/docker"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
+import { Retention } from "@ren/core/retention"
 import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
 import { LocalSandbox } from "@ren/core/sandbox-provider/local"
 import { Settings } from "@ren/core/settings"
@@ -44,7 +45,9 @@ const host = Layer.unwrap(
 
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
-    Brains.layer.pipe(Layer.provide(host), Layer.provide(DurableRunner.layerEffect)),
+    Layer.mergeAll(Brains.layer.pipe(Layer.provide(host)), Retention.layer).pipe(
+      Layer.provide(DurableRunner.layerEffect),
+    ),
     Mailer.layer,
     SignupGuard.layer,
   ]),
