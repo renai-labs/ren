@@ -83,7 +83,7 @@ The Bun host does not wait on running turns and never closes OpenCode (E6). The 
 ### Chat API isolation (E26)
 
 - The entry passes the client token's `sid` to the Chat API.
-- The Chat API allows `sid` and its descendants (`Harness.Chat.get`, `children`). Any other session gets 403.
+- The Chat API allows `sid` and its descendants (`Harness.Chat.get`, `children`). Any other session gets 403 `ForbiddenError`. The check is the `ChatAccess` middleware (`@ren/protocol/chat`), on every route under `/chat/session/:sessionID`, so the contract and the generated clients declare the 403. The cell implements it in `cell/src/chat.ts`.
 - The event stream keeps only events of allowed sessions. The set grows on `session.created` with an allowed parent. `shell.exited` and `shell.deleted` map to sessions through the shell id seen in `shell.created`.
 - `session.status` returns only allowed sessions.
 - An event stream ends when its client token expires (`stream.ended`, reason `closing`, E49).

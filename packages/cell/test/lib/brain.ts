@@ -123,12 +123,16 @@ export const make = Effect.fnUntraced(function* (
     Cell.BrainRoutes,
   )
   const chatWeb = Context.get(yield* Layer.build(Chat.layer.pipe(Layer.provide(Layer.succeedContext(cell)))), Cell.Chat)
-  const chatFetch = (path: string, init: RequestInit = {}, user: string | undefined = "user_1", name?: string) => {
+  const chatFetch = (
+    path: string,
+    init: RequestInit = {},
+    member: Parameters<typeof Chat.setMember>[1] = { sub: "user_1" },
+  ) => {
     const request = new Request(`http://cell${path}`, init)
-    Chat.setMember(request.headers, { ...(user && { sub: user }), ...(name && { name }) })
+    Chat.setMember(request.headers, member)
     return chatWeb.fetch(request)
   }
-  const chatAs = (user: string, name?: string) =>
+  const chatAs = (member: Parameters<typeof Chat.setMember>[1]) =>
     HttpApiClient.make(ChatApi, { baseUrl: "http://cell" }).pipe(
       Effect.provide(FetchHttpClient.layer),
       Effect.provideService(
@@ -136,18 +140,13 @@ export const make = Effect.fnUntraced(function* (
         Object.assign(
           (input: string | URL | Request, init?: RequestInit) => {
             const url = new URL(input instanceof Request ? input.url : String(input))
-            return chatFetch(
-              `${url.pathname}${url.search}`,
-              input instanceof Request ? input : (init ?? {}),
-              user,
-              name,
-            )
+            return chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}), member)
           },
           { preconnect: fetch.preconnect },
         ),
       ),
     )
-  const chat = yield* chatAs("user_1")
+  const chat = yield* chatAs({ sub: "user_1" })
   const opencode = yield* OpenCode.make({ baseUrl: "http://opencode" }).pipe(
     Effect.provide(FetchHttpClient.layer),
     Effect.provideService(

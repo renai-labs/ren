@@ -1,7 +1,7 @@
 export * as Chat from "./chat.js"
 
-import { ChatApi } from "@ren/protocol/chat"
-import { ConflictError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
+import { ChatAccess, ChatApi } from "@ren/protocol/chat"
+import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
 import { Session } from "@ren/schema/session"
 import type { SessionEvent } from "@ren/schema/session/event"
 import { Clock, Deferred, Effect, Layer, Option, Predicate, Ref, Result, Schema, Stream } from "effect"
@@ -200,6 +200,22 @@ const harnessed = Effect.map(
   (context) =>
     <A, E, R>(use: (harness: Harness.Instance) => Effect.Effect<A, E, R>) =>
       Effect.flatMap(Cell.acquire, use).pipe(Effect.scoped, Effect.provide(context)),
+)
+
+const access = Layer.effect(
+  ChatAccess,
+  Effect.map(harnessed, (run) =>
+    ChatAccess.of(
+      Effect.fnUntraced(function* (httpEffect) {
+        const scope = yield* scopeOf
+        const target = (yield* HttpRouter.params).sessionID
+        if (Option.isNone(scope.sid) || !target) return yield* httpEffect
+        const root = scope.sid.value
+        if (yield* run((harness) => isWithin(harness, root, target))) return yield* httpEffect
+        return yield* new ForbiddenError({ message: "The token is for another chat" })
+      }),
+    ),
+  ),
 )
 
 const handlers = Layer.mergeAll(
@@ -423,24 +439,13 @@ export const layer = Layer.effect(
   Cell.Chat,
   Effect.gen(function* () {
     const app = yield* HttpRouter.toHttpEffect(
-      HttpApiBuilder.layer(ChatApi).pipe(Layer.provide(handlers), Layer.provide(HttpServer.layerServices)),
+      HttpApiBuilder.layer(ChatApi).pipe(
+        Layer.provide(handlers),
+        Layer.provide(access),
+        Layer.provide(HttpServer.layerServices),
+      ),
     )
     const context = yield* Effect.context<Services>()
-    const handler = HttpEffect.toWebHandler(app.pipe(Effect.provide(context)))
-    const forbidden = Effect.fnUntraced(function* (request: Request) {
-      const sid = request.headers.get(sessionHeader)
-      const target = /^\/chat\/session\/([^/]+)/.exec(new URL(request.url).pathname)?.at(1)
-      if (!sid || !target) return false
-      return !(yield* Effect.scoped(Effect.flatMap(Cell.acquire, (harness) => isWithin(harness, sid, target))))
-    })
-    return Cell.Chat.of({
-      owns,
-      fetch: (request) =>
-        Effect.runPromise(forbidden(request).pipe(Effect.provide(context))).then((isForbidden) =>
-          isForbidden
-            ? Response.json({ _tag: "ForbiddenError", message: "The token is for another chat" }, { status: 403 })
-            : handler(request),
-        ),
-    })
+    return Cell.Chat.of({ owns, fetch: HttpEffect.toWebHandler(app.pipe(Effect.provide(context))) })
   }),
 )
