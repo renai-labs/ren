@@ -40,7 +40,8 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
               package: protocol.package,
               ...(model.limit && { limit: model.limit }),
             },
-            model.efforts && [{ type: "effort", values: model.efforts }],
+            // oxlint-disable-next-line ren/no-comments -- Ren's catalog is the only source of efforts, the same for every harness; OpenCode adds none of its own.
+            model.efforts ? [{ type: "effort", values: model.efforts }] : [],
           ),
         ]
       })
