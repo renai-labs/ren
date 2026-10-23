@@ -270,6 +270,7 @@ export type SessionInfo = {
   createdAt: string
   updatedAt: string
   archivedAt: string | null
+  filesResetAt: string | null
 }
 
 export type SessionClientAccess = SessionReadyAccess | SessionStartingAccess | SessionFailedAccess

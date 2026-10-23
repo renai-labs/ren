@@ -87,6 +87,7 @@ const toInfo = (row: Row): Session.Info => ({
     ? DateTime.makeUnsafe(row.opencode.updatedAt)
     : DateTime.fromDateUnsafe(row.session.created_at),
   archivedAt: row.session.archived_at && DateTime.fromDateUnsafe(row.session.archived_at),
+  filesResetAt: row.session.files_reset_at && DateTime.fromDateUnsafe(row.session.files_reset_at),
 })
 
 const modelNotFound = new Primitive.NotFound({ message: "Model not found." })

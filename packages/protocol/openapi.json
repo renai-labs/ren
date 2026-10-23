@@ -5967,6 +5967,17 @@
                 "type": "null"
               }
             ]
+          },
+          "filesResetAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the chat moved to a new machine and its workspace files from before were lost, or null."
           }
         },
         "required": [
@@ -5979,7 +5990,8 @@
           "capabilities",
           "createdAt",
           "updatedAt",
-          "archivedAt"
+          "archivedAt",
+          "filesResetAt"
         ],
         "additionalProperties": false
       },
