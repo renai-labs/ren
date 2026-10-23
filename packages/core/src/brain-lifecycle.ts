@@ -153,6 +153,7 @@ export const layer = Layer.effect(
       yield* update(row.id, {
         provider: provider.kind,
         binding: created.value.binding,
+        template: provider.template,
         url: created.value.url,
         key_ids: client.publicKeys.map((key) => key.id),
         phase: "booting",
@@ -179,6 +180,11 @@ export const layer = Layer.effect(
 
     const resume = Effect.fnUntraced(function* (row: Row) {
       if (!row.binding) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
+      // oxlint-disable-next-line ren/no-comments -- An asleep brain on an older build moves to the current one by a replace (E120). Only this step checks, so a running brain is never replaced for its build.
+      if (row.template && provider.template && row.template !== provider.template) {
+        yield* Effect.logInfo(`Brain ${row.id} runs build ${row.template}; Ren replaces it with ${provider.template}`)
+        return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+      }
       const connected = yield* provider.connect(row.binding).pipe(
         Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
         Effect.catchTag("SandboxProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),

@@ -128,6 +128,7 @@ export const layer = Layer.effect(
 
     return SandboxProvider.Service.of({
       kind: "e2b",
+      template: config.template,
       create: Effect.fn("E2BSandbox.create")(function* (input) {
         const metadata = { brain: input.brainId, generation: String(input.generation) }
         const existing = (yield* list(metadata, "running,paused")).at(0)

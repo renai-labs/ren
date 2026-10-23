@@ -26,6 +26,7 @@ export const brain = pgTable(
       .default(sql`'{}'::text[]`),
     provider: text(),
     binding: jsonb().$type<Schema.Json>(),
+    template: text(),
     url: text(),
     generation: integer().notNull().default(1),
     run_epoch: integer().notNull().default(0),

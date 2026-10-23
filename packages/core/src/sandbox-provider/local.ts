@@ -50,6 +50,7 @@ export const layer = (options: {
   readonly root: string
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
+  readonly template?: string
 }) =>
   Layer.effect(
     SandboxProvider.Service,
@@ -76,6 +77,7 @@ export const layer = (options: {
 
       return SandboxProvider.Service.of({
         kind: "local",
+        template: options.template ?? null,
         create: Effect.fn("LocalSandbox.create")(function* (input) {
           const home = homeOf(input.brainId, input.generation)
           const existing = yield* stored(home)
