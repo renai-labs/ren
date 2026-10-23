@@ -359,6 +359,39 @@ test("a question whose turn stopped shows as expired, and answering it sends one
     }),
   ))
 
+test("typing while the connection is parked asks Ren for access once, which wakes the brain, and not again right after (E130)", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make({ vars: { CHAT_IDLE_MS: "300", CHAT_HEARTBEAT_MS: "50" } })
+      yield* brain.start()
+      const accessed = { count: 0 }
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: () =>
+          Effect.sync(() => {
+            accessed.count++
+            return {
+              status: "ready" as const,
+              url: "http://cell",
+              token: "a-client-token",
+              expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+            }
+          }),
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(http(brain)))
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "parked")
+      const parked = accessed.count
+      yield* chat.typing
+      yield* chat.typing
+      yield* Effect.sync(() => accessed.count).pipe(
+        Effect.repeat({ until: (count) => count > parked, schedule: Schedule.spaced("10 millis") }),
+      )
+      yield* chat.typing
+      expect(accessed.count).toBe(parked + 1)
+    }),
+  ))
+
 test("after the connection parks, a history read asks for access before any request to the old URL", () =>
   live(
     Effect.gen(function* () {

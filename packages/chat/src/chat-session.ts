@@ -51,6 +51,8 @@ export const savedPageSizes = [100, 50, 25, 5, 1]
 
 const savedRetries = 3
 
+const prepareEveryMs = 5 * 60_000
+
 const httpErrorOf = (error: unknown) =>
   error instanceof ClientError && HttpClientError.isHttpClientError(error.cause)
     ? Option.some(error.cause)
@@ -944,6 +946,16 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     Effect.forEach([...settling.values()], (fiber) => Fiber.interrupt(fiber), { discard: true }),
   )
 
+  // oxlint-disable-next-line ren/no-comments -- Typing in a parked chat asks Ren for access, which wakes its brain before the send; at most once per 5 minutes (E130).
+  const prepared = { at: Number.NEGATIVE_INFINITY }
+  const typing = Effect.gen(function* () {
+    if ((yield* SubscriptionRef.get(status)) !== "parked") return
+    const now = yield* Clock.currentTimeMillis
+    if (now - prepared.at < prepareEveryMs) return
+    prepared.at = now
+    yield* client.pipe(Effect.ignore, Effect.forkIn(scope))
+  })
+
   // oxlint-disable-next-line ren/no-comments -- Messages kept before a reload go again with their ids; the brain skips an id it already has (E118).
   yield* Effect.forEach(yield* Ref.get(kept), (item) => prompt(item).pipe(Effect.catch(report)), {
     discard: true,
@@ -969,6 +981,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     queueInput: (inboxID: SessionMessage.ID) => redirect(inboxID, "queue"),
     reorderInput,
     wake: connection.wake,
+    typing,
     resync: connection.resync,
     foreground: connection.foreground,
     models: Effect.flatMap(client, (api) => api.model.list()),

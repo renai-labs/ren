@@ -255,6 +255,7 @@ export function SessionComposer(props: {
   )
   const cancelInput = ChatReact.useAction(props.sessionID, (opened, id: SessionMessage.ID) => opened.cancelInput(id))
   const interrupt = ChatReact.useAction(props.sessionID, (opened) => opened.interrupt)
+  const typing = ChatReact.useAction(props.sessionID, (opened) => opened.typing)
   const status = sessionStatus(props.info, { running: props.running })
   const running = props.running
   const stoppable = status.stoppable
@@ -361,6 +362,7 @@ export function SessionComposer(props: {
     setBrowsing(ComposerHistory.idle)
     setSuggesting(trigger && { trigger })
     change(Composer.withText(draft, text))
+    void typing()
   }
   const runClient = (id: ClientCommand.ID) => {
     const run: Readonly<Record<ClientCommand.ID, () => void>> = {
