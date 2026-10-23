@@ -6,11 +6,12 @@ import { Location } from "@opencode/schema/location"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import type { SessionCreateInput, SessionListInput, SessionUpdateInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
+import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
 import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
-import { Clock, DateTime, Effect, Layer, Option, Ref, type Scope, Semaphore, Stream } from "effect"
+import { Clock, DateTime, Effect, Layer, Option, Ref, type Scope, Semaphore, Stream, Struct } from "effect"
 import { mkdir } from "node:fs/promises"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
@@ -387,7 +388,15 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
     transcript: {
       has: (chat) => findSession(client, Session.ID.make(chat)).pipe(Effect.map(Option.isSome)),
-      start: (input) => mutations.withPermit(start(client, server, settings, input)).pipe(Effect.asVoid),
+      start: (input) =>
+        mutations
+          .withPermit(
+            start(client, server, settings, {
+              ...Struct.omit(input, ["environmentTemplateId", "directory"]),
+              ...(input.directory && { directory: Environment.Directory.make(input.directory) }),
+            }),
+          )
+          .pipe(Effect.asVoid),
       // oxlint-disable-next-line ren/no-comments -- The in-process import keeps the chat's workspace link, so its tools stay on its hand (E104); OpenCode's import route drops it.
       restore: (data) =>
         mutations.withPermit(

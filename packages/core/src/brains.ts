@@ -91,6 +91,10 @@ export interface Interface {
     host: CurrentHost["Service"],
     sessionId: Session.ID,
   ) => Effect.Effect<void, ForbiddenError>
+  readonly directoryOf: (
+    host: CurrentHost["Service"],
+    sessionId: Session.ID,
+  ) => Effect.Effect<Option.Option<Environment.Directory>, ForbiddenError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Brains") {}
@@ -477,6 +481,12 @@ export const layer = Layer.effect(
             "Environments.Unavailable": (error) =>
               Effect.fail(new EnvironmentUnavailableError({ message: error.message })),
           }),
+        )
+      }),
+      directoryOf: Effect.fn("Brains.directoryOf")(function* (host: CurrentHost["Service"], sessionId: Session.ID) {
+        return yield* environments.findDirectory(
+          yield* inBrain(host, sessionId),
+          yield* handOf(host.brainId, host.generation),
         )
       }),
       releaseEnvironment: Effect.fn("Brains.releaseEnvironment")(function* (

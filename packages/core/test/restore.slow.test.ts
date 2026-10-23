@@ -50,11 +50,12 @@ const opened = Effect.fnUntraced(function* (text: string) {
   const database = yield* Database.Service
   const owner = yield* Seed.owner()
   const sessionId = Session.ID.create()
+  const messageId = Session.MessageID.create()
   yield* sessions.create(owner, {
     sessionId,
     harness: "opencode",
     interactive: true,
-    initialMessage: { messageId: Session.MessageID.create(), prompt: { text }, sender: { userId: owner.createdBy } },
+    initialMessage: { messageId, prompt: { text }, sender: { userId: owner.createdBy } },
   })
   const brainId = (yield* database.db
     .select({ brainId: Database.Schema.agent_session.brain_id })
@@ -98,7 +99,7 @@ const opened = Effect.fnUntraced(function* (text: string) {
       children: found.children.map((each) => each.id).toSorted(),
     })),
   )
-  return { sessionId, brainId, owner, chat, idle, synced, read }
+  return { sessionId, messageId, brainId, owner, chat, idle, synced, read }
 })
 
 it.live(
@@ -121,5 +122,38 @@ it.live(
       yield* chat.synced
       yield* Host.forgetHarness(chat.brainId)
       expect(yield* chat.read).toEqual(before)
+    }),
+)
+
+it.live(
+  "a chat with no transcript in Ren restores as a start: its first message comes back once, and its tools run in its folder on the brain's own hand",
+  () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const script = stub.script()
+      const chat = yield* opened(`open ${script.marker}`)
+      yield* Effect.promise(() => script.called())
+      yield* chat.idle
+      yield* chat.synced
+      yield* database.db
+        .delete(Database.Schema.opencode_message)
+        .where(eq(Database.Schema.opencode_message.session_id, chat.sessionId))
+      yield* database.db
+        .delete(Database.Schema.opencode_session)
+        .where(eq(Database.Schema.opencode_session.session_id, chat.sessionId))
+      yield* Host.forgetHarness(chat.brainId)
+      yield* chat.read
+      yield* Effect.promise(() => script.called(2))
+      yield* chat.idle
+      expect((yield* chat.read).messages.filter((id) => id === chat.messageId)).toHaveLength(1)
+      const shell = stub.script({ tool: { name: "shell", input: { command: "pwd" } } })
+      yield* chat.chat("/prompt", {
+        method: "POST",
+        body: JSON.stringify({ id: SessionMessage.ID.create(), text: shell.marker, delivery: "steer" }),
+      })
+      const answered = yield* Effect.promise(() => shell.called(2))
+      expect(JSON.stringify(answered.body.messages.findLast((message) => message.role === "tool")?.content)).toContain(
+        `/workspace/${chat.sessionId}`,
+      )
     }),
 )

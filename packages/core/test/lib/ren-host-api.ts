@@ -66,34 +66,39 @@ const forgetful = HttpApiBuilder.group(SyncApi, "sync", (group) =>
 
 // oxlint-disable-next-line ren/no-comments -- Sync into Postgres, as the server's sync handler does, for tests that restore chats.
 const remembering = HttpApiBuilder.group(SyncApi, "sync", (group) =>
-  Effect.map(SessionSync.Service, (sync) =>
+  Effect.map(Effect.all({ sync: SessionSync.Service, brains: Brains.Service }), (services) =>
     group
       .handle("sync.checkpoints", () =>
-        Effect.map(Effect.flatMap(CurrentHost, sync.checkpoints), (sessions) => ({ sessions })),
+        Effect.map(Effect.flatMap(CurrentHost, services.sync.checkpoints), (sessions) => ({ sessions })),
       )
       .handle("sync.startUpload", (request) =>
-        Effect.flatMap(CurrentHost, (host) => sync.startUpload(host, request.params.id, request.payload)).pipe(
+        Effect.flatMap(CurrentHost, (host) => services.sync.startUpload(host, request.params.id, request.payload)).pipe(
           Effect.map((upload) => ({ upload })),
         ),
       )
       .handle("sync.uploadMessages", (request) =>
         Effect.flatMap(CurrentHost, (host) =>
-          sync.uploadMessages(host, request.params.id, request.params.upload, request.payload.messages),
+          services.sync.uploadMessages(host, request.params.id, request.params.upload, request.payload.messages),
         ),
       )
       .handle("sync.commit", (request) =>
         Effect.flatMap(CurrentHost, (host) =>
-          sync.commit(host, request.params.id, request.params.upload, request.payload),
+          services.sync.commit(host, request.params.id, request.params.upload, request.payload),
         ),
       )
       .handle("sync.restore", (request) =>
-        Effect.flatMap(CurrentHost, (host) => sync.restore(host, request.payload.sessionId)).pipe(
-          Effect.map((chats) => ({ chats })),
-        ),
+        Effect.gen(function* () {
+          const host = yield* CurrentHost
+          return {
+            chats: yield* services.sync.restore(host, request.payload.sessionId, (chat) =>
+              services.brains.directoryOf(host, chat),
+            ),
+          }
+        }),
       )
       .handle("sync.messages", (request) =>
         Effect.flatMap(CurrentHost, (host) =>
-          sync.messages(host, request.params.id, {
+          services.sync.messages(host, request.params.id, {
             limit: request.query.limit,
             ...("afterSeq" in request.query &&
               "afterId" in request.query && { after: { seq: request.query.afterSeq, id: request.query.afterId } }),

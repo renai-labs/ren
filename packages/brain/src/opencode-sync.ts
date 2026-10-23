@@ -74,7 +74,7 @@ export interface Interface {
 export interface Restore<E = never, R = never> {
   readonly sessionId: Session.ID
   readonly exists: (id: Session.ID) => Effect.Effect<boolean, E, R>
-  readonly start: (input: Session.StartInput) => Effect.Effect<unknown, E, R>
+  readonly start: (input: Session.StartInput & { readonly directory?: string }) => Effect.Effect<unknown, E, R>
   readonly import: (data: {
     readonly chat: Sync.RestoredChat
     readonly session: Sync.OpenCodeSessionRow
@@ -345,7 +345,8 @@ export const make = Effect.fn("OpenCodeSync.make")(function* (options: Options) 
                   return
                 }
                 if (!chat.session) {
-                  if (chat.start) yield* input.start(chat.start)
+                  if (chat.start)
+                    yield* input.start({ ...chat.start, ...(chat.directory && { directory: chat.directory }) })
                   return
                 }
                 const messages: Array<Sync.OpenCodeMessageRow> = []

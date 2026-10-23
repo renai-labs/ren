@@ -1,5 +1,6 @@
 import { CurrentHost } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
+import { Brains } from "@ren/core/brains"
 import { SessionSync } from "@ren/core/session-sync"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
@@ -7,6 +8,7 @@ import { HttpApiBuilder } from "effect/http-api"
 export const SyncHandler = HttpApiBuilder.group(SyncApi, "sync", (handlers) =>
   Effect.gen(function* () {
     const sync = yield* SessionSync.Service
+    const brains = yield* Brains.Service
     return handlers
       .handle("sync.checkpoints", () =>
         Effect.gen(function* () {
@@ -35,7 +37,10 @@ export const SyncHandler = HttpApiBuilder.group(SyncApi, "sync", (handlers) =>
       )
       .handle("sync.restore", (request) =>
         Effect.gen(function* () {
-          return { chats: yield* sync.restore(yield* CurrentHost, request.payload.sessionId) }
+          const host = yield* CurrentHost
+          return {
+            chats: yield* sync.restore(host, request.payload.sessionId, (chat) => brains.directoryOf(host, chat)),
+          }
         }),
       )
       .handle("sync.messages", (request) =>
