@@ -63,6 +63,49 @@ export type SessionStartingAccess = { status: "starting"; phase: string }
 
 export type SessionFailedAccess = { status: "failed"; reason: string }
 
+export type SessionMessageID = string
+
+export type SessionModelRef = { id: string; providerID: string; variant?: string }
+
+export type SessionMessageFileSource = { type: "inline" } | { type: "uri"; uri: string }
+
+export type SessionMessageMention = { start: number; end: number; text: string }
+
+export type SessionMessageSender = { userId: string }
+
+export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
+
+export type SessionMessageShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
+
+export type SessionMessageText = { type: "text"; text: string }
+
+export type SessionMessageReasoning = {
+  type: "reasoning"
+  text: string
+  time?: { created: number; completed?: number }
+}
+
+export type SessionMessageToolStreaming = { status: "streaming"; input: string }
+
+export type SessionMessageToolRunning = {
+  status: "running"
+  input: { [x: string]: JsonValue }
+  metadata: { [x: string]: JsonValue }
+}
+
+export type SessionMessageToolTextContent = { type: "text"; text: string }
+
+export type SessionMessageToolFileContent = { type: "file"; uri: string; mime: string; name?: string }
+
+export type SessionErrorInfo = { type: string; message: string; status?: number; response?: { body: string } }
+
+export type SessionMessageTokenUsage = {
+  input: number
+  output: number
+  reasoning: number
+  cache: { read: number; write: number }
+}
+
 export type SessionModelVariant = { id: string }
 
 export type TaskID = string
@@ -231,6 +274,118 @@ export type SessionInfo = {
 
 export type SessionClientAccess = SessionReadyAccess | SessionStartingAccess | SessionFailedAccess
 
+export type SessionMessageAgentSwitched = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "agent-switched"
+  agent: string
+  previous?: string
+}
+
+export type SessionMessageSystem = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "system"
+  text: string
+  description?: string
+}
+
+export type SessionMessageSkill = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "skill"
+  skill: string
+  name: string
+  text: string
+}
+
+export type SessionMessageCompactionRunning = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "compaction"
+  status: "running"
+  reason: "auto" | "manual"
+  summary: string
+  recent: string
+}
+
+export type SessionMessageModelSwitched = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "model-switched"
+  model: SessionModelRef
+  previous?: SessionModelRef
+}
+
+export type SessionMessageFileAttachment = {
+  data: string
+  mime: string
+  source: SessionMessageFileSource
+  name?: string
+  description?: string
+  mention?: SessionMessageMention
+}
+
+export type SessionMessageAgentAttachment = { name: string; mention?: SessionMessageMention }
+
+export type SessionMessageSkillAttachment = { id: string; name: string; text?: string; mention?: SessionMessageMention }
+
+export type SessionMessageSynthetic = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "synthetic"
+  text: string
+  description?: string
+  metadata?: SessionMessageSyntheticMetadata
+}
+
+export type SessionMessageShell = {
+  id: SessionMessageID
+  time: { created: number; completed?: number }
+  type: "shell"
+  shellID: string
+  command: string
+  status: "running" | "exited" | "timeout" | "killed"
+  exit?: number | "Infinity" | "-Infinity" | "NaN"
+  output?: SessionMessageShellOutput
+}
+
+export type SessionMessageToolContent = SessionMessageToolTextContent | SessionMessageToolFileContent
+
+export type SessionMessageRetry = { attempt: number; at: number; error: SessionErrorInfo }
+
+export type SessionMessageIdle = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "idle"
+  outcome: "succeeded" | "failed" | "interrupted"
+  error?: SessionErrorInfo
+}
+
+export type SessionMessageCompactionCompleted = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "compaction"
+  status: "completed"
+  reason: "auto" | "manual"
+  model?: SessionModelRef
+  summary: string
+  recent: string
+  cost?: number
+  tokens?: SessionMessageTokenUsage
+}
+
+export type SessionMessageCompactionFailed = {
+  id: SessionMessageID
+  time: { created: number }
+  type: "compaction"
+  status: "failed"
+  reason: "auto" | "manual"
+  error: SessionErrorInfo
+  cost?: number
+  tokens?: SessionMessageTokenUsage
+}
+
 export type SessionModelChoice = { id: string; providerID: string; name: string; variants: Array<SessionModelVariant> }
 
 export type TaskParent = { id: TaskID; identifier: string; title: string }
@@ -304,6 +459,35 @@ export type TaskCommentInfo = {
 
 export type SessionPage = { items: Array<SessionInfo>; page: number; pageSize: number; total: number }
 
+export type SessionMessageUser = {
+  id: SessionMessageID
+  time: { created: number }
+  text: string
+  files?: Array<SessionMessageFileAttachment>
+  agents?: Array<SessionMessageAgentAttachment>
+  skills?: Array<SessionMessageSkillAttachment>
+  type: "user"
+  sender?: SessionMessageSender
+}
+
+export type SessionMessageToolCompleted = {
+  status: "completed"
+  input: { [x: string]: JsonValue }
+  content: [SessionMessageToolContent, ...Array<SessionMessageToolContent>]
+  metadata?: { [x: string]: JsonValue }
+}
+
+export type SessionMessageToolError = {
+  status: "error"
+  input: { [x: string]: JsonValue }
+  error: SessionErrorInfo
+  content?: [SessionMessageToolContent, ...Array<SessionMessageToolContent>]
+  metadata?: { [x: string]: JsonValue }
+}
+
+export type SessionMessageCompaction =
+  SessionMessageCompactionRunning | SessionMessageCompactionCompleted | SessionMessageCompactionFailed
+
 export type LabelPage = { items: Array<LabelInfo>; page: number; pageSize: number; total: number }
 
 export type TaskInfo = {
@@ -356,6 +540,9 @@ export type SettingsInfo = {
   references?: ReferenceList
 }
 
+export type SessionMessageToolState =
+  SessionMessageToolStreaming | SessionMessageToolRunning | SessionMessageToolCompleted | SessionMessageToolError
+
 export type TaskPage = { items: Array<TaskInfo>; page: number; pageSize: number; total: number }
 
 export type TaskEventInfo = {
@@ -388,13 +575,53 @@ export type AgentInfo = {
   archivedAt: string | null
 }
 
+export type SessionMessageTool = {
+  type: "tool"
+  id: string
+  name: string
+  executed?: boolean
+  state: SessionMessageToolState
+  time: { created: number; ran?: number; completed?: number }
+}
+
 export type TaskActivityInfo =
   | { id: TaskEventID; type: "event"; event: TaskEventInfo }
   | { id: TaskCommentID; type: "comment"; comment: TaskCommentInfo }
 
 export type AgentPage = { items: Array<AgentInfo>; page: number; pageSize: number; total: number }
 
+export type SessionMessageContent = SessionMessageText | SessionMessageReasoning | SessionMessageTool
+
 export type TaskActivityPage = { items: Array<TaskActivityInfo>; page: number; pageSize: number; total: number }
+
+export type SessionMessageAssistant = {
+  id: SessionMessageID
+  time: { created: number; streamed?: number; completed?: number }
+  type: "assistant"
+  agent: string
+  model: SessionModelRef
+  content: Array<SessionMessageContent>
+  snapshot?: { start?: string; end?: string; files?: Array<string> }
+  finish?: "stop" | "length" | "tool-calls" | "content-filter" | "error" | "unknown"
+  cost?: number
+  tokens?: SessionMessageTokenUsage
+  error?: SessionErrorInfo
+  retry?: SessionMessageRetry
+}
+
+export type SessionMessageInfo =
+  | SessionMessageAgentSwitched
+  | SessionMessageModelSwitched
+  | SessionMessageUser
+  | SessionMessageSynthetic
+  | SessionMessageSystem
+  | SessionMessageSkill
+  | SessionMessageShell
+  | SessionMessageAssistant
+  | SessionMessageCompaction
+  | SessionMessageIdle
+
+export type SessionMessagePage = { items: Array<SessionMessageInfo>; cursor: { previous?: string; next?: string } }
 
 export type UnauthorizedError = { readonly _tag: "UnauthorizedError"; readonly message: string }
 export const isUnauthorizedError = (value: unknown): value is UnauthorizedError =>
@@ -427,6 +654,18 @@ export type ConflictError = {
 }
 export const isConflictError = (value: unknown): value is ConflictError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConflictError"
+
+export type TooLargeError = { readonly _tag: "TooLargeError"; readonly message: string }
+export const isTooLargeError = (value: unknown): value is TooLargeError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "TooLargeError"
+
+export type UnavailableError = {
+  readonly _tag: "UnavailableError"
+  readonly message: string
+  readonly retryAfterMs: number
+}
+export const isUnavailableError = (value: unknown): value is UnavailableError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnavailableError"
 
 export type HealthGetOutput = HealthInfo
 
@@ -1039,6 +1278,14 @@ export type ChatAccessInput = {
 }
 
 export type ChatAccessOutput = SessionClientAccess
+
+export type ChatMessagesInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly limit?: { readonly limit?: number | undefined; readonly cursor?: string | undefined }["limit"]
+  readonly cursor?: { readonly limit?: number | undefined; readonly cursor?: string | undefined }["cursor"]
+}
+
+export type ChatMessagesOutput = SessionMessagePage
 
 export type ChatRetryInput = {
   readonly id: { readonly id: string }["id"]

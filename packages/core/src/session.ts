@@ -3,10 +3,12 @@ export * as Session from "./session.js"
 import { Database } from "@ren/db/database"
 import { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
+import { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { Space } from "@ren/schema/space"
 import { and, count, desc, eq, isNull, sql, type SQL } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Schema } from "effect"
+import type { NonEmptyReadonlyArray } from "effect/Array"
+import { Array, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore, Struct } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Brains } from "./brains.js"
@@ -16,6 +18,7 @@ import { SessionRunner } from "./session/runner.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
+import { TranscriptCodec } from "./transcript-codec.js"
 
 export const ID = Session.ID
 export type ID = Session.ID
@@ -23,12 +26,23 @@ export type ID = Session.ID
 export const MessageID = Session.MessageID
 export type MessageID = Session.MessageID
 
+export class Busy extends Schema.TaggedError<Busy>()("Session.Busy", { message: Schema.String }) {}
+
+export class PageTooLarge extends Schema.TaggedError<PageTooLarge>()("Session.PageTooLarge", {
+  message: Schema.String,
+}) {}
+
 export type Interface = Primitive.Interface<typeof Session.definition> & {
   readonly access: (
     actor: Actor.Info,
     id: Session.ID,
     options?: { readonly unreachable?: boolean },
   ) => Effect.Effect<Session.ClientAccess, Primitive.NotFound>
+  readonly messages: (
+    actor: Actor.Info,
+    id: Session.ID,
+    query: { readonly limit?: number | undefined; readonly cursor?: string | undefined },
+  ) => Effect.Effect<SessionMessage.Page, Primitive.NotFound | Primitive.Invalid | Busy | PageTooLarge>
   readonly models: (actor: Actor.Info, id: Session.ID) => Effect.Effect<ReadonlyArray<SessionModel.Choice>>
   readonly prepare: (actor: Actor.Info, spaceId: Space.ID) => Effect.Effect<void, Primitive.NotFound>
   readonly retry: (
@@ -77,6 +91,51 @@ const toInfo = (row: Row): Session.Info => ({
 
 const modelNotFound = new Primitive.NotFound({ message: "Model not found." })
 
+// oxlint-disable-next-line ren/no-comments -- Saved history read limits (E111), as ren-v1 INV-63.
+const historyReads = 4
+
+const historyWaiting = 16
+
+const historyWaitsFor = Duration.seconds(2)
+
+const historyReadsWithin = Duration.seconds(5)
+
+const historyMemoryBytes = 48 * 1024 * 1024
+
+const historyPageBytes = 16 * 1024 * 1024
+
+const historyPageSize = 50
+
+const dataUrlChars = 1024
+
+const busy = new Busy({ message: "Ren is reading too much saved history. Ask again in 2 seconds." })
+
+const HistoryCursor = Schema.StringFromBase64Url.pipe(
+  Schema.decodeTo(Schema.fromJsonString(Schema.Struct({ seq: Schema.Int, id: Schema.String }))),
+)
+
+const cut = (url: string) => (url.startsWith("data:") && url.length > dataUrlChars ? url.slice(0, dataUrlChars) : url)
+
+const cutFiles = (content: NonEmptyReadonlyArray<SessionMessage.ToolContent>) =>
+  Array.map(content, (item) => (item.type === "file" ? Struct.evolve(item, { uri: cut }) : item))
+
+const cutTool = (part: SessionMessage.Content): SessionMessage.Content => {
+  if (part.type !== "tool") return part
+  const state = part.state
+  if (state.status === "completed")
+    return Struct.evolve(part, { state: () => Struct.evolve(state, { content: cutFiles }) })
+  if (state.status !== "error" || !state.content) return part
+  const content = state.content
+  return Struct.evolve(part, { state: () => Struct.evolve(state, { content: () => cutFiles(content) }) })
+}
+
+const cutDataUrls = (message: SessionMessage.Info): SessionMessage.Info => {
+  if (message.type === "assistant") return Struct.evolve(message, { content: (content) => content.map(cutTool) })
+  if (message.type !== "user" || !message.files) return message
+  const files = message.files
+  return Struct.evolve(message, { files: () => files.map((file) => Struct.evolve(file, { data: cut })) })
+}
+
 const spaceGet = Primitive.action(Space.definition, "get")
 const spaceUpdate = Primitive.action(Space.definition, "update")
 
@@ -88,6 +147,10 @@ export const layer = Layer.effect(
     const sessions = yield* SessionRunner.Service
     const brain = yield* Brains.Service
     const catalog = yield* Models.Service
+    const codecs = yield* TranscriptCodec.Registry
+    const historyAdmitted = yield* Semaphore.make(historyReads + historyWaiting)
+    const historyReading = yield* Semaphore.make(historyReads)
+    const historyMemory = yield* Semaphore.make(historyMemoryBytes)
 
     const models = (actor: Actor.Info) =>
       catalog.catalog(actor.organizationId).pipe(
@@ -142,6 +205,51 @@ export const layer = Layer.effect(
 
     const read = (actor: Actor.Info, id: Session.ID) =>
       database.transaction((transaction) => find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
+
+    const history = Effect.fnUntraced(function* (
+      actor: Actor.Info,
+      id: Session.ID,
+      query: { readonly limit?: number | undefined; readonly cursor?: string | undefined },
+    ) {
+      const row = yield* read(actor, id)
+      const before = query.cursor
+        ? yield* Schema.decodeUnknownEffect(HistoryCursor)(query.cursor).pipe(
+            Effect.mapError(() => new Primitive.Invalid({ message: "The cursor is not valid.", field: "cursor" })),
+          )
+        : undefined
+      const limit = query.limit ?? historyPageSize
+      return yield* database
+        .transaction((transaction) =>
+          Effect.gen(function* () {
+            const found = yield* OpenCodeStore.history(transaction, id, {
+              before,
+              revertMessageId: row.session.revert_message_id,
+              limit: limit + 1,
+            })
+            const page = found.slice(0, limit)
+            const bytes = page.reduce((sum, each) => sum + each.bytes, 0)
+            if (bytes > historyPageBytes)
+              return yield* new PageTooLarge({
+                message: `This page of saved history is ${bytes} bytes, over the ${historyPageBytes} byte limit. Ask for fewer messages.`,
+              })
+            const items = yield* OpenCodeStore.messagesOf(
+              transaction,
+              id,
+              page.map((each) => each.id),
+            ).pipe(
+              Effect.flatMap((rows) => codecs.get(row.session.harness).messages(rows, row.session.harness_version)),
+              historyMemory.withPermitsIfAvailable(bytes),
+            )
+            if (Option.isNone(items)) return yield* busy
+            const last = page.at(-1)
+            return {
+              items: items.value.map(cutDataUrls),
+              cursor: found.length > limit && last ? { next: Schema.encodeSync(HistoryCursor)(last) } : {},
+            }
+          }),
+        )
+        .pipe(Effect.timeoutOrElse({ duration: historyReadsWithin, orElse: () => Effect.fail(busy) }))
+    })
 
     return Service.of({
       list: Effect.fn("Session.list")(function* (actor: Actor.Info, input: Session.ListInput) {
@@ -247,6 +355,17 @@ export const layer = Layer.effect(
             return toInfo(yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
           }),
         )
+      }),
+      messages: Effect.fn("Session.messages")(function* (actor, id, query) {
+        const admitted = yield* Effect.uninterruptibleMask((restore) =>
+          restore(
+            historyReading
+              .take(1)
+              .pipe(Effect.timeoutOrElse({ duration: historyWaitsFor, orElse: () => Effect.fail(busy) })),
+          ).pipe(Effect.andThen(restore(history(actor, id, query)).pipe(Effect.ensuring(historyReading.release(1))))),
+        ).pipe(historyAdmitted.withPermitsIfAvailable(1))
+        if (Option.isNone(admitted)) return yield* busy
+        return admitted.value
       }),
       models: Effect.fn("Session.models")(models),
       prepare: Effect.fn("Session.prepare")(function* (actor: Actor.Info, spaceId: Space.ID) {

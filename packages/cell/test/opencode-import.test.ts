@@ -18,7 +18,7 @@ import { Env } from "../src/env.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
 import { BrainTest } from "./lib/brain.js"
-import { OpenCodeRows } from "../src/harness/opencode/opencode-rows.js"
+import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 import { Shared } from "./lib/shared.js"
 import type { StubModel } from "./lib/stub-model.js"
 

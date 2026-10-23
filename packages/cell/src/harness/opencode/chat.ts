@@ -14,7 +14,7 @@ import { Clock, Effect, Option, Predicate, Stream } from "effect"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
-import { Translate } from "./translate.js"
+import { Translate } from "@ren/opencode-transcript/translate"
 
 const capabilities = SessionCapabilities.of("opencode")
 

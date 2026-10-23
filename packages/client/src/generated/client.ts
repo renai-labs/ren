@@ -72,6 +72,8 @@ import type {
   SessionArchiveOutput,
   ChatAccessInput,
   ChatAccessOutput,
+  ChatMessagesInput,
+  ChatMessagesOutput,
   ChatRetryInput,
   ChatRetryOutput,
   ChatPrepareInput,
@@ -686,6 +688,18 @@ export function make(options: ClientOptions) {
             query: { unreachable: input["unreachable"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      messages: (input: ChatMessagesInput, requestOptions?: RequestOptions) =>
+        request<ChatMessagesOutput>(
+          {
+            method: "GET",
+            path: `/sessions/${encodeURIComponent(input.id)}/messages`,
+            query: { limit: input["limit"], cursor: input["cursor"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 413, 503],
             empty: false,
           },
           requestOptions,

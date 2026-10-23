@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ren/opencode-transcript",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@opencode/core": "catalog:",
+    "@opencode/schema": "catalog:",
+    "@ren/schema": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  }
+}

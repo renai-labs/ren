@@ -82,6 +82,7 @@
         "@ren/brain": "workspace:*",
         "@ren/environment-api": "workspace:*",
         "@ren/host-api": "workspace:*",
+        "@ren/opencode-transcript": "workspace:*",
         "@ren/protocol": "workspace:*",
         "@ren/schema": "workspace:*",
         "effect": "catalog:",
@@ -179,6 +180,7 @@
         "@effect/platform-bun": "catalog:",
         "@ren/cell": "workspace:*",
         "@ren/executor": "workspace:*",
+        "@ren/opencode-transcript": "workspace:*",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
       },
@@ -271,6 +273,20 @@
         "@typescript/native-preview": "catalog:",
       },
     },
+    "packages/opencode-transcript": {
+      "name": "@ren/opencode-transcript",
+      "version": "0.0.0",
+      "dependencies": {
+        "@opencode/core": "catalog:",
+        "@opencode/schema": "catalog:",
+        "@ren/schema": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+      },
+    },
     "packages/protocol": {
       "name": "@ren/protocol",
       "version": "0.0.0",
@@ -317,6 +333,7 @@
         "@ren/core": "workspace:*",
         "@ren/db": "workspace:*",
         "@ren/host-api": "workspace:*",
+        "@ren/opencode-transcript": "workspace:*",
         "@ren/protocol": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/util": "workspace:*",
@@ -1585,6 +1602,8 @@
     "@ren/host-api": ["@ren/host-api@workspace:packages/host-api"],
 
     "@ren/httpapi-codegen": ["@ren/httpapi-codegen@workspace:packages/httpapi-codegen"],
+
+    "@ren/opencode-transcript": ["@ren/opencode-transcript@workspace:packages/opencode-transcript"],
 
     "@ren/protocol": ["@ren/protocol@workspace:packages/protocol"],
 

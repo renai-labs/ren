@@ -3,7 +3,7 @@ import { Effect, Exit, Result, Schema } from "effect"
 import { Harness } from "../../src/harness/harness.js"
 import { SessionCell } from "../../src/session-cell.js"
 import worker from "../../src/worker.js"
-import { OpenCodeRows } from "../../src/harness/opencode/opencode-rows.js"
+import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
 
 const tables = ["event_sequence", "session_message", "session_v2"]
 

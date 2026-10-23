@@ -6,7 +6,9 @@ import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
 import { Auth } from "@ren/schema/auth"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Layer, Option, Schedule } from "effect"
+import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
+import { Deferred, Effect, Fiber, Layer, Option, Schedule } from "effect"
+import { SqlClient } from "effect/sql"
 import { Access } from "../src/access.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Models } from "../src/models.js"
@@ -14,6 +16,7 @@ import { Session } from "../src/session.js"
 import { SessionRunner } from "../src/session/runner.js"
 import { Space } from "../src/space.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
+import { TranscriptCodec } from "../src/transcript-codec.js"
 import { testEffect } from "./lib/effect.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
@@ -36,6 +39,7 @@ const it = testEffect(
   Layer.mergeAll(Session.layer, Space.layer, SpaceProvisioning.layer).pipe(
     Layer.provideMerge(SessionRunner.layer),
     Layer.provideMerge(BrainRegistry.layer),
+    Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
     Layer.provideMerge(Host.layer({}, models)),
     Layer.provideMerge(models),
     Layer.provideMerge(Access.layer),
@@ -51,6 +55,22 @@ const member = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID,
   yield* Seed.member(organizationId, seeded.id, role)
   yield* provisioning.createInitialMemberships(organizationId, seeded)
   return { userId: seeded.id, organizationId, roles: [role] }
+})
+
+const saved = Effect.fnUntraced(function* (texts: ReadonlyArray<string>) {
+  const database = yield* Database.Service
+  const owner = yield* Seed.owner()
+  const id = yield* Seed.session(owner)
+  yield* database.db.insert(Database.Schema.opencode_message).values(
+    texts.map((text, seq) => ({
+      id: SessionMessage.ID.create(),
+      session_id: id,
+      type: "user",
+      seq,
+      data: JSON.stringify({ text, time: { created: 1_760_000_000_000 } }),
+    })),
+  )
+  return { id, actor: { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] } }
 })
 
 const claims = (token: string) =>
@@ -205,6 +225,52 @@ describe("Session", () => {
           ),
         ).toBe("ready")
         expect((yield* sessions.prepare(grace, team.id).pipe(Effect.flip))._tag).toBe("Primitive.NotFound")
+      }),
+  )
+
+  it.live("Ren refuses a page of saved history over 16 MiB; a smaller page of the same chat reads", () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const chat = yield* saved(["a".repeat(9 * 1024 * 1024), "b".repeat(9 * 1024 * 1024)])
+      expect((yield* Effect.flip(sessions.messages(chat.actor, chat.id, { limit: 2 })))._tag).toBe(
+        "Session.PageTooLarge",
+      )
+      expect((yield* sessions.messages(chat.actor, chat.id, { limit: 1 })).items).toHaveLength(1)
+    }),
+  )
+
+  it.live(
+    "Ren reads saved history 4 at a time with 16 more waiting; one more read at that moment is told to ask again",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const sql = yield* SqlClient.SqlClient
+        const chat = yield* saved(["hello"])
+        const locked = yield* Deferred.make<void>()
+        const unlock = yield* Deferred.make<void>()
+        yield* sql
+          .withTransaction(
+            sql`lock table opencode_message in access exclusive mode`.pipe(
+              Effect.andThen(Deferred.succeed(locked, undefined)),
+              Effect.andThen(Deferred.await(unlock)),
+            ),
+          )
+          .pipe(Effect.forkScoped)
+        yield* Deferred.await(locked)
+        const reads = yield* Effect.all(
+          Array.from({ length: 20 }, () => sessions.messages(chat.actor, chat.id, {})),
+          { concurrency: "unbounded" },
+        ).pipe(Effect.forkScoped)
+        const blocked = sql<{ readonly count: number }>`
+          select count(*)::int as count from pg_stat_activity
+          where datname = current_database() and wait_event_type = 'Lock' and query like '%opencode_message%'`.pipe(
+          Effect.map((rows) => rows.at(0)?.count ?? 0),
+        )
+        yield* blocked.pipe(Effect.repeat({ until: (count) => count >= 4, schedule: Schedule.spaced("10 millis") }))
+        expect((yield* Effect.flip(sessions.messages(chat.actor, chat.id, {})))._tag).toBe("Session.Busy")
+        expect(yield* blocked).toBe(4)
+        yield* Deferred.succeed(unlock, undefined)
+        expect((yield* Fiber.join(reads)).map((page) => page.items.length)).toEqual(Array.from({ length: 20 }, () => 1))
       }),
   )
 })

@@ -65,6 +65,11 @@ const packageBoundaries = [
     message: "The executor runs on an environment's machine. It depends only on schema and the Environment API.",
   },
   {
+    files: ["packages/opencode-transcript/**"],
+    regex: "^@ren/(?!schema(/|$))",
+    message: "The OpenCode transcript translation depends only on schema and OpenCode's schema.",
+  },
+  {
     files: ["packages/db/**"],
     regex: "^@ren/(core|protocol|server)(/|$)",
     message: "Db never imports core, protocol or server.",
@@ -73,6 +78,12 @@ const packageBoundaries = [
     files: ["packages/core/**"],
     regex: "^@ren/(protocol|server)(/|$)",
     message: "Core never knows about HTTP. Take an Actor instead of protocol services.",
+  },
+  {
+    files: ["packages/core/src/**"],
+    regex: "^(@ren/(protocol|server|opencode-transcript)(/|$)|@opencode/)",
+    message:
+      "Core never knows about HTTP or a harness's packages. Take an Actor instead of protocol services; take a harness's code through a registry such as TranscriptCodec.",
   },
   {
     files: ["packages/cell/**"],
