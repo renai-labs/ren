@@ -234,7 +234,10 @@ export const wranglerLayer = (
 const LocalBinding = Schema.Struct({ pid: Schema.Int, home: Schema.String })
 
 // oxlint-disable-next-line ren/no-comments -- The brain loses its harness database, as on a new sandbox, and keeps brain.db: its restart loop is held while the brain process goes and the database is deleted.
-export const forgetHarness = Effect.fnUntraced(function* (brainId: Brain.ID) {
+export const forgetHarness = Effect.fnUntraced(function* (
+  brainId: Brain.ID,
+  options: { readonly folderOf?: Session.ID } = {},
+) {
   const provider = yield* SandboxProvider.Service
   const found = (yield* provider.list.pipe(Effect.orDie)).find((each) => each.brainId === brainId)
   if (!found) return yield* Effect.die(new Error(`Brain ${brainId} has no sandbox`))
@@ -256,6 +259,10 @@ export const forgetHarness = Effect.fnUntraced(function* (brainId: Brain.ID) {
       ),
     ),
   )
+  if (options.folderOf)
+    yield* Effect.promise(() =>
+      rm(join(binding.home, "workspace", options.folderOf ?? ""), { recursive: true, force: true }),
+    )
   process.kill(binding.pid, "SIGCONT")
 })
 

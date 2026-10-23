@@ -5,7 +5,7 @@ import { Database } from "@ren/db/database"
 import type { Session } from "@ren/schema/session"
 import { and, asc, eq, getColumns, inArray, isNull, sql } from "drizzle-orm"
 import type { PgTable } from "drizzle-orm/pg-core"
-import { Effect, Record, Struct } from "effect"
+import { Effect, Option, Record, Struct } from "effect"
 
 export interface Cursor {
   readonly seq: number
@@ -66,6 +66,35 @@ export const keepMessages = Effect.fnUntraced(function* (
         ids.length > 0 ? sql`${Database.Schema.opencode_message.id} <> all(${sql.param(ids)}::text[])` : undefined,
       ),
     )
+})
+
+// oxlint-disable-next-line ren/no-comments -- The brain notes a chat whose workspace files were lost with a synthetic message (E105); Ren keeps its time for the app's notice (E117).
+export const filesResetAt = Effect.fnUntraced(function* (transaction: Database.Transaction, sessionId: Session.ID) {
+  const delivered = yield* transaction
+    .select({
+      at: sql<string | null>`max((${Database.Schema.opencode_message.data}::jsonb -> 'time' ->> 'created')::bigint)`,
+    })
+    .from(Database.Schema.opencode_message)
+    .where(
+      and(
+        eq(Database.Schema.opencode_message.session_id, sessionId),
+        eq(Database.Schema.opencode_message.type, "synthetic"),
+        isNull(Database.Schema.opencode_message.removed_at),
+        sql`${Database.Schema.opencode_message.data}::jsonb -> 'metadata' ->> 'source' = 'ren.files-reset'`,
+      ),
+    )
+  const waiting = yield* transaction
+    .select({ at: sql<string | null>`max(${Database.Schema.opencode_inbox.time_created})` })
+    .from(Database.Schema.opencode_inbox)
+    .where(
+      and(
+        eq(Database.Schema.opencode_inbox.session_id, sessionId),
+        eq(Database.Schema.opencode_inbox.type, "synthetic"),
+        sql`${Database.Schema.opencode_inbox.payload}::jsonb -> 'metadata' ->> 'source' = 'ren.files-reset'`,
+      ),
+    )
+  const times = [delivered.at(0)?.at, waiting.at(0)?.at].flatMap((at) => (at ? [Number(at)] : []))
+  return times.length === 0 ? Option.none<Date>() : Option.some(new Date(Math.max(...times)))
 })
 
 export const keepInbox = Effect.fnUntraced(function* (

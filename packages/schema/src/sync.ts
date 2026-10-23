@@ -56,6 +56,7 @@ export const OpenCodeInboxRow = Schema.Struct({
   payload: Json,
   delivery: Schema.String,
   enqueued_seq: Schema.Int.annotate({ description: "The order of the inbox: a lower value is delivered first." }),
+  time_created: EpochMillis,
 }).annotate({
   identifier: "Sync.OpenCodeInboxRow",
   description: "A message that waits in an OpenCode chat’s inbox, such as a queued prompt (E110).",

@@ -13,7 +13,7 @@ import type { StartBody } from "@ren/host-api/brain-api"
 import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
 import { Clock, DateTime, Effect, Layer, Option, Ref, Schema, type Scope, Semaphore, Stream, Struct } from "effect"
-import { mkdir } from "node:fs/promises"
+import { mkdir, stat } from "node:fs/promises"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
 import { ModelRefresh } from "../../model-refresh.js"
@@ -98,6 +98,8 @@ const dropPick = Effect.fnUntraced(function* (
     })
     .pipe(Effect.orDie)
 })
+
+const filesReset = "ren.files-reset"
 
 const rejected = (error: { readonly message: string }) => new BrainRejectedError({ message: error.message })
 
@@ -404,6 +406,18 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           Effect.gen(function* () {
             const info = OpenCodeRows.session(data.session)
             const messages = yield* Effect.forEach(data.messages, OpenCodeRows.message)
+            // oxlint-disable-next-line ren/no-comments -- Only the brain's own hand is on this disk: its folder is made before the import, and a folder that was gone means its files were lost (E105, E113).
+            const isOwnHand =
+              server.hasEnvironmentConnections && info.location.directory === server.directoryOf(data.chat.id)
+            const isLost =
+              isOwnHand &&
+              !(yield* Effect.promise(() =>
+                stat(info.location.directory).then(
+                  () => true,
+                  () => false,
+                ),
+              ))
+            if (isLost) yield* server.makeDirectory(info.location.directory)
             const workspaceID = data.session.workspace_id
               ? yield* server.workspaces.create({
                   id: RenWorkspaceDriver.workspaceId(data.chat.id),
@@ -434,6 +448,13 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
                 ),
               { discard: true },
             )
+            if (isLost)
+              yield* client.session.synthetic({
+                sessionID: info.id,
+                text: "This chat moved to a new machine. Its workspace files from before the move are gone; the chat history is kept.",
+                metadata: { source: filesReset },
+                resume: false,
+              })
             // oxlint-disable-next-line ren/no-comments -- A revert that was staged, not committed, stays staged (E112).
             if (data.chat.revertMessageId)
               yield* client.session.revert.stage({

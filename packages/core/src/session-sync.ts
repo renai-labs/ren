@@ -194,11 +194,13 @@ export const layer = Layer.effect(
               if (input.inbox.some((row) => row.session_id !== sessionId)) return yield* forbidden
               yield* OpenCodeStore.keepInbox(transaction, sessionId, input.inbox)
             }
+            const reset = yield* OpenCodeStore.filesResetAt(transaction, sessionId)
             yield* transaction
               .update(Database.Schema.agent_session)
               .set({
                 sync_seq: input.seq,
                 sync_upload_open: false,
+                ...Option.match(reset, { onNone: () => ({}), onSome: (at) => ({ files_reset_at: at }) }),
                 // ast-grep-ignore: no-nullish-comparison, -- null clears the revert; undefined is a brain that does not send it
                 ...(input.revertMessageId !== undefined && { revert_message_id: input.revertMessageId }),
               })
