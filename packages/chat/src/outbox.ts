@@ -3,9 +3,9 @@ export * as Outbox from "./outbox.js"
 // oxlint-disable typescript/no-misused-spread -- schema types are plain readonly structs; Struct.assign would widen the literal tags these updates keep
 
 import type { Session } from "@ren/schema/session"
-import type { SessionInbox } from "@ren/schema/session/inbox"
-import type { SessionMessage } from "@ren/schema/session/message"
-import type { DateTime } from "effect"
+import { SessionInbox } from "@ren/schema/session/inbox"
+import { SessionMessage } from "@ren/schema/session/message"
+import { type DateTime, Schema } from "effect"
 import { ChatState } from "./chat-state.js"
 import { Reducer } from "./reducer.js"
 
@@ -17,6 +17,18 @@ export interface Prompt {
   readonly sender?: SessionMessage.Sender
   readonly agents?: ReadonlyArray<SessionMessage.AgentAttachment>
 }
+
+// oxlint-disable-next-line ren/no-comments -- A message the brain has not accepted yet, as the host keeps it in browser storage per chat (E118).
+export interface Kept extends Schema.Schema.Type<typeof Kept> {}
+export const Kept = Schema.Struct({
+  id: SessionMessage.ID,
+  text: Schema.String,
+  delivery: SessionInbox.Delivery,
+  agents: Schema.optionalKey(Schema.Array(SessionMessage.AgentAttachment)),
+  skills: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ id: Schema.String, mention: Schema.optionalKey(SessionMessage.Mention) })),
+  ),
+})
 
 export const isFresh = (state: ChatState.State, sessionID: string, id: string) =>
   !ChatState.messages(state, sessionID).some((item) => item.id === id) &&

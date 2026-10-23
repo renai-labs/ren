@@ -20,6 +20,7 @@ import {
   Option,
   Predicate,
   PubSub,
+  Ref,
   Schedule,
   Semaphore,
   Stream,
@@ -68,6 +69,10 @@ export interface Options {
   readonly sessionID: Session.ID
   readonly access: (input: { readonly unreachable: boolean }) => Effect.Effect<Session.ClientAccess, unknown>
   readonly saved?: (query: { readonly limit: number }) => Effect.Effect<SessionMessage.Page, unknown>
+  readonly outbox?: {
+    readonly load: Effect.Effect<ReadonlyArray<Outbox.Kept>>
+    readonly keep: (items: ReadonlyArray<Outbox.Kept>) => Effect.Effect<void>
+  }
   readonly initialMessageLimit?: number
   readonly sender?: SessionMessage.Sender
   readonly handoff?: Handoff
@@ -173,6 +178,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const report = options.onError ?? ((error: unknown) => Effect.logWarning("A chat read failed", error))
 
   const update = (f: (current: ChatState.State) => ChatState.State) => SubscriptionRef.update(state, f)
+
+  const kept = yield* Ref.make(options.outbox ? yield* options.outbox.load : [])
+  const keep = (f: (items: ReadonlyArray<Outbox.Kept>) => ReadonlyArray<Outbox.Kept>) =>
+    options.outbox ? Ref.updateAndGet(kept, f).pipe(Effect.flatMap(options.outbox.keep)) : Effect.void
+  const unkeep = (id: SessionMessage.ID) => keep((items) => items.filter((item) => item.id !== id))
 
   const savedPage = (sizes: ReadonlyArray<number>): Effect.Effect<SessionMessage.Page, unknown> => {
     const size = sizes.at(0)
@@ -566,6 +576,16 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         now,
       ),
     )
+    yield* keep((items) => [
+      ...items.filter((item) => item.id !== id),
+      {
+        id,
+        text: input.text,
+        delivery,
+        ...(input.agents && { agents: input.agents }),
+        ...(input.skills && { skills: input.skills }),
+      },
+    ])
     yield* connection.wake
     yield* send(
       Effect.gen(function* () {
@@ -591,11 +611,14 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       ),
     ).pipe(
       Effect.tapError((error) =>
-        fresh && !(error instanceof AccessFailed)
-          ? update((current) => Outbox.rollback(current, root, id))
-          : Effect.void,
+        error instanceof AccessFailed
+          ? Effect.void
+          : unkeep(id).pipe(
+              Effect.andThen(fresh ? update((current) => Outbox.rollback(current, root, id)) : Effect.void),
+            ),
       ),
     )
+    yield* unkeep(id)
     const echoed = yield* SubscriptionRef.modify(state, (current) => [
       !current.outbox.has(id),
       Outbox.acknowledge(current, id),
@@ -895,6 +918,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   yield* Effect.addFinalizer(() =>
     Effect.forEach([...settling.values()], (fiber) => Fiber.interrupt(fiber), { discard: true }),
   )
+
+  // oxlint-disable-next-line ren/no-comments -- Messages kept before a reload go again with their ids; the brain skips an id it already has (E118).
+  yield* Effect.forEach(yield* Ref.get(kept), (item) => prompt(item).pipe(Effect.catch(report)), {
+    discard: true,
+  }).pipe(Effect.forkIn(scope))
 
   return {
     sessionID: root,

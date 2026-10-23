@@ -1,13 +1,13 @@
 export * as Chat from "./chat.js"
 
 import { scheduleTask, useAtomRefresh, useAtomValue } from "@effect/atom-react"
-import { ChatAtoms } from "@ren/chat"
+import { ChatAtoms, Outbox } from "@ren/chat"
 import type { TimelineDetail } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Ren } from "@ren/client/effect"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Layer, Stream, SubscriptionRef } from "effect"
+import { Effect, Layer, Option, Schema, Stream, SubscriptionRef } from "effect"
 import { FetchHttpClient, HttpClient } from "effect/http"
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity"
 import type { Platform } from "../platform/platform.js"
@@ -42,6 +42,9 @@ export function forUser(platform: Platform.Info, userId: string) {
   return chat
 }
 
+// oxlint-disable-next-line ren/no-comments -- Messages a chat's brain has not accepted yet, kept across reloads (E118).
+const Kept = Schema.fromJsonString(Schema.Array(Outbox.Kept))
+
 const untraced = Layer.succeed(HttpClient.TracerPropagationEnabled, false)
 
 function atomsFor(platform: Platform.Info, userId: string, detail: TimelineDetail.Detail | undefined) {
@@ -62,6 +65,20 @@ function atomsFor(platform: Platform.Info, userId: string, detail: TimelineDetai
         ),
         Effect.provide(server),
       ),
+    outbox: (sessionID: Session.ID) => {
+      const key = `session.${sessionID}.outbox`
+      return {
+        load: Effect.sync(() =>
+          Schema.decodeUnknownOption(Kept)(platform.storage.get(key)).pipe(Option.getOrElse(() => [])),
+        ),
+        keep: (items: ReadonlyArray<Outbox.Kept>) =>
+          Effect.sync(() =>
+            items.length === 0
+              ? platform.storage.remove(key)
+              : platform.storage.set(key, Schema.encodeSync(Kept)(items)),
+          ),
+      }
+    },
     saved: (sessionID: Session.ID, query: { readonly limit: number }) =>
       Ren.make({ baseUrl: platform.serverUrl }).pipe(
         Effect.flatMap((ren) => ren.chat.messages({ id: sessionID, limit: query.limit })),
