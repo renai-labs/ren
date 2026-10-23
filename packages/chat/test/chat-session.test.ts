@@ -1,4 +1,10 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test"
+import { Database } from "bun:sqlite"
+import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
+import { Sync } from "@ren/schema/sync"
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { SessionID } from "@opencode/schema/session-id"
 import { SessionCatalog } from "@ren/schema/session/catalog"
 import { SessionMessage } from "@ren/schema/session/message"
@@ -389,6 +395,49 @@ test("typing while the connection is parked asks Ren for access once, which wake
       )
       yield* chat.typing
       expect(accessed.count).toBe(parked + 1)
+    }),
+  ))
+
+test("a chat restored while its event stream is open shows each restored message once and adds no other chat", () =>
+  live(
+    Effect.gen(function* () {
+      const folder = yield* Effect.acquireRelease(
+        Effect.promise(() => mkdtemp(join(tmpdir(), "ren-chat-restore-"))),
+        (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
+      )
+      const source = yield* BrainTest.make({ database: join(folder, "source.db") })
+      yield* source.start()
+      yield* source.send(stub.script().marker)
+      yield* source.opencode.session.wait({ sessionID: SessionID.make(source.id) })
+      const database = new Database(join(folder, "source.db"), { readonly: true })
+      const info = OpenCodeRows.session(database.query("select * from session_v2 where id = ?").get(source.id))
+      const messages = yield* Effect.forEach(
+        Schema.decodeUnknownSync(Schema.Array(Sync.OpenCodeMessageRow))(
+          database
+            .query("select id, session_id, type, seq, data from session_message where session_id = ? order by seq, id")
+            .all(source.id),
+        ),
+        OpenCodeRows.message,
+      )
+      database.close()
+      const target = yield* BrainTest.make({ id: source.id, database: join(folder, "target.db") })
+      const chat = yield* open(target)
+      yield* chat.open(target.id).pipe(Effect.ignore)
+      yield* until(chat.status, (status) => status === "connected")
+      yield* target.opencode.session.import({ info, messages, location: info.location })
+      const expected = (yield* target.chat.session["session.messages"]({
+        params: { sessionID: target.id },
+        query: { limit: 200 },
+      })).items
+        .map((message) => message.id)
+        .toReversed()
+      yield* chat.resync("The chat was restored")
+      const restored = yield* until(
+        chat.state,
+        (state) => ChatState.messages(state, target.id).length >= expected.length,
+      )
+      expect(ChatState.messages(restored, target.id).map((message) => message.id)).toEqual(expected)
+      expect(Object.keys(restored.info)).toEqual([target.id])
     }),
   ))
 

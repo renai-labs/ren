@@ -110,6 +110,7 @@
         "@effect/atom-react": "catalog:",
         "@opencode/schema": "catalog:",
         "@ren/cell": "workspace:*",
+        "@ren/opencode-transcript": "workspace:*",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@typescript/native-preview": "catalog:",
