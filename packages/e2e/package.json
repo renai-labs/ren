@@ -23,6 +23,7 @@
     "@ren/core": "workspace:*",
     "@ren/db": "workspace:*",
     "@ren/executor": "workspace:*",
+    "@ren/opencode-transcript": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/server": "workspace:*",
     "@ren/util": "workspace:*",

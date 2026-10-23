@@ -8,9 +8,11 @@ import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Settings } from "@ren/core/settings"
 import { SignupGuard } from "@ren/core/signup-guard"
+import { TranscriptCodec } from "@ren/core/transcript-codec"
 import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Postgres } from "@ren/db/postgres"
+import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Routes } from "@ren/server/routes"
 import { Config, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
@@ -22,6 +24,7 @@ HttpRouter.serve(Routes.layer).pipe(
     Brains.layer.pipe(Layer.provide(BrainHost.layerCell), Layer.provide(DurableRunner.layerEffect)),
     Mailer.layer,
     SignupGuard.layer,
+    TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([ChaosModels.layer, Environments.layer]),

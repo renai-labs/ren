@@ -132,7 +132,7 @@ export interface Chat {
 }
 
 // oxlint-disable-next-line ren/no-comments -- What brain core needs from a harness to bring a chat back from Ren (piece E). Rows are the harness's own; only its adapter reads them.
-export interface Transcript {
+interface Transcript {
   readonly has: (chat: Session.ID) => Effect.Effect<boolean>
   readonly start: (
     input: Session.StartInput & { readonly directory?: string },

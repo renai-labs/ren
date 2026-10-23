@@ -9,7 +9,7 @@ import { Harness } from "./harness/harness.js"
 import { HotReload } from "./hot-reload.js"
 import { Sync } from "./sync.js"
 
-export class Unavailable extends Schema.TaggedError<Unavailable>()("Restore.Unavailable", { message: Schema.String }) {}
+class Unavailable extends Schema.TaggedError<Unavailable>()("Restore.Unavailable", { message: Schema.String }) {}
 
 export interface Interface {
   readonly ensure: (
