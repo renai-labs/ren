@@ -3,7 +3,7 @@ export * as RealStack from "./real-stack.js"
 import { PgClient } from "@effect/sql-pg"
 import { OpenCode } from "@opencode/client"
 import { Signature } from "@ren/environment-api/signature"
-import { Shared, TestCell, TestToken, Wrangler } from "@ren/cell/testing"
+import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"
 import { BrainHost } from "@ren/core/brain-host"
@@ -338,10 +338,7 @@ export const start = async (options: {
       ),
     )
     const access = await core(BrainHost.Service.use((brain) => brain.access(sessionId)))
-    const opencode = OpenCode.make({
-      baseUrl: access.url,
-      headers: { authorization: TestToken.basic(await TestCell.sign({ sid: sessionId, scope: "server" })) },
-    })
+    const opencode = OpenCode.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
     const send = (text: string) =>
       core(
         SessionRunner.Service.use((sessions) =>

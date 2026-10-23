@@ -1,7 +1,6 @@
 export * as Actor from "./actor.js"
 
 import { Database } from "@ren/db/database"
-import type { CurrentHost } from "@ren/host-api/ren-host-api"
 import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import type { Session } from "@ren/schema/session"
@@ -25,8 +24,13 @@ export interface AgentInfo extends Info {
   readonly agent: NonNullable<Info["agent"]>
 }
 
+export interface SessionRef {
+  readonly sessionId: Session.ID
+  readonly organizationId: Auth.OrganizationID
+}
+
 export interface Interface {
-  readonly fromHost: (host: CurrentHost["Service"]) => Effect.Effect<AgentInfo, Primitive.Forbidden>
+  readonly fromSession: (session: SessionRef) => Effect.Effect<AgentInfo, Primitive.Forbidden>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Actor") {}
@@ -36,7 +40,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     return Service.of({
-      fromHost: Effect.fn("Actor.fromHost")(function* (host: CurrentHost["Service"]) {
+      fromSession: Effect.fn("Actor.fromSession")(function* (session: SessionRef) {
         const row = (yield* database.db
           .select({ session: Database.Schema.agent_session, role: Database.Schema.member.role })
           .from(Database.Schema.agent_session)
@@ -50,14 +54,14 @@ export const layer = Layer.effect(
           .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_session.space_id))
           .where(
             and(
-              eq(Database.Schema.agent_session.id, host.sessionId),
-              eq(Database.Schema.agent_session.organization_id, host.organizationId),
+              eq(Database.Schema.agent_session.id, session.sessionId),
+              eq(Database.Schema.agent_session.organization_id, session.organizationId),
               isNull(Database.Schema.agent_session.archived_at),
               isNull(Database.Schema.space.archived_at),
             ),
           )
           .pipe(Effect.orDie)).at(0)
-        if (!row) return yield* new Primitive.Forbidden({ message: "The host session is not available." })
+        if (!row) return yield* new Primitive.Forbidden({ message: "The session is not available." })
         const agentId =
           row.session.agent_id ??
           (yield* database.db
@@ -74,9 +78,9 @@ export const layer = Layer.effect(
         if (!agentId) return yield* new Primitive.Forbidden({ message: "The session’s agent is not available." })
         return {
           userId: row.session.created_by,
-          organizationId: host.organizationId,
+          organizationId: session.organizationId,
           roles: row.role.split(","),
-          agent: { agentId, sessionId: host.sessionId, spaceId: row.session.space_id },
+          agent: { agentId, sessionId: session.sessionId, spaceId: row.session.space_id },
         }
       }),
     })

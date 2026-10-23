@@ -56,13 +56,13 @@ export const CreateInput = Schema.Struct({
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
-  name: Schema.optional(Primitive.Name),
-  description: Schema.optional(Schema.NullOr(Schema.String)),
   agentOrder: Schema.optional(
     AgentOrder.check(
       Schema.isMaxLength(maximumAgentOrder, { message: `A factory has at most ${maximumAgentOrder} agents.` }),
     ),
   ),
+  name: Schema.optional(Primitive.Name),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
 }).annotate({ identifier: "Space.UpdateInput" })
 
 export const definition = Primitive.define({

@@ -5998,6 +5998,21 @@
       "Space.UpdateInput": {
         "type": "object",
         "properties": {
+          "agentOrder": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The space’s factory order: agent IDs, first to last. It orders the task board’s columns and does not limit which agent holds a task.",
+                "maxItems": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "anyOf": [
               {
@@ -6022,21 +6037,6 @@
                     "type": "null"
                   }
                 ]
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "agentOrder": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "The space’s factory order: agent IDs, first to last. It orders the task board’s columns and does not limit which agent holds a task.",
-                "maxItems": 64
               },
               {
                 "type": "null"

@@ -20,10 +20,10 @@ export const space = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text().notNull(),
     description: text(),
-    agent_order: jsonb().$type<ReadonlyArray<Agent.ID>>().notNull().default([]),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
     archived_at: timestamp(),
+    agent_order: jsonb().$type<ReadonlyArray<Agent.ID>>().notNull().default([]),
   },
   (table) => [
     index("space_organization_id_created_at_id_idx").on(table.organization_id, table.created_at, table.id),
