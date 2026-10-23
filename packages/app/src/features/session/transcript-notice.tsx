@@ -84,3 +84,12 @@ export function TranscriptNotice(props: { message: SessionMessage.Info | undefin
     </Text>
   )
 }
+
+// oxlint-disable-next-line ren/no-comments -- Shown where a chat moved to a new machine and lost its workspace files (E117).
+export function FilesReset() {
+  return (
+    <Notice tone="neutral" title="This chat moved to a new machine">
+      Workspace files from before this point are gone. The chat history is kept.
+    </Notice>
+  )
+}

@@ -12,7 +12,7 @@ import { TaskProgress, type TaskStatus } from "@ren/ui/task-progress"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Effect, Option, SubscriptionRef } from "effect"
+import { DateTime, Effect, Option, SubscriptionRef } from "effect"
 import { AsyncResult } from "effect/reactivity"
 import { useDeferredValue, useRef, useState } from "react"
 import type { ReactNode, RefObject } from "react"
@@ -292,14 +292,14 @@ export function SessionChat(props: {
   const context = RouterContext.useRouterContext()
   const stored = useQuery({
     ...context.api.session.get.queryOptions({ idOrSlug: props.sessionID }),
-    select: (session) => session.title,
+    select: (session) => ({ title: session.title, filesResetAt: session.filesResetAt }),
   })
   const chat = ChatView.useRoot(props.sessionID, props.child)
   const rows = chat.rows
   const messages = chat.messages
   const info = chat.info
   const running = chat.running
-  const title = SessionTitle.display(info?.title ?? stored.data, SessionTitle.untitled)
+  const title = SessionTitle.display(info?.title ?? stored.data?.title, SessionTitle.untitled)
   const scroller = useRef<ConversationShell.TimelineHandle>(null)
   const [restored, setRestored] = useState(0)
   const finder = useFind(messages, rows)
@@ -383,6 +383,7 @@ export function SessionChat(props: {
     detail: props.detail,
     viewer: props.viewer,
     people,
+    filesResetAt: stored.data?.filesResetAt ? DateTime.makeUnsafe(stored.data.filesResetAt) : null,
   })
 
   return (

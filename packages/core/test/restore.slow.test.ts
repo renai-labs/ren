@@ -486,7 +486,6 @@ it.live(
   "a chat restored into a missing folder on the brain's own hand gets the folder back, one note, and a files reset time in Ren; a kept folder gets no note",
   () =>
     Effect.gen(function* () {
-      const database = yield* Database.Service
       const script = stub.script()
       const chat = yield* opened(`open ${script.marker}`)
       yield* Effect.promise(() => script.called())
@@ -524,11 +523,9 @@ it.live(
       yield* Host.forgetHarness(chat.brainId, { folderOf: chat.sessionId })
       expect(yield* notes).toBe(1)
       yield* chat.synced
-      const reset = (yield* database.db
-        .select({ at: Database.Schema.agent_session.files_reset_at })
-        .from(Database.Schema.agent_session)
-        .where(eq(Database.Schema.agent_session.id, chat.sessionId))).at(0)?.at
-      expect(reset).toBeInstanceOf(Date)
+      const sessions = yield* Session.Service
+      const actor = { userId: chat.owner.createdBy, organizationId: chat.owner.organizationId, roles: ["owner"] }
+      expect((yield* sessions.get(actor, chat.sessionId)).filesResetAt).not.toBeNull()
     }),
 )
 

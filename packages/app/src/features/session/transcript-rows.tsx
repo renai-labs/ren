@@ -4,9 +4,10 @@ import type { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import type { SessionModel } from "@ren/schema/session/model"
 import { Transcript } from "@ren/ui/transcript"
-import { Match } from "effect"
+import { DateTime, Match } from "effect"
 import { type PendingAction, type Person, type RowData, type Shared, TranscriptRow } from "./session-transcript.js"
 import { Timeline } from "./timeline.js"
+import { FilesReset } from "./transcript-notice.js"
 import { TranscriptTurn } from "./transcript-turn.js"
 
 const none: ReadonlySet<string> = new Set()
@@ -44,6 +45,7 @@ export function useTranscriptRows(props: {
   detail?: TimelineDetail.Detail | undefined
   viewer?: string
   people?: ReadonlyMap<string, Person>
+  filesResetAt?: DateTime.Utc | null
 }) {
   const messages: ReadonlyMap<string, SessionMessage.Info> = new Map(
     props.messages.map((message) => [message.id, message]),
@@ -122,13 +124,39 @@ export function useTranscriptRows(props: {
     CompactionQueued: empty,
     TurnGap: empty,
   })
+  // oxlint-disable-next-line ren/no-comments -- The chat moved to a new machine at filesResetAt: the notice goes before the first message after that time, or at the end (E117).
+  const resetAt = props.filesResetAt
+  const resetBefore = resetAt
+    ? props.rows.find((row) => {
+        const message = row._tag === "UserMessage" ? messages.get(row.userMessageID) : undefined
+        return message !== undefined && DateTime.isGreaterThanOrEqualTo(message.time.created, resetAt)
+      })
+    : undefined
+  const notice = resetAt ? <FilesReset /> : undefined
+  const working = props.working ? <Transcript.Working /> : undefined
   return {
     items: props.rows.filter((row) => row._tag !== "TurnGap"),
     itemKey: TimelineRow.key,
     marker: (row: TimelineRow.Row) => row._tag === "UserMessage",
     itemMessage: (row: TimelineRow.Row) => Timeline.messageIDs(row).at(0),
     itemBusy: (row: TimelineRow.Row) => TranscriptTurn.rowBusy(turns, row),
-    renderItem: (row: TimelineRow.Row) => <TranscriptRow shared={shared} data={data(row)} row={row} />,
-    footer: props.working ? <Transcript.Working /> : undefined,
+    renderItem: (row: TimelineRow.Row) =>
+      row === resetBefore ? (
+        <>
+          {notice}
+          <TranscriptRow shared={shared} data={data(row)} row={row} />
+        </>
+      ) : (
+        <TranscriptRow shared={shared} data={data(row)} row={row} />
+      ),
+    footer:
+      notice && !resetBefore ? (
+        <>
+          {notice}
+          {working}
+        </>
+      ) : (
+        working
+      ),
   }
 }

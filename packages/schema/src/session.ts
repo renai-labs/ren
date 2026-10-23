@@ -144,6 +144,9 @@ export const Info = Schema.Struct({
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),
+  filesResetAt: Schema.NullOr(Schema.DateTimeUtc).annotate({
+    description: "When the chat moved to a new machine and its workspace files from before were lost, or null.",
+  }),
 }).annotate({ identifier: "Session.Info" })
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
