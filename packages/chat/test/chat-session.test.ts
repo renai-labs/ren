@@ -146,12 +146,12 @@ const logged = (brain: Brain, log: Array<string>) =>
     ),
   )
 
-test("a prompt sent while the brain's URL fails stays pending and is sent once with the same id after new access; a 401 from an old token does the same", () =>
+test("a prompt sent while the brain's URL fails stays pending and is sent once with the same id after new access; a 502 for a gone sandbox and a 401 from an old token do the same", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
-      const fault = { mode: "none" as "none" | "network" | "unauthorized", attempts: 0 }
+      const fault = { mode: "none" as "none" | "network" | "gone" | "unauthorized", attempts: 0 }
       const sent: Array<string> = []
       const accessed = { count: 0 }
       const fetching = FetchHttpClient.layer.pipe(
@@ -166,6 +166,8 @@ test("a prompt sent while the brain's URL fails stays pending and is sent once w
                   if (fault.mode !== "none") {
                     fault.attempts++
                     if (fault.mode === "network") throw new TypeError("fetch failed")
+                    if (fault.mode === "gone")
+                      return Response.json({ message: "The sandbox was not found", code: 502 }, { status: 502 })
                     return Response.json({ _tag: "UnauthorizedError", message: "An old generation" }, { status: 401 })
                   }
                   sent.push(
@@ -195,7 +197,7 @@ test("a prompt sent while the brain's URL fails stays pending and is sent once w
       }).pipe(Effect.provide(fetching))
       yield* chat.open(brain.id)
       yield* until(chat.status, (status) => status === "connected")
-      const failing = (mode: "network" | "unauthorized") =>
+      const failing = (mode: "network" | "gone" | "unauthorized") =>
         Effect.gen(function* () {
           fault.mode = mode
           fault.attempts = 0
@@ -216,6 +218,7 @@ test("a prompt sent while the brain's URL fails stays pending and is sent once w
           expect(accessed.count).toBeGreaterThan(before)
         })
       yield* failing("network")
+      yield* failing("gone")
       yield* failing("unauthorized")
     }),
   ))
@@ -469,46 +472,62 @@ test("after the connection parks, a history read asks for access before any requ
     }),
   ))
 
-test("after a request to the brain gets no answer, the next access says the brain is unreachable, and the one after does not", () =>
+test("after a request to the brain gets no answer, or the sandbox proxy answers 502 for a gone sandbox, the next access says the brain is unreachable, and the one after does not", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
-      const down = { value: true }
-      const asked: Array<boolean> = []
-      const fetching = FetchHttpClient.layer.pipe(
-        Layer.provide(
-          Layer.succeed(
-            FetchHttpClient.Fetch,
-            Object.assign(
-              (input: string | URL | Request, init?: RequestInit) => {
-                if (down.value) return Promise.reject(new TypeError("fetch failed"))
-                const url = new URL(input instanceof Request ? input.url : String(input))
-                return brain.chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}))
-              },
-              { preconnect: fetch.preconnect },
+      yield* Effect.forEach(
+        [
+          () => Promise.reject(new TypeError("fetch failed")),
+          () =>
+            Promise.resolve(
+              Response.json({ sandboxId: "gone", message: "The sandbox was not found", code: 502 }, { status: 502 }),
             ),
-          ),
-        ),
+        ],
+        (failure) =>
+          Effect.gen(function* () {
+            const down = { value: true }
+            const asked: Array<boolean> = []
+            const fetching = FetchHttpClient.layer.pipe(
+              Layer.provide(
+                Layer.succeed(
+                  FetchHttpClient.Fetch,
+                  Object.assign(
+                    (input: string | URL | Request, init?: RequestInit) => {
+                      if (down.value) return failure()
+                      const url = new URL(input instanceof Request ? input.url : String(input))
+                      return brain.chatFetch(
+                        `${url.pathname}${url.search}`,
+                        input instanceof Request ? input : (init ?? {}),
+                      )
+                    },
+                    { preconnect: fetch.preconnect },
+                  ),
+                ),
+              ),
+            )
+            const chat = yield* ChatSession.make({
+              sessionID: brain.id,
+              access: (input) =>
+                Effect.sync(() => {
+                  asked.push(input.unreachable)
+                  return {
+                    status: "ready" as const,
+                    url: "http://cell",
+                    token: "a-client-token",
+                    expiresAt: DateTime.makeUnsafe(Date.now() + 30_000),
+                  }
+                }),
+              connection: { reconnectDelay: 60_000 },
+            }).pipe(Effect.provide(fetching))
+            yield* chat.open(brain.id).pipe(Effect.ignore)
+            down.value = false
+            yield* chat.open(brain.id)
+            expect([asked[0], asked.includes(true), asked.at(-1)]).toEqual([false, true, false])
+          }).pipe(Effect.scoped),
+        { discard: true },
       )
-      const chat = yield* ChatSession.make({
-        sessionID: brain.id,
-        access: (input) =>
-          Effect.sync(() => {
-            asked.push(input.unreachable)
-            return {
-              status: "ready" as const,
-              url: "http://cell",
-              token: "a-client-token",
-              expiresAt: DateTime.makeUnsafe(Date.now() + 30_000),
-            }
-          }),
-        connection: { reconnectDelay: 60_000 },
-      }).pipe(Effect.provide(fetching))
-      yield* chat.open(brain.id).pipe(Effect.ignore)
-      down.value = false
-      yield* chat.open(brain.id)
-      expect([asked[0], asked.includes(true), asked.at(-1)]).toEqual([false, true, false])
     }),
   ))
 

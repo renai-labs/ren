@@ -53,6 +53,9 @@ const savedRetries = 3
 
 const prepareEveryMs = 5 * 60_000
 
+// oxlint-disable-next-line ren/no-comments -- The sandbox provider's proxy answers 502 or 504 when it cannot reach the sandbox, for example after the sandbox was killed (E123).
+const gateway = new Set([502, 504])
+
 const httpErrorOf = (error: unknown) =>
   error instanceof ClientError && HttpClientError.isHttpClientError(error.cause)
     ? Option.some(error.cause)
@@ -61,9 +64,15 @@ const httpErrorOf = (error: unknown) =>
 const isUnauthorized = (error: unknown) =>
   Option.exists(httpErrorOf(error), (cause) => "response" in cause.reason && cause.reason.response.status === 401)
 
-// oxlint-disable-next-line ren/no-comments -- The brain did not answer, or refused a token of an old generation: the message stays pending and is sent again with the same id after new access; the brain skips an id it has (E126).
+// oxlint-disable-next-line ren/no-comments -- The brain did not answer, its sandbox is gone, or it refused a token of an old generation: the message stays pending and is sent again with the same id after new access; the brain skips an id it has (E126).
 const isUnreachable = (error: unknown) =>
-  isUnauthorized(error) || Option.exists(httpErrorOf(error), (cause) => cause.reason._tag === "TransportError")
+  isUnauthorized(error) ||
+  Option.exists(
+    httpErrorOf(error),
+    (cause) =>
+      cause.reason._tag === "TransportError" ||
+      ("response" in cause.reason && gateway.has(cause.reason.response.status)),
+  )
 
 // oxlint-disable-next-line ren/no-comments -- The answer to a question whose turn stopped, as a message that quotes each question (E129).
 export const quote = (form: Form.Info, answer: Form.Answer) =>
@@ -192,6 +201,11 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   // oxlint-disable-next-line ren/no-comments -- A request to the brain's URL that got no answer: the next access asks Ren to check the sandbox (E123).
   const reach = { unreachable: false }
 
+  const lost = Effect.sync(() => {
+    reach.unreachable = true
+    cached.current = Option.none()
+  })
+
   const report = options.onError ?? ((error: unknown) => Effect.logWarning("A chat read failed", error))
 
   const update = (f: (current: ChatState.State) => ChatState.State) => SubscriptionRef.update(state, f)
@@ -266,13 +280,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       const authorized = HttpClient.mapRequest(http, HttpClientRequest.basicAuth("ren", access.token)).pipe(
         HttpClient.transform((response, request) =>
           response.pipe(
-            Effect.tapError((error) =>
-              Effect.sync(() => {
-                if (error.reason._tag !== "TransportError") return
-                reach.unreachable = true
-                cached.current = Option.none()
-              }),
-            ),
+            Effect.tap((answer) => (gateway.has(answer.status) ? lost : Effect.void)),
+            Effect.tapError((error) => (error.reason._tag === "TransportError" ? lost : Effect.void)),
             Effect.provideService(HttpClient.TracerPropagationEnabled, false),
             Effect.timeoutOrElse({
               duration: headersTimeout,
