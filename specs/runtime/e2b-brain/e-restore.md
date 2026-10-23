@@ -143,7 +143,7 @@ A brain with no chat left is resting, so the daily cleanup destroys its sandbox 
 
 ### History while not ready (E108, E111)
 
-- Ren adds a read-only `session.messages` to its Session API, with the same query (`limit`, `cursor`) and response type as the Chat API's (`protocol/src/chat.ts:163`). It checks access as `Session.get` does.
+- Ren adds a read-only `chat.messages` (E139), with the same query (`limit`, `cursor`) and response type as the Chat API's `session.messages` (`protocol/src/chat.ts:163`). It checks access as `Session.get` does.
 - Read limits as ren-v1: 4 reads at once, 16 queued for at most 2 s, 48 MiB in flight, a page of at most 16 MiB or 20,000 rows, a 5 s statement timeout. 503 with `Retry-After: 2`; 413 when a page is too large. `data:` URLs longer than 1024 characters are cut.
 - The chat runtime reads history from Ren while `Session.access` returns `starting` or `failed`, and from the brain after `ready`. On 413 it steps the page size down 100, 50, 25, 5, 1; on 503 it retries up to 3 times per page. A file shown by `uri` that does not load shows its name and icon. Every message sent while the brain is not ready stays in local storage per chat, with its id, until the brain accepts it; after a reload or a Retry the app sends it again with the same id (E118).
 
@@ -196,6 +196,18 @@ A brain with no chat left is resting, so the daily cleanup destroys its sandbox 
 | down (Ren)                 | A restore answers 503 and keeps its restore flag; the app retries. Drops wait. History from Ren is not available; the app shows the phase.                                                                      |
 | down (hand)                | No effect on restore (E113). A folder removal on a managed hand waits until the hand answers.                                                                                                                   |
 | restarting (brain process) | A group with a restore flag resumes on its next request and copies only the missing chats (E107). An upgrade restart clears the cache only after a drained flush (E100).                                        |
+
+## Not done in M2
+
+- The live E2B runs: B15, D10, E21 (subagent chats and queued messages after a replace) and G8 to G10, with the 5-chat size measurement. The dev template `ren-brain-dev:e2d523f1b189dd70` is from before `@ren/opencode-transcript`; rebuild it before the next live run.
+- Test 6 (chaos, real stack).
+- Test 16 is not written.
+- Old celld case P5-06 (a restore skips the descendants of a missing parent) has no test.
+- Queued file attachments are not queued again by a restore: the stored payload differs from the prompt input.
+- Folder removal on a template's machine (E114) is not done: Ren cannot give access for a deleted chat.
+- Sync never writes `agent_session.harness_version`, so Ren gives the codec `null` (E115).
+- The E117 notice reads `filesResetAt` from `session.get`, which the app loads with the page. A reset while the page is open shows after the next load.
+- E118 keeps prompts only. Commands, compactions and queue changes are not kept.
 
 ## Tests
 
