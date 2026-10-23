@@ -170,6 +170,15 @@ const events = (scope: Effect.Success<typeof scopeOf>) =>
     }),
   )
 
+// oxlint-disable-next-line ren/no-comments -- workerd does not cancel a stream when its client leaves; its request signal (enable_request_signal) tells.
+const disconnected = (request: HttpServerRequest.HttpServerRequest) =>
+  Effect.callback<void>((resume) => {
+    if (!(request.source instanceof Request)) return
+    const signal = request.source.signal
+    if (signal.aborted) return resume(Effect.void)
+    signal.addEventListener("abort", () => resume(Effect.void), { once: true })
+  })
+
 const sender = Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
   Option.map(Option.fromNullishOr(request.headers[userHeader]), (userId): Harness.Sender => {
     const name = Option.fromNullishOr(request.headers[userNameHeader]).pipe(
@@ -222,7 +231,9 @@ const handlers = Layer.mergeAll(
   HttpApiBuilder.group(ChatApi, "event", (group) =>
     Effect.map(Effect.context<Services>(), (context) =>
       group.handle("event.subscribe", () =>
-        Effect.map(scopeOf, (scope) => events(scope).pipe(Stream.provideContext(context))),
+        Effect.map(Effect.all({ scope: scopeOf, request: HttpServerRequest.HttpServerRequest }), (found) =>
+          events(found.scope).pipe(Stream.interruptWhen(disconnected(found.request)), Stream.provideContext(context)),
+        ),
       ),
     ),
   ),
