@@ -10,6 +10,7 @@ import { Array, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "./access.js"
 import { CredentialOffboarding } from "./credential/offboarding.js"
 import { EgressControl } from "./egress-control.js"
+import { AppQueries } from "./app/queries.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
@@ -224,6 +225,7 @@ export const layer = Layer.effect(
       archive: Effect.fn("Space.archive")(function* (actor: Actor.Info, id: Space.ID) {
         const archived = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
+            yield* AppQueries.lock(transaction, actor)
             const visible = yield* findVisible(transaction, actor, id)
             if (!visible) return yield* notFound
             if (visible.row.space.archived_at) return { info: toInfo(actor)(visible.row), removed: Option.none() }
@@ -242,6 +244,19 @@ export const layer = Layer.effect(
               return yield* new Primitive.Conflict({
                 message: `This space owns ${owned.map((agent) => agent.name).join(", ")}. Move or archive them first.`,
               })
+            const ownedApps = yield* transaction
+              .select({ slug: Database.Schema.app.slug })
+              .from(Database.Schema.app)
+              .where(and(eq(Database.Schema.app.owner_space_id, id), isNull(Database.Schema.app.archived_at)))
+              .orderBy(asc(Database.Schema.app.slug))
+            if (ownedApps.length > 0)
+              return yield* new Primitive.Conflict({
+                message: `This space owns apps ${ownedApps.map((app) => app.slug).join(", ")}. Move or archive them first.`,
+              })
+            yield* transaction
+              .update(Database.Schema.space_app)
+              .set({ archived_at: sql`now()` })
+              .where(and(eq(Database.Schema.space_app.space_id, id), isNull(Database.Schema.space_app.archived_at)))
             const archived = yield* transaction
               .update(Database.Schema.space)
               .set({ archived_at: sql`now()`, updated_at: sql`now()` })
