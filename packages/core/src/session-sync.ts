@@ -6,7 +6,7 @@ import type { Sync } from "@ren/schema/sync"
 import { Database } from "@ren/db/database"
 import { Session } from "@ren/schema/session"
 import { and, asc, eq, sql } from "drizzle-orm"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Option, Schema } from "effect"
 import { OpenCodeStore } from "./session/opencode-store.js"
 
 export { ForbiddenError, StaleUploadError } from "@ren/host-api/errors"
@@ -45,7 +45,11 @@ export interface Interface {
     upload: number,
     input: { readonly session: Sync.OpenCodeSessionRow; readonly seq: number; readonly ids: ReadonlyArray<string> },
   ) => Effect.Effect<void, ForbiddenError | StaleUploadError>
-  readonly restore: (host: Host, sessionId: Session.ID) => Effect.Effect<ReadonlyArray<Sync.RestoredChat>, ForbiddenError>
+  readonly restore: (
+    host: Host,
+    sessionId: Session.ID,
+    directoryOf?: (chat: Session.ID) => Effect.Effect<Option.Option<string>, ForbiddenError>,
+  ) => Effect.Effect<ReadonlyArray<Sync.RestoredChat>, ForbiddenError>
   readonly messages: (
     host: Host,
     sessionId: Session.ID,
@@ -181,7 +185,12 @@ export const layer = Layer.effect(
           }),
         )
       }),
-      restore: Effect.fn("SessionSync.restore")(function* (host: Host, sessionId: Session.ID) {
+      restore: Effect.fn("SessionSync.restore")(function* (
+        host: Host,
+        sessionId: Session.ID,
+        directoryOf: (chat: Session.ID) => Effect.Effect<Option.Option<string>, ForbiddenError> = () =>
+          Effect.succeedNone,
+      ) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const chat = yield* lock(transaction, host, sessionId)
@@ -225,10 +234,13 @@ export const layer = Layer.effect(
                     session,
                   }
                   if (session || !chat.startInput) return restored satisfies Sync.RestoredChat
-                  return {
-                    ...restored,
-                    start: yield* Schema.decodeUnknownEffect(Session.StartInput)(chat.startInput).pipe(Effect.orDie),
-                  } satisfies Sync.RestoredChat
+                  const start = yield* Schema.decodeUnknownEffect(Session.StartInput)(chat.startInput).pipe(
+                    Effect.orDie,
+                  )
+                  return Option.match(yield* directoryOf(chat.id), {
+                    onNone: () => ({ ...restored, start }) satisfies Sync.RestoredChat,
+                    onSome: (directory) => ({ ...restored, start, directory }) satisfies Sync.RestoredChat,
+                  })
                 }),
             )
           }),

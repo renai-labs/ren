@@ -61,6 +61,9 @@ export const RestoredChat = Schema.Struct({
   start: Schema.optionalKey(Session.StartInput).annotate({
     description: "Present when the chat has no transcript: the start input, with the first message.",
   }),
+  directory: Schema.optionalKey(Schema.String).annotate({
+    description: "With `start`: the folder on the chat’s hand, as a start from Ren would give it.",
+  }),
 }).annotate({
   identifier: "Sync.RestoredChat",
   description: "One chat of a restored group. Its messages are read page by page with `sync.messages`.",
