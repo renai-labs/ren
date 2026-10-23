@@ -683,6 +683,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/sessions/${encodeURIComponent(input.id)}/chat`,
+            query: { unreachable: input["unreachable"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,

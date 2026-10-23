@@ -47,7 +47,7 @@ export class AccessFailed extends Data.TaggedError("ChatSession.AccessFailed")<{
 
 export interface Options {
   readonly sessionID: Session.ID
-  readonly access: Effect.Effect<Session.ClientAccess, unknown>
+  readonly access: (input: { readonly unreachable: boolean }) => Effect.Effect<Session.ClientAccess, unknown>
   readonly initialMessageLimit?: number
   readonly sender?: SessionMessage.Sender
   readonly handoff?: Handoff
@@ -147,6 +147,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const cached: { current: Option.Option<{ readonly access: Session.ReadyAccess; readonly client: Client }> } = {
     current: Option.none(),
   }
+  // oxlint-disable-next-line ren/no-comments -- A request to the brain's URL that got no answer: the next access asks Ren to check the sandbox (E123).
+  const reach = { unreachable: false }
 
   const report = options.onError ?? ((error: unknown) => Effect.logWarning("A chat read failed", error))
 
@@ -160,7 +162,9 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         DateTime.toEpochMillis(cached.current.value.access.expiresAt) - now > refreshBefore
       )
         return cached.current.value.client
-      const access = yield* options.access.pipe(
+      const unreachable = reach.unreachable
+      reach.unreachable = false
+      const access = yield* options.access({ unreachable }).pipe(
         Effect.mapError((cause) => new AccessFailed({ cause })),
         Effect.flatMap((answer) => {
           if (answer.status === "ready") return Effect.succeed(Option.some(answer))
@@ -178,6 +182,13 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       const authorized = HttpClient.mapRequest(http, HttpClientRequest.basicAuth("ren", access.token)).pipe(
         HttpClient.transform((response, request) =>
           response.pipe(
+            Effect.tapError((error) =>
+              Effect.sync(() => {
+                if (error.reason._tag !== "TransportError") return
+                reach.unreachable = true
+                cached.current = Option.none()
+              }),
+            ),
             Effect.provideService(HttpClient.TracerPropagationEnabled, false),
             Effect.timeoutOrElse({
               duration: headersTimeout,

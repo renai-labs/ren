@@ -440,9 +440,14 @@ const adaptGroupSession = (raw: RawClient["session"]) => ({
 })
 
 type ChatAccessRequest = Parameters<RawClient["chat"]["chat.access"]>[0]
-type ChatAccessInput = { readonly id: ChatAccessRequest["params"]["id"] }
+type ChatAccessInput = {
+  readonly id: ChatAccessRequest["params"]["id"]
+  readonly unreachable?: ChatAccessRequest["query"]["unreachable"]
+}
 const EndpointChatAccess = (raw: RawClient["chat"]) => (input: ChatAccessInput) =>
-  raw["chat.access"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+  raw["chat.access"]({ params: { id: input["id"] }, query: { unreachable: input["unreachable"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 type ChatRetryRequest = Parameters<RawClient["chat"]["chat.retry"]>[0]
 type ChatRetryInput = {

@@ -73,6 +73,7 @@ export interface Interface {
   readonly access: (
     sessionId: Session.ID,
     member: { readonly userId: Auth.UserID; readonly name?: string },
+    options?: { readonly unreachable?: boolean },
   ) => Effect.Effect<Session.ClientAccess>
   readonly prepare: (spaceId: Space.ID) => Effect.Effect<void>
   readonly flush: (sessionId: Session.ID) => Effect.Effect<Synced, BrainHost.BrainUnavailable | BrainRejectedError>
@@ -370,8 +371,11 @@ export const layer = Layer.effect(
       access: Effect.fn("Brains.access")(function* (
         sessionId: Session.ID,
         member: { readonly userId: Auth.UserID; readonly name?: string },
+        options: { readonly unreachable?: boolean } = {},
       ) {
         const session = yield* brainOf(sessionId)
+        // oxlint-disable-next-line ren/no-comments -- The app could not reach the brain's URL: the host checks the sandbox before Ren answers (E123).
+        if (options.unreachable) yield* brainHost.unavailable(session.brainId)
         const state = yield* brainHost.access(session.brainId)
         if (state._tag === "Starting") return { status: "starting", phase: state.phase } satisfies Session.ClientAccess
         if (state._tag === "Failed") return { status: "failed", reason: state.reason } satisfies Session.ClientAccess

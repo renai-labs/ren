@@ -294,6 +294,8 @@ export const layer = Layer.effect(
           ),
         )
       if (status === "gone") yield* lose({ brainId, generation: row.generation })
+      // oxlint-disable-next-line ren/no-comments -- A paused sandbox wakes; it is never replaced here (E123).
+      if (status === "paused" && row.phase === "ready") yield* update(row.id, { phase: "resuming" })
     })
 
     const rest = Effect.fnUntraced(function* (row: Pick<Row, "id" | "generation" | "binding">) {

@@ -10,7 +10,9 @@ export const ChatHandler = HttpApiBuilder.group(Api, "chat", (handlers) =>
     const sessions = yield* Session.Service
     return handlers
       .handle("chat.access", (request) =>
-        Effect.flatMap(Primitive.currentActor, (actor) => sessions.access(actor, request.params.id)).pipe(
+        Effect.flatMap(Primitive.currentActor, (actor) =>
+          sessions.access(actor, request.params.id, { unreachable: request.query.unreachable === "true" }),
+        ).pipe(
           Effect.catchTag("Primitive.NotFound", (error) => Effect.fail(new NotFoundError({ message: error.message }))),
         ),
       )

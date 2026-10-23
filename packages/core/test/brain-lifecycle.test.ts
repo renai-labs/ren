@@ -7,7 +7,7 @@ import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { eq, inArray } from "drizzle-orm"
-import { type Duration, Effect, Layer, ManagedRuntime, Option, Schedule, Schema } from "effect"
+import { Duration, Effect, Layer, ManagedRuntime, Option, Schedule, Schema } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -90,7 +90,7 @@ const seeded = () =>
       const creator = yield* Seed.user()
       const brainId = Brain.ID.create()
       const sessionId = yield* Seed.session({ organizationId, spaceId, createdBy: creator.id, brainId })
-      return { brainId, sessionId, spaceId, organizationId }
+      return { brainId, sessionId, spaceId, organizationId, creatorId: creator.id }
     }),
   )
 
@@ -383,6 +383,62 @@ describe("brain runs", () => {
       ),
     )
     expect([replaced.template, (await row(running)).generation, (await row(running)).template]).toEqual(["t2", 1, "t1"])
+    await runtime.dispose()
+  })
+
+  test("an access after the app could not reach its brain asks the provider: a gone sandbox is replaced, a paused one wakes without a replace, a running one stays ready", async () => {
+    const chats = await Promise.all([seeded(), seeded(), seeded()])
+    await database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .update(Database.Schema.agent_session)
+          .set({ started_at: new Date() })
+          .where(
+            inArray(
+              Database.Schema.agent_session.id,
+              chats.map((chat) => chat.sessionId),
+            ),
+          )
+      }),
+    )
+    const runtime = await ren({ lostEvery: "1 hour" })
+    await runtime.runPromise(
+      BrainLifecycle.Service.use((lifecycle) => Effect.forEach(chats, (chat) => lifecycle.ensure(chat.brainId))),
+    )
+    await Promise.all(chats.map((chat) => reaches(chat.brainId, "ready")))
+    const gone = chats[0]
+    const paused = chats[1]
+    const running = chats[2]
+    process.kill(-pidOf((await row(gone.brainId)).binding), "SIGKILL")
+    await runtime.runPromise(
+      SandboxProvider.Service.use((provider) =>
+        Effect.gen(function* () {
+          const binding = (yield* Effect.promise(() => row(paused.brainId))).binding
+          yield* provider.keepAlive(binding, Duration.millis(1)).pipe(Effect.orDie)
+          yield* provider
+            .status(binding)
+            .pipe(
+              Effect.orDie,
+              Effect.repeat({ until: (status) => status === "paused", schedule: Schedule.spaced("20 millis") }),
+            )
+        }),
+      ),
+    )
+    const answers = await runtime.runPromise(
+      Brains.Service.use((brains) =>
+        Effect.forEach([gone, paused, running], (chat) =>
+          brains.access(chat.sessionId, { userId: chat.creatorId }, { unreachable: true }),
+        ),
+      ),
+    )
+    expect(answers.map((answer) => (answer.status === "starting" ? answer.phase : answer.status))).toEqual([
+      "replacing",
+      "resuming",
+      "ready",
+    ])
+    const woke = await reaches(paused.brainId, "ready")
+    expect([woke.generation, (await row(running.brainId)).generation]).toEqual([1, 1])
     await runtime.dispose()
   })
 

@@ -55,9 +55,11 @@ function atomsFor(platform: Platform.Info, userId: string, detail: TimelineDetai
     sender: { userId },
     ...(detail && { detail }),
     ...(platform.onLifecycle && { lifecycle: platform.onLifecycle }),
-    access: (sessionID: Session.ID) =>
+    access: (sessionID: Session.ID, input: { readonly unreachable: boolean }) =>
       Ren.make({ baseUrl: platform.serverUrl }).pipe(
-        Effect.flatMap((ren) => ren.chat.access({ id: sessionID })),
+        Effect.flatMap((ren) =>
+          ren.chat.access({ id: sessionID, ...(input.unreachable && { unreachable: "true" as const }) }),
+        ),
         Effect.provide(server),
       ),
   })

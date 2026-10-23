@@ -36,12 +36,13 @@ const http = (brain: Brain) =>
     ),
   )
 
-const access = Effect.sync(() => ({
-  status: "ready" as const,
-  url: "http://cell",
-  token: "a-client-token",
-  expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
-}))
+const access = () =>
+  Effect.sync(() => ({
+    status: "ready" as const,
+    url: "http://cell",
+    token: "a-client-token",
+    expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+  }))
 
 const open = (brain: Brain) =>
   ChatSession.make({ sessionID: brain.id, access, sender: { userId: "user_1" } }).pipe(Effect.provide(http(brain)))
@@ -109,13 +110,56 @@ test("a prompt shows at once, streams its turn, and the live transcript equals a
     }),
   ))
 
+test("after a request to the brain gets no answer, the next access says the brain is unreachable, and the one after does not", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const down = { value: true }
+      const asked: Array<boolean> = []
+      const fetching = FetchHttpClient.layer.pipe(
+        Layer.provide(
+          Layer.succeed(
+            FetchHttpClient.Fetch,
+            Object.assign(
+              (input: string | URL | Request, init?: RequestInit) => {
+                if (down.value) return Promise.reject(new TypeError("fetch failed"))
+                const url = new URL(input instanceof Request ? input.url : String(input))
+                return brain.chatFetch(`${url.pathname}${url.search}`, input instanceof Request ? input : (init ?? {}))
+              },
+              { preconnect: fetch.preconnect },
+            ),
+          ),
+        ),
+      )
+      const chat = yield* ChatSession.make({
+        sessionID: brain.id,
+        access: (input) =>
+          Effect.sync(() => {
+            asked.push(input.unreachable)
+            return {
+              status: "ready" as const,
+              url: "http://cell",
+              token: "a-client-token",
+              expiresAt: DateTime.makeUnsafe(Date.now() + 30_000),
+            }
+          }),
+        connection: { reconnectDelay: 60_000 },
+      }).pipe(Effect.provide(fetching))
+      yield* chat.open(brain.id).pipe(Effect.ignore)
+      down.value = false
+      yield* chat.open(brain.id)
+      expect([asked[0], asked.includes(true), asked.at(-1)]).toEqual([false, true, false])
+    }),
+  ))
+
 test("a prompt that cannot be sent leaves no optimistic row behind", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       const chat = yield* ChatSession.make({
         sessionID: brain.id,
-        access: Effect.fail(new Error("Ren is unreachable")),
+        access: () => Effect.fail(new Error("Ren is unreachable")),
         connection: { reconnectDelay: 60_000 },
       }).pipe(Effect.provide(http(brain)))
       const failed = yield* chat.prompt({ text: "hello" }).pipe(Effect.flip)
