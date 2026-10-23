@@ -253,7 +253,8 @@ const start = Effect.fn("OpenCodeHarness.start")(function* (
   const model = chosen && RenPlugin.modelRef(chosen)
   const metadata = SessionSettings.metadata(session, { start, model: override, interactive: input.interactive })
   const environmentDirectory = yield* environmentDirectoryOf(server, input, session)
-  if (Option.isNone(environmentDirectory)) yield* server.makeDirectory(directory)
+  // oxlint-disable-next-line ren/no-comments -- The folder on the brain's own hand exists from the start, so a restore that finds it missing knows its files were lost (E105).
+  if (Option.getOrElse(environmentDirectory, () => directory) === directory) yield* server.makeDirectory(directory)
   const permissions = deniedActions(server, input, environmentDirectory).map((action) => ({
     action,
     resource: "*",
