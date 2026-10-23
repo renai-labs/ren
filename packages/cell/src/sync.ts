@@ -7,6 +7,7 @@ import { FetchHttpClient } from "effect/http"
 import { BrainStorage } from "./brain-storage.js"
 import { HostToken } from "./host-token.js"
 import { SyncClient } from "./sync-client.js"
+import { RenAddress } from "./ren-address.js"
 
 export interface Interface {
   readonly step: Effect.Effect<Option.Option<Duration.Duration>>
@@ -88,7 +89,7 @@ export const layerWith = (reader: Effect.Effect<OpenCodeSync.Reader, never, Scop
       )
       const opened = yield* OpenCodeSync.make({
         remote: yield* SyncClient.make(url, hostToken.current.pipe(Effect.map(Option.getOrElse(() => "")))).pipe(
-          Effect.provide(FetchHttpClient.layer),
+          Effect.provide(RenAddress.http.pipe(Layer.provide(FetchHttpClient.layer))),
         ),
         reader: yield* reader,
         restoring,
