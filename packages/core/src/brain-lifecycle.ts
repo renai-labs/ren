@@ -6,7 +6,7 @@ import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Signature } from "@ren/schema/signature"
 import { and, eq, gt, inArray, isNotNull, isNull, notExists, notInArray, or, sql } from "drizzle-orm"
-import { Clock, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
+import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
@@ -68,6 +68,7 @@ export const layer = Layer.effect(
     const client = yield* BrainClient.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const environments = yield* Environments.Service
+    const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(Config.withDefault(timing.wake))
 
     const read = (brainId: Brain.ID) =>
       database.db
@@ -206,11 +207,20 @@ export const layer = Layer.effect(
       const api = yield* client.brain(target)
       const woke = yield* api.brain["brain.wake"]().pipe(
         Effect.retry({ schedule: Schedule.spaced(timing.poll) }),
-        Effect.timeoutOption(timing.wake),
+        Effect.timeoutOption(wakeWithin),
       )
+      // oxlint-disable-next-line ren/no-comments -- A slow wake is not a dead brain: Ren replaces it only when /ren/state does not answer either (E132).
       if (Option.isNone(woke)) {
-        yield* Effect.logWarning(`Brain ${row.id} did not confirm its wake in time; Ren replaces it`)
-        return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+        const answers = yield* api.brain["brain.state"]().pipe(Effect.timeoutOption("10 seconds"), Effect.option)
+        if (Option.isNone(answers) || Option.isNone(answers.value)) {
+          yield* Effect.logWarning(
+            `Brain ${row.id} did not confirm its wake in time and does not answer; Ren replaces it`,
+          )
+          return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+        }
+        yield* Effect.logWarning(
+          `Brain ${row.id} answers but did not confirm its wake within ${Duration.format(wakeWithin)}`,
+        )
       }
       yield* update(row.id, { phase: "ready", failures: 0, failure: null })
       return true
@@ -299,7 +309,9 @@ export const layer = Layer.effect(
               client.brain(target).pipe(
                 Effect.flatMap((api) => api.brain["brain.state"]()),
                 Effect.timeout(timing.wake),
-                Effect.catchCause((cause) => Effect.logWarning(`Brain ${row.id} did not answer Ren's boot call`, cause)),
+                Effect.catchCause((cause) =>
+                  Effect.logWarning(`Brain ${row.id} did not answer Ren's boot call`, cause),
+                ),
               ),
           }),
         { concurrency: 8, discard: true },

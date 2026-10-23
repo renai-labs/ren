@@ -42,6 +42,7 @@ const ren = async (
     readonly template?: string
     readonly port?: number
     readonly around?: Parameters<typeof Host.serve>[1]
+    readonly config?: Record<string, string>
   } = {},
 ) =>
   ManagedRuntime.make(
@@ -49,7 +50,7 @@ const ren = async (
       Layer.provideMerge(
         Host.stack({
           root,
-          config: {},
+          config: options.config ?? {},
           models,
           environments: Host.noTemplates,
           ...options,
@@ -470,6 +471,32 @@ describe("brain runs", () => {
     await pulled.promise
     expect((await row(brainId)).generation).toBe(1)
     await second.dispose()
+  })
+
+  test("a wake that is not confirmed in time leaves a brain that still answers ready, and does not replace it", async () => {
+    const brainId = await newBrain()
+    const first = await ren()
+    await first.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
+    await reaches(brainId, "ready")
+    await first.dispose()
+    await database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .update(Database.Schema.brain)
+          .set({ keep_alive_until: new Date(Date.now() - 1000) })
+          .where(eq(Database.Schema.brain.id, brainId))
+      }),
+    )
+    const stalled = await ren({
+      config: { BRAIN_WAKE_TIMEOUT: "2 seconds" },
+      around: (endpoint, effect) => (endpoint === "pull" ? Effect.never : effect),
+    })
+    await stalled.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.access(brainId)))
+    await reaches(brainId, "waking")
+    const ready = await reaches(brainId, "ready")
+    expect(ready.generation).toBe(1)
+    await stalled.dispose()
   })
 
   test("a brain run that ended runs again when the brain needs it", async () => {
