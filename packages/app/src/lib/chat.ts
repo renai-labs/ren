@@ -62,6 +62,11 @@ function atomsFor(platform: Platform.Info, userId: string, detail: TimelineDetai
         ),
         Effect.provide(server),
       ),
+    saved: (sessionID: Session.ID, query: { readonly limit: number }) =>
+      Ren.make({ baseUrl: platform.serverUrl }).pipe(
+        Effect.flatMap((ren) => ren.chat.messages({ id: sessionID, limit: query.limit })),
+        Effect.provide(server),
+      ),
   })
 }
 

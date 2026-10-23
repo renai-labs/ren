@@ -18,6 +18,7 @@ import {
   Effect,
   Fiber,
   Option,
+  Predicate,
   PubSub,
   Schedule,
   Semaphore,
@@ -44,6 +45,11 @@ const refreshBefore = 60_000
 
 const startingPollMs = 2_000
 
+// oxlint-disable-next-line ren/no-comments -- Ren refuses a page of saved history over its size limit with 413 (E111); the runtime asks again for fewer messages.
+export const savedPageSizes = [100, 50, 25, 5, 1]
+
+const savedRetries = 3
+
 const httpErrorOf = (error: unknown) =>
   error instanceof ClientError && HttpClientError.isHttpClientError(error.cause)
     ? Option.some(error.cause)
@@ -61,6 +67,7 @@ export class AccessFailed extends Data.TaggedError("ChatSession.AccessFailed")<{
 export interface Options {
   readonly sessionID: Session.ID
   readonly access: (input: { readonly unreachable: boolean }) => Effect.Effect<Session.ClientAccess, unknown>
+  readonly saved?: (query: { readonly limit: number }) => Effect.Effect<SessionMessage.Page, unknown>
   readonly initialMessageLimit?: number
   readonly sender?: SessionMessage.Sender
   readonly handoff?: Handoff
@@ -167,6 +174,39 @@ export const make = Effect.fnUntraced(function* (options: Options) {
 
   const update = (f: (current: ChatState.State) => ChatState.State) => SubscriptionRef.update(state, f)
 
+  const savedPage = (sizes: ReadonlyArray<number>): Effect.Effect<SessionMessage.Page, unknown> => {
+    const size = sizes.at(0)
+    if (!options.saved || !size) return Effect.fail(new Error("Ren has no saved page small enough"))
+    return options.saved({ limit: size }).pipe(
+      Effect.retry({
+        while: (error) => Predicate.isTagged(error, "UnavailableError"),
+        times: savedRetries,
+        schedule: Schedule.spaced(startingPollMs),
+      }),
+      Effect.catchIf(
+        (error) => Predicate.isTagged(error, "TooLargeError"),
+        () => savedPage(sizes.slice(1)),
+      ),
+    )
+  }
+
+  // oxlint-disable-next-line ren/no-comments -- While the brain starts, the chat shows the history Ren saved; the brain's read replaces it at ready, so each message shows once (E108).
+  const shown = { saved: false }
+  const showSaved = Effect.suspend(() => {
+    if (!options.saved || shown.saved) return Effect.void
+    shown.saved = true
+    return savedPage(savedPageSizes).pipe(
+      Effect.flatMap((page) =>
+        update((current) =>
+          current.messages[root] ? current : Hydrate.messages(current, root, { items: page.items, cursor: {} }),
+        ),
+      ),
+      Effect.catch(report),
+      Effect.forkIn(scope),
+      Effect.asVoid,
+    )
+  })
+
   const client = accessLock.withPermits(1)(
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis
@@ -181,8 +221,12 @@ export const make = Effect.fnUntraced(function* (options: Options) {
         Effect.mapError((cause) => new AccessFailed({ cause })),
         Effect.flatMap((answer) => {
           if (answer.status === "ready") return Effect.succeed(Option.some(answer))
-          if (answer.status === "failed") return Effect.fail(new AccessFailed({ cause: new Error(answer.reason) }))
-          return Effect.sleep(startingPollMs).pipe(Effect.as(Option.none<Session.ReadyAccess>()))
+          if (answer.status === "failed")
+            return showSaved.pipe(Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error(answer.reason) }))))
+          return showSaved.pipe(
+            Effect.andThen(Effect.sleep(startingPollMs)),
+            Effect.as(Option.none<Session.ReadyAccess>()),
+          )
         }),
         Effect.repeat({ until: Option.isSome }),
         Effect.flatMap((answer) =>
