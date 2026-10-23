@@ -124,8 +124,8 @@ export function useTranscriptRows(props: {
     CompactionQueued: empty,
     TurnGap: empty,
   })
-  // oxlint-disable-next-line ren/no-comments -- The chat moved to a new machine at filesResetAt: the notice goes before the first message after that time, or at the end (E117).
-  const resetAt = props.filesResetAt
+  // oxlint-disable-next-line ren/no-comments -- The chat moved to a new machine at filesResetAt: the notice goes before the first message after that time, or at the end (E117). It waits for the chat's rows, so the list never starts with the footer alone.
+  const resetAt = props.rows.length > 0 ? props.filesResetAt : undefined
   const resetBefore = resetAt
     ? props.rows.find((row) => {
         const message = row._tag === "UserMessage" ? messages.get(row.userMessageID) : undefined
@@ -143,7 +143,7 @@ export function useTranscriptRows(props: {
     renderItem: (row: TimelineRow.Row) =>
       row === resetBefore ? (
         <>
-          {notice}
+          <div className="pb-4 md:pb-6">{notice}</div>
           <TranscriptRow shared={shared} data={data(row)} row={row} />
         </>
       ) : (
