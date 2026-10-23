@@ -22,6 +22,7 @@ import { FetchHttpClient } from "effect/http"
 import { ChatSession } from "../src/chat-session.js"
 import { ChatState } from "../src/chat-state.js"
 import { Family } from "../src/family.js"
+import { Outbox } from "../src/outbox.js"
 import { Fixture } from "./lib/fixture.js"
 
 setDefaultTimeout(60_000)
@@ -257,6 +258,64 @@ test("while access is starting the history comes from Ren, a page that is too la
       yield* until(chat.status, (status) => status === "connected")
       const live = yield* until(chat.state, settled(brain.id))
       expect(ChatState.messages(live, brain.id).map((message) => message.id)).toEqual(expected)
+    }),
+  ))
+
+test("a message sent while access is starting outlives a rebuilt runtime and is sent once after ready with its id; one the brain already accepted is not sent twice (E118)", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const stored: { items: ReadonlyArray<Outbox.Kept> } = { items: [] }
+      const ready = { value: false }
+      const make = ChatSession.make({
+        sessionID: brain.id,
+        access: () =>
+          Effect.sync(() =>
+            ready.value
+              ? {
+                  status: "ready" as const,
+                  url: "http://cell",
+                  token: "a-client-token",
+                  expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
+                }
+              : { status: "starting" as const, phase: "waking" },
+          ),
+        outbox: {
+          load: Effect.sync(() => stored.items),
+          keep: (items) => Effect.sync(() => void (stored.items = items)),
+        },
+        sender: { userId: "user_1" },
+      }).pipe(Effect.provide(http(brain)))
+      const script = stub.script()
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const chat = yield* make
+          yield* chat.prompt({ text: script.marker }).pipe(Effect.forkChild)
+          yield* Effect.sync(() => stored.items.length).pipe(
+            Effect.repeat({ until: (count) => count === 1, schedule: Schedule.spaced("10 millis") }),
+          )
+        }),
+      )
+      const id = stored.items.at(0)?.id
+      ready.value = true
+      const sent = (state: ChatState.State) =>
+        ChatState.messages(state, brain.id).filter((message) => message.id === id)
+      const reloaded = yield* make
+      yield* reloaded.open(brain.id)
+      yield* Effect.promise(() => script.called())
+      expect(sent(yield* until(reloaded.state, settled(brain.id)))).toHaveLength(1)
+      yield* Effect.sync(() => stored.items.length).pipe(
+        Effect.repeat({ until: (count) => count === 0, schedule: Schedule.spaced("10 millis") }),
+      )
+      stored.items = [{ id: SessionMessage.ID.make(id ?? ""), text: script.marker, delivery: "steer" }]
+      const again = yield* make
+      yield* again.open(brain.id)
+      yield* Effect.sync(() => stored.items.length).pipe(
+        Effect.repeat({ until: (count) => count === 0, schedule: Schedule.spaced("10 millis") }),
+      )
+      expect(sent(yield* SubscriptionRef.get(again.state))).toHaveLength(1)
+      expect(script.calls.filter((call) => call.kind === "turn")).toHaveLength(1)
     }),
   ))
 

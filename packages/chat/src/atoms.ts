@@ -42,6 +42,7 @@ export interface Options<R, ER> {
     sessionID: Session.ID,
     query: { readonly limit: number },
   ) => Effect.Effect<SessionMessage.Page, unknown, R>
+  readonly outbox?: (sessionID: Session.ID) => NonNullable<ChatSession.Options["outbox"]>
   readonly sender?: SessionMessage.Sender
   readonly detail?: TimelineDetail.Detail
   readonly lifecycle?: (listener: (event: Lifecycle) => void) => () => void
@@ -92,6 +93,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
             }),
             ...(options.sender && { sender: options.sender }),
             ...(handed && { handoff: handed }),
+            ...(options.outbox && { outbox: options.outbox(sessionID) }),
           })
           yield* opened.open(sessionID).pipe(
             Effect.andThen(opened.enrich(sessionID)),
