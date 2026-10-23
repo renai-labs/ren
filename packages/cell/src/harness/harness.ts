@@ -142,6 +142,8 @@ export interface Transcript {
     readonly session: Sync.OpenCodeSessionRow
     readonly messages: ReadonlyArray<Sync.OpenCodeMessageRow>
   }) => Effect.Effect<void>
+  readonly drop: (chat: Session.ID) => Effect.Effect<void>
+  readonly removeFolder: (chat: Session.ID) => Effect.Effect<void>
 }
 
 export interface Instance {

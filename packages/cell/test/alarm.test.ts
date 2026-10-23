@@ -95,6 +95,8 @@ const setup = Effect.gen(function* () {
       has: () => Effect.die(new Error("alarm must not read transcripts")),
       start: () => Effect.die(new Error("alarm must not start sessions")),
       restore: () => Effect.die(new Error("alarm must not restore")),
+      drop: () => Effect.die(new Error("alarm must not drop chats")),
+      removeFolder: () => Effect.die(new Error("alarm must not remove folders")),
     },
     send: () => Effect.die(new Error("alarm must not send messages")),
     setModel: () => Effect.die(new Error("alarm must not set models")),

@@ -225,6 +225,33 @@ describe("BrainHost pull", () => {
       expect(reply.models).toEqual({ hash: "models-1" })
     }),
   )
+
+  it.live("a pull that lists a root chat Ren no longer has gets it back as deleted", () =>
+    Effect.gen(function* () {
+      const subject = yield* seeded
+      const database = yield* Database.Service
+      const brainId = (yield* database.db
+        .select({ brainId: Database.Schema.agent_session.brain_id })
+        .from(Database.Schema.agent_session)
+        .where(eq(Database.Schema.agent_session.id, subject.sessionId))).at(0)?.brainId
+      if (!brainId) return yield* Effect.die(new Error("the session has no brain"))
+      const gone = Session.ID.create()
+      const reply = yield* Brains.Service.use((brain) =>
+        brain.pull(
+          { brainId, organizationId: subject.owner.organizationId, generation: 1 },
+          {
+            version: "test",
+            keyIds: [],
+            models: null,
+            layers: { agents: {} },
+            sessions: [],
+            roots: [subject.sessionId, gone],
+          },
+        ),
+      ).pipe(Effect.provide(cell("http://127.0.0.1:9")))
+      expect(reply.deleted).toEqual([gone])
+    }),
+  )
 })
 
 describe("BrainHost host tokens", () => {

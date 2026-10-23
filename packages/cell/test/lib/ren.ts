@@ -85,6 +85,7 @@ export const start = (options: { readonly hostname?: string } = {}) => {
     refresh: (): Refresh => ({ type: "unavailable" }),
     rotate: false,
     revoked: new Set<string>(),
+    deleted: new Set<Session.ID>(),
     issued: 0,
   }
   const modelsOf = (brainId: Brain.ID) => state.models.get(brainId) ?? state.models.get("all")
@@ -158,6 +159,7 @@ export const start = (options: { readonly hostname?: string } = {}) => {
               models: "access" in granted && request.payload.models !== granted.hash ? granted : { hash: granted.hash },
               layers: state.settings,
               chats: state.chats,
+              deleted: (request.payload.roots ?? []).filter((id) => state.deleted.has(id)),
             }
           }),
         ),
@@ -328,6 +330,9 @@ export const start = (options: { readonly hostname?: string } = {}) => {
     },
     holdRefresh: (gate: (() => Promise<void>) | undefined) => {
       state.refreshGate = gate
+    },
+    remove: (sessionId: Session.ID) => {
+      state.deleted.add(sessionId)
     },
     accessCalls: (sessionId: Session.ID) =>
       calls.filter((call) => call.endpoint === "environments.access" && call.sessionId === sessionId).length,
