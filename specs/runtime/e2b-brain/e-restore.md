@@ -1,6 +1,6 @@
 # Piece E: restore on access
 
-Status: spec written. Decisions: E98–E115 (README §6). It also uses E39 (interrupted chats), E55 (synthetic message, M1 item 11), E68 (start runs), E76 (daily cleanup), E84 (pending messages), E89 (in-place update) and the restore flag per chat (M1 item 8).
+Status: spec written. Decisions: E98–E118, E126–E131, E133 (README §6). It also uses E39 (interrupted chats), E55 (synthetic message, M1 item 11), E68 (start runs), E76 (daily cleanup), E84 (pending messages), E89 (in-place update) and the restore flag per chat (M1 item 8).
 
 ## Goal
 
@@ -11,6 +11,8 @@ Not in this piece:
 - Harness-neutral tables in Ren (piece J). Ren's tables stay OpenCode-specific; every contract in this piece is already harness-neutral (E115).
 - Upload of only the changed rows (piece J, E31). A busy chat can still lose up to 5 min of a turn when its sandbox is lost.
 - Backup of workspace files. Files on a new sandbox are lost; the agent is told (E105).
+
+A space brain loads chats lazily: a chat group comes back on its first request, never at boot. Any read across chats goes to Ren, not to the brain's cache (E116).
 
 ## Layers
 
@@ -51,13 +53,14 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Restore.Unav
 ```
 
 1. Take the lock of the chat's group. Concurrent calls for one group wait on one restore.
-2. If the adapter has the chat (`has`) and the group's root has no restore flag, return.
-3. Get the group from Ren (`/host/sync/restore`). Ren unreachable: fail with `Restore.Unavailable`; the entry answers 503 with `Retry-After`.
-4. Set the restore flag on the root in `brain.db` (the flag per chat from M1 item 8).
-5. For each chat of the group that the adapter does not have, parents first by `parentId`: `restore(rows)`; or, for a chat without a transcript, the harness's `start` with the start input (E106).
-6. For each restored chat on the brain's own hand whose folder did not exist before the restore: `note(chat, …)` (E105, E113).
-7. For each restored chat with a staged revert: `stageRevert(chat, messageId)` (E112).
-8. Remove the restore flag.
+1. If the chat has no saved settings in `brain.db`, pull first (E131). Ren unreachable: fail with `Restore.Unavailable`.
+1. If the adapter has the chat (`has`) and the group's root has no restore flag, return.
+1. Get the group from Ren (`/host/sync/restore`). Ren unreachable: fail with `Restore.Unavailable`; the entry answers 503 with `Retry-After`.
+1. Set the restore flag on the root in `brain.db` (the flag per chat from M1 item 8).
+1. For each chat of the group that the adapter does not have, parents first by `parentId`: `restore(rows)`; or, for a chat without a transcript, the harness's `start` with the start input (E106).
+1. For each restored chat on the brain's own hand whose folder did not exist before the restore: `note(chat, …)` (E105, E113).
+1. For each restored chat with a staged revert: `stageRevert(chat, messageId)` (E112).
+1. Remove the restore flag.
 
 Callers: every Chat API handler that names a session (through `harnessed` in `cell/src/chat.ts`) and the Brain API handlers `brain.start`, `brain.send` and `brain.setModel` (`cell/src/brain.ts:76-104`). `OpenCodeHarness.start` stops calling `sync.restore` itself (`cell/src/harness/opencode/harness.ts:365-388`). `Restore.ensure` never runs inside a harness hook or the workspace driver (ren-v1 INV-57).
 
@@ -116,6 +119,7 @@ A brain with no chat left is resting, so the daily cleanup destroys its sandbox 
 
 - A restored chat keeps its workspace link, so its tools run on its hand in the same folder (closes `harness.ts:393` and P5-08). The binding of chat to hand lives in Ren (`session_environment`), so a restore never contacts a hand.
 - Only for a chat on the brain's own hand: brain core checks the folder on the local disk before the import. When the folder did not exist, the chat gets one synthetic message after the import: workspace files from before the restore are gone; the chat history is kept.
+- The user is told too (E117): the brain reports `filesResetAt` for that chat with the next sync, Ren stores `agent_session.files_reset_at`, and the app shows a notice in the timeline at that time, in live and saved history.
 
 ### Harness upgrade (E100)
 
@@ -141,7 +145,22 @@ A brain with no chat left is resting, so the daily cleanup destroys its sandbox 
 
 - Ren adds a read-only `session.messages` to its Session API, with the same query (`limit`, `cursor`) and response type as the Chat API's (`protocol/src/chat.ts:163`). It checks access as `Session.get` does.
 - Read limits as ren-v1: 4 reads at once, 16 queued for at most 2 s, 48 MiB in flight, a page of at most 16 MiB or 20,000 rows, a 5 s statement timeout. 503 with `Retry-After: 2`; 413 when a page is too large. `data:` URLs longer than 1024 characters are cut.
-- The chat runtime reads history from Ren while `Session.access` returns `starting` or `failed`, and from the brain after `ready`. On 413 it steps the page size down 100, 50, 25, 5, 1; on 503 it retries up to 3 times per page. A file shown by `uri` that does not load shows its name and icon. Messages typed meanwhile wait in local storage (E84).
+- The chat runtime reads history from Ren while `Session.access` returns `starting` or `failed`, and from the brain after `ready`. On 413 it steps the page size down 100, 50, 25, 5, 1; on 503 it retries up to 3 times per page. A file shown by `uri` that does not load shows its name and icon. Every message sent while the brain is not ready stays in local storage per chat, with its id, until the brain accepts it; after a reload or a Retry the app sends it again with the same id (E118).
+
+### Client behaviour around the brain's lifecycle (E126–E130, E133)
+
+```
+ send ──▶ outbox (browser storage, E118) ──▶ brain
+            │ network error / 401 ──▶ keep pending ──▶ Session.access(unreachable, E123) ──▶ resend, same id (E126)
+ stream ends "closing" (token expiry) ──▶ reconnect now with new access (E127)
+ stream ends "idle"                  ──▶ park; drop cached access (E128)
+ parked + read/send                  ──▶ Session.access first (wakes the brain); saved history from Ren meanwhile
+ parked + typing                     ──▶ prepare, once per 5 min per chat (E130)
+ question stopped after 10 min        ──▶ shown expired; an answer becomes a message quoting it (E129)
+```
+
+- Only a refusal by the brain (a 4xx other than 401) removes a pending message. The brain skips an id it already has, so a resend never makes a second turn.
+- Ren's own senders follow the same contract with a durable `send:<messageId>` run (E77, E133).
 
 ## Swap and scope check
 
@@ -155,17 +174,17 @@ A brain with no chat left is resting, so the daily cleanup destroys its sandbox 
 
 ## Contract changes
 
-| Package                        | Change                                                                                                                                                                                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `db`                           | `opencode_message.removed_at timestamp`. `agent_session.harness_version text`, `agent_session.revert_message_id text`. `agent_session.start_input` type includes `initialMessage`. Ren stores OpenCode's queued messages.      |
-| `schema`                       | `Environment` hand gains `managed: boolean`.                                                                                                                                                                                   |
-| `host-api`                     | `sync.restore`: one chat's group; each chat `{ harness, harnessVersion, parentId, revertMessageId, rows, start? }`. Sync uploads carry queued messages and `revertMessageId`. `/host/pull`: request `roots`, reply `deleted`.  |
-| `core`                         | `SessionSync.restore` per group; `commit` sets `removed_at` and `revert_message_id`; `TranscriptCodec.Registry`; `Session.messages` with read limits; retention run on `DurableRunner`; `start_input` keeps the first message. |
-| `protocol`                     | Session API: `GET` messages of a session, Chat API message type, 503 and 413 errors. Run `bun run generate`.                                                                                                                   |
-| new `@ren/opencode-transcript` | Pure OpenCode row and message translation, moved from `cell`. Depends on `@ren/schema` and `@opencode/schema`. `AGENTS.md` layering gets a line for it.                                                                        |
-| `cell`                         | `Restore` and its callers; `Transcript` in the harness interface; `HarnessStorage.clear`; upgrade check at boot; pull `roots` and `deleted`; the 7-day folder date in `brain.db`.                                              |
-| `server`                       | Registers the OpenCode codec in `main.ts`; the Session API handler for messages.                                                                                                                                               |
-| `chat`, `app`                  | Read history from Ren while access is `starting` or `failed`, with page stepping and retry; the file fallback tile.                                                                                                            |
+| Package                        | Change                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db`                           | `opencode_message.removed_at timestamp`. `agent_session.harness_version text`, `agent_session.revert_message_id text`, `agent_session.files_reset_at timestamp`. `agent_session.start_input` type includes `initialMessage`. Ren stores OpenCode's queued messages.                                                                                                                                |
+| `schema`                       | `Environment` hand gains `managed: boolean`.                                                                                                                                                                                                                                                                                                                                                       |
+| `host-api`                     | `sync.restore`: one chat's group; each chat `{ harness, harnessVersion, parentId, revertMessageId, rows, start? }`. Sync uploads carry queued messages and `revertMessageId`. `/host/pull`: request `roots`, reply `deleted`.                                                                                                                                                                      |
+| `core`                         | `SessionSync.restore` per group; `commit` sets `removed_at` and `revert_message_id`; `TranscriptCodec.Registry`; `Session.messages` with read limits; retention run on `DurableRunner`; `start_input` keeps the first message.                                                                                                                                                                     |
+| `protocol`                     | Session API: `GET` messages of a session, Chat API message type, 503 and 413 errors. Run `bun run generate`.                                                                                                                                                                                                                                                                                       |
+| new `@ren/opencode-transcript` | Pure OpenCode row and message translation, moved from `cell`. Depends on `@ren/schema` and `@opencode/schema`. `AGENTS.md` layering gets a line for it.                                                                                                                                                                                                                                            |
+| `cell`                         | `Restore` and its callers; `Transcript` in the harness interface; `HarnessStorage.clear`; upgrade check at boot; pull `roots` and `deleted`; the 7-day folder date in `brain.db`.                                                                                                                                                                                                                  |
+| `server`                       | Registers the OpenCode codec in `main.ts`; the Session API handler for messages.                                                                                                                                                                                                                                                                                                                   |
+| `chat`, `app`                  | Pending sends kept and resent on network error or 401 (E126); reconnect on `closing` (E127); drop cached access on park (E128); expired questions (E129); `prepare` on typing when parked (E130). Read history from Ren while access is `starting` or `failed`, with page stepping and retry; the file fallback tile; the files-reset notice (E117); unsent messages kept in local storage (E118). |
 
 ## Lifecycle states
 
@@ -205,5 +224,14 @@ Write each test first. Each test must fail before its change. Brain tests run th
 | 19  | `chat/test/chat-session.test.ts`        | Access `starting`: the history comes from Ren; a 413 makes the next page smaller. Access `ready`: the runtime switches to the brain and shows each message once (E108, E111).                                                                                   |
 | 20  | `server/test/cell-restore.slow.test.ts` | A chat over 20 MB restores page by page; no request is over the body limit (INV-53).                                                                                                                                                                            |
 | 21  | live, skipped without `E2B_API_KEY`     | Replace a brain's sandbox, then open its chat: history, subagent chats, queued messages and a shell call all work (asks the user first, README §7).                                                                                                             |
+| 22  | `chat/test/chat-session.test.ts`        | An open event stream during a restore: the app shows each restored message once, and no restored chat as new (ren-v1 `498070ea8`, `b54b041e1`).                                                                                                                 |
+| 23  | `server/test/cell-restore.slow.test.ts` | A restore into a missing folder on the brain's own hand sets `files_reset_at`; Ren's `session.messages` and the app show the notice at that time (E117).                                                                                                        |
+| 24  | `chat/test/chat-session.test.ts`        | A message sent while access is `starting`, then the runtime is rebuilt (a reload): the message is sent once after `ready`, with the same id. A send the brain already accepted is not sent again (E118).                                                        |
+| 25  | `chat/test/chat-session.test.ts`        | A prompt sent while the brain's URL fails stays pending; after new access it is sent once with the same id. A 401 from a token of an old generation does the same (E126).                                                                                       |
+| 26  | `chat/test/connection.test.ts`          | A stream that ends with `closing` reconnects without a wake; one that ends with `idle` parks (E127).                                                                                                                                                            |
+| 27  | `chat/test/chat-session.test.ts`        | After the connection parks, a history read asks for access before any request to the old URL (E128).                                                                                                                                                            |
+| 28  | `chat/test/chat-session.test.ts`        | A question whose turn stopped shows as expired; answering it sends one message that quotes the question (E129).                                                                                                                                                 |
+| 29  | `chat/test/chat-session.test.ts`        | Typing while parked calls `prepare` once, and not again within 5 min (E130).                                                                                                                                                                                    |
+| 30  | `server/test/cell-restore.slow.test.ts` | On a new sandbox, the first request is a prompt to a chat that needs a restore: the turn runs with the chat's agent, and a file tool is denied another chat's folder. With Ren unreachable the prompt gets 503 and no turn starts (E131).                       |
 
 Edge cases from ren-v1 that these tests cover: INV-51 (4), INV-53 (20), INV-55 (1), INV-56 (1), INV-59 (7: folder before import), INV-60 and INV-54 (15, 16: drops only what Ren names, files only after 7 days and only on managed hands), INV-63 (18), INV-69 (2); `2ca54c9d4` (9), `394f7f48b` (10, 17), `7d5c7eb01` (18, 19). INV-58 (older row versions) has no test until a second OpenCode row version exists; the contract is in `Transcript.restore`.

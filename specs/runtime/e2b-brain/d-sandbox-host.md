@@ -58,16 +58,16 @@ A run is an Effect workflow: a name, a payload schema and a key (`DurableRunner.
 A key that finished does not run again; the engine returns the stored result. ren-v1's Temporal (`USE_EXISTING`) started a new run after the previous one closed. To get that behaviour, a run that must run again has a counter in its key (user decision, item 3):
 
 - `brain:<brainId>:<run_epoch>`. The run adds 1 to `brain.run_epoch` when it ends, not when it is interrupted.
-- `start:<sessionId>:<first message id>`. A restart of a lost chat has a new first message.
+- `start:<sessionId>:<first message id>:<run_epoch>`. A restart of a lost chat has a new first message. The brain counter makes a start that gave up on a `failed` brain run again after Retry, because the failed brain run ended and the counter moved on (`core/src/brain-host.ts:155-164`).
 
 ### Runs
 
-| Key                 | Input                          | Does                                                                                                    | Decision |
-| ------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | -------- |
-| `brain:<brainId>`   | none                           | steps until `ready` or `failed`                                                                         | E71      |
-| `start:<sessionId>` | start input with first message | ensures `brain:<brainId>`, waits for `ready`, then `brain.start`                                        | E68      |
-| `send:<messageId>`  | send input                     | ensures `brain:<brainId>`, waits for `ready`, then `brain.send`. Built when Ren first sends on its own. | E77      |
-| `cleanup:<date>`    | none                           | destroys sandboxes of brains whose chats are all archived; retries failed destroys                      | E76      |
+| Key                                                | Input                          | Does                                                                                                                | Decision |
+| -------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------- | -------- |
+| `brain:<brainId>:<run_epoch>`                      | none                           | steps until `ready` or `failed`                                                                                     | E71      |
+| `start:<sessionId>:<first message id>:<run_epoch>` | start input with first message | ensures `brain:<brainId>:<run_epoch>`, waits for `ready`, then `brain.start`                                        | E68      |
+| `send:<messageId>`                                 | send input                     | ensures `brain:<brainId>:<run_epoch>`, waits for `ready`, then `brain.send`. Built when Ren first sends on its own. | E77      |
+| `cleanup:<date>`                                   | none                           | destroys sandboxes of brains whose chats are all archived; retries failed destroys                                  | E76      |
 
 ### `BrainLifecycle.step`
 
@@ -82,6 +82,7 @@ State lives on the `brain` row: `phase`, `generation`, `run_epoch`, `provider`, 
 | `waking`     | `POST /ren/wake`, at most 60 s (E73)                                                                                                                   | `ready`; on timeout → `replacing` (E35)            |
 | `replacing`  | one transaction: `generation + 1`, busy chats of the brain → idle with outcome `interrupted` (E39); then `provider.destroy(old)`, which may fail (E74) | `creating`                                         |
 | `ready`      | —                                                                                                                                                      | done                                               |
+| `capacity`   | the step that hit a capacity limit set this phase and waits `Retry-After` (E88); it does not count as a failure                                        | `resuming` with a binding, else `creating`         |
 | `failed`     | —                                                                                                                                                      | done; the next `ensure` starts again at `creating` |
 
 `ensure("brain:…")` on a `ready` brain first checks reachability: `connect` (cheap when running), and `waking` when it was paused.
@@ -91,6 +92,7 @@ State lives on the `brain` row: `phase`, `generation`, `run_epoch`, `provider`, 
 ### Access, create, send (E36, E66, E68, E70)
 
 - `Session.access` reads `brain.phase` and `keep_alive_until`. It returns `ready { url, token }` only when `phase = ready` and `keep_alive_until` is more than 2 min away. With 2 min or less left, it calls `keepAlive` first, then returns `ready`. When `keep_alive_until` has passed (the sandbox is paused) or `phase` is not `ready`, it calls `ensure("brain:…")` and returns `starting { phase }`. Every access counts as activity for the idle window (E72). The app asks again every 2 s.
+- A chat is `ready` for access only after `brain.start` succeeded: the start run sets `agent_session.started_at`, and until then `Session.access` returns `starting { phase: "starting the chat" }` (`core/src/brain-host.ts:296-305`, `:367`). Without it, the app opened a chat the brain did not have yet.
 - `Session.create` writes the session and calls `ensure("start:<sessionId>", …)`, then returns.
 - The workerd host always returns `ready`.
 
