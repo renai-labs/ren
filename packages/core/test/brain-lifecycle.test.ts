@@ -8,6 +8,7 @@ import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { eq, inArray } from "drizzle-orm"
 import { Duration, Effect, Layer, ManagedRuntime, Option, Schedule, Schema } from "effect"
+import type { HttpClient } from "effect/http"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -15,6 +16,7 @@ import { Brains } from "../src/brains.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
 import { Models } from "../src/models.js"
 import { SandboxProvider } from "../src/sandbox-provider.js"
+import { E2BSandbox } from "../src/sandbox-provider/e2b.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 
@@ -43,6 +45,7 @@ const ren = async (
     readonly port?: number
     readonly around?: Parameters<typeof Host.serve>[1]
     readonly config?: Record<string, string>
+    readonly sandbox?: Layer.Layer<SandboxProvider.Service, unknown, HttpClient.HttpClient>
   } = {},
 ) =>
   ManagedRuntime.make(
@@ -507,6 +510,24 @@ describe("brain runs", () => {
     await setPhase(brainId, "resuming")
     await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
     await reaches(brainId, "ready")
+    await current.dispose()
+  })
+})
+
+// oxlint-disable-next-line ren/no-comments -- Live: calls E2B with the development key (README §7). script/test.ts removes E2B_ variables, so run it with `E2B_API_KEY=… bun test test/brain-lifecycle.test.ts -t E2B`.
+describe.skipIf(!process.env.E2B_API_KEY)("an E2B brain", () => {
+  test("E2B: a template tag that E2B does not have fails with the tag in the reason, and the third failure gives failed (G4, E81)", async () => {
+    const found = await seeded()
+    const current = await ren({
+      sandbox: E2BSandbox.layer,
+      config: { E2B_API_KEY: process.env.E2B_API_KEY ?? "", E2B_TEMPLATE: "ren-brain-dev:0000000000000000" },
+    })
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(found.brainId)))
+    await reaches(found.brainId, "failed")
+    expect(await row(found.brainId)).toMatchObject({
+      failures: 3,
+      failure: expect.stringContaining("tag '0000000000000000' does not exist"),
+    })
     await current.dispose()
   })
 })
