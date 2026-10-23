@@ -366,6 +366,189 @@ const adaptGroupAgent = (raw: RawClient["agent"]) => ({
   transferOwnership: EndpointAgentTransferOwnership(raw),
 })
 
+type AppListRequest = Parameters<RawClient["app"]["app.list"]>[0]
+type AppListInput = {
+  readonly spaceId?: AppListRequest["query"]["spaceId"]
+  readonly page: AppListRequest["query"]["page"]
+  readonly pageSize: AppListRequest["query"]["pageSize"]
+}
+const EndpointAppList = (raw: RawClient["app"]) => (input: AppListInput) =>
+  raw["app.list"]({ query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type AppGetRequest = Parameters<RawClient["app"]["app.get"]>[0]
+type AppGetInput = { readonly idOrSlug: AppGetRequest["params"]["idOrSlug"] }
+const EndpointAppGet = (raw: RawClient["app"]) => (input: AppGetInput) =>
+  raw["app.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type AppCreateRequest = Parameters<RawClient["app"]["app.create"]>[0]
+type AppCreateInput = {
+  readonly name: AppCreateRequest["payload"]["name"]
+  readonly description: AppCreateRequest["payload"]["description"]
+  readonly icon?: AppCreateRequest["payload"]["icon"]
+  readonly requiredCredentials: AppCreateRequest["payload"]["requiredCredentials"]
+  readonly environment?: AppCreateRequest["payload"]["environment"]
+  readonly skills: AppCreateRequest["payload"]["skills"]
+  readonly mcps: AppCreateRequest["payload"]["mcps"]
+  readonly dependsOn: AppCreateRequest["payload"]["dependsOn"]
+  readonly slug: AppCreateRequest["payload"]["slug"]
+  readonly ownerSpaceId: AppCreateRequest["payload"]["ownerSpaceId"]
+}
+const EndpointAppCreate = (raw: RawClient["app"]) => (input: AppCreateInput) =>
+  raw["app.create"]({
+    payload: {
+      name: input["name"],
+      description: input["description"],
+      icon: input["icon"],
+      requiredCredentials: input["requiredCredentials"],
+      environment: input["environment"],
+      skills: input["skills"],
+      mcps: input["mcps"],
+      dependsOn: input["dependsOn"],
+      slug: input["slug"],
+      ownerSpaceId: input["ownerSpaceId"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type AppUpdateRequest = Parameters<RawClient["app"]["app.update"]>[0]
+type AppUpdateInput = {
+  readonly id: AppUpdateRequest["params"]["id"]
+  readonly name?: AppUpdateRequest["payload"]["name"]
+  readonly description?: AppUpdateRequest["payload"]["description"]
+  readonly icon?: AppUpdateRequest["payload"]["icon"]
+}
+const EndpointAppUpdate = (raw: RawClient["app"]) => (input: AppUpdateInput) =>
+  raw["app.update"]({
+    params: { id: input["id"] },
+    payload: { name: input["name"], description: input["description"], icon: input["icon"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type AppArchiveRequest = Parameters<RawClient["app"]["app.archive"]>[0]
+type AppArchiveInput = { readonly id: AppArchiveRequest["params"]["id"] }
+const EndpointAppArchive = (raw: RawClient["app"]) => (input: AppArchiveInput) =>
+  raw["app.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type AppTransferOwnershipRequest = Parameters<RawClient["app"]["app.transferOwnership"]>[0]
+type AppTransferOwnershipInput = {
+  readonly id: AppTransferOwnershipRequest["params"]["id"]
+  readonly spaceId: AppTransferOwnershipRequest["payload"]["spaceId"]
+  readonly retainUse?: AppTransferOwnershipRequest["payload"]["retainUse"]
+}
+const EndpointAppTransferOwnership = (raw: RawClient["app"]) => (input: AppTransferOwnershipInput) =>
+  raw["app.transferOwnership"]({
+    params: { id: input["id"] },
+    payload: { spaceId: input["spaceId"], retainUse: input["retainUse"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupApp = (raw: RawClient["app"]) => ({
+  list: EndpointAppList(raw),
+  get: EndpointAppGet(raw),
+  create: EndpointAppCreate(raw),
+  update: EndpointAppUpdate(raw),
+  archive: EndpointAppArchive(raw),
+  transferOwnership: EndpointAppTransferOwnership(raw),
+})
+
+type AppReleaseListRequest = Parameters<RawClient["app-release"]["app-release.list"]>[0]
+type AppReleaseListInput = {
+  readonly appId: AppReleaseListRequest["query"]["appId"]
+  readonly page: AppReleaseListRequest["query"]["page"]
+  readonly pageSize: AppReleaseListRequest["query"]["pageSize"]
+}
+const EndpointAppReleaseList = (raw: RawClient["app-release"]) => (input: AppReleaseListInput) =>
+  raw["app-release.list"]({ query: { appId: input["appId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type AppReleaseGetRequest = Parameters<RawClient["app-release"]["app-release.get"]>[0]
+type AppReleaseGetInput = { readonly idOrSlug: AppReleaseGetRequest["params"]["idOrSlug"] }
+const EndpointAppReleaseGet = (raw: RawClient["app-release"]) => (input: AppReleaseGetInput) =>
+  raw["app-release.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type AppReleaseCreateRequest = Parameters<RawClient["app-release"]["app-release.create"]>[0]
+type AppReleaseCreateInput = {
+  readonly requiredCredentials: AppReleaseCreateRequest["payload"]["requiredCredentials"]
+  readonly environment?: AppReleaseCreateRequest["payload"]["environment"]
+  readonly skills: AppReleaseCreateRequest["payload"]["skills"]
+  readonly mcps: AppReleaseCreateRequest["payload"]["mcps"]
+  readonly dependsOn: AppReleaseCreateRequest["payload"]["dependsOn"]
+  readonly appId: AppReleaseCreateRequest["payload"]["appId"]
+  readonly expectedLatestReleaseId: AppReleaseCreateRequest["payload"]["expectedLatestReleaseId"]
+  readonly version?: AppReleaseCreateRequest["payload"]["version"]
+  readonly bump?: AppReleaseCreateRequest["payload"]["bump"]
+}
+const EndpointAppReleaseCreate = (raw: RawClient["app-release"]) => (input: AppReleaseCreateInput) =>
+  raw["app-release.create"]({
+    payload: {
+      requiredCredentials: input["requiredCredentials"],
+      environment: input["environment"],
+      skills: input["skills"],
+      mcps: input["mcps"],
+      dependsOn: input["dependsOn"],
+      appId: input["appId"],
+      expectedLatestReleaseId: input["expectedLatestReleaseId"],
+      version: input["version"],
+      bump: input["bump"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupAppRelease = (raw: RawClient["app-release"]) => ({
+  list: EndpointAppReleaseList(raw),
+  get: EndpointAppReleaseGet(raw),
+  create: EndpointAppReleaseCreate(raw),
+})
+
+type SpaceAppListRequest = Parameters<RawClient["space-app"]["space-app.list"]>[0]
+type SpaceAppListInput = {
+  readonly spaceId: SpaceAppListRequest["query"]["spaceId"]
+  readonly page: SpaceAppListRequest["query"]["page"]
+  readonly pageSize: SpaceAppListRequest["query"]["pageSize"]
+}
+const EndpointSpaceAppList = (raw: RawClient["space-app"]) => (input: SpaceAppListInput) =>
+  raw["space-app.list"]({
+    query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SpaceAppGetRequest = Parameters<RawClient["space-app"]["space-app.get"]>[0]
+type SpaceAppGetInput = { readonly idOrSlug: SpaceAppGetRequest["params"]["idOrSlug"] }
+const EndpointSpaceAppGet = (raw: RawClient["space-app"]) => (input: SpaceAppGetInput) =>
+  raw["space-app.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type SpaceAppCreateRequest = Parameters<RawClient["space-app"]["space-app.create"]>[0]
+type SpaceAppCreateInput = {
+  readonly spaceId: SpaceAppCreateRequest["payload"]["spaceId"]
+  readonly appId: SpaceAppCreateRequest["payload"]["appId"]
+  readonly pinnedReleaseId?: SpaceAppCreateRequest["payload"]["pinnedReleaseId"]
+}
+const EndpointSpaceAppCreate = (raw: RawClient["space-app"]) => (input: SpaceAppCreateInput) =>
+  raw["space-app.create"]({
+    payload: { spaceId: input["spaceId"], appId: input["appId"], pinnedReleaseId: input["pinnedReleaseId"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type SpaceAppUpdateRequest = Parameters<RawClient["space-app"]["space-app.update"]>[0]
+type SpaceAppUpdateInput = {
+  readonly id: SpaceAppUpdateRequest["params"]["id"]
+  readonly pinnedReleaseId: SpaceAppUpdateRequest["payload"]["pinnedReleaseId"]
+}
+const EndpointSpaceAppUpdate = (raw: RawClient["space-app"]) => (input: SpaceAppUpdateInput) =>
+  raw["space-app.update"]({ params: { id: input["id"] }, payload: { pinnedReleaseId: input["pinnedReleaseId"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type SpaceAppArchiveRequest = Parameters<RawClient["space-app"]["space-app.archive"]>[0]
+type SpaceAppArchiveInput = { readonly id: SpaceAppArchiveRequest["params"]["id"] }
+const EndpointSpaceAppArchive = (raw: RawClient["space-app"]) => (input: SpaceAppArchiveInput) =>
+  raw["space-app.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSpaceApp = (raw: RawClient["space-app"]) => ({
+  list: EndpointSpaceAppList(raw),
+  get: EndpointSpaceAppGet(raw),
+  create: EndpointSpaceAppCreate(raw),
+  update: EndpointSpaceAppUpdate(raw),
+  archive: EndpointSpaceAppArchive(raw),
+})
+
 type AgentMembershipListRequest = Parameters<RawClient["agent-membership"]["agent-membership.list"]>[0]
 type AgentMembershipListInput = {
   readonly spaceId?: AgentMembershipListRequest["query"]["spaceId"]
@@ -848,6 +1031,9 @@ const adaptClient = (raw: RawClient) => ({
   "space-settings": adaptGroupSpaceSettings(raw["space-settings"]),
   "organization-settings": adaptGroupOrganizationSettings(raw["organization-settings"]),
   agent: adaptGroupAgent(raw["agent"]),
+  app: adaptGroupApp(raw["app"]),
+  "app-release": adaptGroupAppRelease(raw["app-release"]),
+  "space-app": adaptGroupSpaceApp(raw["space-app"]),
   "agent-membership": adaptGroupAgentMembership(raw["agent-membership"]),
   session: adaptGroupSession(raw["session"]),
   chat: adaptGroupChat(raw["chat"]),
