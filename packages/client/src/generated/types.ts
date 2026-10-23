@@ -168,8 +168,6 @@ export type TaskEventArchived = { _tag: "archived" }
 
 export type CredentialID = string
 
-export type CredentialEnvName = string
-
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
 export type CredentialLocation = "header" | "query" | "path"
@@ -287,6 +285,8 @@ export type TaskEventAssigned = {
   toSpaceId: SpaceID
   note: string | null
 }
+
+export type AppListingCategories = { [x: PrimitiveSlug]: Array<PrimitiveSlug> }
 
 export type AppInfo = {
   id: AppID
@@ -511,6 +511,16 @@ export type SpaceEnvironmentTemplatePage = {
 export type PermissionRuleList = Array<PermissionRule>
 
 export type ReferenceList = Array<ReferenceInfo>
+
+export type AppListingInfo = {
+  appId: AppID
+  body: string | null
+  categories: AppListingCategories
+  examplePrompts: Array<string>
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
 
 export type AppPage = { items: Array<AppInfo>; page: number; pageSize: number; total: number }
 
@@ -765,6 +775,16 @@ export type TaskActivityPage = { items: Array<TaskActivityInfo>; page: number; p
 
 export type AppReleasePage = { items: Array<AppReleaseInfo>; page: number; pageSize: number; total: number }
 
+export type AppRegistryInfo = {
+  id: AppID
+  slug: PrimitiveSlug
+  name: string
+  description: string
+  icon: string | null
+  listing: AppListingInfo
+  release: AppReleaseInfo
+}
+
 export type SpaceAppInfo = {
   id: SpaceAppID
   spaceId: SpaceID
@@ -791,6 +811,8 @@ export type SessionMessageAssistant = {
   error?: SessionErrorInfo
   retry?: SessionMessageRetry
 }
+
+export type AppRegistryPage = { items: Array<AppRegistryInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceAppPage = { items: Array<SpaceAppInfo>; page: number; pageSize: number; total: number }
 
@@ -4317,6 +4339,39 @@ export type AppReleaseCreateInput = {
 }
 
 export type AppReleaseCreateOutput = AppReleaseInfo
+
+export type AppRegistryListInput = {
+  readonly query?: {
+    readonly query?: string | undefined
+    readonly category?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["query"]
+  readonly category?: {
+    readonly query?: string | undefined
+    readonly category?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["category"]
+  readonly page: {
+    readonly query?: string | undefined
+    readonly category?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly query?: string | undefined
+    readonly category?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type AppRegistryListOutput = AppRegistryPage
+
+export type AppRegistryGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type AppRegistryGetOutput = AppRegistryInfo
 
 export type SpaceAppListInput = {
   readonly spaceId: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["spaceId"]

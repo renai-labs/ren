@@ -37,6 +37,8 @@ import type {
   AppReleaseListInput,
   AppReleaseGetInput,
   AppReleaseCreateInput,
+  AppRegistryListInput,
+  AppRegistryGetInput,
   SpaceAppListInput,
   SpaceAppGetInput,
   SpaceAppCreateInput,
@@ -442,6 +444,26 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["app-release", "create"] as const,
             mutationFn: (input: AppReleaseCreateInput) => client["app-release"]["create"](input),
+          }),
+      },
+    },
+    "app-registry": {
+      list: {
+        queryKey: (input?: AppRegistryListInput) =>
+          input === undefined ? (["app-registry", "list"] as const) : (["app-registry", "list", input] as const),
+        queryOptions: (input: AppRegistryListInput) =>
+          queryOptions({
+            queryKey: ["app-registry", "list", input] as const,
+            queryFn: (context) => client["app-registry"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: AppRegistryGetInput) =>
+          input === undefined ? (["app-registry", "get"] as const) : (["app-registry", "get", input] as const),
+        queryOptions: (input: AppRegistryGetInput) =>
+          queryOptions({
+            queryKey: ["app-registry", "get", input] as const,
+            queryFn: (context) => client["app-registry"]["get"](input, { signal: context.signal }),
           }),
       },
     },

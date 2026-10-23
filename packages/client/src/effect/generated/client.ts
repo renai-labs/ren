@@ -499,6 +499,28 @@ const adaptGroupAppRelease = (raw: RawClient["app-release"]) => ({
   create: EndpointAppReleaseCreate(raw),
 })
 
+type AppRegistryListRequest = Parameters<RawClient["app-registry"]["app-registry.list"]>[0]
+type AppRegistryListInput = {
+  readonly query?: AppRegistryListRequest["query"]["query"]
+  readonly category?: AppRegistryListRequest["query"]["category"]
+  readonly page: AppRegistryListRequest["query"]["page"]
+  readonly pageSize: AppRegistryListRequest["query"]["pageSize"]
+}
+const EndpointAppRegistryList = (raw: RawClient["app-registry"]) => (input: AppRegistryListInput) =>
+  raw["app-registry.list"]({
+    query: { query: input["query"], category: input["category"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type AppRegistryGetRequest = Parameters<RawClient["app-registry"]["app-registry.get"]>[0]
+type AppRegistryGetInput = { readonly idOrSlug: AppRegistryGetRequest["params"]["idOrSlug"] }
+const EndpointAppRegistryGet = (raw: RawClient["app-registry"]) => (input: AppRegistryGetInput) =>
+  raw["app-registry.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupAppRegistry = (raw: RawClient["app-registry"]) => ({
+  list: EndpointAppRegistryList(raw),
+  get: EndpointAppRegistryGet(raw),
+})
+
 type SpaceAppListRequest = Parameters<RawClient["space-app"]["space-app.list"]>[0]
 type SpaceAppListInput = {
   readonly spaceId: SpaceAppListRequest["query"]["spaceId"]
@@ -1033,6 +1055,7 @@ const adaptClient = (raw: RawClient) => ({
   agent: adaptGroupAgent(raw["agent"]),
   app: adaptGroupApp(raw["app"]),
   "app-release": adaptGroupAppRelease(raw["app-release"]),
+  "app-registry": adaptGroupAppRegistry(raw["app-registry"]),
   "space-app": adaptGroupSpaceApp(raw["space-app"]),
   "agent-membership": adaptGroupAgentMembership(raw["agent-membership"]),
   session: adaptGroupSession(raw["session"]),

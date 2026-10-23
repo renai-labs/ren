@@ -2305,6 +2305,1309 @@
         }
       }
     },
+    "/apps": {
+      "get": {
+        "tags": ["app"],
+        "operationId": "app.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the apps that the caller can see.",
+        "summary": "List apps"
+      },
+      "post": {
+        "tags": ["app"],
+        "operationId": "app.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one app.",
+        "summary": "Create app",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/App.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/apps/{idOrSlug}": {
+      "get": {
+        "tags": ["app"],
+        "operationId": "app.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one app by ID or slug.",
+        "summary": "Get app"
+      }
+    },
+    "/apps/{id}": {
+      "patch": {
+        "tags": ["app"],
+        "operationId": "app.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/App.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one app.",
+        "summary": "Update app",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/App.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["app"],
+        "operationId": "app.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/App.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one app and return it. Archiving an archived app returns it unchanged.",
+        "summary": "Archive app"
+      }
+    },
+    "/apps/{id}/transferOwnership": {
+      "post": {
+        "tags": ["app"],
+        "operationId": "app.transferOwnership",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/App.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the transferOwnership action on one app.",
+        "summary": "transferOwnership app",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/App.TransferOwnershipInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/app-releases": {
+      "get": {
+        "tags": ["app-release"],
+        "operationId": "app-release.list",
+        "parameters": [
+          {
+            "name": "appId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/App.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppRelease.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppRelease.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the app-releases that the caller can see.",
+        "summary": "List app-releases"
+      },
+      "post": {
+        "tags": ["app-release"],
+        "operationId": "app-release.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppRelease.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppRelease.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one app-release.",
+        "summary": "Create app-release",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppRelease.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/app-releases/{idOrSlug}": {
+      "get": {
+        "tags": ["app-release"],
+        "operationId": "app-release.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppRelease.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppRelease.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one app-release by ID or slug.",
+        "summary": "Get app-release"
+      }
+    },
+    "/app-registry": {
+      "get": {
+        "tags": ["app-registry"],
+        "operationId": "app-registry.list",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Match the slug, name or description, ignoring case."
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Primitive.Slug_1"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppRegistry.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppRegistry.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the app-registry that the caller can see.",
+        "summary": "List app-registry"
+      }
+    },
+    "/app-registry/{idOrSlug}": {
+      "get": {
+        "tags": ["app-registry"],
+        "operationId": "app-registry.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppRegistry.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppRegistry.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one app-registry by ID or slug.",
+        "summary": "Get app-registry"
+      }
+    },
+    "/space-apps": {
+      "get": {
+        "tags": ["space-app"],
+        "operationId": "space-app.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceApp.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceApp.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the space-apps that the caller can see.",
+        "summary": "List space-apps"
+      },
+      "post": {
+        "tags": ["space-app"],
+        "operationId": "space-app.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceApp.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceApp.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one space-app.",
+        "summary": "Create space-app",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpaceApp.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/space-apps/{idOrSlug}": {
+      "get": {
+        "tags": ["space-app"],
+        "operationId": "space-app.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceApp.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceApp.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one space-app by ID or slug.",
+        "summary": "Get space-app"
+      }
+    },
+    "/space-apps/{id}": {
+      "patch": {
+        "tags": ["space-app"],
+        "operationId": "space-app.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/SpaceApp.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceApp.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceApp.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one space-app.",
+        "summary": "Update space-app",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpaceApp.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["space-app"],
+        "operationId": "space-app.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/SpaceApp.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SpaceApp.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceApp.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one space-app and return it. Archiving an archived space-app returns it unchanged.",
+        "summary": "Archive space-app"
+      }
+    },
     "/agent-memberships": {
       "get": {
         "tags": ["agent-membership"],
@@ -5815,6 +7118,584 @@
         "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
       },
+      "App.CreateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppRelease.Environment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skills": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Skill.Declaration"
+            }
+          },
+          "mcps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Mcp.Declaration"
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            }
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Primitive.Slug"
+          },
+          "ownerSpaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          }
+        },
+        "required": ["name", "description", "slug", "ownerSpaceId"],
+        "additionalProperties": false
+      },
+      "App.ID": {
+        "type": "string",
+        "pattern": "^app_"
+      },
+      "App.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Primitive.Slug"
+          },
+          "organizationId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.OrganizationID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ownerSpaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latestReleaseId": {
+            "$ref": "#/components/schemas/AppRelease.ID"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "organizationId",
+          "ownerSpaceId",
+          "name",
+          "description",
+          "icon",
+          "latestReleaseId",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "App.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/App.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "App.TransferOwnershipInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "retainUse": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["spaceId"],
+        "additionalProperties": false
+      },
+      "App.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Primitive.HttpsUrl"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AppListing.Categories": {
+        "type": "object",
+        "propertyNames": {
+          "$ref": "#/components/schemas/Primitive.Slug"
+        },
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/Primitive.Slug"
+          },
+          "minItems": 1
+        },
+        "description": "Discovery labels by group, such as { roles: [engineer], functions: [research] }."
+      },
+      "AppListing.Info": {
+        "type": "object",
+        "properties": {
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "categories": {
+            "$ref": "#/components/schemas/AppListing.Categories"
+          },
+          "examplePrompts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["appId", "body", "categories", "examplePrompts", "createdAt", "updatedAt", "archivedAt"],
+        "additionalProperties": false
+      },
+      "AppRegistry.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Primitive.Slug"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "listing": {
+            "$ref": "#/components/schemas/AppListing.Info"
+          },
+          "release": {
+            "$ref": "#/components/schemas/AppRelease.Info"
+          }
+        },
+        "required": ["id", "slug", "name", "description", "icon", "listing", "release"],
+        "additionalProperties": false
+      },
+      "AppRegistry.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppRegistry.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "AppRelease.CreateInput": {
+        "type": "object",
+        "properties": {
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppRelease.Environment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skills": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Skill.Declaration"
+            }
+          },
+          "mcps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Mcp.Declaration"
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            }
+          },
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "expectedLatestReleaseId": {
+            "$ref": "#/components/schemas/AppRelease.ID"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppRelease.Version"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bump": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["patch", "minor", "major"]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["appId", "expectedLatestReleaseId"],
+        "additionalProperties": false
+      },
+      "AppRelease.Environment": {
+        "type": "object",
+        "properties": {
+          "packages": {
+            "$ref": "#/components/schemas/AppRelease.Packages"
+          },
+          "buildCommands": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "maxItems": 50
+          }
+        },
+        "additionalProperties": false
+      },
+      "AppRelease.ID": {
+        "type": "string",
+        "pattern": "^apr_"
+      },
+      "AppRelease.Info": {
+        "type": "object",
+        "properties": {
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/AppRelease.Environment"
+          },
+          "skills": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Skill.Info"
+            }
+          },
+          "mcps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Mcp.Info"
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            }
+          },
+          "id": {
+            "$ref": "#/components/schemas/AppRelease.ID"
+          },
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "version": {
+            "$ref": "#/components/schemas/AppRelease.Version"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["skills", "mcps", "id", "appId", "version", "createdAt"],
+        "additionalProperties": false
+      },
+      "AppRelease.Packages": {
+        "type": "object",
+        "properties": {
+          "apt": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "npm": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "pip": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "go": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "AppRelease.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppRelease.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "AppRelease.Version": {
+        "type": "string",
+        "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\\+[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*)?$"
+      },
       "Auth.Me": {
         "type": "object",
         "properties": {
@@ -6010,6 +7891,27 @@
         "enum": ["egress", "delivered"],
         "description": "`delivered` puts the real value into the workload, for traffic the egress cannot read yet."
       },
+      "Credential.Env": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["env"]
+          },
+          "name": {
+            "$ref": "#/components/schemas/Credential.EnvName"
+          },
+          "description": {
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "An optional credential is not asked for at install. A feature that needs it fails until it is connected."
+          }
+        },
+        "required": ["kind", "name"],
+        "additionalProperties": false
+      },
       "Credential.EnvName": {
         "type": "string",
         "maxLength": 128,
@@ -6018,7 +7920,24 @@
       "Credential.FieldName": {
         "type": "string",
         "maxLength": 64,
-        "pattern": "^[a-z][A-Za-z0-9_]*$"
+        "pattern": "^[a-z][A-Za-z0-9_]*$",
+        "allOf": [
+          {
+            "pattern": "^(?!token$)"
+          },
+          {
+            "pattern": "^(?!accessToken$)"
+          },
+          {
+            "pattern": "^(?!username$)"
+          },
+          {
+            "pattern": "^(?!password$)"
+          },
+          {
+            "pattern": "^(?!basic$)"
+          }
+        ]
       },
       "Credential.Host": {
         "type": "string",
@@ -6241,6 +8160,56 @@
         "required": ["owner"],
         "additionalProperties": false
       },
+      "Credential.Name": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Credential.EnvName"
+          },
+          {
+            "$ref": "#/components/schemas/Credential.FieldName"
+          }
+        ],
+        "description": "The name of a required credential: an env name or a field name."
+      },
+      "Credential.OAuthApp": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["oauth_app"]
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "An optional credential is not asked for at install. A feature that needs it fails until it is connected."
+          }
+        },
+        "required": ["kind", "name"],
+        "additionalProperties": false
+      },
+      "Credential.Option": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          }
+        },
+        "required": ["label", "value"],
+        "additionalProperties": false
+      },
       "Credential.Owner": {
         "anyOf": [
           {
@@ -6315,6 +8284,25 @@
           "type": "null"
         }
       },
+      "Credential.Requirement": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Credential.Env"
+          },
+          {
+            "$ref": "#/components/schemas/Credential.Secret"
+          },
+          {
+            "$ref": "#/components/schemas/Credential.OAuthApp"
+          },
+          {
+            "$ref": "#/components/schemas/Credential.Text"
+          },
+          {
+            "$ref": "#/components/schemas/Credential.Select"
+          }
+        ]
+      },
       "Credential.RotateInput": {
         "type": "object",
         "properties": {
@@ -6325,9 +8313,111 @@
         "required": ["value"],
         "additionalProperties": false
       },
+      "Credential.Secret": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["secret"]
+          },
+          "name": {
+            "$ref": "#/components/schemas/Credential.FieldName"
+          },
+          "description": {
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "An optional credential is not asked for at install. A feature that needs it fails until it is connected."
+          }
+        },
+        "required": ["kind", "name"],
+        "additionalProperties": false
+      },
+      "Credential.Select": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["select"]
+          },
+          "name": {
+            "$ref": "#/components/schemas/Credential.FieldName"
+          },
+          "description": {
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "An optional credential is not asked for at install. A feature that needs it fails until it is connected."
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "options": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "$ref": "#/components/schemas/Credential.Option"
+              }
+            ],
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/Credential.Option"
+            }
+          },
+          "when": {
+            "$ref": "#/components/schemas/Credential.When"
+          }
+        },
+        "required": ["kind", "name", "message", "options"],
+        "additionalProperties": false
+      },
+      "Credential.SkillRequirement": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Credential.Env"
+          },
+          {
+            "$ref": "#/components/schemas/Credential.OAuthApp"
+          }
+        ]
+      },
       "Credential.Status": {
         "type": "string",
         "enum": ["ok", "reconnect"]
+      },
+      "Credential.Text": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["text"]
+          },
+          "name": {
+            "$ref": "#/components/schemas/Credential.FieldName"
+          },
+          "description": {
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "An optional credential is not asked for at install. A feature that needs it fails until it is connected."
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "placeholder": {
+            "type": "string"
+          },
+          "when": {
+            "$ref": "#/components/schemas/Credential.When"
+          }
+        },
+        "required": ["kind", "name", "message"],
+        "additionalProperties": false
       },
       "Credential.Type": {
         "type": "string",
@@ -6440,6 +8530,23 @@
           }
         ],
         "description": "A pasted value. Ren never returns it."
+      },
+      "Credential.When": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/Credential.FieldName"
+          },
+          "op": {
+            "type": "string",
+            "enum": ["eq", "neq"]
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "op", "value"],
+        "additionalProperties": false
       },
       "EnvironmentProvider.ID": {
         "type": "string",
@@ -6951,6 +9058,422 @@
       "Label.UserNameEncoded": {
         "type": "string"
       },
+      "Mcp.Auth": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["oauth"]
+              },
+              "authorizationEndpoint": {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              "tokenEndpoint": {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              "tokenEndpointAuth": {
+                "type": "string",
+                "enum": ["client_secret_basic", "client_secret_post", "none"]
+              },
+              "client": {
+                "type": "object",
+                "properties": {
+                  "clientId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "resource": {
+                    "$ref": "#/components/schemas/Primitive.HttpsUrl"
+                  },
+                  "redirectUri": {
+                    "$ref": "#/components/schemas/Primitive.HttpsUrl"
+                  }
+                },
+                "required": ["clientId"],
+                "additionalProperties": false,
+                "description": "A partner’s OAuth client that Ren borrows, instead of registering its own."
+              }
+            },
+            "required": ["type", "authorizationEndpoint", "tokenEndpoint", "tokenEndpointAuth"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["header"]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "credential": {
+                "$ref": "#/components/schemas/Credential.Name"
+              }
+            },
+            "required": ["type", "name", "credential"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["basic"]
+              },
+              "username": {
+                "$ref": "#/components/schemas/Credential.Name"
+              },
+              "password": {
+                "$ref": "#/components/schemas/Credential.Name"
+              }
+            },
+            "required": ["type", "username", "password"],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Mcp.Declaration": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "transport": {
+            "$ref": "#/components/schemas/Mcp.Transport"
+          },
+          "auth": {
+            "$ref": "#/components/schemas/Mcp.Auth"
+          },
+          "timeouts": {
+            "$ref": "#/components/schemas/Mcp.Timeouts"
+          },
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          }
+        },
+        "required": ["name", "description", "transport", "auth"],
+        "additionalProperties": false
+      },
+      "Mcp.Info": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "transport": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["remote"]
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": ["type", "url"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["local"]
+                  },
+                  "command": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    ],
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "cwd": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "env": {
+                    "type": "object",
+                    "propertyNames": {
+                      "$ref": "#/components/schemas/Credential.EnvName"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Literal values, stored in the release and shown to every reader of it. Never a secret: a secret is a required credential."
+                  }
+                },
+                "required": ["type", "command"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["provider"]
+                  },
+                  "provider": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": ["composio"]
+                      }
+                    ]
+                  },
+                  "toolkit": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The provider’s toolkit. Ren looks up the provider’s auth config for each environment."
+                  }
+                },
+                "required": ["type", "provider", "toolkit"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "auth": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["none"]
+                  }
+                },
+                "required": ["type"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["oauth"]
+                  },
+                  "authorizationEndpoint": {
+                    "type": "string"
+                  },
+                  "tokenEndpoint": {
+                    "type": "string"
+                  },
+                  "tokenEndpointAuth": {
+                    "type": "string",
+                    "enum": ["client_secret_basic", "client_secret_post", "none"]
+                  },
+                  "client": {
+                    "type": "object",
+                    "properties": {
+                      "clientId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "resource": {
+                        "type": "string"
+                      },
+                      "redirectUri": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["clientId"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["type", "authorizationEndpoint", "tokenEndpoint", "tokenEndpointAuth"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["header"]
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "credential": {
+                    "$ref": "#/components/schemas/Credential.Name"
+                  }
+                },
+                "required": ["type", "name", "credential"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["basic"]
+                  },
+                  "username": {
+                    "$ref": "#/components/schemas/Credential.Name"
+                  },
+                  "password": {
+                    "$ref": "#/components/schemas/Credential.Name"
+                  }
+                },
+                "required": ["type", "username", "password"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "timeouts": {
+            "$ref": "#/components/schemas/Mcp.Timeouts"
+          },
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          }
+        },
+        "required": ["name", "description", "transport", "auth"],
+        "additionalProperties": false
+      },
+      "Mcp.Timeouts": {
+        "type": "object",
+        "properties": {
+          "startup": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "catalog": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "execution": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "additionalProperties": false,
+        "description": "Independent stage timeouts in milliseconds."
+      },
+      "Mcp.Transport": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["remote"]
+              },
+              "url": {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              }
+            },
+            "required": ["type", "url"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["local"]
+              },
+              "command": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                ],
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "cwd": {
+                "type": "string",
+                "minLength": 1
+              },
+              "env": {
+                "type": "object",
+                "propertyNames": {
+                  "$ref": "#/components/schemas/Credential.EnvName"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Literal values, stored in the release and shown to every reader of it. Never a secret: a secret is a required credential."
+              }
+            },
+            "required": ["type", "command"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["provider"]
+              },
+              "provider": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": ["composio"]
+                  }
+                ]
+              },
+              "toolkit": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The provider’s toolkit. Ren looks up the provider’s auth config for each environment."
+              }
+            },
+            "required": ["type", "provider", "toolkit"],
+            "additionalProperties": false
+          }
+        ]
+      },
       "NotFoundErrorEncoded": {
         "type": "object",
         "properties": {
@@ -7038,6 +9561,20 @@
         "items": {
           "$ref": "#/components/schemas/Permission.Rule"
         }
+      },
+      "Primitive.HttpsUrl": {
+        "type": "string"
+      },
+      "Primitive.Slug": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "Primitive.Slug_1": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Match a category in any group."
       },
       "Reference.Alias": {
         "type": "string",
@@ -8472,6 +11009,128 @@
         },
         "additionalProperties": false
       },
+      "Skill.Content": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["content"]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.SkillRequirement"
+            }
+          },
+          "instructions": {
+            "type": "string",
+            "description": "The body of SKILL.md, after its frontmatter."
+          },
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The other files of the skill folder, by path relative to it."
+          }
+        },
+        "required": ["type", "description", "instructions"],
+        "additionalProperties": false
+      },
+      "Skill.Declaration": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Skill.Content"
+          },
+          {
+            "$ref": "#/components/schemas/Skill.Upstream"
+          }
+        ]
+      },
+      "Skill.Info": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Skill.Content"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["upstream"]
+              },
+              "requiredCredentials": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Credential.SkillRequirement"
+                }
+              },
+              "upstream": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "A Git branch, tag or commit. Omission follows the default branch. A branch or the default branch is read again by the brain: its new commits change the skill without a new release or catalog fingerprint. Name a commit to fix the content."
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["url", "path"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["type", "upstream"],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Skill.SourceDirectory": {
+        "type": "string"
+      },
+      "Skill.Upstream": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["upstream"]
+          },
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.SkillRequirement"
+            }
+          },
+          "upstream": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              "ref": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A Git branch, tag or commit. Omission follows the default branch. A branch or the default branch is read again by the brain: its new commits change the skill without a new release or catalog fingerprint. Name a commit to fix the content."
+              },
+              "path": {
+                "$ref": "#/components/schemas/Skill.SourceDirectory"
+              }
+            },
+            "required": ["url", "path"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["type", "upstream"],
+        "additionalProperties": false
+      },
       "Space.AssignmentID": {
         "type": "string",
         "pattern": "^spp_"
@@ -8681,6 +11340,137 @@
             ]
           }
         },
+        "additionalProperties": false
+      },
+      "SpaceApp.CreateInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "pinnedReleaseId": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AppRelease.ID"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["spaceId", "appId"],
+        "additionalProperties": false
+      },
+      "SpaceApp.ID": {
+        "type": "string",
+        "pattern": "^spa_"
+      },
+      "SpaceApp.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SpaceApp.ID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "isOwner": {
+            "type": "boolean"
+          },
+          "pinnedReleaseId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppRelease.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "app": {
+            "$ref": "#/components/schemas/App.Info"
+          },
+          "release": {
+            "$ref": "#/components/schemas/AppRelease.Info"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "spaceId",
+          "appId",
+          "isOwner",
+          "pinnedReleaseId",
+          "app",
+          "release",
+          "createdAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "SpaceApp.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpaceApp.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "SpaceApp.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "pinnedReleaseId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppRelease.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["pinnedReleaseId"],
         "additionalProperties": false
       },
       "SpaceEnvironmentTemplate.CreateInput": {
@@ -10297,6 +13087,18 @@
     },
     {
       "name": "agent"
+    },
+    {
+      "name": "app"
+    },
+    {
+      "name": "app-release"
+    },
+    {
+      "name": "app-registry"
+    },
+    {
+      "name": "space-app"
     },
     {
       "name": "agent-membership"

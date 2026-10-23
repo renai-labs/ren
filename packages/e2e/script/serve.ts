@@ -1,5 +1,7 @@
 import { PgClient } from "@effect/sql-pg"
 import { Shared } from "@ren/cell/testing"
+import { Access } from "@ren/core/access"
+import { AppRegistry } from "@ren/core/app/registry"
 import { Seed } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
 import { Signature } from "@ren/schema/signature"
@@ -65,7 +67,31 @@ const failed = async (error: unknown): Promise<never> => {
 }
 
 await Effect.runPromise(
-  Seed.ren().pipe(
+  Effect.gen(function* () {
+    yield* Seed.ren()
+    const registry = yield* AppRegistry.Service
+    yield* registry.publish(
+      Schema.decodeUnknownSync(AppRegistry.Batch)({
+        apps: [
+          {
+            slug: "e2e-docs",
+            name: "Docs",
+            description: "Look up library documentation",
+            mcps: {
+              docs: {
+                name: "Docs",
+                description: "Library documentation",
+                transport: { type: "remote", url: "https://docs.example.com/mcp" },
+                auth: { type: "none" },
+              },
+            },
+            listing: { body: "Answers questions from library docs.", categories: { roles: ["engineer"] } },
+          },
+        ],
+      }),
+    )
+  }).pipe(
+    Effect.provide(AppRegistry.layer.pipe(Layer.provide(Access.layer))),
     Effect.provide(Database.layer.pipe(Layer.provide(PgClient.layer({ url: Redacted.make(database.href) })))),
   ),
 ).catch(failed)
