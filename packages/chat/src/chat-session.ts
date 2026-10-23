@@ -1,6 +1,6 @@
 export * as ChatSession from "./chat-session.js"
 
-import { Ren } from "@ren/client/chat/effect"
+import { ClientError, Ren } from "@ren/client/chat/effect"
 import type { Form } from "@ren/schema/form"
 import type { Permission } from "@ren/schema/permission"
 import { Session } from "@ren/schema/session"
@@ -19,6 +19,7 @@ import {
   Fiber,
   Option,
   PubSub,
+  Schedule,
   Semaphore,
   Stream,
   SubscriptionRef,
@@ -42,6 +43,18 @@ const autoApproveRetries = 2
 const refreshBefore = 60_000
 
 const startingPollMs = 2_000
+
+const httpErrorOf = (error: unknown) =>
+  error instanceof ClientError && HttpClientError.isHttpClientError(error.cause)
+    ? Option.some(error.cause)
+    : Option.none()
+
+const isUnauthorized = (error: unknown) =>
+  Option.exists(httpErrorOf(error), (cause) => "response" in cause.reason && cause.reason.response.status === 401)
+
+// oxlint-disable-next-line ren/no-comments -- The brain did not answer, or refused a token of an old generation: the message stays pending and is sent again with the same id after new access; the brain skips an id it has (E126).
+const isUnreachable = (error: unknown) =>
+  isUnauthorized(error) || Option.exists(httpErrorOf(error), (cause) => cause.reason._tag === "TransportError")
 
 export class AccessFailed extends Data.TaggedError("ChatSession.AccessFailed")<{ readonly cause: unknown }> {}
 
@@ -420,7 +433,8 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     onStatus: (next) =>
       Effect.gen(function* () {
         if (next !== "connected") reads.invalidate()
-        if (next === "reconnecting") cached.current = Option.none()
+        // oxlint-disable-next-line ren/no-comments -- A parked brain may be asleep or gone: the next read or send asks Ren first, which wakes it (E128).
+        if (next === "reconnecting" || next === "parked") cached.current = Option.none()
         yield* SubscriptionRef.set(status, next)
       }),
   })
@@ -521,8 +535,23 @@ export const make = Effect.fnUntraced(function* (options: Options) {
           ...(input.agents && { agents: input.agents }),
           ...(input.skills && { skills: input.skills }),
         })
-      }),
-    ).pipe(Effect.tapError(() => (fresh ? update((current) => Outbox.rollback(current, root, id)) : Effect.void)))
+      }).pipe(
+        Effect.tapError((error) =>
+          Effect.sync(() => {
+            if (!isUnauthorized(error)) return
+            reach.unreachable = true
+            cached.current = Option.none()
+          }),
+        ),
+        Effect.retry({ while: isUnreachable, schedule: Schedule.spaced(startingPollMs) }),
+      ),
+    ).pipe(
+      Effect.tapError((error) =>
+        fresh && !(error instanceof AccessFailed)
+          ? update((current) => Outbox.rollback(current, root, id))
+          : Effect.void,
+      ),
+    )
     const echoed = yield* SubscriptionRef.modify(state, (current) => [
       !current.outbox.has(id),
       Outbox.acknowledge(current, id),
