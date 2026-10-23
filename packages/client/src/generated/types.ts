@@ -456,21 +456,21 @@ export type SpaceCreateOutput = SpaceInfo
 
 export type SpaceUpdateInput = {
   readonly id: { readonly id: string }["id"]
-  readonly name?: {
+  readonly agentOrder?: {
+    readonly agentOrder?: ReadonlyArray<string> | undefined
     readonly name?: string | undefined
     readonly description?: string | null | undefined
+  }["agentOrder"]
+  readonly name?: {
     readonly agentOrder?: ReadonlyArray<string> | undefined
+    readonly name?: string | undefined
+    readonly description?: string | null | undefined
   }["name"]
   readonly description?: {
+    readonly agentOrder?: ReadonlyArray<string> | undefined
     readonly name?: string | undefined
     readonly description?: string | null | undefined
-    readonly agentOrder?: ReadonlyArray<string> | undefined
   }["description"]
-  readonly agentOrder?: {
-    readonly name?: string | undefined
-    readonly description?: string | null | undefined
-    readonly agentOrder?: ReadonlyArray<string> | undefined
-  }["agentOrder"]
 }
 
 export type SpaceUpdateOutput = SpaceInfo

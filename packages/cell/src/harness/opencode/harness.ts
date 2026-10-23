@@ -16,7 +16,6 @@ import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
 import { SettingsHost } from "../../settings-host.js"
 import { Sync } from "../../sync.js"
-import { TaskHost } from "../../task-host.js"
 import { Harness } from "../harness.js"
 import { OpenCodeChat } from "./chat.js"
 import { Credentials } from "./credentials.js"
@@ -244,10 +243,9 @@ const open = Effect.fn("OpenCodeHarness.open")(function* (
   refreshKey: Harness.Refresh,
   connections: Option.Option<EnvironmentConnections.Interface>,
   settings: Option.Option<Pick<BrainSettings.Host, "read">>,
-  tasks: Option.Option<TaskHost.Service["Service"]> = Option.none(),
 ) {
   return yield* make(
-    yield* OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, settings, tasks),
+    yield* OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, settings),
     endpoints,
   )
 })
@@ -260,12 +258,11 @@ export const layer = (storage: DurableObjectStorage) =>
       const refreshKey = yield* ModelRefresh.Service
       const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
       const settings = yield* Effect.serviceOption(SettingsHost.Service)
-      const tasks = yield* Effect.serviceOption(TaskHost.Service)
       return Harness.layer(
         store.read.pipe(
           Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
           Effect.flatMap((endpoints) =>
-            open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey, connections, settings, tasks),
+            open(storage, cell.vars.OPENCODE_CONFIG, endpoints, refreshKey, connections, settings),
           ),
         ),
       )

@@ -182,31 +182,32 @@ export const layer = Layer.effect(
               return yield* new Primitive.Forbidden({ message: "You cannot edit this space." })
             }
             const agentOrder = input.agentOrder && Array.dedupe(input.agentOrder)
-            const usable = agentOrder
-              ? yield* transaction
-                  .select({ id: Database.Schema.agent.id })
-                  .from(Database.Schema.agent)
-                  .where(
-                    and(
-                      inArray(Database.Schema.agent.id, agentOrder.filter(Schema.is(Agent.ID))),
-                      AgentQueries.isUsableIn(id, actor.organizationId),
-                    ),
-                  )
-              : []
-            if (agentOrder && usable.length !== agentOrder.length)
-              return yield* new Primitive.Invalid({
-                message: "Each agent in the factory order must be usable in this space.",
-                field: "agentOrder",
-              })
-            yield* transaction
+            if (agentOrder) {
+              const usable = yield* transaction
+                .select({ id: Database.Schema.agent.id })
+                .from(Database.Schema.agent)
+                .where(
+                  and(
+                    inArray(Database.Schema.agent.id, agentOrder.filter(Schema.is(Agent.ID))),
+                    AgentQueries.isUsableIn(id, actor.organizationId),
+                  ),
+                )
+              if (usable.length !== agentOrder.length)
+                return yield* new Primitive.Invalid({
+                  message: "Each agent in the factory order must be usable in this space.",
+                  field: "agentOrder",
+                })
+              yield* transaction
+                .update(Database.Schema.space)
+                .set({ agent_order: agentOrder.filter(Schema.is(Agent.ID)) })
+                .where(eq(Database.Schema.space.id, id))
+            }
+            const updated = yield* transaction
               .update(Database.Schema.space)
-              .set({
-                name: input.name,
-                description: input.description,
-                agent_order: agentOrder?.filter(Schema.is(Agent.ID)),
-                updated_at: sql`now()`,
-              })
+              .set({ name: input.name, description: input.description, updated_at: sql`now()` })
               .where(eq(Database.Schema.space.id, id))
+              .returning()
+            if (updated.length === 0) return yield* notFound
             return yield* find(transaction, actor, eq(Database.Schema.space.id, id))
           }),
         )

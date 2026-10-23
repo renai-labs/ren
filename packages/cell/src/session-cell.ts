@@ -8,17 +8,14 @@ import { Chat } from "./chat.js"
 import { OpenCodeHarness } from "./harness/opencode/harness.js"
 import { HostAccess } from "./host-access.js"
 import { SettingsHost } from "./settings-host.js"
-import { TaskHost } from "./task-host.js"
 
 const ren = Layer.unwrap(
   Effect.gen(function* () {
     const info = yield* Cell.Info
     if (!info.vars.REN_URL) return Layer.empty
-    return Layer.mergeAll(
-      EnvironmentConnections.layer.pipe(Layer.provide(HostAccess.layer)),
-      SettingsHost.layer,
-      TaskHost.layer,
-    ).pipe(Layer.provide(FetchHttpClient.layer))
+    return Layer.mergeAll(EnvironmentConnections.layer.pipe(Layer.provide(HostAccess.layer)), SettingsHost.layer).pipe(
+      Layer.provide(FetchHttpClient.layer),
+    )
   }),
 )
 

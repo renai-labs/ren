@@ -30,7 +30,6 @@ import {
 import type { Harness } from "../harness.js"
 import { ModelProviders } from "./model-providers.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
-import type { TaskHost } from "../../task-host.js"
 
 const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
 
@@ -169,14 +168,12 @@ export const make = (
   approvals: (
     sessionId: string,
   ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
-  tasks: Option.Option<TaskHost.Service["Service"]> = Option.none(),
 ) =>
   Plugin.define({
     id: "ren",
     effect: (context) =>
       Effect.gen(function* () {
         const tool = context.tool
-        if (Option.isSome(tasks)) yield* tasks.value.register(tool)
         const integration = context.integration
         const provider = context.provider
         if (Option.isNone(connections))

@@ -4,7 +4,6 @@ import { RenHostApi } from "@ren/host-api/ren-host-api"
 import { SyncApi } from "@ren/host-api/sync-api"
 import { Sync } from "@ren/schema/sync"
 import { Access } from "@ren/core/access"
-import { Actor } from "@ren/core/actor"
 import { Agent } from "@ren/core/agent"
 import { AgentMembership } from "@ren/core/agent/membership"
 import { BrainHost } from "@ren/core/brain-host"
@@ -41,7 +40,6 @@ import { OrganizationSettingsHandler } from "./handlers/api/organization-setting
 import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostSettingsHandler } from "./handlers/ren-host/settings.js"
-import { HostTasksHandler } from "./handlers/ren-host/tasks.js"
 import { HostTokenHandler } from "./handlers/ren-host/token.js"
 import { SessionHandler } from "./handlers/api/session.js"
 import { SpaceHandler } from "./handlers/api/space.js"
@@ -76,10 +74,6 @@ const Cors = HttpRouter.middleware(
   { global: true },
 )
 
-const TaskServices = Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
-  Layer.provide(SessionRunner.layer),
-)
-
 export const layer = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
@@ -112,22 +106,18 @@ export const layer = Layer.mergeAll(
         EnvironmentTemplates.layer,
         SpaceEnvironmentTemplate.layer,
         SpaceSettings.layer,
+        Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
+          Layer.provide(SessionRunner.layer),
+        ),
         OrganizationSettings.layer,
         Agent.layer,
         AgentMembership.layer,
         Session.layer.pipe(Layer.provide(SessionRunner.layer)),
-        TaskServices,
       ]),
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(
-      Layer.provide([
-        HostModelsHandler,
-        HostEnvironmentsHandler,
-        HostTokenHandler,
-        HostSettingsHandler,
-        HostTasksHandler,
-      ]),
-      Layer.provide([TaskServices, BrainHost.hostAuthentication, Settings.layer, Actor.layer]),
+      Layer.provide([HostModelsHandler, HostEnvironmentsHandler, HostTokenHandler, HostSettingsHandler]),
+      Layer.provide([BrainHost.hostAuthentication, Settings.layer]),
     ),
     AuthRoute,
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),

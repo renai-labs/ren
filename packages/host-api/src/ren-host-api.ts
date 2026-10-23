@@ -1,24 +1,17 @@
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
-import { Label } from "@ren/schema/label"
 import type { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
-import { Task } from "@ren/schema/task"
-import { TaskComment } from "@ren/schema/task-comment"
 import { Context } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
+import { Host } from "./host.js"
 import {
   EnvironmentNotFoundError,
   EnvironmentUnavailableError,
   ForbiddenError,
   ModelsUnavailableError,
-  TaskConflictError,
-  TaskInvalidError,
-  TaskNotFoundError,
 } from "./errors.js"
-import { Host } from "./host.js"
-import { HostTasks } from "./tasks.js"
 
 export class CurrentHost extends Context.Service<
   CurrentHost,
@@ -110,57 +103,7 @@ const SettingsGroup = HttpApiGroup.make("settings")
   .middleware(HostAuthentication)
   .annotateMerge(OpenApi.annotations({ title: "settings" }))
 
-const taskErrors = [TaskNotFoundError, TaskConflictError, TaskInvalidError, ForbiddenError] as const
-
-const TasksGroup = HttpApiGroup.make("tasks")
-  .add(
-    HttpApiEndpoint.post("task_list", "/host/tasks/list", {
-      payload: HostTasks.ListInput,
-      success: Task.definition.list.page,
-      error: taskErrors,
-    }),
-    HttpApiEndpoint.post("task_get", "/host/tasks/get", {
-      payload: HostTasks.GetInput,
-      success: HostTasks.GetResult,
-      error: taskErrors,
-    }),
-    HttpApiEndpoint.post("task_create", "/host/tasks/create", {
-      payload: HostTasks.CreateInput,
-      success: Task.Info,
-      error: taskErrors,
-    }),
-    HttpApiEndpoint.post("task_update", "/host/tasks/update", {
-      payload: HostTasks.UpdateInput,
-      success: Task.Info,
-      error: taskErrors,
-    }),
-    HttpApiEndpoint.post("task_assign", "/host/tasks/assign", {
-      payload: HostTasks.AssignInput,
-      success: HostTasks.AssignResult,
-      error: taskErrors,
-    }),
-    HttpApiEndpoint.post("task_review", "/host/tasks/review", {
-      payload: HostTasks.ReviewInput,
-      success: Task.Info,
-      error: taskErrors,
-    }),
-    HttpApiEndpoint.post("task_comment", "/host/tasks/comment", {
-      payload: TaskComment.CreateInput,
-      success: TaskComment.Info,
-      error: taskErrors,
-    }),
-    HttpApiEndpoint.post("label_list", "/host/tasks/labels", {
-      payload: Label.ListInput,
-      success: Label.definition.list.page,
-      error: taskErrors,
-    }),
-  )
-  .middleware(HostAuthentication)
-  .annotateMerge(OpenApi.annotations({ title: "tasks" }))
-  .annotate(HttpApi.PayloadParseOptions, { onExcessProperty: "error" })
-
 export const RenHostApi = HttpApi.make("host")
-  .add(TasksGroup)
   .add(ModelsGroup)
   .add(EnvironmentsGroup)
   .add(HostGroup)
