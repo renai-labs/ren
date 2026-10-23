@@ -352,7 +352,7 @@ it.live("an expired key refuses start and send without a model call until a fres
 )
 
 it.live(
-  "a model and an endpoint added while the harness is open are listed with their metadata and serve the next turns",
+  "a model and an endpoint added while the harness is open are listed with their metadata and serve the next turns; a model without efforts has no variants, as in Ren's list",
   () =>
     Effect.gen(function* () {
       const brain = yield* BrainTest.Service
@@ -383,6 +383,11 @@ it.live(
         ],
       })
       expect(added?.variants).toHaveLength(2)
+      expect(
+        (yield* brain.opencode.model.list()).data.find(
+          (model) => model.providerID === "later" && model.modelID === "stub-model",
+        )?.variants,
+      ).toEqual([])
       const sessionID = SessionID.make(brain.id)
       yield* brain.start({ model: { endpointId: "stub", modelId: "stub-added", variant: "high" } })
       const script = Shared.stub().script()
