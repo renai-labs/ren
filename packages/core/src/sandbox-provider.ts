@@ -38,6 +38,7 @@ export interface Listed {
 
 export interface Interface {
   readonly kind: string
+  readonly template: string | null
   readonly create: (input: {
     readonly brainId: Brain.ID
     readonly generation: number

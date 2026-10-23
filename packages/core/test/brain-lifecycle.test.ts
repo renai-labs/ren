@@ -6,7 +6,7 @@ import { SqlClient } from "effect/sql"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { eq } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import { type Duration, Effect, Layer, ManagedRuntime, Option, Schedule, Schema } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -35,7 +35,12 @@ const port = await Effect.runPromise(Host.freePort)
 const root = await mkdtemp(join(tmpdir(), "ren-core-brains-"))
 
 const ren = async (
-  options: { readonly lostEvery?: Duration.Input; readonly maxRunning?: number; readonly root?: string } = {},
+  options: {
+    readonly lostEvery?: Duration.Input
+    readonly maxRunning?: number
+    readonly root?: string
+    readonly template?: string
+  } = {},
 ) =>
   ManagedRuntime.make(
     Host.serve(port).pipe(
@@ -269,9 +274,7 @@ describe("brain runs", () => {
     const placement = { organizationId: found.organizationId, spaceId: found.spaceId, brainId: found.brainId }
     await current.runPromise(Brains.Service.use((host) => host.start(input, placement)))
     await current.runPromise(
-      Brains.StartRun.poll(
-        await Effect.runPromise(Brains.StartRun.executionId({ input, placement, epoch: 1 })),
-      ).pipe(
+      Brains.StartRun.poll(await Effect.runPromise(Brains.StartRun.executionId({ input, placement, epoch: 1 }))).pipe(
         Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("100 millis") }),
         Effect.timeoutOrElse({
           duration: "20 seconds",
@@ -300,9 +303,7 @@ describe("brain runs", () => {
     const placement = { organizationId: found.organizationId, spaceId: found.spaceId, brainId: found.brainId }
     await current.runPromise(Brains.Service.use((host) => host.start(input, placement)))
     await current.runPromise(
-      Brains.StartRun.poll(
-        await Effect.runPromise(Brains.StartRun.executionId({ input, placement, epoch: 0 })),
-      ).pipe(
+      Brains.StartRun.poll(await Effect.runPromise(Brains.StartRun.executionId({ input, placement, epoch: 0 }))).pipe(
         Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("100 millis") }),
         Effect.timeoutOrElse({
           duration: "20 seconds",
@@ -339,6 +340,50 @@ describe("brain runs", () => {
     await current.runPromise(Effect.scoped(Layer.build(Host.destroyBrains)))
     await current.dispose()
     await rm(own, { recursive: true, force: true })
+  })
+
+  test("a paused brain on an older build is replaced with the provider's build at its next access; a running one keeps its build", async () => {
+    const paused = await newBrain()
+    const running = await newBrain()
+    const runtime = await ren({ template: "t2" })
+    await runtime.runPromise(
+      BrainLifecycle.Service.use((lifecycle) =>
+        Effect.all([lifecycle.ensure(paused), lifecycle.ensure(running)], { discard: true }),
+      ),
+    )
+    await Promise.all([reaches(paused, "ready"), reaches(running, "ready")])
+    await database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .update(Database.Schema.brain)
+          .set({ template: "t1" })
+          .where(inArray(Database.Schema.brain.id, [paused, running]))
+        yield* db.db
+          .update(Database.Schema.brain)
+          .set({ keep_alive_until: new Date(Date.now() - 1000) })
+          .where(eq(Database.Schema.brain.id, paused))
+      }),
+    )
+    await runtime.runPromise(
+      BrainLifecycle.Service.use((lifecycle) =>
+        Effect.all([lifecycle.access(paused), lifecycle.access(running)], { discard: true }),
+      ),
+    )
+    const replaced = await Effect.runPromise(
+      Effect.promise(() => row(paused)).pipe(
+        Effect.repeat({
+          until: (found) => found.generation === 2 && found.phase === "ready",
+          schedule: Schedule.spaced("100 millis"),
+        }),
+        Effect.timeoutOrElse({
+          duration: "60 seconds",
+          orElse: () => Effect.die(new Error("The brain was not replaced")),
+        }),
+      ),
+    )
+    expect([replaced.template, (await row(running)).generation, (await row(running)).template]).toEqual(["t2", 1, "t1"])
+    await runtime.dispose()
   })
 
   test("a brain run that ended runs again when the brain needs it", async () => {
