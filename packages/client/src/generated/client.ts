@@ -74,6 +74,10 @@ import type {
   AppReleaseGetOutput,
   AppReleaseCreateInput,
   AppReleaseCreateOutput,
+  AppRegistryListInput,
+  AppRegistryListOutput,
+  AppRegistryGetInput,
+  AppRegistryGetOutput,
   SpaceAppListInput,
   SpaceAppListOutput,
   SpaceAppGetInput,
@@ -758,6 +762,36 @@ export function make(options: ClientOptions) {
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "app-registry": {
+      list: (input: AppRegistryListInput, requestOptions?: RequestOptions) =>
+        request<AppRegistryListOutput>(
+          {
+            method: "GET",
+            path: `/app-registry`,
+            query: {
+              query: input["query"],
+              category: input["category"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: AppRegistryGetInput, requestOptions?: RequestOptions) =>
+        request<AppRegistryGetOutput>(
+          {
+            method: "GET",
+            path: `/app-registry/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,

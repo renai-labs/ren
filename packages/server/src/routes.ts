@@ -6,6 +6,7 @@ import { Sync } from "@ren/schema/sync"
 import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"
 import { App } from "@ren/core/app"
+import { AppRegistry } from "@ren/core/app/registry"
 import { AppRelease } from "@ren/core/app/release"
 import { SpaceApp } from "@ren/core/space/app"
 import { AgentMembership } from "@ren/core/agent/membership"
@@ -33,6 +34,7 @@ import { Api } from "./api.js"
 import { Auth } from "./auth.js"
 import { AgentHandler } from "./handlers/api/agent.js"
 import { AppHandler } from "./handlers/api/app.js"
+import { AppRegistryHandler } from "./handlers/api/app-registry.js"
 import { AppReleaseHandler } from "./handlers/api/app-release.js"
 import { SpaceAppHandler } from "./handlers/api/space-app.js"
 import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
@@ -98,6 +100,7 @@ export const layer = Layer.mergeAll(
         AgentHandler,
         AppHandler,
         AppReleaseHandler,
+        AppRegistryHandler,
         SpaceAppHandler,
         AgentMembershipHandler,
         SessionHandler,
@@ -125,6 +128,7 @@ export const layer = Layer.mergeAll(
         Agent.layer,
         App.layer,
         AppRelease.layer,
+        AppRegistry.layer,
         SpaceApp.layer,
         AgentMembership.layer,
         Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
