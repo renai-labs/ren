@@ -60,7 +60,11 @@ export const permission = (
 ) => first(state, state.permissions, sessionID, include)
 
 export const form = (state: ChatState.State, sessionID: string): Form.Info | undefined =>
-  first(state, state.forms, sessionID, (item) => item.kind === "question" || item.kind === "websearch.provider")
+  first(state, state.forms, sessionID, (item) => item.kind === "question" || item.kind === "websearch.provider") ??
+  first(state, state.expired, sessionID, () => true)
+
+export const isExpired = (state: ChatState.State, form: Form.Info) =>
+  ChatState.expiredForms(state, form.sessionID).some((item) => item.id === form.id)
 
 export const webSearch = (state: ChatState.State, sessionID: string) => {
   const found = form(state, sessionID)

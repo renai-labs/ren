@@ -319,6 +319,46 @@ test("a message sent while access is starting outlives a rebuilt runtime and is 
     }),
   ))
 
+test("a question whose turn stopped shows as expired, and answering it sends one message that quotes the question (E129)", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const chat = yield* open(brain)
+      yield* chat.open(brain.id)
+      yield* until(chat.status, (status) => status === "connected")
+      const asking = stub.script({
+        tool: {
+          name: "question",
+          input: {
+            questions: [
+              { question: "Which colour?", header: "Colour", options: [{ label: "Blue", description: "b" }] },
+            ],
+          },
+        },
+      })
+      yield* chat.prompt({ text: asking.marker })
+      const asked = yield* until(chat.state, (state) => (state.forms[brain.id] ?? []).length > 0)
+      const form = asked.forms[brain.id]?.at(0)
+      if (!form) return yield* Effect.die(new Error("No question"))
+      yield* brain.opencode.session.interrupt({ sessionID: SessionID.make(brain.id) })
+      yield* until(chat.state, (state) => ChatState.expiredForms(state, brain.id).some((each) => each.id === form.id))
+      const field = form.fields[0]
+      const answer = stub.script()
+      yield* chat.replyForm(brain.id, form.id, { [field.key]: `Blue ${answer.marker}` })
+      const call = yield* Effect.promise(() => answer.called())
+      expect(call.text).toContain("Which colour?")
+      expect(call.text).toContain("Blue")
+      const state = yield* SubscriptionRef.get(chat.state)
+      expect(ChatState.expiredForms(state, brain.id)).toEqual([])
+      expect(
+        ChatState.messages(state, brain.id).filter(
+          (message) => message.type === "user" && message.text.includes("Which colour?"),
+        ),
+      ).toHaveLength(1)
+    }),
+  ))
+
 test("after the connection parks, a history read asks for access before any request to the old URL", () =>
   live(
     Effect.gen(function* () {

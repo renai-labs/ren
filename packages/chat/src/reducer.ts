@@ -471,6 +471,7 @@ const handlers: Handlers = {
         pending: drop(state.pending, id),
         permissions: drop(state.permissions, id),
         forms: drop(state.forms, id),
+        expired: drop(state.expired, id),
         outbox: new Set([...state.outbox].filter((item) => !ChatState.pending(state, id).some((p) => p.id === item))),
         compacting: drop(state.compacting, id),
         history: new Set([...state.history].filter((item) => item !== id)),
@@ -793,8 +794,18 @@ const handlers: Handlers = {
   },
   "form.replied": (state, event) =>
     done({ ...state, forms: removeKeyed(state.forms, event.data.sessionID, event.data.id) }),
-  "form.cancelled": (state, event) =>
-    done({ ...state, forms: removeKeyed(state.forms, event.data.sessionID, event.data.id) }),
+  "form.cancelled": (state, event) => {
+    const form = (state.forms[event.data.sessionID] ?? []).find(
+      (item) => item.id === event.data.id && item.kind === "question",
+    )
+    return done({
+      ...state,
+      forms: removeKeyed(state.forms, event.data.sessionID, event.data.id),
+      ...(form && {
+        expired: set(state.expired, form.sessionID, [...ChatState.expiredForms(state, form.sessionID), form]),
+      }),
+    })
+  },
   "shell.created": (state, event) =>
     done({ ...state, shells: set(state.shells ?? {}, event.data.info.id, event.data.info) }),
   "shell.exited": (state, event) =>
