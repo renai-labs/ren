@@ -4,46 +4,61 @@ import { Effect, Schema } from "effect"
 import { Credential } from "./credential.js"
 import { Primitive } from "./primitive.js"
 
-export const Transport = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("remote"), url: Primitive.HttpsUrl }),
-  Schema.Struct({ type: Schema.Literal("local"), command: Schema.NonEmptyArray(Schema.NonEmptyString) }),
-  Schema.Struct({
-    type: Schema.Literal("provider"),
-    provider: Schema.Literals(["composio"]),
-    toolkit: Schema.NonEmptyString.annotate({
-      description: "The provider’s toolkit. Ren looks up the provider’s auth config for each environment.",
+const Remote = Schema.Struct({ type: Schema.Literal("remote"), url: Primitive.HttpsUrl })
+const Local = Schema.Struct({
+  type: Schema.Literal("local"),
+  command: Schema.NonEmptyArray(Schema.NonEmptyString),
+  cwd: Schema.optionalKey(Schema.NonEmptyString),
+  env: Schema.optionalKey(
+    Schema.Record(Credential.EnvName, Schema.String).annotate({
+      description:
+        "Literal values, stored in the release and shown to every reader of it. Never a secret: a secret is a required credential.",
     }),
+  ),
+})
+const Provider = Schema.Struct({
+  type: Schema.Literal("provider"),
+  provider: Schema.Literals(["composio"]),
+  toolkit: Schema.NonEmptyString.annotate({
+    description: "The provider’s toolkit. Ren looks up the provider’s auth config for each environment.",
   }),
-]).annotate({ identifier: "Mcp.Transport" })
+})
+export const Transport = Schema.Union([Remote, Local, Provider]).annotate({ identifier: "Mcp.Transport" })
 export type Transport = typeof Transport.Type
 
-export const Auth = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("none") }),
-  Schema.Struct({
-    type: Schema.Literal("oauth"),
-    authorizationEndpoint: Primitive.HttpsUrl,
-    tokenEndpoint: Primitive.HttpsUrl,
-    tokenEndpointAuth: Schema.Literals(["client_secret_basic", "client_secret_post", "none"]),
-    client: Schema.optionalKey(
-      Schema.Struct({
-        clientId: Schema.NonEmptyString,
-        resource: Schema.optionalKey(Primitive.HttpsUrl),
-        redirectUri: Schema.optionalKey(Primitive.HttpsUrl),
-      }).annotate({ description: "A partner’s OAuth client that Ren borrows, instead of registering its own." }),
-    ),
-  }),
-  Schema.Struct({
-    type: Schema.Literal("header"),
-    name: Schema.NonEmptyString,
-    credential: Credential.Name,
-  }),
-  Schema.Struct({
-    type: Schema.Literal("basic"),
-    username: Credential.Name,
-    password: Credential.Name,
-  }),
-]).annotate({ identifier: "Mcp.Auth" })
+const NoAuth = Schema.Struct({ type: Schema.Literal("none") })
+const OAuth = Schema.Struct({
+  type: Schema.Literal("oauth"),
+  authorizationEndpoint: Primitive.HttpsUrl,
+  tokenEndpoint: Primitive.HttpsUrl,
+  tokenEndpointAuth: Schema.Literals(["client_secret_basic", "client_secret_post", "none"]),
+  client: Schema.optionalKey(
+    Schema.Struct({
+      clientId: Schema.NonEmptyString,
+      resource: Schema.optionalKey(Primitive.HttpsUrl),
+      redirectUri: Schema.optionalKey(Primitive.HttpsUrl),
+    }).annotate({ description: "A partner’s OAuth client that Ren borrows, instead of registering its own." }),
+  ),
+})
+const Header = Schema.Struct({
+  type: Schema.Literal("header"),
+  name: Schema.NonEmptyString,
+  credential: Credential.Name,
+})
+const Basic = Schema.Struct({
+  type: Schema.Literal("basic"),
+  username: Credential.Name,
+  password: Credential.Name,
+})
+export const Auth = Schema.Union([NoAuth, OAuth, Header, Basic]).annotate({ identifier: "Mcp.Auth" })
 export type Auth = typeof Auth.Type
+
+export interface Timeouts extends Schema.Schema.Type<typeof Timeouts> {}
+export const Timeouts = Schema.Struct({
+  startup: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
+  catalog: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
+  execution: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
+}).annotate({ identifier: "Mcp.Timeouts", description: "Independent stage timeouts in milliseconds." })
 
 export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
 export const Declaration = Schema.Struct({
@@ -51,6 +66,7 @@ export const Declaration = Schema.Struct({
   description: Schema.NonEmptyString,
   transport: Transport,
   auth: Auth,
+  timeouts: Schema.optionalKey(Timeouts),
   requiredCredentials: Schema.Array(Credential.Requirement).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
 })
   .check(
@@ -68,3 +84,26 @@ export const Declaration = Schema.Struct({
     }),
   )
   .annotate({ identifier: "Mcp.Declaration" })
+
+export interface Info extends Schema.Schema.Type<typeof Info> {}
+export const Info = Schema.Struct({
+  ...Declaration.fields,
+  transport: Schema.Union([Schema.Struct({ ...Remote.fields, url: Schema.String }), Local, Provider]),
+  auth: Schema.Union([
+    NoAuth,
+    Schema.Struct({
+      ...OAuth.fields,
+      authorizationEndpoint: Schema.String,
+      tokenEndpoint: Schema.String,
+      client: Schema.optionalKey(
+        Schema.Struct({
+          clientId: Schema.NonEmptyString,
+          resource: Schema.optionalKey(Schema.String),
+          redirectUri: Schema.optionalKey(Schema.String),
+        }),
+      ),
+    }),
+    Header,
+    Basic,
+  ]),
+}).annotate({ identifier: "Mcp.Info" })

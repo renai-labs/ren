@@ -86,6 +86,10 @@ export const Spec = Schema.Struct({
         return !kind || (parts.at(3) ?? "") in space[kind]
       }
       return [
+        ...App.dependencyCycles(new Map(apps.map((owned) => [owned.name, owned.app]))).map((cycle) => ({
+          path: ["spaces"],
+          issue: `App dependency cycle: ${cycle}.`,
+        })),
         ...(["agents", "apps"] as const).flatMap((kind) =>
           [...owners[kind]].flatMap(([name, owned]) =>
             owned.slice(1).map((duplicate) => ({
