@@ -3,7 +3,7 @@ import { OpenCode } from "@opencode/client"
 import { Signature } from "@ren/schema/signature"
 import { Sync } from "@ren/schema/sync"
 import { Celld, Shared, TestToken } from "@ren/cell/testing"
-import { BrainHost } from "@ren/core/brain-host"
+import { Brains } from "@ren/core/brains"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { Seed } from "@ren/core/testing"
@@ -56,7 +56,7 @@ const setup = Effect.fnUntraced(function* () {
   const owner = yield* Seed.owner()
   yield* Seed.ren()
   const sessions = yield* SessionRunner.Service
-  const brain = yield* BrainHost.Service
+  const brain = yield* Brains.Service
   const id = Session.ID.create()
   const input = {
     sessionId: id,

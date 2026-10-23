@@ -17,7 +17,7 @@ import { Effect, Layer, ManagedRuntime, Redacted, Schema } from "effect"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { BrainHost } from "../src/brain-host.js"
+import { Brains } from "../src/brains.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
@@ -181,7 +181,7 @@ const lastToolResult = (call: StubModel.Call) =>
 const start = async (input: { readonly withTemplate?: boolean; readonly first?: StubModel.Script } = {}) => {
   const sessionId = await database.runPromise(Seed.session({ organizationId, spaceId, createdBy: creator, brainId }))
   await withRen(
-    BrainHost.Service.use((brain) =>
+    Brains.Service.use((brain) =>
       brain.start(
         {
           sessionId,
@@ -214,7 +214,7 @@ const started = async (input: { readonly withTemplate?: boolean } = {}) => {
 const turn = async (sessionId: Session.ID, command: string) => {
   const script = stub.script(shell(command))
   await withRen(
-    BrainHost.Service.use((brain) =>
+    Brains.Service.use((brain) =>
       brain.send({
         sessionId,
         messageId: Session.MessageID.create(),
@@ -377,7 +377,7 @@ describe("environments of chats on a local sandbox brain", () => {
     expect(await turn(sessionId, "echo after")).toContain("No access to an environment")
     const chat = stub.script({ reply: "still here" })
     await withRen(
-      BrainHost.Service.use((brain) =>
+      Brains.Service.use((brain) =>
         brain.send({
           sessionId,
           messageId: Session.MessageID.create(),

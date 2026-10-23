@@ -11,6 +11,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { BrainClient } from "../../src/brain-client.js"
 import { BrainHost } from "../../src/brain-host.js"
+import { Brains } from "../../src/brains.js"
 import { BrainLifecycle } from "../../src/brain-lifecycle.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { EnvironmentProvider } from "../../src/environment-provider.js"
@@ -62,7 +63,8 @@ interface StackOptions<E, R> {
 
 // oxlint-disable-next-line ren/no-comments -- Each brain is a real Bun brain process on this machine (LocalSandbox), under root. Brains reach Ren on REN_URL, where serve answers.
 export const stack = <E, R>(options: StackOptions<E, R>) =>
-  BrainHost.layerSandbox.pipe(
+  Brains.layer.pipe(
+    Layer.provideMerge(BrainHost.layerSandbox),
     Layer.provideMerge(BrainLifecycle.layer),
     Layer.provideMerge(
       LocalSandbox.layer({
@@ -95,7 +97,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
 export const serve = (port: number, around?: RenHostApiTest.Around) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      const context = yield* Effect.context<BrainHost.Service>()
+      const context = yield* Effect.context<Brains.Service>()
       const api = HttpRouter.toWebHandler(
         RenHostApiTest.layer(around).pipe(
           Layer.provide(Layer.succeedContext(context)),
@@ -151,13 +153,15 @@ export const layerWith = <E, R>(
 export const layer = (config: Record<string, string>, models: Layer.Layer<Models.Service>) =>
   layerWith(config, models, noTemplates)
 
-// oxlint-disable-next-line ren/no-comments -- BrainHost.layer reaches every brain at CELL_URL, so a test can put a server that fails on purpose there.
+// oxlint-disable-next-line ren/no-comments -- BrainHost.layerCell reaches every brain at CELL_URL, so a test can put a server that fails on purpose there.
 export const cellLayer = <E, R>(
   config: Record<string, string>,
   models: Layer.Layer<Models.Service>,
   environments: Layer.Layer<Environments.Service, E, R>,
 ) =>
-  Layer.fresh(BrainHost.layer).pipe(
+  Layer.fresh(Brains.layer).pipe(
+    Layer.provideMerge(BrainHost.layerCell),
+    Layer.provideMerge(DurableRunner.layerMemory),
     Layer.provideMerge(BrainClient.layer),
     Layer.provide(Settings.layer),
     Layer.provide(models),

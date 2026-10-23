@@ -2,6 +2,7 @@ import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
+import { Brains } from "@ren/core/brains"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
@@ -21,12 +22,12 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { Routes } from "./routes.js"
 
-const sandbox = Layer.unwrap(
+const host = Layer.unwrap(
   Effect.gen(function* () {
     const provider = yield* Config.Literals(["local", "e2b", "cell"], "SANDBOX_PROVIDER").pipe(
       Config.withDefault("local"),
     )
-    if (provider === "cell") return BrainHost.layer
+    if (provider === "cell") return BrainHost.layerCell
     const root = yield* Config.String("LOCAL_BRAIN_ROOT").pipe(Config.withDefault(join(tmpdir(), "ren-brains")))
     const entry = yield* Config.String("LOCAL_BRAIN_ENTRY").pipe(
       Config.withDefault(join(import.meta.dir, "../../cell/src/bun.ts")),
@@ -37,13 +38,16 @@ const sandbox = Layer.unwrap(
     return BrainHost.layerSandbox.pipe(
       Layer.provide(BrainLifecycle.layer),
       Layer.provide(provider === "e2b" ? E2BSandbox.layer : LocalSandbox.layer({ entry, executor, root })),
-      Layer.provide(DurableRunner.layerEffect),
     )
   }),
 )
 
 HttpRouter.serve(Routes.layer).pipe(
-  Layer.provide([sandbox, Mailer.layer, SignupGuard.layer]),
+  Layer.provide([
+    Brains.layer.pipe(Layer.provide(host), Layer.provide(DurableRunner.layerEffect)),
+    Mailer.layer,
+    SignupGuard.layer,
+  ]),
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([Models.layerConfig, Environments.layer]),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),

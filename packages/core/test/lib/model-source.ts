@@ -4,7 +4,7 @@ import { Shared } from "@ren/cell/testing"
 import { Testing } from "@ren/db/testing"
 import { Session } from "@ren/schema/session"
 import { Effect, Layer } from "effect"
-import { BrainHost } from "../../src/brain-host.js"
+import { Brains } from "../../src/brains.js"
 import { BrainRegistry } from "../../src/brain-registry.js"
 import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
@@ -53,7 +53,7 @@ export const chat = Effect.fnUntraced(function* (initial: Models.Access) {
   yield* Effect.promise(() => opened.called())
   const brainId = (yield* sessions.get(sessionId)).brainId
   const restart = (input: Partial<Session.StartInput>, text: string) =>
-    BrainHost.Service.use((brain) =>
+    Brains.Service.use((brain) =>
       brain.start(
         {
           sessionId,
