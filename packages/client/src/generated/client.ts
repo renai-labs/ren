@@ -162,6 +162,8 @@ import type {
   CredentialRemoveOutput,
   CredentialConnectCredentialConnectInput,
   CredentialConnectCredentialConnectOutput,
+  CredentialConnectCredentialRequirementsInput,
+  CredentialConnectCredentialRequirementsOutput,
   OauthSessionGetInput,
   OauthSessionGetOutput,
   OauthAppListInput,
@@ -1380,6 +1382,18 @@ export function make(options: ClientOptions) {
               body: { owner: input["owner"], target: input["target"], reconnect: input["reconnect"] },
               successStatus: 200,
               declaredStatuses: [400, 401, 403, 404, 409],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        requirements: (input: CredentialConnectCredentialRequirementsInput, requestOptions?: RequestOptions) =>
+          request<CredentialConnectCredentialRequirementsOutput>(
+            {
+              method: "GET",
+              path: `/credential-requirements`,
+              query: { spaceId: input["spaceId"], appId: input["appId"] },
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
               empty: false,
             },
             requestOptions,

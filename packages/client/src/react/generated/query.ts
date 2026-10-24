@@ -81,6 +81,7 @@ import type {
   CredentialCopyInput,
   CredentialRemoveInput,
   CredentialConnectCredentialConnectInput,
+  CredentialConnectCredentialRequirementsInput,
   OauthSessionGetInput,
   OauthAppListInput,
   OauthAppGetInput,
@@ -844,6 +845,18 @@ export function make(client: ReturnType<typeof Ren.make>) {
               mutationKey: ["credential-connect", "credential", "connect"] as const,
               mutationFn: (input: CredentialConnectCredentialConnectInput) =>
                 client["credential-connect"]["credential"]["connect"](input),
+            }),
+        },
+        requirements: {
+          queryKey: (input?: CredentialConnectCredentialRequirementsInput) =>
+            input === undefined
+              ? (["credential-connect", "credential", "requirements"] as const)
+              : (["credential-connect", "credential", "requirements", input] as const),
+          queryOptions: (input: CredentialConnectCredentialRequirementsInput) =>
+            queryOptions({
+              queryKey: ["credential-connect", "credential", "requirements", input] as const,
+              queryFn: (context) =>
+                client["credential-connect"]["credential"]["requirements"](input, { signal: context.signal }),
             }),
         },
       },

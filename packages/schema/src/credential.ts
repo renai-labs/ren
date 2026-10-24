@@ -420,6 +420,36 @@ export const ConnectInput = Schema.Struct({
   reconnect: Schema.optional(Schema.Boolean),
 }).annotate({ identifier: "Credential.ConnectInput" })
 
+export const RequirementKind = Schema.Literals(["oauth", "provider", "fields", "env"]).annotate({
+  identifier: "Credential.RequirementKind",
+  description: "How the item connects: a sign-in, a managed provider, an MCP’s pasted fields, or a pasted env key.",
+})
+export type RequirementKind = typeof RequirementKind.Type
+
+export interface RequirementItem extends Schema.Schema.Type<typeof RequirementItem> {}
+export const RequirementItem = Schema.Struct({
+  key: Schema.String,
+  group: AppIdentity.ID.annotate({ description: "The app that the dialog shows this item under." }),
+  app: AppIdentity.ID,
+  mcp: Schema.NullOr(Primitive.Slug),
+  label: EnvName,
+  name: Schema.String,
+  kind: RequirementKind,
+  status: Schema.Literals(["ok", "missing", "reconnect"]),
+  credentialId: Schema.NullOr(ID),
+  destinations: Schema.Array(OwnerKind),
+}).annotate({ identifier: "Credential.RequirementItem" })
+
+export interface Requirements extends Schema.Schema.Type<typeof Requirements> {}
+export const Requirements = Schema.Struct({ items: Schema.Array(RequirementItem) }).annotate({
+  identifier: "Credential.Requirements",
+})
+
+export interface RequirementsInput extends Schema.Schema.Type<typeof RequirementsInput> {}
+export const RequirementsInput = Schema.Struct({ spaceId: Space.ID, appId: AppIdentity.ID }).annotate({
+  identifier: "Credential.RequirementsInput",
+})
+
 export interface RemoveInput extends Schema.Schema.Type<typeof RemoveInput> {}
 export const RemoveInput = Schema.Struct({}).annotate({ identifier: "Credential.RemoveInput" })
 

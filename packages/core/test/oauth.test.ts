@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { Access } from "../src/access.js"
 import { App } from "../src/app.js"
+import { AppRelease } from "../src/app/release.js"
 import { CredentialRefresh } from "../src/credential-refresh.js"
 import { Credentials } from "../src/credentials.js"
 import { DurableRunner } from "../src/durable-runner.js"
@@ -25,7 +26,7 @@ afterAll(() => server.stop())
 const invalidated: Array<string> = []
 
 const it = testEffect(
-  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer, OAuthApps.layer).pipe(
+  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer, AppRelease.layer, OAuthApps.layer).pipe(
     Layer.provideMerge(OAuth.layerRefresher),
     Layer.provideMerge(Credentials.layer),
     Layer.provideMerge(
@@ -94,7 +95,7 @@ const setup = Effect.fnUntraced(function* (declaration: Mcp.Declaration = oauth(
       },
     })
     .where(eq(Database.Schema.app_release.id, app.latestReleaseId))
-  return { actor, app, space, owner: { kind: "person" as const, userId: actor.userId } }
+  return { actor, app, space, declaration, owner: { kind: "person" as const, userId: actor.userId } }
 })
 
 const connect = Effect.fnUntraced(function* (
@@ -324,6 +325,35 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
           reason: "StateInvalid: used",
         })
       }),
+  )
+
+  it.live("the callback uses the release recorded at start, also after a newer release (test 27)", () =>
+    Effect.gen(function* () {
+      yield* reset()
+      const service = yield* OAuth.Service
+      const releases = yield* AppRelease.Service
+      const found = yield* setup()
+      const redirect = yield* connect(found)
+      yield* releases.create(found.actor, {
+        requiredCredentials: [],
+        skills: {},
+        dependsOn: [],
+        appId: found.app.id,
+        expectedLatestReleaseId: found.app.latestReleaseId,
+        version: "0.0.2",
+        mcps: {
+          linear: {
+            name: "Linear",
+            description: "Linear issues",
+            auth: found.declaration.auth,
+            requiredCredentials: [],
+            transport: { type: "remote", url: "https://linear-v2.example.test/mcp" },
+          },
+        },
+      })
+      yield* service.callback({ state: redirect.searchParams.get("state") ?? "", code: "c" }, Option.none())
+      expect((yield* stored("MCP_LINEAR"))?.row.hosts).toEqual(["127.0.0.1"])
+    }),
   )
 
   it.live("token answers: no refresh token and expires_in as a string are accepted; a 2xx error and DPoP fail", () =>

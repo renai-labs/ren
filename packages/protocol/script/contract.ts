@@ -12,7 +12,7 @@ const exceptions = new Map([
   ],
   [
     "credential-connect",
-    "Starts a sign-in for one MCP of an app: a collection write that returns a redirect, which no primitive operation is.",
+    "Starts a sign-in for one MCP of an app, and lists what an app needs connected in a space: a write that returns a redirect and a computed read, which no primitive operation is.",
   ],
   [
     "chat",
