@@ -13,6 +13,7 @@ import { useDeferredValue, useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { PasteCredentialDialog } from "../../components/paste-credential-dialog.js"
 import { Credentials } from "../../components/credentials.js"
+import { ConnectAppDialog } from "./connect-app-dialog.js"
 import { CredentialsTable } from "./credentials-table.js"
 import { Owners } from "./owners.js"
 
@@ -21,6 +22,7 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
   const queryClient = useQueryClient()
   const all = useQuery(context.api.credential.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
   const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
+
   const [query, setQuery] = useState("")
   const [creating, setCreating] = useState(false)
   const [copying, setCopying] = useState(false)
@@ -57,6 +59,11 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
           Add key
         </Button>
       </Toolbar.Root>
+      <SpaceApps
+        spaceId={props.spaceId}
+        space={spaceList.find((found) => found.id === props.spaceId)}
+        userId={props.userId}
+      />
       <CredentialsTable
         rows={visible}
         state={state[all.status]}
@@ -85,6 +92,56 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
           spaces={names}
           onClose={() => setCopying(false)}
           onCopied={refresh}
+        />
+      ) : null}
+    </>
+  )
+}
+
+// oxlint-disable-next-line ren/no-comments -- connections.md §10a: each app of the space opens its connect dialog.
+function SpaceApps(props: {
+  spaceId: string
+  space: { readonly name: string; readonly brainScope: string } | undefined
+  userId: string
+}) {
+  const context = RouterContext.useRouterContext()
+  const apps = useQuery(
+    context.api["space-app"].list.queryOptions({
+      spaceId: props.spaceId,
+      page: 1,
+      pageSize: Pagination.maximumPageSize,
+    }),
+  )
+  const [connecting, setConnecting] = useState<string>()
+  const installed = apps.data?.items ?? []
+  if (installed.length === 0) return null
+  return (
+    <>
+      <List.Root label="Apps in this space">
+        <List.Section title="Apps" appearance="eyebrow">
+          {installed.map((use) => (
+            <List.Item
+              key={use.id}
+              title={use.app.name}
+              description={use.app.description}
+              trailing={
+                <Button appearance="secondary" size="small" onClick={() => setConnecting(use.appId)}>
+                  Connect
+                </Button>
+              }
+            />
+          ))}
+        </List.Section>
+      </List.Root>
+      {connecting ? (
+        <ConnectAppDialog
+          spaceId={props.spaceId}
+          appId={connecting}
+          appNames={new Map(installed.map((use) => [use.appId, use.app.name]))}
+          spaceName={props.space?.name ?? "this space"}
+          personal={props.space?.brainScope === "session"}
+          userId={props.userId}
+          onClose={() => setConnecting(undefined)}
         />
       ) : null}
     </>
