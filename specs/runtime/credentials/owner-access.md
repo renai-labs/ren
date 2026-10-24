@@ -11,6 +11,8 @@ This file is the core of the spec. The references hold the evidence:
 
 Prior art: ren-v1 `packages/api/src/vault/` (tables, OAuth flow, requirements) and OpenCode `packages/core/src/mcp/oauth.ts` (MCP SDK in Effect).
 
+> `ren_connect`, its card and its instruction (A9, A40, A42 below) moved to Ren MCP and are not built in this branch. The rules for them stay as written for that work.
+
 ## 1. Goal
 
 People connect, see, share and remove credentials with the same UX as ren-v1, in the composer, in the chat and on the settings pages. Ren keeps each credential with one owner and applies the owner rules of README section 6.4.
@@ -18,7 +20,7 @@ People connect, see, share and remove credentials with the same UX as ren-v1, in
 Done when:
 
 - In a new chat, the composer shows "2 not connected" for a space that uses the Stripe and Linear apps. The person connects Linear with OAuth and pastes the Stripe key from the composer. The pill goes away.
-- In a chat, the agent calls Gmail. The egress refuses with `credential_missing`. The agent calls `ren_connect`. The person signs in from the card. The agent goes on.
+- In a chat, the agent calls Gmail. The egress refuses with `credential_missing`. The agent tells the person which key to connect (a connect tool and card come with Ren MCP, later). The person connects it. The agent goes on.
 - A space serves two customers with two Meta Ads connections. Code mode calls each one with its own credential.
 - A member leaves the org. Their personal credentials and their account credentials in every space are gone. The Stripe key that they pasted for a space stays.
 

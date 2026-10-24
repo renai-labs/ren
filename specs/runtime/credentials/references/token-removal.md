@@ -25,7 +25,7 @@ The host token is the root: host, environment and model renewals all present it.
 | The 401 renew-and-retry in `plugin.ts:378`                                                                                                                       | goes.                                          |
 | The host-token check in `cell/src/brain.ts:37`                                                                                                                   | goes.                                          |
 | `cell/src/fence.ts`, and its use in `host-token.ts:71` and `hot-reload.ts:110`                                                                                   | optional. The egress denies an old generation. |
-| The environment token for a brain's own hand; `cell/src/host-access.ts` for that hand                                                                            | goes. The call stays on 127.0.0.1.             |
+| The environment token for a brain's own hand; `cell/src/host-access.ts` for that hand                                                                            | stays. E2B publishes every sandbox port, also one bound to 127.0.0.1 (live: `https://4100-<id>.e2b.app/v1/rpc` reached the executor), so the token is the hand's only guard. |
 | `server/src/handlers/ren-host/token.ts` (`host.refresh`), `models.ts` (`models.refresh`)                                                                         | go.                                            |
 | `core/src/brain-client.ts:45`, `core/src/environments.ts:99` (read private keys)                                                                                 | use `Signer`.                                  |
 
@@ -33,15 +33,15 @@ The host token is the root: host, environment and model renewals all present it.
 
 Decisions are in [`../../e2b-brain/README.md`](../../e2b-brain/README.md) §6.
 
-| Decision | Today                                                           | After this spec                                                |
-| -------- | --------------------------------------------------------------- | -------------------------------------------------------------- |
-| E25      | One host token per brain, held by the brain.                    | The egress holds it and injects it (C8).                       |
-| E47      | The brain renews its host token at 1 h left.                    | Ren signs a new one 5 min before `exp`; the egress caches it.  |
-| E54, E57 | Model grants with keys in the brain; renewal at 3 h left.       | The model key is a credential at the egress.                   |
-| E58      | Renew the key once on a 401, then retry.                        | Removed.                                                       |
-| E60      | On `ModelsNotConfigured`, pull and answer again.                | Only for the model list.                                       |
-| E64      | Model credentials installed per Location.                       | Model list only; no credentials.                               |
-| E69      | The boot poll carries the first host token in `ren-host-token`. | Removed.                                                       |
-| E97      | Environment token for the brain's own hand.                     | Removed for its own hand.                                      |
-| E119     | The brain learns Ren's address from server tokens.              | Removed. The brain calls `ren.internal`; the egress routes it. |
-| E51      | The brain fences itself on `GenerationRetired`.                 | Optional; the egress denies the old generation.                |
+| Decision | Today                                                           | After this spec                                                   |
+| -------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| E25      | One host token per brain, held by the brain.                    | The egress holds it and injects it (C8).                          |
+| E47      | The brain renews its host token at 1 h left.                    | Ren signs a new one 20 min before `exp`; the egress caches it.    |
+| E54, E57 | Model grants with keys in the brain; renewal at 3 h left.       | The model key is a credential at the egress.                      |
+| E58      | Renew the key once on a 401, then retry.                        | Removed.                                                          |
+| E60      | On `ModelsNotConfigured`, pull and answer again.                | Only for the model list.                                          |
+| E64      | Model credentials installed per Location.                       | Model list only; no credentials.                                  |
+| E69      | The boot poll carries the first host token in `ren-host-token`. | Removed.                                                          |
+| E97      | Environment token for the brain's own hand.                     | Removed for its own hand.                                         |
+| E119     | The brain learns Ren's address from server tokens.              | Removed. The brain calls `REN_URL`; the egress injects the token. |
+| E51      | The brain fences itself on `GenerationRetired`.                 | Optional; the egress denies the old generation.                   |

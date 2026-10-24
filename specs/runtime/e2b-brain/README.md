@@ -381,7 +381,7 @@ Status: spec written, not built. Build after M2. Two specs, built together (C34)
  │ MCP header                   │ │ (E2B: proxy login per     │                        │ ③ swaps in the real value    │            MCP, model, git
  │  Bearer ren:MCP_META_ADS__ACME│ │  sandbox; never inside it)│                        │ or refuses credential_missing│
  └──────────────▲───────────────┘ └──────────────────────────┘                        └──────────────────────────────┘
-                │ on credential_missing the agent calls ren_connect({ label }) → the app draws a connect card
+                │ on credential_missing the agent tells the person the label (connect card: Ren MCP, later)
 ```
 
 ### 10.2 Decisions in plain words
@@ -425,7 +425,7 @@ Connecting:
 Gaps and UX:
 
 22. Ren computes what a chat, or a new chat, needs and what is missing. The app asks again after each change; it does not poll (A8, A28).
-23. In a chat, the egress refuses, the agent calls `ren_connect`, the person connects from the card, and the next request works (A9).
+23. In a chat, the egress refuses with the label, the person connects the key, and the next request works (A9; the card comes with Ren MCP).
 24. The UX is the same as in ren-v1: the composer pill, the connect dialog, the card, the secrets page, the space tab, the OAuth apps page and Reconnect (A26, `../credentials/references/ux-parity.md`).
 
 Lifecycle:
@@ -442,11 +442,11 @@ Deep check against ren-v1 and E2B (README §11a, `owner-access.md` §14a), in pl
 28. The egress keeps answers in its own memory. If Ren goes down, running chats keep working for up to 15 min with the last good answers (C37).
 29. E2B sends host names to the egress only with `allowOut: ["*"]` and `denyOut: ["0.0.0.0/0"]`. The E2B layer sets this with the proxy on create, update and resume (C38).
 30. Ren tells every egress copy to forget an answer after a delete or a replace, and closes the old sandbox's open connections (C40).
-31. The egress never forwards a request with an unresolved `ren:<LABEL>`. It answers 403 with the label and "call ren_connect" (C42).
+31. The egress never forwards a request with an unresolved `ren:<LABEL>`. It answers 403 with the reason and the label (C42).
 32. Every image trusts the egress certificate in every common place (system, Python, Node, curl, git, AWS) (C44).
 33. GitHub works for `gh` and `git` through `GH_TOKEN`, `GITHUB_TOKEN` and injection by host (C45).
 34. A new key's placeholder env var appears at once, not at turn end (C47). System names like `PATH` cannot be labels (C48).
-35. Hosts are required for every key; no bare `*` (A39). `ren_connect` cannot set hosts (A40).
+35. Hosts are required for every key; no bare `*` (A39). An agent cannot set hosts (A40).
 36. Removing a member from a space stops their session brain there from using space credentials (A37).
 
 Later (A34): the composer pill, OAuth for MCPs and MCP connections wait until Ren stores which apps and MCPs a space uses. Open: request signing; a KMS signer for the egress certificate authority; budget checks at the egress (REN-1482); whether E2B keeps the proxy login across pause and resume (live test).
