@@ -6,6 +6,7 @@ import { Signature } from "@ren/schema/signature"
 import { Workload } from "@ren/schema/workload"
 import { and, desc, eq, isNull, lt, sql } from "drizzle-orm"
 import { Clock, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Envelope } from "./envelope.js"
 import { Signer } from "./signer.js"
 
 export type ProofKind = "ProxyLogin" | "Token"
@@ -32,6 +33,7 @@ export type Verified =
 export interface Interface {
   readonly issue: (caller: Caller, kind: ProofKind) => Effect.Effect<Placement>
   readonly verify: (proof: Proof) => Effect.Effect<Verified>
+  readonly placement: (caller: Caller) => Effect.Effect<Option.Option<Placement>>
   readonly revoke: (workload: {
     readonly kind: Workload.Kind
     readonly id: string
@@ -67,6 +69,12 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const signer = yield* Signer.Service
+    const envelope = yield* Envelope.Service
+    const contextOf = (caller: Caller): Envelope.Context => ({
+      organizationId: caller.organizationId,
+      kind: "credential_caller",
+      id: Workload.key(caller.workload),
+    })
     const decodeWorkload = Schema.decodeUnknownOption(Workload.Info)
 
     const retired = Effect.fnUntraced(function* (workload: Workload.Info) {
@@ -85,6 +93,10 @@ export const layer = Layer.effect(
       issue: Effect.fn("CredentialCallers.issue")(function* (caller: Caller, kind: ProofKind) {
         const login = kind === "ProxyLogin" ? { username: `ren-${random(12)}`, password: random(32) } : undefined
         const passwordHash = login ? yield* hash(login.password) : null
+        // oxlint-disable-next-line ren/no-comments -- The provider needs the login again on every resume and network update (C38); Ren keeps it sealed, and checks proofs against the hash.
+        const passwordSealed = login
+          ? yield* envelope.seal(Redacted.make(login.password), contextOf(caller)).pipe(Effect.orDie)
+          : null
         yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* transaction
@@ -108,10 +120,17 @@ export const layer = Layer.effect(
                 proof_kind: kind,
                 username: login?.username ?? null,
                 password_hash: passwordHash,
+                password_sealed: passwordSealed,
               })
               .onConflictDoUpdate({
                 target: [table.workload_kind, table.workload_id, table.generation],
-                set: { proof_kind: kind, username: login?.username ?? null, password_hash: passwordHash },
+                set: {
+                  proof_kind: kind,
+                  username: login?.username ?? null,
+                  password_hash: passwordHash,
+                  password_sealed: passwordSealed,
+                  revoked_at: null,
+                },
               })
           }),
         )
@@ -158,6 +177,25 @@ export const layer = Layer.effect(
         if (Option.isNone(workload)) return unknown
         if (yield* retired(workload.value)) return { ok: false, reason: "generation_retired" } as const
         return { ok: true, caller: { workload: workload.value, organizationId: row.organization_id } } as const
+      }),
+
+      placement: Effect.fn("CredentialCallers.placement")(function* (caller: Caller) {
+        const rows = yield* database.db
+          .select()
+          .from(table)
+          .where(
+            and(
+              eq(table.workload_kind, caller.workload.kind),
+              eq(table.workload_id, caller.workload.id),
+              eq(table.generation, caller.workload.generation),
+              isNull(table.revoked_at),
+            ),
+          )
+          .pipe(Effect.orDie)
+        const row = rows.at(0)
+        if (!row?.username || !row.password_sealed) return Option.none()
+        const password = yield* envelope.open(row.password_sealed, contextOf(caller)).pipe(Effect.orDie)
+        return Option.some({ kind: "ProxyLogin", username: row.username, password } satisfies Placement)
       }),
 
       revoke: Effect.fn("CredentialCallers.revoke")(function* (workload) {

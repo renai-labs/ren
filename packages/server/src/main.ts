@@ -17,6 +17,7 @@ import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
 import { Retention } from "@ren/core/retention"
+import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
 import { LocalSandbox } from "@ren/core/sandbox-provider/local"
 import { Settings } from "@ren/core/settings"
@@ -49,7 +50,7 @@ const host = Layer.unwrap(
       Config.withDefault(join(import.meta.dir, "../../executor/src/main.ts")),
     )
     return BrainHost.layerSandbox.pipe(
-      Layer.provide(BrainLifecycle.layer),
+      Layer.provide(BrainLifecycle.layer.pipe(Layer.provide(SandboxEgress.layerConfig))),
       Layer.provide(provider === "e2b" ? E2BSandbox.layer : LocalSandbox.layer({ entry, executor, root })),
     )
   }),

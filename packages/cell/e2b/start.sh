@@ -1,6 +1,14 @@
 #!/bin/sh
 set -eu
-if [ "$(id -u)" = "0" ] && id user >/dev/null 2>&1; then exec su user -s /bin/sh -c "$0"; fi
+if [ "$(id -u)" = "0" ] && id user >/dev/null 2>&1; then
+  # Ren uploads the egress CA before brain.env; trust it in the system store before the brain starts (C44).
+  while [ ! -s /home/user/.ren/brain.env ]; do sleep 0.2; done
+  if [ -s /home/user/.ren/egress-ca.pem ]; then
+    cp /home/user/.ren/egress-ca.pem /usr/local/share/ca-certificates/ren-egress.crt
+    update-ca-certificates >/dev/null
+  fi
+  exec su user -s /bin/sh -c "$0"
+fi
 home="${HOME:-/home/user}"
 mkdir -p "$home/.ren" "$home/workspace"
 while [ ! -s "$home/.ren/brain.env" ]; do sleep 0.2; done

@@ -12,6 +12,15 @@ const envdPort = 49983
 
 const envFile = "/home/user/.ren/brain.env"
 
+export const caFile = "/home/user/.ren/egress-ca.pem"
+
+// oxlint-disable-next-line ren/no-comments -- E2B sends host names to the proxy only when a domain entry allows the connection; `*` with a deny of all IP ranges sends every connection to the proxy by name (README §11a rows 1 and 2). An update replaces the whole config, so each one repeats the proxy.
+const networkOf = (proxy: SandboxProvider.Proxy) => ({
+  allowOut: ["*"],
+  denyOut: ["0.0.0.0/0"],
+  egressProxy: { address: proxy.address, username: proxy.username, password: Redacted.value(proxy.password) },
+})
+
 const createTimeout = Duration.minutes(10)
 
 const Binding = Schema.Struct({
@@ -101,20 +110,18 @@ export const layer = Layer.effect(
         ),
         Effect.map((sandboxes) => sandboxes.filter((sandbox) => sandbox.metadata?.owner === owner)),
       )
-    const configure = Effect.fn("E2BSandbox.configure")(function* (
+    const upload = Effect.fnUntraced(function* (
       binding: Binding,
       accessToken: Option.Option<string>,
-      env: Readonly<Record<string, string>>,
+      path: string,
+      content: string,
     ) {
-      const content = Object.keys(env)
-        .map((name) => `${name}=${quote(env[name] ?? "")}`)
-        .join("\n")
       const form = new FormData()
-      form.append("file", new Blob([`${content}\n`]), "brain.env")
+      form.append("file", new Blob([content]), path.slice(path.lastIndexOf("/") + 1))
       const response = yield* http
         .execute(
           HttpClientRequest.post(
-            `https://${envdPort}-${binding.sandboxId}.${binding.domain}/files?path=${encodeURIComponent(envFile)}&username=user`,
+            `https://${envdPort}-${binding.sandboxId}.${binding.domain}/files?path=${encodeURIComponent(path)}&username=user`,
           ).pipe(
             HttpClientRequest.setHeaders(
               Option.match(accessToken, { onNone: () => ({}), onSome: (token) => ({ "x-access-token": token }) }),
@@ -125,6 +132,34 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(failed("configure")))
       yield* strict("configure", response)
     })
+    // oxlint-disable-next-line ren/no-comments -- The CA goes before brain.env, because start.sh installs it into the system store once brain.env exists (C44).
+    const configure = Effect.fn("E2BSandbox.configure")(function* (
+      binding: Binding,
+      accessToken: Option.Option<string>,
+      env: Readonly<Record<string, string>>,
+      proxy: Option.Option<SandboxProvider.Proxy>,
+    ) {
+      const ca = Option.flatMap(proxy, (found) => found.ca)
+      if (Option.isSome(ca)) yield* upload(binding, accessToken, caFile, ca.value)
+      const content = Object.keys(env)
+        .map((name) => `${name}=${quote(env[name] ?? "")}`)
+        .join("\n")
+      yield* upload(binding, accessToken, envFile, `${content}\n`)
+    })
+    const updateNetwork = Effect.fn("E2BSandbox.updateNetwork")(function* (
+      binding: Binding,
+      proxy: Option.Option<SandboxProvider.Proxy>,
+    ) {
+      if (Option.isNone(proxy)) return
+      const response = yield* send(
+        "network",
+        HttpClientRequest.put(`/sandboxes/${binding.sandboxId}/network`).pipe(
+          HttpClientRequest.bodyJsonUnsafe(networkOf(proxy.value)),
+        ),
+      )
+      if (response.status === 404) return yield* gone(binding)
+      yield* strict("network", response)
+    })
 
     return SandboxProvider.Service.of({
       kind: "e2b",
@@ -134,6 +169,9 @@ export const layer = Layer.effect(
         const existing = (yield* list(metadata, "running,paused")).at(0)
         if (existing) {
           const binding = { sandboxId: existing.sandboxID, domain: config.domain, port: config.port }
+          yield* updateNetwork(binding, input.proxy).pipe(
+            Effect.catchTag("SandboxProvider.Gone", (error) => Effect.fail(failed("network")(error))),
+          )
           return { binding: Schema.encodeSync(Binding)(binding), url: urlOf(binding) }
         }
         const running = yield* list({}, "running")
@@ -152,6 +190,7 @@ export const layer = Layer.effect(
               secure: true,
               metadata: { owner, ...metadata },
               envVars: input.env,
+              ...Option.match(input.proxy, { onNone: () => ({}), onSome: (proxy) => ({ network: networkOf(proxy) }) }),
             }),
           ),
         )
@@ -161,10 +200,10 @@ export const layer = Layer.effect(
           ),
         )
         const binding = { sandboxId: created.sandboxID, domain: created.domain ?? config.domain, port: config.port }
-        yield* configure(binding, Option.fromNullishOr(created.envdAccessToken), input.env)
+        yield* configure(binding, Option.fromNullishOr(created.envdAccessToken), input.env, input.proxy)
         return { binding: Schema.encodeSync(Binding)(binding), url: urlOf(binding) }
       }),
-      connect: Effect.fn("E2BSandbox.connect")(function* (raw) {
+      connect: Effect.fn("E2BSandbox.connect")(function* (raw, proxy) {
         const binding = yield* read(raw)
         const response = yield* send(
           "connect",
@@ -174,6 +213,7 @@ export const layer = Layer.effect(
         )
         if (response.status === 404) return yield* gone(binding)
         yield* body("connect", response)
+        yield* updateNetwork(binding, proxy)
         return { url: urlOf(binding) }
       }),
       keepAlive: Effect.fn("E2BSandbox.keepAlive")(function* (raw, duration) {

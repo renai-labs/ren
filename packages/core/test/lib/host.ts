@@ -16,6 +16,7 @@ import { BrainClient } from "../../src/brain-client.js"
 import { BrainHost } from "../../src/brain-host.js"
 import { Brains } from "../../src/brains.js"
 import { BrainLifecycle } from "../../src/brain-lifecycle.js"
+import { SandboxEgress } from "../../src/sandbox-egress.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { EnvironmentProvider } from "../../src/environment-provider.js"
 import { Environments } from "../../src/environments.js"
@@ -73,7 +74,7 @@ interface StackOptions<E, R> {
 export const stack = <E, R>(options: StackOptions<E, R>) =>
   Brains.layer.pipe(
     Layer.provideMerge(BrainHost.layerSandbox),
-    Layer.provideMerge(BrainLifecycle.layer),
+    Layer.provideMerge(BrainLifecycle.layer.pipe(Layer.provide(SandboxEgress.layerNone))),
     Layer.provideMerge(
       options.sandbox ??
         LocalSandbox.layer({

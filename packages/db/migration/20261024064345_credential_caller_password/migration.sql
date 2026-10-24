@@ -1,0 +1,1 @@
+ALTER TABLE "credential_caller" ADD COLUMN "password_sealed" jsonb;

@@ -253,7 +253,7 @@ describe("brain runs", () => {
     const current = await ren()
     const created = await current.runPromise(
       SandboxProvider.Service.use((provider) =>
-        provider.create({ brainId: Brain.ID.create(), generation: 1, env: {} }),
+        provider.create({ brainId: Brain.ID.create(), generation: 1, env: {}, proxy: Option.none() }),
       ),
     )
     const pid = pidOf(created.binding)

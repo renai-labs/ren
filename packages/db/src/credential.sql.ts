@@ -102,6 +102,7 @@ export const credential_caller = pgTable(
     proof_kind: text().$type<"ProxyLogin" | "Address" | "HostStamp" | "Token">().notNull(),
     username: text(),
     password_hash: text(),
+    password_sealed: jsonb().$type<Envelope.Sealed>(),
     address: text(),
     revoked_at: timestamp(),
     created_at: timestamp().defaultNow().notNull(),

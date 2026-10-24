@@ -11,6 +11,7 @@ import { WorkflowEngine } from "effect/workflow"
 import { BrainClient } from "./brain-client.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Environments } from "./environments.js"
+import { SandboxEgress } from "./sandbox-egress.js"
 import { SandboxProvider } from "./sandbox-provider.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("BrainLifecycle.Unavailable", {
@@ -68,6 +69,7 @@ export const layer = Layer.effect(
     const client = yield* BrainClient.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const environments = yield* Environments.Service
+    const egress = yield* SandboxEgress.Service
     const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(Config.withDefault(timing.wake))
 
     const read = (brainId: Brain.ID) =>
@@ -143,7 +145,16 @@ export const layer = Layer.effect(
 
     const create = Effect.fnUntraced(function* (row: Row) {
       const created = yield* provider
-        .create({ brainId: row.id, generation: row.generation, env: yield* env(row) })
+        .create({
+          brainId: row.id,
+          generation: row.generation,
+          env: yield* env(row),
+          proxy: yield* egress.proxyFor({
+            brainId: row.id,
+            generation: row.generation,
+            organizationId: row.organization_id,
+          }),
+        })
         .pipe(
           Effect.map(Option.some),
           Effect.catchTag("SandboxProvider.Capacity", (error) =>
@@ -186,7 +197,12 @@ export const layer = Layer.effect(
         yield* Effect.logInfo(`Brain ${row.id} runs build ${row.template}; Ren replaces it with ${provider.template}`)
         return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
       }
-      const connected = yield* provider.connect(row.binding).pipe(
+      const proxy = yield* egress.proxyFor({
+        brainId: row.id,
+        generation: row.generation,
+        organizationId: row.organization_id,
+      })
+      const connected = yield* provider.connect(row.binding, proxy).pipe(
         Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
         Effect.catchTag("SandboxProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
         Effect.catchTag("SandboxProvider.Capacity", (error) =>

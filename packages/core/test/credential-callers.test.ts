@@ -2,8 +2,9 @@ import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, Effect, Layer, Redacted, Schema } from "effect"
+import { ConfigProvider, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { CredentialCallers } from "../src/credential-callers.js"
+import { Envelope } from "../src/envelope.js"
 import { Signer } from "../src/signer.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
@@ -12,11 +13,14 @@ const key = await Effect.runPromise(Signature.generate("brain"))
 
 const it = testEffect(
   CredentialCallers.layer.pipe(
-    Layer.provideMerge(Signer.layerLocal),
+    Layer.provideMerge(Layer.mergeAll(Signer.layerLocal, Envelope.layerLocal)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({
+          ENVELOPE_KEYS: JSON.stringify([
+            { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
+          ]),
           BRAIN_KEYS: JSON.stringify([
             { id: key.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.privateKey.key) },
           ]),
@@ -127,6 +131,28 @@ describe("CredentialCallers", () => {
       expect(
         yield* callers.verify({ kind: "ProxyLogin", username: current.username, password: current.password }),
       ).toEqual({ ok: false, reason: "generation_retired" })
+    }),
+  )
+
+  it.live("a resumed sandbox gets the same proxy login again; a replaced generation has none", () =>
+    Effect.gen(function* () {
+      const callers = yield* CredentialCallers.Service
+      const seeded = yield* brain()
+      const caller = (generation: number) => ({
+        workload: { kind: "brain" as const, id: seeded.brainId, generation },
+        organizationId: seeded.organizationId,
+      })
+      expect(yield* callers.placement(caller(1))).toEqual(Option.none())
+      const issued = yield* callers.issue(caller(1), "ProxyLogin")
+      const again = yield* callers.placement(caller(1))
+      if (issued.kind !== "ProxyLogin" || Option.isNone(again) || again.value.kind !== "ProxyLogin")
+        return yield* Effect.die(new Error("expected proxy logins"))
+      expect([again.value.username, Redacted.value(again.value.password)]).toEqual([
+        issued.username,
+        Redacted.value(issued.password),
+      ])
+      yield* callers.issue(caller(2), "ProxyLogin")
+      expect(yield* callers.placement(caller(1))).toEqual(Option.none())
     }),
   )
 })

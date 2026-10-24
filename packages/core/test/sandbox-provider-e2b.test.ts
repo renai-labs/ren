@@ -1,0 +1,118 @@
+import { afterAll, describe, expect } from "bun:test"
+import { Brain } from "@ren/schema/brain"
+import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
+import { E2BSandbox } from "../src/sandbox-provider/e2b.js"
+import { SandboxProvider } from "../src/sandbox-provider.js"
+import { testEffect } from "./lib/effect.js"
+
+interface Seen {
+  readonly method: string
+  readonly host: string
+  readonly path: string
+  readonly body: string
+}
+
+const seen: Array<Seen> = []
+
+// oxlint-disable-next-line ren/no-comments -- A local server answers as the E2B API and as envd. The client below sends every request here and keeps the host it meant in x-target-host.
+const e2b = Bun.serve({
+  hostname: "127.0.0.1",
+  port: 0,
+  fetch: async (request) => {
+    const url = new URL(request.url)
+    seen.push({
+      method: request.method,
+      host: request.headers.get("x-target-host") ?? "",
+      path: url.pathname,
+      body: await request.text(),
+    })
+    if (url.pathname === "/v2/sandboxes") return Response.json([])
+    if (url.pathname === "/sandboxes" && request.method === "POST")
+      return Response.json({ sandboxID: "sbx_1", domain: "e2b.test", envdAccessToken: "envd" })
+    if (url.pathname === "/sandboxes/sbx_1/connect") return Response.json({ sandboxID: "sbx_1" })
+    if (url.pathname === "/sandboxes/sbx_1/network") return new Response(null, { status: 204 })
+    if (url.pathname === "/files") return Response.json([{ path: url.searchParams.get("path") }])
+    return new Response("not found", { status: 404 })
+  },
+})
+afterAll(() => e2b.stop(true))
+
+const local = Layer.effect(
+  HttpClient.HttpClient,
+  Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient
+    return HttpClient.mapRequest(client, (request) => {
+      const url = URL.parse(request.url)
+      if (!url) return request
+      return request.pipe(
+        HttpClientRequest.setUrl(`http://127.0.0.1:${e2b.port}${url.pathname}${url.search}`),
+        HttpClientRequest.setHeader("x-target-host", url.host),
+      )
+    })
+  }),
+).pipe(Layer.provide(FetchHttpClient.layer))
+
+const it = testEffect(
+  E2BSandbox.layer.pipe(
+    Layer.provide(local),
+    Layer.provide(
+      ConfigProvider.layer(
+        ConfigProvider.fromUnknown({
+          E2B_API_KEY: "e2b_test",
+          E2B_DOMAIN: "e2b.test",
+          E2B_API_URL: `http://127.0.0.1:${e2b.port}`,
+        }),
+      ),
+    ),
+  ),
+)
+
+const proxy = {
+  address: "egress.ren.dev:1080",
+  username: "ren-login",
+  password: Redacted.make("secret"),
+  ca: Option.some("-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----\n"),
+}
+
+const network = {
+  allowOut: ["*"],
+  denyOut: ["0.0.0.0/0"],
+  egressProxy: { address: "egress.ren.dev:1080", username: "ren-login", password: "secret" },
+}
+
+describe("E2BSandbox with an egress", () => {
+  it.live("create, resume and every network update carry the proxy login (C38), and the CA reaches the sandbox", () =>
+    Effect.gen(function* () {
+      const provider = yield* SandboxProvider.Service
+      seen.length = 0
+      const created = yield* provider.create({
+        brainId: Brain.ID.make("brn_01"),
+        generation: 1,
+        env: { REN_BRAIN_ID: "brn_01" },
+        proxy: Option.some(proxy),
+      })
+      const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
+      expect(JSON.parse(create?.body ?? "{}")).toMatchObject({ network })
+      const files = seen.filter((request) => request.path === "/files").map((request) => request.host)
+      expect(files).toEqual(["49983-sbx_1.e2b.test", "49983-sbx_1.e2b.test"])
+      expect(seen.some((request) => request.body.includes("BEGIN CERTIFICATE"))).toBe(true)
+
+      seen.length = 0
+      yield* provider.connect(created.binding, Option.some(proxy))
+      const update = seen.find((request) => request.path === "/sandboxes/sbx_1/network")
+      expect(update?.method).toBe("PUT")
+      expect(JSON.parse(update?.body ?? "{}")).toEqual(network)
+    }),
+  )
+
+  it.live("without an egress, a create sends no network config", () =>
+    Effect.gen(function* () {
+      const provider = yield* SandboxProvider.Service
+      seen.length = 0
+      yield* provider.create({ brainId: Brain.ID.make("brn_02"), generation: 1, env: {}, proxy: Option.none() })
+      const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
+      expect(JSON.parse(create?.body ?? "{}").network).toBeUndefined()
+    }),
+  )
+})

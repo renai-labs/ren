@@ -2,7 +2,7 @@ export * as SandboxProvider from "./sandbox-provider.js"
 
 import type { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
-import { Context, type Duration, type Effect, Schema, type Stream } from "effect"
+import { Context, type Duration, type Effect, Option, Redacted, Schema, type Stream } from "effect"
 
 export class Gone extends Schema.TaggedError<Gone>()("SandboxProvider.Gone", { message: Schema.String }) {}
 
@@ -36,6 +36,14 @@ export interface Listed {
   readonly generation: number
 }
 
+// oxlint-disable-next-line ren/no-comments -- Where the sandbox's outbound traffic goes, with the proxy login that names its workload, and the egress CA it must trust (README C2, C38, C44). The provider gives the login to its platform; the sandbox never sees it.
+export interface Proxy {
+  readonly address: string
+  readonly username: string
+  readonly password: Redacted.Redacted
+  readonly ca: Option.Option<string>
+}
+
 export interface Interface {
   readonly kind: string
   readonly template: string | null
@@ -43,8 +51,12 @@ export interface Interface {
     readonly brainId: Brain.ID
     readonly generation: number
     readonly env: Readonly<Record<string, string>>
+    readonly proxy: Option.Option<Proxy>
   }) => Effect.Effect<Created, Failed | Capacity>
-  readonly connect: (binding: Schema.Json) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
+  readonly connect: (
+    binding: Schema.Json,
+    proxy: Option.Option<Proxy>,
+  ) => Effect.Effect<{ readonly url: string }, Gone | Failed | Capacity>
   readonly keepAlive: (binding: Schema.Json, duration: Duration.Duration) => Effect.Effect<void, Gone | Failed>
   readonly destroy: (binding: Schema.Json) => Effect.Effect<void, Failed>
   readonly status: (binding: Schema.Json) => Effect.Effect<Status, Failed>
@@ -54,3 +66,26 @@ export interface Interface {
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/SandboxProvider") {}
+
+export const caVariables = [
+  "SSL_CERT_FILE",
+  "REQUESTS_CA_BUNDLE",
+  "NODE_EXTRA_CA_CERTS",
+  "CURL_CA_BUNDLE",
+  "GIT_SSL_CAINFO",
+  "AWS_CA_BUNDLE",
+] as const
+
+// oxlint-disable-next-line ren/no-comments -- For a host where the workload itself names the proxy (local development, README §7): every client reads HTTPS_PROXY or HTTP_PROXY; traffic to the brain's own hand and server stays local (README §6.10 rule 4); every CA variable names the egress CA (C44).
+export const proxyEnv = (proxy: Proxy, caPath: string): Readonly<Record<string, string>> => {
+  const url = `http://${encodeURIComponent(proxy.username)}:${encodeURIComponent(Redacted.value(proxy.password))}@${proxy.address}`
+  return {
+    HTTPS_PROXY: url,
+    HTTP_PROXY: url,
+    https_proxy: url,
+    http_proxy: url,
+    NO_PROXY: "localhost,127.0.0.1,0.0.0.0,::1",
+    no_proxy: "localhost,127.0.0.1,0.0.0.0,::1",
+    ...(Option.isSome(proxy.ca) ? Object.fromEntries(caVariables.map((name) => [name, caPath])) : {}),
+  }
+}
