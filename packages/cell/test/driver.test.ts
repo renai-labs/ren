@@ -388,15 +388,16 @@ describe("OpenCode facts the Ren driver relies on", () => {
         })
         const endpoints = Shared.access(undefined, stub.url).endpoints
         const server = yield* OpenCodeServer.make(
-          createEmbeddedRoutes(
-            {
-              database: { path: ":memory:" },
-              config: { project: false, content: Shared.vars(stub.url).OPENCODE_CONFIG },
-              models: { fetch: false },
-              fs: { filewatcher: false, fff: false },
-            },
-            RenWorkspaceDriver.replacements(counted),
-          ).pipe(Layer.provide(HttpServer.layerServices)),
+          (replacements) =>
+            createEmbeddedRoutes(
+              {
+                database: { path: ":memory:" },
+                config: { project: false, content: Shared.vars(stub.url).OPENCODE_CONFIG },
+                models: { fetch: false },
+                fs: { filewatcher: false, fff: false },
+              },
+              [...replacements, ...RenWorkspaceDriver.replacements(counted)],
+            ).pipe(Layer.provide(HttpServer.layerServices)),
           endpoints,
           () => Effect.succeedNone,
           Option.some(counted),

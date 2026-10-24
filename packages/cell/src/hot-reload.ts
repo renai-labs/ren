@@ -102,8 +102,11 @@ export const layer = Layer.effect(
       yield* Effect.scoped(
         Effect.gen(function* () {
           const opened = yield* harness.get
-          if (access) yield* opened.configure(access.endpoints)
-          yield* opened.applySettings(reply.chats)
+          yield* opened.configure({
+            models: Option.match(yield* store.read, { onNone: () => [], onSome: (saved) => saved.endpoints }),
+            apps: yield* apps.current,
+            settings: { layers: yield* settings.layers, chats: yield* settings.chats },
+          })
           // oxlint-disable-next-line ren/no-comments -- A chat Ren deleted leaves the harness at once, when idle; its folder goes after 7 days of Ren naming it deleted (E109, E114).
           const busy = new Set(sessions.filter((session) => session.busy).map((session) => session.id))
           yield* Effect.forEach(
