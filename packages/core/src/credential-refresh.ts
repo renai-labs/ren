@@ -1,12 +1,15 @@
 export * as CredentialRefresh from "./credential-refresh.js"
 
 import { Database } from "@ren/db/database"
+import type { Auth } from "@ren/schema/auth"
 import type { Credential } from "@ren/schema/credential"
-import { and, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm"
-import { Clock, Context, Duration, Effect, Layer, Schedule, Schema } from "effect"
+import { and, eq, inArray, isNotNull, isNull, lt, notExists, or, sql } from "drizzle-orm"
+import { Clock, Context, Duration, Effect, Layer, Option, Redacted, Schedule, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
+import { Credentials } from "./credentials.js"
 import { DurableRunner } from "./durable-runner.js"
 import { EgressControl } from "./egress-control.js"
+import { Envelope } from "./envelope.js"
 
 export class Fatal extends Schema.TaggedError<Fatal>()("CredentialRefresh.Fatal", { message: Schema.String }) {}
 
@@ -14,8 +17,27 @@ export class Transient extends Schema.TaggedError<Transient>()("CredentialRefres
   message: Schema.String,
 }) {}
 
+export interface Current {
+  readonly id: Credential.ID
+  readonly organizationId: Auth.OrganizationID
+  readonly label: string
+  readonly value: Credentials.Sealed
+  readonly revision: number
+  readonly scopes: ReadonlyArray<string>
+  readonly expiresAt: Option.Option<Date>
+}
+
+// oxlint-disable-next-line ren/no-comments -- A refresher reads and returns; only the sweep writes (K11). `scopes` keeps the old scopes when absent (§8 rule 4); `saved` runs after the write, for example a Composio cleanup of the old session.
+export interface Renewed {
+  readonly value: Credentials.Sealed
+  readonly expiresAt: Option.Option<Date>
+  readonly scopes?: ReadonlyArray<string>
+  readonly saved?: Effect.Effect<void>
+}
+
+// oxlint-disable-next-line ren/no-comments -- `none` means there is nothing to do now, for example a token without a refresh token before its expiry (§8 rule 5).
 export interface Refresher {
-  readonly refresh: (id: Credential.ID) => Effect.Effect<void, Fatal | Transient>
+  readonly refresh: (current: Current) => Effect.Effect<Option.Option<Renewed>, Fatal | Transient>
 }
 
 export class Refreshers extends Context.Service<Refreshers, ReadonlyMap<Credential.Type, Refresher>>()(
@@ -26,15 +48,20 @@ export const layerNoRefreshers = Layer.succeed(Refreshers, new Map())
 
 export interface Interface {
   readonly sweep: Effect.Effect<void>
+  readonly refresh: (id: Credential.ID, options: { readonly revision?: number }) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/CredentialRefresh") {}
 
 export const every = Duration.minutes(5)
 
-export const ahead = Duration.minutes(10)
+export const ahead = Duration.minutes(20)
 
 export const lease = Duration.minutes(2)
+
+export const alertAfter = 3
+
+export const sessionsKept = Duration.days(1)
 
 const RefreshRun = DurableRunner.make("CredentialRefresh", {
   payload: { slot: Schema.String },
@@ -42,79 +69,164 @@ const RefreshRun = DurableRunner.make("CredentialRefresh", {
 })
 
 const table = Database.Schema.credential
+const apps = Database.Schema.oauth_app
 
-// oxlint-disable-next-line ren/no-comments -- C51: one sweep for all Ren copies every 5 minutes. Each credential that expires within 10 minutes is taken under a lease, so one refresh runs at a time per credential and a sweep never retries inside one rotation (ren-v1 bug 2). A fatal answer deletes the credential (owner-access §11).
+const SealedJson = Schema.fromJsonString(Credentials.Sealed)
+const encodeSealed = Schema.encodeSync(SealedJson)
+const decodeSealed = Schema.decodeUnknownOption(SealedJson)
+
+// oxlint-disable-next-line ren/no-comments -- C51: one sweep for all Ren copies every 5 minutes, for credentials that expire within 20 minutes (K12). One lease per credential, so one refresh runs at a time (ren-v1 bug 2). The write checks the revision that was read, so a reconnect that saved meanwhile wins (K11, U3). A fatal answer keeps the row with status `reconnect` and a cleared value (K13); a temporary one counts and alerts after 3 in a row (K14).
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
     const refreshers = yield* Refreshers
     const control = yield* EgressControl.Service
+    const envelope = yield* Envelope.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
 
-    const refreshOne = Effect.fnUntraced(function* (row: {
-      readonly id: Credential.ID
-      readonly type: Credential.Type
-    }) {
-      const refresher = refreshers.get(row.type)
-      if (!refresher) return
+    const contextOf = (row: { readonly organization_id: Auth.OrganizationID; readonly id: Credential.ID }) => ({
+      organizationId: row.organization_id,
+      kind: "credential" as const,
+      id: row.id,
+    })
+
+    const seal = (row: Parameters<typeof contextOf>[0], value: Credentials.Sealed) =>
+      envelope.seal(Redacted.make(encodeSealed(value)), contextOf(row)).pipe(Effect.orDie)
+
+    const write = Effect.fnUntraced(function* (
+      row: typeof table.$inferSelect,
+      set: Partial<typeof table.$inferInsert>,
+    ) {
+      const written = yield* database.db
+        .update(table)
+        .set({ ...set, revision: sql`${table.revision} + 1`, refresh_lease_at: null, updated_at: sql`now()` })
+        .where(and(eq(table.id, row.id), eq(table.revision, row.revision)))
+        .returning({ id: table.id })
+        .pipe(Effect.orDie)
+      if (written.length === 0) {
+        yield* Effect.logInfo(`Credential ${row.label} changed during its refresh; Ren keeps the newer value`)
+        return false
+      }
+      yield* control.invalidate({ label: row.label })
+      return true
+    })
+
+    const release = (row: typeof table.$inferSelect, options: { readonly failed: boolean }) =>
+      database.db
+        .update(table)
+        .set({
+          refresh_lease_at: null,
+          ...(options.failed && { refresh_failures: sql`${table.refresh_failures} + 1` }),
+        })
+        .where(eq(table.id, row.id))
+        .returning({ failures: table.refresh_failures })
+        .pipe(
+          Effect.orDie,
+          Effect.map((rows) => rows.at(0)?.failures ?? 0),
+        )
+
+    const refresh = Effect.fn("CredentialRefresh.refresh")(function* (
+      id: Credential.ID,
+      options: { readonly revision?: number },
+    ) {
+      const now = yield* Clock.currentTimeMillis
       const taken = yield* database.db
         .update(table)
-        .set({ refresh_lease_at: sql`now()` })
+        .set({ refresh_lease_at: new Date(now) })
         .where(
           and(
-            eq(table.id, row.id),
-            or(
-              isNull(table.refresh_lease_at),
-              lt(table.refresh_lease_at, sql`now() - ${`${Duration.toSeconds(lease)} seconds`}::interval`),
-            ),
+            eq(table.id, id),
+            eq(table.status, "ok"),
+            options.revision === undefined ? undefined : eq(table.revision, options.revision),
+            or(isNull(table.refresh_lease_at), lt(table.refresh_lease_at, new Date(now - Duration.toMillis(lease)))),
           ),
         )
-        .returning({ id: table.id, label: table.label })
+        .returning()
         .pipe(Effect.orDie)
-      const found = taken.at(0)
-      if (!found) return
-      yield* refresher.refresh(row.id).pipe(
-        Effect.andThen(
-          database.db.update(table).set({ refresh_failures: 0 }).where(eq(table.id, row.id)).pipe(Effect.orDie),
-        ),
-        Effect.catchTag("CredentialRefresh.Fatal", (error) =>
-          database.db
-            .delete(table)
-            .where(eq(table.id, row.id))
-            .pipe(
-              Effect.orDie,
-              Effect.andThen(control.invalidate({ label: found.label })),
-              Effect.andThen(Effect.logWarning(`Credential ${found.label} could not refresh and is removed`, error)),
-            ),
-        ),
-        Effect.catchTag("CredentialRefresh.Transient", (error) =>
-          database.db
-            .update(table)
-            .set({ refresh_failures: sql`${table.refresh_failures} + 1` })
-            .where(eq(table.id, row.id))
-            .pipe(
-              Effect.orDie,
-              Effect.andThen(
-                Effect.logWarning(`Credential ${found.label} could not refresh; the next sweep tries again`, error),
-              ),
-            ),
-        ),
-      )
+      const row = taken.at(0)
+      if (!row) return
+      const refresher = refreshers.get(row.type)
+      const opened = yield* envelope.open(row.value, contextOf(row)).pipe(Effect.orDie)
+      const value = decodeSealed(Redacted.value(opened))
+      if (!refresher || Option.isNone(value)) {
+        yield* release(row, { failed: false })
+        return
+      }
+      yield* refresher
+        .refresh({
+          id: row.id,
+          organizationId: row.organization_id,
+          label: row.label,
+          value: value.value,
+          revision: row.revision,
+          scopes: row.scopes,
+          expiresAt: Option.fromNullishOr(row.expires_at),
+        })
+        .pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: () => release(row, { failed: false }),
+              onSome: (renewed) =>
+                Effect.gen(function* () {
+                  const saved = yield* write(row, {
+                    value: yield* seal(row, renewed.value),
+                    expires_at: Option.getOrNull(renewed.expiresAt),
+                    ...(renewed.scopes && { scopes: [...renewed.scopes] }),
+                    refresh_failures: 0,
+                  })
+                  if (saved && renewed.saved) yield* renewed.saved
+                }),
+            }),
+          ),
+          Effect.catchTag("CredentialRefresh.Fatal", (error) =>
+            Effect.gen(function* () {
+              yield* write(row, { status: "reconnect", value: yield* seal(row, { type: "cleared" }) })
+              yield* Effect.logWarning(`Credential ${row.label} could not refresh and needs a reconnect`, error)
+            }),
+          ),
+          Effect.catchTag("CredentialRefresh.Transient", (error) =>
+            Effect.gen(function* () {
+              const failures = yield* release(row, { failed: true })
+              yield* Effect.logWarning(`Credential ${row.label} could not refresh; Ren tries again`, error)
+              if (failures === alertAfter)
+                yield* Effect.logError(
+                  `alert: credential ${row.label} failed to refresh ${alertAfter} times in a row`,
+                ).pipe(Effect.annotateLogs({ alert: "credential_refresh", credential: row.id }))
+            }),
+          ),
+        )
     })
 
     const sweep = Effect.gen(function* () {
-      const due = yield* database.db
-        .select({ id: table.id, type: table.type })
-        .from(table)
-        .where(
-          and(
-            isNotNull(table.expires_at),
-            lt(table.expires_at, sql`now() + ${`${Duration.toSeconds(ahead)} seconds`}::interval`),
-          ),
-        )
+      const now = yield* Clock.currentTimeMillis
+      const types = [...refreshers.keys()]
+      const due =
+        types.length === 0
+          ? []
+          : yield* database.db
+              .select({ id: table.id })
+              .from(table)
+              .where(
+                and(
+                  eq(table.status, "ok"),
+                  inArray(table.type, types),
+                  isNotNull(table.expires_at),
+                  lt(table.expires_at, new Date(now + Duration.toMillis(ahead))),
+                  notExists(
+                    database.db
+                      .select({ one: sql`1` })
+                      .from(apps)
+                      .where(and(eq(apps.id, table.oauth_app_id), isNotNull(apps.archived_at))),
+                  ),
+                ),
+              )
+              .pipe(Effect.orDie)
+      yield* Effect.forEach(due, (row) => refresh(row.id, {}), { concurrency: 8, discard: true })
+      yield* database.db
+        .delete(Database.Schema.oauth_session)
+        .where(lt(Database.Schema.oauth_session.created_at, new Date(now - Duration.toMillis(sessionsKept))))
         .pipe(Effect.orDie)
-      yield* Effect.forEach(due, refreshOne, { concurrency: 8, discard: true })
     }).pipe(Effect.withSpan("CredentialRefresh.sweep"))
 
     yield* DurableRunner.register(RefreshRun, (payload) =>
@@ -129,6 +241,6 @@ export const layer = Layer.effect(
       Effect.forkScoped,
     )
 
-    return Service.of({ sweep })
+    return Service.of({ sweep, refresh })
   }),
 )
