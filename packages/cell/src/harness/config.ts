@@ -28,6 +28,7 @@ export interface Observation {
   readonly desiredRevision: number
   readonly appliedRevision: number
   readonly appFingerprint: Option.Option<string>
+  readonly appConflicts: ReadonlyArray<string>
 }
 
 export interface Location {

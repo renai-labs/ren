@@ -9,6 +9,7 @@ import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { BrainSettings } from "@ren/brain/settings"
+import { AppCatalog } from "@ren/schema/app-catalog"
 import { Session } from "@ren/schema/session"
 import {
   Clock,
@@ -33,6 +34,26 @@ import type { OpenCodeExecution } from "./execution.js"
 import type { HarnessConfig } from "../config.js"
 
 const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
+
+// oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 keys a skill by its id and an MCP's tools by the server key with each character outside [A-Za-z0-9_-] as "_"; a later registration silently replaces an earlier one with the same name.
+const naming: AppCatalog.Naming = {
+  normalize: (slug) => slug.replaceAll(/[^A-Za-z0-9_-]/gu, "_"),
+  reserved: [
+    ...["opencode", "report"].map((slug) => ({
+      kind: "skills" as const,
+      slug,
+      source: `OpenCode’s built-in skill ${slug}`,
+    })),
+    ...["opencode", "browser"].map((slug) => ({
+      kind: "mcps" as const,
+      slug,
+      source: `OpenCode’s built-in ${slug} tools`,
+    })),
+  ],
+}
+
+const conflictsOf = (apps: Option.Option<AppCatalog.Info>) =>
+  Option.match(apps, { onNone: () => [], onSome: (info) => AppCatalog.nameConflicts(info.catalog, naming) })
 
 export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("ManagedKeyError", {
   message: Schema.String,
@@ -256,7 +277,10 @@ export const make = (
           }),
         )
         const initial = yield* Ref.get(desired)
-        const applied = yield* Ref.make(initial)
+        const appConflicts = yield* Ref.make(conflictsOf(initial.apps))
+        const applied = yield* Ref.make(
+          (yield* Ref.get(appConflicts)).length ? { ...initial, apps: Option.none<AppCatalog.Info>() } : initial,
+        )
         const models = yield* Ref.make(initial.models)
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(models)))
         yield* integration.transform((editor) => {
@@ -396,6 +420,7 @@ export const make = (
               desiredRevision: (yield* Ref.get(desired)).revision,
               appliedRevision: snapshot.revision,
               appFingerprint: Option.map(snapshot.apps, (info) => info.fingerprint),
+              appConflicts: yield* Ref.get(appConflicts),
             }
           }),
           offer: (snapshot) =>
@@ -415,7 +440,14 @@ export const make = (
                     : basename(context.location.directory)
                   yield* settings.value.install(sessionId, snapshot.chats.get(sessionId))
                 }
-                yield* Ref.set(applied, snapshot)
+                const conflicts = conflictsOf(snapshot.apps)
+                const previous = yield* Ref.getAndSet(appConflicts, conflicts)
+                if (conflicts.length && conflicts.join("\n") !== previous.join("\n"))
+                  yield* Effect.logWarning(`The brain keeps its applied app catalog:\n${conflicts.join("\n")}`)
+                yield* Ref.set(
+                  applied,
+                  conflicts.length ? { ...snapshot, apps: (yield* Ref.get(applied)).apps } : snapshot,
+                )
                 yield* synced
               }),
             ),
