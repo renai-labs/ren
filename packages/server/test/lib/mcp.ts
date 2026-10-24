@@ -117,3 +117,26 @@ export const result = async (response: Response) => {
         .join("")
   return Schema.decodeUnknownSync(Result)(json).result
 }
+
+export const modern = (app: App, token: string, method: string, params: Record<string, unknown> = {}) =>
+  mcp(
+    app,
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params: {
+        ...params,
+        _meta: {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientCapabilities": {},
+        },
+      },
+    },
+    {
+      authorization: `Bearer ${token}`,
+      "mcp-protocol-version": "2026-07-28",
+      "mcp-method": method,
+      ...(typeof params.name === "string" && { "mcp-name": params.name }),
+    },
+  )
