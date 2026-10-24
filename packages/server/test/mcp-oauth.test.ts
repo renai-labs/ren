@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test"
 import { decodeJwt } from "jose"
-import { sessionCookie, signUp } from "./lib/app.js"
-import { authorize, base, makeMcpApp, resource } from "./lib/mcp.js"
+import { origin, sessionCookie, signUp } from "./lib/app.js"
+import { Redirect, authorize, base, finishAuthorization, makeMcpApp, resource, startAuthorization } from "./lib/mcp.js"
 
 const app = makeMcpApp()
 
@@ -10,6 +10,31 @@ afterAll(() => app.dispose())
 const get = (path: string, headers: HeadersInit = {}) => app.handler(new Request(`${base}${path}`, { headers }))
 
 describe("Ren MCP OAuth", () => {
+  test("sends a client that asks to create an account to sign-up, and gives the new account a token for its new organization", async () => {
+    const started = await startAuthorization(app, { prompt: "create" })
+    expect(started.page.pathname).toBe("/app/signup")
+    const signedUp = await app.handler(
+      new Request(`${base}/auth/sign-up/email`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({ name: "Grace", email: "new-mcp@example.com", password: "correct horse battery staple" }),
+      }),
+    )
+    const cookie = sessionCookie(signedUp)
+    const continued = await app.handler(
+      new Request(`${base}/auth/oauth2/continue`, {
+        method: "POST",
+        headers: { cookie, origin, "content-type": "application/json" },
+        body: JSON.stringify({ created: true, oauth_query: started.page.search.slice(1) }),
+      }),
+    )
+    const consentPage = new URL((await Redirect(continued)).url)
+    expect(consentPage.pathname).toBe("/app/consent")
+    const organizationId: string = (await (await get("/me", { cookie })).json()).organization.id
+    const flow = await finishAuthorization(app, cookie, consentPage, started.verifier)
+    expect(decodeJwt((await flow.token.json()).access_token)).toMatchObject({ ren_org: organizationId })
+  })
+
   test("serves authorization server metadata for the /auth issuer with CIMD and without registration", async () => {
     const response = await get("/.well-known/oauth-authorization-server/auth")
     expect(response.status).toBe(200)

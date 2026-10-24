@@ -25,7 +25,7 @@ const json =
   async (response: Response) =>
     Schema.decodeUnknownSync(Schema.fromJsonString(schema))(await response.text())
 
-const Consent = json(Schema.Struct({ url: Schema.String }))
+export const Redirect = json(Schema.Struct({ url: Schema.String }))
 
 const Me = json(Schema.Struct({ organization: Schema.Struct({ id: Schema.String }) }))
 
@@ -51,7 +51,7 @@ export const makeMcpApp = () =>
 const challenge = async (verifier: string) =>
   Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).toString("base64url")
 
-export const authorize = async (app: App, cookie: string) => {
+export const startAuthorization = async (app: App, options: { cookie?: string; prompt?: string } = {}) => {
   const verifier = crypto.randomUUID() + crypto.randomUUID()
   const query = new URLSearchParams({
     response_type: "code",
@@ -62,9 +62,15 @@ export const authorize = async (app: App, cookie: string) => {
     code_challenge: await challenge(verifier),
     code_challenge_method: "S256",
     resource,
+    ...(options.prompt !== undefined && { prompt: options.prompt }),
   })
-  const authorized = await app.handler(new Request(`${base}/auth/oauth2/authorize?${query}`, { headers: { cookie } }))
-  const consentPage = new URL(authorized.headers.get("location") ?? "")
+  const authorized = await app.handler(
+    new Request(`${base}/auth/oauth2/authorize?${query}`, { headers: { cookie: options.cookie ?? "" } }),
+  )
+  return { page: new URL(authorized.headers.get("location") ?? ""), verifier }
+}
+
+export const finishAuthorization = async (app: App, cookie: string, consentPage: URL, verifier: string) => {
   const consent = await app.handler(
     new Request(`${base}/auth/oauth2/consent`, {
       method: "POST",
@@ -72,7 +78,7 @@ export const authorize = async (app: App, cookie: string) => {
       body: JSON.stringify({ accept: true, oauth_query: consentPage.search.slice(1) }),
     }),
   )
-  const callback = new URL((await Consent(consent)).url)
+  const callback = new URL((await Redirect(consent)).url)
   const token = await app.handler(
     new Request(`${base}/auth/oauth2/token`, {
       method: "POST",
@@ -87,7 +93,12 @@ export const authorize = async (app: App, cookie: string) => {
       }),
     }),
   )
-  return { consentPage, callback, token }
+  return { callback, token }
+}
+
+export const authorize = async (app: App, cookie: string) => {
+  const started = await startAuthorization(app, { cookie })
+  return { consentPage: started.page, ...(await finishAuthorization(app, cookie, started.page, started.verifier)) }
 }
 
 export const accessToken = async (app: App, email: string) => {
