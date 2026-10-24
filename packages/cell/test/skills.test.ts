@@ -7,7 +7,6 @@ import { TestAccess, TestGitHub } from "@ren/brain/testing"
 import { TestEnvironment, testEffect } from "@ren/executor/testing"
 import { App } from "@ren/schema/app"
 import type { AppCatalog } from "@ren/schema/app-catalog"
-import { AppRelease } from "@ren/schema/app-release"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
@@ -35,18 +34,15 @@ const it = testEffect(TestEnvironment.layer({ environmentId, workspace }))
 const folder = (sessionId: Session.ID) => join(workspace, sessionId)
 
 const catalog = (skills: Readonly<Record<string, Skill.Declaration>>): AppCatalog.Info => {
-  const releaseId = AppRelease.ID.create()
   return {
     fingerprint: crypto.randomUUID(),
     catalog: {
       apps: [],
       mcps: [],
-      credentials: [],
+      unavailable: [],
       skills: Object.entries(skills).map((entry) => ({
         appId: App.ID.create(),
-        releaseId,
         appSlug: "docs",
-        version: "1.0.0",
         slug: entry[0],
         declaration: entry[1],
       })),

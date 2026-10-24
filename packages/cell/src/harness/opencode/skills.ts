@@ -12,7 +12,7 @@ import type { SkillCache } from "@ren/brain/skill/cache"
 import { SkillMaterialize } from "@ren/brain/skill/materialize"
 import type { SkillSource } from "@ren/brain/skill/source"
 import type { AppCatalog } from "@ren/schema/app-catalog"
-import { Effect, Equal, Option, Ref, Schema, Semaphore, Struct } from "effect"
+import { Effect, Equal, Hash, Option, Ref, Schema, Semaphore, Struct } from "effect"
 
 export interface Sources {
   readonly source: SkillSource.Interface
@@ -63,11 +63,13 @@ export const make = Effect.fnUntraced(function* (input: {
       Effect.fnUntraced(function* (entry) {
         const declaration = entry.declaration
         if (declaration.type === "content") {
-          const directory = `${root}/${entry.slug}/${entry.releaseId}`
+          // oxlint-disable-next-line ren/no-comments -- An app has one definition (profiles.md P2), so a content skill is named by its content: an edit gives a new directory.
+          const identity = Math.abs(Hash.string(JSON.stringify(declaration))).toString(36)
+          const directory = `${root}/${entry.slug}/${identity}`
           const hasFiles = Object.keys(declaration.files).length > 0
           return [
             {
-              identity: entry.releaseId,
+              identity,
               directory,
               files: hasFiles
                 ? Option.some({

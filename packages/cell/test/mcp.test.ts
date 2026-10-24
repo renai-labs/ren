@@ -5,7 +5,10 @@ import { SessionID } from "@opencode/schema/session-id"
 import { testEffect } from "@ren/executor/testing"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { SessionMessage } from "@ren/schema/session/message"
-import { Effect, Layer, Queue } from "effect"
+import { App } from "@ren/schema/app"
+import { Clock, Effect, Fiber, Layer, Option, Queue } from "effect"
+import { TestClock } from "effect/testing"
+import { OpenCodeMcp } from "../src/harness/opencode/mcp.js"
 import { BrainTest } from "./lib/brain.js"
 import { McpPeer } from "./lib/mcp.js"
 import { Shared } from "./lib/shared.js"
@@ -45,39 +48,154 @@ const observed = Effect.fnUntraced(function* (apps?: AppCatalog.Info) {
   }
 })
 
-it.live("an installed app's remote MCP is a tool the model calls, follows a new release and goes on removal", () =>
+it.live("two profiles of one app are two servers, each with its own placeholder; a no-auth MCP is one server", () =>
   Effect.gen(function* () {
-    const first = yield* McpPeer.make()
-    const second = yield* McpPeer.make()
-    const keyed = yield* McpPeer.make()
-    yield* second.change("replacement")
+    const acme = yield* McpPeer.make()
+    const globex = yield* McpPeer.make()
+    const docs = yield* McpPeer.make()
+    yield* globex.change("globex")
     const test = yield* observed()
+    const oauth = { type: "oauth", tokenEndpointAuth: "none" } as const
     yield* test.brain.configureApps(
-      McpPeer.catalog("first", [
-        { slug: "docs", url: first.url },
-        { slug: "keyed", url: keyed.url, auth: { type: "header", name: "Authorization", credential: "token" } },
-      ]),
+      McpPeer.catalog(
+        "first",
+        [
+          { slug: "gmail", url: acme.url, auth: oauth, profile: { slug: "acme", name: "Acme client" } },
+          { slug: "gmail", url: globex.url, auth: oauth, profile: { slug: "globex", name: "Globex client" } },
+          { slug: "docs", url: docs.url },
+        ],
+        { unavailable: [{ appSlug: "docs", mcp: "sheets", profile: "Acme client", reason: "provider" }] },
+      ),
     )
-    const script = McpPeer.execute("docs.marker")
-    yield* test.prompt(`${script.marker} read the marker`)
+    const script = McpPeer.execute("gmail__globex.marker")
+    yield* test.prompt(`${script.marker} read the globex marker`)
     yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(McpPeer.result(script)).toBe("first")
-    expect(script.calls.at(0)?.system).not.toContain("tools.keyed")
-    expect(Queue.sizeUnsafe(keyed.requests)).toBe(0)
-    expect((yield* Queue.clear(first.requests)).filter((request) => request.method === "initialize")).toHaveLength(1)
+    expect(McpPeer.result(script)).toBe("globex")
+    const system = script.calls.at(0)?.system ?? ""
+    for (const tool of ["gmail__acme.marker", "gmail__globex.marker", "docs.marker"])
+      expect(system).toContain(`tools.${tool}()`)
+    expect(system).toContain("The MCP server gmail__acme is Docs for the profile “Acme client”.")
+    expect(system).toContain("sheets (Acme client) is unavailable: the provider is not set up on this Ren.")
+    expect(acme.headers.at(0)?.get("authorization")).toBe("Bearer ren:MCP_GMAIL__ACME")
+    expect(globex.headers.at(0)?.get("authorization")).toBe("Bearer ren:MCP_GMAIL__GLOBEX")
+    expect(docs.headers.at(0)?.get("authorization")).toBeNull()
 
-    yield* test.brain.configureApps(McpPeer.catalog("second", [{ slug: "docs", url: second.url }]))
-    const next = McpPeer.execute("docs.marker")
-    yield* test.prompt(`${next.marker} read the marker again`)
-    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(McpPeer.result(next)).toBe("replacement")
-    expect(JSON.stringify(next.calls.at(0)?.body.messages)).toContain(script.marker)
-
-    yield* test.brain.configureApps(McpPeer.catalog("third", []))
-    const removed = McpPeer.execute("docs.marker")
+    yield* test.brain.configureApps(McpPeer.catalog("second", []))
+    const removed = McpPeer.execute("gmail__acme.marker")
     yield* test.prompt(`${removed.marker} read the marker after removal`)
     yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(McpPeer.result(removed)).toContain("Unknown tool 'docs.marker'")
+    expect(McpPeer.result(removed)).toContain("Unknown tool 'gmail__acme.marker'")
+  }),
+)
+
+it.effect("a local entry runs with its declared env and the profile's placeholders; a header MCP sends its field", () =>
+  Effect.sync(() => {
+    const catalog = McpPeer.catalog("local", [
+      {
+        slug: "sheets",
+        transport: { type: "local", command: ["sheets"], env: { MODE: "read" } },
+        profile: { slug: "acme", name: "Acme client" },
+        env: { SHEETS_KEY: "ren:SHEETS_KEY__ACME" },
+      },
+      {
+        slug: "crm",
+        url: "https://crm.example.com/mcp",
+        auth: { type: "header", name: "X-Api-Key", credential: "apiKey" },
+        profile: { slug: "acme", name: "Acme client" },
+      },
+    ])
+    const rendered = OpenCodeMcp.servers(Option.some(catalog), { local: true })
+    expect(rendered.map((server) => [server.name, server.config])).toMatchObject([
+      ["sheets__acme", { type: "local", environment: { MODE: "read", SHEETS_KEY: "ren:SHEETS_KEY__ACME" } }],
+      ["crm__acme", { type: "remote", headers: { "X-Api-Key": "ren:MCP_CRM__ACME.apiKey" } }],
+    ])
+    expect(OpenCodeMcp.servers(Option.some(catalog), { local: false }).map((server) => server.name)).toEqual([
+      "crm__acme",
+    ])
+  }),
+)
+
+it.effect("the env note: one line per app with connected env items, in catalog order, the same bytes each time", () =>
+  Effect.sync(() => {
+    const catalog = McpPeer.catalog("env", [], {
+      apps: [
+        {
+          appId: App.ID.create(),
+          appSlug: "google",
+          name: "Google",
+          profiles: [
+            {
+              slug: "acme",
+              name: "Acme client",
+              kind: "shared",
+              env: { GOOGLE_PROJECT_ID: "GOOGLE_PROJECT_ID__ACME" },
+            },
+            {
+              slug: "globex",
+              name: "Globex client",
+              kind: "shared",
+              env: { GOOGLE_PROJECT_ID: "GOOGLE_PROJECT_ID__GLOBEX" },
+            },
+          ],
+        },
+        {
+          appId: App.ID.create(),
+          appSlug: "docs",
+          name: "Docs",
+          profiles: [{ slug: "acme", name: "Acme", kind: "shared", env: {} }],
+        },
+      ],
+    })
+    const notes = OpenCodeMcp.notes(Option.some(catalog), { local: true })
+    expect(notes).toEqual([
+      "google profiles: Acme client → keys end in `__ACME` (`GOOGLE_PROJECT_ID__ACME`); Globex client → `__GLOBEX`. Env keys exist only with the suffix.",
+    ])
+    expect(OpenCodeMcp.notes(Option.some(catalog), { local: true }).join("\n")).toBe(notes.join("\n"))
+  }),
+)
+
+it.effect("after a failure, retries come at 10 s, 1 min and 5 min, and stop once no server is down", () =>
+  Effect.gen(function* () {
+    const at: Array<number> = []
+    const state = { down: true }
+    const fiber = yield* OpenCodeMcp.retrying({
+      down: Effect.sync(() => state.down),
+      retry: Effect.flatMap(Clock.currentTimeMillis, (now) => Effect.sync(() => at.push(now))),
+    }).pipe(Effect.forkChild)
+    yield* TestClock.adjust("10 seconds")
+    yield* TestClock.adjust("1 minute")
+    state.down = false
+    yield* TestClock.adjust("5 minutes")
+    yield* Fiber.join(fiber)
+    expect(at).toEqual([10_000, 70_000])
+  }),
+)
+
+it.live("a server whose connect got a 403 is connected again at the next turn; a connected server keeps running", () =>
+  Effect.gen(function* () {
+    const good = yield* McpPeer.make()
+    const bad = yield* McpPeer.make()
+    yield* bad.change("reconnected")
+    yield* bad.refuse(403)
+    const test = yield* observed()
+    const oauth = { type: "oauth", tokenEndpointAuth: "none" } as const
+    yield* test.brain.configureApps(
+      McpPeer.catalog("first", [
+        { slug: "good", url: good.url },
+        { slug: "bad", url: bad.url, auth: oauth, profile: { slug: "acme", name: "Acme" } },
+      ]),
+    )
+    const first = McpPeer.execute("good.marker")
+    yield* test.prompt(`${first.marker} read the marker`)
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+    expect(first.calls.at(0)?.system).not.toContain("tools.bad__acme.marker()")
+    yield* Queue.clear(good.requests)
+    yield* bad.refuse(200)
+    const second = McpPeer.execute("bad__acme.marker")
+    yield* test.prompt(`${second.marker} read the marker again`)
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+    expect(McpPeer.result(second)).toBe("reconnected")
+    expect((yield* Queue.clear(good.requests)).filter((request) => request.method === "initialize")).toEqual([])
   }),
 )
 

@@ -16,7 +16,7 @@ const empty: AppCatalog.Info = {
     apps: [],
     mcps: [],
     skills: [],
-    credentials: [],
+    unavailable: [],
   },
 }
 

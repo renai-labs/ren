@@ -5,7 +5,6 @@ import { SessionID } from "@opencode/schema/session-id"
 import { PullReply, PullRequest, type PullApps } from "@ren/host-api/ren-host-api"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { App } from "@ren/schema/app"
-import { AppRelease } from "@ren/schema/app-release"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Fiber, Layer, Option, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
@@ -34,12 +33,12 @@ import { Shared } from "./lib/shared.js"
 
 const it = testEffect(Layer.empty)
 
-const provenance = { appId: App.ID.create(), releaseId: AppRelease.ID.create(), appSlug: "notes", version: "1.0.0" }
+const provenance = { appId: App.ID.create(), appSlug: "notes" }
 
 const catalog = Schema.decodeUnknownSync(AppCatalog.Info)({
   fingerprint: "packages",
   catalog: {
-    apps: [provenance],
+    apps: [{ ...provenance, name: "Notes", profiles: [] }],
     skills: [
       {
         ...provenance,
@@ -66,6 +65,9 @@ const catalog = Schema.decodeUnknownSync(AppCatalog.Info)({
       {
         ...provenance,
         slug: "remote",
+        server: "remote__team",
+        profile: { id: "apf_team", slug: "team", name: "Team", kind: "shared" },
+        label: "MCP_REMOTE__TEAM",
         declaration: {
           name: "Remote",
           description: "Read remote notes",
@@ -78,6 +80,9 @@ const catalog = Schema.decodeUnknownSync(AppCatalog.Info)({
       {
         ...provenance,
         slug: "local",
+        server: "local",
+        profile: null,
+        label: null,
         declaration: {
           name: "Local",
           description: "Read local notes",
@@ -89,22 +94,25 @@ const catalog = Schema.decodeUnknownSync(AppCatalog.Info)({
       {
         ...provenance,
         slug: "provider",
+        server: "provider__team",
+        profile: { id: "apf_team", slug: "team", name: "Team", kind: "shared" },
+        label: "MCP_PROVIDER__TEAM",
         declaration: {
           name: "Provider",
           description: "Read provider notes",
-          transport: { type: "provider", provider: "composio", toolkit: "notion" },
-          auth: { type: "none" },
+          transport: { type: "provider", provider: "composio", integration: "notion" },
+          auth: { type: "oauth", tokenEndpointAuth: "none" },
           requiredCredentials: [],
         },
       },
     ],
-    credentials: [{ appId: provenance.appId, requirements: [{ kind: "env", name: "NOTES_KEY", optional: false }] }],
+    unavailable: [],
   },
 })
 
 const empty: AppCatalog.Info = {
   fingerprint: "empty",
-  catalog: { apps: [], skills: [], mcps: [], credentials: [] },
+  catalog: { apps: [], skills: [], mcps: [], unavailable: [] },
 }
 
 const open = Effect.fnUntraced(function* (options: { readonly active?: boolean } = {}) {
