@@ -13,9 +13,13 @@ const ren: Egress.Principal = { kind: "ren", orgs: "all" }
 const EgressHandler = HttpApiBuilder.group(EgressApi.Api, "egress", (handlers) =>
   Effect.gen(function* () {
     const egress = yield* Egress.Service
+    const scope = yield* Effect.scope
     return handlers
       .handle("authenticate", (request) => egress.authenticate(ren, request.payload.proof))
       .handle("resolve", (request) => egress.resolve(ren, request.payload))
+      .handle("unauthorized", (request) =>
+        egress.unauthorized(ren, request.payload).pipe(Effect.forkIn(scope), Effect.asVoid),
+      )
   }),
 )
 

@@ -6,9 +6,9 @@ import { Brain } from "@ren/schema/brain"
 import { Credential } from "@ren/schema/credential"
 import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
-import { and, asc, count, eq, exists, ilike, isNull, ne, or, sql, type SQL } from "drizzle-orm"
+import { and, asc, count, eq, exists, ilike, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
-import { Cause, Context, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Cause, Clock, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { SqlError } from "effect/sql"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
@@ -30,6 +30,7 @@ export interface Scope {
   readonly person: Option.Option<Auth.UserID>
 }
 
+// oxlint-disable-next-line ren/no-comments -- `revision` is set when Ren can renew the value after an upstream 401: sign-ins, client credentials and provider routes at their stored revision, minted values at 0 (K16, §9 rule 7).
 export interface Candidate {
   readonly id: string
   readonly source: string
@@ -37,7 +38,16 @@ export interface Candidate {
   readonly owner: OwnerKind
   readonly hosts: ReadonlyArray<string>
   readonly inject: Credential.Inject
+  readonly type?: Credential.Type
+  readonly revision?: number | undefined
+  readonly status?: Credential.Status
 }
+
+export const refreshableTypes: ReadonlyArray<Credential.Type> = ["oauth", "client_credentials", "route"]
+
+export const maximumWantedScopes = 64
+
+export const unauthorizedEvery = Duration.minutes(5)
 
 export interface Request {
   readonly host: string
@@ -155,6 +165,8 @@ export interface Interface extends Omit<Methods, "rotate" | "update"> {
   readonly candidates: (scope: Scope) => Effect.Effect<ReadonlyArray<Candidate>>
   readonly environment: (scope: Scope) => Effect.Effect<Readonly<Record<string, string>>>
   readonly open: (id: Credential.ID) => Effect.Effect<Option.Option<Opened>>
+  readonly claimUnauthorized: (id: Credential.ID, revision: number) => Effect.Effect<boolean>
+  readonly addWantedScopes: (id: Credential.ID, scopes: ReadonlyArray<string>) => Effect.Effect<void>
   readonly removeForMember: (organizationId: Auth.OrganizationID, userId: Auth.UserID) => Effect.Effect<void>
   readonly removeForSpaceMember: (spaceId: Space.ID, userId: Auth.UserID) => Effect.Effect<void>
   readonly removeForSpace: (spaceId: Space.ID) => Effect.Effect<void>
@@ -744,16 +756,28 @@ export const layer = Layer.effect(
         const rows = yield* database.db
           .select({
             id: table.id,
-            source: sql<string>`'static'`,
             label: table.label,
             owner: table.owner,
             hosts: table.hosts,
             inject: table.inject,
+            type: table.type,
+            revision: table.revision,
+            status: table.status,
           })
           .from(table)
           .where(and(eq(table.delivery, "egress"), reaches(scope)))
           .pipe(Effect.orDie)
-        return rows
+        return rows.map((row): Candidate => ({
+          id: row.id,
+          source: "static",
+          label: row.label,
+          owner: row.owner,
+          hosts: row.hosts,
+          inject: row.inject,
+          type: row.type,
+          status: row.status,
+          revision: refreshableTypes.includes(row.type) ? row.revision : undefined,
+        }))
       }),
 
       // oxlint-disable-next-line ren/no-comments -- A35: each key that reaches the workload is an env var that holds its placeholder; a delivered key holds its value (C9). The first owner in the lookup order wins a label.
@@ -787,6 +811,50 @@ export const layer = Layer.effect(
           revision: row.revision,
           ...(row.expires_at && { expiresAt: DateTime.fromDateUnsafe(row.expires_at) }),
         }))
+      }),
+
+      // oxlint-disable-next-line ren/no-comments -- At most one refresh per credential every 5 minutes after a 401, and only for the revision the egress injected (K18).
+      claimUnauthorized: Effect.fn("Credentials.claimUnauthorized")(function* (id: Credential.ID, revision: number) {
+        const now = yield* Clock.currentTimeMillis
+        const claimed = yield* database.db
+          .update(table)
+          .set({ unauthorized_refresh_at: new Date(now) })
+          .where(
+            and(
+              eq(table.id, id),
+              eq(table.revision, revision),
+              or(
+                isNull(table.unauthorized_refresh_at),
+                lt(table.unauthorized_refresh_at, new Date(now - Duration.toMillis(unauthorizedEvery))),
+              ),
+            ),
+          )
+          .returning({ id: table.id })
+          .pipe(Effect.orDie)
+        return claimed.length > 0
+      }),
+
+      // oxlint-disable-next-line ren/no-comments -- K47: a 403 insufficient_scope records the scopes the upstream asked for; the next reconnect asks for them too. It changes no status and starts no sign-in.
+      addWantedScopes: Effect.fn("Credentials.addWantedScopes")(function* (
+        id: Credential.ID,
+        scopes: ReadonlyArray<string>,
+      ) {
+        yield* database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              const found = (yield* transaction
+                .select({ scopes: table.scopes, wanted: table.wanted_scopes })
+                .from(table)
+                .where(eq(table.id, id))
+                .for("update")).at(0)
+              if (!found) return
+              const wanted = [...new Set([...found.wanted, ...scopes])]
+                .filter((scope) => !found.scopes.includes(scope))
+                .slice(0, maximumWantedScopes)
+              yield* transaction.update(table).set({ wanted_scopes: wanted }).where(eq(table.id, id))
+            }),
+          )
+          .pipe(Effect.orDie)
       }),
 
       removeForMember: (organizationId, userId) =>

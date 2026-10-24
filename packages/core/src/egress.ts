@@ -1,11 +1,14 @@
 export * as Egress from "./egress.js"
 
 import type { Auth } from "@ren/schema/auth"
+import { Credential } from "@ren/schema/credential"
 import { Workload } from "@ren/schema/workload"
-import { Context, DateTime, Effect, Layer, Option, Result } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Result, Schema } from "effect"
 import { CredentialCallers } from "./credential-callers.js"
+import { CredentialRefresh } from "./credential-refresh.js"
 import { CredentialSource } from "./credential-source.js"
 import { Credentials } from "./credentials.js"
+import { EgressControl } from "./egress-control.js"
 import { Injection } from "./injection.js"
 
 // oxlint-disable-next-line ren/no-comments -- Ren's own egress authenticates with mTLS and may name a connection by the login it checked (`Login` proof). Another proxy is limited to its orgs (README §6.6).
@@ -28,8 +31,18 @@ export type Authenticated =
   | { readonly ok: true; readonly workload: string }
   | { readonly ok: false; readonly reason: "unknown_workload" | "generation_retired" | "principal_scope" }
 
+// oxlint-disable-next-line ren/no-comments -- What an egress reports after an upstream answered 401, or 403 with `insufficient_scope`, to a request with refreshable labels (§6.3, K44).
+export interface Report {
+  readonly login: string
+  readonly host: string
+  readonly status: 401 | 403
+  readonly scope?: string
+  readonly labels: ReadonlyArray<{ readonly label: string; readonly revision: number }>
+}
+
 export interface Interface {
   readonly resolve: (principal: Principal, request: Request) => Effect.Effect<Injection.Reply>
+  readonly unauthorized: (principal: Principal, report: Report) => Effect.Effect<void>
   readonly authenticate: (principal: Principal, proof: CredentialCallers.Proof) => Effect.Effect<Authenticated>
 }
 
@@ -47,6 +60,8 @@ export const layer = Layer.effect(
     const callers = yield* CredentialCallers.Service
     const credentials = yield* Credentials.Service
     const sources = yield* CredentialSource.Service
+    const refresh = yield* CredentialRefresh.Service
+    const control = yield* EgressControl.Service
 
     const caller = Effect.fnUntraced(function* (principal: Principal, proof: CredentialCallers.Proof) {
       if (proof.kind === "Login" && principal.kind !== "ren") return Result.fail("unknown_workload" as const)
@@ -55,6 +70,32 @@ export const layer = Layer.effect(
       if (principal.orgs !== "all" && !principal.orgs.includes(verified.caller.organizationId))
         return Result.fail("principal_scope" as const)
       return Result.succeed(verified.caller)
+    })
+
+    const wantScopes = (candidate: Credentials.Candidate, scope: string | undefined) =>
+      candidate.type === "oauth" && Schema.is(Credential.ID)(candidate.id) && scope
+        ? credentials.addWantedScopes(
+            candidate.id,
+            scope.split(" ").filter((part) => part.length > 0),
+          )
+        : Effect.void
+
+    const renew = Effect.fnUntraced(function* (
+      candidate: Credentials.Candidate,
+      reported: { readonly label: string; readonly revision: number },
+      scope: Credentials.Scope,
+    ) {
+      if (candidate.source === "minted") {
+        yield* sources.forget(candidate, scope)
+        return yield* control.invalidate({ label: reported.label })
+      }
+      if (!Schema.is(Credential.ID)(candidate.id)) return
+      if (candidate.revision !== reported.revision) return yield* control.invalidate({ label: reported.label })
+      if (!(yield* credentials.claimUnauthorized(candidate.id, reported.revision))) {
+        yield* Effect.logInfo(`Credential ${reported.label} refreshed after a 401 less than 5 minutes ago`)
+        return
+      }
+      yield* refresh.refresh(candidate.id, { revision: reported.revision })
     })
 
     return Service.of({
@@ -81,6 +122,7 @@ export const layer = Layer.effect(
         const expiries: Array<number> = []
         for (const match of matched.matches) {
           const label = match.candidate.label
+          if (match.candidate.status === "reconnect") return deny("credential_reconnect", label)
           const value = yield* sources
             .value(match.candidate, scope.value)
             .pipe(Effect.option, Effect.map(Option.flatten))
@@ -110,8 +152,49 @@ export const layer = Layer.effect(
           ...(expiries.length > 0 && { expiresAt: Math.min(...expiries) }),
           labels: [...new Set(matched.matches.map((match) => match.candidate.label))],
           inject: planned,
-          refreshable: [],
+          refreshable: [
+            ...new Map(
+              matched.matches.flatMap((match) =>
+                match.candidate.revision === undefined
+                  ? []
+                  : [[match.candidate.label, { label: match.candidate.label, revision: match.candidate.revision }]],
+              ),
+            ).values(),
+          ],
         }
+      }),
+
+      // oxlint-disable-next-line ren/no-comments -- §9: Ren finds each label as a resolve would. A newer stored revision means the 401 belongs to a value that is gone, so only the caches clear (U1). The same revision refreshes once per 5 minutes; a 401 never changes the status (K18). A 403 on a sign-in records the wanted scopes (K47).
+      unauthorized: Effect.fn("Egress.unauthorized")(function* (principal: Principal, report: Report) {
+        const found = yield* caller(principal, { kind: "Login", username: report.login })
+        if (Result.isFailure(found)) {
+          yield* Effect.logInfo("Egress reported a 401 for an unknown login").pipe(
+            Effect.annotateLogs({ reason: found.failure }),
+          )
+          return
+        }
+        const scope = yield* credentials.scopeOf(found.success.workload)
+        if (Option.isNone(scope)) return
+        const candidates = yield* sources.candidates(scope.value)
+        yield* Effect.forEach(
+          report.labels,
+          (reported) => {
+            const matched = Credentials.match(candidates, {
+              host: report.host,
+              placeholders: [Credential.placeholder(reported.label)],
+            })
+            const candidate = matched.ok ? matched.matches.at(0)?.candidate : undefined
+            if (candidate?.revision === undefined) return Effect.void
+            return Effect.logInfo(`Upstream ${report.host} answered ${report.status} for ${reported.label}`).pipe(
+              Effect.andThen(
+                report.status === 403
+                  ? wantScopes(candidate, report.scope)
+                  : renew(candidate, { label: reported.label, revision: reported.revision }, scope.value),
+              ),
+            )
+          },
+          { discard: true },
+        )
       }),
     })
   }),

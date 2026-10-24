@@ -18,9 +18,9 @@ const calls = Ref.makeUnsafe<ReadonlyArray<Credential.ID>>([])
 const answer = Ref.makeUnsafe<Answer>("renew")
 const invalidated = Ref.makeUnsafe<ReadonlyArray<string>>([])
 const logged: Array<string> = []
-const gate = Ref.makeUnsafe<Option.Option<{ readonly started: Deferred.Deferred<void>; readonly go: Deferred.Deferred<void> }>>(
-  Option.none(),
-)
+const gate = Ref.makeUnsafe<
+  Option.Option<{ readonly started: Deferred.Deferred<void>; readonly go: Deferred.Deferred<void> }>
+>(Option.none())
 
 const refreshers = Layer.succeed(
   CredentialRefresh.Refreshers,
@@ -56,10 +56,7 @@ const control = Layer.succeed(
   }),
 )
 
-const logs = Logger.layer(
-  [Logger.make((options) => logged.push(String(options.message)))],
-  { mergeWithExisting: true },
-)
+const logs = Logger.layer([Logger.make((options) => logged.push(String(options.message)))], { mergeWithExisting: true })
 
 const it = testEffect(
   CredentialRefresh.layer.pipe(

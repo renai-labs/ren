@@ -58,6 +58,7 @@ const host = Layer.unwrap(
 )
 
 const credentials = Egress.layer.pipe(
+  Layer.provideMerge(CredentialRefresh.layer.pipe(Layer.provide(CredentialRefresh.layerNoRefreshers))),
   Layer.provideMerge(CredentialSource.layer),
   Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
   Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
@@ -66,19 +67,13 @@ const credentials = Egress.layer.pipe(
 
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([
-    Layer.mergeAll(
-      Brains.layer.pipe(
-        Layer.provide(host),
-        Layer.provide(CredentialEnv.layer),
-      ),
-      Retention.layer,
-      CredentialRefresh.layer.pipe(Layer.provide(CredentialRefresh.layerNoRefreshers)),
-    ).pipe(Layer.provide(DurableRunner.layerEffect)),
+    Layer.mergeAll(Brains.layer.pipe(Layer.provide(host), Layer.provide(CredentialEnv.layer)), Retention.layer),
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
   Layer.provideMerge(credentials),
+  Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([Models.layerConfig, Environments.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
