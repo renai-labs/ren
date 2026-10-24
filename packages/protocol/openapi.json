@@ -14763,7 +14763,7 @@
     },
     "securitySchemes": {
       "bearer": {
-        "description": "A Better Auth session token, for the CLI and SDK.",
+        "description": "A Better Auth session token, for the CLI and SDK, or a Ren MCP access token.",
         "type": "http",
         "scheme": "Bearer"
       },
