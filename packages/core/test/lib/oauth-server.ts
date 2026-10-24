@@ -11,7 +11,7 @@ export interface Options {
   token?: (form: URLSearchParams) => { status: number; body: unknown }
 }
 
-export interface Seen {
+interface Seen {
   readonly path: string
   readonly form: URLSearchParams
   readonly authorization: string | null

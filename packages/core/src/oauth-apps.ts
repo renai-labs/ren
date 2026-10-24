@@ -31,7 +31,7 @@ const toInfo = (row: typeof table.$inferSelect): OAuthApp.Info => ({
   organizationId: row.organization_id,
   name: row.name,
   clientId: row.client_id,
-  hasClientSecret: row.client_secret !== null,
+  hasClientSecret: Boolean(row.client_secret),
   scopes: row.scopes,
   discovery: row.discovery,
   authorizationEndpoint: row.authorization_endpoint,
@@ -82,9 +82,9 @@ export const layer = Layer.effect(
     })
 
     const sealSecret = (actor: Actor.Info, id: OAuthApp.ID, secret: Redacted.Redacted | undefined) =>
-      secret === undefined
-        ? Effect.succeed(undefined)
-        : envelope.seal(secret, { organizationId: actor.organizationId, kind: "oauth_app", id }).pipe(Effect.orDie)
+      secret
+        ? envelope.seal(secret, { organizationId: actor.organizationId, kind: "oauth_app", id }).pipe(Effect.orDie)
+        : Effect.succeed(undefined)
 
     return Service.of({
       list: Effect.fn("OAuthApps.list")(function* (actor: Actor.Info, input: OAuthApp.ListInput) {

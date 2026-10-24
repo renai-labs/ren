@@ -2,7 +2,6 @@ export * as McpProvider from "./mcp-provider.js"
 
 import type { Credential } from "@ren/schema/credential"
 import { Auth } from "@ren/schema/auth"
-import { Envelope as EnvelopeSchema } from "@ren/schema/envelope"
 import { Cache, Clock, Config, Context, Duration, Effect, Layer, Option, Redacted, Schedule, Schema } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
@@ -81,7 +80,7 @@ export const layerComposio = Layer.effect(
         const request = HttpClientRequest.make(method)(`${base}/api/v3.1${path}`).pipe(
           HttpClientRequest.setHeader("x-api-key", Redacted.value(apiKey)),
           HttpClientRequest.acceptJson,
-          body === undefined ? (self) => self : HttpClientRequest.bodyJsonUnsafe(body),
+          body ? HttpClientRequest.bodyJsonUnsafe(body) : (self) => self,
         )
         const response = yield* http.execute(request).pipe(
           Effect.timeout("10 seconds"),
@@ -184,7 +183,7 @@ export interface Leftover {
     | {
         readonly organizationId: Auth.OrganizationID
         readonly credentialId: string
-        readonly value: EnvelopeSchema.Sealed
+        readonly value: Envelope.Sealed
       }
     | undefined
 }
@@ -211,7 +210,7 @@ const CleanupRun = DurableRunner.make("McpProviderCleanup", {
     sessionId: Schema.optional(Schema.String),
     accountId: Schema.optional(Schema.String),
     sealed: Schema.optional(
-      Schema.Struct({ organizationId: Auth.OrganizationID, credentialId: Schema.String, value: EnvelopeSchema.Sealed }),
+      Schema.Struct({ organizationId: Auth.OrganizationID, credentialId: Schema.String, value: Envelope.Sealed }),
     ),
   },
   idempotencyKey: (payload) =>

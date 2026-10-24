@@ -27,12 +27,20 @@ import { CredentialSource } from "@ren/core/credential-source"
 import { Credentials } from "@ren/core/credentials"
 import { Egress } from "@ren/core/egress"
 import { Envelope } from "@ren/core/envelope"
+import { CredentialRefresh } from "@ren/core/credential-refresh"
+import { McpProvider } from "@ren/core/mcp-provider"
+import { OAuth } from "@ren/core/oauth"
+import { OAuthFetch } from "@ren/core/oauth-fetch"
 
-const credentials = Egress.layer.pipe(
+const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
+  Layer.provideMerge(CredentialRefresh.layer.pipe(Layer.provide(OAuth.layerRefresher))),
   Layer.provideMerge(CredentialSource.layer),
-  Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
+  Layer.provideMerge(
+    Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
+  ),
   Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
-  Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer)),
+  Layer.provideMerge(McpProvider.layerNone),
+  Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerPublic)),
 )
 
 HttpRouter.serve(Routes.layer).pipe(
@@ -47,6 +55,7 @@ HttpRouter.serve(Routes.layer).pipe(
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
   Layer.provideMerge(credentials),
+  Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([ChaosModels.layer, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
   Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal)),

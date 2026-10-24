@@ -201,7 +201,7 @@ const endpointsOf = (
     authorizationEndpoint,
     tokenEndpoint,
     resource: firstOf(resource, own?.resource, auth.client?.resource) ?? url.replace(/\/$/u, ""),
-    differs: metadata !== undefined && firstOf(auth.tokenEndpoint, metadata.token_endpoint) !== metadata.token_endpoint,
+    differs: metadata ? firstOf(auth.tokenEndpoint, metadata.token_endpoint) !== metadata.token_endpoint : false,
   })
 }
 
@@ -237,7 +237,7 @@ const replaced = (previous: Option.Option<Credentials.Sealed>, oldAccount: strin
   sessionId: Option.getOrUndefined(
     Option.flatMap(previous, (found) => (found.type === "route" ? Option.some(found.sessionId) : Option.none())),
   ),
-  accountId: oldAccount === null || oldAccount === newAccount ? undefined : oldAccount,
+  ...(oldAccount && oldAccount !== newAccount && { accountId: oldAccount }),
 })
 
 const ownerColumns = (owner: Credential.Owner) => ({
@@ -342,7 +342,7 @@ export const layer = Layer.effect(
       const name = declaration.requiredCredentials
         .flatMap((requirement) => (requirement.kind === "oauth_app" ? [requirement.name] : []))
         .at(0)
-      if (name === undefined) return Option.none<OrgApp>()
+      if (!name) return Option.none<OrgApp>()
       const rows = yield* database.db
         .select()
         .from(Database.Schema.oauth_app)
@@ -600,7 +600,7 @@ export const layer = Layer.effect(
         Effect.sync(
           () =>
             !Option.match(app, {
-              onNone: () => auth.client !== undefined,
+              onNone: () => Boolean(auth.client),
               onSome: (own) => own.discovery === "static",
             }),
         ),
@@ -691,6 +691,7 @@ export const layer = Layer.effect(
 
     // oxlint-disable-next-line ren/no-comments -- K7 (MCP 2026-07-28, RFC 9207): `iss` is checked before anything else of the answer, errors included, with plain string equality. A server that says it sends `iss` must send it. On a mismatch, no provider text is used.
     const checkAnswer = (taken: Session, discovered: Discovered, input: Callback): Option.Option<string> => {
+      // ast-grep-ignore: no-nullish-comparison, -- an empty `iss` is present and must be compared (K7)
       if (input.iss === undefined ? discovered.issSupported : input.iss !== taken.issuer)
         return Option.some("The sign-in answer came from another server than the one Ren asked.")
       if (input.error) return Option.some(input.errorDescription ?? input.error)
@@ -796,7 +797,7 @@ export const layer = Layer.effect(
 
     // oxlint-disable-next-line ren/no-comments -- §10b rule 9 (K41): a match with another connection of the same MCP and owner completes with a warning.
     const sameAccount = Effect.fnUntraced(function* (taken: Session, subjectHash: string | null) {
-      if (subjectHash === null) return Option.none<string>()
+      if (!subjectHash) return Option.none<string>()
       const rows = yield* database.db
         .select({ name: credentials.name, label: credentials.label })
         .from(credentials)
@@ -954,7 +955,7 @@ export const layerRefresher = Layer.effect(
       const metadata = yield* Cache.get(issuers, issuer)
       if (Result.isFailure(metadata))
         return metadata.failure instanceof Error && metadata.failure.name === "IssuerMismatchError"
-      return metadata.success !== undefined && metadata.success.issuer !== issuer
+      return metadata.success ? metadata.success.issuer !== issuer : false
     })
 
     const refresher: CredentialRefresh.Refresher = {

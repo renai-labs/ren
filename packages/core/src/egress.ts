@@ -155,7 +155,7 @@ export const layer = Layer.effect(
           refreshable: [
             ...new Map(
               matched.matches.flatMap((match) =>
-                match.candidate.revision === undefined
+                typeof match.candidate.revision !== "number"
                   ? []
                   : [[match.candidate.label, { label: match.candidate.label, revision: match.candidate.revision }]],
               ),
@@ -184,7 +184,7 @@ export const layer = Layer.effect(
               placeholders: [Credential.placeholder(reported.label)],
             })
             const candidate = matched.ok ? matched.matches.at(0)?.candidate : undefined
-            if (candidate?.revision === undefined) return Effect.void
+            if (typeof candidate?.revision !== "number") return Effect.void
             return Effect.logInfo(`Upstream ${report.host} answered ${report.status} for ${reported.label}`).pipe(
               Effect.andThen(
                 report.status === 403

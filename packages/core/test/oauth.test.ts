@@ -386,9 +386,9 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
     () =>
       Effect.gen(function* () {
         const service = yield* OAuth.Service
-        const run = (supported: boolean, iss: string | undefined, extra: Partial<OAuth.Callback> = {}) =>
+        const run = (options: { readonly supported: boolean }, iss: string | undefined, extra: Partial<OAuth.Callback> = {}) =>
           Effect.gen(function* () {
-            yield* reset({ metadata: { authorization_response_iss_parameter_supported: supported } })
+            yield* reset({ metadata: { authorization_response_iss_parameter_supported: options.supported } })
             const redirect = yield* connect(yield* setup())
             return yield* service.callback(
               {
@@ -400,17 +400,17 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
               Option.none(),
             )
           })
-        expect((yield* run(true, server.issuer)).ok).toBe(true)
-        expect((yield* run(true, undefined)).ok).toBe(false)
-        expect((yield* run(false, `${server.issuer}/`)).ok).toBe(false)
-        expect((yield* run(false, undefined)).ok).toBe(true)
-        const mismatch = yield* run(true, "https://evil.test", {
+        expect((yield* run({ supported: true }, server.issuer)).ok).toBe(true)
+        expect((yield* run({ supported: true }, undefined)).ok).toBe(false)
+        expect((yield* run({ supported: false }, `${server.issuer}/`)).ok).toBe(false)
+        expect((yield* run({ supported: false }, undefined)).ok).toBe(true)
+        const mismatch = yield* run({ supported: true }, "https://evil.test", {
           error: "access_denied",
           errorDescription: "Click evil.test",
         })
         expect(mismatch.ok).toBe(false)
         expect(JSON.stringify(mismatch)).not.toContain("evil.test")
-        const denied = yield* run(false, undefined, { error: "access_denied", errorDescription: "The person said no" })
+        const denied = yield* run({ supported: false }, undefined, { error: "access_denied", errorDescription: "The person said no" })
         expect(denied).toEqual({ ok: false, reason: "The person said no" })
       }),
   )
