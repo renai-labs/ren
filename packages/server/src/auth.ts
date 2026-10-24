@@ -1,5 +1,7 @@
 export * as Auth from "./auth.js"
 
+import { fetchClientMetadataResource } from "@better-auth/cimd/node"
+import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { SpaceProvisioning } from "@ren/core/space/provisioning"
@@ -27,6 +29,15 @@ interface Membership {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/server/Auth") {}
 
+export const ClientMetadataFetch = Context.Reference<ClientMetadataResourceFetch>(
+  "@ren/server/Auth/ClientMetadataFetch",
+  {
+    defaultValue: () => fetchClientMetadataResource,
+  },
+)
+
+export const mcpPath = "/mcp"
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -35,6 +46,7 @@ export const layer = Layer.effect(
     const signupGuard = yield* SignupGuard.Service
     const provisioning = yield* SpaceProvisioning.Service
     const toProvisioningUser = (user: BetterAuth.ProvisioningUser) => ({ ...user, id: Auth.UserID.make(user.id) })
+    const clientMetadataFetch = yield* ClientMetadataFetch
     const run = yield* FiberSet.makeRuntime()
     const runPromise = yield* FiberSet.makeRuntimePromise()
     const config = yield* Config.all({
@@ -57,6 +69,8 @@ export const layer = Layer.effect(
       trustedOrigins: config.trustedOrigins,
       google: { clientId: config.googleClientId, clientSecret: Redacted.value(config.googleClientSecret) },
       appURL: config.appURL,
+      mcpResource: new URL(mcpPath, config.baseURL).href,
+      fetchClientMetadataResource: clientMetadataFetch,
       requireEmailVerification: !config.skipEmailVerification,
       sendEmail: (email) => {
         run(mailer.send(email).pipe(Effect.ignoreCause({ log: "Error", message: "Failed to send email" })))
@@ -81,6 +95,7 @@ export const layer = Layer.effect(
           ),
       },
     })
+    yield* Effect.promise(() => auth.$context)
     return Service.of({
       handler: auth.handler,
       trustedOrigins: config.trustedOrigins,

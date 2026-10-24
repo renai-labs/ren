@@ -369,6 +369,8 @@ describe("Auth", () => {
           trustedOrigins: [],
           google: { clientId: "unused", clientSecret: "unused" },
           appURL: "http://localhost:5173",
+          mcpResource: "http://localhost:4000/mcp",
+          fetchClientMetadataResource: () => Promise.resolve(new Response(null, { status: 404 })),
           requireEmailVerification: true,
           sendEmail: () => {},
           signupGuard: {

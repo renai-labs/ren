@@ -1,6 +1,9 @@
 export * as BetterAuth from "./better-auth.js"
 
+import { cimd } from "@better-auth/cimd"
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"
+import { mcp } from "@better-auth/mcp"
+import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
 import type { SpaceProvisioning } from "@ren/core/space/provisioning"
@@ -10,7 +13,7 @@ import { Auth } from "@ren/schema/auth"
 import { BASE_ERROR_CODES, betterAuth } from "better-auth"
 import type { BetterAuthPlugin } from "better-auth"
 import { APIError, createAuthMiddleware } from "better-auth/api"
-import { bearer, emailOTP, organization } from "better-auth/plugins"
+import { bearer, emailOTP, jwt, organization } from "better-auth/plugins"
 import { Effect, Option, Schema } from "effect"
 import { AuthEmail } from "./auth-email.js"
 import { DefaultOrganization } from "./default-organization.js"
@@ -24,6 +27,8 @@ export interface Input {
   readonly google: { readonly clientId: string; readonly clientSecret: string }
   readonly appURL: string
   readonly requireEmailVerification: boolean
+  readonly mcpResource: string
+  readonly fetchClientMetadataResource: ClientMetadataResourceFetch
   readonly sendEmail: (email: Mailer.Email) => void
   readonly signupGuard: {
     readonly checkEmailSignUp: (email: string) => Promise<Option.Option<SignupGuard.Rejection>>
@@ -47,7 +52,26 @@ const ids = new Map<string, () => string>([
   ["organization", Auth.OrganizationID.create],
   ["member", Auth.MemberID.create],
   ["invitation", Auth.InvitationID.create],
+  ["jwks", Auth.JwkID.create],
+  ["oauthClient", Auth.OAuthClientID.create],
+  ["oauthResource", Auth.OAuthResourceID.create],
+  ["oauthClientResource", Auth.OAuthClientResourceID.create],
+  ["oauthRefreshToken", Auth.OAuthRefreshTokenID.create],
+  ["oauthAccessToken", Auth.OAuthAccessTokenID.create],
+  ["oauthConsent", Auth.OAuthConsentID.create],
+  ["oauthClientAssertion", Auth.OAuthClientAssertionID.create],
 ])
+
+export const mcpScope = "ren"
+
+export const organizationClaim = "ren_org"
+
+const ActiveOrganization = Schema.Struct({ activeOrganizationId: Schema.String })
+
+// oxlint-disable-next-line ren/no-comments -- @better-auth/oauth-provider types its OpenAPI parameters with `items?: undefined`, which exactOptionalPropertyTypes refuses as a BetterAuthPlugin; the value is a valid plugin.
+const oauthPlugin = (plugin: ReturnType<typeof mcp> | ReturnType<typeof cimd>) =>
+  // ast-grep-ignore: no-chained-type-assertions, -- the value is a valid plugin; only the published type is wrong
+  plugin as unknown as BetterAuthPlugin // oxlint-disable-line typescript/no-unsafe-type-assertion -- see the reason above
 
 const signUpPath = "/sign-up/email"
 
@@ -226,7 +250,39 @@ export const make = (input: Input) => {
       user: { create: { before: guardAccountCreation(input) } },
       session: { create: { before: provisionOrganization(input) } },
     },
-    plugins: [bearer(), emailCodes(input), organizationPlugin, indexes],
+    plugins: [
+      bearer(),
+      emailCodes(input),
+      organizationPlugin,
+      jwt({ disableSettingJwtHeader: true }),
+      oauthPlugin(
+        mcp({
+          resource: input.mcpResource,
+          loginPage: new URL("login", appURL).href,
+          consentPage: new URL("consent", appURL).href,
+          scopes: ["openid", "profile", "email", "offline_access", mcpScope],
+          accessTokenExpiresIn: 60 * 60,
+          refreshTokenExpiresIn: 60 * 60 * 24 * 30,
+          postLogin: {
+            page: new URL("consent", appURL).href,
+            shouldRedirect: () => false,
+            consentReferenceId: (context) =>
+              Schema.decodeUnknownOption(ActiveOrganization)(context.session).pipe(
+                Option.map((session) => session.activeOrganizationId),
+                Option.getOrUndefined,
+              ),
+          },
+          customAccessTokenClaims: (info) => (info.referenceId ? { [organizationClaim]: info.referenceId } : {}),
+        }),
+      ),
+      oauthPlugin(
+        cimd({
+          fetchClientMetadataResource: input.fetchClientMetadataResource,
+          metadataProfile: "mcp-2026-07-28",
+        }),
+      ),
+      indexes,
+    ],
     advanced: {
       // oxlint-disable-next-line ren/no-comments -- Better Auth skips the origin check when NODE_ENV is "test"; keep it on so tests match production
       disableOriginCheck: false,
