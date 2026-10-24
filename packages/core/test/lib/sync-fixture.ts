@@ -5,6 +5,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import type { Sync } from "@ren/schema/sync"
 import type { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { Effect } from "effect"
 import { SessionSync } from "../../src/session-sync.js"
 
@@ -13,6 +14,7 @@ export const now = 1_760_000_000_000
 export const host = (organizationId: Auth.OrganizationID, rootId: Session.ID): CurrentHost["Service"] => ({
   brainId: Brain.ofSession(rootId),
   organizationId,
+  spaceId: Space.ID.create(),
   generation: 1,
 })
 

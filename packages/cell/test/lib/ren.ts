@@ -24,6 +24,7 @@ import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import type { Signature } from "@ren/schema/signature"
+import { Space } from "@ren/schema/space"
 import type { Sync } from "@ren/schema/sync"
 import { SyncApi } from "@ren/host-api/sync-api"
 import { Effect, Layer, Option, Redacted } from "effect"
@@ -279,6 +280,7 @@ export const start = (options: { readonly hostname?: string } = {}) => {
             Effect.provideService(CurrentHost, {
               brainId: host.value.brain,
               organizationId: host.value.org,
+              spaceId: Space.ID.create(),
               generation: host.value.gen,
             }),
           )

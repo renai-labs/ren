@@ -252,7 +252,12 @@ for (const host of hosts)
           yield* Host.ready(brains.access(chat.sessionId, { userId: chat.owner.createdBy }))
           const found = yield* brains
             .accessEnvironment(
-              { brainId: yield* brainOf(chat.sessionId), organizationId: chat.owner.organizationId, generation: 1 },
+              {
+                brainId: yield* brainOf(chat.sessionId),
+                organizationId: chat.owner.organizationId,
+                spaceId: chat.owner.spaceId,
+                generation: 1,
+              },
               chat.sessionId,
             )
             .pipe(Effect.result)
