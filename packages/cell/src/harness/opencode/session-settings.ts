@@ -10,8 +10,6 @@ const Saved = Schema.Struct({
   interactive: Schema.Boolean,
 })
 
-export type Saved = typeof Saved.Type
-
 export const savedOf = (session: Session.Info) => Schema.decodeUnknownOption(Saved)(session.metadata?.ren)
 
 export const metadata = (session: Option.Option<Session.Info>, saved: typeof Saved.Type) => ({

@@ -5,18 +5,33 @@ import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
 import { SessionInbox } from "@opencode/schema/session-inbox"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { BrainSettings } from "@ren/brain/settings"
+import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { SessionCreateInput, SessionListInput, SessionUpdateInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
 import { Environment } from "@ren/schema/environment"
 import type { Models } from "@ren/schema/models"
 import type { StartBody } from "@ren/host-api/brain-api"
-import type { PullChat } from "@ren/host-api/ren-host-api"
 import { Model, type SendInput } from "@ren/schema/session"
-import { Clock, DateTime, Effect, Layer, Option, Ref, Schema, type Scope, Semaphore, Stream, Struct } from "effect"
+import {
+  Clock,
+  DateTime,
+  Effect,
+  Layer,
+  Option,
+  Ref,
+  Result,
+  Schema,
+  type Scope,
+  Semaphore,
+  Stream,
+  Struct,
+} from "effect"
 import { mkdir, rm, stat } from "node:fs/promises"
 // oxlint-disable-next-line ren/no-node-modules-import -- @opencode/core exports no package.json and no version, and the harness version must be the installed one.
 import opencode from "../../../node_modules/@opencode/core/package.json"
 import { BrainStorage } from "../../brain-storage.js"
+import { AppStore } from "../../app-store.js"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
 import { HarnessStorage } from "../../harness-storage.js"
@@ -30,6 +45,7 @@ import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { SessionSettings } from "./session-settings.js"
+import type { HarnessConfig } from "../config.js"
 
 const environmentActions = ["read", "edit", "glob", "grep", "shell"]
 
@@ -79,25 +95,22 @@ const rejectUnknownModel = Effect.fn("OpenCodeHarness.rejectUnknownModel")(funct
     return yield* new BrainRejectedError({ message: `Unknown model: ${model.endpointId}/${model.modelId}` })
 })
 
-const modelName = (model: Model) => `${model.endpointId}/${model.modelId}`
-
 // oxlint-disable-next-line ren/no-comments -- A chat whose picked model is gone uses its settings' model; the pick is cleared and the chat is told why (E55).
 const dropPick = Effect.fnUntraced(function* (
   client: OpenCodeClient,
   session: Option.Option<Session.Info>,
-  saved: SessionSettings.Saved,
-  picked: Model,
   now: Model,
 ) {
   const info = Option.getOrUndefined(session)
-  if (!info) return
+  const saved = Option.getOrUndefined(Option.flatMap(session, SessionSettings.savedOf))
+  if (!info || !saved?.model) return
   yield* client.session
     .update({ sessionID: info.id, metadata: SessionSettings.metadata(session, { ...saved, model: null }) })
     .pipe(Effect.orDie)
   yield* client.session
     .synthetic({
       sessionID: info.id,
-      text: `The model ${modelName(picked)} is no longer available. This chat now uses ${modelName(now)}.`,
+      text: `The model ${saved.model.endpointId}/${saved.model.modelId} is no longer available. This chat now uses ${now.endpointId}/${now.modelId}.`,
       resume: false,
     })
     .pipe(Effect.orDie)
@@ -197,7 +210,7 @@ const remember = Effect.fnUntraced(function* (
   if (Option.isSome(settings)) yield* settings.value.keep(sessionId, chat)
   if (!options.install) return
   yield* server.activate(sessionId).pipe(Effect.ignore)
-  yield* server.chats.value.install(sessionId)
+  yield* server.configure({ chats: yield* Ref.get(server.chats.value.latest) })
 })
 
 const update = Effect.fnUntraced(function* (
@@ -331,6 +344,7 @@ type Opener = (
   connections: Option.Option<EnvironmentConnections.Interface>,
   config: string,
   settings: Option.Option<ChatSettings.Interface>,
+  apps: Option.Option<AppCatalog.Info>,
 ) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
 
 const layerWith = (opener: Opener) =>
@@ -341,6 +355,7 @@ const layerWith = (opener: Opener) =>
       const refreshKey = yield* ModelRefresh.Service
       const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
       const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
+      const apps = yield* Effect.serviceOption(AppStore.Service)
       const prepare = HarnessStorage.prepare(version).pipe(
         Effect.provideService(BrainStorage.Service, yield* BrainStorage.Service),
         Effect.provideService(HarnessStorage.Service, yield* HarnessStorage.Service),
@@ -350,9 +365,17 @@ const layerWith = (opener: Opener) =>
           Effect.andThen(store.read),
           Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
           Effect.flatMap((endpoints) =>
-            opener(endpoints, refreshKey, connections, cell.vars.OPENCODE_CONFIG, settings).pipe(
-              Effect.flatMap((server) => make(server, endpoints, settings)),
-            ),
+            Effect.gen(function* () {
+              const server = yield* opener(
+                endpoints,
+                refreshKey,
+                connections,
+                cell.vars.OPENCODE_CONFIG,
+                settings,
+                Option.isSome(apps) ? yield* apps.value.current : Option.none(),
+              )
+              return yield* make(server, endpoints, settings)
+            }),
           ),
         ),
       )
@@ -360,17 +383,19 @@ const layerWith = (opener: Opener) =>
   )
 
 export const layer = (storage: DurableObjectStorage) =>
-  layerWith((endpoints, refreshKey, connections, config, settings) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps) =>
     OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
+      apps,
       directoryOf: (sessionId) => `/workspace/${sessionId}`,
     }),
   )
 
 export const layerProcess = (database: string, confinement: RenPlugin.Confinement) =>
-  layerWith((endpoints, refreshKey, connections, config, settings) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps) =>
     OpenCodeServer.openProcess(database, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
+      apps,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
       confinement,
       makeDirectory: (directory) => Effect.promise(() => mkdir(directory, { recursive: true })),
@@ -383,17 +408,71 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   settings: Option.Option<ChatSettings.Interface> = Option.none(),
 ) {
   const client = server.client
-  const state = { firstAskedAt: new Map<string, number>() }
+  const state = { firstAskedAt: new Map<string, number>(), models: endpoints }
   const mutations = yield* Semaphore.make(1)
-  const configure = Effect.fn("OpenCodeHarness.configure")(function* (next: ReadonlyArray<Models.Endpoint>) {
-    yield* server.configure(next)
+  const configure = Effect.fn("OpenCodeHarness.configure")(function* (
+    update: HarnessConfig.Update,
+  ): Effect.fn.Return<void> {
+    const models = update.models ?? state.models
+    if (Option.isSome(server.chats) && update.settings) {
+      const pulled = update.settings
+      const known = server.chats.value
+      const native = yield* lookupOf(client)
+      const managed = new Set([...state.models, ...models].map((endpoint) => endpoint.id))
+      const lookup: BrainSettings.Lookup = (model) => {
+        if (!managed.has(model.endpointId)) return native(model)
+        return Option.fromUndefinedOr(
+          models
+            .find((endpoint) => endpoint.id === model.endpointId)
+            ?.models.find((entry) => entry.id === model.modelId),
+        ).pipe(Option.map((entry) => ({ variants: entry.efforts ?? [] })))
+      }
+      yield* Effect.forEach(
+        pulled.chats,
+        (chat) =>
+          Effect.gen(function* () {
+            const session = yield* findSession(client, Session.ID.make(chat.id))
+            if (Option.isNone(session)) return
+            if (chat.archived) {
+              yield* client.session.interrupt({ sessionID: session.value.id }).pipe(Effect.orDie)
+              return
+            }
+            const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
+            const picked = saved?.model && Option.isSome(lookup(saved.model)) ? saved.model : undefined
+            const resolved = BrainSettings.resolve(
+              pulled.layers,
+              {
+                agent: chat.agent,
+                model: Option.fromUndefinedOr(picked),
+              },
+              lookup,
+            )
+            if (Result.isFailure(resolved)) {
+              yield* Effect.logWarning(`Chat ${chat.id} keeps its settings: ${resolved.failure.message}`)
+              return
+            }
+            if (!picked) yield* dropPick(client, session, resolved.success.primary.model)
+            const next = { resolved: resolved.success, interactive: saved?.interactive ?? true }
+            yield* Ref.update(known.latest, (all) => new Map([...all, [chat.id, next]]))
+            if (Option.isSome(settings)) yield* settings.value.keep(chat.id, next)
+          }),
+        { discard: true },
+      )
+    }
+    state.models = models
+    yield* server.configure({
+      models,
+      ...(update.apps && { apps: update.apps }),
+      ...(Option.isSome(server.chats) && { chats: yield* Ref.get(server.chats.value.latest) }),
+    })
   })
-  yield* configure(endpoints)
+  yield* configure({ models: endpoints })
 
   return {
     fetch: server.fetch,
     chat: OpenCodeChat.make(server),
-    configure: (next: ReadonlyArray<Models.Endpoint>) => mutations.withPermit(configure(next)),
+    configure: (update: HarnessConfig.Update) => mutations.withPermit(configure(update)),
+    configuration: server.configuration,
     start: (input: StartBody) =>
       mutations.withPermit(
         Effect.gen(function* () {
@@ -504,53 +583,13 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
             .pipe(Effect.orDie)
         }),
       ),
-    applySettings: Effect.fn("OpenCodeHarness.applySettings")(function* (chats: ReadonlyArray<PullChat>) {
-      if (Option.isNone(server.chats) || Option.isNone(settings)) return
-      const known = server.chats.value
-      const lookup = yield* lookupOf(client)
-      const active = new Set(Object.keys(yield* client.session.active().pipe(Effect.orDie)))
-      const stopArchived = (sessionID: Session.ID) =>
-        active.has(sessionID) ? client.session.interrupt({ sessionID }).pipe(Effect.orDie) : Effect.void
-      yield* Effect.forEach(
-        chats,
-        (chat) =>
-          Effect.gen(function* () {
-            const session = yield* findSession(client, Session.ID.make(chat.id))
-            if (Option.isNone(session)) return
-            if (chat.archived) return yield* stopArchived(session.value.id)
-            const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
-            const gone = saved?.model && Option.isNone(lookup(saved.model)) ? saved : undefined
-            const resolved = yield* settings.value
-              .resolve(chat.id, gone ? Option.none() : Option.fromNullishOr(saved?.model), lookup)
-              .pipe(
-                Effect.tapError((error) => Effect.logWarning(`Chat ${chat.id} keeps its settings: ${error.message}`)),
-                Effect.option,
-              )
-            if (Option.isNone(resolved)) return
-            if (gone?.model) yield* dropPick(client, session, gone, gone.model, resolved.value.primary.model)
-            yield* Ref.update(
-              known.latest,
-              (all) =>
-                new Map([...all, [chat.id, { resolved: resolved.value, interactive: saved?.interactive ?? true }]]),
-            )
-            if (!active.has(chat.id)) yield* known.install(chat.id)
-          }),
-        { discard: true },
-      )
-    }),
     onTurn: (hooks) =>
       Option.match(server.chats, {
         onNone: () => Effect.void,
         onSome: (chats) =>
-          Effect.all(
-            [
-              Ref.set(chats.turnStarted, hooks.started),
-              Ref.set(chats.turnEnded, (sessionId) =>
-                chats.install(sessionId).pipe(Effect.andThen(hooks.ended(sessionId))),
-              ),
-            ],
-            { discard: true },
-          ),
+          Effect.all([Ref.set(chats.turnStarted, hooks.started), Ref.set(chats.turnEnded, hooks.ended)], {
+            discard: true,
+          }),
       }),
     sessions: Effect.gen(function* () {
       const roots = yield* Stream.paginate(undefined, (cursor: SessionListInput["cursor"]) =>

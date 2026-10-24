@@ -67,15 +67,16 @@ const open = Effect.fnUntraced(function* (beforeOpen: Effect.Effect<void> = Effe
   const vars = Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url))
   const endpoints = Shared.access(undefined, stub.url).endpoints
   const host = yield* OpenCodeServer.make(
-    createEmbeddedRoutes(
-      {
-        database: { path: ":memory:" },
-        config: { project: false, content: vars.OPENCODE_CONFIG },
-        models: { fetch: false },
-        fs: { filewatcher: false, fff: false },
-      },
-      RenWorkspaceDriver.replacements(environments),
-    ).pipe(Layer.provide(HttpServer.layerServices)),
+    (replacements) =>
+      createEmbeddedRoutes(
+        {
+          database: { path: ":memory:" },
+          config: { project: false, content: vars.OPENCODE_CONFIG },
+          models: { fetch: false },
+          fs: { filewatcher: false, fff: false },
+        },
+        [...replacements, ...RenWorkspaceDriver.replacements(environments)],
+      ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     () => Effect.succeedNone,
     Option.some(environments),

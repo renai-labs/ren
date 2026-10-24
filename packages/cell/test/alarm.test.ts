@@ -102,7 +102,7 @@ const setup = Effect.gen(function* () {
     send: () => Effect.die(new Error("alarm must not send messages")),
     setModel: () => Effect.die(new Error("alarm must not set models")),
     sessions: Effect.suspend(() => current.reading.pipe(Effect.andThen(Effect.sync(() => current.snapshots)))),
-    applySettings: () => Effect.die(new Error("alarm must not apply settings")),
+    configuration: Effect.die(new Error("alarm must not read configuration")),
     onTurn: () => Effect.die(new Error("alarm must not watch turns")),
   }
   const context = yield* Layer.build(

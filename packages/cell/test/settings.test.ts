@@ -14,6 +14,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { ChatSettings } from "../src/chat-settings.js"
 import type { Harness } from "../src/harness/harness.js"
+import type { HarnessConfig } from "../src/harness/config.js"
 import { OpenCodeEvents } from "../src/harness/opencode/events.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
@@ -56,12 +57,16 @@ const open = Effect.fnUntraced(function* (
   )
   yield* settings.save(BrainSettings.merge(BrainSettings.empty, initial), [])
   const server = yield* OpenCodeServer.make(
-    createEmbeddedRoutes({
-      database: { path: options.database ?? ":memory:" },
-      config: { project: false, content: Shared.vars(stub.url).OPENCODE_CONFIG },
-      models: { fetch: false },
-      fs: { filewatcher: false, fff: false },
-    }).pipe(Layer.provide(HttpServer.layerServices)),
+    (replacements) =>
+      createEmbeddedRoutes(
+        {
+          database: { path: options.database ?? ":memory:" },
+          config: { directory, project: false, content: Shared.vars(stub.url).OPENCODE_CONFIG },
+          models: { fetch: false },
+          fs: { filewatcher: false, fff: false },
+        },
+        replacements,
+      ).pipe(Layer.provide(HttpServer.layerServices)),
     access.endpoints,
     options.refreshKey ?? (() => Effect.succeedNone),
     Option.none(),
@@ -99,15 +104,119 @@ const open = Effect.fnUntraced(function* (
         sender: { userId: "user_1" },
       })
       .pipe(Effect.andThen(client.session.wait({ sessionID })), Effect.orDie)
-  const pull = (layers: SessionSettings.Layers) =>
+  const pull = (layers: SessionSettings.Layers, update: Omit<HarnessConfig.Update, "settings"> = {}) =>
     Effect.gen(function* () {
       yield* settings.save(BrainSettings.merge(yield* settings.layers, layers), [])
-      yield* harness.applySettings([{ id: sessionId, agent: null, archived: false }])
+      yield* harness.configure({
+        ...update,
+        settings: {
+          layers: yield* settings.layers,
+          chats: [{ id: sessionId, agent: null, archived: false }],
+        },
+      })
     })
   return { server, harness, client, sessionId, sessionID, turn, pull, directory, access }
 })
 
 describe("settings in the cell", () => {
+  it.live("a parent, its child and queued work keep the config until execution becomes idle", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(TestSettings.layers({ ren: { instructions: "Parent config." } }))
+      const child = stub.script()
+      const parent = stub.script({
+        hold: true,
+        tools: [
+          {
+            name: "subagent",
+            input: { agent: "explore", description: "Read", prompt: `${child.marker} read` },
+          },
+        ],
+      })
+      yield* Effect.addFinalizer(() => Effect.sync(parent.release))
+      yield* opened.client.session
+        .prompt({ sessionID: opened.sessionID, text: `${parent.marker} go` })
+        .pipe(Effect.orDie)
+      yield* Effect.promise(() => parent.called())
+      const queued = stub.script()
+      yield* opened.client.session
+        .prompt({ sessionID: opened.sessionID, text: `${queued.marker} go`, delivery: "queue" })
+        .pipe(Effect.orDie)
+      yield* opened.pull(TestSettings.layers({ ren: { instructions: "Next config." } }))
+      parent.release()
+      yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+      expect(child.calls[0]?.system).toContain("Parent config.")
+      expect(child.calls[0]?.system).not.toContain("Next config.")
+      expect(queued.calls[0]?.system).toContain("Parent config.")
+      const next = stub.script()
+      yield* opened.turn(next)
+      expect(next.calls[0]?.system).toContain("Next config.")
+    }),
+  )
+  it.live("the complete pending config waits for queued execution to become idle", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(TestSettings.layers({ ren: { instructions: "Before the update." } }))
+      const held = stub.script({ hold: true })
+      yield* Effect.addFinalizer(() => Effect.sync(held.release))
+      yield* opened.client.session.prompt({ sessionID: opened.sessionID, text: `${held.marker} go` }).pipe(Effect.orDie)
+      yield* Effect.promise(() => held.called())
+      const queued = stub.script({ hold: true })
+      yield* Effect.addFinalizer(() => Effect.sync(queued.release))
+      yield* opened.client.session
+        .prompt({
+          sessionID: opened.sessionID,
+          text: `${queued.marker} go`,
+          delivery: "queue",
+        })
+        .pipe(Effect.orDie)
+      const added = { id: "after-update", name: "After Update", limit: { context: 100_000, output: 4000 } }
+      yield* opened.pull(
+        TestSettings.layers({
+          ren: {
+            instructions: "After the update.",
+            model: { endpointId: "stub", modelId: added.id },
+          },
+        }),
+        {
+          models: opened.access.endpoints.map((endpoint) =>
+            Struct.evolve(endpoint, { models: (models) => [...models, added] }),
+          ),
+          apps: Option.some({
+            fingerprint: "apps-after-update",
+            catalog: {
+              apps: [],
+              mcps: [],
+              skills: [],
+              credentials: [],
+            },
+          }),
+        },
+      )
+      expect(
+        (yield* opened.harness.configuration).find((location) => location.directory.endsWith(opened.sessionId))
+          ?.appFingerprint,
+      ).toEqual(Option.none())
+      expect(held.calls[0]?.system).toContain("Before the update.")
+      held.release()
+      yield* Effect.promise(() => queued.called())
+      expect(queued.calls[0]?.system).toContain("Before the update.")
+      expect(queued.calls[0]?.body.model).toBe("stub-model")
+      expect(
+        (yield* opened.harness.configuration).find((location) => location.directory.endsWith(opened.sessionId))
+          ?.appFingerprint,
+      ).toEqual(Option.none())
+      queued.release()
+      yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+      const next = stub.script()
+      yield* opened.turn(next)
+      expect(next.calls[0]?.system).toContain("After the update.")
+      expect(next.calls[0]?.system).not.toContain("Before the update.")
+      expect(next.calls[0]?.body.model).toBe(added.id)
+      expect(
+        (yield* opened.harness.configuration).find((location) => location.directory.endsWith(opened.sessionId))
+          ?.appFingerprint,
+      ).toEqual(Option.some("apps-after-update"))
+    }),
+  )
   it.live("clearing a variant switches the existing session back to the default", () =>
     Effect.gen(function* () {
       const opened = yield* open(TestSettings.layers())
@@ -375,11 +484,11 @@ describe("settings in the cell", () => {
         .pipe(Effect.orDie)
       yield* Effect.promise(() => held.called())
       const added = { id: "stub-added", name: "Stub Added", limit: { context: 100_000, output: 4000 } }
-      yield* opened.harness.configure(
-        opened.access.endpoints.map((endpoint) =>
+      yield* opened.harness.configure({
+        models: opened.access.endpoints.map((endpoint) =>
           endpoint.id === "stub" ? Struct.evolve(endpoint, { models: (models) => [...models, added] }) : endpoint,
         ),
-      )
+      })
       const offers = (sessionId: RenSession.ID) =>
         opened.client.model.list({ location: { directory: join(opened.directory, sessionId) } }).pipe(
           Effect.orDie,
@@ -408,7 +517,7 @@ describe("settings in the cell", () => {
           { stub: Shared.apiKey("stub-key"), anthropic: Shared.apiKey("sk-anthropic") },
           stub.url,
         ).endpoints
-        yield* opened.harness.configure(both)
+        yield* opened.harness.configure({ models: both })
         const stored = opened.server.credentials
           .all()
           .pipe(Effect.map((all) => all.some((credential) => credential.integrationID === "anthropic")))
@@ -424,7 +533,7 @@ describe("settings in the cell", () => {
           })
           .pipe(Effect.orDie)
         yield* Effect.promise(() => held.called())
-        yield* opened.harness.configure(both.filter((endpoint) => endpoint.id !== "anthropic"))
+        yield* opened.harness.configure({ models: both.filter((endpoint) => endpoint.id !== "anthropic") })
         expect(yield* stored).toBe(true)
         held.release()
         yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
@@ -468,25 +577,44 @@ describe("settings in the cell", () => {
         TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
       )
       const picked = { id: "stub-picked", name: "Stub Picked", limit: { context: 100_000, output: 4000 } }
-      yield* opened.harness.configure(
-        opened.access.endpoints.map((endpoint) =>
+      yield* opened.harness.configure({
+        models: opened.access.endpoints.map((endpoint) =>
           endpoint.id === "stub" ? Struct.evolve(endpoint, { models: (models) => [...models, picked] }) : endpoint,
         ),
-      )
+      })
       yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: picked.id }))
       const modelOf = opened.client.session.get({ sessionID: opened.sessionID }).pipe(
         Effect.orDie,
         Effect.map((session) => String(session.model?.id)),
       )
       expect(yield* modelOf).toBe(picked.id)
-      yield* opened.harness.configure(opened.access.endpoints)
-      yield* opened.harness.applySettings([{ id: opened.sessionId, agent: null, archived: false }])
+      yield* opened.pull(TestSettings.layers(), { models: opened.access.endpoints })
       expect(yield* modelOf).toBe("stub-model")
       const notes = JSON.stringify(
         yield* opened.client.session.inbox.list({ sessionID: opened.sessionID }).pipe(Effect.orDie),
       )
       expect(notes).toContain("stub/stub-picked")
       expect(notes).toContain("stub/stub-model")
+    }),
+  )
+  it.live("a chat that switches from one available pick to another gets no message that a model is gone", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(
+        TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
+      )
+      const first = { id: "stub-first", name: "Stub First", limit: { context: 100_000, output: 4000 } }
+      const second = { id: "stub-second", name: "Stub Second", limit: { context: 100_000, output: 4000 } }
+      yield* opened.harness.configure({
+        models: opened.access.endpoints.map((endpoint) =>
+          endpoint.id === "stub"
+            ? Struct.evolve(endpoint, { models: (models) => [...models, first, second] })
+            : endpoint,
+        ),
+      })
+      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: first.id }))
+      yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: second.id }))
+      yield* opened.harness.setModel(opened.sessionId, Option.none())
+      expect(yield* opened.client.session.inbox.list({ sessionID: opened.sessionID }).pipe(Effect.orDie)).toEqual([])
     }),
   )
   it.live("the title request gives the model the chat as data to title, not as a request to act on", () =>

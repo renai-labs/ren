@@ -93,7 +93,7 @@ const open = Effect.fnUntraced(function* (confinement?: RenPlugin.Confinement) {
     EnvironmentConnections.Service,
   )
   const host = yield* OpenCodeServer.make(
-    embedded(RenWorkspaceDriver.replacements(environments)),
+    (replacements) => embedded([...replacements, ...RenWorkspaceDriver.replacements(environments)]),
     endpoints,
     () => Effect.succeedNone,
     Option.some(environments),
@@ -146,6 +146,7 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
       activate: () => Effect.void,
       chats: Option.none(),
       configure: () => Effect.void,
+      configuration: Effect.succeed([]),
     },
     endpoints,
   )

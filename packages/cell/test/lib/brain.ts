@@ -87,12 +87,16 @@ export const make = Effect.fnUntraced(function* (
   )
   yield* Context.get(services, ModelStore.Service).install(Shared.access(undefined, Shared.stub().url), "test")
   const host = yield* OpenCodeServer.make(
-    createEmbeddedRoutes({
-      database: { path: options.database ?? ":memory:" },
-      config: { project: false, content: vars.OPENCODE_CONFIG },
-      models: { fetch: false },
-      fs: { filewatcher: false, fff: false },
-    }).pipe(Layer.provide(HttpServer.layerServices)),
+    (replacements) =>
+      createEmbeddedRoutes(
+        {
+          database: { path: options.database ?? ":memory:" },
+          config: { directory, project: false, content: vars.OPENCODE_CONFIG },
+          models: { fetch: false },
+          fs: { filewatcher: false, fff: false },
+        },
+        replacements,
+      ).pipe(Layer.provide(HttpServer.layerServices)),
     [],
     Context.get(services, ModelRefresh.Service),
     Option.none(),
@@ -174,7 +178,7 @@ export const make = Effect.fnUntraced(function* (
       yield* store.install(access, `test-${Date.now()}`)
       const opened = Context.get(cell, Harness.Service)
       if ((yield* opened.state).isOpen)
-        yield* Effect.scoped(Effect.flatMap(opened.get, (instance) => instance.configure(access.endpoints)))
+        yield* Effect.scoped(Effect.flatMap(opened.get, (instance) => instance.configure({ models: access.endpoints })))
     })
   return {
     id,

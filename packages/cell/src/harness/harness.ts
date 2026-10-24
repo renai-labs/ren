@@ -1,7 +1,6 @@
 export * as Harness from "./harness.js"
 
 import type { StartBody } from "@ren/host-api/brain-api"
-import type { PullChat } from "@ren/host-api/ren-host-api"
 import type { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from "@ren/host-api/errors"
 import type { Form } from "@ren/schema/form"
 import type { Models } from "@ren/schema/models"
@@ -19,6 +18,7 @@ import type { Sync } from "@ren/schema/sync"
 import { Context, Effect, Exit, Layer, type Option, Schema, Scope, type Stream } from "effect"
 import { Lease } from "../lease.js"
 import type { Reconcile } from "../reconcile.js"
+import type { HarnessConfig } from "./config.js"
 
 interface SessionState extends Reconcile.Snapshot {
   readonly id: string
@@ -150,7 +150,8 @@ export interface Instance {
   readonly chat: Chat
   readonly transcript: Transcript
   readonly fetch: (request: Request) => Promise<Response>
-  readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>
+  readonly configure: (update: HarnessConfig.Update) => Effect.Effect<void>
+  readonly configuration: Effect.Effect<ReadonlyArray<HarnessConfig.Observation>>
   readonly start: (input: StartBody) => Effect.Effect<Session.Started, BrainRejectedError | SyncUnavailableError>
   readonly send: (
     input: Session.SendInput,
@@ -160,7 +161,6 @@ export interface Instance {
     model: Option.Option<Session.Model>,
   ) => Effect.Effect<void, BrainRejectedError | SessionNotStartedError>
   readonly sessions: Effect.Effect<ReadonlyArray<SessionState>>
-  readonly applySettings: (chats: ReadonlyArray<PullChat>) => Effect.Effect<void>
   readonly onTurn: (hooks: {
     readonly started: (sessionId: string) => Effect.Effect<void>
     readonly ended: (sessionId: string) => Effect.Effect<void>

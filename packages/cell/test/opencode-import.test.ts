@@ -181,15 +181,19 @@ const withWorkspaces = Effect.fnUntraced(function* () {
     EnvironmentConnections.layer.pipe(Layer.provide(TestAccess.fixed(new Map())), Layer.provide(FetchHttpClient.layer)),
   ).pipe(Effect.map((context) => Context.get(context, EnvironmentConnections.Service)))
   const host = yield* OpenCodeServer.make(
-    createEmbeddedRoutes(
-      {
-        database: { path: database },
-        config: { project: false, content: Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url)).OPENCODE_CONFIG },
-        models: { fetch: false },
-        fs: { filewatcher: false, fff: false },
-      },
-      RenWorkspaceDriver.replacements(connections),
-    ).pipe(Layer.provide(HttpServer.layerServices)),
+    (replacements) =>
+      createEmbeddedRoutes(
+        {
+          database: { path: database },
+          config: {
+            project: false,
+            content: Schema.decodeUnknownSync(Env.Vars)(Shared.vars(stub.url)).OPENCODE_CONFIG,
+          },
+          models: { fetch: false },
+          fs: { filewatcher: false, fff: false },
+        },
+        [...replacements, ...RenWorkspaceDriver.replacements(connections)],
+      ).pipe(Layer.provide(HttpServer.layerServices)),
     Shared.access(undefined, stub.url).endpoints,
     () => Effect.succeedNone,
     Option.some(connections),
