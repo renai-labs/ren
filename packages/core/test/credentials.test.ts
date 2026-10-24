@@ -8,7 +8,11 @@ import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
+import { CredentialRefresh } from "../src/credential-refresh.js"
 import { Credentials } from "../src/credentials.js"
+import { DurableRunner } from "../src/durable-runner.js"
+import { OAuth } from "../src/oauth.js"
+import { OAuthFetch } from "../src/oauth-fetch.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
 import { Space } from "../src/space.js"
@@ -27,9 +31,25 @@ const egress = Bun.serve({
 })
 afterAll(() => egress.stop(true))
 
+const exchanges: Array<URLSearchParams> = []
+const tokenAnswer: { status: number; body: unknown } = { status: 200, body: {} }
+const tokens = Bun.serve({
+  hostname: "127.0.0.1",
+  port: 0,
+  fetch: async (request) => {
+    exchanges.push(new URLSearchParams(await request.text()))
+    return Response.json(tokenAnswer.body, { status: tokenAnswer.status })
+  },
+})
+afterAll(() => tokens.stop(true))
+
 const it = testEffect(
-  Layer.mergeAll(Credentials.layer, Space.layer, SpaceMember.layer, SpaceProvisioning.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(Access.layer, Envelope.layerLocal, EgressControl.layerHttp)),
+  Layer.mergeAll(CredentialRefresh.layer, Space.layer, SpaceMember.layer, SpaceProvisioning.layer).pipe(
+    Layer.provideMerge(OAuth.layerRefresher),
+    Layer.provideMerge(Credentials.layer),
+    Layer.provideMerge(
+      Layer.mergeAll(Access.layer, Envelope.layerLocal, EgressControl.layerHttp, OAuthFetch.layerUnchecked, DurableRunner.layerMemory),
+    ),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(
@@ -243,6 +263,73 @@ describe("Credentials: store rules", () => {
       expect(exits.filter(Exit.isSuccess).length).toBe(1)
       expect(exits.map(failure).filter((text) => text.includes("LimitReached")).length).toBe(1)
     }),
+  )
+})
+
+describe("Credentials: client credentials (§10c, test 30)", () => {
+  it.live(
+    "a create exchanges once; the sweep exchanges again 20 minutes before expiry; invalid_client needs a reconnect; a rotate fixes it; a person owner is refused",
+    () =>
+      Effect.gen(function* () {
+        const credentials = yield* Credentials.Service
+        const refresh = yield* CredentialRefresh.Service
+        const database = yield* Database.Service
+        const setup = yield* team()
+        exchanges.length = 0
+        tokenAnswer.status = 200
+        tokenAnswer.body = { access_token: "shpat_1", token_type: "bearer", expires_in: "3600" }
+        const value = (secret: string) => ({
+          type: "client_credentials" as const,
+          clientId: "shop-client",
+          clientSecret: Redacted.make(secret),
+          tokenEndpoint: `http://127.0.0.1:${tokens.port}/admin/oauth/access_token`,
+        })
+        const person = yield* Effect.exit(
+          credentials.create(setup.ada, {
+            owner: { kind: "person", userId: setup.ada.userId },
+            label: "SHOPIFY",
+            hosts: ["acme.myshopify.com"],
+            value: value("s1"),
+          }),
+        )
+        expect(failure(person)).toContain("Primitive.Invalid")
+        expect(exchanges).toEqual([])
+        const made = yield* credentials.create(setup.ada, {
+          owner: { kind: "org" },
+          label: "SHOPIFY",
+          hosts: ["acme.myshopify.com"],
+          inject: { op: "setHeader", name: "X-Shopify-Access-Token", format: "{value}" },
+          value: value("s1"),
+        })
+        expect(exchanges.map((form) => [form.get("grant_type"), form.get("client_id"), form.get("client_secret")])).toEqual([
+          ["client_credentials", "shop-client", "s1"],
+        ])
+        expect(made.expiresAt).not.toBeNull()
+        const opened = yield* credentials.open(made.id)
+        expect(Option.map(opened, (found) => found.value.type === "client_credentials" && found.value.accessToken && Redacted.value(found.value.accessToken))).toEqual(Option.some("shpat_1"))
+        tokenAnswer.body = { access_token: "shpat_2", expires_in: 3600 }
+        yield* database.db
+          .update(Database.Schema.credential)
+          .set({ expires_at: new Date(Date.now() + 19 * 60_000) })
+          .where(eq(Database.Schema.credential.id, made.id))
+        yield* Effect.all([refresh.sweep, refresh.sweep], { concurrency: 2 })
+        expect(exchanges.length).toBe(2)
+        tokenAnswer.status = 401
+        tokenAnswer.body = { error: "invalid_client" }
+        yield* refresh.refresh(made.id, {})
+        expect((yield* credentials.get(setup.ada, made.id)).status).toBe("reconnect")
+        tokenAnswer.status = 200
+        tokenAnswer.body = { access_token: "shpat_3" }
+        const rotated = yield* credentials.rotate(setup.ada, made.id, { value: value("s2") })
+        expect(rotated).toMatchObject({ status: "ok", expiresAt: null })
+        expect(exchanges.at(-1)?.get("client_secret")).toBe("s2")
+        tokenAnswer.status = 400
+        tokenAnswer.body = { error: "invalid_client", error_description: "Bad secret" }
+        const refused = yield* Effect.exit(
+          credentials.create(setup.ada, { owner: { kind: "org" }, label: "SHOPIFY_TWO", hosts: ["b.myshopify.com"], value: value("x") }),
+        )
+        expect(failure(refused)).toContain("invalid_client")
+      }),
   )
 })
 

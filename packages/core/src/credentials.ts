@@ -8,7 +8,7 @@ import type { Space } from "@ren/schema/space"
 import type { Workload } from "@ren/schema/workload"
 import { and, asc, count, eq, exists, ilike, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
-import { Cause, Clock, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Cause, Clock, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Result, Schema } from "effect"
 import { SqlError } from "effect/sql"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
@@ -16,6 +16,8 @@ import { CredentialOffboarding } from "./credential/offboarding.js"
 import { CredentialPolicy } from "./credential/policy.js"
 import { EgressControl } from "./egress-control.js"
 import { Envelope } from "./envelope.js"
+import { OAuthFetch } from "./oauth-fetch.js"
+import { OAuthToken } from "./oauth-token.js"
 import { Primitive } from "./primitive.js"
 
 export type OwnerKind = Credential.OwnerKind | "workload"
@@ -259,6 +261,25 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const envelope = yield* Envelope.Service
     const control = yield* EgressControl.Service
+    const http = yield* OAuthFetch.Service
+
+    // oxlint-disable-next-line ren/no-comments -- §10c rules 1 and 3 (K42): Ren exchanges once before it saves; a failed exchange fails the write with the provider's code.
+    const exchange = Effect.fnUntraced(function* (value: Sealed) {
+      if (value.type !== "client_credentials") return { value, expiresAt: null }
+      const answered = yield* OAuthToken.exchangeClientCredentials(http.fetch, value).pipe(
+        Effect.mapError(() => new Primitive.Invalid({ message: "Ren could not reach the token endpoint.", field: "value" })),
+      )
+      if (Result.isFailure(answered))
+        return yield* new Primitive.Invalid({
+          message: `The token endpoint refused the client id and secret (${answered.failure.code}).`,
+          field: "value",
+        })
+      const now = yield* Clock.currentTimeMillis
+      return {
+        value: { ...value, accessToken: Redacted.make(answered.success.accessToken) },
+        expiresAt: Option.getOrNull(Option.map(answered.success.expiresIn, (seconds) => new Date(now + seconds * 1000))),
+      }
+    })
 
     const contextOf = (organizationId: Auth.OrganizationID, id: Credential.ID): Envelope.Context => ({
       organizationId,
@@ -466,6 +487,7 @@ export const layer = Layer.effect(
         readonly inject: Credential.Inject
         readonly delivery: Credential.Delivery
         readonly accountUserId: Auth.UserID | null
+        readonly expiresAt?: Date | null
       },
     ) {
       const id = Credential.ID.create()
@@ -491,6 +513,7 @@ export const layer = Layer.effect(
               inject: input.inject,
               delivery: input.delivery,
               account_user_id: input.accountUserId,
+              expires_at: input.expiresAt ?? null,
               created_by_user_id: actor.userId,
             })
             .pipe(Effect.catchTag("EffectDrizzleQueryError", labelTaken))
@@ -580,11 +603,18 @@ export const layer = Layer.effect(
       create: Effect.fn("Credentials.create")(function* (actor: Actor.Info, input: Credential.CreateInput) {
         yield* checkTarget(actor, input.owner, "create")
         yield* checkDelivery(actor, input.owner, input.delivery)
+        if (input.value.type === "client_credentials" && input.owner.kind === "person")
+          return yield* new Primitive.Invalid({
+            message: "Client credentials reach an app’s own account; save them for a space or the org.",
+            field: "owner",
+          })
+        const exchanged = yield* exchange(sealedOf(input.value))
         return yield* insert(actor, input.owner, {
           label: input.label,
           name: input.name ?? null,
           type: input.value.type,
-          value: sealedOf(input.value),
+          value: exchanged.value,
+          expiresAt: exchanged.expiresAt,
           hosts: input.hosts,
           inject: input.inject ?? Credential.defaultInject(input.value.type),
           delivery: input.delivery ?? "egress",
@@ -626,15 +656,18 @@ export const layer = Layer.effect(
             message: `This credential holds a ${found.row.type} value. To change its type, delete it and create a new one (TypeChange).`,
             field: "value",
           })
+        const exchanged = yield* exchange(sealedOf(input.value))
         const sealed = yield* envelope
-          .seal(Redacted.make(encodeValue(sealedOf(input.value))), contextOf(found.row.organization_id, id))
+          .seal(Redacted.make(encodeValue(exchanged.value)), contextOf(found.row.organization_id, id))
           .pipe(Effect.orDie)
         yield* database.db
           .update(table)
           .set({
             value: sealed,
-            key_preview: previewOf(sealedOf(input.value)),
-            field_names: fieldNamesOf(sealedOf(input.value)),
+            key_preview: previewOf(exchanged.value),
+            field_names: fieldNamesOf(exchanged.value),
+            expires_at: exchanged.expiresAt,
+            revision: sql`${table.revision} + 1`,
             status: "ok",
             updated_at: sql`now()`,
           })

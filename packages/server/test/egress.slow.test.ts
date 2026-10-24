@@ -9,6 +9,7 @@ import { DurableRunner } from "@ren/core/durable-runner"
 import { Egress } from "@ren/core/egress"
 import { EgressControl } from "@ren/core/egress-control"
 import { Envelope } from "@ren/core/envelope"
+import { OAuthFetch } from "@ren/core/oauth-fetch"
 import { Models } from "@ren/core/models"
 import { Signer } from "@ren/core/signer"
 import { Seed, testEffect } from "@ren/core/testing"
@@ -120,7 +121,7 @@ const ren = () => {
     Layer.provideMerge(CredentialSource.layer),
     Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
     Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone)),
-    Layer.provideMerge(Layer.mergeAll(Access.layer, Envelope.layerLocal, EgressControl.layerHttp, Signer.layerLocal)),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, Envelope.layerLocal, EgressControl.layerHttp, Signer.layerLocal, OAuthFetch.layerUnchecked)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(
