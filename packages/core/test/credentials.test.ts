@@ -318,16 +318,13 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
       ]
       const found = Credentials.match(candidates, {
         host: "api.stripe.com",
-        path: "/v1",
         placeholders: ["ren:STRIPE_API_KEY"],
       })
       expect(found.ok && found.matches.map((matched) => matched.candidate.owner)).toEqual(["person"])
-      expect(
-        Credentials.match(candidates, { host: "evil.example.com", path: "/", placeholders: ["ren:STRIPE_API_KEY"] }),
-      ).toEqual({ ok: false, reason: "host_not_allowed", label: "STRIPE_API_KEY" })
-      expect(
-        Credentials.match(candidates, { host: "api.stripe.com", path: "/", placeholders: ["ren:MISSING"] }),
-      ).toEqual({
+      expect(Credentials.match(candidates, { host: "evil.example.com", placeholders: ["ren:STRIPE_API_KEY"] })).toEqual(
+        { ok: false, reason: "host_not_allowed", label: "STRIPE_API_KEY" },
+      )
+      expect(Credentials.match(candidates, { host: "api.stripe.com", placeholders: ["ren:MISSING"] })).toEqual({
         ok: false,
         reason: "credential_missing",
         label: "MISSING",
@@ -342,13 +339,13 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
         candidate("GITHUB", "space", ["api.github.com"], header),
         candidate("GITHUB_BOT", "org", ["api.github.com"], header),
       ]
-      expect(Credentials.match(candidates, { host: "api.github.com", path: "/", placeholders: [] })).toEqual({
+      expect(Credentials.match(candidates, { host: "api.github.com", placeholders: [] })).toEqual({
         ok: false,
         reason: "ambiguous",
       })
-      const one = Credentials.match(candidates.slice(0, 1), { host: "api.github.com", path: "/", placeholders: [] })
+      const one = Credentials.match(candidates.slice(0, 1), { host: "api.github.com", placeholders: [] })
       expect(one.ok && one.matches.map((matched) => matched.candidate.label)).toEqual(["GITHUB"])
-      expect(Credentials.match(candidates, { host: "api.stripe.com", path: "/", placeholders: [] })).toEqual({
+      expect(Credentials.match(candidates, { host: "api.stripe.com", placeholders: [] })).toEqual({
         ok: true,
         matches: [],
       })

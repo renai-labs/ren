@@ -2,7 +2,7 @@ export * as Egress from "./egress.js"
 
 import type { Auth } from "@ren/schema/auth"
 import { Workload } from "@ren/schema/workload"
-import { Context, Effect, Layer, Option, Result } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Result } from "effect"
 import { CredentialCallers } from "./credential-callers.js"
 import { CredentialSource } from "./credential-source.js"
 import { Credentials } from "./credentials.js"
@@ -78,13 +78,15 @@ export const layer = Layer.effect(
           return deny(matched.reason, matched.label)
         }
         const planned: Array<Injection.Op> = []
+        const expiries: Array<number> = []
         for (const match of matched.matches) {
           const label = match.candidate.label
           const value = yield* sources
             .value(match.candidate, scope.value)
             .pipe(Effect.option, Effect.map(Option.flatten))
           if (Option.isNone(value)) return deny("credential_missing", label)
-          const ops = Injection.plan(match.candidate, value.value, match.placeholder)
+          if (value.value.expiresAt) expiries.push(Math.floor(DateTime.toEpochMillis(value.value.expiresAt) / 1000))
+          const ops = Injection.plan(match.candidate, value.value.value, match.placeholder)
           if (Result.isFailure(ops)) {
             yield* Effect.logWarning(`Credential ${label} holds a value that cannot go into a header`).pipe(
               Effect.annotateLogs({ workload, host: request.host, label }),
@@ -105,6 +107,7 @@ export const layer = Layer.effect(
           allow: true,
           workload,
           ttl: ttlSeconds,
+          ...(expiries.length > 0 && { expiresAt: Math.min(...expiries) }),
           labels: [...new Set(matched.matches.map((match) => match.candidate.label))],
           inject: planned,
         }

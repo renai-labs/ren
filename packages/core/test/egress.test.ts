@@ -1,5 +1,6 @@
 import { afterAll, describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
+import { BrainToken } from "@ren/host-api/brain-token"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Injection } from "@ren/schema/injection"
@@ -55,6 +56,7 @@ const it = testEffect(
             },
           ]),
           EGRESS_CONTROL_URLS: `http://127.0.0.1:${egress.port}`,
+          REN_URL: "https://api.ren.test",
         }),
       ),
     ),
@@ -121,7 +123,7 @@ describe("Egress.resolve", () => {
       const reply = yield* resolver.resolve(all, request(found.proof, "api.stripe.com", ["ren:STRIPE_API_KEY"]))
       expect(reply).toMatchObject({ allow: true, workload: `brain:${found.brainId}:1`, ttl: 30 })
       expect(values(reply)).toEqual([
-        { op: "replace", placeholder: "ren:STRIPE_API_KEY", value: "sk_live_real", in: ["header", "query", "path"] },
+        { op: "replace", placeholder: "ren:STRIPE_API_KEY", value: "sk_live_real", in: ["header"] },
       ])
       expect(yield* resolver.resolve(all, request(found.proof, "evil.example.com", ["ren:STRIPE_API_KEY"]))).toEqual({
         allow: false,
@@ -218,17 +220,23 @@ describe("Egress.resolve", () => {
   )
 
   it.live(
-    "an egress that does not report route gets egress_outdated for a route credential, and replace still works",
+    "an egress that does not report setHeader gets egress_outdated for such a credential, and replace still works",
     () =>
       Effect.gen(function* () {
         const resolver = yield* Egress.Service
         const credentials = yield* Credentials.Service
         const found = yield* setup()
-        const old: ReadonlyArray<Injection.OpName> = ["replace", "setHeader"]
-        expect(yield* resolver.resolve(all, request(found.proof, "ren.internal", [], old))).toEqual({
+        const old: ReadonlyArray<Injection.OpName> = ["replace"]
+        yield* credentials.create(found.ada, {
+          owner: { kind: "org" },
+          label: "JIRA",
+          hosts: ["acme.atlassian.net"],
+          value: { type: "basic", username: "ada@acme.dev", password: Redacted.make("pass") },
+        })
+        expect(yield* resolver.resolve(all, request(found.proof, "acme.atlassian.net", [], old))).toEqual({
           allow: false,
           reason: "egress_outdated",
-          label: "REN",
+          label: "JIRA",
         })
         yield* credentials.create(found.ada, {
           owner: { kind: "org" },
@@ -238,10 +246,20 @@ describe("Egress.resolve", () => {
         })
         expect(
           yield* resolver.resolve(all, request(found.proof, "api.stripe.com", ["ren:STRIPE_API_KEY"], old)),
-        ).toMatchObject({
-          allow: true,
-        })
+        ).toMatchObject({ allow: true })
       }),
+  )
+
+  it.live("a call to Ren's host gets the host token, with its expiry, so the egress never sends it after", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const found = yield* setup()
+      const reply = yield* resolver.resolve(all, request(found.proof, "api.ren.test", ["ren:REN"]))
+      if (!reply.allow) return yield* Effect.die(new Error("expected an allow"))
+      expect(reply.labels).toEqual(["REN"])
+      expect(reply.expiresAt).toBeGreaterThan(Date.now() / 1000 + BrainToken.lifetimes.host - 60)
+      expect(reply.expiresAt).toBeLessThanOrEqual(Date.now() / 1000 + BrainToken.lifetimes.host)
+    }),
   )
 
   it.live("an unknown login is unknown_workload", () =>

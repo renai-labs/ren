@@ -39,6 +39,10 @@ export const Reply = Schema.Union([
     allow: Schema.Literal(true),
     workload: Schema.String,
     ttl: Schema.Int,
+    expiresAt: Schema.optional(Schema.Int).annotate({
+      description:
+        "Unix seconds when the first value in the answer stops working. The egress never uses the answer after it, also when Ren does not answer.",
+    }),
     labels: Schema.Array(Schema.String).annotate({
       description: "The labels the answer used, so Ren can tell the egress to drop it when one of them changes.",
     }),

@@ -1,6 +1,7 @@
 export * as BrainLifecycle from "./brain-lifecycle.js"
 
 import { Database } from "@ren/db/database"
+import type { State as BrainState } from "@ren/host-api/brain-api"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
@@ -59,8 +60,6 @@ export const timing = {
 
 type Row = typeof Database.Schema.brain.$inferSelect
 
-export const renInternal = "https://ren.internal"
-
 const brains = Database.Schema.brain
 
 export const layer = Layer.effect(
@@ -73,6 +72,7 @@ export const layer = Layer.effect(
     const environments = yield* Environments.Service
     const egress = yield* SandboxEgress.Service
     const wakeWithin = yield* Config.Duration("BRAIN_WAKE_TIMEOUT").pipe(Config.withDefault(timing.wake))
+    const bootWithin = yield* Config.Duration("BRAIN_BOOT_TIMEOUT").pipe(Config.withDefault(timing.boot))
 
     const read = (brainId: Brain.ID) =>
       database.db
@@ -100,6 +100,7 @@ export const layer = Layer.effect(
             organizationId: row.organization_id,
             url: row.url,
             keyIds: row.key_ids,
+            egress: row.egress,
           })
         : Option.none()
 
@@ -145,18 +146,19 @@ export const layer = Layer.effect(
       yield* update(row.id, { phase: row.phase })
     })
 
+    // oxlint-disable-next-line ren/no-comments -- A brain goes behind the egress when this Ren runs one and its provider can route a sandbox through it. The answer is kept on the row (egress); every later step reads the row, never the setting.
+    const behindEgress = egress.enabled && provider.canEgress
+
     const create = Effect.fnUntraced(function* (row: Row) {
-      const proxy = yield* egress.proxyFor({
-        brainId: row.id,
-        generation: row.generation,
-        organizationId: row.organization_id,
-      })
+      const proxy = behindEgress
+        ? yield* egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id })
+        : Option.none<SandboxProvider.Proxy>()
       const created = yield* provider
         .create({
           brainId: row.id,
           generation: row.generation,
-          // oxlint-disable-next-line ren/no-comments -- Behind an egress, the brain calls Ren at https://ren.internal; the egress routes it and injects the host token (C8, C49).
-          env: { ...(yield* env(row)), ...(Option.isSome(proxy) && { REN_URL: renInternal, REN_EGRESS: "1" }) },
+          // oxlint-disable-next-line ren/no-comments -- Behind an egress, the brain calls Ren at REN_URL with the placeholder ren:REN; the egress puts in the host token (C8, C49).
+          env: { ...(yield* env(row)), ...(Option.isSome(proxy) && { REN_EGRESS: "1" }) },
           proxy,
         })
         .pipe(
@@ -170,6 +172,7 @@ export const layer = Layer.effect(
         provider: provider.kind,
         binding: created.value.binding,
         template: provider.template,
+        egress: Option.isSome(proxy),
         url: created.value.url,
         key_ids: client.publicKeys.map((key) => key.id),
         phase: "booting",
@@ -182,10 +185,33 @@ export const layer = Layer.effect(
       const target = Option.getOrUndefined(targetOf(row))
       if (!target) return yield* update(row.id, { phase: "creating" }).pipe(Effect.as(false))
       const api = yield* client.brain(target)
-      const state = yield* waitFor(api.brain["brain.state"](), timing.boot)
+      const answered = { last: Option.none<BrainState>() }
+      // oxlint-disable-next-line ren/no-comments -- Ready means the brain answers and has reached Ren with a pull, so a brain whose path to Ren is broken (egress, CA, DNS) fails with that reason instead of looking ready (M1; ren-v1 INV-15). An older brain does not report pulledAt.
+      const state = yield* waitFor(
+        api.brain["brain.state"]().pipe(
+          Effect.tap((found) =>
+            Effect.sync(() => {
+              answered.last = Option.some(found)
+            }),
+          ),
+          Effect.flatMap((found) =>
+            // ast-grep-ignore: no-nullish-comparison, -- null is "not yet pulled"; an older brain leaves pulledAt out and is not waited for
+            found.pulledAt === null
+              ? Effect.fail(new Unavailable({ message: "not reached Ren" }))
+              : Effect.succeed(found),
+          ),
+        ),
+        bootWithin,
+      )
       if (Option.isNone(state)) {
         if (row.binding) yield* provider.destroy(row.binding).pipe(Effect.ignore)
-        yield* fail(row, `The brain did not answer within ${Duration.format(timing.boot)}`, "creating")
+        yield* fail(
+          row,
+          Option.isSome(answered.last)
+            ? `The brain answers but did not reach Ren within ${Duration.format(bootWithin)}`
+            : `The brain did not answer within ${Duration.format(bootWithin)}`,
+          "creating",
+        )
         yield* update(row.id, { binding: null, url: null })
         return false
       }
@@ -201,11 +227,14 @@ export const layer = Layer.effect(
         yield* Effect.logInfo(`Brain ${row.id} runs build ${row.template}; Ren replaces it with ${provider.template}`)
         return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
       }
-      const proxy = yield* egress.proxyFor({
-        brainId: row.id,
-        generation: row.generation,
-        organizationId: row.organization_id,
-      })
+      // oxlint-disable-next-line ren/no-comments -- A brain built for the other egress mode would get the wrong keys; it moves to the current one by a replace, as for a build (E120).
+      if (row.egress !== behindEgress) {
+        yield* Effect.logInfo(`Brain ${row.id} was created ${row.egress ? "behind" : "without"} the egress; Ren replaces it`)
+        return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
+      }
+      const proxy = behindEgress
+        ? yield* egress.proxyFor({ brainId: row.id, generation: row.generation, organizationId: row.organization_id })
+        : Option.none<SandboxProvider.Proxy>()
       const connected = yield* provider.connect(row.binding, proxy).pipe(
         Effect.map((found) => ({ _tag: "Connected", url: found.url }) as const),
         Effect.catchTag("SandboxProvider.Gone", () => Effect.succeed({ _tag: "Gone" } as const)),
@@ -281,6 +310,7 @@ export const layer = Layer.effect(
           }),
         )
         .pipe(Effect.orDie)
+      yield* egress.retire(row.id)
       if (row.binding)
         yield* provider
           .destroy(row.binding)
@@ -355,6 +385,7 @@ export const layer = Layer.effect(
 
     const rest = Effect.fnUntraced(function* (row: Pick<Row, "id" | "generation" | "binding">) {
       if (!row.binding) return
+      yield* egress.retire(row.id)
       yield* provider.destroy(row.binding)
       yield* update(row.id, {
         generation: row.generation + 1,

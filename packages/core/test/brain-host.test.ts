@@ -35,6 +35,7 @@ const source: { available: boolean } = { available: true }
 const fixed = Layer.succeed(
   Models.Service,
   Models.Service.of({
+    revision: Effect.succeed("test"),
     catalog: () => Effect.succeed(Models.catalog(configured)),
     grant: () =>
       source.available
@@ -227,6 +228,29 @@ describe("BrainHost pull", () => {
     }),
   )
 
+  it.live("a brain created behind the egress pulls ren:MODELS; a brain created without it pulls the real key", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const keyOf = Effect.fnUntraced(function* (egress: boolean) {
+        const subject = yield* seeded
+        const brainId = (yield* database.db
+          .select({ brainId: Database.Schema.agent_session.brain_id })
+          .from(Database.Schema.agent_session)
+          .where(eq(Database.Schema.agent_session.id, subject.sessionId))).at(0)?.brainId
+        if (!brainId) return yield* Effect.die(new Error("the session has no brain"))
+        yield* database.db.update(Database.Schema.brain).set({ egress }).where(eq(Database.Schema.brain.id, brainId))
+        const reply = yield* Brains.Service.use((brain) =>
+          brain.pull(
+            { brainId, organizationId: subject.owner.organizationId, generation: 1 },
+            { version: "test", keyIds: [], models: null, layers: { agents: {} }, sessions: [] },
+          ),
+        ).pipe(Effect.provide(cell("http://127.0.0.1:9")))
+        return reply.models.access?.endpoints.map((endpoint) => Redacted.value(endpoint.apiKey.key))
+      })
+      expect([yield* keyOf(true), yield* keyOf(false)]).toEqual([["ren:MODELS"], ["sk-configured"]])
+    }),
+  )
+
   it.live("a pull that lists a root chat Ren no longer has gets it back as deleted", () =>
     Effect.gen(function* () {
       const subject = yield* seeded
@@ -332,6 +356,7 @@ describe("BrainHost host tokens", () => {
               organizationId: Auth.OrganizationID.create(),
               url: "http://127.0.0.1:9",
               keyIds,
+              egress: false,
             },
             { sid: Session.ID.create(), sub: Auth.UserID.create() },
           ),

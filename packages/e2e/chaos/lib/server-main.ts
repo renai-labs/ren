@@ -21,6 +21,19 @@ import { ChaosModels } from "./provider/models.js"
 import { Signer } from "@ren/core/signer"
 import { EgressControl } from "@ren/core/egress-control"
 import { CredentialEnv } from "@ren/core/credential-env"
+import { Access } from "@ren/core/access"
+import { CredentialCallers } from "@ren/core/credential-callers"
+import { CredentialSource } from "@ren/core/credential-source"
+import { Credentials } from "@ren/core/credentials"
+import { Egress } from "@ren/core/egress"
+import { Envelope } from "@ren/core/envelope"
+
+const credentials = Egress.layer.pipe(
+  Layer.provideMerge(CredentialSource.layer),
+  Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
+  Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
+  Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer)),
+)
 
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
@@ -33,9 +46,10 @@ HttpRouter.serve(Routes.layer).pipe(
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
-  Layer.provide([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
+  Layer.provideMerge(credentials),
+  Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([ChaosModels.layer, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
-  Layer.provide(EgressControl.layerNone),
+  Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),

@@ -150,7 +150,7 @@ export type CredentialEnvName = string
 
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
-export type CredentialLocation = "header" | "query" | "path" | "body"
+export type CredentialLocation = "header" | "query" | "path"
 
 export type CredentialDelivery = "egress" | "delivered"
 
@@ -1966,10 +1966,7 @@ export type CredentialCreateInput = {
       | (
           | {
               readonly op: "replace"
-              readonly in: readonly [
-                "header" | "query" | "path" | "body",
-                ...Array<"header" | "query" | "path" | "body">,
-              ]
+              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
             }
           | {
               readonly op: "setHeader"
@@ -1997,10 +1994,7 @@ export type CredentialCreateInput = {
       | (
           | {
               readonly op: "replace"
-              readonly in: readonly [
-                "header" | "query" | "path" | "body",
-                ...Array<"header" | "query" | "path" | "body">,
-              ]
+              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
             }
           | {
               readonly op: "setHeader"
@@ -2028,10 +2022,7 @@ export type CredentialCreateInput = {
       | (
           | {
               readonly op: "replace"
-              readonly in: readonly [
-                "header" | "query" | "path" | "body",
-                ...Array<"header" | "query" | "path" | "body">,
-              ]
+              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
             }
           | {
               readonly op: "setHeader"
@@ -2059,10 +2050,7 @@ export type CredentialCreateInput = {
       | (
           | {
               readonly op: "replace"
-              readonly in: readonly [
-                "header" | "query" | "path" | "body",
-                ...Array<"header" | "query" | "path" | "body">,
-              ]
+              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
             }
           | {
               readonly op: "setHeader"
@@ -2090,10 +2078,7 @@ export type CredentialCreateInput = {
       | (
           | {
               readonly op: "replace"
-              readonly in: readonly [
-                "header" | "query" | "path" | "body",
-                ...Array<"header" | "query" | "path" | "body">,
-              ]
+              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
             }
           | {
               readonly op: "setHeader"
@@ -2121,10 +2106,7 @@ export type CredentialCreateInput = {
       | (
           | {
               readonly op: "replace"
-              readonly in: readonly [
-                "header" | "query" | "path" | "body",
-                ...Array<"header" | "query" | "path" | "body">,
-              ]
+              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
             }
           | {
               readonly op: "setHeader"
@@ -2152,10 +2134,7 @@ export type CredentialCreateInput = {
       | (
           | {
               readonly op: "replace"
-              readonly in: readonly [
-                "header" | "query" | "path" | "body",
-                ...Array<"header" | "query" | "path" | "body">,
-              ]
+              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
             }
           | {
               readonly op: "setHeader"

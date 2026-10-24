@@ -1,0 +1,1 @@
+ALTER TABLE "brain" ADD COLUMN "egress" boolean DEFAULT false NOT NULL;

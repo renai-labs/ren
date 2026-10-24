@@ -37,12 +37,10 @@ export interface Candidate {
   readonly owner: OwnerKind
   readonly hosts: ReadonlyArray<string>
   readonly inject: Credential.Inject
-  readonly pathPrefix?: string
 }
 
 export interface Request {
   readonly host: string
-  readonly path: string
   readonly placeholders: ReadonlyArray<string>
 }
 
@@ -66,8 +64,7 @@ const parse = (text: string) => {
 }
 
 const allowsHost = (candidate: Candidate, request: Request) =>
-  candidate.hosts.some((pattern) => Credential.matchesHost(pattern, request.host)) &&
-  (!candidate.pathPrefix || request.path.startsWith(candidate.pathPrefix))
+  candidate.hosts.some((pattern) => Credential.matchesHost(pattern, request.host))
 
 const byOrder = (candidates: ReadonlyArray<Candidate>) =>
   candidates.toSorted((left, right) => lookupOrder.indexOf(left.owner) - lookupOrder.indexOf(right.owner))
@@ -81,9 +78,7 @@ export const match = (candidates: ReadonlyArray<Candidate>, request: Request): M
   })
   if (placeholders.length === 0) {
     const byHost = ordered.filter((candidate) => candidate.inject.op !== "replace" && allowsHost(candidate, request))
-    const first = new Map(byHost.toReversed().map((candidate) => [candidate.label, candidate]))
-    const pathMatches = [...first.values()].filter((candidate) => candidate.pathPrefix)
-    const chosen = pathMatches.length > 0 ? pathMatches : [...first.values()]
+    const chosen = [...new Map(byHost.toReversed().map((candidate) => [candidate.label, candidate])).values()]
     if (chosen.length > 1) return { ok: false, reason: "ambiguous" }
     return { ok: true, matches: chosen.map((candidate) => ({ candidate, placeholder: Option.none() })) }
   }
@@ -93,10 +88,7 @@ export const match = (candidates: ReadonlyArray<Candidate>, request: Request): M
     const owner = labelled.at(0)?.owner
     const sameOwner = labelled.filter((candidate) => candidate.owner === owner)
     const allowed = sameOwner.filter((candidate) => allowsHost(candidate, request))
-    const candidate = allowed.reduce<Candidate | undefined>(
-      (best, next) => (!best || (next.pathPrefix?.length ?? 0) > (best.pathPrefix?.length ?? 0) ? next : best),
-      undefined,
-    )
+    const candidate = allowed.at(0)
     if (labelled.length === 0) return { ok: false, reason: "credential_missing", label: placeholder.label }
     if (!candidate) return { ok: false, reason: "host_not_allowed", label: placeholder.label }
     matches.push({ candidate, placeholder: Option.some({ text: placeholder.text, field: placeholder.field }) })
@@ -107,6 +99,7 @@ export const match = (candidates: ReadonlyArray<Candidate>, request: Request): M
 export interface Opened {
   readonly id: Credential.ID
   readonly value: Credential.Value
+  readonly expiresAt?: DateTime.Utc
 }
 
 type Methods = Primitive.Interface<typeof Credential.definition>
@@ -736,7 +729,11 @@ export const layer = Layer.effect(
       open: Effect.fn("Credentials.open")(function* (id: Credential.ID) {
         const row = (yield* database.db.select().from(table).where(eq(table.id, id)).pipe(Effect.orDie)).at(0)
         if (!row) return Option.none()
-        return Option.map(yield* openRow(row), (value) => ({ id, value }))
+        return Option.map(yield* openRow(row), (value): Opened => ({
+          id,
+          value,
+          ...(row.expires_at && { expiresAt: DateTime.fromDateUnsafe(row.expires_at) }),
+        }))
       }),
 
       removeForMember: (organizationId, userId) =>

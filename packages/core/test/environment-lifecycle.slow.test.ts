@@ -39,6 +39,7 @@ const encodedKeys = (keys: ReadonlyArray<Signature.PrivateKey>) =>
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
+    revision: Effect.succeed("test"),
     catalog: () => Effect.succeed({ endpoints: [] }),
     grant: () => Effect.sync(() => Shared.access({ stub: Shared.apiKey("sk-environments") }, stub.url)),
   }),

@@ -224,6 +224,13 @@
         "effect": "catalog:",
       },
     },
+    "packages/egress": {
+      "name": "@ren/egress",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/bun": "catalog:",
+      },
+    },
     "packages/egress-api": {
       "name": "@ren/egress-api",
       "version": "0.0.0",
@@ -1609,6 +1616,8 @@
     "@ren/db": ["@ren/db@workspace:packages/db"],
 
     "@ren/e2e": ["@ren/e2e@workspace:packages/e2e"],
+
+    "@ren/egress": ["@ren/egress@workspace:packages/egress"],
 
     "@ren/egress-api": ["@ren/egress-api@workspace:packages/egress-api"],
 

@@ -27,6 +27,7 @@ const stub = Shared.stub()
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
+    revision: Effect.succeed("test"),
     catalog: () => Effect.succeed({ endpoints: [] }),
     grant: () => Effect.sync(() => Shared.access({ stub: Shared.apiKey("sk-lifecycle") }, stub.url)),
   }),
@@ -184,6 +185,7 @@ describe("brain runs", () => {
     const booting = await reaches(brainId, "booting")
     await first.dispose()
     const second = await ren()
+    await second.runPromise(Effect.void)
     const ready = await reaches(brainId, "ready")
     expect(ready.binding).toEqual(booting.binding)
     const sandboxes = await second.runPromise(SandboxProvider.Service.use((provider) => provider.list))
@@ -500,6 +502,48 @@ describe("brain runs", () => {
     const ready = await reaches(brainId, "ready")
     expect(ready.generation).toBe(1)
     await stalled.dispose()
+  })
+
+  test("a booted brain that cannot reach Ren is not ready: it fails with a reason that names Ren, not ready forever", async () => {
+    const brainId = await newBrain()
+    const cut = await ren({
+      config: { BRAIN_BOOT_TIMEOUT: "3 seconds" },
+      around: (endpoint, effect) => (endpoint === "pull" ? Effect.never : effect),
+    })
+    await cut.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
+    expect(await reaches(brainId, "failed")).toMatchObject({
+      failures: 3,
+      failure: expect.stringContaining("did not reach Ren"),
+    })
+    await cut.dispose()
+  })
+
+  test("a brain created behind an egress that this Ren no longer runs is replaced at its resume, not left without keys", async () => {
+    const brainId = await newBrain()
+    const current = await ren()
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
+    expect(await reaches(brainId, "ready")).toMatchObject({ generation: 1, egress: false })
+    await database.runPromise(
+      Effect.gen(function* () {
+        const db = yield* Database.Service
+        yield* db.db
+          .update(Database.Schema.brain)
+          .set({ egress: true, phase: "resuming" })
+          .where(eq(Database.Schema.brain.id, brainId))
+      }),
+    )
+    await current.runPromise(BrainLifecycle.Service.use((lifecycle) => lifecycle.ensure(brainId)))
+    const replaced = await Effect.runPromise(
+      Effect.promise(() => row(brainId)).pipe(
+        Effect.repeat({
+          until: (found) => found.phase === "ready" && found.generation === 2,
+          schedule: Schedule.spaced("100 millis"),
+        }),
+        Effect.timeout("60 seconds"),
+      ),
+    )
+    expect(replaced).toMatchObject({ generation: 2, egress: false })
+    await current.dispose()
   })
 
   test("a brain run that ended runs again when the brain needs it", async () => {

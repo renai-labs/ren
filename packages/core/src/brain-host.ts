@@ -43,7 +43,15 @@ export const layerCell = Layer.effect(
         .where(eq(Database.Schema.brain.id, brainId))
         .pipe(Effect.orDie)).at(0)
       if (!row) return yield* Effect.die(new Error(`Brain ${brainId} does not exist`))
-      return { brainId, generation: row.generation, organizationId: row.organizationId, url, keyIds: row.keyIds }
+      // oxlint-disable-next-line ren/no-comments -- A cell has no egress in front of it: its brains always hold their own keys.
+      return {
+        brainId,
+        generation: row.generation,
+        organizationId: row.organizationId,
+        url,
+        keyIds: row.keyIds,
+        egress: false,
+      }
     })
     return Service.of({
       target,

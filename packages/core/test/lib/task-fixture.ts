@@ -31,6 +31,7 @@ export const harness = () => {
   const models = Layer.succeed(
     Models.Service,
     Models.Service.of({
+      revision: Effect.succeed("test"),
       catalog: () => Effect.succeed(Models.catalog(configured)),
       grant: () => Effect.succeed(configured),
     }),

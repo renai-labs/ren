@@ -27,7 +27,15 @@ const e2b = Bun.serve({
       path: url.pathname,
       body: await request.text(),
     })
-    if (url.pathname === "/v2/sandboxes") return Response.json([])
+    if (url.pathname === "/v2/sandboxes")
+      return Response.json(
+        url.searchParams.get("metadata")?.includes("brain=")
+          ? []
+          : [
+              { sandboxID: "sbx_mine", state: "running", metadata: { owner: "ren-test-a", brain: "brn_01" } },
+              { sandboxID: "sbx_theirs", state: "running", metadata: { owner: "ren-v2-dev", brain: "brn_02" } },
+            ],
+      )
     if (url.pathname === "/sandboxes" && request.method === "POST")
       return Response.json({ sandboxID: "sbx_1", domain: "e2b.test", envdAccessToken: "envd" })
     if (url.pathname === "/sandboxes/sbx_1/connect") return Response.json({ sandboxID: "sbx_1" })
@@ -62,6 +70,7 @@ const it = testEffect(
           E2B_API_KEY: "e2b_test",
           E2B_DOMAIN: "e2b.test",
           E2B_API_URL: `http://127.0.0.1:${e2b.port}`,
+          E2B_OWNER: "ren-test-a",
         }),
       ),
     ),
@@ -103,6 +112,19 @@ describe("E2BSandbox with an egress", () => {
       const update = seen.find((request) => request.path === "/sandboxes/sbx_1/network")
       expect(update?.method).toBe("PUT")
       expect(JSON.parse(update?.body ?? "{}")).toEqual(network)
+    }),
+  )
+
+  it.live("this Ren sees only the sandboxes of its E2B_OWNER, so its cleanup never destroys another Ren's", () =>
+    Effect.gen(function* () {
+      const provider = yield* SandboxProvider.Service
+      seen.length = 0
+      expect((yield* provider.list).map((each) => each.binding)).toEqual([
+        { sandboxId: "sbx_mine", domain: "e2b.test", port: 4800 },
+      ])
+      yield* provider.create({ brainId: Brain.ID.make("brn_03"), generation: 1, env: {}, proxy: Option.none() })
+      const create = seen.find((request) => request.path === "/sandboxes" && request.method === "POST")
+      expect(JSON.parse(create?.body ?? "{}").metadata.owner).toBe("ren-test-a")
     }),
   )
 

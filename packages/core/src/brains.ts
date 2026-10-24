@@ -444,19 +444,21 @@ export const layer = Layer.effect(
               Effect.fail(new ForbiddenError({ message: error.message })),
             ),
           )
+        const updated = yield* database.db
+          .update(Database.Schema.brain)
+          .set({ key_ids: [...request.keyIds] })
+          .where(eq(Database.Schema.brain.id, host.brainId))
+          .returning({ egress: Database.Schema.brain.egress })
+          .pipe(Effect.orDie)
+        const behindEgress = updated.at(0)?.egress ?? false
         const access = yield* models.grant(host.brainId, host.organizationId).pipe(
-          Effect.map(Option.some),
+          Effect.map((granted) => Option.some(behindEgress ? Models.placeholders(granted) : granted)),
           Effect.catch((error) =>
             Effect.logWarning("Model access is unavailable for a pull; the brain keeps its models", error).pipe(
               Effect.as(Option.none<Models.Access>()),
             ),
           ),
         )
-        yield* database.db
-          .update(Database.Schema.brain)
-          .set({ key_ids: [...request.keyIds] })
-          .where(eq(Database.Schema.brain.id, host.brainId))
-          .pipe(Effect.orDie)
         yield* brainHost.observe(host.brainId, request.sessions)
         const roots = request.roots ?? []
         const kept =

@@ -27,6 +27,8 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Models.Unava
 
 export interface Interface {
   readonly catalog: (organizationId: Auth.OrganizationID) => Effect.Effect<Models.Catalog, Unavailable>
+  // oxlint-disable-next-line ren/no-comments -- Changes when the model list or a key in it changes, so a cache of grants knows to ask again (H4).
+  readonly revision: Effect.Effect<string>
   readonly grant: (brainId: Brain.ID, organizationId: Auth.OrganizationID) => Effect.Effect<Models.Access, Unavailable>
 }
 
@@ -51,6 +53,7 @@ export const layerNone = Layer.succeed(
     catalog: Effect.fn("Models.catalog")(function* () {
       return { endpoints: [] }
     }),
+    revision: Effect.succeed("none"),
     grant: Effect.fn("Models.grant")(function* () {
       return Models.Access.make({ endpoints: [] })
     }),
@@ -65,7 +68,13 @@ export const layerConfig = Layer.effect(
     const file = yield* Config.String("REN_MODELS_FILE")
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
-    const read = fs.readFileString(file).pipe(Effect.flatMap(decodeFile))
+    const read = fs
+      .readFileString(file)
+      .pipe(
+        Effect.flatMap((text) =>
+          Effect.map(decodeFile(text), (access) => ({ access, revision: Bun.hash(text).toString(16) })),
+        ),
+      )
     const current = yield* Ref.make(
       yield* read.pipe(
         Effect.mapError((cause) => new Error(`REN_MODELS_FILE ${file} is not a valid model list`, { cause })),
@@ -80,8 +89,8 @@ export const layerConfig = Layer.effect(
           Effect.matchEffect({
             onFailure: (error) =>
               Effect.logError("REN_MODELS_FILE changed to an invalid model list; Ren keeps the last valid one", error),
-            onSuccess: (access) =>
-              Ref.set(current, access).pipe(Effect.andThen(Effect.logInfo("Reloaded REN_MODELS_FILE"))),
+            onSuccess: (loaded) =>
+              Ref.set(current, loaded).pipe(Effect.andThen(Effect.logInfo("Reloaded REN_MODELS_FILE"))),
           }),
         ),
       ),
@@ -89,10 +98,11 @@ export const layerConfig = Layer.effect(
     )
     return Service.of({
       catalog: Effect.fn("Models.catalog")(function* () {
-        return Models.catalog(yield* Ref.get(current))
+        return Models.catalog((yield* Ref.get(current)).access)
       }),
+      revision: Effect.map(Ref.get(current), (loaded) => loaded.revision),
       grant: Effect.fn("Models.grant")(function* () {
-        const access = yield* Ref.get(current)
+        const access = (yield* Ref.get(current)).access
         const expiresAt = DateTime.addDuration(yield* DateTime.now, keyLifetime)
         return Models.Access.make({
           endpoints: access.endpoints.map((endpoint) =>
@@ -107,20 +117,9 @@ export const layerConfig = Layer.effect(
 // oxlint-disable-next-line ren/no-comments -- Behind an egress a brain holds no model key: each endpoint gets the placeholder ren:MODELS and no expiry, so the brain never renews it. The egress puts in the real key that Ren mints (CredentialSource.layerMinted).
 export const placeholderKey = "ren:MODELS"
 
-export const layerPlaceholders = Layer.effect(
-  Service,
-  Effect.gen(function* () {
-    const models = yield* Service
-    return Service.of({
-      catalog: models.catalog,
-      grant: Effect.fn("Models.grant")(function* (brainId, organizationId) {
-        const access = yield* models.grant(brainId, organizationId)
-        return Models.Access.make({
-          endpoints: access.endpoints.map((endpoint) =>
-            Struct.evolve(endpoint, { apiKey: () => ({ key: Redacted.make(placeholderKey) }) }),
-          ),
-        })
-      }),
-    })
-  }),
-)
+export const placeholders = (access: Models.Access): Models.Access =>
+  Models.Access.make({
+    endpoints: access.endpoints.map((endpoint) =>
+      Struct.evolve(endpoint, { apiKey: () => ({ key: Redacted.make(placeholderKey) }) }),
+    ),
+  })

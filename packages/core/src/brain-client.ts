@@ -18,6 +18,7 @@ export interface Target {
   readonly organizationId: Auth.OrganizationID
   readonly url: string
   readonly keyIds: ReadonlyArray<string>
+  readonly egress: boolean
 }
 
 export interface Host {
@@ -46,11 +47,8 @@ export const layer = Layer.effect(
     const config = yield* Config.all({
       renUrl: Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000")),
       address: Config.option(Config.String("REN_URL")),
-      egress: Config.option(Config.String("EGRESS_PROXY_ADDRESS")),
     })
     const signer = yield* Signer.Service
-    // oxlint-disable-next-line ren/no-comments -- Behind an egress the brain holds no host token and keeps https://ren.internal as Ren's address: the egress injects the token and routes to Ren (C8, C49).
-    const behindEgress = Option.isSome(config.egress)
     const publicKeys = yield* signer.publicKeys("brain").pipe(Effect.orDie)
     const http = yield* HttpClient.HttpClient
     const now = Effect.map(Clock.currentTimeMillis, (millis) => Math.floor(millis / 1000))
@@ -88,7 +86,8 @@ export const layer = Layer.effect(
                         brain: target.brainId,
                         gen: target.generation,
                         exp: issued + BrainToken.lifetimes.server,
-                        ...Option.match(behindEgress ? Option.none() : config.address, {
+                        // oxlint-disable-next-line ren/no-comments -- A brain behind the egress holds no host token and keeps REN_URL as Ren's address: the egress injects the token on calls to that host (C8, C49).
+                        ...Option.match(target.egress ? Option.none() : config.address, {
                           onNone: () => ({}),
                           onSome: (ren) => ({ ren }),
                         }),
@@ -97,7 +96,7 @@ export const layer = Layer.effect(
                     )
                     .pipe(Effect.orDie),
                 ),
-                behindEgress ? identity : HttpClientRequest.setHeader(hostTokenHeader, yield* hostToken(target)),
+                target.egress ? identity : HttpClientRequest.setHeader(hostTokenHeader, yield* hostToken(target)),
               )
             }),
           ),

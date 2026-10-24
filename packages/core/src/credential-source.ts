@@ -7,8 +7,8 @@ import { Auth } from "@ren/schema/auth"
 import {
   Cache,
   Clock,
-  Config,
   Context,
+  DateTime,
   Duration,
   Effect,
   Exit,
@@ -32,6 +32,12 @@ export type Value =
       readonly headers: ReadonlyArray<{ readonly name: string; readonly value: Redacted.Redacted }>
     }
 
+// oxlint-disable-next-line ren/no-comments -- expiresAt is when the value stops working upstream; the egress never sends it after that (C37).
+export interface Sourced {
+  readonly value: Value
+  readonly expiresAt?: DateTime.Utc
+}
+
 export class Unavailable extends Schema.TaggedError<Unavailable>()("CredentialSource.Unavailable", {
   label: Schema.String,
   message: Schema.String,
@@ -42,7 +48,7 @@ export interface Source {
   readonly value: (
     candidate: Credentials.Candidate,
     scope: Credentials.Scope,
-  ) => Effect.Effect<Option.Option<Value>, Unavailable>
+  ) => Effect.Effect<Option.Option<Sourced>, Unavailable>
 }
 
 export class Static extends Context.Service<Static, Source>()("@ren/core/CredentialSource/Static") {}
@@ -61,13 +67,17 @@ export const layerStatic = Layer.effect(
       value: Effect.fn("CredentialSource.static")(function* (candidate: Credentials.Candidate) {
         if (!Schema.is(Credential.ID)(candidate.id)) return Option.none()
         const opened = yield* credentials.open(candidate.id)
-        return Option.map(opened, (found): Value => found.value)
+        return Option.map(opened, (found): Sourced => ({
+          value: found.value,
+          ...(found.expiresAt && { expiresAt: found.expiresAt }),
+        }))
       }),
     })
   }),
 )
 
-const renewBefore = Duration.minutes(5)
+// oxlint-disable-next-line ren/no-comments -- Longer than the 15 minutes the egress uses its last answer while Ren is down, so a value it keeps has not expired (C37; ren-v1 INV-24).
+const renewBefore = Duration.minutes(20)
 
 const ttlUntil = (expiresAtMillis: number, now: number) =>
   Duration.millis(Math.max(0, expiresAtMillis - Duration.toMillis(renewBefore) - now))
@@ -75,22 +85,21 @@ const ttlUntil = (expiresAtMillis: number, now: number) =>
 const ren = "REN"
 const models = "MODELS"
 
-// oxlint-disable-next-line ren/no-comments -- Ren mints REN (the brain's host token, for ren.internal) and MODELS (the model keys). One mint at a time per workload; a 5xx is retried; a value is kept until 5 minutes before its expiry, so the old one stays in use until then (C29; ren-v1 INV-24, INV-25, INV-26, OI-11).
+// oxlint-disable-next-line ren/no-comments -- Ren mints REN (the brain's host token, for Ren's own host: the host of REN_URL) and MODELS (the model keys). One mint at a time per workload; a 5xx is retried; a value is kept until 20 minutes before its expiry, so the old one stays in use until then (C29, C37; ren-v1 INV-24, INV-25, INV-26, OI-11).
 export const layerMinted = Layer.effect(
   Minted,
   Effect.gen(function* () {
     const brains = yield* BrainClient.Service
     const grants = yield* Models.Service
-    const upstream = yield* Config.String("REN_EGRESS_UPSTREAM").pipe(
-      Config.orElse(() => Config.String("REN_URL")),
-      Config.withDefault("http://localhost:4000"),
-    )
+    const renHost = new URL(brains.renUrl).hostname
 
-    const Key = Schema.fromJsonString(Schema.Struct({ workload: Workload.Info, organizationId: Schema.String }))
+    const Key = Schema.fromJsonString(
+      Schema.Struct({ workload: Workload.Info, organizationId: Schema.String, revision: Schema.String }),
+    )
     const encodeKey = Schema.encodeSync(Key)
     const decodeKey = Schema.decodeSync(Key)
-    const keyOf = (scope: Credentials.Scope) =>
-      encodeKey({ workload: scope.workload, organizationId: scope.organizationId })
+    const keyOf = (scope: Credentials.Scope, revision = "") =>
+      encodeKey({ workload: scope.workload, organizationId: scope.organizationId, revision })
 
     const hostTokens = yield* Cache.makeWith(
       (key: string) =>
@@ -142,7 +151,8 @@ export const layerMinted = Layer.effect(
 
     const cachedHostToken = (scope: Credentials.Scope) =>
       Effect.map(Cache.get(hostTokens, keyOf(scope)), (found) => found.token)
-    const cachedGrant = (scope: Credentials.Scope) => Cache.get(modelGrants, keyOf(scope))
+    const cachedGrant = (scope: Credentials.Scope) =>
+      Effect.flatMap(grants.revision, (revision) => Cache.get(modelGrants, keyOf(scope, revision)))
 
     return Minted.of({
       candidates: Effect.fn("CredentialSource.minted.candidates")(function* (scope: Credentials.Scope) {
@@ -155,8 +165,8 @@ export const layerMinted = Layer.effect(
             source: "minted",
             label: ren,
             owner: "workload",
-            hosts: ["ren.internal"],
-            inject: { op: "route" },
+            hosts: [renHost],
+            inject: { op: "replace", in: ["header"] },
           },
           ...endpoints.flatMap((endpoint): ReadonlyArray<Credentials.Candidate> => {
             const url = URL.parse(endpoint.baseUrl)
@@ -169,7 +179,6 @@ export const layerMinted = Layer.effect(
                 owner: "workload",
                 hosts: [url.hostname],
                 inject: { op: "replace", in: ["header"] },
-                ...(url.pathname !== "/" && { pathPrefix: url.pathname.replace(/\/$/u, "") }),
               },
             ]
           }),
@@ -182,10 +191,12 @@ export const layerMinted = Layer.effect(
         if (candidate.label === ren) {
           const token = yield* cachedHostToken(scope)
           return Option.some({
-            type: "route",
-            upstream: Redacted.make(upstream),
-            headers: [{ name: "Authorization", value: Redacted.make(`Bearer ${token}`) }],
-          } satisfies Value)
+            value: { type: "key", value: Redacted.make(token) },
+            ...Option.match(BrainToken.expiry(token), {
+              onNone: () => ({}),
+              onSome: (exp) => ({ expiresAt: DateTime.makeUnsafe(exp * 1000) }),
+            }),
+          } satisfies Sourced)
         }
         const granted = yield* cachedGrant(scope).pipe(
           Effect.mapError(
@@ -193,7 +204,10 @@ export const layerMinted = Layer.effect(
           ),
         )
         const endpoint = granted.access.endpoints.find((found) => candidate.id === `minted:${models}:${found.id}`)
-        return Option.map(Option.fromNullishOr(endpoint), (found): Value => ({ type: "key", value: found.apiKey.key }))
+        return Option.map(Option.fromNullishOr(endpoint), (found): Sourced => ({
+          value: { type: "key", value: found.apiKey.key },
+          ...(found.apiKey.expiresAt && { expiresAt: found.apiKey.expiresAt }),
+        }))
       }),
     })
   }),

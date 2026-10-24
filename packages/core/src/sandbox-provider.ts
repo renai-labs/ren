@@ -46,6 +46,8 @@ export interface Proxy {
 
 export interface Interface {
   readonly kind: string
+  // oxlint-disable-next-line ren/no-comments -- Whether this provider can send a sandbox's traffic through the egress with a proxy login (E2B BYOP, HTTPS_PROXY locally). Ren puts a brain behind the egress only when the provider can.
+  readonly canEgress: boolean
   readonly template: string | null
   readonly create: (input: {
     readonly brainId: Brain.ID

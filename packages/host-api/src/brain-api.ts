@@ -38,6 +38,10 @@ export const State = Schema.Struct({
   holders: Schema.Int,
   waitingSince: Schema.NullOr(Schema.DateTimeUtc),
   nextReconcileAt: Schema.NullOr(Schema.DateTimeUtc),
+  pulledAt: Schema.optionalKey(Schema.NullOr(Schema.DateTimeUtc)).annotate({
+    description:
+      "When the brain last reached Ren with a pull; null before the first one. Ren makes a booted brain ready only after it, so a brain that cannot reach Ren is not ready. An older brain leaves it out.",
+  }),
 }).annotate({ identifier: "Brain.State" })
 
 export const Synced = Schema.Struct({ drained: Schema.Boolean }).annotate({ identifier: "Brain.Synced" })

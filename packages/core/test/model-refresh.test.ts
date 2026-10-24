@@ -20,6 +20,7 @@ const refreshes = Ref.makeUnsafe(0)
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
+    revision: Effect.succeed("test"),
     catalog: () => Effect.succeed({ endpoints: [] }),
     grant: () =>
       Effect.gen(function* () {

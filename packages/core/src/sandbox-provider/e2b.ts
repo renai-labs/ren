@@ -6,7 +6,8 @@ import { Config, Duration, Effect, Layer, Option, Redacted, Schema, Stream } fro
 import { HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { SandboxProvider } from "../sandbox-provider.js"
 
-export const owner = "ren-v2-dev"
+// oxlint-disable-next-line ren/no-comments -- Sandboxes are tagged with the Ren that made them. One E2B team can serve several Rens (developers); each lists, counts and cleans up only its own (E2B_OWNER).
+export const defaultOwner = "ren-v2-dev"
 
 const envdPort = 49983
 
@@ -61,7 +62,9 @@ export const layer = Layer.effect(
       domain: Config.String("E2B_DOMAIN").pipe(Config.withDefault("e2b.app")),
       port: Config.Int("BRAIN_PORT").pipe(Config.withDefault(4800)),
       maxRunning: Config.Int("SANDBOX_MAX_RUNNING").pipe(Config.withDefault(10)),
+      owner: Config.String("E2B_OWNER").pipe(Config.withDefault(defaultOwner)),
     })
+    const owner = config.owner
     const http = yield* HttpClient.HttpClient
     const api = http.pipe(
       HttpClient.mapRequest((request) =>
@@ -163,6 +166,7 @@ export const layer = Layer.effect(
 
     return SandboxProvider.Service.of({
       kind: "e2b",
+      canEgress: true,
       template: config.template,
       create: Effect.fn("E2BSandbox.create")(function* (input) {
         const metadata = { brain: input.brainId, generation: String(input.generation) }

@@ -29,11 +29,13 @@ const key = await Effect.runPromise(Signature.generate("brain"))
 const grants = Ref.makeUnsafe(0)
 const failuresLeft = Ref.makeUnsafe(0)
 const latch = Ref.makeUnsafe(Option.none<Effect.Effect<void>>())
+const revision = Ref.makeUnsafe("file-1")
 
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
     catalog: () => Effect.succeed({ endpoints: [] }),
+    revision: Ref.get(revision),
     grant: () =>
       Effect.gen(function* () {
         const wait = yield* Ref.get(latch)
@@ -69,7 +71,7 @@ const it = testEffect(
           BRAIN_KEYS: JSON.stringify([
             { id: key.privateKey.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.privateKey.key) },
           ]),
-          REN_EGRESS_UPSTREAM: "http://ren-server:4000",
+          REN_URL: "https://api.ren.test",
         }),
       ),
     ),
@@ -88,9 +90,9 @@ const modelKey = Effect.gen(function* () {
   const candidates = yield* source.candidates(scope)
   const found = candidates.find((candidate) => candidate.label === "MODELS")
   if (!found) return yield* Effect.die(new Error("no MODELS candidate"))
-  expect(found).toMatchObject({ hosts: ["api.anthropic.com"], pathPrefix: "/v1", owner: "workload" })
+  expect(found).toMatchObject({ hosts: ["api.anthropic.com"], owner: "workload" })
   const value = yield* source.value(found, scope)
-  return Option.map(value, (opened) => (opened.type === "key" ? Redacted.value(opened.value) : ""))
+  return Option.map(value, (opened) => (opened.value.type === "key" ? Redacted.value(opened.value.value) : ""))
 })
 
 describe("CredentialSource.layerMinted", () => {
@@ -112,30 +114,41 @@ describe("CredentialSource.layerMinted", () => {
     }),
   )
 
-  it.effect("the old key is used until shortly before its expiry, then Ren mints a new one", () =>
+  it.effect("the old key is used until 20 minutes before its expiry, longer than the egress keeps an answer", () =>
     Effect.gen(function* () {
       yield* Ref.set(grants, 0)
       yield* Ref.set(failuresLeft, 0)
       expect(yield* modelKey).toEqual(Option.some("sk-ant-1"))
-      yield* TestClock.adjust(Duration.hours(5))
+      yield* TestClock.adjust(Duration.minutes(5 * 60 + 39))
       expect(yield* modelKey).toEqual(Option.some("sk-ant-1"))
-      yield* TestClock.adjust(Duration.minutes(56))
+      yield* TestClock.adjust(Duration.minutes(2))
       expect(yield* modelKey).toEqual(Option.some("sk-ant-2"))
     }),
   )
 
-  it.effect("a brain gets REN for ren.internal: its host token, routed to Ren's address", () =>
+  it.effect(
+    "a changed model list (a new key or host in REN_MODELS_FILE) reaches the next request, not after the old key's lifetime",
+    () =>
+      Effect.gen(function* () {
+        yield* Ref.set(grants, 0)
+        yield* Ref.set(failuresLeft, 0)
+        const before = yield* modelKey
+        yield* Ref.set(revision, "file-2")
+        const after = yield* modelKey
+        expect([before, after]).toEqual([Option.some("sk-ant-1"), Option.some("sk-ant-2")])
+      }),
+  )
+
+  it.effect("a brain gets REN for Ren's own host (REN_URL): its host token, in place of the placeholder", () =>
     Effect.gen(function* () {
       const source = yield* CredentialSource.Minted
       const ren = (yield* source.candidates(scope)).find((candidate) => candidate.label === "REN")
-      expect(ren).toMatchObject({ hosts: ["ren.internal"], inject: { op: "route" } })
+      expect(ren).toMatchObject({ hosts: ["api.ren.test"], inject: { op: "replace", in: ["header"] } })
       if (!ren) return
       const value = yield* source.value(ren, scope)
-      if (Option.isNone(value) || value.value.type !== "route") return yield* Effect.die(new Error("expected a route"))
-      expect(Redacted.value(value.value.upstream)).toBe("http://ren-server:4000")
-      expect(value.value.headers.map((header) => [header.name, Redacted.value(header.value).slice(0, 9)])).toEqual([
-        ["Authorization", "Bearer ey"],
-      ])
+      if (Option.isNone(value) || value.value.value.type !== "key")
+        return yield* Effect.die(new Error("expected a key"))
+      expect(Redacted.value(value.value.value.value).slice(0, 2)).toBe("ey")
     }),
   )
 })

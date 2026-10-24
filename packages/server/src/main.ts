@@ -28,7 +28,7 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Postgres } from "@ren/db/postgres"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
-import { Config, Effect, Layer, Option } from "effect"
+import { Config, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -57,11 +57,6 @@ const host = Layer.unwrap(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- Behind an egress, brains get placeholder model keys; the egress gets the real ones from CredentialSource.layerMinted.
-const egressModels = Effect.map(Config.option(Config.String("EGRESS_PROXY_ADDRESS")), (address) =>
-  Option.isSome(address) ? Models.layerPlaceholders : Layer.empty,
-)
-
 const credentials = Egress.layer.pipe(
   Layer.provideMerge(CredentialSource.layer),
   Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
@@ -75,7 +70,6 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       Brains.layer.pipe(
         Layer.provide(host),
         Layer.provide(CredentialEnv.layer),
-        Layer.provide(Layer.unwrap(egressModels)),
       ),
       Retention.layer,
       CredentialRefresh.layer.pipe(Layer.provide(CredentialRefresh.layerNoRefreshers)),

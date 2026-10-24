@@ -228,8 +228,10 @@ export const Type = Schema.Literals(["key", "basic", "oauth", "fields", "route",
 })
 export type Type = typeof Type.Type
 
-export const Location = Schema.Literals(["header", "query", "path", "body"]).annotate({
+export const Location = Schema.Literals(["header", "query", "path"]).annotate({
   identifier: "Credential.Location",
+  description:
+    "Where a placeholder is replaced. Never in a body: body text is content, such as a prompt that mentions a placeholder.",
 })
 export type Location = typeof Location.Type
 
@@ -252,10 +254,11 @@ export const Inject = Schema.Union([
 })
 export type Inject = typeof Inject.Type
 
+// oxlint-disable-next-line ren/no-comments -- A key goes into headers only, unless its owner chooses more: a placeholder in a path or query can come back in an upstream's error text (H1).
 export const defaultInject = (type: Type): Inject =>
   type === "basic"
     ? { op: "setHeader", name: "Authorization", format: "Basic {basic}" }
-    : { op: "replace", in: ["header", "query", "path"] }
+    : { op: "replace", in: ["header"] }
 
 export const Delivery = Schema.Literals(["egress", "delivered"]).annotate({
   identifier: "Credential.Delivery",

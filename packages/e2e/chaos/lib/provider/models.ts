@@ -23,6 +23,7 @@ export const layer = Layer.effect(
       Effect.orDie,
     )
     return Models.Service.of({
+      revision: Effect.succeed("test"),
       catalog: () => Effect.map(read, (grants) => Models.catalog(grants.fallback)),
       grant: (brainId) => Effect.map(read, (grants) => grants.brains[brainId] ?? grants.fallback),
     })

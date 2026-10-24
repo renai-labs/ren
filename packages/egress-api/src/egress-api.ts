@@ -64,6 +64,7 @@ export const ResolveReply = Schema.Union([
     allow: Schema.Literal(true),
     workload: Schema.String,
     ttl: Schema.Int,
+    expiresAt: Schema.optional(Schema.Int),
     labels: Schema.Array(Schema.String),
     inject: Schema.Array(WireOp),
   }),

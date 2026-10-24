@@ -23,6 +23,7 @@ export const source: { access: Models.Access } = { access: access({ stub: lastin
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
+    revision: Effect.succeed("test"),
     catalog: () => Effect.sync(() => Models.catalog(source.access)),
     grant: () => Effect.sync(() => source.access),
   }),

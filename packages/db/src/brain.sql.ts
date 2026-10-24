@@ -3,7 +3,7 @@ import type { Brain } from "@ren/schema/brain"
 import { Space } from "@ren/schema/space"
 import { sql } from "drizzle-orm"
 import type { Schema } from "effect"
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
+import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { organization } from "./auth.sql.js"
 import { space } from "./space.sql.js"
 
@@ -27,6 +27,8 @@ export const brain = pgTable(
     provider: text(),
     binding: jsonb().$type<Schema.Json>(),
     template: text(),
+    // oxlint-disable-next-line ren/no-comments -- Set at create and read by every later step: the sandbox sends its traffic through the egress, so the brain holds placeholders, never real keys or its host token.
+    egress: boolean().notNull().default(false),
     url: text(),
     generation: integer().notNull().default(1),
     run_epoch: integer().notNull().default(0),

@@ -6228,7 +6228,8 @@
       },
       "Credential.Location": {
         "type": "string",
-        "enum": ["header", "query", "path", "body"]
+        "enum": ["header", "query", "path"],
+        "description": "Where a placeholder is replaced. Never in a body: body text is content, such as a prompt that mentions a placeholder."
       },
       "Credential.MoveInput": {
         "type": "object",
