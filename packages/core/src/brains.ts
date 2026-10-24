@@ -52,6 +52,7 @@ import { BrainClient } from "./brain-client.js"
 import { CredentialEnv } from "./credential-env.js"
 import { BrainHost } from "./brain-host.js"
 import { DurableRunner } from "./durable-runner.js"
+import { Credentials } from "./credentials.js"
 import { Environments } from "./environments.js"
 import { Models } from "./models.js"
 import { Primitive } from "./primitive.js"
@@ -452,21 +453,27 @@ export const layer = Layer.effect(
         }
       }),
       pull: Effect.fn("Brains.pull")(function* (host: CurrentHost["Service"], request: PullRequest) {
-        const apps = Predicate.isUndefined(request.apps)
-          ? Option.none<PullApps>()
-          : yield* appResolve.revision(host.spaceId).pipe(
-              Effect.flatMap((revision) =>
-                revision === request.apps
-                  ? Effect.succeed<PullApps>({ fingerprint: revision })
-                  : appResolve.forSpace(host.spaceId),
-              ),
-              Effect.map(Option.some),
-              Effect.catch((error) =>
-                Effect.logWarning("App catalog is unavailable for a pull; the brain keeps its catalog", error).pipe(
-                  Effect.as(Option.none<PullApps>()),
+        const scope = yield* Credentials.scopeOf(database.db, {
+          kind: "brain",
+          id: host.brainId,
+          generation: host.generation,
+        }).pipe(Effect.orDie)
+        const apps =
+          Predicate.isUndefined(request.apps) || Option.isNone(scope)
+            ? Option.none<PullApps>()
+            : yield* appResolve.revision(scope.value).pipe(
+                Effect.flatMap((revision) =>
+                  revision === request.apps
+                    ? Effect.succeed<PullApps>({ fingerprint: revision })
+                    : appResolve.forScope(scope.value),
                 ),
-              ),
-            )
+                Effect.map(Option.some),
+                Effect.catchCause((cause) =>
+                  Effect.logWarning("App catalog is unavailable for a pull; the brain keeps its catalog", cause).pipe(
+                    Effect.as(Option.none<PullApps>()),
+                  ),
+                ),
+              )
         const pulled = yield* settings
           .pull(host.brainId, request.layers)
           .pipe(

@@ -1,22 +1,14 @@
 import { expect } from "bun:test"
 import { Database } from "@ren/db/database"
-import { Testing } from "@ren/db/testing"
 import { Mcp } from "@ren/schema/mcp"
-import { eq } from "drizzle-orm"
-import { Effect, Layer, Result, Schema } from "effect"
-import { Access } from "../src/access.js"
+import { Effect, Result, Schema } from "effect"
 import { App } from "../src/app.js"
 import { AppRegistry } from "../src/app/registry.js"
-import { SpaceApp } from "../src/space/app.js"
 import { testEffect } from "./lib/effect.js"
+import { ProfilesFixture } from "./lib/profiles.js"
 import { Seed } from "./lib/seed.js"
 
-const it = testEffect(
-  Layer.mergeAll(App.layer, AppRegistry.layer, SpaceApp.layer).pipe(
-    Layer.provideMerge(Access.layer),
-    Layer.provideMerge(Testing.layer),
-  ),
-)
+const it = testEffect(ProfilesFixture.layer)
 
 const remote = (url: string) =>
   Schema.decodeUnknownSync(Mcp.Declaration)({
@@ -45,97 +37,56 @@ const publish = Effect.fnUntraced(function* (input: AppRegistry.Publication) {
 
 const page = { page: 1, pageSize: 50 }
 
-it.live("only execution changes cut releases; floating uses follow them and pins keep theirs", () =>
+it.live("only execution changes raise the revision; every org that reaches the app gets the new definition", () =>
   Effect.gen(function* () {
     const registry = yield* AppRegistry.Service
-    const uses = yield* SpaceApp.Service
     const skill = { type: "upstream", upstream: { url: "https://github.com/renai-labs/Integrations", path: "a" } }
     const first = publication("docs", { skills: { guide: skill }, listing: { body: "Read docs" } })
     const created = yield* publish(first)
-    expect(created).toMatchObject({ version: "1.0.0", changed: { execution: true, metadata: true, listing: true } })
+    expect(created).toMatchObject({ revision: 1, changed: { execution: true, metadata: true, listing: true } })
     expect(yield* publish(first)).toEqual({
       ...created,
       changed: { execution: false, metadata: false, listing: false },
     })
-    const consumer = yield* Seed.actor(yield* Seed.organization(), "admin")
-    const floating = yield* uses.create(consumer, {
-      spaceId: yield* Seed.space(consumer.organizationId),
-      appId: created.appId,
-    })
-    const pinned = yield* uses.create(consumer, {
-      spaceId: yield* Seed.space(consumer.organizationId),
-      appId: created.appId,
-      pinnedReleaseId: created.releaseId,
-    })
     const renamed = { ...first, name: "Docs", icon: "https://example.com/docs.png" }
-    expect((yield* publish(renamed)).changed).toEqual({ execution: false, metadata: true, listing: false })
+    expect(yield* publish(renamed)).toMatchObject({ revision: 1, changed: { execution: false, metadata: true } })
     const relabeled = {
       ...renamed,
       listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"] },
     }
     expect((yield* publish(relabeled)).changed).toEqual({ execution: false, metadata: false, listing: true })
-    const successor = yield* publish(
+    const next = yield* publish(
       publication("docs", {
         ...relabeled,
         skills: { guide: { ...skill, upstream: { ...skill.upstream, path: "b" } } },
       }),
     )
-    expect(successor).toMatchObject({ version: "1.0.1", changed: { execution: true, metadata: false, listing: false } })
-    expect((yield* uses.get(consumer, floating.id)).release.id).toBe(successor.releaseId)
-    expect(yield* uses.get(consumer, pinned.id)).toMatchObject({
-      app: { name: "Docs", icon: "https://example.com/docs.png" },
-      release: { id: created.releaseId, skills: { guide: { upstream: { path: "a" } } } },
-    })
-    expect(yield* registry.get(consumer, "docs")).toMatchObject({
+    expect(next).toMatchObject({ revision: 2, changed: { execution: true, metadata: false, listing: false } })
+    const reader = yield* Seed.actor(yield* Seed.organization(), "member")
+    expect(yield* registry.get(reader, "docs")).toMatchObject({
       name: "Docs",
       listing: { body: "New", categories: { roles: ["engineer"] }, examplePrompts: ["Hi"] },
-      release: { version: "1.0.1" },
+      revision: 2,
+      skills: { guide: { upstream: { path: "b" } } },
     })
   }),
 )
 
-it.live("listing an organization's app keeps its owner and lets other organizations read and install it only", () =>
+it.live("publish refuses a slug that a custom app holds, and never writes onto it (P37)", () =>
   Effect.gen(function* () {
     const apps = yield* App.Service
     const registry = yield* AppRegistry.Service
-    const uses = yield* SpaceApp.Service
     const organizationId = yield* Seed.organization()
-    const owner = yield* Seed.actor(organizationId, "admin")
-    const ownerSpaceId = yield* Seed.space(organizationId)
-    const app = yield* apps.create(owner, Seed.appInput(ownerSpaceId, "owned"))
-    const foreign = yield* Seed.actor(yield* Seed.organization(), "admin")
-    expect((yield* Effect.flip(registry.get(foreign, "owned")))._tag).toBe("Primitive.NotFound")
-    const unnamed = yield* Effect.flip(
+    const owner = yield* ProfilesFixture.user(organizationId, "Ana", "admin")
+    const app = yield* ProfilesFixture.app(owner, owner.personal, "owned")
+    const refused = yield* Effect.flip(
       publish(publication("owned", { mcps: { owned: remote("https://ren.example.com/mcp") } })),
     )
-    expect(unnamed).toMatchObject({ _tag: "Primitive.Conflict" })
-    expect(unnamed.message).toContain("organization")
-    const misnamed = yield* Effect.flip(
-      publish(publication("owned", { mcps: {}, organizationId: foreign.organizationId })),
-    )
-    expect(misnamed._tag).toBe("Primitive.Conflict")
-    const absent = yield* Effect.flip(publish(publication("unowned", { organizationId })))
-    expect(absent._tag).toBe("Primitive.Conflict")
+    expect(refused).toMatchObject({ _tag: "Primitive.Conflict" })
+    expect(refused.message).toContain("organization’s app")
+    expect(yield* apps.get(owner, app.id)).toMatchObject({ revision: 1, mcps: {} })
+    const foreign = yield* Seed.actor(yield* Seed.organization(), "admin")
     expect((yield* Effect.flip(registry.get(foreign, "owned")))._tag).toBe("Primitive.NotFound")
-    expect((yield* apps.get(owner, app.id)).latestReleaseId).toBe(app.latestReleaseId)
-    expect(yield* publish(publication("owned", { mcps: {}, organizationId }))).toMatchObject({
-      appId: app.id,
-      releaseId: app.latestReleaseId,
-      changed: { execution: false, listing: true },
-    })
-    expect(yield* apps.get(foreign, app.id)).toMatchObject({ organizationId, ownerSpaceId })
-    expect((yield* Effect.flip(apps.update(foreign, app.id, { name: "Stolen" })))._tag).toBe("Primitive.Forbidden")
-    const installed = yield* uses.create(foreign, {
-      spaceId: yield* Seed.space(foreign.organizationId),
-      appId: app.id,
-    })
-    expect(installed).toMatchObject({ isOwner: false, pinnedReleaseId: null, release: { id: app.latestReleaseId } })
-    yield* uses.create(owner, { spaceId: yield* Seed.space(organizationId), appId: app.id })
-    const inUse = yield* Effect.flip(apps.archive(owner, app.id))
-    expect(inUse._tag).toBe("Primitive.Conflict")
-    expect(inUse.message).toContain("Team")
-    expect(inUse.message).toContain("1 space of another organization")
-    expect(inUse.message).not.toContain(installed.spaceId)
   }),
 )
 
@@ -163,30 +114,17 @@ it.live("browsing lists active listings by text and category", () =>
   }),
 )
 
-it.live("publications racing from one expected release give one successor and never downgrade", () =>
+it.live("publications racing from one expected revision give one edit", () =>
   Effect.gen(function* () {
-    const registry = yield* AppRegistry.Service
-    const database = yield* Database.Service
     const initial = yield* publish(publication("race"))
     const successors = ["https://one.example.com/mcp", "https://two.example.com/mcp"].map((url) =>
-      publication("race", { mcps: { race: remote(url) }, expectedCurrentReleaseId: initial.releaseId }),
+      publication("race", { mcps: { race: remote(url) }, expectedRevision: initial.revision }),
     )
     const results = yield* Effect.forEach(successors, (input) => Effect.result(publish(input)), {
       concurrency: "unbounded",
     })
-    expect(results.filter(Result.isSuccess).map((result) => result.success.version)).toEqual(["1.0.1"])
+    expect(results.filter(Result.isSuccess).map((result) => result.success.revision)).toEqual([2])
     expect(results.filter(Result.isFailure).map((result) => result.failure._tag)).toEqual(["Primitive.Conflict"])
-    const winner = successors.at(results.findIndex(Result.isSuccess))
-    if (winner) expect((yield* publish(winner)).changed.execution).toBe(false)
-    const lower = yield* Effect.flip(
-      registry.publish({
-        apps: [publication("race", { version: "1.0.0", mcps: { race: remote("https://three.example.com/mcp") } })],
-      }),
-    )
-    expect(lower._tag).toBe("Primitive.Conflict")
-    expect(
-      (yield* database.db.select().from(Database.Schema.app_release)).map((row) => row.version).toSorted(),
-    ).toEqual(["1.0.0", "1.0.1"])
   }),
 )
 
@@ -205,60 +143,11 @@ it.live("a broken dependency rolls back the whole batch", () =>
     )
     expect(missing.message).toContain("ghost")
     const rows = yield* database.db.select().from(Database.Schema.app)
-    expect(rows.map((row) => [row.slug, row.latest_release_id])).toEqual([["search", before.releaseId]])
+    expect(rows.map((row) => [row.slug, row.revision])).toEqual([["search", before.revision]])
     expect(
       yield* database.db.select({ body: Database.Schema.app_listing.body }).from(Database.Schema.app_listing),
     ).toEqual([{ body: null }])
   }),
-)
-
-it.live(
-  "a successor that would break a floating consumer space is refused with the checks of an organization write",
-  () =>
-    Effect.gen(function* () {
-      const apps = yield* App.Service
-      const uses = yield* SpaceApp.Service
-      const database = yield* Database.Service
-      const docs = yield* publish(publication("docs"))
-      yield* publish(publication("base"))
-      const consumer = yield* Seed.actor(yield* Seed.organization(), "admin")
-      const spaceId = yield* Seed.space(consumer.organizationId)
-      yield* uses.create(consumer, { spaceId, appId: docs.appId })
-      yield* apps.create(
-        consumer,
-        Seed.appInput(spaceId, "local", {
-          skills: {
-            guide: { type: "content", description: "Guide", instructions: "Ours", files: {}, requiredCredentials: [] },
-          },
-        }),
-      )
-      const clash = yield* Effect.flip(
-        publish(
-          publication("docs", {
-            skills: {
-              guide: {
-                type: "content",
-                description: "Guide",
-                instructions: "Theirs",
-                files: {},
-                requiredCredentials: [],
-              },
-            },
-          }),
-        ),
-      )
-      expect(clash._tag).toBe("Primitive.Conflict")
-      expect(clash.message).toContain("Component collision")
-      const missing = yield* Effect.flip(publish(publication("docs", { dependsOn: ["base"] })))
-      expect(missing._tag).toBe("Primitive.Conflict")
-      expect(missing.message).toContain("Missing dependency")
-      expect(
-        (yield* database.db
-          .select()
-          .from(Database.Schema.app_release)
-          .where(eq(Database.Schema.app_release.app_id, docs.appId))).map((row) => row.id),
-      ).toEqual([docs.releaseId])
-    }),
 )
 
 it.live("withdrawal is refused while another listed app depends on the app", () =>
@@ -273,7 +162,7 @@ it.live("withdrawal is refused while another listed app depends on the app", () 
   }),
 )
 
-it.live("duplicate dependencies reject the batch without changing existing releases", () =>
+it.live("duplicate dependencies reject the batch without changing existing apps", () =>
   Effect.gen(function* () {
     const registry = yield* AppRegistry.Service
     const database = yield* Database.Service
@@ -285,16 +174,14 @@ it.live("duplicate dependencies reject the batch without changing existing relea
       .pipe(Effect.flip)
     expect(failure._tag).toBe("Primitive.Conflict")
     expect(failure.message).toContain("Duplicate dependency")
-    expect(failure.message).toContain("child")
-    expect(failure.message).toContain("base")
     expect(yield* database.db.select().from(Database.Schema.app)).toMatchObject([
-      { id: before.appId, latest_release_id: before.releaseId, description: "The base app" },
+      { id: before.appId, revision: 1, description: "The base app" },
     ])
-    expect(yield* database.db.select().from(Database.Schema.app_release_dependency)).toEqual([])
+    expect(yield* database.db.select().from(Database.Schema.app_dependency)).toEqual([])
   }),
 )
 
-it.live("publication rejects self-dependencies and cycles within a batch or through existing releases", () =>
+it.live("publication rejects self-dependencies and cycles within a batch or through existing apps", () =>
   Effect.gen(function* () {
     const registry = yield* AppRegistry.Service
     const database = yield* Database.Service
@@ -311,41 +198,30 @@ it.live("publication rejects self-dependencies and cycles within a batch or thro
           expect(yield* database.db.select().from(Database.Schema.app)).toEqual([])
         }),
     )
-    const initial = yield* registry.publish({
-      apps: [publication("first"), publication("second", { dependsOn: ["first"] })],
-    })
+    yield* registry.publish({ apps: [publication("first"), publication("second", { dependsOn: ["first"] })] })
     const failure = yield* publish(publication("first", { dependsOn: ["second"] })).pipe(Effect.flip)
     expect(failure._tag).toBe("Primitive.Conflict")
     expect(failure.message).toMatch(/first -> second -> first|second -> first -> second/u)
-    expect((yield* database.db.select().from(Database.Schema.app_release)).map((row) => row.id).toSorted()).toEqual(
-      initial.apps.map((app) => app.releaseId).toSorted(),
-    )
   }),
 )
 
-it.live("withdrawal keeps installations, latest selection and pins; publication does not relist", () =>
+it.live("a withdrawn app keeps its profiles running and takes no new ones; publication does not relist", () =>
   Effect.gen(function* () {
     const registry = yield* AppRegistry.Service
-    const uses = yield* SpaceApp.Service
     const published = yield* publish(publication("withdrawn"))
-    const consumer = yield* Seed.actor(yield* Seed.organization(), "admin")
-    const floating = yield* uses.create(consumer, {
-      spaceId: yield* Seed.space(consumer.organizationId),
-      appId: published.appId,
-    })
+    const organizationId = yield* Seed.organization()
+    const consumer = yield* ProfilesFixture.user(organizationId, "Ana", "admin")
+    yield* ProfilesFixture.profile(consumer, { appId: published.appId, slug: "all", kind: "shared", allSpaces: true })
     yield* registry.withdraw("withdrawn")
     expect((yield* Effect.flip(registry.get(consumer, "withdrawn")))._tag).toBe("Primitive.NotFound")
-    const stranger = yield* Seed.actor(yield* Seed.organization(), "admin")
+    expect(yield* ProfilesFixture.reach(organizationId, consumer.personal)).toEqual(["withdrawn/all"])
     const refused = yield* Effect.flip(
-      uses.create(stranger, { spaceId: yield* Seed.space(stranger.organizationId), appId: published.appId }),
+      ProfilesFixture.profile(consumer, { appId: published.appId, slug: "new", kind: "shared", spaceIds: [] }),
     )
-    expect(refused._tag).toBe("Primitive.NotFound")
-    const successor = yield* publish(
-      publication("withdrawn", { mcps: { withdrawn: remote("https://next.example.com/mcp") } }),
-    )
-    expect((yield* uses.get(consumer, floating.id)).release.id).toBe(successor.releaseId)
+    expect(refused._tag).toBe("Primitive.Conflict")
+    yield* publish(publication("withdrawn", { mcps: { withdrawn: remote("https://next.example.com/mcp") } }))
     expect((yield* Effect.flip(registry.get(consumer, "withdrawn")))._tag).toBe("Primitive.NotFound")
     yield* registry.relist("withdrawn")
-    expect((yield* registry.get(stranger, "withdrawn")).release.id).toBe(successor.releaseId)
+    expect((yield* registry.get(consumer, "withdrawn")).revision).toBe(2)
   }),
 )

@@ -221,15 +221,23 @@ export const layer = Layer.effect(
         )
       }),
       create: Effect.fn("SpaceMember.create")(function* (actor: Actor.Info, input: SpaceMember.CreateInput) {
-        return yield* database.transaction((transaction) =>
+        const created = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const space = yield* lockSpace(transaction, actor, input.spaceId)
             if (!space) return yield* notFound
             if (!access.isAllowed({ actor, action: actions.create, resource: space })) return yield* forbidden
-            if ("userId" in input) return yield* addMember(transaction, actor, input.spaceId, input.userId)
-            return yield* addPendingMember(transaction, actor, input.spaceId, input.email)
+            if (!("userId" in input))
+              return { member: yield* addPendingMember(transaction, actor, input.spaceId, input.email), workloads: [] }
+            return {
+              member: yield* addMember(transaction, actor, input.spaceId, input.userId),
+              workloads: yield* CredentialOffboarding.spaceBrains(transaction, [input.spaceId]),
+            }
           }),
         )
+        yield* CredentialOffboarding.invalidate({ labels: [], workloads: created.workloads, providers: [] }).pipe(
+          Effect.provideService(EgressControl.Service, control),
+        )
+        return created.member
       }),
       archive: Effect.fn("SpaceMember.archive")(function* (actor: Actor.Info, id: SpaceMember.ID) {
         const archived = yield* database.transaction((transaction) =>

@@ -2,9 +2,6 @@ export * as AppQueries from "./queries.js"
 
 import { Database } from "@ren/db/database"
 import { App } from "@ren/schema/app"
-import type { AppRelease } from "@ren/schema/app-release"
-import { SpaceApp } from "@ren/schema/space-app"
-import type { Space } from "@ren/schema/space"
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm"
 import { DateTime, Effect } from "effect"
 import type { Access } from "../access.js"
@@ -28,7 +25,7 @@ export const lock = Effect.fnUntraced(function* (
     .where(eq(Database.Schema.organization.id, actor.organizationId))
     .for("update")
   if (options.graph === false) return
-  // oxlint-disable-next-line ren/no-comments -- A registry publication checks the graph of every consumer space, in every organization: it holds this key exclusively, and organization writes share it.
+  // oxlint-disable-next-line ren/no-comments -- A registry publication changes apps that every organization may use: it holds this key exclusively, and organization writes share it.
   yield* transaction.execute(sql`select pg_advisory_xact_lock_shared(${gate.namespace}::int, hashtext('registry'))`)
   yield* transaction.execute(
     sql`select pg_advisory_xact_lock(${gate.namespace}::int, hashtext(${actor.organizationId}))`,
@@ -40,137 +37,65 @@ export const registryLock = (transaction: Database.Transaction) =>
 
 export const isListed = sql<boolean>`exists (select 1 from app_listing where app_listing.app_id = ${Database.Schema.app}.id and app_listing.archived_at is null)`
 
-export const appInfo = (row: typeof Database.Schema.app.$inferSelect): App.Info => {
-  return {
-    id: row.id,
-    slug: row.slug,
-    organizationId: row.organization_id,
-    ownerSpaceId: row.owner_space_id,
-    name: row.name,
-    description: row.description,
-    icon: row.icon,
-    latestReleaseId: row.latest_release_id,
-    createdAt: DateTime.fromDateUnsafe(row.created_at),
-    updatedAt: DateTime.fromDateUnsafe(row.updated_at),
-    archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
-  }
-}
+type Row = typeof Database.Schema.app.$inferSelect
 
-export const releaseInfos = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  rows: ReadonlyArray<typeof Database.Schema.app_release.$inferSelect>,
-) {
-  if (!rows.length) return new Map<AppRelease.ID, AppRelease.Info>()
-  const dependencies = yield* transaction
-    .select({ releaseId: Database.Schema.app_release_dependency.app_release_id, slug: Database.Schema.app.slug })
-    .from(Database.Schema.app_release_dependency)
-    .innerJoin(
-      Database.Schema.app,
-      eq(Database.Schema.app.id, Database.Schema.app_release_dependency.dependency_app_id),
-    )
-    .where(
-      inArray(
-        Database.Schema.app_release_dependency.app_release_id,
-        rows.map((row) => row.id),
-      ),
-    )
-    .orderBy(asc(Database.Schema.app.slug))
-  const byRelease = Map.groupBy(dependencies, (entry) => entry.releaseId)
-  return new Map(
-    rows.map((row) => [
-      row.id,
-      {
-        id: row.id,
-        appId: row.app_id,
-        version: row.version,
-        requiredCredentials: row.required_credentials,
-        ...(row.environment && { environment: row.environment }),
-        mcps: row.mcps,
-        skills: row.skills,
-        dependsOn: (byRelease.get(row.id) ?? []).map((entry) => entry.slug),
-        createdAt: DateTime.fromDateUnsafe(row.created_at),
-      },
-    ]),
-  )
+export const appInfo = (row: Row, dependsOn: ReadonlyArray<string>): App.Info => ({
+  id: row.id,
+  slug: row.slug,
+  organizationId: row.organization_id,
+  ownerSpaceId: row.owner_space_id,
+  name: row.name,
+  description: row.description,
+  icon: row.icon,
+  requiredCredentials: row.required_credentials,
+  ...(row.environment && { environment: row.environment }),
+  mcps: row.mcps,
+  skills: row.skills,
+  dependsOn,
+  revision: row.revision,
+  createdAt: DateTime.fromDateUnsafe(row.created_at),
+  updatedAt: DateTime.fromDateUnsafe(row.updated_at),
+  archivedAt: row.archived_at && DateTime.fromDateUnsafe(row.archived_at),
 })
 
-export const releaseInfo = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  row: typeof Database.Schema.app_release.$inferSelect,
+export const dependsOn = Effect.fnUntraced(function* (
+  client: Pick<Database.Transaction, "select">,
+  appIds: ReadonlyArray<App.ID>,
 ) {
-  const info = (yield* releaseInfos(transaction, [row])).get(row.id)
-  if (!info) return yield* Effect.die(new Error("Release info is missing"))
-  return info
+  if (!appIds.length) return new Map<App.ID, ReadonlyArray<string>>()
+  const rows = yield* client
+    .select({ appId: Database.Schema.app_dependency.app_id, slug: Database.Schema.app.slug })
+    .from(Database.Schema.app_dependency)
+    .innerJoin(Database.Schema.app, eq(Database.Schema.app.id, Database.Schema.app_dependency.dependency_app_id))
+    .where(inArray(Database.Schema.app_dependency.app_id, [...appIds]))
+    .orderBy(asc(Database.Schema.app.slug))
+  const grouped = Map.groupBy(rows, (row) => row.appId)
+  return new Map(appIds.map((id) => [id, (grouped.get(id) ?? []).map((row) => row.slug)]))
+})
+
+export const infos = Effect.fnUntraced(function* (
+  client: Pick<Database.Transaction, "select">,
+  rows: ReadonlyArray<Row>,
+) {
+  const dependencies = yield* dependsOn(
+    client,
+    rows.map((row) => row.id),
+  )
+  return rows.map((row) => appInfo(row, dependencies.get(row.id) ?? []))
+})
+
+export const info = Effect.fnUntraced(function* (client: Pick<Database.Transaction, "select">, row: Row) {
+  const found = (yield* infos(client, [row])).at(0)
+  if (!found) return yield* Effect.die(new Error("App info is missing"))
+  return found
 })
 
 export const isOwnerMember = (actor: Actor.Info) =>
   sql<boolean>`exists (select 1 from space_member where space_id = ${Database.Schema.app}.owner_space_id and user_id = ${actor.userId} and archived_at is null)`
+
+// oxlint-disable-next-line ren/no-comments -- profiles.md §7 rule 8: members of the owner space, the person of a private profile, and members of a space that a shared profile lists or that every space reaches.
 export const isSpaceMember = (actor: Actor.Info) =>
-  sql<boolean>`(${isOwnerMember(actor)} or exists (select 1 from space_app inner join space_member on space_member.space_id = space_app.space_id where space_app.app_id = ${Database.Schema.app}.id and space_app.archived_at is null and space_member.user_id = ${actor.userId} and space_member.archived_at is null))`
-export const isInSpace = (spaceId: Space.ID) =>
-  or(
-    eq(Database.Schema.app.owner_space_id, spaceId),
-    sql`exists (select 1 from space_app where app_id = ${Database.Schema.app}.id and space_id = ${spaceId} and archived_at is null)`,
-  )
-
-export const activeUse = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  spaceId: Space.ID,
-  appId: App.ID,
-) {
-  return (yield* transaction
-    .select()
-    .from(Database.Schema.space_app)
-    .where(
-      and(
-        eq(Database.Schema.space_app.space_id, spaceId),
-        eq(Database.Schema.space_app.app_id, appId),
-        isNull(Database.Schema.space_app.archived_at),
-      ),
-    )).at(0)
-})
-
-export const inSpace = (client: Pick<Database.Transaction, "select">, spaceId: Space.ID) =>
-  client
-    .select({ app: Database.Schema.app, use: Database.Schema.space_app, release: Database.Schema.app_release })
-    .from(Database.Schema.app)
-    .leftJoin(
-      Database.Schema.space_app,
-      and(
-        eq(Database.Schema.space_app.app_id, Database.Schema.app.id),
-        eq(Database.Schema.space_app.space_id, spaceId),
-        isNull(Database.Schema.space_app.archived_at),
-      ),
-    )
-    .innerJoin(
-      Database.Schema.app_release,
-      eq(
-        Database.Schema.app_release.id,
-        sql`coalesce(${Database.Schema.space_app.pinned_release_id}, ${Database.Schema.app.latest_release_id})`,
-      ),
-    )
-    .where(
-      and(
-        isNull(Database.Schema.app.archived_at),
-        or(eq(Database.Schema.app.owner_space_id, spaceId), sql`${Database.Schema.space_app.id} is not null`),
-      ),
-    )
-    .orderBy(asc(Database.Schema.app.slug))
-
-export const consumers = Effect.fnUntraced(function* (transaction: Database.Transaction, appId: App.ID) {
-  return (yield* transaction
-    .select({ id: Database.Schema.space.id })
-    .from(Database.Schema.space)
-    .where(
-      and(
-        isNull(Database.Schema.space.archived_at),
-        or(
-          sql`exists (select 1 from app where id = ${appId} and owner_space_id = ${Database.Schema.space.id})`,
-          sql`exists (select 1 from space_app where app_id = ${appId} and space_id = ${Database.Schema.space.id} and archived_at is null and pinned_release_id is null)`,
-        ),
-      ),
-    )).map((row) => row.id)
-})
+  sql<boolean>`(${isOwnerMember(actor)} or exists (select 1 from app_profile where app_profile.app_id = ${Database.Schema.app}.id and app_profile.organization_id = ${actor.organizationId} and ((app_profile.kind = 'private' and app_profile.user_id = ${actor.userId}) or (app_profile.kind = 'shared' and (app_profile.all_spaces or exists (select 1 from app_profile_space inner join space_member on space_member.space_id = app_profile_space.space_id where app_profile_space.profile_id = app_profile.id and space_member.user_id = ${actor.userId} and space_member.archived_at is null))))))`
 
 export const find = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
@@ -195,7 +120,7 @@ export const find = Effect.fnUntraced(function* (
         or(
           eq(Database.Schema.app.organization_id, actor.organizationId),
           isListed,
-          sql`exists (select 1 from space_app inner join space on space.id = space_app.space_id where space_app.app_id = ${Database.Schema.app}.id and space_app.archived_at is null and space.organization_id = ${actor.organizationId})`,
+          sql`exists (select 1 from app_profile where app_profile.app_id = ${Database.Schema.app}.id and app_profile.organization_id = ${actor.organizationId})`,
         ),
         options.includeArchived ? undefined : isNull(Database.Schema.app.archived_at),
       ),
@@ -217,51 +142,8 @@ export const findOwned = Effect.fnUntraced(function* (
 ) {
   const row = yield* find(transaction, access, actor, idOrSlug, options)
   if (row.app.organization_id !== actor.organizationId)
-    return yield* new Primitive.Forbidden({ message: "A listed app can be read and installed, not changed." })
+    return yield* new Primitive.Forbidden({ message: "A listed app can be read and used, not changed." })
   return row
 })
 
 export const visibleSpace = AgentQueries.visibleSpace
-
-export const selectedRelease = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  app: typeof Database.Schema.app.$inferSelect,
-  pinnedReleaseId: AppRelease.ID | null | undefined,
-) {
-  const release = (yield* transaction
-    .select()
-    .from(Database.Schema.app_release)
-    .where(
-      and(
-        eq(Database.Schema.app_release.app_id, app.id),
-        eq(Database.Schema.app_release.id, pinnedReleaseId ?? app.latest_release_id),
-      ),
-    )).at(0)
-  if (!release) return yield* new Primitive.Conflict({ message: "The release pin does not belong to this app." })
-  return release
-})
-
-export const relationship = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  app: typeof Database.Schema.app.$inferSelect,
-  spaceId: Space.ID,
-  use?: typeof Database.Schema.space_app.$inferSelect,
-  release?: AppRelease.Info,
-) {
-  return {
-    id: use?.id ?? SpaceApp.ofOwner(app.id),
-    spaceId,
-    appId: app.id,
-    isOwner: !use,
-    pinnedReleaseId: use?.pinned_release_id ?? null,
-    app: appInfo(app),
-    release:
-      release ??
-      (yield* releaseInfo(
-        transaction,
-        yield* selectedRelease(transaction, app, use?.pinned_release_id).pipe(Effect.orDie),
-      )),
-    createdAt: DateTime.fromDateUnsafe(use?.created_at ?? app.created_at),
-    archivedAt: use?.archived_at ? DateTime.fromDateUnsafe(use.archived_at) : null,
-  }
-})

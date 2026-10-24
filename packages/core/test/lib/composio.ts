@@ -8,20 +8,24 @@ import { ConfigProvider, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../../src/access.js"
 import { App } from "../../src/app.js"
+import { AppProfiles } from "../../src/app/profiles.js"
 import { CredentialRefresh } from "../../src/credential-refresh.js"
 import { Credentials } from "../../src/credentials.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { EgressControl } from "../../src/egress-control.js"
 import { Envelope } from "../../src/envelope.js"
 import { McpProvider } from "../../src/mcp-provider.js"
+import { ProviderConnect } from "../../src/mcp-provider/connect.js"
 import { OAuth } from "../../src/oauth.js"
 import { OAuthFetch } from "../../src/oauth-fetch.js"
 import type { ComposioServer } from "./composio-server.js"
 import { Seed } from "./seed.js"
 
 export const layer = (server: ComposioServer.Instance, invalidated: Array<string>) =>
-  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer).pipe(
+  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer, AppProfiles.layer).pipe(
+    Layer.provideMerge(ProviderConnect.layerRefresher),
     Layer.provideMerge(OAuth.layerRefresher),
+    Layer.provideMerge(ProviderConnect.layer),
     Layer.provideMerge(Credentials.layer),
     Layer.provideMerge(McpProvider.layerCleanup),
     Layer.provideMerge(McpProvider.layerComposio),
@@ -58,13 +62,16 @@ export const layer = (server: ComposioServer.Instance, invalidated: Array<string
 const gmail: Mcp.Declaration = {
   name: "Gmail",
   description: "Gmail through Composio",
-  transport: { type: "provider", provider: "composio", toolkit: "gmail" },
-  auth: { type: "none" },
+  transport: { type: "provider", provider: "composio", integration: "gmail" },
+  auth: { type: "oauth", tokenEndpointAuth: "none" },
   requiredCredentials: [],
 }
 
+export const label = "MCP_GMAIL__TEAM"
+
 export const setup = Effect.fnUntraced(function* () {
   const apps = yield* App.Service
+  const profiles = yield* AppProfiles.Service
   const organizationId = yield* Seed.organization()
   const actor = yield* Seed.actor(organizationId, "admin")
   const space = yield* Seed.space(organizationId)
@@ -72,7 +79,9 @@ export const setup = Effect.fnUntraced(function* () {
     actor,
     Seed.appInput(space, `google-${crypto.randomUUID().slice(0, 8)}`, { mcps: { gmail } }),
   )
-  return { actor, app, owner: { kind: "person" as const, userId: actor.userId } }
+  const profile = (yield* profiles.list(actor, { appId: app.id, page: 1, pageSize: 50 })).items.at(0)
+  if (!profile) return yield* Effect.die(new Error("expected the owner-space profile"))
+  return { actor, app, profile }
 })
 
 export const connect = Effect.fnUntraced(function* (
@@ -82,15 +91,16 @@ export const connect = Effect.fnUntraced(function* (
   const oauth = yield* OAuth.Service
   const database = yield* Database.Service
   const result = yield* oauth.connect(found.actor, {
-    owner: found.owner,
-    target: { kind: "mcp", app: found.app.id, mcp: "gmail" },
+    profileId: found.profile.id,
+    item: { mcp: "gmail" },
     ...(options.reconnect && { reconnect: true }),
   })
   if (!("redirectUrl" in result)) return yield* Effect.die(new Error("expected a redirect"))
   const session = (yield* database.db
     .select()
     .from(Database.Schema.oauth_session)
-    .where(eq(Database.Schema.oauth_session.app_id, found.app.id))).at(-1)
+    .where(eq(Database.Schema.oauth_session.profile_id, found.profile.id))
+    .orderBy(Database.Schema.oauth_session.created_at)).at(-1)
   if (!session) return yield* Effect.die(new Error("expected a sign-in session"))
   return { redirect: result.redirectUrl, state: session.state, credentialId: session.credential_id }
 })

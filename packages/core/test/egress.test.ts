@@ -8,9 +8,11 @@ import { Credential } from "@ren/schema/credential"
 import { Injection } from "@ren/schema/injection"
 import { Signature } from "@ren/schema/signature"
 import { eq } from "drizzle-orm"
-import { ConfigProvider, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
+import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
+import { App } from "../src/app.js"
+import { AppProfiles } from "../src/app/profiles.js"
 import { BrainClient } from "../src/brain-client.js"
 import { CredentialCallers } from "../src/credential-callers.js"
 import { CredentialRefresh } from "../src/credential-refresh.js"
@@ -28,6 +30,7 @@ import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
+import { ProfilesFixture } from "./lib/profiles.js"
 import { Seed } from "./lib/seed.js"
 
 const invalidations: Array<unknown> = []
@@ -64,8 +67,29 @@ const refreshers = Layer.succeed(
   ]),
 )
 
+const expiresAt = DateTime.makeUnsafe("2030-01-01T00:00:00Z")
+
+// oxlint-disable-next-line ren/no-comments -- A provider whose route carries a short-lived Bearer token, as Pipedream's does (§14 rule 3).
+const timed = Effect.succeed(
+  Option.some<McpProvider.Provider>({
+    id: "timed",
+    connect: () => Effect.succeed({ redirectUrl: "https://timed.test", account: "a" }),
+    status: () => Effect.succeed("active"),
+    open: () => Effect.succeed({}),
+    route: () =>
+      Effect.succeed({
+        upstream: Redacted.make("https://remote.timed.test/v3"),
+        headers: [{ name: "authorization", value: Redacted.make("Bearer short") }],
+        expiresAt,
+      }),
+    renew: (state) => Effect.succeed(state),
+    remove: () => Effect.void,
+  }),
+)
+
 const it = testEffect(
-  Layer.mergeAll(Egress.layer, Space.layer, SpaceMember.layer, SpaceProvisioning.layer).pipe(
+  Layer.mergeAll(Egress.layer, Space.layer, SpaceMember.layer, SpaceProvisioning.layer, App.layer).pipe(
+    Layer.provideMerge(AppProfiles.layer),
     Layer.provideMerge(CredentialRefresh.layer),
     Layer.provideMerge(Layer.mergeAll(refreshers, DurableRunner.layerMemory)),
     Layer.provideMerge(CredentialSource.layer),
@@ -80,7 +104,7 @@ const it = testEffect(
         EgressControl.layerHttp,
         Signer.layerLocal,
         OAuthFetch.layerUnchecked,
-        McpProvider.layerComposio,
+        McpProvider.layer([McpProvider.composio, timed]),
       ),
     ),
     Layer.provideMerge(Testing.layer),
@@ -487,9 +511,13 @@ describe("Egress.unauthorized", () => {
         Redacted.make(
           encodeSealed({
             type: "route",
-            upstream: Redacted.make("https://backend.composio.dev/tool_router/trs_secret/mcp"),
-            sessionId: "trs_secret",
-            toolkit: "gmail",
+            state: {
+              sessionId: "trs_secret",
+              url: "https://backend.composio.dev/tool_router/trs_secret/mcp",
+              user: id,
+              integration: "gmail",
+              account: "ca_1",
+            },
           }),
         ),
         { organizationId: found.organizationId, kind: "credential", id },
@@ -518,6 +546,127 @@ describe("Egress.unauthorized", () => {
         allow: true,
         inject: [],
       })
+    }),
+  )
+
+  it.live(
+    "candidates hold loose keys and only the reached profiles' current items; an unused credential is denied",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const apps = yield* App.Service
+        const found = yield* setup()
+        const app = yield* ProfilesFixture.app(found.ada, found.space.id, "mail", {
+          mcps: { gmail: ProfilesFixture.remote("Gmail"), drive: ProfilesFixture.remote("Drive") },
+        })
+        const profiles = yield* AppProfiles.Service
+        const team = (yield* profiles.list(found.ada, { appId: app.id, page: 1, pageSize: 50 })).items.at(0)
+        if (!team) return yield* Effect.die(new Error("expected the owner-space profile"))
+        const other = yield* ProfilesFixture.profile(found.ada, {
+          appId: app.id,
+          slug: "other",
+          kind: "shared",
+          spaceIds: [],
+        })
+        yield* ProfilesFixture.connect(found.organizationId, team.id, "MCP_GMAIL__TEAM", {
+          hosts: ["gmail.example.com"],
+        })
+        yield* ProfilesFixture.connect(found.organizationId, team.id, "MCP_DRIVE__TEAM", {
+          hosts: ["drive.example.com"],
+        })
+        yield* ProfilesFixture.connect(found.organizationId, other.id, "MCP_GMAIL__OTHER", {
+          hosts: ["gmail.example.com"],
+        })
+        const resolve = (host: string, label: string) =>
+          resolver.resolve(all, request(found.proof, host, [`ren:${label}`]))
+        expect((yield* resolve("gmail.example.com", "MCP_GMAIL__TEAM")).allow).toBe(true)
+        expect(yield* resolve("gmail.example.com", "MCP_GMAIL__OTHER")).toMatchObject({
+          allow: false,
+          reason: "credential_missing",
+        })
+        yield* apps.update(found.ada, app.id, {
+          requiredCredentials: [],
+          mcps: { gmail: ProfilesFixture.remote("Gmail") },
+          skills: {},
+          dependsOn: [],
+          expectedRevision: app.revision,
+        })
+        expect(yield* resolve("drive.example.com", "MCP_DRIVE__TEAM")).toMatchObject({
+          allow: false,
+          reason: "credential_missing",
+        })
+      }),
+  )
+
+  it.live("Bob joins Ana's Personal Space: its next resolve denies her private profile's label (P42, P44)", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const members = yield* SpaceMember.Service
+      const callers = yield* CredentialCallers.Service
+      const found = yield* setup()
+      const ana = found.ada
+      const app = yield* ProfilesFixture.app(ana, found.space.id, "inbox", {
+        mcps: { gmail: ProfilesFixture.remote("Gmail") },
+      })
+      const mine = yield* ProfilesFixture.profile(ana, { appId: app.id, slug: "ana", kind: "private" })
+      yield* ProfilesFixture.connect(found.organizationId, mine.id, "MCP_GMAIL__ANA", { hosts: ["gmail.example.com"] })
+      const spaces = yield* Space.Service
+      const own = (yield* spaces.list(found.ada, { page: 1, pageSize: 50 })).items.find((space) =>
+        space.name.endsWith("Personal Space"),
+      )
+      if (!own) return yield* Effect.die(new Error("expected Ana's Personal Space"))
+      const brainId = Brain.ID.create()
+      yield* Seed.session({ organizationId: found.organizationId, spaceId: own.id, createdBy: ana.userId, brainId })
+      const placement = yield* callers.issue(
+        { workload: { kind: "brain", id: brainId, generation: 1 }, organizationId: found.organizationId },
+        "ProxyLogin",
+      )
+      if (placement.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
+      const proof: CredentialCallers.Proof = {
+        kind: "ProxyLogin",
+        username: placement.username,
+        password: placement.password,
+      }
+      const resolve = resolver.resolve(all, request(proof, "gmail.example.com", ["ren:MCP_GMAIL__ANA"]))
+      expect((yield* resolve).allow).toBe(true)
+      const bob = yield* Seed.user({ name: "Bob" })
+      yield* Seed.member(found.organizationId, bob.id, "member")
+      invalidations.length = 0
+      yield* members.create(found.ada, { spaceId: own.id, userId: bob.id })
+      expect(yield* resolve).toMatchObject({ allow: false, reason: "credential_missing" })
+      expect(invalidations).toContainEqual({ workload: `brain:${brainId}:` })
+    }),
+  )
+
+  it.live("a provider route's expiry bounds the life of the egress answer (§14 rule 3)", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const database = yield* Database.Service
+      const envelope = yield* Envelope.Service
+      const found = yield* setup()
+      const id = Credential.ID.create()
+      const value = yield* envelope.seal(Redacted.make(encodeSealed({ type: "route", state: { token: "opaque" } })), {
+        organizationId: found.organizationId,
+        kind: "credential",
+        id,
+      })
+      yield* database.db.insert(Database.Schema.credential).values({
+        id,
+        organization_id: found.organizationId,
+        owner: "org",
+        label: "MCP_MAIL",
+        type: "route",
+        provider: "timed",
+        value,
+        hosts: ["remote.timed.test"],
+        inject: { op: "route" },
+      })
+      const reply = yield* resolver.resolve(all, request(found.proof, "remote.timed.test", ["ren:MCP_MAIL"]))
+      expect(reply).toMatchObject({ allow: true, expiresAt: Math.floor(DateTime.toEpochMillis(expiresAt) / 1000) })
+      expect(values(reply)).toEqual([
+        { op: "route", upstream: "https://remote.timed.test/v3" },
+        { op: "setHeader", name: "authorization", value: "Bearer short" },
+      ])
     }),
   )
 })

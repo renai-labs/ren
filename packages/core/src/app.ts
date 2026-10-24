@@ -3,20 +3,21 @@ export { CreateInput } from "@ren/schema/app"
 
 import { Database } from "@ren/db/database"
 import { App } from "@ren/schema/app"
-import { AppRelease } from "@ren/schema/app-release"
-import { SpaceApp } from "@ren/schema/space-app"
 import { Pagination } from "@ren/util/pagination"
 import { and, asc, eq, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { AppPolicy } from "./app/policy.js"
+import { AppProfiles } from "./app/profiles.js"
 import { AppQueries } from "./app/queries.js"
 import { AppValidation } from "./app/validation.js"
 import { Primitive } from "./primitive.js"
 
 export type Interface = Primitive.Interface<typeof App.definition>
 export class Service extends Context.Service<Service, Interface>()("@ren/core/App") {}
+
+const stale = new Primitive.Conflict({ message: "The app changed. Reload before saving." })
 
 export const layer = Layer.effect(
   Service,
@@ -40,24 +41,27 @@ export const layer = Layer.effect(
                 and(
                   input.spaceId
                     ? and(
-                        AppQueries.isInSpace(input.spaceId),
-                        sql`exists (select 1 from space where id = ${input.spaceId} and organization_id = ${actor.organizationId})`,
+                        eq(Database.Schema.app.owner_space_id, input.spaceId),
+                        eq(Database.Schema.app.organization_id, actor.organizationId),
                       )
                     : eq(Database.Schema.app.organization_id, actor.organizationId),
                   isNull(Database.Schema.app.archived_at),
                 ),
               )
               .orderBy(asc(Database.Schema.app.slug))
-            const visible = rows
-              .filter((row) => authorize(actor, "app.list", row))
-              .map((row) => AppQueries.appInfo(row.app))
-            return Pagination.page(visible, input)
+            const visible = Pagination.page(
+              rows.filter((row) => authorize(actor, "app.list", row)).map((row) => row.app),
+              input,
+            )
+            return { ...visible, items: yield* AppQueries.infos(transaction, visible.items) }
           }),
         )
       }),
       get: Effect.fn("App.get")(function* (actor, id) {
         return yield* database.transaction((transaction) =>
-          Effect.map(AppQueries.find(transaction, access, actor, id), (row) => AppQueries.appInfo(row.app)),
+          Effect.flatMap(AppQueries.find(transaction, access, actor, id), (row) =>
+            AppQueries.info(transaction, row.app),
+          ),
         )
       }),
       create: Effect.fn("App.create")(function* (actor, input) {
@@ -74,7 +78,6 @@ export const layer = Layer.effect(
             )
               return yield* new Primitive.Forbidden({ message: "You cannot create apps in this space." })
             const id = App.ID.create()
-            const releaseId = AppRelease.ID.create()
             if (input.dependsOn.includes(input.slug))
               return yield* new Primitive.Conflict({ message: `App “${input.slug}” cannot depend on itself.` })
             const dependencies = yield* AppValidation.dependencies(transaction, access, actor, id, input.dependsOn)
@@ -88,7 +91,10 @@ export const layer = Layer.effect(
                 name: input.name,
                 description: input.description,
                 icon: input.icon,
-                latest_release_id: releaseId,
+                required_credentials: input.requiredCredentials,
+                environment: input.environment,
+                skills: input.skills,
+                mcps: input.mcps,
               })
               .returning()
               .pipe(
@@ -97,42 +103,60 @@ export const layer = Layer.effect(
                   Primitive.uniqueConflict(Database.Schema.appSlugConstraint, "An app with this slug already exists."),
                 ),
               )).at(0)
-            yield* transaction.insert(Database.Schema.app_release).values({
-              id: releaseId,
-              app_id: id,
-              version: "0.0.1",
-              required_credentials: input.requiredCredentials,
-              environment: input.environment,
-              skills: input.skills,
-              mcps: input.mcps,
-            })
-            yield* AppValidation.writeDependencies(transaction, releaseId, dependencies)
             if (!row) return yield* Effect.die(new Error("App insert returned no row"))
-            yield* AppValidation.finalGraph(transaction, {
+            yield* AppValidation.writeDependencies(transaction, row, dependencies)
+            yield* AppProfiles.createOwner(transaction, {
               organizationId: actor.organizationId,
-              spaceIds: [input.ownerSpaceId],
+              appId: id,
+              spaceId: input.ownerSpaceId,
+              createdBy: actor.userId,
             })
-            return AppQueries.appInfo(row)
+            yield* AppValidation.names(transaction, actor.organizationId, [{ row, dependsOn: dependencies }])
+            return yield* AppQueries.info(transaction, row)
           }),
         )
       }),
+      // oxlint-disable-next-line ren/no-comments -- profiles.md §12 rule 1 (P2): an edit replaces the whole definition and raises the revision; a stale revision is refused, never merged.
       update: Effect.fn("App.update")(function* (actor, id, input) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            yield* AppQueries.lock(transaction, actor, { graph: false })
+            yield* AppQueries.lock(transaction, actor)
             const found = yield* AppQueries.findOwned(transaction, access, actor, id)
             if (!authorize(actor, "app.update", found))
               return yield* new Primitive.Forbidden({ message: "Only the owner space can edit this app." })
+            if (found.app.revision !== input.expectedRevision) return yield* stale
+            const dependencies = yield* AppValidation.dependencies(
+              transaction,
+              access,
+              actor,
+              found.app.id,
+              input.dependsOn,
+            )
             const row = (yield* transaction
               .update(Database.Schema.app)
-              .set({ name: input.name, description: input.description, icon: input.icon, updated_at: sql`now()` })
-              .where(eq(Database.Schema.app.id, id))
+              .set({
+                name: input.name,
+                description: input.description,
+                icon: input.icon,
+                required_credentials: input.requiredCredentials,
+                environment: input.environment ?? null,
+                skills: input.skills,
+                mcps: input.mcps,
+                revision: sql`${Database.Schema.app.revision} + 1`,
+                updated_at: sql`now()`,
+              })
+              .where(
+                and(eq(Database.Schema.app.id, found.app.id), eq(Database.Schema.app.revision, input.expectedRevision)),
+              )
               .returning()).at(0)
-            if (!row) return yield* AppQueries.notFound
-            return AppQueries.appInfo(row)
+            if (!row) return yield* stale
+            yield* AppValidation.writeDependencies(transaction, row, dependencies)
+            yield* AppValidation.names(transaction, actor.organizationId, [{ row, dependsOn: dependencies }])
+            return yield* AppQueries.info(transaction, row)
           }),
         )
       }),
+      // oxlint-disable-next-line ren/no-comments -- P11: archive is never refused for use; the app's profiles stay, are not reached, and come back at unarchive.
       archive: Effect.fn("App.archive")(function* (actor, id) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
@@ -140,36 +164,14 @@ export const layer = Layer.effect(
             const found = yield* AppQueries.findOwned(transaction, access, actor, id, { includeArchived: true })
             if (!authorize(actor, "app.archive", found))
               return yield* new Primitive.Forbidden({ message: "Only the owner space can archive this app." })
-            if (found.app.archived_at) return AppQueries.appInfo(found.app)
-            const uses = yield* transaction
-              .select({ name: Database.Schema.space.name, organizationId: Database.Schema.space.organization_id })
-              .from(Database.Schema.space_app)
-              .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.space_app.space_id))
-              .where(and(eq(Database.Schema.space_app.app_id, id), isNull(Database.Schema.space_app.archived_at)))
-              .orderBy(asc(Database.Schema.space.name))
-            const own = uses.filter((use) => use.organizationId === actor.organizationId).map((use) => use.name)
-            const foreign = uses.length - own.length
-            if (uses.length)
-              return yield* new Primitive.Conflict({
-                message: `App ${found.app.slug} is still used in ${[
-                  ...(own.length ? [`spaces ${own.join(", ")}`] : []),
-                  ...(foreign
-                    ? [foreign === 1 ? "1 space of another organization" : `${foreign} spaces of other organizations`]
-                    : []),
-                ].join(" and ")}. Remove those uses first.`,
-              })
-            const rows = yield* transaction
+            if (found.app.archived_at) return yield* AppQueries.info(transaction, found.app)
+            const row = (yield* transaction
               .update(Database.Schema.app)
               .set({ archived_at: sql`now()`, updated_at: sql`now()` })
               .where(eq(Database.Schema.app.id, id))
-              .returning()
-            yield* AppValidation.finalGraph(transaction, {
-              organizationId: actor.organizationId,
-              spaceIds: found.app.owner_space_id ? [found.app.owner_space_id] : [],
-            })
-            const row = rows.at(0)
+              .returning()).at(0)
             if (!row) return yield* AppQueries.notFound
-            return AppQueries.appInfo(row)
+            return yield* AppQueries.info(transaction, row)
           }),
         )
       }),
@@ -181,29 +183,14 @@ export const layer = Layer.effect(
             const target = yield* AppQueries.visibleSpace(transaction, access, actor, input.spaceId)
             if (!authorize(actor, "app.transferOwnership", { ...found, isTargetMember: target.isMember }))
               return yield* new Primitive.Forbidden({ message: "Moving an app requires access to both spaces." })
-            if (found.app.owner_space_id === input.spaceId) return AppQueries.appInfo(found.app)
-            const targetUse = yield* AppQueries.activeUse(transaction, input.spaceId, id)
-            if (targetUse)
-              yield* transaction
-                .update(Database.Schema.space_app)
-                .set({ archived_at: sql`now()` })
-                .where(eq(Database.Schema.space_app.id, targetUse.id))
-            if (input.retainUse && found.app.owner_space_id)
-              yield* transaction
-                .insert(Database.Schema.space_app)
-                .values({ id: SpaceApp.ID.create(), space_id: found.app.owner_space_id, app_id: id })
-                .onConflictDoNothing()
+            if (found.app.owner_space_id === input.spaceId) return yield* AppQueries.info(transaction, found.app)
             const row = (yield* transaction
               .update(Database.Schema.app)
               .set({ owner_space_id: input.spaceId, updated_at: sql`now()` })
               .where(eq(Database.Schema.app.id, id))
               .returning()).at(0)
-            yield* AppValidation.finalGraph(transaction, {
-              organizationId: actor.organizationId,
-              spaceIds: [input.spaceId, ...(found.app.owner_space_id ? [found.app.owner_space_id] : [])],
-            })
             if (!row) return yield* AppQueries.notFound
-            return AppQueries.appInfo(row)
+            return yield* AppQueries.info(transaction, row)
           }),
         )
       }),

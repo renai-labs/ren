@@ -34,7 +34,9 @@ const program = Effect.gen(function* () {
   const result = yield* registry.publish(batch, { isDryRun })
   yield* Effect.forEach(result.apps, (app) => {
     const changes = Object.entries(app.changed).flatMap((entry) => (entry[1] ? [entry[0]] : []))
-    return Effect.log(`${app.slug}@${app.version} ${app.appId}: ${changes.length ? changes.join(", ") : "unchanged"}`)
+    return Effect.log(
+      `${app.slug} revision ${app.revision} ${app.appId}: ${changes.length ? changes.join(", ") : "unchanged"}`,
+    )
   })
   yield* Effect.log(`${isDryRun ? "Dry run: would publish" : "Published"} ${result.apps.length} apps.`)
 })

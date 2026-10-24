@@ -1,221 +1,152 @@
 import { describe, expect } from "bun:test"
-import { Database } from "@ren/db/database"
-import { Testing } from "@ren/db/testing"
 import type { App as AppSchema } from "@ren/schema/app"
-import { Credential } from "@ren/schema/credential"
 import type { Mcp } from "@ren/schema/mcp"
-import { ConfigProvider, Effect, Layer, Redacted, Schema } from "effect"
-import { Access } from "../src/access.js"
+import { Effect } from "effect"
 import { App } from "../src/app.js"
-import { AppRelease } from "../src/app/release.js"
+import { AppProfiles } from "../src/app/profiles.js"
+import { ProfileItems } from "../src/app/profile-items.js"
 import { CredentialRequirements } from "../src/credential-requirements.js"
-import { Credentials } from "../src/credentials.js"
-import { EgressControl } from "../src/egress-control.js"
-import { Envelope } from "../src/envelope.js"
-import { McpProvider } from "../src/mcp-provider.js"
-import { OAuthFetch } from "../src/oauth-fetch.js"
-import { SpaceApp } from "../src/space/app.js"
 import { testEffect } from "./lib/effect.js"
+import { ProfilesFixture } from "./lib/profiles.js"
 import { Seed } from "./lib/seed.js"
 
-const it = testEffect(
-  Layer.mergeAll(CredentialRequirements.layer, App.layer, AppRelease.layer, SpaceApp.layer).pipe(
-    Layer.provideMerge(Credentials.layer),
-    Layer.provideMerge(
-      Layer.mergeAll(
-        Access.layer,
-        Envelope.layerLocal,
-        EgressControl.layerNone,
-        OAuthFetch.layerUnchecked,
-        McpProvider.layerNone,
-      ),
-    ),
-    Layer.provideMerge(Testing.layer),
-    Layer.provide(
-      ConfigProvider.layer(
-        ConfigProvider.fromUnknown({
-          ENVELOPE_KEYS: JSON.stringify([
-            { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
-          ]),
-        }),
-      ),
-    ),
-  ),
-)
+const it = testEffect(ProfilesFixture.layer)
 
-const remote = (url: string, auth: Mcp.Auth = { type: "oauth", tokenEndpointAuth: "none" }): Mcp.Declaration => ({
+const page = { page: 1, pageSize: 50 }
+
+const calendar = (
+  url: string,
+  scopes?: ReadonlyArray<string>,
+  requiredCredentials: Mcp.Declaration["requiredCredentials"] = [],
+): Mcp.Declaration => ({
   name: "Calendar",
   description: "Calendar",
   transport: { type: "remote", url },
-  auth,
-  requiredCredentials: [],
+  auth: { type: "oauth", tokenEndpointAuth: "none", ...(scopes && { scopes }) },
+  requiredCredentials,
 })
 
-const encode = Schema.encodeSync(Schema.fromJsonString(Credentials.Sealed))
-
-const connected = Effect.fnUntraced(function* (input: {
-  readonly organizationId: Parameters<typeof Seed.space>[0]
-  readonly owner: Credential.Owner
-  readonly label: string
-  readonly appId: AppSchema.ID
-  readonly mcp: string
-  readonly hosts: ReadonlyArray<string>
-  readonly connection?: string
-}) {
-  const database = yield* Database.Service
-  const envelope = yield* Envelope.Service
-  const id = Credential.ID.create()
-  const value = yield* envelope.seal(Redacted.make(encode({ type: "oauth", accessToken: Redacted.make("t") })), {
-    organizationId: input.organizationId,
-    kind: "credential",
-    id,
-  })
-  yield* database.db.insert(Database.Schema.credential).values({
-    id,
-    organization_id: input.organizationId,
-    owner: input.owner.kind,
-    space_id: input.owner.kind === "space" ? input.owner.spaceId : null,
-    user_id: input.owner.kind === "person" ? input.owner.userId : null,
-    label: input.label,
-    type: "oauth",
-    value,
-    hosts: [...input.hosts],
-    inject: { op: "replace", in: ["header"] },
-    app_id: input.appId,
-    mcp: input.mcp,
-    connection: input.connection ?? null,
-  })
-  return id
+const crm = (header: string): Mcp.Declaration => ({
+  name: "CRM",
+  description: "CRM",
+  transport: { type: "remote", url: "https://crm.example.com/mcp" },
+  auth: { type: "header", name: header, credential: "apiKey" },
+  requiredCredentials: [{ kind: "secret", name: "apiKey", optional: false }],
 })
 
-const slug = (name: string) => `${name}-${crypto.randomUUID().slice(0, 8)}`
+const single = Effect.fnUntraced(function* (definition: Parameters<typeof Seed.appInput>[2]) {
+  const profiles = yield* AppProfiles.Service
+  const organizationId = yield* Seed.organization()
+  const ana = yield* ProfilesFixture.user(organizationId, "Ana", "admin")
+  const app = yield* ProfilesFixture.app(ana, ana.personal, "work", definition)
+  const profile = (yield* profiles.list(ana, { ...page, appId: app.id })).items.at(0)
+  if (!profile) return yield* Effect.die(new Error("expected the owner-space profile"))
+  return { organizationId, ana, app, profile }
+})
 
-describe("CredentialRequirements.forApp (§10a, tests 25, 26, 28)", () => {
-  it.live("one item per MCP that signs in and per env key, then each dependency's items grouped by its app", () =>
-    Effect.gen(function* () {
-      const apps = yield* App.Service
-      const requirements = yield* CredentialRequirements.Service
-      const organizationId = yield* Seed.organization()
-      const actor = yield* Seed.actor(organizationId, "admin")
-      const space = yield* Seed.space(organizationId)
-      const base = yield* apps.create(
-        actor,
-        Seed.appInput(space, slug("base"), {
-          requiredCredentials: [{ kind: "env", name: "GOOGLE_PROJECT_ID", optional: false }],
-        }),
-      )
-      const root = yield* apps.create(
-        actor,
-        Seed.appInput(space, slug("google"), {
-          dependsOn: [base.slug],
-          mcps: {
-            calendar: remote("https://calendar.example.test/mcp"),
-            gmail: {
-              name: "Gmail",
-              description: "Gmail",
-              requiredCredentials: [],
-              transport: { type: "provider", provider: "composio", toolkit: "gmail" },
-              auth: { type: "none" },
-            },
-            docs: remote("https://docs.example.test/mcp", { type: "none" }),
-          },
-        }),
-      )
-      const found = yield* requirements.forApp(actor, { spaceId: space, appId: root.id })
-      expect(found.items.map((item) => [item.group, item.mcp, item.label, item.kind, item.status])).toEqual([
-        [root.id, "calendar", "MCP_CALENDAR", "oauth", "missing"],
-        [root.id, "gmail", "MCP_GMAIL", "provider", "missing"],
-        [base.id, null, "GOOGLE_PROJECT_ID", "env", "missing"],
-      ])
-    }),
-  )
-
+describe("profile items (§9 rule 4, §12)", () => {
   it.live(
-    "another app's credential with the same MCP slug does not count; a person credential is ok on release 1 and reconnect on release 2",
+    "binding hash: a URL path change and a new scope give reconnect; a header rename and a dropped scope do not",
     () =>
       Effect.gen(function* () {
         const apps = yield* App.Service
-        const releases = yield* AppRelease.Service
-        const uses = yield* SpaceApp.Service
-        const requirements = yield* CredentialRequirements.Service
-        const organizationId = yield* Seed.organization()
-        const actor = yield* Seed.actor(organizationId, "admin")
-        const owner = yield* Seed.space(organizationId)
-        const pinned = yield* Seed.space(organizationId)
-        const other = yield* apps.create(
-          actor,
-          Seed.appInput(owner, slug("other"), { mcps: { calendar: remote("https://calendar.example.test/mcp") } }),
-        )
-        const input = Seed.appInput(owner, slug("calendar"), {
-          mcps: { calendar: remote("https://calendar.example.test/mcp") },
+        const profiles = yield* AppProfiles.Service
+        const first = { calendar: calendar("https://cal.example.com/mcp", ["read", "write"]), crm: crm("X-Key") }
+        const found = yield* single({ mcps: first })
+        const slug = found.profile.slug.toUpperCase().replaceAll("-", "_")
+        yield* ProfilesFixture.connect(found.organizationId, found.profile.id, `MCP_CALENDAR__${slug}`, {
+          madeFor: ProfileItems.madeFor(first.calendar),
+          scopes: ["read", "write"],
         })
-        yield* connected({
-          organizationId,
-          owner: { kind: "space", spaceId: owner },
-          label: "MCP_CALENDAR",
-          appId: other.id,
-          mcp: "calendar",
-          hosts: ["calendar.example.test"],
+        yield* ProfilesFixture.connect(found.organizationId, found.profile.id, `MCP_CRM__${slug}`, {
+          madeFor: ProfileItems.madeFor(first.crm),
+          fieldNames: ["apiKey"],
         })
-        yield* apps.archive(actor, other.id)
-        const app = yield* apps.create(actor, input)
-        yield* uses.create(actor, { spaceId: pinned, appId: app.id, pinnedReleaseId: app.latestReleaseId })
-        const status = (spaceId: typeof owner) =>
-          Effect.map(requirements.forApp(actor, { spaceId, appId: app.id }), (found) => found.items.at(0)?.status)
-        expect(yield* status(owner)).toBe("missing")
-        yield* connected({
-          organizationId,
-          owner: { kind: "org" },
-          label: "MCP_CALENDAR",
-          appId: app.id,
-          mcp: "calendar",
-          hosts: ["calendar.example.test"],
+        let app: AppSchema.Info = found.app
+        const edit = Effect.fnUntraced(function* (mcps: Record<string, Mcp.Declaration>) {
+          app = yield* apps.update(found.ana, app.id, {
+            requiredCredentials: [],
+            skills: {},
+            dependsOn: [],
+            mcps,
+            expectedRevision: app.revision,
+          })
+          return Object.fromEntries(
+            (yield* profiles.get(found.ana, found.profile.id)).items.map((item) => [item.name, item.status]),
+          )
         })
-        expect(yield* status(owner)).toBe("ok")
-        yield* releases.create(actor, {
-          ...input,
-          appId: app.id,
-          expectedLatestReleaseId: app.latestReleaseId,
-          version: "0.0.2",
-          mcps: { calendar: remote("https://calendar-v2.example.test/mcp") },
-        })
-        expect(yield* status(pinned)).toBe("ok")
-        expect(yield* status(owner)).toBe("reconnect")
+        expect(
+          yield* edit({ calendar: calendar("https://cal.example.com/mcp", ["read"]), crm: crm("X-Api-Key") }),
+        ).toEqual({ Calendar: "ok", CRM: "ok" })
+        expect(
+          yield* edit({ calendar: calendar("https://cal.example.com/mcp", ["read", "admin"]), crm: crm("X-Key") }),
+        ).toEqual({ Calendar: "reconnect", CRM: "ok" })
+        expect(
+          yield* edit({ calendar: calendar("https://cal.example.com/v2/mcp", ["read"]), crm: crm("X-Key") }),
+        ).toEqual({ Calendar: "reconnect", CRM: "ok" })
       }),
   )
 
-  it.live("only the default connection counts; a named one does not satisfy the item", () =>
+  it.live(
+    "items merge the env keys of the app, its skills and its local MCPs; an oauth_app requirement is one app gate",
+    () =>
+      Effect.gen(function* () {
+        const found = yield* single({
+          requiredCredentials: [Seed.env("PROJECT_ID"), { kind: "oauth_app", name: "Google", optional: false }],
+          skills: {
+            report: {
+              type: "content",
+              description: "Report",
+              instructions: "Report",
+              files: {},
+              requiredCredentials: [Seed.env("PROJECT_ID"), Seed.env("REGION", true)],
+            },
+          },
+          mcps: {
+            calendar: calendar("https://cal.example.com/mcp", undefined, [
+              { kind: "oauth_app", name: "Google", optional: false },
+            ]),
+            sheets: {
+              name: "Sheets",
+              description: "Sheets",
+              transport: { type: "local", command: ["sheets"] },
+              auth: { type: "none" },
+              requiredCredentials: [Seed.env("SHEETS_KEY")],
+            },
+          },
+        })
+        const slug = found.profile.slug.toUpperCase().replaceAll("-", "_")
+        expect(
+          found.profile.items.map((item) => ({ item: item.item, label: item.label, optional: item.optional })),
+        ).toEqual([
+          { item: { mcp: "calendar" }, label: `MCP_CALENDAR__${slug}`, optional: false },
+          { item: { env: "PROJECT_ID" }, label: `PROJECT_ID__${slug}`, optional: false },
+          { item: { env: "REGION" }, label: `REGION__${slug}`, optional: true },
+          { item: { env: "SHEETS_KEY" }, label: `SHEETS_KEY__${slug}`, optional: false },
+        ])
+        expect(found.profile.oauthApps).toEqual([{ name: "Google", isConfigured: false }])
+      }),
+  )
+})
+
+describe("the composer pill (P15)", () => {
+  it.live("a new chat in a space lists the profiles it reaches with their gaps; a connect clears one", () =>
     Effect.gen(function* () {
-      const apps = yield* App.Service
       const requirements = yield* CredentialRequirements.Service
-      const organizationId = yield* Seed.organization()
-      const actor = yield* Seed.actor(organizationId, "admin")
-      const space = yield* Seed.space(organizationId)
-      const app = yield* apps.create(
-        actor,
-        Seed.appInput(space, slug("meta"), { mcps: { "meta-ads": remote("https://ads.example.test/mcp") } }),
+      const found = yield* single({ mcps: { calendar: calendar("https://cal.example.com/mcp") } })
+      const gaps = Effect.map(requirements.forSpace(found.ana, found.ana.personal), (reach) =>
+        reach.profiles.flatMap((profile) =>
+          profile.items.filter((item) => item.status !== "ok").map((item) => item.label),
+        ),
       )
-      yield* connected({
-        organizationId,
-        owner: { kind: "space", spaceId: space },
-        label: "MCP_META_ADS__ACME",
-        appId: app.id,
-        mcp: "meta-ads",
-        hosts: ["ads.example.test"],
-        connection: "acme",
+      const slug = found.profile.slug.toUpperCase().replaceAll("-", "_")
+      expect(yield* gaps).toEqual([`MCP_CALENDAR__${slug}`])
+      yield* ProfilesFixture.connect(found.organizationId, found.profile.id, `MCP_CALENDAR__${slug}`, {
+        madeFor: ProfileItems.madeFor(calendar("https://cal.example.com/mcp")),
       })
-      const item = () =>
-        Effect.map(requirements.forApp(actor, { spaceId: space, appId: app.id }), (found) => found.items.at(0))
-      expect((yield* item())?.status).toBe("missing")
-      yield* connected({
-        organizationId,
-        owner: { kind: "space", spaceId: space },
-        label: "MCP_META_ADS",
-        appId: app.id,
-        mcp: "meta-ads",
-        hosts: ["ads.example.test"],
-      })
-      expect(yield* item()).toMatchObject({ status: "ok", label: "MCP_META_ADS", destinations: ["space", "org"] })
+      expect(yield* gaps).toEqual([])
+      const stranger = yield* ProfilesFixture.user(found.organizationId, "Bob")
+      expect((yield* Effect.flip(requirements.forSpace(stranger, found.ana.personal)))._tag).toBe("Primitive.NotFound")
     }),
   )
 })

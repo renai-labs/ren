@@ -2,8 +2,6 @@ export * as AppPolicy from "./policy.js"
 
 import { App } from "@ren/schema/app"
 import { AppRegistry } from "@ren/schema/app-registry"
-import { AppRelease } from "@ren/schema/app-release"
-import { SpaceApp } from "@ren/schema/space-app"
 import { Auth } from "@ren/schema/auth"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
@@ -26,26 +24,10 @@ export const documents = [
     ],
   },
   {
-    primitive: AppRelease.definition.name,
-    statements: [
-      ...statements(Primitive.actions(AppRelease.definition, ["list", "get"]), "app.spaceMember"),
-      {
-        actions: Primitive.actions(AppRelease.definition, ["list", "get"]),
-        roles: Auth.Role.literals,
-        on: "app.listed",
-      },
-      ...statements(Primitive.actions(AppRelease.definition, ["create"]), "app.ownerMember"),
-    ],
-  },
-  {
     primitive: AppRegistry.definition.name,
     statements: [
       { actions: Primitive.actions(AppRegistry.definition), roles: Auth.Role.literals, on: Policy.everywhere },
     ],
-  },
-  {
-    primitive: SpaceApp.definition.name,
-    statements: [...statements(Primitive.actions(SpaceApp.definition), "app.targetMember")],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
 

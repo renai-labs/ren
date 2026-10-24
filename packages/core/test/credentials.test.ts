@@ -8,10 +8,11 @@ import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
+import { App } from "../src/app.js"
+import { AppProfiles } from "../src/app/profiles.js"
 import { CredentialRefresh } from "../src/credential-refresh.js"
 import { Credentials } from "../src/credentials.js"
 import { DurableRunner } from "../src/durable-runner.js"
-import { McpProvider } from "../src/mcp-provider.js"
 import { OAuth } from "../src/oauth.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
 import { EgressControl } from "../src/egress-control.js"
@@ -20,6 +21,7 @@ import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
+import { ProfilesFixture } from "./lib/profiles.js"
 import { Seed } from "./lib/seed.js"
 
 const invalidations: Array<unknown> = []
@@ -45,7 +47,14 @@ const tokens = Bun.serve({
 afterAll(() => tokens.stop(true))
 
 const it = testEffect(
-  Layer.mergeAll(CredentialRefresh.layer, Space.layer, SpaceMember.layer, SpaceProvisioning.layer).pipe(
+  Layer.mergeAll(
+    CredentialRefresh.layer,
+    Space.layer,
+    SpaceMember.layer,
+    SpaceProvisioning.layer,
+    App.layer,
+    AppProfiles.layer,
+  ).pipe(
     Layer.provideMerge(OAuth.layerRefresher),
     Layer.provideMerge(Credentials.layer),
     Layer.provideMerge(
@@ -55,7 +64,6 @@ const it = testEffect(
         EgressControl.layerHttp,
         OAuthFetch.layerUnchecked,
         DurableRunner.layerMemory,
-        McpProvider.layerNone,
       ),
     ),
     Layer.provideMerge(Testing.layer),
@@ -492,7 +500,7 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
           Effect.gen(function* () {
             const scope = yield* credentials.scopeOf({ kind: "brain", id: brainId, generation: 1 })
             if (Option.isNone(scope)) return []
-            return (yield* credentials.candidates(scope.value)).map((found) => found.label).toSorted()
+            return (yield* credentials.candidates(scope.value, [])).map((found) => found.label).toSorted()
           })
         expect(yield* labels(Brain.ofSession(sessionId))).toEqual(["OPENAI_API_KEY"])
         expect(yield* labels(spaceBrain)).toEqual([])
@@ -538,6 +546,43 @@ describe("Credentials: offboarding (owner-access §11)", () => {
         )
         expect(invalidations).toContainEqual({ label: "MCP_GMAIL" })
         expect(invalidations).toContainEqual({ workload: `brain:${brain.id}:` })
+      }),
+  )
+
+  it.live(
+    "a holder leaves the org: their sign-ins in every profile go, their private profiles go, a pasted key stays (P10, P14)",
+    () =>
+      Effect.gen(function* () {
+        const credentials = yield* Credentials.Service
+        const provisioning = yield* SpaceProvisioning.Service
+        const profiles = yield* AppProfiles.Service
+        const database = yield* Database.Service
+        const setup = yield* team()
+        const app = yield* ProfilesFixture.app(setup.ada, setup.space.id, "mail", {
+          mcps: { gmail: ProfilesFixture.remote("Gmail") },
+          requiredCredentials: [Seed.env("MAIL_KEY")],
+        })
+        const shared = (yield* profiles.list(setup.ada, { appId: app.id, ...page })).items.at(0)
+        if (!shared) return yield* Effect.die(new Error("expected the owner-space profile"))
+        const mine = yield* ProfilesFixture.profile(setup.grace, { appId: app.id, slug: "grace", kind: "private" })
+        yield* ProfilesFixture.connect(setup.organizationId, shared.id, "MCP_GMAIL__TEAM", {
+          holder: setup.grace.userId,
+        })
+        yield* credentials.create(setup.grace, {
+          owner: { kind: "profile", profileId: shared.id },
+          item: { env: "MAIL_KEY" },
+          ...key("mail-key", ["mail.example.com"]),
+        })
+        yield* ProfilesFixture.connect(setup.organizationId, mine.id, "MAIL_KEY__GRACE")
+        yield* provisioning.archiveMemberships(setup.organizationId, setup.grace.userId)
+        const left = yield* database.db
+          .select({ label: Database.Schema.credential.label })
+          .from(Database.Schema.credential)
+          .where(eq(Database.Schema.credential.organization_id, setup.organizationId))
+        expect(left.map((row) => row.label)).toEqual(["MAIL_KEY__TEAM"])
+        expect(
+          (yield* profiles.list(setup.admin, { appId: app.id, ...page })).items.map((found) => found.slug),
+        ).toEqual(["team"])
       }),
   )
 
@@ -606,7 +651,7 @@ describe("Credentials: env vars of a workload (A35, C9)", () => {
       })
       const scope = yield* credentials.scopeOf({ kind: "brain", id: brainId, generation: 1 })
       if (Option.isNone(scope)) return yield* Effect.die(new Error("no scope"))
-      expect(yield* credentials.environment(scope.value)).toEqual({
+      expect(yield* credentials.environment(scope.value, [])).toEqual({
         STRIPE_API_KEY: "ren:STRIPE_API_KEY",
         PG_PASSWORD: "pg-secret",
       })

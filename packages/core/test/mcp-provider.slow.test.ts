@@ -19,12 +19,12 @@ it.live(
       const accountId = [...server.accounts.keys()].at(-1) ?? ""
       expect(yield* ComposioTest.callback(started.state)).toEqual({
         ok: false,
-        reason: "Composio did not finish the connection.",
+        reason: "The provider did not finish the connection.",
       })
       const cleanup = yield* McpProvider.Cleanup
-      yield* cleanup.wait({ provider: "composio", accountId })
+      yield* cleanup.wait({ provider: "composio", account: accountId })
       expect(server.accounts.has(accountId)).toBe(false)
-      expect(yield* ComposioTest.stored("MCP_GMAIL")).toBeUndefined()
+      expect(yield* ComposioTest.stored(ComposioTest.label)).toBeUndefined()
     }),
   30_000,
 )

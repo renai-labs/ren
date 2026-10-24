@@ -1,6 +1,7 @@
 export * as CredentialSource from "./credential-source.js"
 
 import { BrainToken } from "@ren/host-api/brain-token"
+import type { AppProfile } from "@ren/schema/app-profile"
 import { Credential } from "@ren/schema/credential"
 import { Workload } from "@ren/schema/workload"
 import { Auth } from "@ren/schema/auth"
@@ -45,7 +46,10 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("CredentialSo
 }) {}
 
 export interface Source {
-  readonly candidates: (scope: Credentials.Scope) => Effect.Effect<ReadonlyArray<Credentials.Candidate>>
+  readonly candidates: (
+    scope: Credentials.Scope,
+    profileIds: ReadonlyArray<AppProfile.ID>,
+  ) => Effect.Effect<ReadonlyArray<Credentials.Candidate>>
   readonly value: (
     candidate: Credentials.Candidate,
     scope: Credentials.Scope,
@@ -75,7 +79,7 @@ export const layerStatic = Layer.effect(
   Effect.gen(function* () {
     const credentials = yield* Credentials.Service
     return Static.of({
-      candidates: (scope) => credentials.candidates(scope),
+      candidates: (scope, profileIds) => credentials.candidates(scope, profileIds),
       value: Effect.fn("CredentialSource.static")(function* (candidate: Credentials.Candidate) {
         if (!Schema.is(Credential.ID)(candidate.id)) return Option.none()
         const opened = yield* credentials.open(candidate.id)
@@ -91,23 +95,29 @@ export const layerStatic = Layer.effect(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- §5 and §10 rule 7 (K25): a `route` value is the provider session URL, with the provider's project headers. Neither reaches the workload.
+// oxlint-disable-next-line ren/no-comments -- connections.md §10 rule 7 (K25), profiles.md §14: a `route` value is what the credential's provider routes its sealed state to: an upstream URL and headers, with an optional expiry. Neither reaches the workload.
 export const layerProvider = Layer.effect(
   Provider,
   Effect.gen(function* () {
     const credentials = yield* Credentials.Service
-    const providers = yield* McpProvider.Service
+    const registry = yield* McpProvider.Registry
     return Provider.of({
       candidates: () => Effect.succeed([]),
       value: Effect.fn("CredentialSource.provider")(function* (candidate: Credentials.Candidate) {
         if (!Schema.is(Credential.ID)(candidate.id)) return Option.none()
         const opened = yield* credentials.open(candidate.id)
         if (Option.isNone(opened) || opened.value.value.type !== "route") return Option.none()
-        const provider = yield* providers
-          .get("composio")
-          .pipe(Effect.mapError((error) => new Unavailable({ label: candidate.label, message: error.message })))
+        const unavailable = (message: string) => new Unavailable({ label: candidate.label, message })
+        const provider = yield* Option.match(opened.value.provider, {
+          onNone: () => Effect.fail(unavailable("The credential names no provider.")),
+          onSome: (id) => registry.get(id).pipe(Effect.mapError((error) => unavailable(error.message))),
+        })
+        const route = yield* provider
+          .route(opened.value.value.state)
+          .pipe(Effect.mapError((error) => unavailable(error.message)))
         return Option.some({
-          value: { type: "route", upstream: opened.value.value.upstream, headers: provider.headers },
+          value: { type: "route", upstream: route.upstream, headers: route.headers },
+          ...(route.expiresAt && { expiresAt: route.expiresAt }),
         } satisfies Sourced)
       }),
       forget: () => Effect.void,
@@ -269,8 +279,14 @@ export const layer = Layer.effect(
     const bySource: Readonly<Record<string, Source>> = sources
     const of = (candidate: Credentials.Candidate) => bySource[candidate.source] ?? sources.static
     return Service.of({
-      candidates: Effect.fn("CredentialSource.candidates")(function* (scope: Credentials.Scope) {
-        return [...(yield* sources.minted.candidates(scope)), ...(yield* sources.static.candidates(scope))]
+      candidates: Effect.fn("CredentialSource.candidates")(function* (
+        scope: Credentials.Scope,
+        profileIds: ReadonlyArray<AppProfile.ID>,
+      ) {
+        return [
+          ...(yield* sources.minted.candidates(scope, profileIds)),
+          ...(yield* sources.static.candidates(scope, profileIds)),
+        ]
       }),
       value: (candidate, scope) => of(candidate).value(candidate, scope),
       forget: (candidate, scope) => of(candidate).forget(candidate, scope),
