@@ -35,11 +35,13 @@ export function PasteCredentialDialog(props: {
       const name = value.name.trim()
       const saved = await create
         .mutateAsync({
-          owner: Credentials.ownerOf(value.owner, props.userId),
-          label: value.label,
-          hosts: Credentials.hosts(value.hosts),
-          value: { type: "key", value: value.value },
-          ...(name && { name }),
+          payload: {
+            owner: Credentials.ownerOf(value.owner, props.userId),
+            label: value.label,
+            hosts: Credentials.hosts(value.hosts),
+            value: { type: "key", value: value.value },
+            ...(name && { name }),
+          },
         })
         .catch(() => undefined)
       if (!saved) return

@@ -6,6 +6,7 @@ import { Icon } from "@ren/ui/icon"
 import { List } from "@ren/ui/list"
 import { Notice } from "@ren/ui/notice"
 import { SearchField } from "@ren/ui/search-field"
+import { Select } from "@ren/ui/select"
 import { Toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -13,7 +14,8 @@ import { useDeferredValue, useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { PasteCredentialDialog } from "../../components/paste-credential-dialog.js"
 import { Credentials } from "../../components/credentials.js"
-import { ConnectAppDialog } from "./connect-app-dialog.js"
+import { ProfileDialog } from "../../components/profile-dialog.js"
+import { Profiles } from "../../components/profiles.js"
 import { CredentialsTable } from "./credentials-table.js"
 import { Owners } from "./owners.js"
 
@@ -59,11 +61,7 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
           Add key
         </Button>
       </Toolbar.Root>
-      <SpaceApps
-        spaceId={props.spaceId}
-        space={spaceList.find((found) => found.id === props.spaceId)}
-        userId={props.userId}
-      />
+      <SpaceProfiles spaceId={props.spaceId} />
       <CredentialsTable
         rows={visible}
         state={state[all.status]}
@@ -98,50 +96,69 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
   )
 }
 
-// oxlint-disable-next-line ren/no-comments -- connections.md §10a: each app of the space opens its connect dialog.
-function SpaceApps(props: {
-  spaceId: string
-  space: { readonly name: string; readonly brainScope: string } | undefined
-  userId: string
-}) {
+// oxlint-disable-next-line ren/no-comments -- profiles.md §9 rule 1 (P12, P32): the profiles this space reaches, with their gaps; a new profile from here lists this space, and from a space with other members it is shared.
+function SpaceProfiles(props: { spaceId: string }) {
   const context = RouterContext.useRouterContext()
-  const apps = useQuery(
-    context.api["space-app"].list.queryOptions({
-      spaceId: props.spaceId,
-      page: 1,
-      pageSize: Pagination.maximumPageSize,
-    }),
+  const reach = useQuery({
+    ...context.api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId }),
+    refetchOnWindowFocus: "always",
+  })
+  const members = useQuery(
+    context.api["space-member"].list.queryOptions({ spaceId: props.spaceId, status: "active", page: 1, pageSize: 2 }),
   )
-  const [connecting, setConnecting] = useState<string>()
-  const installed = apps.data?.items ?? []
-  if (installed.length === 0) return null
+  const apps = useQuery(context.api.app.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
+  const registry = useQuery(
+    context.api["app-registry"].list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }),
+  )
+  const [opened, setOpened] = useState<{ readonly appId: string; readonly profileId?: string }>()
+  const profiles = reach.data?.profiles ?? []
+  const choices = [
+    ...(apps.data?.items ?? []).map((app) => ({ value: app.id, label: app.name })),
+    ...(registry.data?.items ?? []).map((app) => ({ value: app.id, label: app.name })),
+  ]
   return (
     <>
-      <List.Root label="Apps in this space">
-        <List.Section title="Apps" appearance="eyebrow">
-          {installed.map((use) => (
-            <List.Item
-              key={use.id}
-              title={use.app.name}
-              description={use.app.description}
-              trailing={
-                <Button appearance="secondary" size="small" onClick={() => setConnecting(use.appId)}>
-                  Connect
-                </Button>
-              }
-            />
-          ))}
+      <List.Root label="App profiles in this space">
+        <List.Section title="App profiles" appearance="eyebrow">
+          {profiles.map((profile) => {
+            const gaps = Profiles.gaps(profile).length
+            return (
+              <List.Item
+                key={profile.id}
+                title={`${profile.appSlug} · ${profile.name}`}
+                description={gaps ? `${gaps} not connected` : "Connected"}
+                trailing={
+                  <Button
+                    appearance="secondary"
+                    size="small"
+                    onClick={() => setOpened({ appId: profile.appId, profileId: profile.id })}
+                  >
+                    Open profile
+                  </Button>
+                }
+              />
+            )
+          })}
         </List.Section>
       </List.Root>
-      {connecting ? (
-        <ConnectAppDialog
-          spaceId={props.spaceId}
-          appId={connecting}
-          appNames={new Map(installed.map((use) => [use.appId, use.app.name]))}
-          spaceName={props.space?.name ?? "this space"}
-          personal={props.space?.brainScope === "session"}
-          userId={props.userId}
-          onClose={() => setConnecting(undefined)}
+      {choices.length > 0 ? (
+        <Toolbar.Root>
+          <Select.Root
+            label="New profile for"
+            size="small"
+            options={choices}
+            value={null}
+            placeholder="New profile for an app"
+            onValueChange={(appId) => setOpened({ appId })}
+          />
+        </Toolbar.Root>
+      ) : null}
+      {opened ? (
+        <ProfileDialog
+          appId={opened.appId}
+          {...(opened.profileId && { profileId: opened.profileId })}
+          from={{ spaceId: props.spaceId, members: members.data?.total ?? 1 }}
+          onClose={() => setOpened(undefined)}
         />
       ) : null}
     </>

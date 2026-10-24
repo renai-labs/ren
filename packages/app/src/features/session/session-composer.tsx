@@ -20,6 +20,7 @@ import { DraftStore } from "../../platform/draft-store.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
+import { SessionProfilesPill } from "../../components/profiles-pill.js"
 import { Failure } from "./failure.js"
 import { ComposerAddMenu } from "./composer-add-menu.js"
 import { ComposerKeys } from "./composer-keys.js"
@@ -537,7 +538,12 @@ export function SessionComposer(props: {
         ) : undefined
       }
       leading={addMenu}
-      footerLeading={addMenu}
+      footerLeading={
+        <>
+          {addMenu}
+          <SessionProfilesPill sessionId={props.sessionID} />
+        </>
+      }
       trailing={controls}
       footerTrailing={controls}
     >
