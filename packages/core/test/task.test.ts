@@ -311,10 +311,9 @@ describe("Subtasks", () => {
       )
       yield* Fiber.join(holder)
       const results = yield* Fiber.join(writes)
-      expect(results.map((result) => (result._tag === "Success" ? "Success" : result.failure._tag)).toSorted()).toEqual([
-        "Primitive.Invalid",
-        "Success",
-      ])
+      expect(results.map((result) => (result._tag === "Success" ? "Success" : result.failure._tag)).toSorted()).toEqual(
+        ["Primitive.Invalid", "Success"],
+      )
     }),
   )
 

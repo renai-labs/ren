@@ -16,6 +16,13 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@ren/cell/RenAddress") {}
 
 // oxlint-disable-next-line ren/no-comments -- Ren's address: the newest one a server token named, saved in brain.db, else REN_URL (E119).
+// oxlint-disable-next-line ren/no-comments -- Behind an egress the address stays https://ren.internal; the egress routes it to Ren (C49).
+export const layerFixed = (configured: string | undefined) =>
+  Layer.succeed(
+    Service,
+    Service.of({ current: Effect.succeed(Option.fromNullishOr(configured)), adopt: () => Effect.void }),
+  )
+
 export const layer = (configured: string | undefined) =>
   Layer.effect(
     Service,

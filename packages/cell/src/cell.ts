@@ -24,6 +24,7 @@ import { BrainStorage } from "./brain-storage.js"
 import { Env } from "./env.js"
 import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
+import { CredentialEnv } from "./credential-env.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
 import { ModelRefresh } from "./model-refresh.js"
@@ -204,13 +205,14 @@ export const activityLayer = Layer.effect(
 export const hostLayer = Layer.unwrap(
   Effect.gen(function* () {
     const cell = yield* Info
+    const behindEgress = cell.vars.REN_EGRESS === "1"
     return ModelRefresh.layer(cell.vars.REN_URL).pipe(
-      Layer.provideMerge(HostToken.layer(cell.vars.REN_URL)),
-      Layer.provideMerge(ModelStore.layer),
+      Layer.provideMerge(behindEgress ? HostToken.layerEgress : HostToken.layer(cell.vars.REN_URL)),
+      Layer.provideMerge(Layer.mergeAll(ModelStore.layer, CredentialEnv.layer)),
       Layer.provideMerge(Fence.layer),
       Layer.provide(RenAddress.http),
       Layer.provide(FetchHttpClient.layer),
-      Layer.provideMerge(RenAddress.layer(cell.vars.REN_URL)),
+      Layer.provideMerge(behindEgress ? RenAddress.layerFixed(cell.vars.REN_URL) : RenAddress.layer(cell.vars.REN_URL)),
     )
   }),
 )

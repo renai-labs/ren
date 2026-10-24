@@ -41,6 +41,7 @@ import { HttpClientError } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
 import { Access } from "./access.js"
 import { BrainClient } from "./brain-client.js"
+import { CredentialEnv } from "./credential-env.js"
 import { BrainHost } from "./brain-host.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Environments } from "./environments.js"
@@ -175,6 +176,7 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const client = yield* BrainClient.Service
     const models = yield* Models.Service
+    const credentialEnv = yield* CredentialEnv.Service
     const settings = yield* Settings.Service
     const environments = yield* Environments.Service
     const brainHost = yield* BrainHost.Service
@@ -466,12 +468,15 @@ export const layer = Layer.effect(
                 .where(inArray(Database.Schema.agent_session.id, [...roots]))
                 .pipe(Effect.orDie)
         const hash = Option.isSome(access) ? yield* Models.hash(access.value) : (request.models ?? "")
+        const variables = yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation })
+        const envHash = yield* CredentialEnv.hash(variables)
         return {
           publicKeys: client.publicKeys,
           models: Option.isNone(access) || hash === request.models ? { hash } : { hash, access: access.value },
           layers: pulled.layers,
           chats: pulled.chats,
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
+          env: envHash === request.env ? { hash: envHash } : { hash: envHash, variables },
         } satisfies PullReply
       }),
       refreshModels: Effect.fn("Brains.refreshModels")(function* (host: CurrentHost["Service"]) {

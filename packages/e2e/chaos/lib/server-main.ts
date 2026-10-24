@@ -20,10 +20,15 @@ import { ChaosEnvironments } from "./provider/environments.js"
 import { ChaosModels } from "./provider/models.js"
 import { Signer } from "@ren/core/signer"
 import { EgressControl } from "@ren/core/egress-control"
+import { CredentialEnv } from "@ren/core/credential-env"
 
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
-    Brains.layer.pipe(Layer.provide(BrainHost.layerCell), Layer.provide(DurableRunner.layerEffect)),
+    Brains.layer.pipe(
+      Layer.provide(BrainHost.layerCell),
+      Layer.provide(DurableRunner.layerEffect),
+      Layer.provide(CredentialEnv.layerNone),
+    ),
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),

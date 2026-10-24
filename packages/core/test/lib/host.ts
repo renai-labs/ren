@@ -27,6 +27,7 @@ import { Settings } from "../../src/settings.js"
 import { RenHostApiTest } from "./ren-host-api.js"
 import { Seed } from "./seed.js"
 import { Signer } from "../../src/signer.js"
+import { CredentialEnv } from "../../src/credential-env.js"
 
 const entry = join(import.meta.dir, "../../../cell/src/bun.ts")
 const executor = join(import.meta.dir, "../../../executor/src/main.ts")
@@ -73,6 +74,7 @@ interface StackOptions<E, R> {
 // oxlint-disable-next-line ren/no-comments -- Each brain is a real Bun brain process on this machine (LocalSandbox), under root. Brains reach Ren on REN_URL, where serve answers.
 export const stack = <E, R>(options: StackOptions<E, R>) =>
   Brains.layer.pipe(
+    Layer.provide(CredentialEnv.layerNone),
     Layer.provideMerge(BrainHost.layerSandbox),
     Layer.provideMerge(BrainLifecycle.layer.pipe(Layer.provide(SandboxEgress.layerNone))),
     Layer.provideMerge(
@@ -267,6 +269,7 @@ export const cellLayer = <E, R>(
   environments: Layer.Layer<Environments.Service, E, R>,
 ) =>
   Layer.fresh(Brains.layer).pipe(
+    Layer.provide(CredentialEnv.layerNone),
     Layer.provideMerge(BrainHost.layerCell),
     Layer.provideMerge(DurableRunner.layerMemory),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),

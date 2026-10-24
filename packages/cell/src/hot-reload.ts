@@ -9,6 +9,7 @@ import { BrainKeys } from "./brain-keys.js"
 import { BrainStorage } from "./brain-storage.js"
 import { Cell } from "./cell.js"
 import { ChatSettings } from "./chat-settings.js"
+import { CredentialEnv } from "./credential-env.js"
 import { Fence } from "./fence.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
@@ -37,6 +38,7 @@ export const layer = Layer.effect(
     const keys = yield* BrainKeys.Service
     const fence = yield* Fence.Service
     const harness = yield* Harness.Service
+    const credentialEnv = yield* CredentialEnv.Service
     const url = info.vars.REN_URL
     if (!url) return Service.of({ pull: Effect.void })
     const host = yield* HostToken.client(url).pipe(
@@ -78,10 +80,12 @@ export const layer = Layer.effect(
             layers: BrainSettings.known(layers),
             sessions,
             roots: sessions.map((session) => session.id),
+            ...Option.match(yield* credentialEnv.hash, { onNone: () => ({}), onSome: (env) => ({ env }) }),
           },
         })
         .pipe(HostToken.withToken(token.value), Effect.timeout(HostToken.renAnswersWithin))
       yield* keys.save(reply.publicKeys)
+      if (reply.env?.variables) yield* credentialEnv.apply(reply.env.hash, reply.env.variables)
       const access = reply.models.access
       if (access) yield* store.install(access, reply.models.hash)
       yield* settings.save(BrainSettings.merge(layers, reply.layers), reply.chats)

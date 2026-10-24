@@ -56,6 +56,8 @@ export interface Connection {
 
 export interface Interface {
   readonly connect: (sessionId: Session.ID) => Effect.Effect<Connection, Unavailable, Scope.Scope>
+  // oxlint-disable-next-line ren/no-comments -- Env vars the host adds to every process a session starts, read at each start: credential placeholders and delivered secrets (README §6.5, C21).
+  readonly variables?: Effect.Effect<Readonly<Record<string, string>>>
   readonly release: (sessionId: Session.ID) => Effect.Effect<void>
 }
 

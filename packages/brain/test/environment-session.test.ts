@@ -766,3 +766,18 @@ it.effect(
       expect(yield* text(racing.stderr)).toBe("")
     }),
 )
+
+it.live("the host's env vars reach every process a session starts; a change applies at the next start (C21)", () =>
+  Effect.gen(function* () {
+    const environments = yield* environmentsWith(
+      TestAccess.fixed(new Map([[sessionId, yield* accessAt(yield* TestEnvironment.url)]])),
+    )
+    const variables = yield* Ref.make<Readonly<Record<string, string>>>({ STRIPE_API_KEY: "ren:STRIPE_API_KEY" })
+    const environment = EnvironmentSession.make({ ...environments, variables: Ref.get(variables) }, sessionId, killed)
+    const first = yield* environment.spawner.spawn(ChildProcess.make("sh", ["-c", "echo $STRIPE_API_KEY $LINEAR"]))
+    expect(yield* text(first.stdout)).toBe("ren:STRIPE_API_KEY\n")
+    yield* Ref.set(variables, { STRIPE_API_KEY: "ren:STRIPE_API_KEY", LINEAR: "ren:LINEAR" })
+    const second = yield* environment.spawner.spawn(ChildProcess.make("sh", ["-c", "echo $STRIPE_API_KEY $LINEAR"]))
+    expect(yield* text(second.stdout)).toBe("ren:STRIPE_API_KEY ren:LINEAR\n")
+  }),
+)

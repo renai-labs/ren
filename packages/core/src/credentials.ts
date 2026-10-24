@@ -124,6 +124,7 @@ export interface Interface extends Omit<Methods, "rotate" | "update"> {
   ) => Effect.Effect<Credential.Info, Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict | Primitive.Invalid>
   readonly scopeOf: (workload: Workload.Info) => Effect.Effect<Option.Option<Scope>>
   readonly candidates: (scope: Scope) => Effect.Effect<ReadonlyArray<Candidate>>
+  readonly environment: (scope: Scope) => Effect.Effect<Readonly<Record<string, string>>>
   readonly open: (id: Credential.ID) => Effect.Effect<Option.Option<Opened>>
   readonly removeForMember: (organizationId: Auth.OrganizationID, userId: Auth.UserID) => Effect.Effect<void>
   readonly removeForSpaceMember: (spaceId: Space.ID, userId: Auth.UserID) => Effect.Effect<void>
@@ -437,6 +438,27 @@ export const layer = Layer.effect(
       return yield* infoById(id)
     })
 
+    const reaches = (scope: Scope) =>
+      and(
+        eq(table.organization_id, scope.organizationId),
+        or(
+          eq(table.owner, "org"),
+          Option.match(scope.spaceId, {
+            onNone: () => undefined,
+            onSome: (spaceId) => and(eq(table.owner, "space"), eq(table.space_id, spaceId)),
+          }),
+          Option.match(scope.person, {
+            onNone: () => undefined,
+            onSome: (userId) => and(eq(table.owner, "person"), eq(table.user_id, userId)),
+          }),
+          and(
+            eq(table.owner, "workload"),
+            eq(table.workload_kind, scope.workload.kind),
+            eq(table.workload_id, scope.workload.id),
+          ),
+        ),
+      )
+
     const openRow = Effect.fnUntraced(function* (row: typeof table.$inferSelect) {
       const opened = yield* envelope.open(row.value, contextOf(row.organization_id, row.id)).pipe(Effect.orDie)
       return decodeValue(Redacted.value(opened))
@@ -684,30 +706,31 @@ export const layer = Layer.effect(
             inject: table.inject,
           })
           .from(table)
-          .where(
-            and(
-              eq(table.organization_id, scope.organizationId),
-              eq(table.delivery, "egress"),
-              or(
-                eq(table.owner, "org"),
-                Option.match(scope.spaceId, {
-                  onNone: () => undefined,
-                  onSome: (spaceId) => and(eq(table.owner, "space"), eq(table.space_id, spaceId)),
-                }),
-                Option.match(scope.person, {
-                  onNone: () => undefined,
-                  onSome: (userId) => and(eq(table.owner, "person"), eq(table.user_id, userId)),
-                }),
-                and(
-                  eq(table.owner, "workload"),
-                  eq(table.workload_kind, scope.workload.kind),
-                  eq(table.workload_id, scope.workload.id),
-                ),
-              ),
-            ),
-          )
+          .where(and(eq(table.delivery, "egress"), reaches(scope)))
           .pipe(Effect.orDie)
         return rows
+      }),
+
+      // oxlint-disable-next-line ren/no-comments -- A35: each key that reaches the workload is an env var that holds its placeholder; a delivered key holds its value (C9). The first owner in the lookup order wins a label.
+      environment: Effect.fn("Credentials.environment")(function* (scope: Scope) {
+        const rows = yield* database.db
+          .select()
+          .from(table)
+          .where(and(eq(table.type, "key"), reaches(scope)))
+          .pipe(Effect.orDie)
+        const ordered = rows.toSorted(
+          (left, right) => lookupOrder.indexOf(right.owner) - lookupOrder.indexOf(left.owner),
+        )
+        const entries = yield* Effect.forEach(ordered, (row) =>
+          row.delivery === "egress"
+            ? Effect.succeed([[row.label, Credential.placeholder(row.label)]] as const)
+            : Effect.map(openRow(row), (value) =>
+                Option.isSome(value) && value.value.type === "key"
+                  ? ([[row.label, Redacted.value(value.value.value)]] as const)
+                  : [],
+              ),
+        )
+        return Object.fromEntries(entries.flat())
       }),
 
       open: Effect.fn("Credentials.open")(function* (id: Credential.ID) {

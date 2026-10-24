@@ -12,6 +12,7 @@ import {
   FileSystem,
   Layer,
   Path,
+  Redacted,
   Ref,
   Schema,
   Stream,
@@ -96,6 +97,27 @@ export const layerConfig = Layer.effect(
         return Models.Access.make({
           endpoints: access.endpoints.map((endpoint) =>
             Struct.evolve(endpoint, { apiKey: (apiKey) => ({ key: apiKey.key, expiresAt }) }),
+          ),
+        })
+      }),
+    })
+  }),
+)
+
+// oxlint-disable-next-line ren/no-comments -- Behind an egress a brain holds no model key: each endpoint gets the placeholder ren:MODELS and no expiry, so the brain never renews it. The egress puts in the real key that Ren mints (CredentialSource.layerMinted).
+export const placeholderKey = "ren:MODELS"
+
+export const layerPlaceholders = Layer.effect(
+  Service,
+  Effect.gen(function* () {
+    const models = yield* Service
+    return Service.of({
+      catalog: models.catalog,
+      grant: Effect.fn("Models.grant")(function* (brainId, organizationId) {
+        const access = yield* models.grant(brainId, organizationId)
+        return Models.Access.make({
+          endpoints: access.endpoints.map((endpoint) =>
+            Struct.evolve(endpoint, { apiKey: () => ({ key: Redacted.make(placeholderKey) }) }),
           ),
         })
       }),

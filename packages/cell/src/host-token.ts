@@ -35,6 +35,14 @@ export const client = (url: string) =>
 
 export const withToken = (token: string) => Effect.provideService(PresentedToken, token)
 
+// oxlint-disable-next-line ren/no-comments -- Behind an egress the brain holds no host token: it sends the placeholder, and the egress sets the real token on each call to ren.internal (C8, token-removal.md).
+export const placeholder = "ren:REN"
+
+export const layerEgress = Layer.succeed(
+  Service,
+  Service.of({ current: Effect.succeed(Option.some(placeholder)), isValid: Effect.succeed(true) }),
+)
+
 export const layer = (url: string | undefined) =>
   Layer.effect(
     Service,

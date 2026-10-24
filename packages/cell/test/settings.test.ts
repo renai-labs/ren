@@ -474,12 +474,10 @@ describe("settings in the cell", () => {
         ),
       )
       yield* opened.harness.setModel(opened.sessionId, Option.some({ endpointId: "stub", modelId: picked.id }))
-      const modelOf = opened.client.session
-        .get({ sessionID: opened.sessionID })
-        .pipe(
-          Effect.orDie,
-          Effect.map((session) => String(session.model?.id)),
-        )
+      const modelOf = opened.client.session.get({ sessionID: opened.sessionID }).pipe(
+        Effect.orDie,
+        Effect.map((session) => String(session.model?.id)),
+      )
       expect(yield* modelOf).toBe(picked.id)
       yield* opened.harness.configure(opened.access.endpoints)
       yield* opened.harness.applySettings([{ id: opened.sessionId, agent: null, archived: false }])
@@ -493,7 +491,9 @@ describe("settings in the cell", () => {
   )
   it.live("the title request gives the model the chat as data to title, not as a request to act on", () =>
     Effect.gen(function* () {
-      const opened = yield* open(TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }))
+      const opened = yield* open(
+        TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
+      )
       const script = stub.script()
       yield* opened.turn(script)
       const title = yield* Effect.promise(() =>

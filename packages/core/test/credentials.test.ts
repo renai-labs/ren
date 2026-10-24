@@ -473,3 +473,38 @@ describe("Credentials: offboarding (owner-access §11)", () => {
     }),
   )
 })
+
+describe("Credentials: env vars of a workload (A35, C9)", () => {
+  it.live("each pasted key that reaches a brain becomes LABEL=ren:LABEL; a delivered key gives its value", () =>
+    Effect.gen(function* () {
+      const credentials = yield* Credentials.Service
+      const setup = yield* team()
+      yield* credentials.create(setup.ada, { owner: { kind: "org" }, label: "STRIPE_API_KEY", ...key("sk_live_1234") })
+      yield* credentials.create(setup.admin, {
+        owner: { kind: "org" },
+        label: "PG_PASSWORD",
+        delivery: "delivered",
+        ...key("pg-secret", ["db.acme.dev"]),
+      })
+      yield* credentials.create(setup.ada, {
+        owner: { kind: "org" },
+        label: "JIRA",
+        hosts: ["acme.atlassian.net"],
+        value: { type: "basic", username: "ada", password: Redacted.make("p") },
+      })
+      const brainId = Brain.ID.create()
+      yield* Seed.session({
+        organizationId: setup.organizationId,
+        spaceId: setup.space.id,
+        createdBy: setup.ada.userId,
+        brainId,
+      })
+      const scope = yield* credentials.scopeOf({ kind: "brain", id: brainId, generation: 1 })
+      if (Option.isNone(scope)) return yield* Effect.die(new Error("no scope"))
+      expect(yield* credentials.environment(scope.value)).toEqual({
+        STRIPE_API_KEY: "ren:STRIPE_API_KEY",
+        PG_PASSWORD: "pg-secret",
+      })
+    }),
+  )
+})

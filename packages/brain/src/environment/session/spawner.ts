@@ -59,6 +59,7 @@ export type KilledBySignal = (signal: Signal.Name) => unknown
 
 export interface SpawnOptions {
   readonly outputFile?: string
+  readonly variables?: Readonly<Record<string, string>>
   readonly window?: EnvironmentApi.OutputWindow
   readonly onSkip?: (skipped: { readonly length: number; readonly newlines: number }) => void
 }
@@ -87,7 +88,7 @@ export const make = (
         command: commandToRun(command.command, command.args, connection.hello.shells),
         arguments: command.args,
         hasStdin,
-        variables: Record.filter(command.options.env ?? {}, Predicate.isString),
+        variables: { ...options.variables, ...Record.filter(command.options.env ?? {}, Predicate.isString) },
         ...(command.options.cwd && { directory: command.options.cwd }),
         ...(Predicate.isNotUndefined(command.options.shell) && { shell: command.options.shell }),
         ...Struct.pick(options, ["outputFile"]),

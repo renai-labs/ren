@@ -70,9 +70,7 @@ export const layer = Layer.effect(
         input: Session.StartInput,
         options: { readonly agentId?: Agent.ID } = {},
       ) {
-        const startInput = yield* Schema.encodeEffect(Session.StartInput)(input).pipe(
-          Effect.orDie,
-        )
+        const startInput = yield* Schema.encodeEffect(Session.StartInput)(input).pipe(Effect.orDie)
         const brainId = yield* registry.assign({ ...owner, sessionId: input.sessionId })
         const created = yield* database.transaction((transaction) =>
           Effect.gen(function* () {

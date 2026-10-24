@@ -61,9 +61,16 @@ export const make = (
     connections.connect(sessionId).pipe(Effect.flatMap(use), Effect.scoped)
   const sessionSpawner = (options: EnvironmentSpawner.SpawnOptions = {}) =>
     ChildProcessSpawner.make((command) =>
-      connections.connect(sessionId).pipe(
+      Effect.all({
+        connection: connections.connect(sessionId),
+        variables: connections.variables ?? Effect.succeed({}),
+      }).pipe(
         Effect.mapError(EnvironmentSpawner.childProcessError("spawn")),
-        Effect.flatMap((connection) => EnvironmentSpawner.make(connection, killedBySignal, options).spawn(command)),
+        Effect.flatMap((found) =>
+          EnvironmentSpawner.make(found.connection, killedBySignal, { ...options, variables: found.variables }).spawn(
+            command,
+          ),
+        ),
       ),
     )
   return {

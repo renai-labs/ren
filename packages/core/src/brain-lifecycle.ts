@@ -59,6 +59,8 @@ export const timing = {
 
 type Row = typeof Database.Schema.brain.$inferSelect
 
+export const renInternal = "https://ren.internal"
+
 const brains = Database.Schema.brain
 
 export const layer = Layer.effect(
@@ -144,16 +146,18 @@ export const layer = Layer.effect(
     })
 
     const create = Effect.fnUntraced(function* (row: Row) {
+      const proxy = yield* egress.proxyFor({
+        brainId: row.id,
+        generation: row.generation,
+        organizationId: row.organization_id,
+      })
       const created = yield* provider
         .create({
           brainId: row.id,
           generation: row.generation,
-          env: yield* env(row),
-          proxy: yield* egress.proxyFor({
-            brainId: row.id,
-            generation: row.generation,
-            organizationId: row.organization_id,
-          }),
+          // oxlint-disable-next-line ren/no-comments -- Behind an egress, the brain calls Ren at https://ren.internal; the egress routes it and injects the host token (C8, C49).
+          env: { ...(yield* env(row)), ...(Option.isSome(proxy) && { REN_URL: renInternal, REN_EGRESS: "1" }) },
+          proxy,
         })
         .pipe(
           Effect.map(Option.some),

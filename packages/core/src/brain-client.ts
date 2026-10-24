@@ -7,7 +7,7 @@ import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
 import type { Array } from "effect"
-import { Clock, Config, Context, Effect, Layer, Option } from "effect"
+import { Clock, Config, Context, Effect, identity, Layer, Option } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { Signer } from "./signer.js"
@@ -46,8 +46,11 @@ export const layer = Layer.effect(
     const config = yield* Config.all({
       renUrl: Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000")),
       address: Config.option(Config.String("REN_URL")),
+      egress: Config.option(Config.String("EGRESS_PROXY_ADDRESS")),
     })
     const signer = yield* Signer.Service
+    // oxlint-disable-next-line ren/no-comments -- Behind an egress the brain holds no host token and keeps https://ren.internal as Ren's address: the egress injects the token and routes to Ren (C8, C49).
+    const behindEgress = Option.isSome(config.egress)
     const publicKeys = yield* signer.publicKeys("brain").pipe(Effect.orDie)
     const http = yield* HttpClient.HttpClient
     const now = Effect.map(Clock.currentTimeMillis, (millis) => Math.floor(millis / 1000))
@@ -85,13 +88,16 @@ export const layer = Layer.effect(
                         brain: target.brainId,
                         gen: target.generation,
                         exp: issued + BrainToken.lifetimes.server,
-                        ...Option.match(config.address, { onNone: () => ({}), onSome: (ren) => ({ ren }) }),
+                        ...Option.match(behindEgress ? Option.none() : config.address, {
+                          onNone: () => ({}),
+                          onSome: (ren) => ({ ren }),
+                        }),
                       },
                       { holders: target.keyIds },
                     )
                     .pipe(Effect.orDie),
                 ),
-                HttpClientRequest.setHeader(hostTokenHeader, yield* hostToken(target)),
+                behindEgress ? identity : HttpClientRequest.setHeader(hostTokenHeader, yield* hostToken(target)),
               )
             }),
           ),

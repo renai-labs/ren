@@ -22,6 +22,10 @@ import { FetchHttpClient, HttpRouter } from "effect/http"
 import { Routes } from "../../src/routes.js"
 import { Signer } from "@ren/core/signer"
 import { EgressControl } from "@ren/core/egress-control"
+import { Access } from "@ren/core/access"
+import { Credentials } from "@ren/core/credentials"
+import { Envelope } from "@ren/core/envelope"
+import { CredentialEnv } from "@ren/core/credential-env"
 
 export const origin = "http://localhost:5173"
 
@@ -74,13 +78,18 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
   )
 
 export const services = Layer.mergeAll(
-  Brains.layer.pipe(Layer.provideMerge(BrainHost.layerCell), Layer.provide(DurableRunner.layerMemory)),
+  Brains.layer.pipe(
+    Layer.provideMerge(BrainHost.layerCell),
+    Layer.provide(DurableRunner.layerMemory),
+    Layer.provide(CredentialEnv.layerNone),
+  ),
   Mailer.layer,
   SignupGuard.layer,
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
 ).pipe(
   Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
+  Layer.provideMerge(Credentials.layer.pipe(Layer.provide(Layer.mergeAll(Envelope.layerLocal, Access.layer)))),
   Layer.provideMerge(EgressControl.layerNone),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide(BunServices.layer),

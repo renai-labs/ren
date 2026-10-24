@@ -6,6 +6,7 @@ import type { Session } from "@ren/schema/session"
 import { Effect, Layer, Option } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Cell } from "./cell.js"
+import { CredentialEnv } from "./credential-env.js"
 import { HostToken } from "./host-token.js"
 import { ModelStore } from "./model-store.js"
 import { RenAddress } from "./ren-address.js"
@@ -61,6 +62,13 @@ export const connections = Layer.unwrap(
   Effect.gen(function* () {
     const info = yield* Cell.Info
     if (!info.vars.REN_URL) return Layer.empty
-    return EnvironmentConnections.layer.pipe(Layer.provide(layer), Layer.provide(FetchHttpClient.layer))
+    return Layer.effect(
+      EnvironmentConnections.Service,
+      Effect.gen(function* () {
+        const connections = yield* EnvironmentConnections.Service
+        const env = yield* CredentialEnv.Service
+        return EnvironmentConnections.Service.of({ ...connections, variables: env.current })
+      }),
+    ).pipe(Layer.provide(EnvironmentConnections.layer.pipe(Layer.provide(layer), Layer.provide(FetchHttpClient.layer))))
   }),
 )

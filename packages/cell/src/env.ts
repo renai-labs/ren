@@ -24,5 +24,8 @@ export const Vars = Schema.Struct({
   CHAT_HEARTBEAT_MS: Millis(15_000),
   OPENCODE_CONFIG: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed("{}"))),
   REN_URL: Schema.optional(Schema.String),
+  REN_EGRESS: Schema.optional(Schema.Literal("1")).annotate({
+    description: "The brain runs behind Ren’s egress: it holds no host token and keeps REN_URL (C8, C49).",
+  }),
   REN_BRAIN_VERSION: Schema.optional(Schema.String),
 })

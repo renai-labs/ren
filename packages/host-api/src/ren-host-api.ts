@@ -53,7 +53,20 @@ export const PullRequest = Schema.Struct({
   roots: Schema.optionalKey(Schema.Array(Session.ID)).annotate({
     description: "The root chats the brain’s harness holds. Ren names the ones it deleted in `deleted`.",
   }),
+  env: Schema.optionalKey(Schema.String).annotate({
+    description: "The hash of the credential env vars the brain has.",
+  }),
 }).annotate({ identifier: "Host.PullRequest" })
+
+export interface PullEnv extends Schema.Schema.Type<typeof PullEnv> {}
+export const PullEnv = Schema.Struct({
+  hash: Schema.String,
+  variables: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+}).annotate({
+  identifier: "Host.PullEnv",
+  description:
+    "The credential env vars of the brain: `LABEL=ren:LABEL` for each key that reaches it (A35), and the value of a delivered secret (C9). A body comes only when the hash changed.",
+})
 
 export interface PullModels extends Schema.Schema.Type<typeof PullModels> {}
 export const PullModels = Schema.Struct({
@@ -77,6 +90,7 @@ export const PullReply = Schema.Struct({
   deleted: Schema.Array(Session.ID).annotate({
     description: "Root chats of the request that Ren no longer has. The brain drops them (E109).",
   }),
+  env: Schema.optionalKey(PullEnv),
 }).annotate({ identifier: "Host.PullReply" })
 
 const SessionParams = { id: Session.ID }

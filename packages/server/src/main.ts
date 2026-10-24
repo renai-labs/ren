@@ -3,6 +3,7 @@ import { Access } from "@ren/core/access"
 import { CredentialCallers } from "@ren/core/credential-callers"
 import { CredentialRefresh } from "@ren/core/credential-refresh"
 import { CredentialSource } from "@ren/core/credential-source"
+import { CredentialEnv } from "@ren/core/credential-env"
 import { Credentials } from "@ren/core/credentials"
 import { Egress } from "@ren/core/egress"
 import { Envelope } from "@ren/core/envelope"
@@ -27,7 +28,7 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Postgres } from "@ren/db/postgres"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
-import { Config, Effect, Layer } from "effect"
+import { Config, Effect, Layer, Option } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -56,6 +57,11 @@ const host = Layer.unwrap(
   }),
 )
 
+// oxlint-disable-next-line ren/no-comments -- Behind an egress, brains get placeholder model keys; the egress gets the real ones from CredentialSource.layerMinted.
+const egressModels = Effect.map(Config.option(Config.String("EGRESS_PROXY_ADDRESS")), (address) =>
+  Option.isSome(address) ? Models.layerPlaceholders : Layer.empty,
+)
+
 const credentials = Egress.layer.pipe(
   Layer.provideMerge(CredentialSource.layer),
   Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
@@ -66,7 +72,11 @@ const credentials = Egress.layer.pipe(
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([
     Layer.mergeAll(
-      Brains.layer.pipe(Layer.provide(host)),
+      Brains.layer.pipe(
+        Layer.provide(host),
+        Layer.provide(CredentialEnv.layer),
+        Layer.provide(Layer.unwrap(egressModels)),
+      ),
       Retention.layer,
       CredentialRefresh.layer.pipe(Layer.provide(CredentialRefresh.layerNoRefreshers)),
     ).pipe(Layer.provide(DurableRunner.layerEffect)),
