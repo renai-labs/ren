@@ -5,7 +5,10 @@ import { Menu } from "@ren/ui/menu"
 import type { Select } from "@ren/ui/select"
 import { Table } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
+import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
+import { RouterContext } from "../../lib/router-context.js"
+import { Platform } from "../../platform/platform.js"
 import {
   DeleteCredentialDialog,
   MoveCredentialDialog,
@@ -30,6 +33,21 @@ export function CredentialsTable(props: {
   const [deleting, setDeleting] = useState<CredentialInfo>()
   const [confirming, setConfirming] = useState(false)
   const close = () => setEditing(undefined)
+  const context = RouterContext.useRouterContext()
+  const platform = Platform.usePlatform()
+  const connect = useMutation(context.api["credential-connect"].credential.connect.mutationOptions())
+  // oxlint-disable-next-line ren/no-comments -- owner-access §13: a connected MCP row reconnects in place; the old credential works until the new sign-in is saved.
+  const reconnect = (row: CredentialInfo) => {
+    if (!row.app || !row.mcp) return
+    void connect
+      .mutateAsync({
+        owner: row.owner,
+        target: { kind: "mcp", app: row.app, mcp: row.mcp, ...(row.connection && { connection: row.connection }) },
+        reconnect: true,
+      })
+      .then((result) => ("redirectUrl" in result ? platform.openExternal(result.redirectUrl) : undefined))
+      .catch(() => undefined)
+  }
   return (
     <>
       <Table.Root
@@ -75,6 +93,11 @@ export function CredentialsTable(props: {
                 </span>
               </Table.Cell>
               <Table.RowActions label={`${row.label} actions`}>
+                {row.app && row.mcp ? (
+                  <Menu.Item icon={<Icon glyph="RefreshCw" />} onSelect={() => reconnect(row)}>
+                    Reconnect
+                  </Menu.Item>
+                ) : null}
                 <Menu.Item
                   icon={<Icon glyph="Pencil" />}
                   onSelect={() => setEditing({ kind: "rename", credential: row })}
