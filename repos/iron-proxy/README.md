@@ -21,9 +21,10 @@ All outbound traffic of a workload (a brain or a hand) goes through the egress. 
 | 2. The login goes with each request; the password does not | `transform.TunnelInfo.ProxyLogin`; resolve sends the `Login` proof |
 | 3. The tunnel target and the `Host` name one host | `internal/proxy/proxy.go` (`handleHTTP`) |
 | 4. No start without the hook address and certificates; fail closed | `ren.Config.Validate`; a hook that does not answer gives `ren_unavailable` |
-| 5. Answer cache: fresh 30 s, the last allow answer 15 min when Ren does not answer, never a denial | `internal/ren/client.go` (`Resolve`) |
+| 5. Answer cache, keyed by login, host and placeholders: fresh for Ren's `ttl` (default 30 s), the last allow answer 15 min when Ren does not answer, never a denial, never past the answer's `expiresAt`. An answer or login that was in flight during an invalidate is not kept. | `internal/ren/client.go` (`Resolve`, `Authenticate`, `sweep`) |
 | 6. Invalidate by workload, label or login; a login also closes its connections | `internal/ren/client.go` (`Invalidate`), `internal/ren/handle.go` (`ServeControl`) |
-| 7. Placeholders in raw, percent-encoded and `Basic` form; JSON and form bodies up to 1 MB; every denial is `403` with `x-ren-egress`; supported ops sent on each resolve | `internal/ren/scan.go`, `internal/ren/handle.go` (`Deny`) |
+| 7. Placeholders in raw, percent-encoded and `Basic` form, in headers, query and path; a body is never searched or changed; every denial is `403` with `x-ren-egress`; supported ops sent on each resolve | `internal/ren/scan.go`, `internal/ren/handle.go` (`Deny`) |
+| 8. Mask: an injected value that comes back in a response header, or in a body of at most 1 MB that is not a stream, is replaced by its placeholder (`ren:MASKED` for a header Ren set). A request with injected values asks the upstream for no encoding. | `internal/ren/mask.go`, `internal/ren/handle.go` |
 
 The hook is HTTP and JSON (`@ren/egress-api`), not the upstream gRPC `TransformService`, so that one contract serves Ren's own egress and other proxies.
 

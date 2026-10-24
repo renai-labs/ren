@@ -3,7 +3,6 @@ package ren
 import (
 	"bytes"
 	"encoding/base64"
-	"io"
 	"net/http"
 	"net/url"
 	"testing"
@@ -61,31 +60,25 @@ func TestFindPlaceholders(t *testing.T) {
 			want: []string{"ren:MCP_TELEGRAM.token"},
 		},
 		{
-			name: "JSON body",
+			name: "never in a body",
 			build: func(t *testing.T) *http.Request {
 				return newRequest(t, "POST", "https://api.example.com/v1", []byte(`{"api_key":"ren:EXAMPLE_KEY"}`), "application/json")
 			},
-			want: []string{"ren:EXAMPLE_KEY"},
+			want: nil,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := tc.build(t)
-			body, err := readBody(req)
-			require.NoError(t, err)
-			require.Equal(t, tc.want, findPlaceholders(req, body))
+			require.Equal(t, tc.want, findPlaceholders(tc.build(t)))
 		})
 	}
 }
 
 func TestApplyEncodesForEachLocation(t *testing.T) {
 	value := `a&b/c"d`
-	req := newRequest(t, "POST", "https://api.example.com/v1/ren:KEY?token=ren:KEY", []byte(`{"key":"ren:KEY"}`), "application/json")
+	req := newRequest(t, "POST", "https://api.example.com/v1/ren:KEY?token=ren:KEY", nil, "")
 	req.Header.Set("Authorization", "Bearer ren:KEY")
-	body, err := readBody(req)
-	require.NoError(t, err)
-	body, err = apply(req, body, []Op{{Op: "replace", Placeholder: "ren:KEY", Value: value, In: []string{"header", "query", "path", "body"}}})
-	require.NoError(t, err)
+	require.NoError(t, apply(req, []Op{{Op: "replace", Placeholder: "ren:KEY", Value: value, In: []string{"header", "query", "path"}}}))
 
 	require.Equal(t, "Bearer "+value, req.Header.Get("Authorization"))
 	query, err := url.ParseQuery(req.URL.RawQuery)
@@ -94,46 +87,21 @@ func TestApplyEncodesForEachLocation(t *testing.T) {
 	require.Equal(t, "token="+url.QueryEscape(value), req.URL.RawQuery)
 	require.Equal(t, "/v1/"+value, req.URL.Path)
 	require.Equal(t, "/v1/"+url.PathEscape(value), req.URL.EscapedPath())
-	require.JSONEq(t, `{"key":"a&b/c\"d"}`, string(body))
-	require.Empty(t, findPlaceholders(req, body))
+	require.Empty(t, findPlaceholders(req))
 }
 
 func TestApplyReEncodesBasic(t *testing.T) {
 	req := newRequest(t, "GET", "https://github.com/acme/repo.git", nil, "")
 	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("x-access-token:ren:GITHUB")))
-	_, err := apply(req, nil, []Op{{Op: "replace", Placeholder: "ren:GITHUB", Value: "ghs_real", In: []string{"header"}}})
-	require.NoError(t, err)
+	require.NoError(t, apply(req, []Op{{Op: "replace", Placeholder: "ren:GITHUB", Value: "ghs_real", In: []string{"header"}}}))
 	require.Equal(t, "Basic "+base64.StdEncoding.EncodeToString([]byte("x-access-token:ghs_real")), req.Header.Get("Authorization"))
-}
-
-func TestApplyFormBody(t *testing.T) {
-	req := newRequest(t, "POST", "https://api.example.com/token", []byte("client_secret=ren%3AKEY&grant=x"), "application/x-www-form-urlencoded")
-	body, err := readBody(req)
-	require.NoError(t, err)
-	body, err = apply(req, body, []Op{{Op: "replace", Placeholder: "ren:KEY", Value: "s&cret", In: []string{"body"}}})
-	require.NoError(t, err)
-	form, err := url.ParseQuery(string(body))
-	require.NoError(t, err)
-	require.Equal(t, "s&cret", form.Get("client_secret"))
-}
-
-func TestBodyOverLimitStreamsUnchanged(t *testing.T) {
-	large := bytes.Repeat([]byte("a"), maxBodyBytes+1)
-	req := newRequest(t, "POST", "https://api.example.com/upload", large, "application/json")
-	body, err := readBody(req)
-	require.NoError(t, err)
-	require.Nil(t, body)
-	sent, err := io.ReadAll(req.Body)
-	require.NoError(t, err)
-	require.Len(t, sent, len(large))
 }
 
 func TestSetHeaderAndStripRenHeaders(t *testing.T) {
 	req := newRequest(t, "GET", "https://mcp.linear.app/mcp", nil, "")
 	req.Header.Set("X-Ren-Revision", "3")
 	stripRenHeaders(req)
-	_, err := apply(req, nil, []Op{{Op: "setHeader", Name: "Authorization", Value: "Bearer lin_real"}})
-	require.NoError(t, err)
+	require.NoError(t, apply(req, []Op{{Op: "setHeader", Name: "Authorization", Value: "Bearer lin_real"}}))
 	require.Equal(t, "Bearer lin_real", req.Header.Get("Authorization"))
 	require.Empty(t, req.Header.Get("X-Ren-Revision"))
 }

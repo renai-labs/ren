@@ -93,13 +93,17 @@ func orDefault(d Duration, fallback time.Duration) time.Duration {
 
 // Reply is Ren's answer to a resolve.
 type Reply struct {
-	Allow    bool     `json:"allow"`
-	Workload string   `json:"workload,omitempty"`
-	TTL      int      `json:"ttl,omitempty"`
-	Labels   []string `json:"labels,omitempty"`
-	Inject   []Op     `json:"inject,omitempty"`
-	Reason   string   `json:"reason,omitempty"`
-	Label    string   `json:"label,omitempty"`
+	Allow    bool   `json:"allow"`
+	Workload string `json:"workload,omitempty"`
+	TTL      int    `json:"ttl,omitempty"`
+	// ExpiresAt is when the first value in the answer stops working (Unix
+	// seconds). The egress never uses the answer after it, also when Ren is
+	// down.
+	ExpiresAt int64    `json:"expiresAt,omitempty"`
+	Labels    []string `json:"labels,omitempty"`
+	Inject    []Op     `json:"inject,omitempty"`
+	Reason    string   `json:"reason,omitempty"`
+	Label     string   `json:"label,omitempty"`
 }
 
 type entry struct {
@@ -126,6 +130,50 @@ type Client struct {
 	logins  map[string]authEntry
 	conns   map[string]map[net.Conn]struct{}
 	open    sync.WaitGroup
+	// epoch counts invalidates. An answer is kept only when no invalidate
+	// ran while it was in flight, because Ren may have read the old value.
+	epoch     uint64
+	lastSweep time.Time
+}
+
+// fresh is how long an answer is reused without asking Ren: Ren's ttl,
+// or the configured default.
+func (c *Client) fresh(reply Reply) time.Duration {
+	if reply.TTL > 0 {
+		return time.Duration(reply.TTL) * time.Second
+	}
+	return c.cfg.fresh()
+}
+
+// usable says whether a kept answer may still be used, given how long
+// answers of its kind are kept. No answer is used past its expiry.
+func (c *Client) usable(kept entry, keep time.Duration) bool {
+	now := c.now()
+	if kept.reply.ExpiresAt != 0 && !now.Before(time.Unix(kept.reply.ExpiresAt, 0)) {
+		return false
+	}
+	return now.Sub(kept.storedAt) < keep
+}
+
+// sweep drops answers and logins that can no longer be used, at most once
+// per fresh period, so the maps do not keep logins of gone sandboxes. Call
+// with mu held.
+func (c *Client) sweep() {
+	now := c.now()
+	if now.Sub(c.lastSweep) < c.cfg.fresh() {
+		return
+	}
+	c.lastSweep = now
+	for key, kept := range c.answers {
+		if !c.usable(kept, c.cfg.stale()) {
+			delete(c.answers, key)
+		}
+	}
+	for key, kept := range c.logins {
+		if now.Sub(kept.storedAt) >= c.cfg.stale() {
+			delete(c.logins, key)
+		}
+	}
 }
 
 // New builds a client from a validated config.
@@ -205,6 +253,7 @@ func (c *Client) Authenticate(ctx context.Context, login, password, remoteAddr s
 	key := loginKey(login, password)
 	c.mu.Lock()
 	kept, ok := c.logins[key]
+	epoch := c.epoch
 	c.mu.Unlock()
 	if ok && c.now().Sub(kept.storedAt) < c.cfg.fresh() {
 		return kept.workload, nil
@@ -218,7 +267,11 @@ func (c *Client) Authenticate(ctx context.Context, login, password, remoteAddr s
 		"proof":      map[string]string{"kind": "ProxyLogin", "username": login, "password": password},
 		"remoteAddr": remoteAddr,
 	}, &reply)
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if err != nil {
+		// Read again: an invalidate during the call drops the kept answer.
+		kept, ok = c.logins[key]
 		if ok && c.now().Sub(kept.storedAt) < c.cfg.stale() {
 			c.logger.Warn("ren did not answer; using the last login answer", slog.String("login", login))
 			return kept.workload, nil
@@ -226,21 +279,20 @@ func (c *Client) Authenticate(ctx context.Context, login, password, remoteAddr s
 		return "", fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	if !reply.OK {
-		c.mu.Lock()
 		delete(c.logins, key)
-		c.mu.Unlock()
 		return "", fmt.Errorf("%s", reply.Reason)
 	}
-	c.mu.Lock()
-	c.logins[key] = authEntry{workload: reply.Workload, login: login, storedAt: c.now()}
-	c.mu.Unlock()
+	if c.epoch == epoch {
+		c.sweep()
+		c.logins[key] = authEntry{workload: reply.Workload, login: login, storedAt: c.now()}
+	}
 	return reply.Workload, nil
 }
 
-func answerKey(login, host string, placeholders []string) string {
-	sorted := slices.Clone(placeholders)
+func answerKey(r Request) string {
+	sorted := slices.Clone(r.Placeholders)
 	slices.Sort(sorted)
-	return login + "\x00" + host + "\x00" + strings.Join(sorted, ",")
+	return r.Login + "\x00" + r.Host + "\x00" + strings.Join(sorted, ",")
 }
 
 // Request is what the egress asks Ren about one request.
@@ -254,15 +306,17 @@ type Request struct {
 }
 
 // Resolve asks Ren what a request gets. A fresh allow answer is reused; when
-// Ren does not answer, the last allow answer is used until it is stale. A
-// denial is never kept, so a credential connected after a denial works on
-// the next request (README §6.3 rules 1 and 9).
+// Ren does not answer, the last allow answer is used until it is stale. No
+// answer is used past its expiry. A denial is never kept, so a credential
+// connected after a denial works on the next request (README §6.3 rules 1
+// and 9).
 func (c *Client) Resolve(ctx context.Context, r Request) (Reply, error) {
-	key := answerKey(r.Login, r.Host, r.Placeholders)
+	key := answerKey(r)
 	c.mu.Lock()
 	kept, ok := c.answers[key]
+	epoch := c.epoch
 	c.mu.Unlock()
-	if ok && c.now().Sub(kept.storedAt) < c.cfg.fresh() {
+	if ok && c.usable(kept, c.fresh(kept.reply)) {
 		return kept.reply, nil
 	}
 	var reply Reply
@@ -275,20 +329,24 @@ func (c *Client) Resolve(ctx context.Context, r Request) (Reply, error) {
 		"placeholders": nonNil(r.Placeholders),
 		"ops":          SupportedOps,
 	}, &reply)
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if err != nil {
-		if ok && c.now().Sub(kept.storedAt) < c.cfg.stale() {
+		// Read again: an invalidate during the call drops the kept answer.
+		kept, ok = c.answers[key]
+		if ok && c.usable(kept, c.cfg.stale()) {
 			c.logger.Warn("ren did not answer; using the last allow answer", slog.String("host", r.Host))
 			return kept.reply, nil
 		}
 		return Reply{}, fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
-	c.mu.Lock()
-	if reply.Allow {
-		c.answers[key] = entry{reply: reply, login: r.Login, storedAt: c.now()}
-	} else {
+	switch {
+	case !reply.Allow:
 		delete(c.answers, key)
+	case c.epoch == epoch:
+		c.sweep()
+		c.answers[key] = entry{reply: reply, login: r.Login, storedAt: c.now()}
 	}
-	c.mu.Unlock()
 	return reply, nil
 }
 
@@ -311,6 +369,7 @@ type Selector struct {
 // sandbox gets no more injections on a connection it kept open (C40).
 func (c *Client) Invalidate(s Selector) int {
 	c.mu.Lock()
+	c.epoch++
 	dropped := 0
 	for key, kept := range c.answers {
 		if (s.Workload != "" && strings.HasPrefix(kept.reply.Workload, s.Workload)) ||

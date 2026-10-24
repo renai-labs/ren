@@ -428,16 +428,21 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 
 	// Ren: ask Ren what this request gets and carry out its ops. A denial,
 	// or a placeholder left after the ops, is never forwarded.
-	var renUpstream *url.URL
+	var renApplied *ren.Applied
 	if p.ren != nil {
-		denied, routed := p.ren.Handle(r.Context(), r, tctx.Tunnel.ProxyLogin)
+		denied, applied := p.ren.Handle(r.Context(), r, tctx.Tunnel.ProxyLogin)
 		if denied != nil {
 			result.Action = transform.ActionReject
 			result.StatusCode = denied.StatusCode
 			p.writeResponse(w, denied)
 			return
 		}
-		renUpstream = routed
+		renApplied = applied
+		// Ren's step may have read and replaced the body; the upstream request
+		// reads it as a BufferedBody again.
+		if _, buffered := r.Body.(*transform.BufferedBody); !buffered {
+			r.Body = transform.NewBufferedBody(r.Body, bodyLimits.MaxRequestBodyBytes)
+		}
 	}
 
 	// MCP policy: evaluate the request against any matching MCP server. Runs
@@ -484,8 +489,8 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 	upstreamPath := r.URL.Path
 	upstreamRawPath := r.URL.RawPath
 	upstreamURL := ""
-	if renUpstream != nil {
-		upstreamURL = renUpstream.String()
+	if renApplied != nil && renApplied.Upstream != nil {
+		upstreamURL = renApplied.Upstream.String()
 	}
 
 	if mcpServer != nil {
@@ -546,6 +551,13 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 		upstreamReq.ContentLength = int64(reqBodyLen)
 	} else {
 		upstreamReq.ContentLength = r.ContentLength
+	}
+	// Ren: an empty body goes as no body. Over HTTP/2 a non-nil body of
+	// length 0 has an unknown length, so the request leaves without a
+	// content-length; a hop that converts it to HTTP/1.1 then sends a POST
+	// that Bun answers with 411.
+	if upstreamReq.ContentLength == 0 {
+		upstreamReq.Body = http.NoBody
 	}
 
 	var replayBody []byte
@@ -673,6 +685,9 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 			finalResp.Body = wrapped
 		}
 	}
+
+	// Ren: an injected value never goes back to the workload (README fork changes, Mask).
+	renApplied.Mask(finalResp)
 
 	// SSE: stream with flushing
 	if isSSE(finalResp) {

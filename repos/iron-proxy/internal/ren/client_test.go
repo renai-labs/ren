@@ -89,6 +89,20 @@ type hook struct {
 	down     atomic.Bool
 	answer   atomic.Value
 	lastBody atomic.Value
+	hold     atomic.Pointer[held]
+}
+
+// held stops the hook after it read a request: entered closes, then the
+// hook waits for release before it answers.
+type held struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (h *hook) holdNext() *held {
+	next := &held{entered: make(chan struct{}), release: make(chan struct{})}
+	h.hold.Store(next)
+	return next
 }
 
 func newHook(t *testing.T, c certs) *hook {
@@ -99,6 +113,10 @@ func newHook(t *testing.T, c certs) *hook {
 		h.calls.Add(1)
 		body, _ := io.ReadAll(r.Body) // a test hook; a short read fails the assertions below
 		h.lastBody.Store(string(body))
+		if wait := h.hold.Swap(nil); wait != nil {
+			close(wait.entered)
+			<-wait.release
+		}
 		if h.down.Load() {
 			http.Error(w, "down", http.StatusServiceUnavailable)
 			return
@@ -184,6 +202,74 @@ func TestInvalidate(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnavailable, "an invalidated answer is never used as a stale answer")
 }
 
+func TestResolveUsesRensTTL(t *testing.T) {
+	client, h, clk := newClient(t)
+	ctx := t.Context()
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", TTL: 5, Labels: []string{"STRIPE_API_KEY"}, Inject: []Op{}})
+	_, err := client.Resolve(ctx, stripe("ren-a"))
+	require.NoError(t, err)
+	clk.advance(6 * time.Second)
+	_, err = client.Resolve(ctx, stripe("ren-a"))
+	require.NoError(t, err)
+	require.Equal(t, int32(2), h.calls.Load(), "an answer is fresh for the ttl Ren gave it")
+}
+
+func TestResolveNeverUsesAnAnswerPastItsExpiry(t *testing.T) {
+	client, h, clk := newClient(t)
+	ctx := t.Context()
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", TTL: 30, ExpiresAt: clk.now.Add(10 * time.Minute).Unix(), Labels: []string{"MODELS"}, Inject: []Op{}})
+	_, err := client.Resolve(ctx, stripe("ren-a"))
+	require.NoError(t, err)
+
+	clk.advance(5 * time.Minute)
+	h.down.Store(true)
+	reply, err := client.Resolve(ctx, stripe("ren-a"))
+	require.NoError(t, err)
+	require.True(t, reply.Allow, "before the value expires, the last allow answer is used while Ren is down")
+
+	clk.advance(5 * time.Minute)
+	_, err = client.Resolve(ctx, stripe("ren-a"))
+	require.ErrorIs(t, err, ErrUnavailable, "a value past its expiry is never sent, also when Ren is down")
+}
+
+func TestResolveDoesNotKeepAnAnswerInvalidatedWhileInFlight(t *testing.T) {
+	client, h, _ := newClient(t)
+	ctx := t.Context()
+	wait := h.holdNext()
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Resolve(ctx, stripe("ren-a"))
+		done <- err
+	}()
+	<-wait.entered
+	client.Invalidate(Selector{Label: "STRIPE_API_KEY"})
+	close(wait.release)
+	require.NoError(t, <-done)
+
+	_, err := client.Resolve(ctx, stripe("ren-a"))
+	require.NoError(t, err)
+	require.Equal(t, int32(2), h.calls.Load(), "an answer Ren read before an invalidate is not kept after it")
+}
+
+func TestAuthenticateDoesNotKeepALoginInvalidatedWhileInFlight(t *testing.T) {
+	client, h, _ := newClient(t)
+	ctx := t.Context()
+	wait := h.holdNext()
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Authenticate(ctx, "ren-a", "secret", "")
+		done <- err
+	}()
+	<-wait.entered
+	client.Invalidate(Selector{Login: "ren-a"})
+	close(wait.release)
+	require.NoError(t, <-done)
+
+	_, err := client.Authenticate(ctx, "ren-a", "secret", "")
+	require.NoError(t, err)
+	require.Equal(t, int32(2), h.calls.Load(), "a login answer Ren gave before an invalidate is not kept after it")
+}
+
 func TestInvalidateLoginClosesItsConnections(t *testing.T) {
 	client, _, _ := newClient(t)
 	server, peer := net.Pipe()
@@ -207,7 +293,7 @@ func TestHandleDeniesWithTheLabel(t *testing.T) {
 	require.Equal(t, "credential_missing", resp.Header.Get("X-Ren-Egress"))
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"error":"ren_credential_missing","label":"MISSING","hint":"call ren_connect"}`, string(body))
+	require.JSONEq(t, `{"error":"ren_credential_missing","label":"MISSING"}`, string(body))
 }
 
 func TestHandleNeverForwardsAnUnresolvedPlaceholder(t *testing.T) {
@@ -229,9 +315,9 @@ func TestHandleRoutes(t *testing.T) {
 	}})
 	req := newRequest(t, "POST", "https://ren.internal/host/pull", nil, "")
 	req.Host = "ren.internal"
-	resp, upstream := client.Handle(t.Context(), req, "ren-a")
+	resp, applied := client.Handle(t.Context(), req, "ren-a")
 	require.Nil(t, resp)
-	require.Equal(t, "http://ren-server:4000/host/pull", upstream.String())
+	require.Equal(t, "http://ren-server:4000/host/pull", applied.Upstream.String())
 	require.Equal(t, "Bearer host-token", req.Header.Get("Authorization"))
 }
 
@@ -240,4 +326,37 @@ func TestConfigRefusesMissingFiles(t *testing.T) {
 	require.Error(t, err)
 	err = Config{}.Validate()
 	require.ErrorContains(t, err, "ca_cert, cert, control_listen, hook, key required")
+}
+
+func TestHandleTreatsAPlaceholderInABodyAsText(t *testing.T) {
+	client, h, _ := newClient(t)
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", Inject: []Op{
+		{Op: "replace", Placeholder: "ren:MODELS", Value: "sk-ant-real", In: []string{"header"}},
+	}})
+	body := `{"tools":[{"description":"Credentials hold placeholders such as ren:STRIPE_API_KEY."}]}`
+	req := newRequest(t, "POST", "https://llm.example.com/v1/messages", []byte(body), "application/json")
+	req.Host = "llm.example.com"
+	req.Header.Set("X-Api-Key", "ren:MODELS")
+	denied, _ := client.Handle(t.Context(), req, "ren-a")
+	require.Nil(t, denied, "a model call whose prompt mentions a placeholder is not refused")
+	require.Contains(t, h.lastBody.Load(), `"placeholders":["ren:MODELS"]`)
+	sent, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+	require.Equal(t, body, string(sent), "the body goes on unchanged")
+}
+
+func TestHandleSaysWhenAPlaceholderSitsWhereItsCredentialDoesNotGo(t *testing.T) {
+	client, h, _ := newClient(t)
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", Labels: []string{"STRIPE_API_KEY"}, Inject: []Op{
+		{Op: "replace", Placeholder: "ren:STRIPE_API_KEY", Value: "sk_live_secret_1", In: []string{"header"}},
+	}})
+	req := newRequest(t, "GET", "https://api.stripe.com/v1/customers/ren:STRIPE_API_KEY", nil, "")
+	req.Host = "api.stripe.com"
+	req.Header.Set("Authorization", "Bearer ren:STRIPE_API_KEY")
+	denied, _ := client.Handle(t.Context(), req, "ren-a")
+	require.NotNil(t, denied)
+	require.Equal(t, "location_not_allowed", denied.Header.Get("X-Ren-Egress"))
+	body, err := io.ReadAll(denied.Body)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"error":"ren_location_not_allowed","label":"STRIPE_API_KEY"}`, string(body))
 }

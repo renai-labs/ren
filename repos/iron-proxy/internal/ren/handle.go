@@ -12,18 +12,19 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // Deny is the response for every refusal: 403, the reason in x-ren-egress,
-// and a JSON body that names the label, so the agent can call ren_connect
+// and a JSON body that names the label, so the agent can tell the person
 // (README C42).
 func Deny(reason, label string) *http.Response {
 	body := map[string]string{"error": "ren_" + reason}
 	if label != "" {
 		body["label"] = label
-		body["hint"] = "call ren_connect"
 	}
 	encoded, _ := json.Marshal(body) // a string map always encodes
 	return &http.Response{
@@ -38,16 +39,19 @@ func Deny(reason, label string) *http.Response {
 	}
 }
 
+// Applied is what Handle did to a request: the upstream of a route op, and
+// the values it put in, so the response can be masked (README §6.3 rule 11).
+type Applied struct {
+	Upstream *url.URL
+	masks    []mask
+}
+
 // Handle runs Ren's step for one request of an authenticated login. It
-// returns a response to send instead of forwarding, or the upstream URL of
-// a route op, or neither. A request that still holds a placeholder after the
-// ops is never forwarded (README C42).
-func (c *Client) Handle(ctx context.Context, req *http.Request, login string) (*http.Response, *url.URL) {
+// returns a response to send instead of forwarding, or what it applied. A
+// request that still holds a placeholder after the ops is never forwarded
+// (README C42).
+func (c *Client) Handle(ctx context.Context, req *http.Request, login string) (*http.Response, *Applied) {
 	stripRenHeaders(req)
-	body, err := readBody(req)
-	if err != nil {
-		return Deny("bad_request", ""), nil
-	}
 	host, portText, err := net.SplitHostPort(req.Host)
 	if err != nil {
 		host = req.Host
@@ -57,7 +61,7 @@ func (c *Client) Handle(ctx context.Context, req *http.Request, login string) (*
 		}
 	}
 	port, _ := strconv.Atoi(portText) // a host:port from net/http has a numeric port
-	placeholders := findPlaceholders(req, body)
+	placeholders := findPlaceholders(req)
 	reply, err := c.Resolve(ctx, Request{
 		Login:        login,
 		Host:         host,
@@ -74,24 +78,34 @@ func (c *Client) Handle(ctx context.Context, req *http.Request, login string) (*
 		c.logger.Info("ren denied a request", slog.String("host", host), slog.String("reason", reply.Reason), slog.String("label", reply.Label))
 		return Deny(reply.Reason, reply.Label), nil
 	}
-	body, err = apply(req, body, reply.Inject)
-	if err != nil {
+	if err := apply(req, reply.Inject); err != nil {
 		c.logger.Warn("ren op could not apply", slog.String("host", host), slog.String("error", err.Error()))
 		return Deny("credential_missing", ""), nil
 	}
-	if left := findPlaceholders(req, body); len(left) > 0 {
-		return Deny("credential_missing", left[0][len("ren:"):]), nil
+	if left := findPlaceholders(req); len(left) > 0 {
+		label := strings.SplitN(left[0][len("ren:"):], ".", 2)[0]
+		// The credential resolved, but the placeholder also sits where the
+		// credential does not go (a path or a query for a header credential).
+		if slices.Contains(reply.Labels, label) {
+			return Deny("location_not_allowed", label), nil
+		}
+		return Deny("credential_missing", label), nil
 	}
-	var upstream *url.URL
+	applied := &Applied{masks: masksOf(reply.Inject)}
+	// An upstream answers in plain text when the request asks for no
+	// encoding, so the egress can find an injected value that comes back.
+	if len(applied.masks) > 0 {
+		req.Header.Del("Accept-Encoding")
+	}
 	for _, op := range reply.Inject {
 		if op.Op == "route" {
-			upstream, err = routeTarget(req, op.Upstream)
+			applied.Upstream, err = routeTarget(req, op.Upstream)
 			if err != nil {
 				return Deny("credential_missing", ""), nil
 			}
 		}
 	}
-	return nil, upstream
+	return nil, applied
 }
 
 // ServeControl serves Ren's calls to this egress over mTLS: invalidate and
