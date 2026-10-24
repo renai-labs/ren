@@ -6,7 +6,9 @@ import {
   TimelineRow,
   TimelineText,
   ToolDisplay,
+  ToolState,
 } from "@ren/chat"
+import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
 import { Avatar } from "@ren/ui/avatar"
@@ -23,6 +25,7 @@ import { Transcript } from "@ren/ui/transcript"
 import { DateTime } from "effect"
 import { Platform } from "../../platform/platform.js"
 import { ChatView } from "./chat-view.js"
+import { ConnectCard } from "./connect-card.js"
 import { TranscriptError, TranscriptNotice, TranscriptNoticeItem, TranscriptShell } from "./transcript-notice.js"
 import { FileChanges, TranscriptTool } from "./transcript-tool.js"
 
@@ -81,8 +84,15 @@ function Subagent(props: { shared: Shared; tool: SessionMessage.Tool }) {
   )
 }
 
+function RenConnect(props: { shared: Shared; label: string }) {
+  const prompt = ChatReact.useAction(props.shared.sessionID, (opened, text: string) => opened.prompt({ text }))
+  return <ConnectCard sessionID={props.shared.root} label={props.label} onConnected={prompt} />
+}
+
 function Tool(props: { shared: Shared; tool: SessionMessage.Tool }) {
   if (isSubagent(props.tool)) return <Subagent shared={props.shared} tool={props.tool} />
+  const label = props.tool.name === "ren_connect" ? ToolState.input(props.tool).label : undefined
+  if (typeof label === "string") return <RenConnect shared={props.shared} label={label} />
   return (
     <TranscriptTool
       tool={props.tool}

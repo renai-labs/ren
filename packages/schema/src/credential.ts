@@ -191,6 +191,28 @@ export const Hosts = Schema.Array(Host)
   .check(Schema.isMinLength(1, { message: "Add at least one host." }), Schema.isMaxLength(maximumHosts))
   .annotate({ identifier: "Credential.Hosts" })
 
+export const splitHosts = (text: string) => [
+  ...new Set(
+    text
+      .split(/[\s,]+/u)
+      .map((host) => host.trim().toLowerCase())
+      .filter((host) => host.length > 0),
+  ),
+]
+
+const isHost = Schema.is(Host)
+
+export const HostsText = Schema.String.check(
+  Schema.makeFilter((text) => splitHosts(text).length > 0 || "Add at least one host, such as api.stripe.com."),
+  Schema.makeFilter(
+    (text) =>
+      splitHosts(text).every(isHost) || "Use host names such as api.stripe.com or *.stripe.com; no IP address or *.",
+  ),
+).annotate({
+  identifier: "Credential.HostsText",
+  description: "Hosts as a person types them: separated by commas, spaces or new lines.",
+})
+
 export const Owner = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("org") }),
   Schema.Struct({ kind: Schema.Literal("space"), spaceId: Space.ID }),
