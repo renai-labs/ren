@@ -1,0 +1,788 @@
+# iron-proxy example configuration
+
+# DNS server configuration
+dns:
+  # Whether the built-in DNS server runs. Defaults to true when omitted. Set to
+  # false (or IRON_DNS_ENABLED=false) to disable DNS interception entirely — useful
+  # when clients reach the proxy via explicit HTTP(S)_PROXY settings instead of DNS
+  # redirection. When disabled, proxy_ip is not required.
+  # enabled: true
+  listen: ":53"
+  # The IP address returned for intercepted DNS queries.
+  # Should be the IP where iron-proxy is running.
+  proxy_ip: "10.16.0.1"
+  # Optional upstream DNS resolver for the proxy's own lookups. If set, both
+  # passthrough DNS queries and upstream HTTP connections resolve via this server
+  # instead of the OS default. Useful when iron-proxy owns the system DNS.
+  # upstream_resolver: "8.8.8.8:53"
+  # Domains to pass through to the OS resolver (everything else resolves to proxy_ip)
+  passthrough:
+    - "*.internal.corp"
+    - "metadata.google.internal"
+  # Static DNS records (take precedence over interception and passthrough)
+  records:
+    - name: "internal.example.com"
+      type: A
+      value: "10.0.0.5"
+
+# Proxy listener configuration
+proxy:
+  http_listen: ":80"
+  https_listen: ":443"
+  # Global body buffer limits for transforms.
+  max_request_body_bytes: 1048576   # default: 1 MiB
+  # max_response_body_bytes: 0      # default: 0 (uncapped)
+  # Cap on how long the proxy waits for upstream response headers before
+  # returning 502. Accepts Go duration syntax: "30s" (default), "5m", "2h".
+  # Bump this for upstream endpoints that legitimately take longer than 30s
+  # to begin replying (e.g. LLM context-compaction endpoints).
+  # upstream_response_header_timeout: "5m"
+  #
+  # CIDRs the proxy refuses to dial upstream. Enforced at TCP connect time
+  # against the resolved address — defeats DNS rebinding and TOCTOU between
+  # allowlist evaluation and the eventual connect. CIDR notation is required
+  # (bare IPs are rejected).
+  #
+  # When this key is omitted, a secure default is applied that blocks cloud
+  # instance metadata (IMDS) and loopback:
+  #   - 169.254.169.254/32   AWS / GCP / Azure IPv4 IMDS
+  #   - fd00:ec2::254/128    AWS IPv6 IMDS
+  #   - 127.0.0.0/8          IPv4 loopback
+  #   - ::1/128              IPv6 loopback
+  #
+  # Set an explicit list to override the defaults. Use an empty list
+  # (upstream_deny_cidrs: []) if you intentionally need to allow IMDS or
+  # loopback traffic to upstreams.
+  # The equivalent environment override is a comma-separated list:
+  # IRON_PROXY_UPSTREAM_DENY_CIDRS="169.254.169.254/32,127.0.0.0/8"
+  # upstream_deny_cidrs:
+  #   - "169.254.169.254/32"
+  #   - "127.0.0.0/8"
+  #
+  # Route iron-proxy's own outbound connections through an upstream
+  # SOCKS5/HTTP CONNECT proxy. Useful in corporate networks where all egress
+  # must traverse a forward proxy. Proxy URLs accept http, https, socks5, and
+  # socks5h schemes. The standard HTTP_PROXY/HTTPS_PROXY/NO_PROXY environment
+  # variables override the matching field below when set, so you can omit this
+  # block entirely if those are already exported.
+  #
+  # NOTE: when an upstream proxy is in use, upstream_deny_cidrs is enforced
+  # against the proxy's address, not the final target — the proxy resolves and
+  # connects to the target on iron-proxy's behalf. This currently applies to
+  # the HTTP/HTTPS forward path (incl. CONNECT in mitm mode); raw TCP tunnels
+  # (sni-only passthrough, WebSocket) still dial directly.
+  # upstream_proxy:
+  #   http_proxy: "http://proxy.corp:3128"
+  #   https_proxy: "http://proxy.corp:3128"
+  #   no_proxy: "localhost,127.0.0.1,.internal.example.com"
+
+# TLS / MITM configuration
+tls:
+  # mode: "mitm" (default) or "sni-only".
+  # In sni-only mode, the proxy peeks at the TLS ClientHello SNI and
+  # TCP-passthroughs to the upstream without terminating TLS. No CA cert is
+  # needed on clients, but the pipeline only sees the hostname (method,
+  # path, headers, and body are empty), so host-only allowlist rules are the
+  # only thing that can match. Body-inspecting transforms like secrets and
+  # grpc still run, but have nothing to act on.
+  mode: "mitm"
+  ca_cert: "/etc/iron-proxy/ca.crt"
+  ca_key: "/etc/iron-proxy/ca.key"
+  cert_cache_size: 1000
+  leaf_cert_expiry_hours: 72
+
+# Transform configuration
+transforms:
+  - name: allowlist
+    config:
+      # When true, log requests that would be blocked but allow them through.
+      # Useful for rolling out allowlist rules without breaking existing traffic.
+      # warn: true
+      # Simple form: allow all methods and paths to these hosts
+      domains:
+        - "registry.npmjs.org"
+      cidrs:
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+      # Rule form: restrict by method and/or path
+      rules:
+        - host: "api.openai.com"
+          methods: ["POST"]
+          paths: ["/v1/*"]
+        - host: "*.anthropic.com"
+          methods: ["POST"]
+          paths: ["/v1/messages", "/v1/complete"]
+        - cidr: "172.16.0.0/12"
+          methods: ["GET"]
+
+  - name: secrets
+    config:
+      secrets:
+        # Inject mode: the proxy always sets the header on matching requests.
+        # The client does not need to send any credential.
+        - source:
+            type: env
+            var: OPENAI_API_KEY
+          inject:
+            # The header name is sent upstream with the casing written here.
+            header: "Authorization"
+            # Go template with .Value (the secret) and base64 (variadic concat+encode).
+            formatter: "Bearer {{ .Value }}"
+          rules:
+            - host: "api.openai.com"
+              methods: ["POST"]
+              paths: ["/v1/*"]
+
+        # Inject mode with query parameter (no formatter needed):
+        # - source:
+        #     type: env
+        #     var: MAPS_API_KEY
+        #   inject:
+        #     query_param: "key"
+        #   rules:
+        #     - host: "maps.googleapis.com"
+
+        # Inject mode with base64 formatter (e.g. GitHub-style basic auth):
+        # - source:
+        #     type: env
+        #     var: GITHUB_TOKEN
+        #   inject:
+        #     header: "Authorization"
+        #     formatter: 'Basic {{ base64 "x-credential:" .Value }}'
+        #   rules:
+        #     - host: "api.github.com"
+
+        # Replace mode: the client sends a proxy token, and the proxy swaps it
+        # for the real secret before forwarding upstream.
+        - source:
+            type: env
+            var: ANTHROPIC_API_KEY
+          replace:
+            proxy_value: "proxy-token-123"
+            match_headers: ["X-Api-Key"]
+            # When true, requests to a matching host that do not contain the
+            # proxy token are rejected (403). Prevents workloads from bypassing
+            # the secret-swap mechanism with alternative credentials.
+            require: true
+          rules:
+            - host: "*.anthropic.com"
+              methods: ["POST"]
+              paths: ["/v1/messages", "/v1/complete"]
+
+        # Replace mode with URL path scanning. Use match_path when the client
+        # embeds the proxy token in the URL path (e.g. Telegram-style APIs).
+        # Defaults to false; opt in explicitly because paths often appear in
+        # access logs.
+        # - source:
+        #     type: env
+        #     var: TELEGRAM_BOT_TOKEN
+        #   replace:
+        #     proxy_value: "proxy-tg-token-123"
+        #     match_headers: []          # disable header scanning if path-only
+        #     match_path: true
+        #     require: true
+        #   rules:
+        #     - host: "api.telegram.org"
+
+        # Replace mode with URL query string scanning. Use match_query when the
+        # client puts the proxy token in a query parameter. Defaults to false;
+        # opt in explicitly because query strings often appear in access logs.
+        # - source:
+        #     type: env
+        #     var: MAPS_API_KEY
+        #   replace:
+        #     proxy_value: "proxy-maps-token-123"
+        #     match_headers: []          # disable header scanning if query-only
+        #     match_query: true
+        #     require: true
+        #   rules:
+        #     - host: "maps.googleapis.com"
+
+        # Replace mode with AWS Secrets Manager and background refresh:
+        # - source:
+        #     type: aws_sm
+        #     secret_id: "arn:aws:secretsmanager:us-east-1:123456:secret:my-api-key"
+        #     region: "us-east-1"      # optional, falls back to AWS SDK default
+        #     json_key: "api_key"      # optional, extract a field from a JSON secret
+        #     ttl: "15m"               # optional, re-fetch interval; 0 = no refresh
+        #   replace:
+        #     proxy_value: "proxy-token-456"
+        #     match_headers: ["Authorization"]
+        #   rules:
+        #     - host: "api.example.com"
+
+        # Replace mode with AWS Systems Manager Parameter Store:
+        # - source:
+        #     type: aws_ssm
+        #     name: "/myapp/api-key"           # parameter name or ARN
+        #     region: "us-east-1"              # optional, falls back to AWS SDK default
+        #     with_decryption: true            # optional, defaults to true for SecureString params
+        #     json_key: "api_key"              # optional, extract a field from a JSON value
+        #     ttl: "15m"                       # optional, re-fetch interval; 0 = no refresh
+        #   replace:
+        #     proxy_value: "proxy-token-789"
+        #     match_headers: ["Authorization"]
+        #   rules:
+        #     - host: "api.example.com"
+
+        # Replace mode with 1Password (service account token auth). The token
+        # is read from the OP_SERVICE_ACCOUNT_TOKEN env var. secret_ref uses
+        # 1Password's secret reference syntax.
+        # - source:
+        #     type: 1password
+        #     secret_ref: "op://Engineering/OpenAI/credential"
+        #     ttl: "15m"                            # optional, re-fetch interval; 0 = no refresh
+        #   replace:
+        #     proxy_value: "proxy-token-1p"
+        #     match_headers: ["Authorization"]
+        #   rules:
+        #     - host: "api.openai.com"
+
+        # Replace mode with 1Password Connect (self-hosted Connect server).
+        # secret_ref uses the same op:// syntax as the 1password source. The
+        # Connect server URL is read from OP_CONNECT_HOST and the API token
+        # from OP_CONNECT_TOKEN.
+        # - source:
+        #     type: 1password_connect
+        #     secret_ref: "op://Engineering/OpenAI/credential"
+        #     ttl: "15m"                   # optional, re-fetch interval; 0 = no refresh
+        #   replace:
+        #     proxy_value: "proxy-token-1pc"
+        #     match_headers: ["Authorization"]
+        #   rules:
+        #     - host: "api.openai.com"
+
+        # Legacy replace mode (top-level fields, still supported):
+        # - source:
+        #     type: env
+        #     var: OPENAI_API_KEY
+        #   proxy_value: "proxy-token-123"
+        #   match_headers: ["Authorization"]
+        #   require: true
+        #   rules:
+        #     - host: "api.openai.com"
+
+  # GCP service account authentication. Signs a JWT with the configured
+  # keyfile, exchanges it at Google's token endpoint for a short-lived OAuth2
+  # access token, and sets Authorization: Bearer on matching requests. Tokens
+  # are cached and refreshed automatically before expiry. Scopes are baked
+  # into the minted token; widen them if one configured transform serves
+  # multiple GCP APIs. Requires MITM mode (sni-only mode cannot rewrite
+  # headers). On token-minting failure the request is rejected (403).
+  #
+  # The keyfile JSON can come from disk via keyfile_path, or from any other
+  # configured secret source (env, aws_sm, aws_ssm, 1password,
+  # 1password_connect) via a nested keyfile block. Use exactly one.
+  #
+  # Set subject to impersonate a Workspace user via domain-wide delegation:
+  # the minted token then acts as that user rather than the service account.
+  # - name: gcp_auth
+  #   config:
+  #     keyfile_path: "/etc/iron-proxy/gcp-sa.json"
+  #     scopes:
+  #       - "https://www.googleapis.com/auth/cloud-platform"
+  #     rules:
+  #       - host: "*.googleapis.com"
+  #
+  # Same thing, keyfile sourced from 1Password Connect, impersonating a user:
+  # - name: gcp_auth
+  #   config:
+  #     keyfile:
+  #       type: 1password_connect
+  #       secret_ref: "op://Engineering/GCP-SA/credential"
+  #     subject: "user@workspace.example.com"   # optional, domain-wide delegation
+  #     scopes:
+  #       - "https://www.googleapis.com/auth/cloud-platform"
+  #     rules:
+  #       - host: "*.googleapis.com"
+  #
+  # Workload identity: ironproxy holds the pod credentials via Google
+  # Application Default Credentials (GKE Workload Identity through the
+  # metadata server, GOOGLE_APPLICATION_CREDENTIALS, Workload Identity
+  # Federation, etc.) and the agent never sees them. The agent SDK can run
+  # with any stub credentials: gcp_auth stubs the OAuth2 token endpoint and
+  # the metadata server, then injects the real bearer token on outbound
+  # requests. The subject field is rejected with this provider because
+  # metadata-server credentials cannot perform domain-wide delegation.
+  # - name: gcp_auth
+  #   config:
+  #     credentials_provider:
+  #       type: workload_identity
+  #     scopes:
+  #       - "https://www.googleapis.com/auth/cloud-platform"
+  #     rules:
+  #       - host: "*.googleapis.com"
+
+  # GCP OIDC ID token authentication. Mints a Google-signed ID token with
+  # the configured audience and sets Authorization: Bearer on matching
+  # requests. This is the token shape required by private Cloud Run services,
+  # Cloud Run functions, IAP, API Gateway, and other audience-authenticated
+  # Google targets. Tokens are cached and refreshed automatically before
+  # expiry. Requires MITM mode (sni-only mode cannot rewrite headers). On
+  # token-minting failure the request is rejected (403).
+  #
+  # The service account JSON can come from disk via keyfile_path, or from any
+  # configured secret source (env, aws_sm, aws_ssm, 1password,
+  # 1password_connect) via a nested keyfile block. Use exactly one.
+  #
+  # Cloud Run checks the aud claim against the receiving service URL or a
+  # configured custom audience. For Cloud Run, custom domains are not valid
+  # audience values.
+  # - name: gcp_id_token
+  #   config:
+  #     keyfile_path: "/etc/iron-proxy/cloud-run-caller.json"
+  #     audience: "https://my-service-abc123-uc.a.run.app"
+  #     # Optional. Use x-serverless-authorization when the upstream app needs
+  #     # the Authorization header for its own application auth.
+  #     header: authorization
+  #     rules:
+  #       - host: "my-service-abc123-uc.a.run.app"
+  #
+  # Same thing, service account JSON sourced from 1Password Connect:
+  # - name: gcp_id_token
+  #   config:
+  #     keyfile:
+  #       type: 1password_connect
+  #       secret_ref: "op://Engineering/Cloud-Run-Caller/credential"
+  #     audience: "https://my-service-abc123-uc.a.run.app"
+  #     header: x-serverless-authorization
+  #     rules:
+  #       - host: "my-service-abc123-uc.a.run.app"
+
+  # OAuth2 token injection. Mints short-lived OAuth2 access tokens and sets
+  # Authorization: Bearer on matching requests. Each entry under tokens names
+  # a grant type, its credential fields, and the hosts it applies to. Token
+  # exchange, caching, and refresh are handled automatically. Requires MITM
+  # mode. By default a minting failure is logged and the request is forwarded
+  # without the token, so one broken credential doesn't take down every request
+  # the entry matches. Set "require: true" on an entry to fail closed instead
+  # and reject those requests with a 502 (same flag as the secrets transform).
+  #
+  # grant is one of:
+  #   refresh_token       RFC 6749 — a refresh token plus a client id
+  #   client_credentials  RFC 6749 4.4 — a client id and secret
+  #   password            RFC 6749 4.3 — username + password + client id
+  #                       (+ optional client secret). Used by vendors that
+  #                       trade a service-account login for a bearer.
+  #   jwt_bearer          RFC 7523 — a JWT signed with an RSA private key,
+  #                       posted as an assertion. Used by DocuSign,
+  #                       Salesforce, Box, Zoom Server-to-Server, etc.
+  #
+  # (For GCP service-account auth — also an RFC 7523 JWT-bearer flow but with
+  # a Google-specific keyfile format — use the gcp_auth transform above.)
+  #
+  # Each credential field is a discrete secret source, the same shape as a
+  # secrets transform source (env, aws_sm, aws_ssm, 1password,
+  # 1password_connect); add json_key to any source to pull one field out of a
+  # JSON secret. token_endpoint is required.
+  #
+  # Setting token_endpoint also stubs that endpoint, so a sandboxed client SDK
+  # can complete its own token dance against the proxy with a placeholder
+  # token while the proxy injects the real one.
+  #
+  # token_endpoint_headers (optional, any grant) sends extra request headers
+  # on the token POST itself. Some vendors require an api-key header on the
+  # token endpoint in addition to client_id/client_secret in the form body.
+  # Each value is a discrete secret source.
+  # - name: oauth_token
+  #   config:
+  #     tokens:
+  #       # Each field resolved from its own source.
+  #       - grant: refresh_token
+  #         require: true        # reject with 502 if minting fails (default: forward without token)
+  #         refresh_token:
+  #           type: 1password_connect
+  #           secret_ref: "op://Engineering/GSUITE-OAUTH/refresh-token"
+  #         client_id:
+  #           type: env
+  #           var: GSUITE_OAUTH_CLIENT_ID
+  #         client_secret:        # omit for public (PKCE) clients
+  #           type: 1password_connect
+  #           secret_ref: "op://Engineering/GSUITE-OAUTH/client-secret"
+  #         token_endpoint: "https://oauth2.googleapis.com/token"
+  #         scopes:
+  #           - "https://www.googleapis.com/auth/gmail.readonly"
+  #         rules:
+  #           - host: "gmail.googleapis.com"
+  #       # Both fields pulled out of one JSON secret with json_key.
+  #       - grant: client_credentials
+  #         client_id:
+  #           type: aws_sm
+  #           secret_id: "arn:aws:secretsmanager:us-east-1:123:secret:oauth"
+  #           json_key: "client_id"
+  #         client_secret:
+  #           type: aws_sm
+  #           secret_id: "arn:aws:secretsmanager:us-east-1:123:secret:oauth"
+  #           json_key: "client_secret"
+  #         token_endpoint: "https://login.example.com/oauth2/token"
+  #         rules:
+  #           - host: "api.example.com"
+  #
+  # DocuSign-style: JWT-bearer grant. The proxy mints a JWT signed with the
+  # integration's RSA private key, exchanges it at the token endpoint, and
+  # injects the resulting bearer on requests to DocuSign's API hosts.
+  # The same shape works for Salesforce (audience=https://login.salesforce.com,
+  # token_endpoint=https://login.salesforce.com/services/oauth2/token), Box,
+  # Zoom Server-to-Server, etc. — only audience, token_endpoint, and scopes
+  # change.
+  # - name: oauth_token
+  #   config:
+  #     tokens:
+  #       - grant: jwt_bearer
+  #         issuer:         {type: env, var: DOCUSIGN_INTEGRATION_KEY}   # iss
+  #         subject:        {type: env, var: DOCUSIGN_USER_GUID}         # sub
+  #         private_key:                                                 # PEM-encoded RSA private key
+  #           type: 1password_connect
+  #           secret_ref: "op://Engineering/DOCUSIGN/private-key.pem"
+  #         private_key_id: {type: env, var: DOCUSIGN_KEY_ID}            # optional; emitted as JWT kid header
+  #         audience: "account.docusign.com"                             # account-d.docusign.com for the dev sandbox
+  #         token_endpoint: "https://account.docusign.com/oauth/token"
+  #         scopes: ["signature", "impersonation"]
+  #         rules:
+  #           - host: "*.docusign.net"
+  #
+  # AlphaSense-style: password grant + an api-key header on both the token
+  # endpoint and the resource endpoint. The bearer is minted here; the static
+  # api-key and clientId headers that GraphQL also wants are injected by two
+  # plain secrets entries below.
+  # - name: oauth_token
+  #   config:
+  #     tokens:
+  #       - grant: password
+  #         username:      {type: env, var: ALPHASENSE_USERNAME}
+  #         password:      {type: env, var: ALPHASENSE_PASSWORD}
+  #         client_id:     {type: env, var: ALPHASENSE_CLIENT_ID}
+  #         client_secret: {type: env, var: ALPHASENSE_CLIENT_SECRET}
+  #         token_endpoint: "https://api.alpha-sense.com/token"
+  #         token_endpoint_headers:
+  #           x-api-key: {type: env, var: ALPHASENSE_API_KEY}
+  #         rules:
+  #           - host: "api.alpha-sense.com"
+  #             paths: ["/gql", "/gql/*"]
+  # - name: secrets
+  #   config:
+  #     secrets:
+  #       - source: {type: env, var: ALPHASENSE_API_KEY}
+  #         inject: {header: "x-api-key"}
+  #         rules:
+  #           - host: "api.alpha-sense.com"
+  #             paths: ["/gql", "/gql/*"]
+  #       - source: {type: env, var: ALPHASENSE_CLIENT_ID}
+  #         inject: {header: "clientId"}
+  #         rules:
+  #           - host: "api.alpha-sense.com"
+  #             paths: ["/gql", "/gql/*"]
+
+  # Generic HMAC request signing. Computes an HMAC signature over a Go-template
+  # message derived from the request (timestamp, method, path, query, host,
+  # body) and injects the resulting signature plus any auxiliary credentials
+  # into a configurable set of headers. Configure once per venue (FalconX,
+  # Coinbase Prime, etc.) — the four enums (algorithm, key_encoding,
+  # output_encoding, timestamp format) cover most signing schemes.
+  #
+  # Requires MITM mode. A truncated body would produce an invalid signature, so
+  # the transform rejects any request whose body cannot be verified intact:
+  # bodies shorter than Content-Length (truncated by max_request_body_bytes
+  # above) → 413, chunked bodies → 400 unless allow_chunked_body: true. If you
+  # sign large bodies, raise proxy.max_request_body_bytes accordingly.
+  #
+  # The required "secret" credential is the HMAC key; all other credentials are
+  # user-named and addressable from header templates as .Credentials.<name>.
+  #
+  # Example: FalconX RFQ/RFS authentication
+  # - name: hmac_sign
+  #   config:
+  #     timestamp:
+  #       format: unix_seconds      # unix_seconds | unix_millis | unix_nanos | rfc3339
+  #     signature:
+  #       algorithm: sha256         # sha256 | sha512 | sha1
+  #       key_encoding: base64      # raw | base64 | hex (decoded before HMAC keying)
+  #       output_encoding: base64   # base64 | hex
+  #       # Go template. Available: .Timestamp .Method .Path .PathWithQuery .Query .Host .Body
+  #       message: "{{.Timestamp}}{{.Method}}{{.PathWithQuery}}{{.Body}}"
+  #     credentials:
+  #       key:        {type: env, var: FALCONX_API_KEY}
+  #       secret:     {type: env, var: FALCONX_SECRET}      # required: the HMAC key
+  #       passphrase: {type: env, var: FALCONX_PASSPHRASE}
+  #     headers:                    # ordered list — case is preserved on the wire
+  #       - {name: "FX-ACCESS-KEY",        value: "{{.Credentials.key}}"}
+  #       - {name: "FX-ACCESS-SIGN",       value: "{{.Signature}}"}
+  #       - {name: "FX-ACCESS-TIMESTAMP",  value: "{{.Timestamp}}"}
+  #       - {name: "FX-ACCESS-PASSPHRASE", value: "{{.Credentials.passphrase}}"}
+  #     # allow_chunked_body: false # opt-in to signing chunked (no Content-Length) bodies
+  #     rules:
+  #       - host: "api.falconx.io"
+
+  # AWS auth: re-signs an inbound SigV4 request with real credentials drawn
+  # from any registered secret source (env, aws_sm, aws_ssm, 1password, ...).
+  # The client (typically an AWS SDK) is expected to sign with placeholder
+  # credentials and any AWS_REGION/service it cares about. This transform
+  # parses the region and service out of the inbound credential scope and
+  # re-signs with the real creds, so one entry covers every AWS service the
+  # client talks to. Use allowed_regions / allowed_services to gate which
+  # scopes this entry is willing to sign for.
+  #
+  # Configure your AWS SDK with any placeholder credentials, e.g.:
+  #   AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+  #   AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+  # then point the SDK at this proxy. The real keys never leave the proxy.
+  #
+  # Requires MITM mode. Bodies shorter than Content-Length → 413, chunked
+  # bodies → 400 unless allow_chunked_body: true. For streaming uploads or any
+  # case where the body must not be buffered (S3 multipart, etc.) set
+  # unsigned_payload: true.
+  #
+  # - name: aws_auth
+  #   config:
+  #     access_key_id:     {type: env, var: AWS_ACCESS_KEY_ID}
+  #     secret_access_key: {type: env, var: AWS_SECRET_ACCESS_KEY}
+  #     # allowed_regions:  ["us-east-1", "eu-west-1"]           # optional safety gate; default allows any region
+  #     # allowed_services: ["bedrock", "s3", "dynamodb"]        # optional safety gate; default allows any service
+  #     # unsigned_payload: false
+  #     # allow_chunked_body: false
+  #     rules:
+  #       - host: "*.amazonaws.com"
+  #
+  # Workload identity: ironproxy holds the rotating pod credentials (EKS IRSA,
+  # Pod Identity, IMDSv2, or any source the AWS SDK default chain understands)
+  # and the agent never sees them. Configure the agent's AWS SDK with any
+  # placeholder credentials so it produces a signed request; aws_auth strips
+  # the placeholder signature and re-signs with the real workload identity.
+  # - name: aws_auth
+  #   config:
+  #     credentials_provider:
+  #       type: workload_identity
+  #       # region: us-east-1     # optional; overrides AWS_REGION discovery
+  #     allowed_services: ["bedrock"]
+  #     rules:
+  #       - host: "*.amazonaws.com"
+
+  # Header allowlist: strips any request header not listed below before the
+  # request goes upstream. Default-deny — every header must either match a
+  # literal name (case-insensitive) or a /regex/ pattern. Place this AFTER
+  # transforms that inject headers (e.g. secrets) so injected headers survive.
+  # - name: header_allowlist
+  #   config:
+  #     headers:
+  #       - "Authorization"
+  #       - "Content-Type"
+  #       - "User-Agent"
+  #       - "Accept"
+  #       - "/^X-Trace-.*$/"
+  #     # Optional rules limit the allowlist to specific hosts/methods/paths.
+  #     # Omit for all requests.
+  #     rules:
+  #       - host: "api.openai.com"
+
+  # Body capture: records decoded request bodies of matching hosts onto the
+  # audit log as top-level request_body / request_body_truncated fields.
+  # Observation-only — never rejects. max_request_body_bytes caps each capture
+  # (default 16384); larger bodies are truncated and flagged. When secrets runs
+  # with match_body: true, place body_capture BEFORE secrets so the audit log
+  # records proxy tokens rather than the real swapped-in credentials.
+  # - name: body_capture
+  #   config:
+  #     max_request_body_bytes: 16384
+  #     rules:
+  #       - host: "api.anthropic.com"
+  #         methods: ["POST"]
+  #         paths: ["/v1/messages"]
+
+  # gRPC transforms: each entry delegates to one external TransformService server.
+  # Use multiple entries for multiple servers; they run in pipeline order.
+  - name: grpc
+    config:
+      name: "policy-engine"
+      target: "localhost:9500"
+      send_request_body: true
+      send_response_body: true
+      # Only forward matching requests to this server (omit for all requests).
+      rules:
+        - host: "api.openai.com"
+          methods: ["POST"]
+          paths: ["/v1/*"]
+        - host: "*.anthropic.com"
+      # TLS is off by default (plaintext). Enable for production use.
+      tls:
+        enabled: true
+        ca_cert: "/etc/iron-proxy/grpc-ca.pem"
+        cert: "/etc/iron-proxy/grpc-client.pem"
+        key: "/etc/iron-proxy/grpc-client-key.pem"
+  - name: grpc
+    config:
+      name: "request-logger"
+      target: "localhost:9501"
+      # send_request_body/send_response_body default to false (headers only)
+
+  # Judge transforms: each entry is an independent LLM-backed allow/deny
+  # decision, scoped to its own rules and carrying its own natural-language
+  # policy. Place judge BEFORE the secrets transform so the LLM provider
+  # never sees real credentials.
+  - name: judge
+    config:
+      name: "github-write-guard"
+      fallback: "deny"            # deny (default) | skip
+      timeout: "8s"
+      max_concurrent: 100
+      circuit_breaker:
+        consecutive_failures: 5
+        cooldown: "10s"
+      rules:
+        - host: "api.github.com"
+          methods: ["POST", "PATCH", "DELETE", "PUT"]
+      provider:
+        type: "anthropic"
+        model: "claude-haiku-4-5-20251001"
+        api_key_env: "ANTHROPIC_API_KEY"
+        max_tokens: 256
+        # OpenAI backend alternative:
+        # type: "openai"
+        # model: "gpt-5.4-nano"
+        # api_key_env: "OPENAI_API_KEY"
+      prompt: |
+        This agent performs code review on the repository under review.
+        Allow writes to the comments and reviews endpoints of the specific
+        repository under review. Deny writes to user settings, organization
+        management, billing, or any repository the agent is not reviewing.
+
+# MCP-aware policy. Inspects Streamable HTTP JSON-RPC traffic to a configured
+# MCP server, blocks tools/call invocations that are not on the allowlist,
+# and filters tools/list responses so denied tools are hidden from the agent.
+# When this block is omitted, MCP traffic is treated as opaque JSON like any
+# other HTTP body.
+#
+# Pipeline placement: the MCP interceptor runs AFTER transforms, so allowlist
+# still gates which hosts can be reached. Argument matchers see whatever wire
+# form transforms (e.g. secrets) have already produced.
+# mcp:
+#   # JSON-RPC error envelope returned to the agent on policy denial. Both
+#   # fields are optional. Defaults: code: -32001, message: "blocked by
+#   # iron-proxy policy". Code -32001 is in the JSON-RPC server-defined range.
+#   error:
+#     code: -32001
+#     message: "blocked by iron-proxy policy"
+#   servers:
+#     - name: github                       # appears in audit as mcp.server
+#       rules:                             # standard host/method/path rules
+#         - host: "mcp.github.com"
+#           paths: ["/mcp", "/mcp/*"]
+#       tools:
+#         - name: "search_repositories"    # always allowed
+#         - name: "create_issue"
+#           when:                          # all clauses must hold; otherwise deny
+#             - path: "owner"              # dotted path against arguments
+#               equals: "ironsh"
+#             - path: "repo"
+#               in: ["iron-proxy", "tunis-v2"]
+#             # `matches: "^safe-"` is also supported (regex on string values)
+#         # Anything not listed is denied (default-deny).
+
+# PostgreSQL MITM proxy. Listens for client connections, authenticates them
+# against proxy-managed credentials, opens its own authenticated connection to
+# the upstream database (handling MD5 / SCRAM-SHA-256 termination), then issues
+# `SET ROLE "<role>"` on the upstream session. From that point on the relay is
+# essentially transparent: clients use Postgres normally and every query they
+# issue runs as the configured role for identity-aware access (e.g. RLS).
+# When this block is omitted, no postgres listener runs.
+#
+# !!! DEPLOYMENT REQUIREMENT !!!
+# If PgBouncer (or any pooler) sits between iron-proxy and PostgreSQL, it
+# MUST be configured with `pool_mode = session`. Transaction- or statement-
+# pool modes silently rebind backends between queries, which makes the role
+# we set on backend A invisible to the next query running on backend B —
+# defeating RLS without surfacing any error. This is not probed at runtime;
+# the constraint is enforced by deployment configuration.
+#
+# What the proxy rejects from the client (with a synthetic ErrorResponse, so
+# the connection stays usable). All checks parse SQL with libpg_query and walk
+# the AST, so they catch the role-mutating construct anywhere in the tree —
+# inside CTEs, subqueries, function arguments, etc.:
+#  - SET ROLE / RESET ROLE / SET SESSION AUTHORIZATION / RESET SESSION
+#    AUTHORIZATION — direct GUC mutation.
+#  - All calls to set_config, including schema-qualified and parameterized
+#    forms. Dynamic targets cannot be proven safe when the query is parsed.
+#  - The legacy wire-level FunctionCall protocol, which invokes functions by
+#    OID without carrying SQL text the proxy can inspect.
+#  - Function and procedure definitions whose bodies cannot be inspected.
+#    LANGUAGE sql and static LANGUAGE plpgsql bodies are parsed recursively;
+#    dynamic PL/pgSQL and unsupported languages are rejected.
+#  - DO $$ ... $$ blocks — the plpgsql body is opaque to the SQL parser, so
+#    we reject rather than risk an embedded role change.
+#  - Multi-statement Simple Queries — kept as a single-statement guard.
+#
+# Cannot be caught at the wire (defend at the database with role/grant config):
+#  - User-defined SECURITY DEFINER functions that elevate internally.
+#  - Dynamic SQL via plpgsql EXECUTE with a non-literal argument.
+#  - Calls to pre-existing functions that wrap set_config under another name.
+#
+# Limitations: client→proxy TLS is not supported (SSLRequest is refused);
+# CancelRequest is not forwarded; frontend messages are limited to 16 MiB;
+# one shared client credential per route (no per-user).
+#
+# The proxy runs a single postgres listener: the postgres key is one object
+# with a bind address and a list of upstreams. A single listen address serves
+# many upstream databases. The client selects an upstream by the database name
+# it sends in its startup message (psql's `dbname=`), and the proxy
+# authenticates that connection against the upstream's own credentials before
+# dialing it. The client must name a database explicitly; a database with no
+# matching upstream is rejected. Each upstream's `database` must equal the
+# database its DSN connects to (the dbname in the DSN) — otherwise the client
+# would land on a different database than the one it named, and the proxy
+# rejects the connection.
+# postgres:
+#   listen: ":5432"
+#   # The single credential clients present to the proxy, shared across every
+#   # upstream below. Routing is by database, so per-database credentials add
+#   # nothing.
+#   client:
+#     user: app_user
+#     password_env: PG_PROXY_PASSWORD
+#   upstreams:
+#     # Clients connect with dbname=appdb to reach this upstream.
+#     - database: appdb
+#       # The DSN is loaded from any registered secret source and passed
+#       # verbatim to pgconn. URL or keyword/value form both work.
+#       dsn:
+#         type: env
+#         var: PG_APPDB_DSN
+#       # The Postgres role the proxy SETs at session start. Every query the
+#       # client issues runs as this role on the upstream database.
+#       role: tenant_role
+#       # Optional session variables (GUCs) the proxy SETs at session start,
+#       # before the SET ROLE. The proxy also pins these: a client may not SET
+#       # or RESET them afterwards (nor RESET ALL / DISCARD ALL), so a setting
+#       # used as a security boundary (e.g. an RLS key) can't be overridden.
+#       # All set_config calls are blocked. Names must be bare or dotted GUC
+#       # identifiers; role and session_authorization are reserved (use role
+#       # above).
+#       settings:
+#         - name: app.tenant_id
+#           value: centaur
+#     # Clients connect with dbname=analyticsdb to reach this upstream.
+#     - database: analyticsdb
+#       dsn:
+#         type: env
+#         var: PG_ANALYTICS_DSN
+#       role: analytics_role
+
+# Optional management API. When `listen` is empty (default), the management
+# server is disabled. When set, the proxy serves an authenticated
+# POST /v1/reload endpoint that re-reads this YAML file and atomically swaps in
+# a freshly built transform pipeline. A bad config is rejected with 422; the
+# running pipeline is preserved. Standalone mode only — incompatible with
+# control-plane mode.
+# management:
+#   # Bind on loopback unless you front this with a private network or auth proxy:
+#   # /v1/reload can rebuild the entire transform pipeline.
+#   listen: "127.0.0.1:9092"
+#   # Env var that holds the bearer token. Defaults to IRON_MANAGEMENT_API_KEY.
+#   api_key_env: "IRON_MANAGEMENT_API_KEY"
+
+# Optional managed-mode control-plane settings.
+# control_plane:
+#   # Base interval between sync polls. The poller adds jitter between polls.
+#   poll_interval: "10s"
+
+# Logging
+log:
+  level: "info"  # debug, info, warn, error

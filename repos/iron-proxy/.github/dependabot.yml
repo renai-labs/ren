@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      aws-sdk-go:
+        patterns:
+          - "github.com/aws/aws-sdk-go-v2*"
+
+  - package-ecosystem: docker
+    directory: /examples/docker-compose
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /examples/nftables
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

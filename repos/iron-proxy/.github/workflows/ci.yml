@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ironsh/iron-proxy-action@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        with:
+          egress-rules: egress-rules.yaml
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test -v -race -count=1 ./...
+
+      - uses: ironsh/iron-proxy-action/summary@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        if: always()
+
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Install the gcloud SDK (gcloud + bq) before the egress proxy locks
+      # down outbound traffic, so the SDK download isn't blocked. The bq CLI
+      # is exercised by TestGCPAuthBigQueryGcloudCLI.
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - uses: ironsh/iron-proxy-action@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        with:
+          egress-rules: egress-rules.yaml
+          disable-docker: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build iron-proxy
+        run: go build -o iron-proxy ./cmd/iron-proxy
+
+      - name: Generate test CA
+        run: ./iron-proxy generate-ca -outdir tmp -alg ed25519
+
+      - name: Start 1Password Connect server
+        working-directory: integration_test/op_connect
+        env:
+          OP_CONNECT_CREDENTIALS_JSON: ${{ secrets.OP_CONNECT_CREDENTIALS_JSON }}
+          OP_CONNECT_TOKEN: ${{ secrets.OP_CONNECT_TOKEN }}
+        run: |
+          printf '%s' "$OP_CONNECT_CREDENTIALS_JSON" > 1password-credentials.json
+          docker compose up -d
+          # Wait for connect-sync to populate the shared data volume so the
+          # API can actually serve vault contents. /heartbeat returns 200 as
+          # soon as the API process is listening, so we probe /v1/vaults
+          # (auth required) instead.
+          for i in $(seq 1 30); do
+            code=$(curl -s --max-time 2 -o /tmp/vaults.out -w '%{http_code}' \
+              -H "Authorization: Bearer $OP_CONNECT_TOKEN" \
+              http://localhost:8080/v1/vaults || true)
+            echo "attempt $i: /v1/vaults -> $code"
+            if [ "$code" = "200" ]; then
+              echo "Connect server is ready (vault sync complete)"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Connect server failed to become ready (last status: $code)" >&2
+          cat /tmp/vaults.out >&2 || true
+          docker compose logs
+          exit 1
+
+      - name: Run integration tests
+        # The BigQuery service account key is stored base64-encoded in
+        # secrets so GitHub Actions' substring-based redaction can't mangle
+        # unrelated job output that happens to share fragments with the JSON
+        # keyfile. We decode it inline to a temp file and export only the
+        # path — the decoded JSON never appears in the env block GitHub
+        # prints at step start.
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-west-1
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          OP_CONNECT_HOST: http://localhost:8080
+          OP_CONNECT_TOKEN: ${{ secrets.OP_CONNECT_TOKEN }}
+          GCP_BIGQUERY_SERVICE_ACCOUNT_KEY_B64: ${{ secrets.GCP_BIGQUERY_SERVICE_ACCOUNT_KEY_B64 }}
+        run: |
+          if [ -n "$GCP_BIGQUERY_SERVICE_ACCOUNT_KEY_B64" ]; then
+            keyfile="$RUNNER_TEMP/gcp-bq-sa-key.json"
+            printf '%s' "$GCP_BIGQUERY_SERVICE_ACCOUNT_KEY_B64" | base64 -d > "$keyfile"
+            chmod 600 "$keyfile"
+            export GCP_BIGQUERY_SERVICE_ACCOUNT_KEY_FILE="$keyfile"
+          fi
+          go test -v -race -count=1 ./integration_test/ -integration
+
+      - name: Dump 1Password Connect logs
+        if: failure()
+        working-directory: integration_test/op_connect
+        run: docker compose logs || true
+
+      - name: Stop 1Password Connect server
+        if: always()
+        working-directory: integration_test/op_connect
+        run: |
+          docker compose down -v || true
+          rm -f 1password-credentials.json
+
+      - uses: ironsh/iron-proxy-action/summary@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        if: always()
+
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ironsh/iron-proxy-action@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        with:
+          egress-rules: egress-rules.yaml
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: go vet
+        run: go vet ./...
+
+      - uses: ironsh/iron-proxy-action/summary@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        if: always()
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ironsh/iron-proxy-action@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        with:
+          egress-rules: egress-rules.yaml
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: latest
+          install-mode: binary
+
+      - uses: ironsh/iron-proxy-action/summary@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        if: always()
+
+  tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ironsh/iron-proxy-action@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        with:
+          egress-rules: egress-rules.yaml
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - uses: ironsh/iron-proxy-action/summary@fa1fd82ec32396d044deba7040a6db576bec927a # v0.1.4
+        if: always()

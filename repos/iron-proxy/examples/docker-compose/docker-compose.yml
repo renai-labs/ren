@@ -1,0 +1,37 @@
+services:
+  proxy:
+    build:
+      context: ../..
+      dockerfile: examples/docker-compose/Dockerfile
+    environment:
+      - OPENAI_API_KEY=sk-real-openai-key-do-not-share
+      - INTERNAL_TOKEN=real-internal-secret-value
+    volumes:
+      - certs:/certs
+    networks:
+      demo:
+        ipv4_address: 172.20.0.2
+
+  client:
+    image: alpine:latest
+    depends_on:
+      - proxy
+    dns:
+      - 172.20.0.2
+    volumes:
+      - ./client.sh:/demo/client.sh:ro
+      - certs:/certs:ro
+    entrypoint: ["/bin/sh", "/demo/client.sh"]
+    networks:
+      demo:
+        ipv4_address: 172.20.0.4
+
+volumes:
+  certs:
+
+networks:
+  demo:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

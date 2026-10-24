@@ -1,0 +1,240 @@
+package mcp
+
+import (
+	"encoding/json"
+	"sync"
+)
+
+// Trace is the per-request MCP audit record attached to a PipelineResult. It
+// collects one Message entry per JSON-RPC message observed on either side of
+// the proxy, in the order they were processed.
+type Trace struct {
+	Server   string         `json:"server"`
+	Messages []Message      `json:"messages,omitempty"`
+	Gateway  map[string]any `json:"gateway,omitempty"`
+
+	mu sync.Mutex
+	// toolsListIDs is the set of JSON-RPC request IDs whose method was
+	// tools/list, used to correlate request → response so that the response
+	// filter only rewrites tool lists. Without this, a tools/call result
+	// that happens to contain a top-level tools array would have entries
+	// stripped by the allowlist.
+	toolsListIDs map[string]bool
+}
+
+// Message is a single JSON-RPC message audit record.
+type Message struct {
+	Direction string `json:"direction"`
+	Method    string `json:"method,omitempty"`
+	Tool      string `json:"tool,omitempty"`
+	Decision  string `json:"decision"`
+	Reason    string `json:"reason,omitempty"`
+	// Arguments is the decoded tools/call arguments payload (e.g.
+	// map[string]any) so the value nests naturally in structured log output.
+	// Set only when the raw JSON fits under AuditArgumentsMaxLen and decodes
+	// cleanly; otherwise RawArguments carries the truncated raw string. nil
+	// for non-tools/call messages or calls without arguments.
+	Arguments any `json:"arguments,omitempty"`
+	// RawArguments is the truncated raw JSON of a tools/call arguments
+	// payload with a "..." suffix when truncation occurred. Set instead of
+	// Arguments when the payload is too large to record in full or does not
+	// decode as JSON.
+	RawArguments string `json:"raw_arguments,omitempty"`
+	// Filtered counts items removed from a tools/list response when this
+	// message represents a response-side filter event.
+	Filtered int `json:"filtered,omitempty"`
+}
+
+// AuditArgumentsMaxLen caps the recorded tools/call arguments at 64 bytes so
+// large payloads (file contents, long SQL, etc.) don't bloat audit records.
+// When the raw arguments exceed this length, the recorded value is the
+// truncated prefix with a "..." marker appended.
+const AuditArgumentsMaxLen = 64
+
+// encodeArguments returns the audit fields for a tools/call arguments
+// payload. When raw fits under AuditArgumentsMaxLen and decodes as JSON, the
+// decoded value is returned as decoded so structured loggers nest it inline.
+// Otherwise rawStr carries a truncated raw-JSON string with a "..." suffix.
+// Exactly one of (decoded, rawStr) is set for a non-empty raw; both are zero
+// when raw is empty.
+func encodeArguments(raw []byte) (decoded any, rawStr string) {
+	if len(raw) == 0 {
+		return nil, ""
+	}
+	if len(raw) <= AuditArgumentsMaxLen {
+		var v any
+		if err := json.Unmarshal(raw, &v); err == nil {
+			return v, ""
+		}
+	}
+	const marker = "..."
+	if len(raw) <= AuditArgumentsMaxLen {
+		return nil, string(raw)
+	}
+	cut := AuditArgumentsMaxLen - len(marker)
+	for cut > 0 && raw[cut]&0xC0 == 0x80 {
+		cut--
+	}
+	return nil, string(raw[:cut]) + marker
+}
+
+// Append records a message on the trace.
+func (t *Trace) Append(m Message) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.Messages = append(t.Messages, m)
+	t.mu.Unlock()
+}
+
+// SetGateway records MCP gateway metadata on the trace. Values must be
+// JSON-serializable and must not include real credential values.
+func (t *Trace) SetGateway(gateway map[string]any) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.Gateway = gateway
+	t.mu.Unlock()
+}
+
+// recordToolsListID notes that this trace saw a request with method
+// tools/list and the supplied id, so the response-side filter knows to
+// rewrite the matching response. Notification ids (absent or null) are
+// ignored: notifications cannot have responses, and a null id cannot be
+// distinguished from another null id at correlation time.
+func (t *Trace) recordToolsListID(id json.RawMessage) {
+	if t == nil {
+		return
+	}
+	key, ok := canonicalIDKey(id)
+	if !ok {
+		return
+	}
+	t.mu.Lock()
+	if t.toolsListIDs == nil {
+		t.toolsListIDs = make(map[string]bool)
+	}
+	t.toolsListIDs[key] = true
+	t.mu.Unlock()
+}
+
+// isToolsListResponse reports whether a response with the supplied id
+// corresponds to a previously recorded tools/list request.
+func (t *Trace) isToolsListResponse(id json.RawMessage) bool {
+	if t == nil {
+		return false
+	}
+	key, ok := canonicalIDKey(id)
+	if !ok {
+		return false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.toolsListIDs[key]
+}
+
+// canonicalIDKey returns a stable string key for a JSON-RPC id. Returns
+// ("", false) for absent or null ids since those cannot be correlated to a
+// specific request.
+func canonicalIDKey(raw json.RawMessage) (string, bool) {
+	if len(raw) == 0 {
+		return "", false
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		// Fall back to raw bytes when the id is not valid JSON; the worst
+		// case is a missed correlation, which means we conservatively pass
+		// the response through unfiltered.
+		return string(raw), true
+	}
+	if v == nil {
+		return "", false
+	}
+	out, err := json.Marshal(v)
+	if err != nil {
+		return string(raw), true
+	}
+	return string(out), true
+}
+
+// MessagesSnapshot returns a copy of the recorded messages safe for use after
+// the trace is still being mutated.
+func (t *Trace) MessagesSnapshot() []Message {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]Message, len(t.Messages))
+	copy(out, t.Messages)
+	return out
+}
+
+// GatewaySnapshot returns a copy of gateway metadata safe for audit rendering.
+func (t *Trace) GatewaySnapshot() map[string]any {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.Gateway) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(t.Gateway))
+	for k, v := range t.Gateway {
+		out[k] = v
+	}
+	return out
+}
+
+// MCPServer implements transform.MCPAudit.
+func (t *Trace) MCPServer() string {
+	if t == nil {
+		return ""
+	}
+	return t.Server
+}
+
+// MCPMessages implements transform.MCPAudit by flattening Message values into
+// JSON-friendly maps. Returning maps avoids creating an import cycle between
+// transform and mcp.
+func (t *Trace) MCPMessages() []map[string]any {
+	if t == nil {
+		return nil
+	}
+	snap := t.MessagesSnapshot()
+	out := make([]map[string]any, 0, len(snap))
+	for _, m := range snap {
+		entry := map[string]any{
+			"direction": m.Direction,
+			"decision":  m.Decision,
+		}
+		if m.Method != "" {
+			entry["method"] = m.Method
+		}
+		if m.Tool != "" {
+			entry["tool"] = m.Tool
+		}
+		if m.Reason != "" {
+			entry["reason"] = m.Reason
+		}
+		if m.Arguments != nil {
+			entry["arguments"] = m.Arguments
+		}
+		if m.RawArguments != "" {
+			entry["raw_arguments"] = m.RawArguments
+		}
+		if m.Filtered > 0 {
+			entry["filtered"] = m.Filtered
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+// MCPGateway implements transform.MCPAudit.
+func (t *Trace) MCPGateway() map[string]any {
+	return t.GatewaySnapshot()
+}

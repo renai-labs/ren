@@ -1,0 +1,20 @@
+version: "2"
+
+linters:
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - ineffassign
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*os.File).Close
+        - (io.Closer).Close
+        - (net.Conn).Close
+        - (*net.TCPConn).Close
+        - (*net.TCPConn).CloseWrite
+        - (*net.TCPListener).Close
+        - (net.Listener).Close
+        - (*crypto/tls.Conn).Close
