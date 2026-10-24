@@ -1,6 +1,7 @@
 export * as Credential from "./credential.js"
 
 import { Effect, Schema } from "effect"
+import { AppIdentity } from "./app/identity.js"
 import { Auth } from "./auth.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
@@ -287,7 +288,7 @@ const SecretValue = Schema.RedactedFromValue(
   ),
 )
 
-export const Value = Schema.Union([
+export const Pasted = Schema.Union([
   Schema.Struct({ type: Schema.Literal("key"), value: SecretValue }),
   Schema.Struct({ type: Schema.Literal("basic"), username: Schema.NonEmptyString, password: SecretValue }),
   Schema.Struct({
@@ -297,8 +298,38 @@ export const Value = Schema.Union([
       Schema.isMaxProperties(maximumFields, { message: `Use ${maximumFields} fields or fewer.` }),
     ),
   }),
-]).annotate({ identifier: "Credential.Value", description: "A pasted value. Ren never returns it." })
+]).annotate({ identifier: "Credential.Pasted", description: "A pasted key, username and password, or fields." })
+export type Pasted = typeof Pasted.Type
+
+export const Value = Schema.Union([
+  ...Pasted.members,
+  Schema.Struct({
+    type: Schema.Literal("client_credentials"),
+    clientId: Schema.NonEmptyString,
+    clientSecret: SecretValue,
+    tokenEndpoint: Primitive.HttpsUrl,
+    tokenEndpointAuth: Schema.optional(Schema.Literals(["client_secret_post", "client_secret_basic"])),
+    scopes: Schema.optional(Schema.Array(Schema.NonEmptyString)),
+  }).annotate({
+    description: "An app’s client id and secret. Ren exchanges them for an access token, and again before it expires.",
+  }),
+]).annotate({ identifier: "Credential.Value", description: "A value a person gives. Ren never returns it." })
 export type Value = typeof Value.Type
+
+export const maximumConnectionLength = 58
+
+export const Connection = Primitive.Slug.check(
+  Schema.isMaxLength(maximumConnectionLength, { message: `Use ${maximumConnectionLength} characters or fewer.` }),
+).annotate({
+  identifier: "Credential.Connection",
+  description: "A second or later account for one MCP. Its label is `MCP_<MCP>__<CONNECTION>`.",
+})
+
+export const Provider = Schema.Literals(["composio"]).annotate({
+  identifier: "Credential.Provider",
+  description: "The managed MCP provider that holds the account of a `route` credential.",
+})
+export type Provider = typeof Provider.Type
 
 export interface Account extends Schema.Schema.Type<typeof Account> {}
 export const Account = Schema.Struct({ userId: Auth.UserID, name: Schema.String }).annotate({
@@ -323,6 +354,10 @@ export const Info = Schema.Struct({
   account: Schema.NullOr(Account).annotate({ description: "Whose account a sign-in reaches. A pasted key has none." }),
   scopes: Schema.Array(Schema.String),
   status: Status,
+  app: Schema.NullOr(AppIdentity.ID).annotate({ description: "The app whose MCP this connection serves." }),
+  mcp: Schema.NullOr(Primitive.Slug).annotate({ description: "The MCP of the app that this connection serves." }),
+  connection: Schema.NullOr(Connection).annotate({ description: "Null for the default connection of an MCP." }),
+  provider: Schema.NullOr(Provider),
   expiresAt: Schema.NullOr(Schema.DateTimeUtc),
   createdBy: Schema.NullOr(Auth.UserID),
   createdAt: Schema.DateTimeUtc,
@@ -340,10 +375,18 @@ export const ListInput = Schema.Struct({
 
 const Page = Pagination.Page(Info).annotate({ identifier: "Credential.Page" })
 
+export const connectedPrefix = "MCP_"
+
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
   owner: Owner,
-  label: Label,
+  label: Label.check(
+    Schema.makeFilter(
+      (label) =>
+        !label.startsWith(connectedPrefix) ||
+        `Labels that start with ${connectedPrefix} belong to connected MCP servers; use another label.`,
+    ),
+  ),
   name: Schema.optional(Primitive.Name),
   hosts: Hosts,
   inject: Schema.optional(Inject),
@@ -363,6 +406,19 @@ export const RotateInput = Schema.Struct({ value: Value }).annotate({ identifier
 
 export interface MoveInput extends Schema.Schema.Type<typeof MoveInput> {}
 export const MoveInput = Schema.Struct({ owner: Owner }).annotate({ identifier: "Credential.MoveInput" })
+
+export interface ConnectInput extends Schema.Schema.Type<typeof ConnectInput> {}
+export const ConnectInput = Schema.Struct({
+  owner: Owner,
+  target: Schema.Struct({
+    kind: Schema.Literal("mcp"),
+    app: AppIdentity.ID,
+    mcp: Primitive.Slug,
+    connection: Schema.optional(Connection),
+    connectionName: Schema.optional(Primitive.Name),
+  }),
+  reconnect: Schema.optional(Schema.Boolean),
+}).annotate({ identifier: "Credential.ConnectInput" })
 
 export interface RemoveInput extends Schema.Schema.Type<typeof RemoveInput> {}
 export const RemoveInput = Schema.Struct({}).annotate({ identifier: "Credential.RemoveInput" })

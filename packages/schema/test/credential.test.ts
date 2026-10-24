@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Redacted, Schema } from "effect"
+import { AppIdentity } from "../src/app/identity.js"
 import { Credential } from "../src/credential.js"
 
 const isLabel = Schema.is(Credential.Label)
@@ -53,6 +54,21 @@ describe("Credential.CreateInput", () => {
     expect(decodeCreate({ ...base, hosts, value: { type: "fields", fields: fields(20) } })._tag).toBe("Success")
     expect(decodeCreate({ ...base, hosts, value: { type: "fields", fields: fields(21) } })._tag).toBe("Failure")
   })
+  test("an MCP_ label is refused, because only a connect makes MCP_ labels (K45)", () => {
+    const value = { type: "key", value: "sk_live_1" }
+    const hosts = ["api.stripe.com"]
+    expect(decodeCreate({ ...base, label: "MCP_GMAIL", hosts, value })._tag).toBe("Failure")
+    expect(decodeCreate({ ...base, label: "MCP", hosts, value })._tag).toBe("Success")
+  })
+  test("a client_credentials value takes a client id, a secret and an https token endpoint (§10c)", () => {
+    const value = { type: "client_credentials", clientId: "id", clientSecret: "secret" }
+    const hosts = ["acme.myshopify.com"]
+    const tokenEndpoint = "https://acme.myshopify.com/admin/oauth/access_token"
+    expect(decodeCreate({ ...base, hosts, value: { ...value, tokenEndpoint } })._tag).toBe("Success")
+    expect(
+      decodeCreate({ ...base, hosts, value: { ...value, tokenEndpoint: "http://acme.myshopify.com/token" } })._tag,
+    ).toBe("Failure")
+  })
   test("a pasted key decodes to a redacted value", () => {
     const decoded = Schema.decodeUnknownSync(Credential.CreateInput)({
       ...base,
@@ -60,5 +76,14 @@ describe("Credential.CreateInput", () => {
       value: { type: "key", value: "sk_live_1" },
     })
     expect(decoded.value.type === "key" && Redacted.value(decoded.value.value)).toBe("sk_live_1")
+  })
+})
+
+describe("Credential.ConnectInput", () => {
+  const decodeConnect = Schema.decodeUnknownExit(Credential.ConnectInput)
+  const target = (connection: string) => ({ kind: "mcp", app: AppIdentity.ID.create(), mcp: "meta-ads", connection })
+  test("a connection slug has at most 58 characters, so MCP_<MCP>__<CONNECTION> fits in 128 (K40)", () => {
+    expect(decodeConnect({ owner: { kind: "org" }, target: target("a".repeat(58)) })._tag).toBe("Success")
+    expect(decodeConnect({ owner: { kind: "org" }, target: target("a".repeat(59)) })._tag).toBe("Failure")
   })
 })

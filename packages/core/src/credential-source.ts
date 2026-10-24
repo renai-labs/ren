@@ -57,7 +57,15 @@ export class Minted extends Context.Service<Minted, Source>()("@ren/core/Credent
 
 export class Service extends Context.Service<Service, Source>()("@ren/core/CredentialSource") {}
 
-// oxlint-disable-next-line ren/no-comments -- Pasted values: Ren opens the stored row with Envelope. A sign-in or a provider is another source (README §5).
+// oxlint-disable-next-line ren/no-comments -- A sign-in and a client-credentials exchange inject their access token as a key. A `route` value comes from `layerProvider`; a cleared one injects nothing (connections.md §5).
+const staticValue = (value: Credentials.Sealed): Option.Option<Value> => {
+  if (value.type === "key" || value.type === "basic" || value.type === "fields") return Option.some(value)
+  if (value.type === "oauth" || value.type === "client_credentials")
+    return Option.map(Option.fromNullishOr(value.accessToken), (token): Value => ({ type: "key", value: token }))
+  return Option.none()
+}
+
+// oxlint-disable-next-line ren/no-comments -- Pasted values and sign-ins: Ren opens the stored row with Envelope. A provider is another source (README §5).
 export const layerStatic = Layer.effect(
   Static,
   Effect.gen(function* () {
@@ -67,10 +75,12 @@ export const layerStatic = Layer.effect(
       value: Effect.fn("CredentialSource.static")(function* (candidate: Credentials.Candidate) {
         if (!Schema.is(Credential.ID)(candidate.id)) return Option.none()
         const opened = yield* credentials.open(candidate.id)
-        return Option.map(opened, (found): Sourced => ({
-          value: found.value,
-          ...(found.expiresAt && { expiresAt: found.expiresAt }),
-        }))
+        return Option.flatMap(opened, (found) =>
+          Option.map(staticValue(found.value), (value): Sourced => ({
+            value,
+            ...(found.expiresAt && { expiresAt: found.expiresAt }),
+          })),
+        )
       }),
     })
   }),

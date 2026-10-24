@@ -96,9 +96,45 @@ export const match = (candidates: ReadonlyArray<Candidate>, request: Request): M
   return { ok: true, matches }
 }
 
+const Token = Schema.RedactedFromValue(Schema.String)
+
+// oxlint-disable-next-line ren/no-comments -- What a credential's `value` holds once opened. Core only: refresh data, Composio session URLs and cleared values never reach `@ren/schema` (connections.md §6.1).
+export const Sealed = Schema.Union([
+  ...Credential.Pasted.members,
+  Schema.Struct({
+    type: Schema.Literal("oauth"),
+    accessToken: Token,
+    issuer: Schema.optional(Schema.String),
+    refresh: Schema.optional(
+      Schema.Struct({
+        refreshToken: Token,
+        clientId: Schema.String,
+        clientSecret: Schema.optional(Token),
+        tokenEndpoint: Schema.String,
+        tokenEndpointAuth: Schema.Literals(["none", "client_secret_basic", "client_secret_post"]),
+        resource: Schema.optional(Schema.String),
+        scope: Schema.optional(Schema.String),
+      }),
+    ),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("client_credentials"),
+    clientId: Schema.String,
+    clientSecret: Token,
+    tokenEndpoint: Schema.String,
+    tokenEndpointAuth: Schema.Literals(["client_secret_post", "client_secret_basic"]),
+    scope: Schema.optional(Schema.String),
+    accessToken: Schema.optional(Token),
+  }),
+  Schema.Struct({ type: Schema.Literal("route"), upstream: Token, sessionId: Schema.String }),
+  Schema.Struct({ type: Schema.Literal("cleared") }),
+])
+export type Sealed = typeof Sealed.Type
+
 export interface Opened {
   readonly id: Credential.ID
-  readonly value: Credential.Value
+  readonly value: Sealed
+  readonly revision: number
   readonly expiresAt?: DateTime.Utc
 }
 
@@ -145,17 +181,29 @@ const actions = {
 
 const ownerRule = (reason: string, message: string) => new Primitive.Forbidden({ message: `${message} (${reason})` })
 
-const ValueJson = Schema.fromJsonString(Credential.Value)
+const ValueJson = Schema.fromJsonString(Sealed)
 const encodeValue = Schema.encodeSync(ValueJson)
 const decodeValue = Schema.decodeUnknownOption(ValueJson)
 
-const previewOf = (value: Credential.Value) => {
+const sealedOf = (value: Credential.Value): Sealed =>
+  value.type === "client_credentials"
+    ? {
+        type: "client_credentials",
+        clientId: value.clientId,
+        clientSecret: value.clientSecret,
+        tokenEndpoint: value.tokenEndpoint,
+        tokenEndpointAuth: value.tokenEndpointAuth ?? "client_secret_post",
+        ...(value.scopes && { scope: value.scopes.join(" ") }),
+      }
+    : value
+
+const previewOf = (value: Sealed) => {
   if (value.type === "key") return Redacted.value(value.value).slice(-4)
   if (value.type === "basic") return value.username
   return null
 }
 
-const fieldNamesOf = (value: Credential.Value) => (value.type === "fields" ? Object.keys(value.fields) : [])
+const fieldNamesOf = (value: Sealed) => (value.type === "fields" ? Object.keys(value.fields) : [])
 
 const ownerOf = (row: typeof table.$inferSelect): Credential.Owner | undefined => {
   if (row.owner === "org") return { kind: "org" }
@@ -353,6 +401,10 @@ export const layer = Layer.effect(
         account: row.account_user_id ? { userId: row.account_user_id, name: accountName ?? "" } : null,
         scopes: row.scopes,
         status: row.status,
+        app: row.app_id,
+        mcp: row.mcp,
+        connection: row.connection,
+        provider: row.provider,
         expiresAt: row.expires_at && DateTime.fromDateUnsafe(row.expires_at),
         createdBy: row.created_by_user_id,
         createdAt: DateTime.fromDateUnsafe(row.created_at),
@@ -393,7 +445,7 @@ export const layer = Layer.effect(
         readonly label: string
         readonly name: string | null
         readonly type: Credential.Type
-        readonly value: Credential.Value
+        readonly value: Sealed
         readonly hosts: ReadonlyArray<string>
         readonly inject: Credential.Inject
         readonly delivery: Credential.Delivery
@@ -516,7 +568,7 @@ export const layer = Layer.effect(
           label: input.label,
           name: input.name ?? null,
           type: input.value.type,
-          value: input.value,
+          value: sealedOf(input.value),
           hosts: input.hosts,
           inject: input.inject ?? Credential.defaultInject(input.value.type),
           delivery: input.delivery ?? "egress",
@@ -559,14 +611,14 @@ export const layer = Layer.effect(
             field: "value",
           })
         const sealed = yield* envelope
-          .seal(Redacted.make(encodeValue(input.value)), contextOf(found.row.organization_id, id))
+          .seal(Redacted.make(encodeValue(sealedOf(input.value))), contextOf(found.row.organization_id, id))
           .pipe(Effect.orDie)
         yield* database.db
           .update(table)
           .set({
             value: sealed,
-            key_preview: previewOf(input.value),
-            field_names: fieldNamesOf(input.value),
+            key_preview: previewOf(sealedOf(input.value)),
+            field_names: fieldNamesOf(sealedOf(input.value)),
             status: "ok",
             updated_at: sql`now()`,
           })
@@ -732,6 +784,7 @@ export const layer = Layer.effect(
         return Option.map(yield* openRow(row), (value): Opened => ({
           id,
           value,
+          revision: row.revision,
           ...(row.expires_at && { expiresAt: DateTime.fromDateUnsafe(row.expires_at) }),
         }))
       }),
