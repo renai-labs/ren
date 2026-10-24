@@ -28,6 +28,22 @@ import type {
   AgentUpdateInput,
   AgentArchiveInput,
   AgentTransferOwnershipInput,
+  AppListInput,
+  AppGetInput,
+  AppCreateInput,
+  AppUpdateInput,
+  AppArchiveInput,
+  AppTransferOwnershipInput,
+  AppReleaseListInput,
+  AppReleaseGetInput,
+  AppReleaseCreateInput,
+  AppRegistryListInput,
+  AppRegistryGetInput,
+  SpaceAppListInput,
+  SpaceAppGetInput,
+  SpaceAppCreateInput,
+  SpaceAppUpdateInput,
+  SpaceAppArchiveInput,
   AgentMembershipListInput,
   AgentMembershipCreateInput,
   AgentMembershipArchiveInput,
@@ -348,6 +364,150 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["agent", "transferOwnership"] as const,
             mutationFn: (input: AgentTransferOwnershipInput) => client["agent"]["transferOwnership"](input),
+          }),
+      },
+    },
+    app: {
+      list: {
+        queryKey: (input?: AppListInput) =>
+          input === undefined ? (["app", "list"] as const) : (["app", "list", input] as const),
+        queryOptions: (input: AppListInput) =>
+          queryOptions({
+            queryKey: ["app", "list", input] as const,
+            queryFn: (context) => client["app"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: AppGetInput) =>
+          input === undefined ? (["app", "get"] as const) : (["app", "get", input] as const),
+        queryOptions: (input: AppGetInput) =>
+          queryOptions({
+            queryKey: ["app", "get", input] as const,
+            queryFn: (context) => client["app"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["app", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["app", "create"] as const,
+            mutationFn: (input: AppCreateInput) => client["app"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["app", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["app", "update"] as const,
+            mutationFn: (input: AppUpdateInput) => client["app"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["app", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["app", "archive"] as const,
+            mutationFn: (input: AppArchiveInput) => client["app"]["archive"](input),
+          }),
+      },
+      transferOwnership: {
+        mutationKey: () => ["app", "transferOwnership"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["app", "transferOwnership"] as const,
+            mutationFn: (input: AppTransferOwnershipInput) => client["app"]["transferOwnership"](input),
+          }),
+      },
+    },
+    "app-release": {
+      list: {
+        queryKey: (input?: AppReleaseListInput) =>
+          input === undefined ? (["app-release", "list"] as const) : (["app-release", "list", input] as const),
+        queryOptions: (input: AppReleaseListInput) =>
+          queryOptions({
+            queryKey: ["app-release", "list", input] as const,
+            queryFn: (context) => client["app-release"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: AppReleaseGetInput) =>
+          input === undefined ? (["app-release", "get"] as const) : (["app-release", "get", input] as const),
+        queryOptions: (input: AppReleaseGetInput) =>
+          queryOptions({
+            queryKey: ["app-release", "get", input] as const,
+            queryFn: (context) => client["app-release"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["app-release", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["app-release", "create"] as const,
+            mutationFn: (input: AppReleaseCreateInput) => client["app-release"]["create"](input),
+          }),
+      },
+    },
+    "app-registry": {
+      list: {
+        queryKey: (input?: AppRegistryListInput) =>
+          input === undefined ? (["app-registry", "list"] as const) : (["app-registry", "list", input] as const),
+        queryOptions: (input: AppRegistryListInput) =>
+          queryOptions({
+            queryKey: ["app-registry", "list", input] as const,
+            queryFn: (context) => client["app-registry"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: AppRegistryGetInput) =>
+          input === undefined ? (["app-registry", "get"] as const) : (["app-registry", "get", input] as const),
+        queryOptions: (input: AppRegistryGetInput) =>
+          queryOptions({
+            queryKey: ["app-registry", "get", input] as const,
+            queryFn: (context) => client["app-registry"]["get"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    "space-app": {
+      list: {
+        queryKey: (input?: SpaceAppListInput) =>
+          input === undefined ? (["space-app", "list"] as const) : (["space-app", "list", input] as const),
+        queryOptions: (input: SpaceAppListInput) =>
+          queryOptions({
+            queryKey: ["space-app", "list", input] as const,
+            queryFn: (context) => client["space-app"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: SpaceAppGetInput) =>
+          input === undefined ? (["space-app", "get"] as const) : (["space-app", "get", input] as const),
+        queryOptions: (input: SpaceAppGetInput) =>
+          queryOptions({
+            queryKey: ["space-app", "get", input] as const,
+            queryFn: (context) => client["space-app"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["space-app", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-app", "create"] as const,
+            mutationFn: (input: SpaceAppCreateInput) => client["space-app"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["space-app", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-app", "update"] as const,
+            mutationFn: (input: SpaceAppUpdateInput) => client["space-app"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["space-app", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["space-app", "archive"] as const,
+            mutationFn: (input: SpaceAppArchiveInput) => client["space-app"]["archive"](input),
           }),
       },
     },

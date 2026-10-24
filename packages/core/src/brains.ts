@@ -15,7 +15,13 @@ import {
   UnauthorizedError,
 } from "@ren/host-api/errors"
 import type { Host } from "@ren/host-api/host"
-import { CurrentHost, HostAuthentication, type PullReply, type PullRequest } from "@ren/host-api/ren-host-api"
+import {
+  CurrentHost,
+  HostAuthentication,
+  type PullApps,
+  type PullReply,
+  type PullRequest,
+} from "@ren/host-api/ren-host-api"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
@@ -32,6 +38,7 @@ import {
   Effect,
   Layer,
   Option,
+  Predicate,
   Redacted,
   Schedule,
   Schema,
@@ -40,6 +47,7 @@ import {
 import { HttpClientError } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
 import { Access } from "./access.js"
+import { AppResolve } from "./app/resolve.js"
 import { BrainClient } from "./brain-client.js"
 import { CredentialEnv } from "./credential-env.js"
 import { BrainHost } from "./brain-host.js"
@@ -174,6 +182,7 @@ export const layer = Layer.effect(
     })
     const database = yield* Database.Service
     const access = yield* Access.Service
+    const appResolve = yield* AppResolve.Service
     const client = yield* BrainClient.Service
     const models = yield* Models.Service
     const credentialEnv = yield* CredentialEnv.Service
@@ -423,6 +432,7 @@ export const layer = Layer.effect(
         const brain = (yield* database.db
           .select({
             organizationId: Database.Schema.brain.organization_id,
+            spaceId: Database.Schema.brain.space_id,
             generation: Database.Schema.brain.generation,
           })
           .from(Database.Schema.brain)
@@ -434,9 +444,29 @@ export const layer = Layer.effect(
           return yield* new GenerationRetiredError({
             message: `Generation ${claims.value.gen} of brain ${claims.value.brain} is retired`,
           })
-        return { brainId: claims.value.brain, organizationId: claims.value.org, generation: claims.value.gen }
+        return {
+          brainId: claims.value.brain,
+          organizationId: claims.value.org,
+          spaceId: brain.spaceId,
+          generation: claims.value.gen,
+        }
       }),
       pull: Effect.fn("Brains.pull")(function* (host: CurrentHost["Service"], request: PullRequest) {
+        const apps = Predicate.isUndefined(request.apps)
+          ? Option.none<PullApps>()
+          : yield* appResolve.revision(host.spaceId).pipe(
+              Effect.flatMap((revision) =>
+                revision === request.apps
+                  ? Effect.succeed<PullApps>({ fingerprint: revision })
+                  : appResolve.forSpace(host.spaceId),
+              ),
+              Effect.map(Option.some),
+              Effect.catch((error) =>
+                Effect.logWarning("App catalog is unavailable for a pull; the brain keeps its catalog", error).pipe(
+                  Effect.as(Option.none<PullApps>()),
+                ),
+              ),
+            )
         const pulled = yield* settings
           .pull(host.brainId, request.layers)
           .pipe(
@@ -475,6 +505,7 @@ export const layer = Layer.effect(
         return {
           publicKeys: client.publicKeys,
           models: Option.isNone(access) || hash === request.models ? { hash } : { hash, access: access.value },
+          ...Option.match(apps, { onNone: () => ({}), onSome: (catalog) => ({ apps: catalog }) }),
           layers: pulled.layers,
           chats: pulled.chats,
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
@@ -518,7 +549,7 @@ export const layer = Layer.effect(
       }),
     })
   }),
-).pipe(Layer.provide(Access.layer))
+).pipe(Layer.provide([Access.layer, AppResolve.layer]))
 
 export const hostAuthentication = Layer.effect(
   HostAuthentication,

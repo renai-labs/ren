@@ -1,3 +1,4 @@
+import { AppCatalog } from "@ren/schema/app-catalog"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
@@ -5,6 +6,7 @@ import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
 import { Signature } from "@ren/schema/signature"
+import type { Space } from "@ren/schema/space"
 import { Context, Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { Host } from "./host.js"
@@ -19,7 +21,12 @@ import {
 
 export class CurrentHost extends Context.Service<
   CurrentHost,
-  { readonly brainId: Brain.ID; readonly organizationId: Auth.OrganizationID; readonly generation: number }
+  {
+    readonly brainId: Brain.ID
+    readonly organizationId: Auth.OrganizationID
+    readonly spaceId: Space.ID
+    readonly generation: number
+  }
 >()("@ren/host-api/CurrentHost") {}
 
 export class HostAuthentication extends HttpApiMiddleware.Service<HostAuthentication, { provides: CurrentHost }>()(
@@ -48,6 +55,9 @@ export const PullRequest = Schema.Struct({
   version: Schema.String.annotate({ description: "The brain’s version." }),
   keyIds: Schema.Array(Schema.String).annotate({ description: "The ids of the public keys the brain holds." }),
   models: Schema.NullOr(Schema.String).annotate({ description: "The models hash the brain has." }),
+  apps: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
+    description: "The app catalog fingerprint the brain has; null requests the catalog. Absent for legacy brains.",
+  }),
   layers: SessionSettings.Known,
   sessions: Schema.Array(PullSession),
   roots: Schema.optionalKey(Schema.Array(Session.ID)).annotate({
@@ -74,6 +84,12 @@ export const PullModels = Schema.Struct({
   access: Schema.optionalKey(Models.Access),
 }).annotate({ identifier: "Host.PullModels" })
 
+export interface PullApps extends Schema.Schema.Type<typeof PullApps> {}
+export const PullApps = Schema.Struct({
+  fingerprint: Schema.String,
+  catalog: Schema.optionalKey(AppCatalog.Catalog),
+}).annotate({ identifier: "Host.PullApps" })
+
 export interface PullChat extends Schema.Schema.Type<typeof PullChat> {}
 export const PullChat = Schema.Struct({
   id: Session.ID,
@@ -85,6 +101,9 @@ export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}
 export const PullReply = Schema.Struct({
   publicKeys: Schema.Array(Signature.PublicKey),
   models: PullModels,
+  apps: Schema.optionalKey(PullApps).annotate({
+    description: "The resolved app catalog, with a body only when changed. Omitted when unsupported or unavailable.",
+  }),
   layers: SessionSettings.Layers,
   chats: Schema.Array(PullChat),
   deleted: Schema.Array(Session.ID).annotate({
@@ -100,9 +119,9 @@ const PullGroup = HttpApiGroup.make("pull")
     HttpApiEndpoint.post("pull", "/host/pull", { payload: PullRequest, success: PullReply }).annotateMerge(
       OpenApi.annotations({
         identifier: "pull",
-        summary: "Pull a brain's settings and models",
+        summary: "Pull a brain's settings, models and app catalog",
         description:
-          "Send the hashes the brain has and the state of its chats. The reply sends each settings layer and the models; a body comes only when its hash changed. It lists the brain’s chats with their primary agent.",
+          "Send the hashes the brain has and the state of its chats. The reply sends each settings layer, the models and the supported app catalog; a body comes only when its hash changed. It lists the brain’s chats with their primary agent.",
       }),
     ),
   )

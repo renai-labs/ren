@@ -9,7 +9,7 @@ import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { BrainSettings } from "@ren/brain/settings"
-import type { Models } from "@ren/schema/models"
+import { AppCatalog } from "@ren/schema/app-catalog"
 import { Session } from "@ren/schema/session"
 import {
   Clock,
@@ -30,8 +30,30 @@ import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { basename } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
+import type { OpenCodeExecution } from "./execution.js"
+import type { HarnessConfig } from "../config.js"
 
 const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
+
+// oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 keys a skill by its id and an MCP's tools by the server key with each character outside [A-Za-z0-9_-] as "_"; a later registration silently replaces an earlier one with the same name.
+const naming: AppCatalog.Naming = {
+  normalize: (slug) => slug.replaceAll(/[^A-Za-z0-9_-]/gu, "_"),
+  reserved: [
+    ...["opencode", "report"].map((slug) => ({
+      kind: "skills" as const,
+      slug,
+      source: `OpenCode’s built-in skill ${slug}`,
+    })),
+    ...["opencode", "browser"].map((slug) => ({
+      kind: "mcps" as const,
+      slug,
+      source: `OpenCode’s built-in ${slug} tools`,
+    })),
+  ],
+}
+
+const conflictsOf = (apps: Option.Option<AppCatalog.Info>) =>
+  Option.match(apps, { onNone: () => [], onSome: (info) => AppCatalog.nameConflicts(info.catalog, naming) })
 
 export class ManagedKeyError extends Schema.TaggedError<ManagedKeyError>()("ManagedKeyError", {
   message: Schema.String,
@@ -47,12 +69,6 @@ interface Instance {
   readonly reload: Effect.Effect<void>
   readonly session: Plugin.Context["session"]
   readonly installed: Ref.Ref<Option.Option<Chat>>
-}
-
-// oxlint-disable-next-line ren/no-comments -- The model list one Location installed (E64). A new list waits for the Location's running turns to end.
-export interface LocationModels {
-  readonly installed: Ref.Ref<ReadonlyArray<Models.Endpoint>>
-  readonly offer: Effect.Effect<void>
 }
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2 ends a turn with an execution event and does not publish session.idle.
@@ -74,7 +90,7 @@ export interface Chats {
   readonly instances: Ref.Ref<ReadonlyMap<string, Instance>>
   readonly turnEnded: Ref.Ref<(sessionId: string) => Effect.Effect<void>>
   readonly turnStarted: Ref.Ref<(sessionId: string) => Effect.Effect<void>>
-  readonly install: (sessionId: string) => Effect.Effect<void>
+  readonly install: (sessionId: string, next: Chat | undefined) => Effect.Effect<void>
 }
 
 export const sameModel = (
@@ -138,10 +154,9 @@ export const chats = Effect.fnUntraced(function* (saved: ReadonlyMap<string, Cha
     instances,
     turnEnded,
     turnStarted,
-    install: (sessionId) =>
+    install: (sessionId, next) =>
       installs.withPermit(
         Effect.gen(function* () {
-          const next = (yield* Ref.get(latest)).get(sessionId)
           const instance = (yield* Ref.get(instances)).get(sessionId)
           if (!next || !instance) return
           const previous = Option.getOrUndefined(yield* Ref.getAndSet(instance.installed, Option.some(next)))
@@ -163,8 +178,8 @@ export const chats = Effect.fnUntraced(function* (saved: ReadonlyMap<string, Cha
 })
 
 export const make = (
-  endpoints: Ref.Ref<ReadonlyArray<Models.Endpoint>>,
-  locations: Ref.Ref<ReadonlyArray<LocationModels>>,
+  desired: Ref.Ref<HarnessConfig.Snapshot>,
+  locations: Ref.Ref<ReadonlyArray<HarnessConfig.Location>>,
   synced: Effect.Effect<void>,
   renew: (endpointId: string) => Effect.Effect<boolean>,
   loaded: Deferred.Deferred<void>,
@@ -175,6 +190,7 @@ export const make = (
   approvals: (
     sessionId: string,
   ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
+  boundaryOf: (location: Plugin.Context["location"]) => OpenCodeExecution.Boundary,
 ) =>
   Plugin.define({
     id: "ren",
@@ -260,7 +276,12 @@ export const make = (
             })
           }),
         )
-        const models = yield* Ref.make(yield* Ref.get(endpoints))
+        const initial = yield* Ref.get(desired)
+        const appConflicts = yield* Ref.make(conflictsOf(initial.apps))
+        const applied = yield* Ref.make(
+          (yield* Ref.get(appConflicts)).length ? { ...initial, apps: Option.none<AppCatalog.Info>() } : initial,
+        )
+        const models = yield* Ref.make(initial.models)
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(models)))
         yield* integration.transform((editor) => {
           for (const integrationID of Ref.getUnsafe(models).map((endpoint) => endpoint.id))
@@ -278,7 +299,7 @@ export const make = (
           const sessionId = context.location.workspaceID
             ? RenWorkspaceDriver.sessionIdOf(context.location.workspaceID)
             : basename(directory)
-          const saved = (yield* Ref.get(shared.latest)).get(sessionId)
+          const saved = initial.chats.get(sessionId)
           const installed = yield* Ref.make(Option.fromUndefinedOr(saved))
           const agentOf = (name: string | undefined) =>
             Option.flatMap(Ref.getUnsafe(installed), (chat) =>
@@ -380,18 +401,6 @@ export const make = (
             if (yield* renew(event.model.providerID)) event.decision = { retry: true, delay: 0 }
           }),
         )
-        const catalog = { waiting: false }
-        const install = Ref.get(endpoints).pipe(
-          Effect.flatMap((latest) => Ref.set(models, latest)),
-          Effect.andThen(integration.reload()),
-          Effect.andThen(provider.reload()),
-          Effect.andThen(synced),
-        )
-        turns.ended.push(() => {
-          if (turns.running.size > 0 || !catalog.waiting) return Effect.void
-          catalog.waiting = false
-          return install
-        })
         yield* context.session.hook("prompt", (event) => Effect.sync(() => void turns.running.add(event.sessionID)))
         yield* context.event.subscribe().pipe(
           Stream.runForEach((event) => {
@@ -401,13 +410,47 @@ export const make = (
           }),
           Effect.forkScoped,
         )
-        const location: LocationModels = {
-          installed: models,
-          offer: Effect.suspend(() => {
-            if (turns.running.size === 0) return install
-            catalog.waiting = true
-            return Effect.void
+        const location: HarnessConfig.Location = {
+          models: Ref.get(models),
+          observation: Effect.gen(function* () {
+            const snapshot = yield* Ref.get(applied)
+            return {
+              directory: context.location.directory,
+              workspaceID: context.location.workspaceID,
+              desiredRevision: (yield* Ref.get(desired)).revision,
+              appliedRevision: snapshot.revision,
+              appFingerprint: Option.map(snapshot.apps, (info) => info.fingerprint),
+              appConflicts: yield* Ref.get(appConflicts),
+            }
           }),
+          offer: (snapshot) =>
+            boundaryOf(context.location).offer(
+              Effect.gen(function* () {
+                if (snapshot.revision !== (yield* Ref.get(desired)).revision) return
+                const modelChanged =
+                  JSON.stringify(snapshot.models) !== JSON.stringify((yield* Ref.get(applied)).models)
+                yield* Ref.set(models, snapshot.models)
+                if (modelChanged) {
+                  yield* integration.reload()
+                  yield* provider.reload()
+                }
+                if (Option.isSome(settings)) {
+                  const sessionId = context.location.workspaceID
+                    ? RenWorkspaceDriver.sessionIdOf(context.location.workspaceID)
+                    : basename(context.location.directory)
+                  yield* settings.value.install(sessionId, snapshot.chats.get(sessionId))
+                }
+                const conflicts = conflictsOf(snapshot.apps)
+                const previous = yield* Ref.getAndSet(appConflicts, conflicts)
+                if (conflicts.length && conflicts.join("\n") !== previous.join("\n"))
+                  yield* Effect.logWarning(`The brain keeps its applied app catalog:\n${conflicts.join("\n")}`)
+                yield* Ref.set(
+                  applied,
+                  conflicts.length ? { ...snapshot, apps: (yield* Ref.get(applied)).apps } : snapshot,
+                )
+                yield* synced
+              }),
+            ),
         }
         yield* Ref.update(locations, (all) => [...all, location])
         yield* Effect.addFinalizer(() => Ref.update(locations, (all) => all.filter((each) => each !== location)))

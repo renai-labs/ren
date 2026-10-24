@@ -1,6 +1,6 @@
 export * as Lease from "./lease.js"
 
-import { Deferred, Effect, Exit } from "effect"
+import { Deferred, Effect, Exit, Option } from "effect"
 
 interface State<A, E> {
   leases: number
@@ -33,6 +33,17 @@ export const make = <A, E>(open: Effect.Effect<A, E>, close: (value: A) => Effec
         }),
       )
       return yield* exit
+    }),
+    acquireIfOpen: Effect.gen(function* () {
+      const current = state.current
+      if (!current) return Option.none<A>()
+      state.leases += 1
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          state.leases -= 1
+        }),
+      )
+      return Option.some(yield* Deferred.await(current))
     }),
     close: Effect.uninterruptible(
       Effect.gen(function* () {

@@ -211,6 +211,7 @@
         "@playwright/test": "catalog:",
         "@ren/brain": "workspace:*",
         "@ren/cell": "workspace:*",
+        "@ren/client": "workspace:*",
         "@ren/core": "workspace:*",
         "@ren/db": "workspace:*",
         "@ren/environment-api": "workspace:*",

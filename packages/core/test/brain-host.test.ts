@@ -9,15 +9,18 @@ import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
-import { eq } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import { Clock, ConfigProvider, Context, Duration, Effect, Fiber, Layer, Option, Queue, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { TestClock } from "effect/testing"
+import { Access } from "../src/access.js"
+import { App } from "../src/app.js"
 import { BrainClient } from "../src/brain-client.js"
 import { Brains } from "../src/brains.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
+import { SpaceApp } from "../src/space/app.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { Host } from "./lib/host.js"
@@ -208,6 +211,92 @@ describe("BrainHost calls to a brain", () => {
 })
 
 describe("BrainHost pull", () => {
+  it.live("app-aware pulls get a body only for a new fingerprint, and a removal is a new body", () =>
+    Effect.gen(function* () {
+      const subject = yield* seeded
+      const actor = { userId: subject.owner.createdBy, organizationId: subject.owner.organizationId, roles: ["owner"] }
+      const host = {
+        brainId: Brain.ofSession(subject.sessionId),
+        organizationId: actor.organizationId,
+        spaceId: subject.owner.spaceId,
+        generation: 1,
+      }
+      const uses = yield* SpaceApp.Service
+      const apps = yield* App.Service
+      const app = yield* apps.create(actor, Seed.appInput(yield* Seed.space(actor.organizationId), "notes"))
+      const use = yield* uses.create(actor, { spaceId: subject.owner.spaceId, appId: app.id })
+      const brain = yield* Brains.Service
+      const request = { version: "test", keyIds: [], models: null, layers: { agents: {} }, sessions: [] }
+      expect(yield* brain.pull(host, request)).not.toHaveProperty("apps")
+      const first = (yield* brain.pull(host, { ...request, apps: null })).apps
+      if (!first) return yield* Effect.die(new Error("The first pull has no catalog"))
+      expect(first.catalog?.apps.map((entry) => entry.appId)).toEqual([app.id])
+      expect((yield* brain.pull(host, { ...request, apps: first.fingerprint })).apps).toEqual({
+        fingerprint: first.fingerprint,
+      })
+      expect((yield* brain.pull(host, { ...request, apps: "stale" })).apps).toEqual(first)
+      yield* uses.archive(actor, use.id)
+      const removed = yield* brain.pull(host, { ...request, apps: first.fingerprint })
+      expect(removed.apps?.fingerprint).not.toBe(first.fingerprint)
+      expect(removed.apps?.catalog?.apps).toEqual([])
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(App.layer, SpaceApp.layer, cell("http://127.0.0.1:9")).pipe(Layer.provide(Access.layer)),
+      ),
+    ),
+  )
+
+  it.live("a catalog whose space is archived is omitted while the rest of pull still succeeds", () =>
+    Effect.gen(function* () {
+      const subject = yield* seeded
+      const database = yield* Database.Service
+      const brain = yield* Brains.Service
+      const host = {
+        brainId: Brain.ofSession(subject.sessionId),
+        organizationId: subject.owner.organizationId,
+        spaceId: subject.owner.spaceId,
+        generation: 1,
+      }
+      const request = { version: "test", keyIds: [], models: null, layers: { agents: {} }, sessions: [] }
+      const initial = yield* brain.pull(host, { ...request, apps: null })
+      if (!initial.apps) return yield* Effect.die(new Error("The first pull has no catalog"))
+      yield* database.db
+        .update(Database.Schema.space)
+        .set({ archived_at: new Date() })
+        .where(eq(Database.Schema.space.id, subject.owner.spaceId))
+      const reply = yield* brain.pull(host, { ...request, apps: initial.apps.fingerprint })
+      expect(reply).not.toHaveProperty("apps")
+      expect(reply.chats.map((chat) => chat.id)).toContain(subject.sessionId)
+    }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
+  )
+
+  it.live("an app catalog that cannot be read is omitted while the rest of pull still succeeds", () =>
+    Effect.gen(function* () {
+      const subject = yield* seeded
+      const database = yield* Database.Service
+      const brain = yield* Brains.Service
+      const host = {
+        brainId: Brain.ofSession(subject.sessionId),
+        organizationId: subject.owner.organizationId,
+        spaceId: subject.owner.spaceId,
+        generation: 1,
+      }
+      yield* Effect.acquireRelease(database.db.execute(sql`alter table app rename to app_unreadable`), () =>
+        database.db.execute(sql`alter table app_unreadable rename to app`).pipe(Effect.orDie),
+      )
+      const reply = yield* brain.pull(host, {
+        version: "test",
+        keyIds: [],
+        models: null,
+        layers: { agents: {} },
+        sessions: [],
+        apps: null,
+      })
+      expect(reply).not.toHaveProperty("apps")
+      expect(reply.chats.map((chat) => chat.id)).toContain(subject.sessionId)
+    }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
+  )
+
   it.live("a model source that fails during a pull sends no models, so the brain keeps the ones it has", () =>
     Effect.gen(function* () {
       const subject = yield* seeded
@@ -220,7 +309,7 @@ describe("BrainHost pull", () => {
       source.available = false
       const reply = yield* Brains.Service.use((brain) =>
         brain.pull(
-          { brainId, organizationId: subject.owner.organizationId, generation: 1 },
+          { brainId, organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, generation: 1 },
           { version: "test", keyIds: [], models: "models-1", layers: { agents: {} }, sessions: [] },
         ),
       ).pipe(Effect.provide(cell("http://127.0.0.1:9")), Effect.ensuring(Effect.sync(() => (source.available = true))))
@@ -241,7 +330,7 @@ describe("BrainHost pull", () => {
         yield* database.db.update(Database.Schema.brain).set({ egress }).where(eq(Database.Schema.brain.id, brainId))
         const reply = yield* Brains.Service.use((brain) =>
           brain.pull(
-            { brainId, organizationId: subject.owner.organizationId, generation: 1 },
+            { brainId, organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, generation: 1 },
             { version: "test", keyIds: [], models: null, layers: { agents: {} }, sessions: [] },
           ),
         ).pipe(Effect.provide(cell("http://127.0.0.1:9")))
@@ -263,7 +352,7 @@ describe("BrainHost pull", () => {
       const gone = Session.ID.create()
       const reply = yield* Brains.Service.use((brain) =>
         brain.pull(
-          { brainId, organizationId: subject.owner.organizationId, generation: 1 },
+          { brainId, organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, generation: 1 },
           {
             version: "test",
             keyIds: [],
@@ -331,7 +420,7 @@ describe("BrainHost host tokens", () => {
       }).pipe(Effect.provide(cell("http://127.0.0.1:9")))
       expect(outcomes).toEqual({
         failures: ["UnauthorizedError", "ForbiddenError", "GenerationRetiredError"],
-        host: { brainId, organizationId: subject.owner.organizationId, generation: 1 },
+        host: { brainId, organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, generation: 1 },
         exp: Duration.toSeconds("2 hours"),
       })
     }),

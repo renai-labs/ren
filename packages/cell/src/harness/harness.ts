@@ -1,7 +1,6 @@
 export * as Harness from "./harness.js"
 
 import type { StartBody } from "@ren/host-api/brain-api"
-import type { PullChat } from "@ren/host-api/ren-host-api"
 import type { BrainRejectedError, SessionNotStartedError, SyncUnavailableError } from "@ren/host-api/errors"
 import type { Form } from "@ren/schema/form"
 import type { Models } from "@ren/schema/models"
@@ -16,9 +15,10 @@ import type { SessionModel } from "@ren/schema/session/model"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
 import type { Sync } from "@ren/schema/sync"
-import { Context, Effect, Exit, Layer, type Option, Schema, Scope, type Stream } from "effect"
+import { Context, Effect, Exit, Layer, Option, Schema, Scope, type Stream } from "effect"
 import { Lease } from "../lease.js"
 import type { Reconcile } from "../reconcile.js"
+import type { HarnessConfig } from "./config.js"
 
 interface SessionState extends Reconcile.Snapshot {
   readonly id: string
@@ -150,7 +150,8 @@ export interface Instance {
   readonly chat: Chat
   readonly transcript: Transcript
   readonly fetch: (request: Request) => Promise<Response>
-  readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>
+  readonly configure: (update: HarnessConfig.Update) => Effect.Effect<void>
+  readonly configuration: Effect.Effect<ReadonlyArray<HarnessConfig.Observation>>
   readonly start: (input: StartBody) => Effect.Effect<Session.Started, BrainRejectedError | SyncUnavailableError>
   readonly send: (
     input: Session.SendInput,
@@ -160,7 +161,6 @@ export interface Instance {
     model: Option.Option<Session.Model>,
   ) => Effect.Effect<void, BrainRejectedError | SessionNotStartedError>
   readonly sessions: Effect.Effect<ReadonlyArray<SessionState>>
-  readonly applySettings: (chats: ReadonlyArray<PullChat>) => Effect.Effect<void>
   readonly onTurn: (hooks: {
     readonly started: (sessionId: string) => Effect.Effect<void>
     readonly ended: (sessionId: string) => Effect.Effect<void>
@@ -169,6 +169,7 @@ export interface Instance {
 
 export interface Interface {
   readonly get: Effect.Effect<Instance, never, Scope.Scope>
+  readonly getIfOpen: Effect.Effect<Option.Option<Instance>, never, Scope.Scope>
   readonly state: Effect.Effect<{ readonly isOpen: boolean; readonly holders: number }>
   readonly close: Effect.Effect<void>
 }
@@ -194,6 +195,7 @@ export const layer = (open: Effect.Effect<Instance, Error, Scope.Scope>) => {
         Effect.map((opened) => opened.instance),
         Effect.orDie,
       ),
+      getIfOpen: lease.acquireIfOpen.pipe(Effect.map(Option.map((opened) => opened.instance)), Effect.orDie),
       state: Effect.sync(() => ({ isOpen: lease.state().open, holders: lease.state().leases })),
       close: lease.close,
     }),

@@ -19,7 +19,9 @@ export const FieldName = Schema.String.check(
   Schema.isPattern(/^[a-z][A-Za-z0-9_]*$/u, {
     message: "Start with a lowercase letter, then use letters, digits and underscores.",
   }),
-  Schema.makeFilter((name) => !reservedFieldNames.includes(name) || `"${name}" is reserved.`),
+  ...reservedFieldNames.map((name) =>
+    Schema.isPattern(new RegExp(`^(?!${name}$)`, "u"), { message: `“${name}” is reserved.` }),
+  ),
 ).annotate({ identifier: "Credential.FieldName" })
 
 export const Name = Schema.Union([EnvName, FieldName]).annotate({

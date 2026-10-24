@@ -2,6 +2,7 @@ export * as Seed from "./seed.js"
 
 import { Database } from "@ren/db/database"
 import { Agent } from "@ren/schema/agent"
+import { App } from "@ren/schema/app"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
@@ -12,6 +13,15 @@ import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template
 import { and, eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { RenSettings } from "../../src/settings/ren.js"
+
+export const appInput = (ownerSpaceId: Space.ID, slug: string, configuration: Partial<App.Declaration> = {}) =>
+  Schema.decodeUnknownSync(App.CreateInput)({
+    ownerSpaceId,
+    slug,
+    name: slug,
+    description: `The ${slug} app`,
+    ...configuration,
+  })
 
 export const organization = Effect.fnUntraced(function* () {
   const database = yield* Database.Service

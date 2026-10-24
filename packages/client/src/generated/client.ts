@@ -56,6 +56,38 @@ import type {
   AgentArchiveOutput,
   AgentTransferOwnershipInput,
   AgentTransferOwnershipOutput,
+  AppListInput,
+  AppListOutput,
+  AppGetInput,
+  AppGetOutput,
+  AppCreateInput,
+  AppCreateOutput,
+  AppUpdateInput,
+  AppUpdateOutput,
+  AppArchiveInput,
+  AppArchiveOutput,
+  AppTransferOwnershipInput,
+  AppTransferOwnershipOutput,
+  AppReleaseListInput,
+  AppReleaseListOutput,
+  AppReleaseGetInput,
+  AppReleaseGetOutput,
+  AppReleaseCreateInput,
+  AppReleaseCreateOutput,
+  AppRegistryListInput,
+  AppRegistryListOutput,
+  AppRegistryGetInput,
+  AppRegistryGetOutput,
+  SpaceAppListInput,
+  SpaceAppListOutput,
+  SpaceAppGetInput,
+  SpaceAppGetOutput,
+  SpaceAppCreateInput,
+  SpaceAppCreateOutput,
+  SpaceAppUpdateInput,
+  SpaceAppUpdateOutput,
+  SpaceAppArchiveInput,
+  SpaceAppArchiveOutput,
   AgentMembershipListInput,
   AgentMembershipListOutput,
   AgentMembershipCreateInput,
@@ -598,6 +630,226 @@ export function make(options: ClientOptions) {
             method: "POST",
             path: `/agents/${encodeURIComponent(input.id)}/transferOwnership`,
             body: { spaceId: input["spaceId"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    app: {
+      list: (input: AppListInput, requestOptions?: RequestOptions) =>
+        request<AppListOutput>(
+          {
+            method: "GET",
+            path: `/apps`,
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: AppGetInput, requestOptions?: RequestOptions) =>
+        request<AppGetOutput>(
+          {
+            method: "GET",
+            path: `/apps/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: AppCreateInput, requestOptions?: RequestOptions) =>
+        request<AppCreateOutput>(
+          {
+            method: "POST",
+            path: `/apps`,
+            body: {
+              name: input["name"],
+              description: input["description"],
+              icon: input["icon"],
+              requiredCredentials: input["requiredCredentials"],
+              environment: input["environment"],
+              skills: input["skills"],
+              mcps: input["mcps"],
+              dependsOn: input["dependsOn"],
+              slug: input["slug"],
+              ownerSpaceId: input["ownerSpaceId"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: AppUpdateInput, requestOptions?: RequestOptions) =>
+        request<AppUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/apps/${encodeURIComponent(input.id)}`,
+            body: { name: input["name"], description: input["description"], icon: input["icon"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: AppArchiveInput, requestOptions?: RequestOptions) =>
+        request<AppArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/apps/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      transferOwnership: (input: AppTransferOwnershipInput, requestOptions?: RequestOptions) =>
+        request<AppTransferOwnershipOutput>(
+          {
+            method: "POST",
+            path: `/apps/${encodeURIComponent(input.id)}/transferOwnership`,
+            body: { spaceId: input["spaceId"], retainUse: input["retainUse"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "app-release": {
+      list: (input: AppReleaseListInput, requestOptions?: RequestOptions) =>
+        request<AppReleaseListOutput>(
+          {
+            method: "GET",
+            path: `/app-releases`,
+            query: { appId: input["appId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: AppReleaseGetInput, requestOptions?: RequestOptions) =>
+        request<AppReleaseGetOutput>(
+          {
+            method: "GET",
+            path: `/app-releases/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: AppReleaseCreateInput, requestOptions?: RequestOptions) =>
+        request<AppReleaseCreateOutput>(
+          {
+            method: "POST",
+            path: `/app-releases`,
+            body: {
+              requiredCredentials: input["requiredCredentials"],
+              environment: input["environment"],
+              skills: input["skills"],
+              mcps: input["mcps"],
+              dependsOn: input["dependsOn"],
+              appId: input["appId"],
+              expectedLatestReleaseId: input["expectedLatestReleaseId"],
+              version: input["version"],
+              bump: input["bump"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "app-registry": {
+      list: (input: AppRegistryListInput, requestOptions?: RequestOptions) =>
+        request<AppRegistryListOutput>(
+          {
+            method: "GET",
+            path: `/app-registry`,
+            query: {
+              query: input["query"],
+              category: input["category"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: AppRegistryGetInput, requestOptions?: RequestOptions) =>
+        request<AppRegistryGetOutput>(
+          {
+            method: "GET",
+            path: `/app-registry/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "space-app": {
+      list: (input: SpaceAppListInput, requestOptions?: RequestOptions) =>
+        request<SpaceAppListOutput>(
+          {
+            method: "GET",
+            path: `/space-apps`,
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: SpaceAppGetInput, requestOptions?: RequestOptions) =>
+        request<SpaceAppGetOutput>(
+          {
+            method: "GET",
+            path: `/space-apps/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: SpaceAppCreateInput, requestOptions?: RequestOptions) =>
+        request<SpaceAppCreateOutput>(
+          {
+            method: "POST",
+            path: `/space-apps`,
+            body: { spaceId: input["spaceId"], appId: input["appId"], pinnedReleaseId: input["pinnedReleaseId"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: SpaceAppUpdateInput, requestOptions?: RequestOptions) =>
+        request<SpaceAppUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/space-apps/${encodeURIComponent(input.id)}`,
+            body: { pinnedReleaseId: input["pinnedReleaseId"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: SpaceAppArchiveInput, requestOptions?: RequestOptions) =>
+        request<SpaceAppArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/space-apps/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,

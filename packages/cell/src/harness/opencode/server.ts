@@ -21,7 +21,20 @@ import { ServerWorkerd } from "@opencode/server/workerd"
 import type { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
 import type { Models } from "@ren/schema/models"
-import { Context, Deferred, Effect, Fiber, Layer, ManagedRuntime, Option, Ref, type Scope, Struct } from "effect"
+import type { AppCatalog } from "@ren/schema/app-catalog"
+import {
+  Context,
+  Deferred,
+  Effect,
+  Fiber,
+  Layer,
+  ManagedRuntime,
+  Option,
+  Ref,
+  type Scope,
+  Semaphore,
+  Struct,
+} from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
 import manifest from "../../../package.json"
 import type { FileSystem } from "@opencode/schema/filesystem"
@@ -31,12 +44,16 @@ import { Credentials } from "./credentials.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { RenPlugin } from "./plugin.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
+import { OpenCodeExecution } from "./execution.js"
+import type { LayerNode } from "@opencode/util/effect/layer-node"
+import type { HarnessConfig } from "../config.js"
 
 export interface Options {
   readonly saved: Option.Option<Effect.Effect<ReadonlyMap<string, RenPlugin.Chat>>>
   readonly directoryOf: (sessionId: string) => string
   readonly confinement?: RenPlugin.Confinement
   readonly makeDirectory?: (directory: string) => Effect.Effect<void>
+  readonly apps?: Option.Option<AppCatalog.Info>
 }
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
@@ -54,13 +71,15 @@ export const open = Effect.fn("OpenCodeServer.open")(function* (
     models: { fetch: false },
   }
   return yield* make(
-    createEmbeddedRoutes(ServerWorkerd.serverOptions(serverOptions), [
-      ...ServerWorkerd.replacements(serverOptions),
-      ...Option.match(connections, {
-        onNone: () => [],
-        onSome: RenWorkspaceDriver.replacements,
-      }),
-    ]).pipe(Layer.provide(HttpServer.layerServices)),
+    (replacements) =>
+      createEmbeddedRoutes(ServerWorkerd.serverOptions(serverOptions), [
+        ...replacements,
+        ...ServerWorkerd.replacements(serverOptions),
+        ...Option.match(connections, {
+          onNone: () => [],
+          onSome: RenWorkspaceDriver.replacements,
+        }),
+      ]).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     refreshKey,
     connections,
@@ -77,16 +96,17 @@ export const openProcess = Effect.fn("OpenCodeServer.openProcess")(function* (
   options: Options,
 ) {
   return yield* make(
-    createEmbeddedRoutes(
-      {
-        app: { name: "ren-brain", version: manifest.version },
-        database: { path: database },
-        config: { project: false, content: config },
-        models: { fetch: false },
-        fs: { filewatcher: false, fff: false },
-      },
-      Option.match(connections, { onNone: () => [], onSome: RenWorkspaceDriver.replacements }),
-    ).pipe(Layer.provide(HttpServer.layerServices)),
+    (replacements) =>
+      createEmbeddedRoutes(
+        {
+          app: { name: "ren-brain", version: manifest.version },
+          database: { path: database },
+          config: { project: false, content: config },
+          models: { fetch: false },
+          fs: { filewatcher: false, fff: false },
+        },
+        [...replacements, ...Option.match(connections, { onNone: () => [], onSome: RenWorkspaceDriver.replacements })],
+      ).pipe(Layer.provide(HttpServer.layerServices)),
     endpoints,
     refreshKey,
     connections,
@@ -95,7 +115,9 @@ export const openProcess = Effect.fn("OpenCodeServer.openProcess")(function* (
 })
 
 export const make = Effect.fn("OpenCodeServer.make")(function* (
-  routes: Layer.Layer<
+  routes: (
+    replacements: LayerNode.Replacements,
+  ) => Layer.Layer<
     | Credential.Service
     | SdkPlugins.Service
     | SessionRestart.Service
@@ -114,19 +136,29 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     directoryOf: (sessionId) => `/workspace/${sessionId}`,
   },
 ): Effect.fn.Return<Instance, Error, Scope.Scope> {
+  const executions = OpenCodeExecution.make()
   const runtime = yield* Effect.acquireRelease(
-    Effect.sync(() => ManagedRuntime.make(routes)),
+    Effect.sync(() => ManagedRuntime.make(routes([executions.replacement]))),
     (opened) => opened.disposeEffect,
   )
   const services = yield* runtime.contextEffect
   const plugins = Context.get(services, SdkPlugins.Service)
-  const endpoints = yield* Ref.make(initial)
-  const locations = yield* Ref.make<ReadonlyArray<RenPlugin.LocationModels>>([])
+  const chats = Option.isSome(options.saved)
+    ? Option.some(yield* RenPlugin.chats(yield* options.saved.value))
+    : Option.none()
+  const desired = yield* Ref.make<HarnessConfig.Snapshot>({
+    revision: 0,
+    models: initial,
+    apps: options.apps ?? Option.none(),
+    chats: Option.isSome(chats) ? yield* Ref.get(chats.value.latest) : new Map(),
+  })
+  const updates = yield* Semaphore.make(1)
+  const locations = yield* Ref.make<ReadonlyArray<HarnessConfig.Location>>([])
   const credentials = Context.get(services, Credential.Service)
   // oxlint-disable-next-line ren/no-comments -- A credential stays while any Location still has its endpoint installed (E64).
   // oxlint-disable-next-line ren/no-comments -- A 401 renews the endpoint's key at once (E58); the caller retries the request one time.
   const renew = Effect.fnUntraced(function* (endpointId: string) {
-    const endpoint = (yield* Ref.get(endpoints)).find((each) => each.id === endpointId)
+    const endpoint = (yield* Ref.get(desired)).models.find((each) => each.id === endpointId)
     if (!endpoint) return false
     const renewed = yield* refreshKey(endpointId)
     if (Option.isNone(renewed)) return false
@@ -138,17 +170,14 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     return true
   })
   const synced = Effect.gen(function* () {
-    const latest = yield* Ref.get(endpoints)
-    const installed = yield* Effect.forEach(yield* Ref.get(locations), (location) => Ref.get(location.installed))
+    const latest = (yield* Ref.get(desired)).models
+    const installed = yield* Effect.forEach(yield* Ref.get(locations), (location) => location.models)
     const byId = new Map([...installed.flat(), ...latest].map((endpoint) => [endpoint.id, endpoint]))
     const inUse = [...byId.values()]
     yield* Credentials.sync(credentials, ModelCredentials.owner, ModelCredentials.entries(inUse))
   })
   const loaded = yield* Deferred.make<void>()
   const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
-  const chats = Option.isSome(options.saved)
-    ? Option.some(yield* RenPlugin.chats(yield* options.saved.value))
-    : Option.none()
   const sessions = Context.get(services, Session.Service)
   const instances = Context.get(services, OpenCodeInstance.Service)
   const located = <S, R>(sessionId: string, service: Effect.Effect<S, never, R>) =>
@@ -167,7 +196,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     )
   yield* plugins.register(
     RenPlugin.make(
-      endpoints,
+      desired,
       locations,
       synced,
       renew,
@@ -177,6 +206,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       chats,
       Option.fromUndefinedOr(options.confinement),
       approvals,
+      executions.get,
     ),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
@@ -203,12 +233,21 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     directoryOf: options.directoryOf,
     makeDirectory: options.makeDirectory ?? (() => Effect.void),
     activate: (sessionId) => located(sessionId, Effect.void),
+    atBoundary: (sessionId, work) =>
+      located(sessionId, Location.Service).pipe(Effect.flatMap((location) => executions.get(location).offer(work))),
     chats,
-    configure: (next) =>
-      Ref.set(endpoints, next).pipe(
-        Effect.andThen(Ref.get(locations)),
-        Effect.flatMap((all) => Effect.forEach(all, (location) => location.offer, { discard: true })),
-        Effect.andThen(synced),
+    configuration: Ref.get(locations).pipe(
+      Effect.flatMap((all) => Effect.forEach(all, (location) => location.observation)),
+    ),
+    configure: (update) =>
+      updates.withPermit(
+        Effect.gen(function* () {
+          const previous = yield* Ref.get(desired)
+          const next: HarnessConfig.Snapshot = { ...previous, ...update, revision: previous.revision + 1 }
+          yield* Ref.set(desired, next)
+          yield* Effect.forEach(yield* Ref.get(locations), (location) => location.offer(next), { discard: true })
+          yield* synced
+        }),
       ),
   }
 })
@@ -242,6 +281,8 @@ export interface Instance {
   readonly directoryOf: (sessionId: string) => string
   readonly makeDirectory: (directory: string) => Effect.Effect<void>
   readonly activate: (sessionId: string) => Effect.Effect<void, Harness.NotFound>
+  readonly atBoundary: (sessionId: string, work: Effect.Effect<void>) => Effect.Effect<void, Harness.NotFound>
   readonly chats: Option.Option<RenPlugin.Chats>
-  readonly configure: (endpoints: ReadonlyArray<Models.Endpoint>) => Effect.Effect<void>
+  readonly configure: (update: Partial<Omit<HarnessConfig.Snapshot, "revision">>) => Effect.Effect<void>
+  readonly configuration: Effect.Effect<ReadonlyArray<HarnessConfig.Observation>>
 }

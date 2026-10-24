@@ -93,7 +93,7 @@ const open = Effect.fnUntraced(function* (confinement?: RenPlugin.Confinement) {
     EnvironmentConnections.Service,
   )
   const host = yield* OpenCodeServer.make(
-    embedded(RenWorkspaceDriver.replacements(environments)),
+    (replacements) => embedded([...replacements, ...RenWorkspaceDriver.replacements(environments)]),
     endpoints,
     () => Effect.succeedNone,
     Option.some(environments),
@@ -144,8 +144,10 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
       directoryOf: () => directory,
       makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
       activate: () => Effect.void,
+      atBoundary: () => Effect.die(new Error("The tool parity host has no runtime catalog")),
       chats: Option.none(),
       configure: () => Effect.void,
+      configuration: Effect.succeed([]),
     },
     endpoints,
   )

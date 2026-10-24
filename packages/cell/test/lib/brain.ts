@@ -1,6 +1,8 @@
 export * as BrainTest from "./brain.js"
 
 import { OpenCode } from "@opencode/client/effect"
+import { SdkPlugins } from "@opencode/core/plugin/sdk"
+import type { Plugin } from "@opencode/plugin/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/host-api/brain-api"
 import { ChatApi } from "@ren/protocol/chat"
@@ -36,6 +38,7 @@ export const make = Effect.fnUntraced(function* (
     readonly database?: string
     readonly id?: Session.ID
     readonly vars?: Readonly<Record<string, string>>
+    readonly plugin?: Plugin.Plugin
   } = {},
 ) {
   const vars = Schema.decodeUnknownSync(Env.Vars)({ ...Shared.vars(Shared.stub().url), ...options.vars })
@@ -46,6 +49,7 @@ export const make = Effect.fnUntraced(function* (
   const issuer = yield* ModelsTest.issuer
   const id = options.id ?? Session.ID.create()
   const alarm: { at: number | null } = { at: null }
+  const pulls = yield* Ref.make(0)
   const services = yield* Layer.build(
     Layer.mergeAll(
       ModelRefresh.layer(issuer.url).pipe(
@@ -53,7 +57,7 @@ export const make = Effect.fnUntraced(function* (
         Layer.provideMerge(Fence.layer),
         Layer.provide(FetchHttpClient.layer),
       ),
-      Layer.succeed(HotReload.Service, HotReload.Service.of({ pull: Effect.void })),
+      Layer.succeed(HotReload.Service, HotReload.Service.of({ pull: Ref.update(pulls, (count) => count + 1) })),
       Layer.succeed(
         Cell.Info,
         Cell.Info.of({
@@ -87,12 +91,22 @@ export const make = Effect.fnUntraced(function* (
   )
   yield* Context.get(services, ModelStore.Service).install(Shared.access(undefined, Shared.stub().url), "test")
   const host = yield* OpenCodeServer.make(
-    createEmbeddedRoutes({
-      database: { path: options.database ?? ":memory:" },
-      config: { project: false, content: vars.OPENCODE_CONFIG },
-      models: { fetch: false },
-      fs: { filewatcher: false, fff: false },
-    }).pipe(Layer.provide(HttpServer.layerServices)),
+    (replacements) =>
+      createEmbeddedRoutes(
+        {
+          database: { path: options.database ?? ":memory:" },
+          config: { directory, project: false, content: vars.OPENCODE_CONFIG },
+          models: { fetch: false },
+          fs: { filewatcher: false, fff: false },
+        },
+        replacements,
+      ).pipe(
+        Layer.provide(HttpServer.layerServices),
+        Layer.tap((services) => {
+          const plugins = Context.get(services, SdkPlugins.Service)
+          return options.plugin ? plugins.register(options.plugin) : Effect.void
+        }),
+      ),
     [],
     Context.get(services, ModelRefresh.Service),
     Option.none(),
@@ -174,7 +188,7 @@ export const make = Effect.fnUntraced(function* (
       yield* store.install(access, `test-${Date.now()}`)
       const opened = Context.get(cell, Harness.Service)
       if ((yield* opened.state).isOpen)
-        yield* Effect.scoped(Effect.flatMap(opened.get, (instance) => instance.configure(access.endpoints)))
+        yield* Effect.scoped(Effect.flatMap(opened.get, (instance) => instance.configure({ models: access.endpoints })))
     })
   return {
     id,
@@ -189,6 +203,7 @@ export const make = Effect.fnUntraced(function* (
       alarm.at = null
     }).pipe(Effect.andThen(Cell.alarm()), Effect.provide(cell)),
     waited: Queue.take(waits),
+    pulls: Ref.get(pulls),
     client,
     fetch: (path: string, init?: RequestInit) =>
       Effect.promise(() => web.fetch(new Request(`http://cell${path}`, init))),
@@ -199,6 +214,7 @@ export const make = Effect.fnUntraced(function* (
     chatAs,
     chatFetch,
     credentials: host.credentials,
+    atBoundary: (work: Effect.Effect<void>) => host.atBoundary(id, work),
     start: (input: Partial<Session.StartInput> = {}) =>
       client.brain["brain.start"]({
         payload: {

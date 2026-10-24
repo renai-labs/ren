@@ -5,6 +5,7 @@ import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Session } from "@ren/schema/session"
 import { Clock, Context, DateTime, Duration, Effect, Layer, Option, Ref, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { AppStore } from "./app-store.js"
 import { BrainKeys } from "./brain-keys.js"
 import { BrainStorage } from "./brain-storage.js"
 import { Cell } from "./cell.js"
@@ -35,6 +36,7 @@ export const layer = Layer.effect(
     const activity = yield* Cell.Activity
     const hostToken = yield* HostToken.Service
     const store = yield* ModelStore.Service
+    const apps = yield* AppStore.Service
     const settings = yield* ChatSettings.Service
     const keys = yield* BrainKeys.Service
     const fence = yield* Fence.Service
@@ -57,20 +59,17 @@ export const layer = Layer.effect(
       if (yield* fence.isRetired) return
       const token = yield* hostToken.current
       if (Option.isNone(token)) return yield* Effect.logWarning("The brain has no valid host token; it skips a pull")
-      const isOpen = (yield* harness.state).isOpen
-      const sessions: ReadonlyArray<PullSession> = isOpen
-        ? yield* Effect.scoped(
-            Effect.flatMap(harness.get, (opened) => opened.sessions).pipe(
-              Effect.map((all) =>
-                all.map((session) => ({
-                  id: Session.ID.make(session.id),
-                  busy: session.active,
-                  progress: session.progress,
-                })),
-              ),
-            ),
-          )
-        : []
+      const sessions: ReadonlyArray<PullSession> = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const opened = yield* harness.getIfOpen
+          if (Option.isNone(opened)) return []
+          return (yield* opened.value.sessions).map((session) => ({
+            id: Session.ID.make(session.id),
+            busy: session.active,
+            progress: session.progress,
+          }))
+        }),
+      )
       const layers = yield* settings.layers
       const reply = yield* host.pull
         .pull({
@@ -78,6 +77,7 @@ export const layer = Layer.effect(
             version: info.version,
             keyIds: (yield* keys.current).map((key) => key.id),
             models: Option.getOrNull(yield* store.hash),
+            apps: Option.getOrNull(Option.map(yield* apps.current, (saved) => saved.fingerprint)),
             layers: BrainSettings.known(layers),
             sessions,
             roots: sessions.map((session) => session.id),
@@ -86,17 +86,25 @@ export const layer = Layer.effect(
         })
         .pipe(HostToken.withToken(token.value), Effect.timeout(HostToken.renAnswersWithin))
       yield* Ref.set(activity.pulledAt, Option.some(yield* DateTime.now))
+      if (reply.apps?.catalog)
+        yield* apps
+          .save({ fingerprint: reply.apps.fingerprint, catalog: reply.apps.catalog })
+          .pipe(Effect.catch((error) => Effect.logWarning("The brain keeps its last app catalog", error)))
       yield* keys.save(reply.publicKeys)
       if (reply.env?.variables) yield* credentialEnv.apply(reply.env.hash, reply.env.variables)
       const access = reply.models.access
       if (access) yield* store.install(access, reply.models.hash)
       yield* settings.save(BrainSettings.merge(layers, reply.layers), reply.chats)
-      if (!isOpen) return
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const opened = yield* harness.get
-          if (access) yield* opened.configure(access.endpoints)
-          yield* opened.applySettings(reply.chats)
+          const current = yield* harness.getIfOpen
+          if (Option.isNone(current)) return
+          const opened = current.value
+          yield* opened.configure({
+            models: Option.match(yield* store.read, { onNone: () => [], onSome: (saved) => saved.endpoints }),
+            apps: yield* apps.current,
+            settings: { layers: yield* settings.layers, chats: yield* settings.chats },
+          })
           // oxlint-disable-next-line ren/no-comments -- A chat Ren deleted leaves the harness at once, when idle; its folder goes after 7 days of Ren naming it deleted (E109, E114).
           const busy = new Set(sessions.filter((session) => session.busy).map((session) => session.id))
           yield* Effect.forEach(

@@ -20,6 +20,7 @@
     "@ren/brain": "workspace:*",
     "@ren/environment-api": "workspace:*",
     "@ren/cell": "workspace:*",
+    "@ren/client": "workspace:*",
     "@ren/core": "workspace:*",
     "@ren/db": "workspace:*",
     "@ren/executor": "workspace:*",
