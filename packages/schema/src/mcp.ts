@@ -18,9 +18,9 @@ const Local = Schema.Struct({
 })
 const Provider = Schema.Struct({
   type: Schema.Literal("provider"),
-  provider: Schema.Literals(["composio"]),
-  toolkit: Schema.NonEmptyString.annotate({
-    description: "The provider’s toolkit. Ren looks up the provider’s auth config for each environment.",
+  provider: Credential.Provider,
+  integration: Schema.NonEmptyString.annotate({
+    description: "The provider’s name for the service, such as a Composio toolkit or a Pipedream app.",
   }),
 })
 export const Transport = Schema.Union([Remote, Local, Provider]).annotate({ identifier: "Mcp.Transport" })

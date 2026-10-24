@@ -180,3 +180,14 @@ describe("Infra.Spec", () => {
     }
   })
 })
+
+describe("Infra.SpaceBindings", () => {
+  test("binds the shared profiles that list a space by app and profile slug; credentials is gone (P36)", () => {
+    const decoded = Schema.decodeUnknownSync(Infra.SpaceBindings)({
+      profiles: { "meta-ads": ["acme", "globex"] },
+      credentials: { "meta-ads": { META_TOKEN: "META_TOKEN" } },
+    })
+    expect(decoded.profiles).toEqual({ "meta-ads": ["acme", "globex"] })
+    expect("credentials" in decoded).toBe(false)
+  })
+})

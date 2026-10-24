@@ -2,40 +2,84 @@ export * as AppCatalog from "./app-catalog.js"
 
 import { Schema } from "effect"
 import { App } from "./app.js"
-import { AppRelease } from "./app-release.js"
+import { AppProfile } from "./app-profile.js"
 import { Credential } from "./credential.js"
 import { Mcp } from "./mcp.js"
 import { Primitive } from "./primitive.js"
 import { Skill } from "./skill.js"
 
-export interface Provenance extends Schema.Schema.Type<typeof Provenance> {}
-export const Provenance = Schema.Struct({
+export interface Profile extends Schema.Schema.Type<typeof Profile> {}
+export const Profile = Schema.Struct({
+  id: AppProfile.ID,
+  slug: AppProfile.Slug,
+  name: Primitive.Name,
+  kind: AppProfile.Kind,
+}).annotate({ identifier: "AppCatalog.Profile" })
+
+export interface AppEntry extends Schema.Schema.Type<typeof AppEntry> {}
+export const AppEntry = Schema.Struct({
   appId: App.ID,
-  releaseId: AppRelease.ID,
   appSlug: Primitive.Slug,
-  version: AppRelease.Version,
-}).annotate({ identifier: "AppCatalog.Provenance" })
+  name: Primitive.Name,
+  profiles: Schema.Array(
+    Schema.Struct({
+      slug: AppProfile.Slug,
+      name: Primitive.Name,
+      kind: AppProfile.Kind,
+      env: Schema.Record(Credential.EnvName, Credential.EnvName).annotate({
+        description: "Each connected env key of the profile, mapped to its label.",
+      }),
+    }),
+  ),
+}).annotate({ identifier: "AppCatalog.AppEntry" })
 
 export interface McpEntry extends Schema.Schema.Type<typeof McpEntry> {}
 export const McpEntry = Schema.Struct({
-  ...Provenance.fields,
+  appId: App.ID,
+  appSlug: Primitive.Slug,
   slug: Primitive.Slug,
   declaration: Mcp.Declaration,
+  server: Schema.String.annotate({ description: "The server name: `<mcp>__<profile>`, or `<mcp>` for auth none." }),
+  profile: Schema.NullOr(Profile).annotate({ description: "Null for an MCP with auth none." }),
+  label: Schema.NullOr(Credential.EnvName).annotate({ description: "The label of the item’s credential." }),
+  env: Schema.optionalKey(
+    Schema.Record(Credential.EnvName, Schema.String).annotate({
+      description: "For a local server: each env key it needs, mapped to the profile’s placeholder.",
+    }),
+  ),
+  url: Schema.optionalKey(
+    Schema.String.annotate({
+      description: "For a provider MCP: the address to call, the provider’s host with the first path segment `ren:<label>`.",
+    }),
+  ),
 }).annotate({ identifier: "AppCatalog.McpEntry" })
 
 export interface SkillEntry extends Schema.Schema.Type<typeof SkillEntry> {}
 export const SkillEntry = Schema.Struct({
-  ...Provenance.fields,
+  appId: App.ID,
+  appSlug: Primitive.Slug,
   slug: Primitive.Slug,
   declaration: Skill.Declaration,
 }).annotate({ identifier: "AppCatalog.SkillEntry" })
 
+export interface Unavailable extends Schema.Schema.Type<typeof Unavailable> {}
+export const Unavailable = Schema.Struct({
+  appSlug: Primitive.Slug,
+  mcp: Primitive.Slug,
+  profile: Schema.NullOr(Primitive.Name).annotate({ description: "The profile’s display name." }),
+  reason: Schema.Literals(["provider", "egress"]),
+}).annotate({
+  identifier: "AppCatalog.Unavailable",
+  description:
+    "An MCP that Ren leaves out: its provider is not set up on this Ren, or the brain cannot reach credentials.",
+})
+
 export interface Catalog extends Schema.Schema.Type<typeof Catalog> {}
 export const Catalog = Schema.Struct({
-  apps: Schema.Array(Provenance),
+  apps: Schema.Array(AppEntry),
   mcps: Schema.Array(McpEntry),
   skills: Schema.Array(SkillEntry),
-  credentials: Schema.Array(Schema.Struct({ appId: App.ID, requirements: Schema.Array(Credential.Requirement) })),
+  unavailable: Schema.Array(Unavailable),
 }).annotate({ identifier: "AppCatalog.Catalog" })
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
@@ -51,13 +95,16 @@ export interface Naming {
 export const nameConflicts = (catalog: Catalog, naming: Naming): ReadonlyArray<string> => {
   const sources = [
     ...naming.reserved,
-    ...(["skills", "mcps"] as const).flatMap((kind) =>
-      catalog[kind].map((entry) => ({
-        kind,
-        slug: entry.slug,
-        source: `${entry.appSlug}@${entry.version} (${entry.appId}/${entry.releaseId})/${kind}/${entry.slug}`,
-      })),
-    ),
+    ...catalog.skills.map((entry) => ({
+      kind: "skills" as const,
+      slug: entry.slug,
+      source: `${entry.appSlug} (${entry.appId})/skills/${entry.slug}`,
+    })),
+    ...catalog.mcps.map((entry) => ({
+      kind: "mcps" as const,
+      slug: entry.server,
+      source: `${entry.appSlug} (${entry.appId})/mcps/${entry.server}`,
+    })),
   ]
   return [...Map.groupBy(sources, (entry) => `${entry.kind}/${naming.normalize(entry.slug)}`).entries()].flatMap(
     ([name, entries]) =>

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import { Redacted, Schema } from "effect"
-import { AppIdentity } from "../src/app/identity.js"
 import { Credential } from "../src/credential.js"
 
 const isLabel = Schema.is(Credential.Label)
@@ -76,14 +75,5 @@ describe("Credential.CreateInput", () => {
       value: { type: "key", value: "sk_live_1" },
     })
     expect(decoded.value.type === "key" && Redacted.value(decoded.value.value)).toBe("sk_live_1")
-  })
-})
-
-describe("Credential.ConnectInput", () => {
-  const decodeConnect = Schema.decodeUnknownExit(Credential.ConnectInput)
-  const target = (connection: string) => ({ kind: "mcp", app: AppIdentity.ID.create(), mcp: "meta-ads", connection })
-  test("a connection slug has at most 58 characters, so MCP_<MCP>__<CONNECTION> fits in 128 (K40)", () => {
-    expect(decodeConnect({ owner: { kind: "org" }, target: target("a".repeat(58)) })._tag).toBe("Success")
-    expect(decodeConnect({ owner: { kind: "org" }, target: target("a".repeat(59)) })._tag).toBe("Failure")
   })
 })
