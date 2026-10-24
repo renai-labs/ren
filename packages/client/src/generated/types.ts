@@ -38,9 +38,7 @@ export type AppID = string
 
 export type PrimitiveSlug = string
 
-export type AppReleaseID = string
-
-export type CredentialEnvName = string
+export type CredentialAppEnvName = string
 
 export type CredentialFieldName = string
 
@@ -48,13 +46,27 @@ export type CredentialOAuthApp = { kind: "oauth_app"; name: string; description?
 
 export type CredentialOption = { label: string; value: string; hint?: string }
 
-export type AppReleasePackages = { apt?: Array<string>; npm?: Array<string>; pip?: Array<string>; go?: Array<string> }
+export type AppPackages = { apt?: Array<string>; npm?: Array<string>; pip?: Array<string>; go?: Array<string> }
+
+export type CredentialEnvName = string
+
+export type CredentialProvider = string
 
 export type McpTimeouts = { startup?: number; catalog?: number; execution?: number }
 
-export type AppReleaseVersion = string
+export type AppProfileID = string
 
-export type SpaceAppID = string
+export type AppProfileSlug = string
+
+export type AppProfileKind = "shared" | "private"
+
+export type CredentialRequirementKind = "oauth" | "provider" | "fields" | "env"
+
+export type AppProfileItemStatus = "ok" | "missing" | "reconnect" | "unavailable"
+
+export type CredentialID = string
+
+export type AppProfileOAuthAppGate = { name: string; isConfigured: boolean }
 
 export type AgentMembershipID = string
 
@@ -166,8 +178,6 @@ export type TaskEventLinksChanged = { _tag: "link"; added: Array<string>; remove
 
 export type TaskEventArchived = { _tag: "archived" }
 
-export type CredentialID = string
-
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
 export type CredentialLocation = "header" | "query" | "path"
@@ -176,15 +186,7 @@ export type CredentialDelivery = "egress" | "delivered"
 
 export type CredentialStatus = "ok" | "reconnect"
 
-export type CredentialConnection = string
-
-export type CredentialProvider = "composio"
-
 export type WriteResultRedirect = { redirectUrl: string; expiresAt: string }
-
-export type CredentialRequirementKind = "oauth" | "provider" | "fields" | "env"
-
-export type CredentialOwnerKind = "org" | "space" | "person"
 
 export type OAuthSessionID = string
 
@@ -216,8 +218,7 @@ export type InvitationPreview = {
   inviter: { name: string | null; email: string } | null
 }
 
-export type CredentialOwner =
-  { kind: "org" } | { kind: "space"; spaceId: SpaceID } | { kind: "person"; userId: AuthUserID }
+export type AppProfileSpaceRef = { id: SpaceID; name: string }
 
 export type SpaceInfo = {
   id: SpaceID
@@ -306,31 +307,25 @@ export type TaskEventAssigned = {
   note: string | null
 }
 
+export type AppProfileSkipped = { kind: "mcps" | "skills" | "env"; slug: string; also: PrimitiveSlug }
+
 export type AppListingCategories = { [x: PrimitiveSlug]: Array<PrimitiveSlug> }
 
-export type AppInfo = {
-  id: AppID
-  slug: PrimitiveSlug
-  organizationId: AuthOrganizationID | null
-  ownerSpaceId: SpaceID | null
-  name: string
-  description: string
-  icon: string | null
-  latestReleaseId: AppReleaseID
-  createdAt: string
-  updatedAt: string
-  archivedAt: string | null
-}
+export type CredentialEnv = { kind: "env"; name: CredentialAppEnvName; description?: string; optional?: boolean }
 
-export type CredentialEnv = { kind: "env"; name: CredentialEnvName; description?: string; optional?: boolean }
+export type CredentialItem = { mcp: PrimitiveSlug } | { env: CredentialAppEnvName }
 
 export type CredentialSecret = { kind: "secret"; name: CredentialFieldName; description?: string; optional?: boolean }
 
 export type CredentialWhen = { name: CredentialFieldName; op: "eq" | "neq"; value: string }
 
+export type AppEnvironment = { packages?: AppPackages; buildCommands?: Array<string> }
+
 export type CredentialName = CredentialEnvName | CredentialFieldName
 
-export type AppReleaseEnvironment = { packages?: AppReleasePackages; buildCommands?: Array<string> }
+export type AppProfileLink = { appId: AppID; profileId: AppProfileID | null }
+
+export type CredentialProfileOwner = { kind: "profile"; profileId: AppProfileID }
 
 export type AgentMembershipInfo = {
   id: AgentMembershipID
@@ -506,19 +501,6 @@ export type CredentialInject =
   | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
   | { op: "route" }
 
-export type CredentialRequirementItem = {
-  key: string
-  group: AppID
-  app: AppID
-  mcp: PrimitiveSlug | null
-  label: CredentialEnvName
-  name: string
-  kind: CredentialRequirementKind
-  status: "ok" | "missing" | "reconnect"
-  credentialId: CredentialID | null
-  destinations: Array<CredentialOwnerKind>
-}
-
 export type OAuthSessionInfo = {
   id: OAuthSessionID
   status: OAuthSessionStatus
@@ -584,9 +566,18 @@ export type AppListingInfo = {
   archivedAt: string | null
 }
 
-export type AppPage = { items: Array<AppInfo>; page: number; pageSize: number; total: number }
-
 export type CredentialSkillRequirement = CredentialEnv | CredentialOAuthApp
+
+export type AppProfileItem = {
+  item: CredentialItem
+  kind: CredentialRequirementKind
+  label: CredentialEnvName
+  name: string
+  status: AppProfileItemStatus
+  optional: boolean
+  credentialId: CredentialID | null
+  holder: CredentialAccount | null
+}
 
 export type CredentialText = {
   kind: "text"
@@ -607,6 +598,12 @@ export type CredentialSelect = {
   options: [CredentialOption, ...Array<CredentialOption>]
   when?: CredentialWhen
 }
+
+export type CredentialOwner =
+  | { kind: "org" }
+  | { kind: "space"; spaceId: SpaceID }
+  | { kind: "person"; userId: AuthUserID }
+  | CredentialProfileOwner
 
 export type AgentMembershipPage = { items: Array<AgentMembershipInfo>; page: number; pageSize: number; total: number }
 
@@ -696,33 +693,6 @@ export type TaskEventData =
   | TaskEventParentChanged
   | TaskEventArchived
 
-export type CredentialInfo = {
-  id: CredentialID
-  organizationId: AuthOrganizationID
-  owner: CredentialOwner
-  label: CredentialEnvName
-  name: string | null
-  type: CredentialType
-  keyPreview: string | null
-  fieldNames: Array<string>
-  hosts: Array<string>
-  inject: CredentialInject
-  delivery: CredentialDelivery
-  account: CredentialAccount | null
-  scopes: Array<string>
-  status: CredentialStatus
-  app: AppID | null
-  mcp: PrimitiveSlug | null
-  connection: CredentialConnection | null
-  provider: CredentialProvider | null
-  expiresAt: string | null
-  createdBy: AuthUserID | null
-  createdAt: string
-  updatedAt: string
-}
-
-export type CredentialRequirements = { items: Array<CredentialRequirementItem> }
-
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
@@ -742,8 +712,52 @@ export type SkillContent = {
   files?: { [x: string]: string }
 }
 
+export type AppProfileInfo = {
+  id: AppProfileID
+  appId: AppID
+  appSlug: PrimitiveSlug
+  slug: AppProfileSlug
+  name: string
+  kind: AppProfileKind
+  userId: AuthUserID | null
+  allSpaces: boolean
+  spaces: Array<AppProfileSpaceRef>
+  hiddenSpaces: number
+  links: Array<AppProfileLink>
+  items: Array<AppProfileItem>
+  unused: Array<{ credentialId: CredentialID; label: CredentialEnvName }>
+  oauthApps: Array<AppProfileOAuthAppGate>
+  skipped: Array<AppProfileSkipped>
+  createdBy: AuthUserID | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type CredentialRequirement =
   CredentialEnv | CredentialSecret | CredentialOAuthApp | CredentialText | CredentialSelect
+
+export type CredentialInfo = {
+  id: CredentialID
+  organizationId: AuthOrganizationID
+  owner: CredentialOwner
+  label: CredentialEnvName
+  name: string | null
+  type: CredentialType
+  keyPreview: string | null
+  fieldNames: Array<string>
+  hosts: Array<string>
+  inject: CredentialInject
+  delivery: CredentialDelivery
+  account: CredentialAccount | null
+  scopes: Array<string>
+  status: CredentialStatus
+  profileId: AppProfileID | null
+  provider: CredentialProvider | null
+  expiresAt: string | null
+  createdBy: AuthUserID | null
+  createdAt: string
+  updatedAt: string
+}
 
 export type SessionMessageToolState =
   SessionMessageToolStreaming | SessionMessageToolRunning | SessionMessageToolCompleted | SessionMessageToolError
@@ -757,8 +771,6 @@ export type TaskEventInfo = {
   actor: TaskActor
   createdAt: string
 }
-
-export type CredentialPage = { items: Array<CredentialInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceSettingsInfo = { id: SpaceID; settings: SettingsInfo; canUpdate: boolean; updatedAt: string | null }
 
@@ -790,13 +802,17 @@ export type SkillInfo =
       upstream: { url: string; ref?: string; path: string }
     }
 
+export type AppProfilePage = { items: Array<AppProfileInfo>; page: number; pageSize: number; total: number }
+
+export type AppProfileReach = { profiles: Array<AppProfileInfo> }
+
 export type McpInfo = {
   name: string
   description: string
   transport:
     | { type: "remote"; url: string }
     | { type: "local"; command: [string, ...Array<string>]; cwd?: string; env?: { [x: CredentialEnvName]: string } }
-    | { type: "provider"; provider: "composio"; toolkit: string }
+    | { type: "provider"; provider: CredentialProvider; integration: string }
   auth:
     | { type: "none" }
     | {
@@ -813,6 +829,8 @@ export type McpInfo = {
   requiredCredentials?: Array<CredentialRequirement>
 }
 
+export type CredentialPage = { items: Array<CredentialInfo>; page: number; pageSize: number; total: number }
+
 export type SessionMessageTool = {
   type: "tool"
   id: string
@@ -828,23 +846,24 @@ export type TaskActivityInfo =
 
 export type AgentPage = { items: Array<AgentInfo>; page: number; pageSize: number; total: number }
 
-export type AppReleaseInfo = {
+export type AppInfo = {
+  id: AppID
+  slug: PrimitiveSlug
+  organizationId: AuthOrganizationID | null
+  ownerSpaceId: SpaceID | null
+  name: string
+  description: string
+  icon: string | null
   requiredCredentials?: Array<CredentialRequirement>
-  environment?: AppReleaseEnvironment
+  environment?: AppEnvironment
   skills: { [x: PrimitiveSlug]: SkillInfo }
   mcps: { [x: PrimitiveSlug]: McpInfo }
   dependsOn?: Array<PrimitiveSlug>
-  id: AppReleaseID
-  appId: AppID
-  version: AppReleaseVersion
+  revision: number
   createdAt: string
+  updatedAt: string
+  archivedAt: string | null
 }
-
-export type SessionMessageContent = SessionMessageText | SessionMessageReasoning | SessionMessageTool
-
-export type TaskActivityPage = { items: Array<TaskActivityInfo>; page: number; pageSize: number; total: number }
-
-export type AppReleasePage = { items: Array<AppReleaseInfo>; page: number; pageSize: number; total: number }
 
 export type AppRegistryInfo = {
   id: AppID
@@ -853,20 +872,21 @@ export type AppRegistryInfo = {
   description: string
   icon: string | null
   listing: AppListingInfo
-  release: AppReleaseInfo
+  requiredCredentials?: Array<CredentialRequirement>
+  environment?: AppEnvironment
+  mcps: { [x: PrimitiveSlug]: McpInfo }
+  skills: { [x: PrimitiveSlug]: SkillInfo }
+  dependsOn?: Array<PrimitiveSlug>
+  revision: number
 }
 
-export type SpaceAppInfo = {
-  id: SpaceAppID
-  spaceId: SpaceID
-  appId: AppID
-  isOwner: boolean
-  pinnedReleaseId: AppReleaseID | null
-  app: AppInfo
-  release: AppReleaseInfo
-  createdAt: string
-  archivedAt: string | null
-}
+export type SessionMessageContent = SessionMessageText | SessionMessageReasoning | SessionMessageTool
+
+export type TaskActivityPage = { items: Array<TaskActivityInfo>; page: number; pageSize: number; total: number }
+
+export type AppPage = { items: Array<AppInfo>; page: number; pageSize: number; total: number }
+
+export type AppRegistryPage = { items: Array<AppRegistryInfo>; page: number; pageSize: number; total: number }
 
 export type SessionMessageAssistant = {
   id: SessionMessageID
@@ -882,10 +902,6 @@ export type SessionMessageAssistant = {
   error?: SessionErrorInfo
   retry?: SessionMessageRetry
 }
-
-export type AppRegistryPage = { items: Array<AppRegistryInfo>; page: number; pageSize: number; total: number }
-
-export type SpaceAppPage = { items: Array<SpaceAppInfo>; page: number; pageSize: number; total: number }
 
 export type SessionMessageInfo =
   | SessionMessageAgentSwitched
@@ -1575,7 +1591,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -1728,7 +1744,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -1881,7 +1897,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2034,7 +2050,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2187,7 +2203,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2340,7 +2356,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2493,7 +2509,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2646,7 +2662,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2799,7 +2815,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -2952,7 +2968,7 @@ export type AppCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3014,50 +3030,6 @@ export type AppCreateOutput = AppInfo
 
 export type AppUpdateInput = {
   readonly id: { readonly id: string }["id"]
-  readonly name?: {
-    readonly name?: string | null
-    readonly description?: string | null
-    readonly icon?: string | null | null
-  }["name"]
-  readonly description?: {
-    readonly name?: string | null
-    readonly description?: string | null
-    readonly icon?: string | null | null
-  }["description"]
-  readonly icon?: {
-    readonly name?: string | null
-    readonly description?: string | null
-    readonly icon?: string | null | null
-  }["icon"]
-}
-
-export type AppUpdateOutput = AppInfo
-
-export type AppArchiveInput = { readonly id: { readonly id: string }["id"] }
-
-export type AppArchiveOutput = AppInfo
-
-export type AppTransferOwnershipInput = {
-  readonly id: { readonly id: string }["id"]
-  readonly spaceId: { readonly spaceId: string; readonly retainUse?: boolean | undefined }["spaceId"]
-  readonly retainUse?: { readonly spaceId: string; readonly retainUse?: boolean | undefined }["retainUse"]
-}
-
-export type AppTransferOwnershipOutput = AppInfo
-
-export type AppReleaseListInput = {
-  readonly appId: { readonly appId: string; readonly page: number; readonly pageSize: number }["appId"]
-  readonly page: { readonly appId: string; readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: { readonly appId: string; readonly page: number; readonly pageSize: number }["pageSize"]
-}
-
-export type AppReleaseListOutput = AppReleasePage
-
-export type AppReleaseGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
-
-export type AppReleaseGetOutput = AppReleaseInfo
-
-export type AppReleaseCreateInput = {
   readonly requiredCredentials: {
     readonly requiredCredentials?: ReadonlyArray<
       | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
@@ -3152,7 +3124,7 @@ export type AppReleaseCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3205,10 +3177,10 @@ export type AppReleaseCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
-    readonly appId: string
-    readonly expectedLatestReleaseId: string
-    readonly version?: string | null
-    readonly bump?: "patch" | "minor" | "major" | null
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
   }["requiredCredentials"]
   readonly environment?: {
     readonly requiredCredentials?: ReadonlyArray<
@@ -3304,7 +3276,7 @@ export type AppReleaseCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3357,10 +3329,10 @@ export type AppReleaseCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
-    readonly appId: string
-    readonly expectedLatestReleaseId: string
-    readonly version?: string | null
-    readonly bump?: "patch" | "minor" | "major" | null
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
   }["environment"]
   readonly skills: {
     readonly requiredCredentials?: ReadonlyArray<
@@ -3456,7 +3428,7 @@ export type AppReleaseCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3509,10 +3481,10 @@ export type AppReleaseCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
-    readonly appId: string
-    readonly expectedLatestReleaseId: string
-    readonly version?: string | null
-    readonly bump?: "patch" | "minor" | "major" | null
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
   }["skills"]
   readonly mcps: {
     readonly requiredCredentials?: ReadonlyArray<
@@ -3608,7 +3580,7 @@ export type AppReleaseCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3661,10 +3633,10 @@ export type AppReleaseCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
-    readonly appId: string
-    readonly expectedLatestReleaseId: string
-    readonly version?: string | null
-    readonly bump?: "patch" | "minor" | "major" | null
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
   }["mcps"]
   readonly dependsOn: {
     readonly requiredCredentials?: ReadonlyArray<
@@ -3760,7 +3732,7 @@ export type AppReleaseCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3813,12 +3785,12 @@ export type AppReleaseCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
-    readonly appId: string
-    readonly expectedLatestReleaseId: string
-    readonly version?: string | null
-    readonly bump?: "patch" | "minor" | "major" | null
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
   }["dependsOn"]
-  readonly appId: {
+  readonly name?: {
     readonly requiredCredentials?: ReadonlyArray<
       | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
       | { readonly kind: "secret"; readonly name: string; readonly description?: string; readonly optional?: boolean }
@@ -3912,7 +3884,7 @@ export type AppReleaseCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -3965,12 +3937,12 @@ export type AppReleaseCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
-    readonly appId: string
-    readonly expectedLatestReleaseId: string
-    readonly version?: string | null
-    readonly bump?: "patch" | "minor" | "major" | null
-  }["appId"]
-  readonly expectedLatestReleaseId: {
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
+  }["name"]
+  readonly description?: {
     readonly requiredCredentials?: ReadonlyArray<
       | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
       | { readonly kind: "secret"; readonly name: string; readonly description?: string; readonly optional?: boolean }
@@ -4064,7 +4036,7 @@ export type AppReleaseCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -4117,12 +4089,12 @@ export type AppReleaseCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
-    readonly appId: string
-    readonly expectedLatestReleaseId: string
-    readonly version?: string | null
-    readonly bump?: "patch" | "minor" | "major" | null
-  }["expectedLatestReleaseId"]
-  readonly version?: {
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
+  }["description"]
+  readonly icon?: {
     readonly requiredCredentials?: ReadonlyArray<
       | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
       | { readonly kind: "secret"; readonly name: string; readonly description?: string; readonly optional?: boolean }
@@ -4216,7 +4188,7 @@ export type AppReleaseCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -4269,12 +4241,12 @@ export type AppReleaseCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
-    readonly appId: string
-    readonly expectedLatestReleaseId: string
-    readonly version?: string | null
-    readonly bump?: "patch" | "minor" | "major" | null
-  }["version"]
-  readonly bump?: {
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
+  }["icon"]
+  readonly expectedRevision: {
     readonly requiredCredentials?: ReadonlyArray<
       | { readonly kind: "env"; readonly name: string; readonly description?: string; readonly optional?: boolean }
       | { readonly kind: "secret"; readonly name: string; readonly description?: string; readonly optional?: boolean }
@@ -4368,7 +4340,7 @@ export type AppReleaseCreateInput = {
               readonly cwd?: string
               readonly env?: { readonly [x: string]: string }
             }
-          | { readonly type: "provider"; readonly provider: "composio"; readonly toolkit: string }
+          | { readonly type: "provider"; readonly provider: string; readonly integration: string }
         readonly auth:
           | { readonly type: "none" }
           | {
@@ -4421,14 +4393,178 @@ export type AppReleaseCreateInput = {
       }
     }
     readonly dependsOn?: ReadonlyArray<string>
-    readonly appId: string
-    readonly expectedLatestReleaseId: string
-    readonly version?: string | null
-    readonly bump?: "patch" | "minor" | "major" | null
-  }["bump"]
+    readonly name?: string | null
+    readonly description?: string | null
+    readonly icon?: string | null | null
+    readonly expectedRevision: number
+  }["expectedRevision"]
 }
 
-export type AppReleaseCreateOutput = AppReleaseInfo
+export type AppUpdateOutput = AppInfo
+
+export type AppArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type AppArchiveOutput = AppInfo
+
+export type AppTransferOwnershipInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly spaceId: { readonly spaceId: string }["spaceId"]
+}
+
+export type AppTransferOwnershipOutput = AppInfo
+
+export type AppProfileListInput = {
+  readonly appId?: {
+    readonly appId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["appId"]
+  readonly spaceId?: {
+    readonly appId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: {
+    readonly appId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly appId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type AppProfileListOutput = AppProfilePage
+
+export type AppProfileGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type AppProfileGetOutput = AppProfileInfo
+
+export type AppProfileCreateInput = {
+  readonly appId: {
+    readonly appId: string
+    readonly name: string
+    readonly slug: string
+    readonly kind: "shared" | "private"
+    readonly allSpaces?: boolean | undefined
+    readonly spaceIds?: ReadonlyArray<string> | undefined
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+  }["appId"]
+  readonly name: {
+    readonly appId: string
+    readonly name: string
+    readonly slug: string
+    readonly kind: "shared" | "private"
+    readonly allSpaces?: boolean | undefined
+    readonly spaceIds?: ReadonlyArray<string> | undefined
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+  }["name"]
+  readonly slug: {
+    readonly appId: string
+    readonly name: string
+    readonly slug: string
+    readonly kind: "shared" | "private"
+    readonly allSpaces?: boolean | undefined
+    readonly spaceIds?: ReadonlyArray<string> | undefined
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+  }["slug"]
+  readonly kind: {
+    readonly appId: string
+    readonly name: string
+    readonly slug: string
+    readonly kind: "shared" | "private"
+    readonly allSpaces?: boolean | undefined
+    readonly spaceIds?: ReadonlyArray<string> | undefined
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+  }["kind"]
+  readonly allSpaces?: {
+    readonly appId: string
+    readonly name: string
+    readonly slug: string
+    readonly kind: "shared" | "private"
+    readonly allSpaces?: boolean | undefined
+    readonly spaceIds?: ReadonlyArray<string> | undefined
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+  }["allSpaces"]
+  readonly spaceIds?: {
+    readonly appId: string
+    readonly name: string
+    readonly slug: string
+    readonly kind: "shared" | "private"
+    readonly allSpaces?: boolean | undefined
+    readonly spaceIds?: ReadonlyArray<string> | undefined
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+  }["spaceIds"]
+  readonly links?: {
+    readonly appId: string
+    readonly name: string
+    readonly slug: string
+    readonly kind: "shared" | "private"
+    readonly allSpaces?: boolean | undefined
+    readonly spaceIds?: ReadonlyArray<string> | undefined
+    readonly links?: ReadonlyArray<{ readonly appId: string; readonly profileId: string }> | undefined
+  }["links"]
+}
+
+export type AppProfileCreateOutput = AppProfileInfo
+
+export type AppProfileUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: { readonly name?: string | undefined }["name"]
+}
+
+export type AppProfileUpdateOutput = AppProfileInfo
+
+export type AppProfileAccessInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly add?: {
+    readonly add?: ReadonlyArray<string> | undefined
+    readonly remove?: ReadonlyArray<string> | undefined
+    readonly allSpaces?: boolean | undefined
+  }["add"]
+  readonly remove?: {
+    readonly add?: ReadonlyArray<string> | undefined
+    readonly remove?: ReadonlyArray<string> | undefined
+    readonly allSpaces?: boolean | undefined
+  }["remove"]
+  readonly allSpaces?: {
+    readonly add?: ReadonlyArray<string> | undefined
+    readonly remove?: ReadonlyArray<string> | undefined
+    readonly allSpaces?: boolean | undefined
+  }["allSpaces"]
+}
+
+export type AppProfileAccessOutput = AppProfileInfo
+
+export type AppProfileLinkInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly appId: { readonly appId: string; readonly profileId: string | null }["appId"]
+  readonly profileId: { readonly appId: string; readonly profileId: string | null }["profileId"]
+}
+
+export type AppProfileLinkOutput = AppProfileInfo
+
+export type AppProfilePromoteInput = { readonly id: { readonly id: string }["id"] }
+
+export type AppProfilePromoteOutput = AppProfileInfo
+
+export type AppProfileReachAppProfileDeleteInput = { readonly id: { readonly id: string }["id"] }
+
+export type AppProfileReachAppProfileDeleteOutput = AppProfileInfo
+
+export type AppProfileReachSessionProfilesInput = { readonly id: { readonly id: string }["id"] }
+
+export type AppProfileReachSessionProfilesOutput = AppProfileReach
+
+export type AppProfileReachSpaceProfilesInput = { readonly id: { readonly id: string }["id"] }
+
+export type AppProfileReachSpaceProfilesOutput = AppProfileReach
 
 export type AppRegistryListInput = {
   readonly query?: {
@@ -4462,49 +4598,6 @@ export type AppRegistryListOutput = AppRegistryPage
 export type AppRegistryGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 
 export type AppRegistryGetOutput = AppRegistryInfo
-
-export type SpaceAppListInput = {
-  readonly spaceId: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["spaceId"]
-  readonly page: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: { readonly spaceId: string; readonly page: number; readonly pageSize: number }["pageSize"]
-}
-
-export type SpaceAppListOutput = SpaceAppPage
-
-export type SpaceAppGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
-
-export type SpaceAppGetOutput = SpaceAppInfo
-
-export type SpaceAppCreateInput = {
-  readonly spaceId: {
-    readonly spaceId: string
-    readonly appId: string
-    readonly pinnedReleaseId?: string | null | undefined
-  }["spaceId"]
-  readonly appId: {
-    readonly spaceId: string
-    readonly appId: string
-    readonly pinnedReleaseId?: string | null | undefined
-  }["appId"]
-  readonly pinnedReleaseId?: {
-    readonly spaceId: string
-    readonly appId: string
-    readonly pinnedReleaseId?: string | null | undefined
-  }["pinnedReleaseId"]
-}
-
-export type SpaceAppCreateOutput = SpaceAppInfo
-
-export type SpaceAppUpdateInput = {
-  readonly id: { readonly id: string }["id"]
-  readonly pinnedReleaseId: { readonly pinnedReleaseId: string | null }["pinnedReleaseId"]
-}
-
-export type SpaceAppUpdateOutput = SpaceAppInfo
-
-export type SpaceAppArchiveInput = { readonly id: { readonly id: string }["id"] }
-
-export type SpaceAppArchiveOutput = SpaceAppInfo
 
 export type AgentMembershipListInput = {
   readonly spaceId?: {
@@ -5179,7 +5272,7 @@ export type LabelArchiveOutput = LabelInfo
 
 export type CredentialListInput = {
   readonly owner?: {
-    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly owner?: ("org" | "space" | "person" | "profile") | undefined
     readonly spaceId?: string | undefined
     readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
     readonly search?: string | undefined
@@ -5187,7 +5280,7 @@ export type CredentialListInput = {
     readonly pageSize: number
   }["owner"]
   readonly spaceId?: {
-    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly owner?: ("org" | "space" | "person" | "profile") | undefined
     readonly spaceId?: string | undefined
     readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
     readonly search?: string | undefined
@@ -5195,7 +5288,7 @@ export type CredentialListInput = {
     readonly pageSize: number
   }["spaceId"]
   readonly type?: {
-    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly owner?: ("org" | "space" | "person" | "profile") | undefined
     readonly spaceId?: string | undefined
     readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
     readonly search?: string | undefined
@@ -5203,7 +5296,7 @@ export type CredentialListInput = {
     readonly pageSize: number
   }["type"]
   readonly search?: {
-    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly owner?: ("org" | "space" | "person" | "profile") | undefined
     readonly spaceId?: string | undefined
     readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
     readonly search?: string | undefined
@@ -5211,7 +5304,7 @@ export type CredentialListInput = {
     readonly pageSize: number
   }["search"]
   readonly page: {
-    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly owner?: ("org" | "space" | "person" | "profile") | undefined
     readonly spaceId?: string | undefined
     readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
     readonly search?: string | undefined
@@ -5219,7 +5312,7 @@ export type CredentialListInput = {
     readonly pageSize: number
   }["page"]
   readonly pageSize: {
-    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly owner?: ("org" | "space" | "person" | "profile") | undefined
     readonly spaceId?: string | undefined
     readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
     readonly search?: string | undefined
@@ -5235,258 +5328,60 @@ export type CredentialGetInput = { readonly idOrSlug: { readonly idOrSlug: strin
 export type CredentialGetOutput = CredentialInfo
 
 export type CredentialCreateInput = {
-  readonly owner: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly label: string
-    readonly name?: string | null
-    readonly hosts: ReadonlyArray<string>
-    readonly inject?:
-      | (
+  readonly payload:
+    | {
+        readonly owner:
+          | { readonly kind: "org" }
+          | { readonly kind: "space"; readonly spaceId: string }
+          | { readonly kind: "person"; readonly userId: string }
+        readonly label: string
+        readonly name?: string | null
+        readonly hosts: ReadonlyArray<string>
+        readonly inject?:
+          | (
+              | {
+                  readonly op: "replace"
+                  readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
+                }
+              | {
+                  readonly op: "setHeader"
+                  readonly name: string
+                  readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
+                }
+              | { readonly op: "route" }
+            )
+          | null
+        readonly delivery?: ("egress" | "delivered") | null
+        readonly value:
+          | { readonly type: "key"; readonly value: string }
+          | { readonly type: "basic"; readonly username: string; readonly password: string }
+          | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
           | {
-              readonly op: "replace"
-              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
+              readonly type: "client_credentials"
+              readonly clientId: string
+              readonly clientSecret: string
+              readonly tokenEndpoint: string
+              readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+              readonly scopes?: ReadonlyArray<string> | null
             }
+      }
+    | {
+        readonly owner: { readonly kind: "profile"; readonly profileId: string }
+        readonly item: { readonly mcp: string } | { readonly env: string }
+        readonly hosts: ReadonlyArray<string>
+        readonly value:
+          | { readonly type: "key"; readonly value: string }
+          | { readonly type: "basic"; readonly username: string; readonly password: string }
+          | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
           | {
-              readonly op: "setHeader"
-              readonly name: string
-              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
+              readonly type: "client_credentials"
+              readonly clientId: string
+              readonly clientSecret: string
+              readonly tokenEndpoint: string
+              readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+              readonly scopes?: ReadonlyArray<string> | null
             }
-          | { readonly op: "route" }
-        )
-      | null
-    readonly delivery?: ("egress" | "delivered") | null
-    readonly value:
-      | { readonly type: "key"; readonly value: string }
-      | { readonly type: "basic"; readonly username: string; readonly password: string }
-      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
-      | {
-          readonly type: "client_credentials"
-          readonly clientId: string
-          readonly clientSecret: string
-          readonly tokenEndpoint: string
-          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
-          readonly scopes?: ReadonlyArray<string> | null
-        }
-  }["owner"]
-  readonly label: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly label: string
-    readonly name?: string | null
-    readonly hosts: ReadonlyArray<string>
-    readonly inject?:
-      | (
-          | {
-              readonly op: "replace"
-              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
-            }
-          | {
-              readonly op: "setHeader"
-              readonly name: string
-              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
-            }
-          | { readonly op: "route" }
-        )
-      | null
-    readonly delivery?: ("egress" | "delivered") | null
-    readonly value:
-      | { readonly type: "key"; readonly value: string }
-      | { readonly type: "basic"; readonly username: string; readonly password: string }
-      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
-      | {
-          readonly type: "client_credentials"
-          readonly clientId: string
-          readonly clientSecret: string
-          readonly tokenEndpoint: string
-          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
-          readonly scopes?: ReadonlyArray<string> | null
-        }
-  }["label"]
-  readonly name?: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly label: string
-    readonly name?: string | null
-    readonly hosts: ReadonlyArray<string>
-    readonly inject?:
-      | (
-          | {
-              readonly op: "replace"
-              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
-            }
-          | {
-              readonly op: "setHeader"
-              readonly name: string
-              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
-            }
-          | { readonly op: "route" }
-        )
-      | null
-    readonly delivery?: ("egress" | "delivered") | null
-    readonly value:
-      | { readonly type: "key"; readonly value: string }
-      | { readonly type: "basic"; readonly username: string; readonly password: string }
-      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
-      | {
-          readonly type: "client_credentials"
-          readonly clientId: string
-          readonly clientSecret: string
-          readonly tokenEndpoint: string
-          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
-          readonly scopes?: ReadonlyArray<string> | null
-        }
-  }["name"]
-  readonly hosts: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly label: string
-    readonly name?: string | null
-    readonly hosts: ReadonlyArray<string>
-    readonly inject?:
-      | (
-          | {
-              readonly op: "replace"
-              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
-            }
-          | {
-              readonly op: "setHeader"
-              readonly name: string
-              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
-            }
-          | { readonly op: "route" }
-        )
-      | null
-    readonly delivery?: ("egress" | "delivered") | null
-    readonly value:
-      | { readonly type: "key"; readonly value: string }
-      | { readonly type: "basic"; readonly username: string; readonly password: string }
-      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
-      | {
-          readonly type: "client_credentials"
-          readonly clientId: string
-          readonly clientSecret: string
-          readonly tokenEndpoint: string
-          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
-          readonly scopes?: ReadonlyArray<string> | null
-        }
-  }["hosts"]
-  readonly inject?: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly label: string
-    readonly name?: string | null
-    readonly hosts: ReadonlyArray<string>
-    readonly inject?:
-      | (
-          | {
-              readonly op: "replace"
-              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
-            }
-          | {
-              readonly op: "setHeader"
-              readonly name: string
-              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
-            }
-          | { readonly op: "route" }
-        )
-      | null
-    readonly delivery?: ("egress" | "delivered") | null
-    readonly value:
-      | { readonly type: "key"; readonly value: string }
-      | { readonly type: "basic"; readonly username: string; readonly password: string }
-      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
-      | {
-          readonly type: "client_credentials"
-          readonly clientId: string
-          readonly clientSecret: string
-          readonly tokenEndpoint: string
-          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
-          readonly scopes?: ReadonlyArray<string> | null
-        }
-  }["inject"]
-  readonly delivery?: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly label: string
-    readonly name?: string | null
-    readonly hosts: ReadonlyArray<string>
-    readonly inject?:
-      | (
-          | {
-              readonly op: "replace"
-              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
-            }
-          | {
-              readonly op: "setHeader"
-              readonly name: string
-              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
-            }
-          | { readonly op: "route" }
-        )
-      | null
-    readonly delivery?: ("egress" | "delivered") | null
-    readonly value:
-      | { readonly type: "key"; readonly value: string }
-      | { readonly type: "basic"; readonly username: string; readonly password: string }
-      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
-      | {
-          readonly type: "client_credentials"
-          readonly clientId: string
-          readonly clientSecret: string
-          readonly tokenEndpoint: string
-          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
-          readonly scopes?: ReadonlyArray<string> | null
-        }
-  }["delivery"]
-  readonly value: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly label: string
-    readonly name?: string | null
-    readonly hosts: ReadonlyArray<string>
-    readonly inject?:
-      | (
-          | {
-              readonly op: "replace"
-              readonly in: readonly ["header" | "query" | "path", ...Array<"header" | "query" | "path">]
-            }
-          | {
-              readonly op: "setHeader"
-              readonly name: string
-              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
-            }
-          | { readonly op: "route" }
-        )
-      | null
-    readonly delivery?: ("egress" | "delivered") | null
-    readonly value:
-      | { readonly type: "key"; readonly value: string }
-      | { readonly type: "basic"; readonly username: string; readonly password: string }
-      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
-      | {
-          readonly type: "client_credentials"
-          readonly clientId: string
-          readonly clientSecret: string
-          readonly tokenEndpoint: string
-          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
-          readonly scopes?: ReadonlyArray<string> | null
-        }
-  }["value"]
+      }
 }
 
 export type CredentialCreateOutput = CredentialInfo
@@ -5561,58 +5456,24 @@ export type CredentialRemoveInput = { readonly id: { readonly id: string }["id"]
 export type CredentialRemoveOutput = CredentialInfo
 
 export type CredentialConnectCredentialConnectInput = {
-  readonly owner: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly target: {
-      readonly kind: "mcp"
-      readonly app: string
-      readonly mcp: string
-      readonly connection?: string | undefined
-      readonly connectionName?: string | undefined
-    }
+  readonly profileId: {
+    readonly profileId: string
+    readonly item: { readonly mcp: string }
     readonly reconnect?: boolean | undefined
-  }["owner"]
-  readonly target: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly target: {
-      readonly kind: "mcp"
-      readonly app: string
-      readonly mcp: string
-      readonly connection?: string | undefined
-      readonly connectionName?: string | undefined
-    }
+  }["profileId"]
+  readonly item: {
+    readonly profileId: string
+    readonly item: { readonly mcp: string }
     readonly reconnect?: boolean | undefined
-  }["target"]
+  }["item"]
   readonly reconnect?: {
-    readonly owner:
-      | { readonly kind: "org" }
-      | { readonly kind: "space"; readonly spaceId: string }
-      | { readonly kind: "person"; readonly userId: string }
-    readonly target: {
-      readonly kind: "mcp"
-      readonly app: string
-      readonly mcp: string
-      readonly connection?: string | undefined
-      readonly connectionName?: string | undefined
-    }
+    readonly profileId: string
+    readonly item: { readonly mcp: string }
     readonly reconnect?: boolean | undefined
   }["reconnect"]
 }
 
 export type CredentialConnectCredentialConnectOutput = WriteResultRedirect | CredentialInfo
-
-export type CredentialConnectCredentialRequirementsInput = {
-  readonly spaceId: { readonly spaceId: string; readonly appId: string }["spaceId"]
-  readonly appId: { readonly spaceId: string; readonly appId: string }["appId"]
-}
-
-export type CredentialConnectCredentialRequirementsOutput = CredentialRequirements
 
 export type OauthSessionGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 

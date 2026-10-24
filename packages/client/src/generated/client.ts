@@ -68,26 +68,30 @@ import type {
   AppArchiveOutput,
   AppTransferOwnershipInput,
   AppTransferOwnershipOutput,
-  AppReleaseListInput,
-  AppReleaseListOutput,
-  AppReleaseGetInput,
-  AppReleaseGetOutput,
-  AppReleaseCreateInput,
-  AppReleaseCreateOutput,
+  AppProfileListInput,
+  AppProfileListOutput,
+  AppProfileGetInput,
+  AppProfileGetOutput,
+  AppProfileCreateInput,
+  AppProfileCreateOutput,
+  AppProfileUpdateInput,
+  AppProfileUpdateOutput,
+  AppProfileAccessInput,
+  AppProfileAccessOutput,
+  AppProfileLinkInput,
+  AppProfileLinkOutput,
+  AppProfilePromoteInput,
+  AppProfilePromoteOutput,
+  AppProfileReachAppProfileDeleteInput,
+  AppProfileReachAppProfileDeleteOutput,
+  AppProfileReachSessionProfilesInput,
+  AppProfileReachSessionProfilesOutput,
+  AppProfileReachSpaceProfilesInput,
+  AppProfileReachSpaceProfilesOutput,
   AppRegistryListInput,
   AppRegistryListOutput,
   AppRegistryGetInput,
   AppRegistryGetOutput,
-  SpaceAppListInput,
-  SpaceAppListOutput,
-  SpaceAppGetInput,
-  SpaceAppGetOutput,
-  SpaceAppCreateInput,
-  SpaceAppCreateOutput,
-  SpaceAppUpdateInput,
-  SpaceAppUpdateOutput,
-  SpaceAppArchiveInput,
-  SpaceAppArchiveOutput,
   AgentMembershipListInput,
   AgentMembershipListOutput,
   AgentMembershipCreateInput,
@@ -162,8 +166,6 @@ import type {
   CredentialRemoveOutput,
   CredentialConnectCredentialConnectInput,
   CredentialConnectCredentialConnectOutput,
-  CredentialConnectCredentialRequirementsInput,
-  CredentialConnectCredentialRequirementsOutput,
   OauthSessionGetInput,
   OauthSessionGetOutput,
   OauthAppListInput,
@@ -705,7 +707,17 @@ export function make(options: ClientOptions) {
           {
             method: "PATCH",
             path: `/apps/${encodeURIComponent(input.id)}`,
-            body: { name: input["name"], description: input["description"], icon: input["icon"] },
+            body: {
+              requiredCredentials: input["requiredCredentials"],
+              environment: input["environment"],
+              skills: input["skills"],
+              mcps: input["mcps"],
+              dependsOn: input["dependsOn"],
+              name: input["name"],
+              description: input["description"],
+              icon: input["icon"],
+              expectedRevision: input["expectedRevision"],
+            },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
@@ -728,7 +740,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/apps/${encodeURIComponent(input.id)}/transferOwnership`,
-            body: { spaceId: input["spaceId"], retainUse: input["retainUse"] },
+            body: { spaceId: input["spaceId"] },
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,
@@ -736,45 +748,48 @@ export function make(options: ClientOptions) {
           requestOptions,
         ),
     },
-    "app-release": {
-      list: (input: AppReleaseListInput, requestOptions?: RequestOptions) =>
-        request<AppReleaseListOutput>(
+    "app-profile": {
+      list: (input: AppProfileListInput, requestOptions?: RequestOptions) =>
+        request<AppProfileListOutput>(
           {
             method: "GET",
-            path: `/app-releases`,
-            query: { appId: input["appId"], page: input["page"], pageSize: input["pageSize"] },
+            path: `/app-profiles`,
+            query: {
+              appId: input["appId"],
+              spaceId: input["spaceId"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
             successStatus: 200,
             declaredStatuses: [401, 403],
             empty: false,
           },
           requestOptions,
         ),
-      get: (input: AppReleaseGetInput, requestOptions?: RequestOptions) =>
-        request<AppReleaseGetOutput>(
+      get: (input: AppProfileGetInput, requestOptions?: RequestOptions) =>
+        request<AppProfileGetOutput>(
           {
             method: "GET",
-            path: `/app-releases/${encodeURIComponent(input.idOrSlug)}`,
+            path: `/app-profiles/${encodeURIComponent(input.idOrSlug)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
             empty: false,
           },
           requestOptions,
         ),
-      create: (input: AppReleaseCreateInput, requestOptions?: RequestOptions) =>
-        request<AppReleaseCreateOutput>(
+      create: (input: AppProfileCreateInput, requestOptions?: RequestOptions) =>
+        request<AppProfileCreateOutput>(
           {
             method: "POST",
-            path: `/app-releases`,
+            path: `/app-profiles`,
             body: {
-              requiredCredentials: input["requiredCredentials"],
-              environment: input["environment"],
-              skills: input["skills"],
-              mcps: input["mcps"],
-              dependsOn: input["dependsOn"],
               appId: input["appId"],
-              expectedLatestReleaseId: input["expectedLatestReleaseId"],
-              version: input["version"],
-              bump: input["bump"],
+              name: input["name"],
+              slug: input["slug"],
+              kind: input["kind"],
+              allSpaces: input["allSpaces"],
+              spaceIds: input["spaceIds"],
+              links: input["links"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
@@ -782,6 +797,95 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      update: (input: AppProfileUpdateInput, requestOptions?: RequestOptions) =>
+        request<AppProfileUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/app-profiles/${encodeURIComponent(input.id)}`,
+            body: { name: input["name"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      access: (input: AppProfileAccessInput, requestOptions?: RequestOptions) =>
+        request<AppProfileAccessOutput>(
+          {
+            method: "POST",
+            path: `/app-profiles/${encodeURIComponent(input.id)}/access`,
+            body: { add: input["add"], remove: input["remove"], allSpaces: input["allSpaces"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      link: (input: AppProfileLinkInput, requestOptions?: RequestOptions) =>
+        request<AppProfileLinkOutput>(
+          {
+            method: "POST",
+            path: `/app-profiles/${encodeURIComponent(input.id)}/link`,
+            body: { appId: input["appId"], profileId: input["profileId"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      promote: (input: AppProfilePromoteInput, requestOptions?: RequestOptions) =>
+        request<AppProfilePromoteOutput>(
+          {
+            method: "POST",
+            path: `/app-profiles/${encodeURIComponent(input.id)}/promote`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "app-profile-reach": {
+      "app-profile": {
+        delete: (input: AppProfileReachAppProfileDeleteInput, requestOptions?: RequestOptions) =>
+          request<AppProfileReachAppProfileDeleteOutput>(
+            {
+              method: "DELETE",
+              path: `/app-profiles/${encodeURIComponent(input.id)}`,
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      session: {
+        profiles: (input: AppProfileReachSessionProfilesInput, requestOptions?: RequestOptions) =>
+          request<AppProfileReachSessionProfilesOutput>(
+            {
+              method: "GET",
+              path: `/sessions/${encodeURIComponent(input.id)}/profiles`,
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      space: {
+        profiles: (input: AppProfileReachSpaceProfilesInput, requestOptions?: RequestOptions) =>
+          request<AppProfileReachSpaceProfilesOutput>(
+            {
+              method: "GET",
+              path: `/spaces/${encodeURIComponent(input.id)}/profiles`,
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
     },
     "app-registry": {
       list: (input: AppRegistryListInput, requestOptions?: RequestOptions) =>
@@ -808,66 +912,6 @@ export function make(options: ClientOptions) {
             path: `/app-registry/${encodeURIComponent(input.idOrSlug)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404],
-            empty: false,
-          },
-          requestOptions,
-        ),
-    },
-    "space-app": {
-      list: (input: SpaceAppListInput, requestOptions?: RequestOptions) =>
-        request<SpaceAppListOutput>(
-          {
-            method: "GET",
-            path: `/space-apps`,
-            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
-            successStatus: 200,
-            declaredStatuses: [401, 403],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      get: (input: SpaceAppGetInput, requestOptions?: RequestOptions) =>
-        request<SpaceAppGetOutput>(
-          {
-            method: "GET",
-            path: `/space-apps/${encodeURIComponent(input.idOrSlug)}`,
-            successStatus: 200,
-            declaredStatuses: [401, 403, 404],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      create: (input: SpaceAppCreateInput, requestOptions?: RequestOptions) =>
-        request<SpaceAppCreateOutput>(
-          {
-            method: "POST",
-            path: `/space-apps`,
-            body: { spaceId: input["spaceId"], appId: input["appId"], pinnedReleaseId: input["pinnedReleaseId"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401, 403, 404, 409],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      update: (input: SpaceAppUpdateInput, requestOptions?: RequestOptions) =>
-        request<SpaceAppUpdateOutput>(
-          {
-            method: "PATCH",
-            path: `/space-apps/${encodeURIComponent(input.id)}`,
-            body: { pinnedReleaseId: input["pinnedReleaseId"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401, 403, 404, 409],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      archive: (input: SpaceAppArchiveInput, requestOptions?: RequestOptions) =>
-        request<SpaceAppArchiveOutput>(
-          {
-            method: "DELETE",
-            path: `/space-apps/${encodeURIComponent(input.id)}`,
-            successStatus: 200,
-            declaredStatuses: [401, 403, 404, 409],
             empty: false,
           },
           requestOptions,
@@ -1296,15 +1340,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/credentials`,
-            body: {
-              owner: input["owner"],
-              label: input["label"],
-              name: input["name"],
-              hosts: input["hosts"],
-              inject: input["inject"],
-              delivery: input["delivery"],
-              value: input["value"],
-            },
+            body: input["payload"],
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
@@ -1379,21 +1415,9 @@ export function make(options: ClientOptions) {
             {
               method: "POST",
               path: `/credentials/connect`,
-              body: { owner: input["owner"], target: input["target"], reconnect: input["reconnect"] },
+              body: { profileId: input["profileId"], item: input["item"], reconnect: input["reconnect"] },
               successStatus: 200,
               declaredStatuses: [400, 401, 403, 404, 409],
-              empty: false,
-            },
-            requestOptions,
-          ),
-        requirements: (input: CredentialConnectCredentialRequirementsInput, requestOptions?: RequestOptions) =>
-          request<CredentialConnectCredentialRequirementsOutput>(
-            {
-              method: "GET",
-              path: `/credential-requirements`,
-              query: { spaceId: input["spaceId"], appId: input["appId"] },
-              successStatus: 200,
-              declaredStatuses: [401, 403, 404],
               empty: false,
             },
             requestOptions,

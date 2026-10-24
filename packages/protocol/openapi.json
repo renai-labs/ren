@@ -2805,18 +2805,40 @@
         }
       }
     },
-    "/app-releases": {
+    "/app-profiles": {
       "get": {
-        "tags": ["app-release"],
-        "operationId": "app-release.list",
+        "tags": ["app-profile"],
+        "operationId": "app-profile.list",
         "parameters": [
           {
             "name": "appId",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/App.ID"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/App.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
-            "required": true
+            "required": false
+          },
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID_1"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
           },
           {
             "name": "page",
@@ -2847,11 +2869,11 @@
         ],
         "responses": {
           "200": {
-            "description": "AppRelease.Page",
+            "description": "AppProfile.Page",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AppRelease.Page"
+                  "$ref": "#/components/schemas/AppProfile.Page"
                 }
               }
             }
@@ -2877,12 +2899,12 @@
             }
           }
         },
-        "description": "Return one page of the app-releases that the caller can see.",
-        "summary": "List app-releases"
+        "description": "Return one page of the app-profiles that the caller can see.",
+        "summary": "List app-profiles"
       },
       "post": {
-        "tags": ["app-release"],
-        "operationId": "app-release.create",
+        "tags": ["app-profile"],
+        "operationId": "app-profile.create",
         "parameters": [],
         "security": [
           {
@@ -2894,11 +2916,11 @@
         ],
         "responses": {
           "200": {
-            "description": "AppRelease.Info",
+            "description": "AppProfile.Info",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AppRelease.Info"
+                  "$ref": "#/components/schemas/AppProfile.Info"
                 }
               }
             }
@@ -2954,13 +2976,13 @@
             }
           }
         },
-        "description": "Create one app-release.",
-        "summary": "Create app-release",
+        "description": "Create one app-profile.",
+        "summary": "Create app-profile",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AppRelease.CreateInput"
+                "$ref": "#/components/schemas/AppProfile.CreateInput"
               }
             }
           },
@@ -2968,10 +2990,10 @@
         }
       }
     },
-    "/app-releases/{idOrSlug}": {
+    "/app-profiles/{idOrSlug}": {
       "get": {
-        "tags": ["app-release"],
-        "operationId": "app-release.get",
+        "tags": ["app-profile"],
+        "operationId": "app-profile.get",
         "parameters": [
           {
             "name": "idOrSlug",
@@ -2992,11 +3014,11 @@
         ],
         "responses": {
           "200": {
-            "description": "AppRelease.Info",
+            "description": "AppProfile.Info",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AppRelease.Info"
+                  "$ref": "#/components/schemas/AppProfile.Info"
                 }
               }
             }
@@ -3032,8 +3054,572 @@
             }
           }
         },
-        "description": "Return one app-release by ID or slug.",
-        "summary": "Get app-release"
+        "description": "Return one app-profile by ID or slug.",
+        "summary": "Get app-profile"
+      }
+    },
+    "/app-profiles/{id}": {
+      "patch": {
+        "tags": ["app-profile"],
+        "operationId": "app-profile.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/AppProfile.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppProfile.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppProfile.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one app-profile.",
+        "summary": "Update app-profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppProfile.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["app-profile-reach"],
+        "operationId": "app-profile.delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/AppProfile.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppProfile.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppProfile.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Delete a profile and its credentials. Spaces that reached it stop using its accounts at once.",
+        "summary": "Delete app profile"
+      }
+    },
+    "/app-profiles/{id}/access": {
+      "post": {
+        "tags": ["app-profile"],
+        "operationId": "app-profile.access",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/AppProfile.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppProfile.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppProfile.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Add or remove listed spaces, or share with every space. A member changes only spaces they belong to.",
+        "summary": "Change the spaces of a shared profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppProfile.AccessInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/app-profiles/{id}/link": {
+      "post": {
+        "tags": ["app-profile"],
+        "operationId": "app-profile.link",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/AppProfile.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppProfile.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppProfile.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the link action on one app-profile.",
+        "summary": "link app-profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppProfile.LinkInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/app-profiles/{id}/promote": {
+      "post": {
+        "tags": ["app-profile"],
+        "operationId": "app-profile.promote",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/AppProfile.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AppProfile.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppProfile.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Turn your private profile into a shared one that lists your spaces. Its accounts and labels stay.",
+        "summary": "Share a private profile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppProfile.PromoteInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/sessions/{id}/profiles": {
+      "get": {
+        "tags": ["app-profile-reach"],
+        "operationId": "session.profiles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Session.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The profiles that a chat reaches, with their gaps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppProfile.Reach"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the app profiles the chat can use, each with its items and their status.",
+        "summary": "List the profiles a chat reaches"
+      }
+    },
+    "/spaces/{id}/profiles": {
+      "get": {
+        "tags": ["app-profile-reach"],
+        "operationId": "space.profiles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The profiles that a chat reaches, with their gaps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppProfile.Reach"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the app profiles a new chat of the caller in this space can use, with their gaps.",
+        "summary": "List the profiles a new chat reaches"
       }
     },
     "/app-registry": {
@@ -3063,7 +3649,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Primitive.Slug_1"
+                  "$ref": "#/components/schemas/Primitive.Slug_2"
                 },
                 {
                   "type": "null"
@@ -3201,411 +3787,6 @@
         },
         "description": "Return one app-registry by ID or slug.",
         "summary": "Get app-registry"
-      }
-    },
-    "/space-apps": {
-      "get": {
-        "tags": ["space-app"],
-        "operationId": "space-app.list",
-        "parameters": [
-          {
-            "name": "spaceId",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Space.ID"
-            },
-            "required": true
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
-            },
-            "required": false
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
-            },
-            "required": false
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceApp.Page",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceApp.Page"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Return one page of the space-apps that the caller can see.",
-        "summary": "List space-apps"
-      },
-      "post": {
-        "tags": ["space-app"],
-        "operationId": "space-app.create",
-        "parameters": [],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceApp.Info",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceApp.Info"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ConflictError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConflictErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Create one space-app.",
-        "summary": "Create space-app",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SpaceApp.CreateInput"
-              }
-            }
-          },
-          "required": true
-        }
-      }
-    },
-    "/space-apps/{idOrSlug}": {
-      "get": {
-        "tags": ["space-app"],
-        "operationId": "space-app.get",
-        "parameters": [
-          {
-            "name": "idOrSlug",
-            "in": "path",
-            "schema": {
-              "type": "string"
-            },
-            "required": true
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceApp.Info",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceApp.Info"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Return one space-app by ID or slug.",
-        "summary": "Get space-app"
-      }
-    },
-    "/space-apps/{id}": {
-      "patch": {
-        "tags": ["space-app"],
-        "operationId": "space-app.update",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "schema": {
-              "$ref": "#/components/schemas/SpaceApp.ID"
-            },
-            "required": true
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceApp.Info",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceApp.Info"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ConflictError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConflictErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Change one space-app.",
-        "summary": "Update space-app",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SpaceApp.UpdateInput"
-              }
-            }
-          },
-          "required": true
-        }
-      },
-      "delete": {
-        "tags": ["space-app"],
-        "operationId": "space-app.archive",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "schema": {
-              "$ref": "#/components/schemas/SpaceApp.ID"
-            },
-            "required": true
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "SpaceApp.Info",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpaceApp.Info"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ConflictError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConflictErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Archive one space-app and return it. Archiving an archived space-app returns it unchanged.",
-        "summary": "Archive space-app"
       }
     },
     "/agent-memberships": {
@@ -6935,7 +7116,7 @@
             }
           }
         },
-        "description": "Start a sign-in for one MCP of an app and return the address of the consent page, or return the credential when it is already connected and `reconnect` is not set. Read the sign-in with `oauth-session.get`.",
+        "description": "Start a sign-in for one MCP of a profile’s app and return the address of the consent page, or return the credential when it is already connected and `reconnect` is not set. Read the sign-in with `oauth-session.get`.",
         "summary": "Connect an MCP",
         "requestBody": {
           "content": {
@@ -6947,82 +7128,6 @@
           },
           "required": true
         }
-      }
-    },
-    "/credential-requirements": {
-      "get": {
-        "tags": ["credential-connect"],
-        "operationId": "credential.requirements",
-        "parameters": [
-          {
-            "name": "spaceId",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/Space.ID"
-            },
-            "required": true
-          },
-          {
-            "name": "appId",
-            "in": "query",
-            "schema": {
-              "$ref": "#/components/schemas/App.ID"
-            },
-            "required": true
-          }
-        ],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Credential.Requirements",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Credential.Requirements"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "NotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Return the items of an app’s connect dialog in a space: one per MCP that needs a credential and one per env key, then the items of the apps it depends on, with the status of each.",
-        "summary": "List what an app needs connected"
       }
     },
     "/oauth-sessions/{idOrSlug}": {
@@ -7787,7 +7892,7 @@
           "environment": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/AppRelease.Environment"
+                "$ref": "#/components/schemas/App.Environment"
               },
               {
                 "type": "null"
@@ -7828,14 +7933,27 @@
         "required": ["name", "description", "slug", "ownerSpaceId"],
         "additionalProperties": false
       },
+      "App.Environment": {
+        "type": "object",
+        "properties": {
+          "packages": {
+            "$ref": "#/components/schemas/App.Packages"
+          },
+          "buildCommands": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "maxItems": 50
+          }
+        },
+        "additionalProperties": false
+      },
       "App.ID": {
         "type": "string",
         "pattern": "^app_"
-      },
-      "App.ID_1": {
-        "type": "string",
-        "pattern": "^app_",
-        "description": "The app that the dialog shows this item under."
       },
       "App.Info": {
         "type": "object",
@@ -7886,8 +8004,42 @@
               }
             ]
           },
-          "latestReleaseId": {
-            "$ref": "#/components/schemas/AppRelease.ID"
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/App.Environment"
+          },
+          "skills": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Skill.Info"
+            }
+          },
+          "mcps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Mcp.Info"
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Counts the edits of the definition."
           },
           "createdAt": {
             "type": "string"
@@ -7914,11 +8066,47 @@
           "name",
           "description",
           "icon",
-          "latestReleaseId",
+          "skills",
+          "mcps",
+          "revision",
           "createdAt",
           "updatedAt",
           "archivedAt"
         ],
+        "additionalProperties": false
+      },
+      "App.Packages": {
+        "type": "object",
+        "properties": {
+          "apt": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "npm": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "pip": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "go": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
         "additionalProperties": false
       },
       "App.Page": {
@@ -7948,16 +8136,6 @@
         "properties": {
           "spaceId": {
             "$ref": "#/components/schemas/Space.ID"
-          },
-          "retainUse": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "required": ["spaceId"],
@@ -7966,6 +8144,46 @@
       "App.UpdateInput": {
         "type": "object",
         "properties": {
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/App.Environment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skills": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Skill.Declaration"
+            }
+          },
+          "mcps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Mcp.Declaration"
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            }
+          },
           "name": {
             "anyOf": [
               {
@@ -8006,9 +8224,15 @@
                 "type": "null"
               }
             ]
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "description": "The revision the edit starts from. Another edit gives 409."
           }
         },
-        "additionalProperties": false
+        "required": ["expectedRevision"],
+        "additionalProperties": false,
+        "description": "The whole definition: it replaces the current one."
       },
       "AppListing.Categories": {
         "type": "object",
@@ -8069,6 +8293,461 @@
         "required": ["appId", "body", "categories", "examplePrompts", "createdAt", "updatedAt", "archivedAt"],
         "additionalProperties": false
       },
+      "AppProfile.AccessInput": {
+        "type": "object",
+        "properties": {
+          "add": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Space.ID"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "remove": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Space.ID"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allSpaces": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AppProfile.CreateInput": {
+        "type": "object",
+        "properties": {
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "slug": {
+            "$ref": "#/components/schemas/AppProfile.Slug"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AppProfile.Kind"
+          },
+          "allSpaces": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spaceIds": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Space.ID"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "links": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "appId": {
+                      "$ref": "#/components/schemas/App.ID"
+                    },
+                    "profileId": {
+                      "$ref": "#/components/schemas/AppProfile.ID"
+                    }
+                  },
+                  "required": ["appId", "profileId"],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["appId", "name", "slug", "kind"],
+        "additionalProperties": false
+      },
+      "AppProfile.ID": {
+        "type": "string",
+        "pattern": "^apf_"
+      },
+      "AppProfile.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/AppProfile.ID"
+          },
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "appSlug": {
+            "$ref": "#/components/schemas/Primitive.Slug"
+          },
+          "slug": {
+            "$ref": "#/components/schemas/AppProfile.Slug"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AppProfile.Kind"
+          },
+          "userId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allSpaces": {
+            "type": "boolean"
+          },
+          "spaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.SpaceRef"
+            },
+            "description": "The listed spaces that the caller belongs to."
+          },
+          "hiddenSpaces": {
+            "type": "integer",
+            "description": "The count of listed spaces that the caller does not belong to."
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.Link"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.Item"
+            }
+          },
+          "unused": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "credentialId": {
+                  "$ref": "#/components/schemas/Credential.ID"
+                },
+                "label": {
+                  "$ref": "#/components/schemas/Credential.EnvName"
+                }
+              },
+              "required": ["credentialId", "label"],
+              "additionalProperties": false
+            },
+            "description": "Credentials of items that the app no longer declares. The egress refuses them."
+          },
+          "oauthApps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.OAuthAppGate"
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.Skipped"
+            }
+          },
+          "createdBy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "appId",
+          "appSlug",
+          "slug",
+          "name",
+          "kind",
+          "userId",
+          "allSpaces",
+          "spaces",
+          "hiddenSpaces",
+          "links",
+          "items",
+          "unused",
+          "oauthApps",
+          "skipped",
+          "createdBy",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "AppProfile.Item": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/Credential.Item"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Credential.RequirementKind"
+          },
+          "label": {
+            "$ref": "#/components/schemas/Credential.EnvName"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AppProfile.ItemStatus"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "An optional item is never a gap."
+          },
+          "credentialId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credential.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credential.Account"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whose account a sign-in reached. A pasted value has none."
+          }
+        },
+        "required": ["item", "kind", "label", "name", "status", "optional", "credentialId", "holder"],
+        "additionalProperties": false
+      },
+      "AppProfile.ItemStatus": {
+        "type": "string",
+        "enum": ["ok", "missing", "reconnect", "unavailable"]
+      },
+      "AppProfile.Kind": {
+        "type": "string",
+        "enum": ["shared", "private"],
+        "description": "A shared profile belongs to the org; a private profile belongs to one person."
+      },
+      "AppProfile.Link": {
+        "type": "object",
+        "properties": {
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "profileId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppProfile.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null while no profile of the dependency app is linked."
+          }
+        },
+        "required": ["appId", "profileId"],
+        "additionalProperties": false
+      },
+      "AppProfile.LinkInput": {
+        "type": "object",
+        "properties": {
+          "appId": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "profileId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AppProfile.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["appId", "profileId"],
+        "additionalProperties": false
+      },
+      "AppProfile.OAuthAppGate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "isConfigured": {
+            "type": "boolean"
+          }
+        },
+        "required": ["name", "isConfigured"],
+        "additionalProperties": false,
+        "description": "An org OAuth app that the app needs. One gate per app, shown on every profile."
+      },
+      "AppProfile.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "AppProfile.PromoteInput": {
+        "not": {
+          "type": "null"
+        }
+      },
+      "AppProfile.Reach": {
+        "type": "object",
+        "properties": {
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.Info"
+            }
+          }
+        },
+        "required": ["profiles"],
+        "additionalProperties": false,
+        "description": "The profiles that a chat reaches, with their gaps."
+      },
+      "AppProfile.Skipped": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["mcps", "skills", "env"]
+          },
+          "slug": {
+            "type": "string"
+          },
+          "also": {
+            "$ref": "#/components/schemas/Primitive.Slug_1"
+          }
+        },
+        "required": ["kind", "slug", "also"],
+        "additionalProperties": false,
+        "description": "A part of the app that Ren leaves out in this org, because an older app has the same name (P25)."
+      },
+      "AppProfile.Slug": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "allOf": [
+          {
+            "maxLength": 32,
+            "description": "Fixed at create. It names the profile’s servers (`<mcp>__<slug>`) and labels (`<KEY>__<SLUG>`)."
+          }
+        ]
+      },
+      "AppProfile.SpaceRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
+        "additionalProperties": false
+      },
+      "AppProfile.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "AppRegistry.Info": {
         "type": "object",
         "properties": {
@@ -8101,11 +8780,44 @@
           "listing": {
             "$ref": "#/components/schemas/AppListing.Info"
           },
-          "release": {
-            "$ref": "#/components/schemas/AppRelease.Info"
+          "requiredCredentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.Requirement"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/App.Environment"
+          },
+          "mcps": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Mcp.Info"
+            }
+          },
+          "skills": {
+            "type": "object",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Skill.Info"
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Primitive.Slug"
+            }
+          },
+          "revision": {
+            "type": "integer"
           }
         },
-        "required": ["id", "slug", "name", "description", "icon", "listing", "release"],
+        "required": ["id", "slug", "name", "description", "icon", "listing", "mcps", "skills", "revision"],
         "additionalProperties": false
       },
       "AppRegistry.Page": {
@@ -8129,214 +8841,6 @@
         },
         "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
-      },
-      "AppRelease.CreateInput": {
-        "type": "object",
-        "properties": {
-          "requiredCredentials": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Credential.Requirement"
-            }
-          },
-          "environment": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AppRelease.Environment"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "skills": {
-            "type": "object",
-            "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
-            },
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Skill.Declaration"
-            }
-          },
-          "mcps": {
-            "type": "object",
-            "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
-            },
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Mcp.Declaration"
-            }
-          },
-          "dependsOn": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
-            }
-          },
-          "appId": {
-            "$ref": "#/components/schemas/App.ID"
-          },
-          "expectedLatestReleaseId": {
-            "$ref": "#/components/schemas/AppRelease.ID"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AppRelease.Version"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "bump": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": ["patch", "minor", "major"]
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": ["appId", "expectedLatestReleaseId"],
-        "additionalProperties": false
-      },
-      "AppRelease.Environment": {
-        "type": "object",
-        "properties": {
-          "packages": {
-            "$ref": "#/components/schemas/AppRelease.Packages"
-          },
-          "buildCommands": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 4096
-            },
-            "maxItems": 50
-          }
-        },
-        "additionalProperties": false
-      },
-      "AppRelease.ID": {
-        "type": "string",
-        "pattern": "^apr_"
-      },
-      "AppRelease.Info": {
-        "type": "object",
-        "properties": {
-          "requiredCredentials": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Credential.Requirement"
-            }
-          },
-          "environment": {
-            "$ref": "#/components/schemas/AppRelease.Environment"
-          },
-          "skills": {
-            "type": "object",
-            "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
-            },
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Skill.Info"
-            }
-          },
-          "mcps": {
-            "type": "object",
-            "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
-            },
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Mcp.Info"
-            }
-          },
-          "dependsOn": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
-            }
-          },
-          "id": {
-            "$ref": "#/components/schemas/AppRelease.ID"
-          },
-          "appId": {
-            "$ref": "#/components/schemas/App.ID"
-          },
-          "version": {
-            "$ref": "#/components/schemas/AppRelease.Version"
-          },
-          "createdAt": {
-            "type": "string"
-          }
-        },
-        "required": ["skills", "mcps", "id", "appId", "version", "createdAt"],
-        "additionalProperties": false
-      },
-      "AppRelease.Packages": {
-        "type": "object",
-        "properties": {
-          "apt": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "npm": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "pip": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "go": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        },
-        "additionalProperties": false
-      },
-      "AppRelease.Page": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AppRelease.Info"
-            }
-          },
-          "page": {
-            "type": "integer"
-          },
-          "pageSize": {
-            "type": "integer"
-          },
-          "total": {
-            "type": "integer"
-          }
-        },
-        "required": ["items", "page", "pageSize", "total"],
-        "additionalProperties": false
-      },
-      "AppRelease.Version": {
-        "type": "string",
-        "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\\+[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*)?$"
       },
       "Auth.Me": {
         "type": "object",
@@ -8476,50 +8980,34 @@
         "required": ["userId", "name"],
         "additionalProperties": false
       },
+      "Credential.AppEnvName": {
+        "type": "string",
+        "maxLength": 128,
+        "pattern": "^[A-Z_][A-Z0-9_]*$",
+        "allOf": [
+          {
+            "maxLength": 94
+          },
+          {
+            "pattern": "^(?!.*__)",
+            "description": "An env key of an app. Each profile gets it with its own suffix: `<KEY>__<PROFILE>`."
+          }
+        ]
+      },
       "Credential.ConnectInput": {
         "type": "object",
         "properties": {
-          "owner": {
-            "$ref": "#/components/schemas/Credential.Owner"
+          "profileId": {
+            "$ref": "#/components/schemas/AppProfile.ID"
           },
-          "target": {
+          "item": {
             "type": "object",
             "properties": {
-              "kind": {
-                "type": "string",
-                "enum": ["mcp"]
-              },
-              "app": {
-                "$ref": "#/components/schemas/App.ID"
-              },
               "mcp": {
                 "$ref": "#/components/schemas/Primitive.Slug"
-              },
-              "connection": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/Credential.Connection"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "connectionName": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
-                    "minLength": 1,
-                    "maxLength": 256
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
               }
             },
-            "required": ["kind", "app", "mcp"],
+            "required": ["mcp"],
             "additionalProperties": false
           },
           "reconnect": {
@@ -8533,73 +9021,18 @@
             ]
           }
         },
-        "required": ["owner", "target"],
+        "required": ["profileId", "item"],
         "additionalProperties": false
-      },
-      "Credential.Connection": {
-        "type": "string",
-        "maxLength": 64,
-        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "allOf": [
-          {
-            "maxLength": 58,
-            "description": "A second or later account for one MCP. Its label is `MCP_<MCP>__<CONNECTION>`."
-          }
-        ]
       },
       "Credential.CreateInput": {
-        "type": "object",
-        "properties": {
-          "owner": {
-            "$ref": "#/components/schemas/Credential.Owner"
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Credential.LooseCreateInput"
           },
-          "label": {
-            "type": "string",
-            "maxLength": 128,
-            "pattern": "^[A-Z_][A-Z0-9_]*$"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
-                "minLength": 1,
-                "maxLength": 256
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "hosts": {
-            "$ref": "#/components/schemas/Credential.Hosts"
-          },
-          "inject": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Credential.Inject"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "delivery": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Credential.Delivery"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "value": {
-            "$ref": "#/components/schemas/Credential.Value"
+          {
+            "$ref": "#/components/schemas/Credential.ProfileCreateInput"
           }
-        },
-        "required": ["owner", "label", "hosts", "value"],
-        "additionalProperties": false
+        ]
       },
       "Credential.Delivery": {
         "type": "string",
@@ -8614,7 +9047,7 @@
             "enum": ["env"]
           },
           "name": {
-            "$ref": "#/components/schemas/Credential.EnvName"
+            "$ref": "#/components/schemas/Credential.AppEnvName"
           },
           "description": {
             "type": "string"
@@ -8748,38 +9181,16 @@
           "status": {
             "$ref": "#/components/schemas/Credential.Status"
           },
-          "app": {
+          "profileId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/App.ID"
+                "$ref": "#/components/schemas/AppProfile.ID"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The app whose MCP this connection serves."
-          },
-          "mcp": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Primitive.Slug"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The MCP of the app that this connection serves."
-          },
-          "connection": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Credential.Connection"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Null for the default connection of an MCP."
+            "description": "The profile that holds this credential."
           },
           "provider": {
             "anyOf": [
@@ -8833,9 +9244,7 @@
           "account",
           "scopes",
           "status",
-          "app",
-          "mcp",
-          "connection",
+          "profileId",
           "provider",
           "expiresAt",
           "createdBy",
@@ -8902,16 +9311,139 @@
         ],
         "description": "Where the egress puts the value: `replace` swaps the placeholder where it is found, `setHeader` sets a header on every request to the hosts, `route` forwards to the value as the upstream URL."
       },
+      "Credential.Item": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mcp": {
+                "$ref": "#/components/schemas/Primitive.Slug"
+              }
+            },
+            "required": ["mcp"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "env": {
+                "$ref": "#/components/schemas/Credential.AppEnvName"
+              }
+            },
+            "required": ["env"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "One MCP or one env key of a profile’s app."
+      },
       "Credential.Location": {
         "type": "string",
         "enum": ["header", "query", "path"],
         "description": "Where a placeholder is replaced. Never in a body: body text is content, such as a prompt that mentions a placeholder."
       },
+      "Credential.LooseCreateInput": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "$ref": "#/components/schemas/Credential.LooseOwner"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Z_][A-Z0-9_]*$"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hosts": {
+            "$ref": "#/components/schemas/Credential.Hosts"
+          },
+          "inject": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credential.Inject"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credential.Delivery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value": {
+            "$ref": "#/components/schemas/Credential.Value"
+          }
+        },
+        "required": ["owner", "label", "hosts", "value"],
+        "additionalProperties": false
+      },
+      "Credential.LooseOwner": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["org"]
+              }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["space"]
+              },
+              "spaceId": {
+                "$ref": "#/components/schemas/Space.ID"
+              }
+            },
+            "required": ["kind", "spaceId"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["person"]
+              },
+              "userId": {
+                "$ref": "#/components/schemas/Auth.UserID"
+              }
+            },
+            "required": ["kind", "userId"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "The owner of a key that belongs to no profile."
+      },
       "Credential.MoveInput": {
         "type": "object",
         "properties": {
           "owner": {
-            "$ref": "#/components/schemas/Credential.Owner"
+            "$ref": "#/components/schemas/Credential.LooseOwner"
           }
         },
         "required": ["owner"],
@@ -9007,12 +9539,15 @@
             },
             "required": ["kind", "userId"],
             "additionalProperties": false
+          },
+          {
+            "$ref": "#/components/schemas/Credential.ProfileOwner"
           }
         ]
       },
       "Credential.OwnerKind": {
         "type": "string",
-        "enum": ["org", "space", "person"]
+        "enum": ["org", "space", "person", "profile"]
       },
       "Credential.Page": {
         "type": "object",
@@ -9036,13 +9571,44 @@
         "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
       },
-      "Credential.Provider": {
-        "anyOf": [
-          {
-            "type": "string",
-            "enum": ["composio"]
+      "Credential.ProfileCreateInput": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "$ref": "#/components/schemas/Credential.ProfileOwner"
+          },
+          "item": {
+            "$ref": "#/components/schemas/Credential.Item"
+          },
+          "hosts": {
+            "$ref": "#/components/schemas/Credential.Hosts"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Credential.Value"
           }
-        ],
+        },
+        "required": ["owner", "item", "hosts", "value"],
+        "additionalProperties": false,
+        "description": "A pasted value for one item of a profile. Ren computes its label."
+      },
+      "Credential.ProfileOwner": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["profile"]
+          },
+          "profileId": {
+            "$ref": "#/components/schemas/AppProfile.ID"
+          }
+        },
+        "required": ["kind", "profileId"],
+        "additionalProperties": false
+      },
+      "Credential.Provider": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "The managed MCP provider that holds the account of a `route` credential."
       },
       "Credential.RemoveInput": {
@@ -9069,78 +9635,10 @@
           }
         ]
       },
-      "Credential.RequirementItem": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "group": {
-            "$ref": "#/components/schemas/App.ID_1"
-          },
-          "app": {
-            "$ref": "#/components/schemas/App.ID"
-          },
-          "mcp": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Primitive.Slug"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "label": {
-            "$ref": "#/components/schemas/Credential.EnvName"
-          },
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/Credential.RequirementKind"
-          },
-          "status": {
-            "type": "string",
-            "enum": ["ok", "missing", "reconnect"]
-          },
-          "credentialId": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Credential.ID"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "destinations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Credential.OwnerKind"
-            }
-          }
-        },
-        "required": ["key", "group", "app", "mcp", "label", "name", "kind", "status", "credentialId", "destinations"],
-        "additionalProperties": false
-      },
       "Credential.RequirementKind": {
         "type": "string",
         "enum": ["oauth", "provider", "fields", "env"],
         "description": "How the item connects: a sign-in, a managed provider, an MCP’s pasted fields, or a pasted env key."
-      },
-      "Credential.Requirements": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Credential.RequirementItem"
-            }
-          }
-        },
-        "required": ["items"],
-        "additionalProperties": false
       },
       "Credential.RotateInput": {
         "type": "object",
@@ -10150,20 +10648,15 @@
                     "enum": ["provider"]
                   },
                   "provider": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "enum": ["composio"]
-                      }
-                    ]
+                    "$ref": "#/components/schemas/Credential.Provider"
                   },
-                  "toolkit": {
+                  "integration": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "The provider’s toolkit. Ren looks up the provider’s auth config for each environment."
+                    "description": "The provider’s name for the service, such as a Composio toolkit or a Pipedream app."
                   }
                 },
-                "required": ["type", "provider", "toolkit"],
+                "required": ["type", "provider", "integration"],
                 "additionalProperties": false
               }
             ]
@@ -10359,20 +10852,15 @@
                 "enum": ["provider"]
               },
               "provider": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "enum": ["composio"]
-                  }
-                ]
+                "$ref": "#/components/schemas/Credential.Provider"
               },
-              "toolkit": {
+              "integration": {
                 "type": "string",
                 "minLength": 1,
-                "description": "The provider’s toolkit. Ren looks up the provider’s auth config for each environment."
+                "description": "The provider’s name for the service, such as a Composio toolkit or a Pipedream app."
               }
             },
-            "required": ["type", "provider", "toolkit"],
+            "required": ["type", "provider", "integration"],
             "additionalProperties": false
           }
         ]
@@ -10912,6 +11400,12 @@
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
       },
       "Primitive.Slug_1": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "The older app in the org that has the same name."
+      },
+      "Primitive.Slug_2": {
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -12503,6 +12997,11 @@
         "type": "string",
         "pattern": "^spc_"
       },
+      "Space.ID_1": {
+        "type": "string",
+        "pattern": "^spc_",
+        "description": "Only the profiles that this space reaches."
+      },
       "Space.Info": {
         "type": "object",
         "properties": {
@@ -12681,137 +13180,6 @@
             ]
           }
         },
-        "additionalProperties": false
-      },
-      "SpaceApp.CreateInput": {
-        "type": "object",
-        "properties": {
-          "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
-          },
-          "appId": {
-            "$ref": "#/components/schemas/App.ID"
-          },
-          "pinnedReleaseId": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/AppRelease.ID"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": ["spaceId", "appId"],
-        "additionalProperties": false
-      },
-      "SpaceApp.ID": {
-        "type": "string",
-        "pattern": "^spa_"
-      },
-      "SpaceApp.Info": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/SpaceApp.ID"
-          },
-          "spaceId": {
-            "$ref": "#/components/schemas/Space.ID"
-          },
-          "appId": {
-            "$ref": "#/components/schemas/App.ID"
-          },
-          "isOwner": {
-            "type": "boolean"
-          },
-          "pinnedReleaseId": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AppRelease.ID"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "app": {
-            "$ref": "#/components/schemas/App.Info"
-          },
-          "release": {
-            "$ref": "#/components/schemas/AppRelease.Info"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "archivedAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "spaceId",
-          "appId",
-          "isOwner",
-          "pinnedReleaseId",
-          "app",
-          "release",
-          "createdAt",
-          "archivedAt"
-        ],
-        "additionalProperties": false
-      },
-      "SpaceApp.Page": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SpaceApp.Info"
-            }
-          },
-          "page": {
-            "type": "integer"
-          },
-          "pageSize": {
-            "type": "integer"
-          },
-          "total": {
-            "type": "integer"
-          }
-        },
-        "required": ["items", "page", "pageSize", "total"],
-        "additionalProperties": false
-      },
-      "SpaceApp.UpdateInput": {
-        "type": "object",
-        "properties": {
-          "pinnedReleaseId": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AppRelease.ID"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": ["pinnedReleaseId"],
         "additionalProperties": false
       },
       "SpaceEnvironmentTemplate.CreateInput": {
@@ -14446,13 +14814,13 @@
       "name": "app"
     },
     {
-      "name": "app-release"
+      "name": "app-profile"
+    },
+    {
+      "name": "app-profile-reach"
     },
     {
       "name": "app-registry"
-    },
-    {
-      "name": "space-app"
     },
     {
       "name": "agent-membership"

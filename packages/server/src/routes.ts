@@ -7,8 +7,6 @@ import { Access } from "@ren/core/access"
 import { Agent } from "@ren/core/agent"
 import { App } from "@ren/core/app"
 import { AppRegistry } from "@ren/core/app/registry"
-import { AppRelease } from "@ren/core/app/release"
-import { SpaceApp } from "@ren/core/space/app"
 import { AgentMembership } from "@ren/core/agent/membership"
 import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
@@ -35,8 +33,7 @@ import { Auth } from "./auth.js"
 import { AgentHandler } from "./handlers/api/agent.js"
 import { AppHandler } from "./handlers/api/app.js"
 import { AppRegistryHandler } from "./handlers/api/app-registry.js"
-import { AppReleaseHandler } from "./handlers/api/app-release.js"
-import { SpaceAppHandler } from "./handlers/api/space-app.js"
+import { AppProfileHandler, AppProfileReachHandler } from "./handlers/api/app-profile.js"
 import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
 import { ChatHandler } from "./handlers/api/chat.js"
 import { CredentialHandler } from "./handlers/api/credential.js"
@@ -105,9 +102,9 @@ export const layer = Layer.mergeAll(
         OrganizationSettingsHandler,
         AgentHandler,
         AppHandler,
-        AppReleaseHandler,
+        AppProfileHandler,
+        AppProfileReachHandler,
         AppRegistryHandler,
-        SpaceAppHandler,
         AgentMembershipHandler,
         SessionHandler,
         ChatHandler,
@@ -136,9 +133,7 @@ export const layer = Layer.mergeAll(
         OrganizationSettings.layer,
         Agent.layer,
         App.layer,
-        AppRelease.layer,
         AppRegistry.layer,
-        SpaceApp.layer,
         AgentMembership.layer,
         Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
         OAuthApps.layer,

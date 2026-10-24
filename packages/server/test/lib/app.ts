@@ -28,7 +28,8 @@ import { Envelope } from "@ren/core/envelope"
 import { CredentialEnv } from "@ren/core/credential-env"
 import { OAuth } from "@ren/core/oauth"
 import { OAuthFetch } from "@ren/core/oauth-fetch"
-import { McpProvider } from "@ren/core/mcp-provider"
+import { AppProfiles } from "@ren/core/app/profiles"
+import { ProviderConnect } from "@ren/core/mcp-provider/connect"
 
 export const origin = "http://localhost:5173"
 
@@ -91,12 +92,12 @@ export const services = Layer.mergeAll(
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   OAuth.layer,
 ).pipe(
+  Layer.provideMerge(ProviderConnect.layer),
+  Layer.provideMerge(AppProfiles.layer),
   Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
   Layer.provideMerge(Credentials.layer),
-  Layer.provideMerge(
-    Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked, McpProvider.layerNone),
-  ),
+  Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide(BunServices.layer),

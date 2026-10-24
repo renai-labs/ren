@@ -28,18 +28,20 @@ import { Credentials } from "@ren/core/credentials"
 import { Egress } from "@ren/core/egress"
 import { Envelope } from "@ren/core/envelope"
 import { CredentialRefresh } from "@ren/core/credential-refresh"
-import { McpProvider } from "@ren/core/mcp-provider"
+import { AppProfiles } from "@ren/core/app/profiles"
+import { ProviderConnect } from "@ren/core/mcp-provider/connect"
 import { OAuth } from "@ren/core/oauth"
 import { OAuthFetch } from "@ren/core/oauth-fetch"
 
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
+  Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(CredentialRefresh.layer.pipe(Layer.provide(OAuth.layerRefresher))),
   Layer.provideMerge(CredentialSource.layer),
   Layer.provideMerge(
     Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
   ),
+  Layer.provideMerge(AppProfiles.layer),
   Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
-  Layer.provideMerge(McpProvider.layerNone),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerPublic)),
 )
 

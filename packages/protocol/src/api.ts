@@ -2,8 +2,7 @@ import { HttpApi, OpenApi } from "effect/http-api"
 import { AgentGroup } from "./groups/agent.js"
 import { AppGroup } from "./groups/app.js"
 import { AppRegistryGroup } from "./groups/app-registry.js"
-import { AppReleaseGroup } from "./groups/app-release.js"
-import { SpaceAppGroup } from "./groups/space-app.js"
+import { AppProfileGroup, AppProfileReachGroup } from "./groups/app-profile.js"
 import { AgentMembershipGroup } from "./groups/agent-membership.js"
 import { ChatGroup } from "./groups/chat.js"
 import { CredentialGroup } from "./groups/credential.js"
@@ -39,9 +38,9 @@ export const Api = HttpApi.make("server")
   .add(OrganizationSettingsGroup)
   .add(AgentGroup)
   .add(AppGroup)
-  .add(AppReleaseGroup)
+  .add(AppProfileGroup)
+  .add(AppProfileReachGroup)
   .add(AppRegistryGroup)
-  .add(SpaceAppGroup)
   .add(AgentMembershipGroup)
   .add(SessionGroup)
   .add(ChatGroup)
