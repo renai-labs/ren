@@ -27,6 +27,8 @@ export const OptionalEmail = Schema.optional(Schema.String).pipe(
 
 export const InvitationId = Schema.optional(Schema.NonEmptyString)
 
+export const AuthorizationSignature = Schema.optional(Schema.NonEmptyString)
+
 export const EmailStep = Schema.toStandardSchemaV1(Schema.Struct({ email: Auth.Email }))
 
 export const SignupDetails = Schema.toStandardSchemaV1(

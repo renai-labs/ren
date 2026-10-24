@@ -1,17 +1,47 @@
 export * as Auth from "./auth.js"
 
+import { oauthProviderClient } from "@better-auth/oauth-provider/client"
 import { Auth } from "@ren/schema/auth"
 import { queryOptions } from "@tanstack/react-query"
 import { useRouteContext } from "@tanstack/react-router"
 import { createAuthClient } from "better-auth/client"
+import type { BetterAuthClientPlugin } from "better-auth/client"
 import { emailOTPClient, organizationClient } from "better-auth/client/plugins"
+import { Option, Schema } from "effect"
 import type { Platform } from "../platform/platform.js"
+
+const Body = Schema.Record(Schema.String, Schema.Unknown)
+
+const decodeBody = Schema.decodeUnknownOption(Schema.fromJsonString(Body))
+
+const authorizationPaths = /\/(?:sign-in|sign-up|oauth2)\//u
+
+const oauthClient = (query: string | undefined) =>
+  ({
+    ...oauthProviderClient(),
+    fetchPlugins: [
+      {
+        id: "ren-authorization-request",
+        name: "ren-authorization-request",
+        hooks: {
+          onRequest: (context) => {
+            if (query === undefined || context.method === "GET" || !authorizationPaths.test(String(context.url))) return
+            const body =
+              typeof context.body === "string"
+                ? decodeBody(context.body)
+                : Schema.decodeUnknownOption(Body)(context.body ?? {})
+            context.body = JSON.stringify({ ...Option.getOrElse(body, () => ({})), oauth_query: query })
+          },
+        },
+      },
+    ],
+  }) satisfies BetterAuthClientPlugin
 
 export function createClient(platform: Platform.Info) {
   return createAuthClient({
     baseURL: `${platform.serverUrl}/auth`,
     ...(platform.fetch && { fetchOptions: { customFetchImpl: platform.fetch } }),
-    plugins: [organizationClient(), emailOTPClient()],
+    plugins: [organizationClient(), emailOTPClient(), oauthClient(platform.authorizationQuery)],
   })
 }
 
@@ -105,5 +135,22 @@ export function organizationOptions(client: Client, organizationId: string) {
       assertSuccess(result, "Couldn’t load the organization.")
       return result.data
     },
+  })
+}
+
+const oauthClientKey = (clientId: string) => ["auth", "oauth-client", clientId] as const
+
+export function oauthClientOptions(client: Client, clientId: string) {
+  return queryOptions({
+    queryKey: oauthClientKey(clientId),
+    queryFn: async (context) => {
+      const result = await client.oauth2.publicClient({
+        query: { client_id: clientId },
+        fetchOptions: { signal: context.signal },
+      })
+      assertSuccess(result, "Couldn’t load the app that asks for access.")
+      return result.data
+    },
+    retry: false,
   })
 }

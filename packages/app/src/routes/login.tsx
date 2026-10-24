@@ -9,11 +9,16 @@ import { Auth } from "../lib/auth.js"
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Sign in · Ren" }] }),
   validateSearch: Schema.toStandardSchemaV1(
-    Schema.Struct({ invitationId: AuthSchemas.InvitationId, redirect: AuthSchemas.Redirect }),
+    Schema.Struct({
+      invitationId: AuthSchemas.InvitationId,
+      redirect: AuthSchemas.Redirect,
+      sig: AuthSchemas.AuthorizationSignature,
+    }),
   ),
   beforeLoad: async (options) => {
     const session = await options.context.queryClient.query(Auth.sessionOptions(options.context.auth))
-    if (session !== null) throw redirect({ href: CompleteAuth.href(options.search) })
+    if (session !== null && options.search.sig === undefined)
+      throw redirect({ href: CompleteAuth.href(options.search) })
   },
   pendingComponent: AppBoot,
   component: LoginPage,
@@ -21,5 +26,13 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const search = Route.useSearch()
-  return <Login destination={search} />
+  return (
+    <Login
+      destination={{
+        invitationId: search.invitationId,
+        redirect: search.redirect,
+        authorization: search.sig !== undefined,
+      }}
+    />
+  )
 }
