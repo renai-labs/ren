@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { Schema } from "effect"
 import { signUp } from "./lib/app.js"
 import { accessToken, base, makeMcpApp, mcp, modern, result } from "./lib/mcp.js"
 
@@ -111,12 +112,27 @@ describe("Ren MCP tools", () => {
     })
   })
 
-  test("returns a Ren API error as a tool error that names the error", async () => {
+  test("splits the arguments of a tool into the path and the body of its endpoint", async () => {
+    const caller = await accessToken(app, "write@example.com")
+    const call = async (name: string, args: Record<string, unknown>) =>
+      result(await modern(app, caller.token, "tools/call", { name, arguments: args }))
+    const created = await call("space_create", { name: "Launch" })
+    const id = Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(created.structuredContent).id
+    expect(created).toMatchObject({ isError: false, structuredContent: { name: "Launch" } })
+    expect(await call("space_update", { id, name: "Launch week" })).toMatchObject({ isError: false })
+    expect(await call("space_get", { idOrSlug: id })).toMatchObject({ structuredContent: { name: "Launch week" } })
+  })
+
+  test("returns a Ren API error or an argument that the endpoint refuses as a tool error", async () => {
     const caller = await accessToken(app, "missing@example.com")
     const missing = await result(
       await modern(app, caller.token, "tools/call", { name: "space_get", arguments: { idOrSlug: "spc_missing" } }),
     )
     expect(missing.isError).toBe(true)
     expect(missing.content).toEqual([{ type: "text", text: expect.stringMatching(/^NotFoundError: /) }])
+    const invalid = await result(
+      await modern(app, caller.token, "tools/call", { name: "space_update", arguments: { id: "bad", name: "x" } }),
+    )
+    expect(invalid).toMatchObject({ isError: true })
   })
 })

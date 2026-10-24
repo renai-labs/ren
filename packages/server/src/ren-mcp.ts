@@ -3,7 +3,7 @@ export * as RenMcp from "./ren-mcp.js"
 import { Mcp } from "@ren/protocol/mcp"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { McpProtocol, McpSchema, McpServer } from "effect/ai"
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { HttpApi, type HttpApiEndpoint, OpenApi } from "effect/http-api"
 import { Api } from "./api.js"
 import { Auth } from "./auth.js"
@@ -49,7 +49,7 @@ const part = (location: "path" | "query" | "body", schema: Schema.Top) => {
 }
 
 const toTool = (endpoint: HttpApiEndpoint.Top, router: HttpRouter.HttpRouter) => {
-  const name = endpoint.identifier.replaceAll(".", "_")
+  const name = endpoint.identifier.replaceAll(/[.-]/gu, "_")
   const payload = [...endpoint.payload.values()].at(0)?.schemas.at(0)
   const parts = [
     ...(endpoint.params ? [part("path", endpoint.params)] : []),
@@ -97,13 +97,11 @@ const toTool = (endpoint: HttpApiEndpoint.Top, router: HttpRouter.HttpRouter) =>
       ...(body && { body: JSON.stringify(content ?? {}) }),
     })
     const response = HttpServerResponse.toWeb(
-      yield* router
-        .asHttpEffect()
-        .pipe(
-          Effect.provideService(HttpServerRequest.HttpServerRequest, HttpServerRequest.fromWeb(request)),
-          Effect.scoped,
-          Effect.orDie,
-        ),
+      yield* router.asHttpEffect().pipe(
+        Effect.provideService(HttpServerRequest.HttpServerRequest, HttpServerRequest.fromWeb(request)),
+        Effect.scoped,
+        Effect.catchCause((cause) => Effect.map(HttpServerError.causeResponse(cause), ([response]) => response)),
+      ),
     )
     const text = yield* Effect.promise(() => response.text())
     if (response.ok) {
