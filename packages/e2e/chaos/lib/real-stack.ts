@@ -41,6 +41,7 @@ import { ChaosEnvironments } from "./provider/environments.js"
 import { ChaosModels } from "./provider/models.js"
 import { ModelProvider } from "./provider/model.js"
 import { Wait } from "./wait.js"
+import { Signer } from "@ren/core/signer"
 
 const root = path.resolve(import.meta.dir, "../../..")
 const adminUrl = process.env.DATABASE_URL ?? "postgres://ren:ren@localhost:54320/ren"
@@ -257,9 +258,13 @@ export const start = async (options: {
         Layer.fresh(Brains.layer).pipe(
           Layer.provide(BrainHost.layerCell),
           Layer.provide(DurableRunner.layerMemory),
-          Layer.provide([BrainClient.layer, Settings.layer]),
+          Layer.provide([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
           Layer.provide(ChaosModels.layer),
-          Layer.provide(Environments.layer.pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)))),
+          Layer.provide(
+            Environments.layer
+              .pipe(Layer.provide(Signer.layerLocal))
+              .pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
+          ),
           Layer.provide(FetchHttpClient.layer),
           Layer.provide(
             ConfigProvider.layer(

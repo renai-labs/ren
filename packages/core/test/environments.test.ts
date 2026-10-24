@@ -15,6 +15,7 @@ import { Environments } from "../src/environments.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { Seed } from "./lib/seed.js"
+import { Signer } from "../src/signer.js"
 
 const it = testEffect(Testing.layer)
 
@@ -33,7 +34,7 @@ const environmentsWith = Effect.fnUntraced(function* (
 ) {
   const probe = yield* TestProvider.make(options)
   const context = yield* Layer.build(
-    Layer.fresh(Environments.layer).pipe(
+    Layer.fresh(Environments.layer.pipe(Layer.provide(Signer.layerLocal))).pipe(
       Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
       Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ENVIRONMENT_KEYS: signingKeys, ...config }))),
     ),

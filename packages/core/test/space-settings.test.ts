@@ -2,6 +2,7 @@ import { describe, expect } from "bun:test"
 import { Testing } from "@ren/db/testing"
 import { Effect, Layer } from "effect"
 import { Access } from "../src/access.js"
+import { EgressControl } from "../src/egress-control.js"
 import { Space } from "../src/space.js"
 import { SpaceSettings } from "../src/space/settings.js"
 import { testEffect } from "./lib/effect.js"
@@ -9,7 +10,7 @@ import { Seed } from "./lib/seed.js"
 
 const it = testEffect(
   Layer.mergeAll(SpaceSettings.layer, Space.layer).pipe(
-    Layer.provideMerge(Access.layer),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),
 )

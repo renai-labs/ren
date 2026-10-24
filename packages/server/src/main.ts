@@ -24,6 +24,8 @@ import { FetchHttpClient, HttpRouter } from "effect/http"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { Routes } from "./routes.js"
+import { Signer } from "@ren/core/signer"
+import { EgressControl } from "@ren/core/egress-control"
 
 const host = Layer.unwrap(
   Effect.gen(function* () {
@@ -54,8 +56,9 @@ HttpRouter.serve(Routes.layer).pipe(
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
-  Layer.provide([BrainClient.layer, Settings.layer]),
-  Layer.provide([Models.layerConfig, Environments.layer]),
+  Layer.provide([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
+  Layer.provide([Models.layerConfig, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
+  Layer.provide(EgressControl.layerConfig),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),

@@ -7,6 +7,7 @@ import { Session } from "@ren/schema/session"
 import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Access } from "../src/access.js"
+import { EgressControl } from "../src/egress-control.js"
 import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
@@ -15,7 +16,7 @@ import { Seed } from "./lib/seed.js"
 
 const it = testEffect(
   Layer.mergeAll(Space.layer, SpaceMember.layer, SpaceProvisioning.layer).pipe(
-    Layer.provideMerge(Access.layer),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),
 )

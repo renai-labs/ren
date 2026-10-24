@@ -14,6 +14,7 @@ import { auth } from "../script/auth-config.js"
 import { Auth } from "../src/auth.js"
 import { BetterAuth } from "../src/better-auth.js"
 import { authRequest, config, sessionCookie, signUp } from "./lib/app.js"
+import { EgressControl } from "@ren/core/egress-control"
 
 const dns: SignupGuard.Resolver = {
   resolveMx: (domain) => Promise.resolve([{ exchange: `mx.${domain}` }]),
@@ -32,6 +33,7 @@ const stalledMail = Layer.mergeAll(
 const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postmark.layer> = Postmark.layer()) =>
   Auth.layer.pipe(
     Layer.provideMerge(Layer.effect(SignupGuard.Service, SignupGuard.make(dns))),
+    Layer.provideMerge(EgressControl.layerNone),
     Layer.provideMerge(Testing.layer),
     Layer.provideMerge(Mailer.layer),
     Layer.provideMerge(mail),

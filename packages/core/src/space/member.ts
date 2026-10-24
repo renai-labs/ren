@@ -5,8 +5,10 @@ import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "../access.js"
+import { CredentialOffboarding } from "../credential/offboarding.js"
+import { EgressControl } from "../egress-control.js"
 import { Actor } from "../actor.js"
 import { Primitive } from "../primitive.js"
 import { SpacePolicy } from "./policy.js"
@@ -154,6 +156,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const access = yield* Access.Service
+    const control = yield* EgressControl.Service
 
     const lockSpace = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
@@ -229,12 +232,12 @@ export const layer = Layer.effect(
         )
       }),
       archive: Effect.fn("SpaceMember.archive")(function* (actor: Actor.Info, id: SpaceMember.ID) {
-        return yield* database.transaction((transaction) =>
+        const archived = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const member = yield* findMember(transaction, id)
             const space = yield* lockSpace(transaction, actor, member.spaceId)
             if (!space) return yield* notFound
-            if (member.archivedAt) return member
+            if (member.archivedAt) return { member, removed: Option.none() }
             if (!access.isAllowed({ actor, action: actions.archive, resource: space })) return yield* forbidden
             const table =
               member.status === "active" ? Database.Schema.space_member : Database.Schema.space_pending_member
@@ -242,9 +245,18 @@ export const layer = Layer.effect(
               .update(table)
               .set({ archived_at: sql`now()` })
               .where(and(eq(table.id, member.id), isNull(table.archived_at)))
-            return yield* findMember(transaction, id)
+            const removed =
+              member.status === "active"
+                ? Option.some(yield* CredentialOffboarding.forSpaceMember(transaction, member.spaceId, member.userId))
+                : Option.none()
+            return { member: yield* findMember(transaction, id), removed }
           }),
         )
+        if (Option.isSome(archived.removed))
+          yield* CredentialOffboarding.invalidate(archived.removed.value).pipe(
+            Effect.provideService(EgressControl.Service, control),
+          )
+        return archived.member
       }),
     })
   }),

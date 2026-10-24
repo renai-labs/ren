@@ -22,6 +22,7 @@ import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
+import { Signer } from "../src/signer.js"
 
 setDefaultTimeout(60_000)
 
@@ -336,7 +337,7 @@ describe("BrainHost host tokens", () => {
           ),
         ).pipe(
           Effect.map((signed) => BrainToken.keyIdOf(signed.token)),
-          Effect.provide(BrainClient.layer),
+          Effect.provide(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
           Effect.provide(FetchHttpClient.layer),
           Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ BRAIN_KEYS: keys }))),
         )
@@ -367,7 +368,7 @@ describe("BrainHost environments", () => {
       Host.cellLayer(
         { CELL_URL: cellUrl },
         fixed,
-        Layer.fresh(Environments.layer).pipe(
+        Layer.fresh(Environments.layer.pipe(Layer.provide(Signer.layerLocal))).pipe(
           Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
           Layer.provide(
             ConfigProvider.layer(

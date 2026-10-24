@@ -18,6 +18,8 @@ import { Config, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { ChaosEnvironments } from "./provider/environments.js"
 import { ChaosModels } from "./provider/models.js"
+import { Signer } from "@ren/core/signer"
+import { EgressControl } from "@ren/core/egress-control"
 
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
@@ -26,8 +28,9 @@ HttpRouter.serve(Routes.layer).pipe(
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
-  Layer.provide([BrainClient.layer, Settings.layer]),
-  Layer.provide([ChaosModels.layer, Environments.layer]),
+  Layer.provide([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
+  Layer.provide([ChaosModels.layer, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
+  Layer.provide(EgressControl.layerNone),
   Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),

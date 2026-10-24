@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm"
 import { Deferred, Effect, Fiber, Layer } from "effect"
 import { SqlClient } from "effect/sql"
 import { Access } from "../src/access.js"
+import { EgressControl } from "../src/egress-control.js"
 import { Agent } from "../src/agent.js"
 import { AgentMembership } from "../src/agent/membership.js"
 import { Space } from "../src/space.js"
@@ -15,7 +16,7 @@ import { Seed } from "./lib/seed.js"
 const it = testEffect(
   Layer.mergeAll(Agent.layer, AgentMembership.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer)),
-    Layer.provideMerge(Access.layer),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),
 )

@@ -10,6 +10,7 @@ import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Deferred, Effect, Fiber, Layer, Option, Schedule } from "effect"
 import { SqlClient } from "effect/sql"
 import { Access } from "../src/access.js"
+import { EgressControl } from "../src/egress-control.js"
 import { BrainRegistry } from "../src/brain-registry.js"
 import { Models } from "../src/models.js"
 import { Session } from "../src/session.js"
@@ -42,7 +43,7 @@ const it = testEffect(
     Layer.provideMerge(TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } })),
     Layer.provideMerge(Host.layer({}, models)),
     Layer.provideMerge(models),
-    Layer.provideMerge(Access.layer),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),
 )

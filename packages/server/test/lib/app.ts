@@ -20,6 +20,8 @@ import { Signature } from "@ren/schema/signature"
 import { Clock, ConfigProvider, Effect, Layer, Logger, Schema } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { Routes } from "../../src/routes.js"
+import { Signer } from "@ren/core/signer"
+import { EgressControl } from "@ren/core/egress-control"
 
 export const origin = "http://localhost:5173"
 
@@ -77,8 +79,9 @@ export const services = Layer.mergeAll(
   SignupGuard.layer,
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
 ).pipe(
-  Layer.provideMerge([BrainClient.layer, Settings.layer]),
-  Layer.provideMerge([Models.layerNone, Environments.layer]),
+  Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
+  Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
+  Layer.provideMerge(EgressControl.layerNone),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide(BunServices.layer),
 )

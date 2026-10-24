@@ -6,9 +6,11 @@ import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
-import { Array, Clock, Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import type { Array } from "effect"
+import { Clock, Config, Context, Effect, Layer, Option } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
+import { Signer } from "./signer.js"
 
 export interface Target {
   readonly brainId: Brain.ID
@@ -42,26 +44,25 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.all({
-      keys: Config.schema(Schema.RedactedFromValue(Signature.PrivateKeys), "BRAIN_KEYS"),
       renUrl: Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000")),
       address: Config.option(Config.String("REN_URL")),
     })
-    const keys = Redacted.value(config.keys)
-    const publicKeys = yield* BrainToken.publicKeys(keys)
+    const signer = yield* Signer.Service
+    const publicKeys = yield* signer.publicKeys("brain").pipe(Effect.orDie)
     const http = yield* HttpClient.HttpClient
     const now = Effect.map(Clock.currentTimeMillis, (millis) => Math.floor(millis / 1000))
-    const signerFor = (keyIds: ReadonlyArray<string>) =>
-      keys.find((key) => keyIds.includes(key.id)) ?? Array.headNonEmpty(keys)
     const hostToken = Effect.fnUntraced(function* (host: Host) {
       const iat = yield* now
-      return yield* BrainToken.sign(Array.headNonEmpty(keys), {
-        scope: "host",
-        brain: host.brainId,
-        gen: host.generation,
-        org: host.organizationId,
-        iat,
-        exp: iat + BrainToken.lifetimes.host,
-      })
+      return yield* signer
+        .sign("brain", {
+          scope: "host",
+          brain: host.brainId,
+          gen: host.generation,
+          org: host.organizationId,
+          iat,
+          exp: iat + BrainToken.lifetimes.host,
+        })
+        .pipe(Effect.orDie)
     })
     return Service.of({
       renUrl: config.renUrl,
@@ -76,13 +77,19 @@ export const layer = Layer.effect(
               return request.pipe(
                 HttpClientRequest.basicAuth(
                   "ren",
-                  yield* BrainToken.sign(signerFor(target.keyIds), {
-                    scope: "server",
-                    brain: target.brainId,
-                    gen: target.generation,
-                    exp: issued + BrainToken.lifetimes.server,
-                    ...Option.match(config.address, { onNone: () => ({}), onSome: (ren) => ({ ren }) }),
-                  }),
+                  yield* signer
+                    .sign(
+                      "brain",
+                      {
+                        scope: "server",
+                        brain: target.brainId,
+                        gen: target.generation,
+                        exp: issued + BrainToken.lifetimes.server,
+                        ...Option.match(config.address, { onNone: () => ({}), onSome: (ren) => ({ ren }) }),
+                      },
+                      { holders: target.keyIds },
+                    )
+                    .pipe(Effect.orDie),
                 ),
                 HttpClientRequest.setHeader(hostTokenHeader, yield* hostToken(target)),
               )
@@ -93,15 +100,21 @@ export const layer = Layer.effect(
         const exp = (yield* now) + BrainToken.lifetimes.client
         return {
           exp,
-          token: yield* BrainToken.sign(signerFor(target.keyIds), {
-            scope: "client",
-            brain: target.brainId,
-            gen: target.generation,
-            sid: claims.sid,
-            sub: claims.sub,
-            ...(claims.name && { name: claims.name }),
-            exp,
-          }),
+          token: yield* signer
+            .sign(
+              "brain",
+              {
+                scope: "client",
+                brain: target.brainId,
+                gen: target.generation,
+                sid: claims.sid,
+                sub: claims.sub,
+                ...(claims.name && { name: claims.name }),
+                exp,
+              },
+              { holders: target.keyIds },
+            )
+            .pipe(Effect.orDie),
         }
       }),
       verify: (token) => BrainToken.verify(publicKeys, token),

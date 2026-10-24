@@ -6,8 +6,10 @@ import { Space } from "@ren/schema/space"
 import { SpaceMember } from "@ren/schema/space-member"
 import { and, asc, count, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
-import { Array, Context, DateTime, Effect, Layer, Schema } from "effect"
+import { Array, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "./access.js"
+import { CredentialOffboarding } from "./credential/offboarding.js"
+import { EgressControl } from "./egress-control.js"
 import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
@@ -64,6 +66,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const access = yield* Access.Service
+    const control = yield* EgressControl.Service
 
     const visibleTo = (actor: Actor.Info) =>
       and(
@@ -219,11 +222,11 @@ export const layer = Layer.effect(
         )
       }),
       archive: Effect.fn("Space.archive")(function* (actor: Actor.Info, id: Space.ID) {
-        return yield* database.transaction((transaction) =>
+        const archived = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const visible = yield* findVisible(transaction, actor, id)
             if (!visible) return yield* notFound
-            if (visible.row.space.archived_at) return toInfo(actor)(visible.row)
+            if (visible.row.space.archived_at) return { info: toInfo(actor)(visible.row), removed: Option.none() }
             if (
               !access.isAllowed({ actor, action: actions.archive, resource: visible.resource }) ||
               visible.row.isFirstOrganizationSpace
@@ -255,9 +258,15 @@ export const layer = Layer.effect(
               )
             const space = archived.at(0)
             if (!space) return yield* notFound
-            return toInfo(actor)({ ...visible.row, space })
+            const removed = yield* CredentialOffboarding.forSpace(transaction, id)
+            return { info: toInfo(actor)({ ...visible.row, space }), removed: Option.some(removed) }
           }),
         )
+        if (Option.isSome(archived.removed))
+          yield* CredentialOffboarding.invalidate(archived.removed.value).pipe(
+            Effect.provideService(EgressControl.Service, control),
+          )
+        return archived.info
       }),
     })
   }),

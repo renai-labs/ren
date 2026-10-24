@@ -5,6 +5,8 @@ import { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
+import { CredentialOffboarding } from "../credential/offboarding.js"
+import { EgressControl } from "../egress-control.js"
 import { SpaceQueries } from "./queries.js"
 
 export interface User {
@@ -37,6 +39,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
+    const control = yield* EgressControl.Service
     return Service.of({
       createInitialMemberships: Effect.fn("SpaceProvisioning.createInitialMemberships")(function* (
         organizationId: Auth.OrganizationID,
@@ -130,24 +133,28 @@ export const layer = Layer.effect(
         organizationId: Auth.OrganizationID,
         userId: Auth.UserID,
       ) {
-        yield* database.transaction((transaction) =>
-          transaction
-            .update(Database.Schema.space_member)
-            .set({ archived_at: sql`now()` })
-            .where(
-              and(
-                eq(Database.Schema.space_member.user_id, userId),
-                isNull(Database.Schema.space_member.archived_at),
-                inArray(
-                  Database.Schema.space_member.space_id,
-                  transaction
-                    .select({ id: Database.Schema.space.id })
-                    .from(Database.Schema.space)
-                    .where(eq(Database.Schema.space.organization_id, organizationId)),
+        const removed = yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            yield* transaction
+              .update(Database.Schema.space_member)
+              .set({ archived_at: sql`now()` })
+              .where(
+                and(
+                  eq(Database.Schema.space_member.user_id, userId),
+                  isNull(Database.Schema.space_member.archived_at),
+                  inArray(
+                    Database.Schema.space_member.space_id,
+                    transaction
+                      .select({ id: Database.Schema.space.id })
+                      .from(Database.Schema.space)
+                      .where(eq(Database.Schema.space.organization_id, organizationId)),
+                  ),
                 ),
-              ),
-            ),
+              )
+            return yield* CredentialOffboarding.forMember(transaction, organizationId, userId)
+          }),
         )
+        yield* CredentialOffboarding.invalidate(removed).pipe(Effect.provideService(EgressControl.Service, control))
       }),
     })
   }),

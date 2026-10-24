@@ -4,6 +4,7 @@ import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
 import { ConfigProvider, Effect, Layer, Option, Ref, Schema } from "effect"
 import { Access } from "../src/access.js"
+import { EgressControl } from "../src/egress-control.js"
 import { EnvironmentTemplates } from "../src/environment-templates.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
@@ -13,6 +14,7 @@ import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { Seed } from "./lib/seed.js"
+import { Signer } from "../src/signer.js"
 
 const probe = await Effect.runPromise(TestProvider.make())
 
@@ -22,12 +24,12 @@ const it = testEffect(
   Layer.mergeAll(
     EnvironmentTemplates.layer,
     SpaceEnvironmentTemplate.layer,
-    Environments.layer,
+    Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
     Space.layer,
     SpaceProvisioning.layer,
   ).pipe(
     Layer.provideMerge(EnvironmentProvider.layer([Effect.succeed(probe.provider)])),
-    Layer.provideMerge(Access.layer),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
       ConfigProvider.layer(

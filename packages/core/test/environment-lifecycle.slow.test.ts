@@ -24,6 +24,7 @@ import { Models } from "../src/models.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
+import { Signer } from "../src/signer.js"
 
 setDefaultTimeout(180_000)
 
@@ -110,7 +111,9 @@ const stackOf = async (config: CoreConfig) => {
       ...(config.keys && { ENVIRONMENT_KEYS: encodedKeys(config.keys) }),
     },
     models,
-    environments: Environments.layer.pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),
+    environments: Environments.layer
+      .pipe(Layer.provide(Signer.layerLocal))
+      .pipe(Layer.provide(EnvironmentProvider.layer([Effect.succeed(probe.provider)]))),
   }).pipe(
     Layer.provide(
       Layer.succeedContext(await database.runPromise(Effect.context<Database.Service | SqlClient.SqlClient>())),

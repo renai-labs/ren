@@ -1,8 +1,7 @@
 export * as Environments from "./environments.js"
 
 import { ExecutorVariables } from "@ren/environment-api/executor-variables"
-import { EnvironmentToken } from "@ren/environment-api/environment-token"
-import { Signature } from "@ren/schema/signature"
+import type { EnvironmentToken } from "@ren/environment-api/environment-token"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
@@ -11,8 +10,9 @@ import { Environment } from "@ren/schema/environment"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { and, asc, count, eq, exists, isNull, type SQLWrapper, sql } from "drizzle-orm"
-import { Array, Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Clock, Config, Context, DateTime, Duration, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { EnvironmentProvider } from "./environment-provider.js"
+import { Signer } from "./signer.js"
 
 interface Subject {
   readonly sessionId: Session.ID
@@ -96,29 +96,19 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.all({
-      keys: Config.option(Config.schema(Schema.RedactedFromValue(Signature.PrivateKeys), "ENVIRONMENT_KEYS")),
       lifetime: Config.Duration("ENVIRONMENT_TOKEN_LIFETIME").pipe(Config.withDefault(Duration.minutes(15))),
       directory: Config.String("ENVIRONMENT_DIRECTORY").pipe(Config.withDefault("/workspace")),
     })
     const database = yield* Database.Service
     const registry = yield* EnvironmentProvider.Registry
     const directoryOf = (sessionId: Session.ID) => `${config.directory}/${sessionId}`
-    const signing = yield* Option.match(config.keys, {
-      onNone: () => Effect.succeedNone,
-      onSome: (keys) =>
-        Effect.gen(function* () {
-          const privateKeys = Redacted.value(keys)
-          const key = Array.headNonEmpty(privateKeys)
-          const first = yield* Signature.publicKeyOf(key)
-          const rest = yield* Effect.forEach(Array.tailNonEmpty(privateKeys), Signature.publicKeyOf)
-          return Option.some({ key, publicKeys: [first, ...rest] as const })
-        }),
-    })
-
-    const signingKeys = Option.match(signing, {
-      onNone: () => Effect.die(new Error("ENVIRONMENT_KEYS has no signing key")),
-      onSome: Effect.succeed,
-    })
+    const signer = yield* Signer.Service
+    const signingKeys = signer.publicKeys("environment").pipe(
+      Effect.map((publicKeys) => ({ publicKeys })),
+      Effect.orDie,
+    )
+    const signToken = (claims: Omit<EnvironmentToken.Claims, "typ" | "kid">) =>
+      signer.sign("environment", { ...claims, typ: "environment" }).pipe(Effect.orDie)
 
     const expiry = Effect.map(Clock.currentTimeMillis, (now) =>
       Math.floor((now + Duration.toMillis(config.lifetime)) / 1000),
@@ -251,13 +241,12 @@ export const layer = Layer.effect(
       options: { readonly isRetry: boolean },
     ): Effect.fn.Return<Environment.Access, NotFound | Unavailable> {
       if (Option.isSome(hand) && !(yield* isBound(subject))) {
-        const keys = yield* signingKeys
         const exp = yield* expiry
         return {
           directory: handDirectory(hand.value, subject.sessionId),
           url: new URL(hand.value.url),
           token: Redacted.make(
-            yield* EnvironmentToken.sign(keys.key, {
+            yield* signToken({
               environment: Environment.ofBrain(hand.value.brainId),
               brain: hand.value.brainId,
               exp,
@@ -316,7 +305,7 @@ export const layer = Layer.effect(
         directory: directoryOf(subject.sessionId),
         url: endpoint.value.url,
         token: Redacted.make(
-          yield* EnvironmentToken.sign(keys.key, {
+          yield* signToken({
             environment: assigned.environmentId,
             brain: assigned.brainId,
             exp,

@@ -25,6 +25,7 @@ import { LocalSandbox } from "../../src/sandbox-provider/local.js"
 import { Settings } from "../../src/settings.js"
 import { RenHostApiTest } from "./ren-host-api.js"
 import { Seed } from "./seed.js"
+import { Signer } from "../../src/signer.js"
 
 const entry = join(import.meta.dir, "../../../cell/src/bun.ts")
 const executor = join(import.meta.dir, "../../../executor/src/main.ts")
@@ -45,7 +46,9 @@ const environmentKeys = JSON.stringify([
   },
 ])
 
-export const noTemplates = Environments.layer.pipe(Layer.provide(EnvironmentProvider.layer<never, never>([])))
+export const noTemplates = Environments.layer
+  .pipe(Layer.provide(Signer.layerLocal))
+  .pipe(Layer.provide(EnvironmentProvider.layer<never, never>([])))
 
 export const freePort = Effect.promise(async () => {
   const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
@@ -83,7 +86,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
         }),
     ),
     Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
-    Layer.provideMerge(BrainClient.layer),
+    Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
     Layer.provide(Settings.layer),
     Layer.provide(options.models),
     Layer.provide(options.environments),
@@ -265,7 +268,7 @@ export const cellLayer = <E, R>(
   Layer.fresh(Brains.layer).pipe(
     Layer.provideMerge(BrainHost.layerCell),
     Layer.provideMerge(DurableRunner.layerMemory),
-    Layer.provideMerge(BrainClient.layer),
+    Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
     Layer.provide(Settings.layer),
     Layer.provide(models),
     Layer.provide(environments),
