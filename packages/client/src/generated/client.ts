@@ -160,6 +160,20 @@ import type {
   CredentialCopyOutput,
   CredentialRemoveInput,
   CredentialRemoveOutput,
+  CredentialConnectCredentialConnectInput,
+  CredentialConnectCredentialConnectOutput,
+  OauthSessionGetInput,
+  OauthSessionGetOutput,
+  OauthAppListInput,
+  OauthAppListOutput,
+  OauthAppGetInput,
+  OauthAppGetOutput,
+  OauthAppCreateInput,
+  OauthAppCreateOutput,
+  OauthAppUpdateInput,
+  OauthAppUpdateOutput,
+  OauthAppArchiveInput,
+  OauthAppArchiveOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -1349,6 +1363,117 @@ export function make(options: ClientOptions) {
             method: "POST",
             path: `/credentials/${encodeURIComponent(input.id)}/remove`,
             body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "credential-connect": {
+      credential: {
+        connect: (input: CredentialConnectCredentialConnectInput, requestOptions?: RequestOptions) =>
+          request<CredentialConnectCredentialConnectOutput>(
+            {
+              method: "POST",
+              path: `/credentials/connect`,
+              body: { owner: input["owner"], target: input["target"], reconnect: input["reconnect"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+    },
+    "oauth-session": {
+      get: (input: OauthSessionGetInput, requestOptions?: RequestOptions) =>
+        request<OauthSessionGetOutput>(
+          {
+            method: "GET",
+            path: `/oauth-sessions/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "oauth-app": {
+      list: (input: OauthAppListInput, requestOptions?: RequestOptions) =>
+        request<OauthAppListOutput>(
+          {
+            method: "GET",
+            path: `/oauth-apps`,
+            query: { page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: OauthAppGetInput, requestOptions?: RequestOptions) =>
+        request<OauthAppGetOutput>(
+          {
+            method: "GET",
+            path: `/oauth-apps/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: OauthAppCreateInput, requestOptions?: RequestOptions) =>
+        request<OauthAppCreateOutput>(
+          {
+            method: "POST",
+            path: `/oauth-apps`,
+            body: {
+              name: input["name"],
+              clientId: input["clientId"],
+              clientSecret: input["clientSecret"],
+              scopes: input["scopes"],
+              discovery: input["discovery"],
+              authorizationEndpoint: input["authorizationEndpoint"],
+              tokenEndpoint: input["tokenEndpoint"],
+              tokenEndpointAuth: input["tokenEndpointAuth"],
+              resource: input["resource"],
+              authorizeParams: input["authorizeParams"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: OauthAppUpdateInput, requestOptions?: RequestOptions) =>
+        request<OauthAppUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/oauth-apps/${encodeURIComponent(input.id)}`,
+            body: {
+              name: input["name"],
+              clientId: input["clientId"],
+              clientSecret: input["clientSecret"],
+              scopes: input["scopes"],
+              discovery: input["discovery"],
+              authorizationEndpoint: input["authorizationEndpoint"],
+              tokenEndpoint: input["tokenEndpoint"],
+              tokenEndpointAuth: input["tokenEndpointAuth"],
+              resource: input["resource"],
+              authorizeParams: input["authorizeParams"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: OauthAppArchiveInput, requestOptions?: RequestOptions) =>
+        request<OauthAppArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/oauth-apps/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,

@@ -6,6 +6,7 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { Actor } from "./actor.js"
 import { AgentPolicy } from "./agent/policy.js"
 import { CredentialPolicy } from "./credential/policy.js"
+import { OAuthAppPolicy } from "./oauth-app/policy.js"
 import { AppPolicy } from "./app/policy.js"
 import { EnvironmentTemplatePolicy } from "./environment-templates/policy.js"
 import { SettingsPolicy } from "./settings/policy.js"
@@ -72,6 +73,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...AppPolicy.documents,
   ...TaskPolicy.documents,
   ...CredentialPolicy.documents,
+  ...OAuthAppPolicy.documents,
 ])
 
 export const layer = Layer.effect(

@@ -165,6 +165,10 @@ export interface Interface extends Omit<Methods, "rotate" | "update"> {
   readonly candidates: (scope: Scope) => Effect.Effect<ReadonlyArray<Candidate>>
   readonly environment: (scope: Scope) => Effect.Effect<Readonly<Record<string, string>>>
   readonly open: (id: Credential.ID) => Effect.Effect<Option.Option<Opened>>
+  readonly authorize: (
+    actor: Actor.Info,
+    owner: Credential.Owner,
+  ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden>
   readonly claimUnauthorized: (id: Credential.ID, revision: number) => Effect.Effect<boolean>
   readonly addWantedScopes: (id: Credential.ID, scopes: ReadonlyArray<string>) => Effect.Effect<void>
   readonly removeForMember: (organizationId: Auth.OrganizationID, userId: Auth.UserID) => Effect.Effect<void>
@@ -814,6 +818,9 @@ export const layer = Layer.effect(
       }),
 
       // oxlint-disable-next-line ren/no-comments -- At most one refresh per credential every 5 minutes after a 401, and only for the revision the egress injected (K18).
+      // oxlint-disable-next-line ren/no-comments -- README §6.4 rule 3: a connect checks the owner rules before the consent screen.
+      authorize: (actor, owner) => checkTarget(actor, owner, "connect"),
+
       claimUnauthorized: Effect.fn("Credentials.claimUnauthorized")(function* (id: Credential.ID, revision: number) {
         const now = yield* Clock.currentTimeMillis
         const claimed = yield* database.db

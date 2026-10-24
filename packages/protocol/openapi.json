@@ -6852,6 +6852,567 @@
           "required": true
         }
       }
+    },
+    "/credentials/connect": {
+      "post": {
+        "tags": ["credential-connect"],
+        "operationId": "credential.connect",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/WriteResult.Redirect"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Credential.Info"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Start a sign-in for one MCP of an app and return the address of the consent page, or return the credential when it is already connected and `reconnect` is not set. Read the sign-in with `oauth-session.get`.",
+        "summary": "Connect an MCP",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Credential.ConnectInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/oauth-sessions/{idOrSlug}": {
+      "get": {
+        "tags": ["oauth-session"],
+        "operationId": "oauth-session.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OAuthSession.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthSession.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one oauth-session by ID or slug.",
+        "summary": "Get oauth-session"
+      }
+    },
+    "/oauth-apps": {
+      "get": {
+        "tags": ["oauth-app"],
+        "operationId": "oauth-app.list",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OAuthApp.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthApp.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the oauth-apps that the caller can see.",
+        "summary": "List oauth-apps"
+      },
+      "post": {
+        "tags": ["oauth-app"],
+        "operationId": "oauth-app.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An org's own OAuth client. Ren never returns its secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthApp.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one oauth-app.",
+        "summary": "Create oauth-app",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthApp.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/oauth-apps/{idOrSlug}": {
+      "get": {
+        "tags": ["oauth-app"],
+        "operationId": "oauth-app.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An org's own OAuth client. Ren never returns its secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthApp.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one oauth-app by ID or slug.",
+        "summary": "Get oauth-app"
+      }
+    },
+    "/oauth-apps/{id}": {
+      "patch": {
+        "tags": ["oauth-app"],
+        "operationId": "oauth-app.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/OAuthApp.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An org's own OAuth client. Ren never returns its secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthApp.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one oauth-app.",
+        "summary": "Update oauth-app",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthApp.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["oauth-app"],
+        "operationId": "oauth-app.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/OAuthApp.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An org's own OAuth client. Ren never returns its secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthApp.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one oauth-app and return it. Archiving an archived oauth-app returns it unchanged.",
+        "summary": "Archive oauth-app"
+      }
     }
   },
   "components": {
@@ -7832,6 +8393,66 @@
           }
         },
         "required": ["userId", "name"],
+        "additionalProperties": false
+      },
+      "Credential.ConnectInput": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "$ref": "#/components/schemas/Credential.Owner"
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["mcp"]
+              },
+              "app": {
+                "$ref": "#/components/schemas/App.ID"
+              },
+              "mcp": {
+                "$ref": "#/components/schemas/Primitive.Slug"
+              },
+              "connection": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Credential.Connection"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "connectionName": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": ["kind", "app", "mcp"],
+            "additionalProperties": false
+          },
+          "reconnect": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["owner", "target"],
         "additionalProperties": false
       },
       "Credential.Connection": {
@@ -9625,6 +10246,438 @@
         },
         "required": ["_tag", "message"],
         "additionalProperties": false
+      },
+      "OAuthApp.CreateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "clientId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "clientSecret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OAuthApp.Discovery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authorizationEndpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokenEndpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokenEndpointAuth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OAuthApp.TokenEndpointAuth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authorizeParams": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["name", "clientId"],
+        "additionalProperties": false
+      },
+      "OAuthApp.Discovery": {
+        "type": "string",
+        "enum": ["live", "static"],
+        "description": "`static` uses the stored endpoints and skips discovery."
+      },
+      "OAuthApp.ID": {
+        "type": "string",
+        "pattern": "^oap_"
+      },
+      "OAuthApp.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OAuthApp.ID"
+          },
+          "organizationId": {
+            "$ref": "#/components/schemas/Auth.OrganizationID"
+          },
+          "name": {
+            "type": "string",
+            "description": "The name an MCP's `oauth_app` requirement asks for."
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "hasClientSecret": {
+            "type": "boolean"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "discovery": {
+            "$ref": "#/components/schemas/OAuthApp.Discovery"
+          },
+          "authorizationEndpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokenEndpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokenEndpointAuth": {
+            "$ref": "#/components/schemas/OAuthApp.TokenEndpointAuth"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authorizeParams": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "configuredBy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "name",
+          "clientId",
+          "hasClientSecret",
+          "scopes",
+          "discovery",
+          "authorizationEndpoint",
+          "tokenEndpoint",
+          "tokenEndpointAuth",
+          "resource",
+          "authorizeParams",
+          "configuredBy",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false,
+        "description": "An org's own OAuth client. Ren never returns its secret."
+      },
+      "OAuthApp.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OAuthApp.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "OAuthApp.TokenEndpointAuth": {
+        "type": "string",
+        "enum": ["none", "client_secret_basic", "client_secret_post"]
+      },
+      "OAuthApp.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientSecret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OAuthApp.Discovery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authorizationEndpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokenEndpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokenEndpointAuth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OAuthApp.TokenEndpointAuth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authorizeParams": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "OAuthSession.ID": {
+        "type": "string",
+        "pattern": "^oas_"
+      },
+      "OAuthSession.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OAuthSession.ID"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OAuthSession.Status"
+          },
+          "label": {
+            "type": "string"
+          },
+          "credentialId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credential.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The credential, once the sign-in completed."
+          },
+          "failureReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sameAccountAs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The display name of another connection that holds the same account (K41)."
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "status", "label", "credentialId", "failureReason", "sameAccountAs", "expiresAt"],
+        "additionalProperties": false
+      },
+      "OAuthSession.Status": {
+        "type": "string",
+        "enum": ["pending", "complete", "failed", "expired"]
       },
       "OrganizationSettings.Info": {
         "type": "object",
@@ -13171,6 +14224,19 @@
         },
         "required": ["_tag", "message", "retryAfterMs"],
         "additionalProperties": false
+      },
+      "WriteResult.Redirect": {
+        "type": "object",
+        "properties": {
+          "redirectUrl": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": ["redirectUrl", "expiresAt"],
+        "additionalProperties": false
       }
     },
     "securitySchemes": {
@@ -13257,6 +14323,15 @@
     },
     {
       "name": "credential"
+    },
+    {
+      "name": "credential-connect"
+    },
+    {
+      "name": "oauth-session"
+    },
+    {
+      "name": "oauth-app"
     }
   ]
 }

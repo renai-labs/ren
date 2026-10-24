@@ -80,6 +80,13 @@ import type {
   CredentialMoveInput,
   CredentialCopyInput,
   CredentialRemoveInput,
+  CredentialConnectCredentialConnectInput,
+  OauthSessionGetInput,
+  OauthAppListInput,
+  OauthAppGetInput,
+  OauthAppCreateInput,
+  OauthAppUpdateInput,
+  OauthAppArchiveInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -825,6 +832,74 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["credential", "remove"] as const,
             mutationFn: (input: CredentialRemoveInput) => client["credential"]["remove"](input),
+          }),
+      },
+    },
+    "credential-connect": {
+      credential: {
+        connect: {
+          mutationKey: () => ["credential-connect", "credential", "connect"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["credential-connect", "credential", "connect"] as const,
+              mutationFn: (input: CredentialConnectCredentialConnectInput) =>
+                client["credential-connect"]["credential"]["connect"](input),
+            }),
+        },
+      },
+    },
+    "oauth-session": {
+      get: {
+        queryKey: (input?: OauthSessionGetInput) =>
+          input === undefined ? (["oauth-session", "get"] as const) : (["oauth-session", "get", input] as const),
+        queryOptions: (input: OauthSessionGetInput) =>
+          queryOptions({
+            queryKey: ["oauth-session", "get", input] as const,
+            queryFn: (context) => client["oauth-session"]["get"](input, { signal: context.signal }),
+          }),
+      },
+    },
+    "oauth-app": {
+      list: {
+        queryKey: (input?: OauthAppListInput) =>
+          input === undefined ? (["oauth-app", "list"] as const) : (["oauth-app", "list", input] as const),
+        queryOptions: (input: OauthAppListInput) =>
+          queryOptions({
+            queryKey: ["oauth-app", "list", input] as const,
+            queryFn: (context) => client["oauth-app"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: OauthAppGetInput) =>
+          input === undefined ? (["oauth-app", "get"] as const) : (["oauth-app", "get", input] as const),
+        queryOptions: (input: OauthAppGetInput) =>
+          queryOptions({
+            queryKey: ["oauth-app", "get", input] as const,
+            queryFn: (context) => client["oauth-app"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["oauth-app", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["oauth-app", "create"] as const,
+            mutationFn: (input: OauthAppCreateInput) => client["oauth-app"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["oauth-app", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["oauth-app", "update"] as const,
+            mutationFn: (input: OauthAppUpdateInput) => client["oauth-app"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["oauth-app", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["oauth-app", "archive"] as const,
+            mutationFn: (input: OauthAppArchiveInput) => client["oauth-app"]["archive"](input),
           }),
       },
     },

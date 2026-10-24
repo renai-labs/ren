@@ -210,6 +210,7 @@ export const oauth_session = pgTable(
     discovery_state: jsonb().$type<Readonly<Record<string, unknown>>>(),
     status: text().$type<OAuthSession.Status>().notNull().default("pending"),
     failure_reason: text(),
+    same_account_as: text(),
     created_at: timestamp().defaultNow().notNull(),
     expires_at: timestamp().notNull(),
     consumed_at: timestamp(),
