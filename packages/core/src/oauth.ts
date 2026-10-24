@@ -24,6 +24,7 @@ import { Credentials } from "./credentials.js"
 import { EgressControl } from "./egress-control.js"
 import { Envelope } from "./envelope.js"
 import { OAuthFetch } from "./oauth-fetch.js"
+import { OAuthToken } from "./oauth-token.js"
 import { Primitive } from "./primitive.js"
 
 export interface Callback {
@@ -59,14 +60,9 @@ const upper = (slug: string) => slug.toUpperCase().replaceAll("-", "_")
 export const labelOf = (mcp: string, connection?: string) =>
   `${Credential.connectedPrefix}${upper(mcp)}${connection ? `__${upper(connection)}` : ""}`
 
-const TokenEndpointAuth = Schema.Literals(["none", "client_secret_basic", "client_secret_post"])
-
-const Client = Schema.Struct({
-  clientId: Schema.String,
-  clientSecret: Schema.optional(Schema.RedactedFromValue(Schema.String)),
-  tokenEndpointAuth: TokenEndpointAuth,
-})
-type Client = typeof Client.Type
+const Client = OAuthToken.Client
+type Client = OAuthToken.Client
+const TokenEndpointAuth = OAuthToken.TokenEndpointAuth
 const ClientJson = Schema.fromJsonString(Client)
 
 const Discovered = Schema.Struct({
@@ -78,117 +74,10 @@ type Discovered = typeof Discovered.Type
 const decodeDiscovered = Schema.decodeUnknownOption(Discovered)
 
 const SealedJson = Schema.fromJsonString(Credentials.Sealed)
-const decodeClaims = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Struct({ sub: Schema.optional(Schema.String) })))
 
 const random = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")
 
-const sha256 = (text: string, encoding: "hex" | "base64url") => new Bun.CryptoHasher("sha256").update(text).digest(encoding)
-
-export const fatalCodes: ReadonlyArray<string> = ["invalid_grant", "invalid_client", "bad_refresh_token"]
-
-export interface Token {
-  readonly accessToken: string
-  readonly refreshToken: Option.Option<string>
-  readonly expiresIn: Option.Option<number>
-  readonly scope: Option.Option<string>
-  readonly subject: Option.Option<string>
-}
-
-export interface TokenError {
-  readonly status: number
-  readonly code: string
-  readonly description: string
-}
-
-const Answer = Schema.Struct({
-  access_token: Schema.optional(Schema.Unknown),
-  token_type: Schema.optional(Schema.Unknown),
-  expires_in: Schema.optional(Schema.Unknown),
-  refresh_token: Schema.optional(Schema.Unknown),
-  scope: Schema.optional(Schema.Unknown),
-  id_token: Schema.optional(Schema.Unknown),
-  user_id: Schema.optional(Schema.Unknown),
-  error: Schema.optional(Schema.Unknown),
-  error_description: Schema.optional(Schema.Unknown),
-})
-const decodeAnswer = Schema.decodeUnknownOption(Answer)
-
-const text = (value: unknown) => Option.liftPredicate(value, (found): found is string => typeof found === "string")
-
-// oxlint-disable-next-line ren/no-comments -- §8 rule 6: the code is a string or `{ error: { code } }`; anything else is an unknown code, which is temporary (ren-v1 bug S15).
-const errorCodeOf = (error: unknown) =>
-  Option.orElse(text(error), () =>
-    typeof error === "object" && error !== null && "code" in error ? text(error.code) : Option.none(),
-  )
-
-// oxlint-disable-next-line ren/no-comments -- §7 rule 10: a number or a numeric string; zero, negative or anything else is missing.
-const secondsOf = (raw: unknown) => {
-  const seconds = typeof raw === "string" && /^\d+$/u.test(raw) ? Number(raw) : raw
-  return typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0 ? Option.some(seconds) : Option.none()
-}
-
-// oxlint-disable-next-line ren/no-comments -- K41: the account id is the ID token's `sub`, else a profile id in the answer. It is only compared, so the ID token is not verified.
-const subjectOf = (answer: typeof Answer.Type) => {
-  const payload = Option.flatMap(text(answer.id_token), (token) => Option.fromNullishOr(token.split(".").at(1)))
-  const claims = Option.flatMap(payload, (part) => decodeClaims(Buffer.from(part, "base64url").toString()))
-  return Option.orElse(
-    Option.flatMap(claims, (found) => Option.fromNullishOr(found.sub)),
-    () => text(answer.user_id),
-  )
-}
-
-// oxlint-disable-next-line ren/no-comments -- §7 rule 10 (K5, K6): a refresh token is optional; a 2xx with `error` and no `access_token` is an error; `token_type` is Bearer in any case, or missing.
-export const readToken = (status: number, body: unknown): Result.Result<Token, TokenError> => {
-  const empty: typeof Answer.Type = {}
-  const answer = Option.getOrElse(decodeAnswer(body), () => empty)
-  const accessToken = text(answer.access_token)
-  const ok = status >= 200 && status < 300
-  if (!ok || Option.isNone(accessToken))
-    return Result.fail({
-      status,
-      code: Option.getOrElse(errorCodeOf(answer.error), () => (ok ? "invalid_response" : "unknown")),
-      description: Option.getOrElse(text(answer.error_description), () => ""),
-    })
-  const tokenType = text(answer.token_type)
-  if (Option.isSome(tokenType) && tokenType.value.toLowerCase() !== "bearer")
-    return Result.fail({ status, code: "unsupported_token_type", description: `token_type ${tokenType.value}` })
-  return Result.succeed({
-    accessToken: accessToken.value,
-    refreshToken: text(answer.refresh_token),
-    expiresIn: secondsOf(answer.expires_in),
-    scope: text(answer.scope),
-    subject: subjectOf(answer),
-  })
-}
-
-export const isFatal = (error: TokenError) =>
-  (error.status === 400 || error.status === 401) && fatalCodes.includes(error.code)
-
-// oxlint-disable-next-line ren/no-comments -- §7 rules 15 and 16, §8 rule 11: one token request for sign-in and refresh. Every request carries `client_id`; the secret goes only to this endpoint, in the way the client was registered.
-const postToken = (
-  fetch: OAuthFetch.Fetch,
-  endpoint: string,
-  client: Client,
-  form: Readonly<Record<string, string | undefined>>,
-) =>
-  Effect.tryPromise({
-    try: async () => {
-      const body = new URLSearchParams(Object.entries(form).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]])))
-      body.set("client_id", client.clientId)
-      const secret = client.clientSecret && Redacted.value(client.clientSecret)
-      const headers = new Headers({ "content-type": "application/x-www-form-urlencoded", accept: "application/json" })
-      if (secret && client.tokenEndpointAuth === "client_secret_post") body.set("client_secret", secret)
-      if (secret && client.tokenEndpointAuth === "client_secret_basic")
-        headers.set(
-          "authorization",
-          `Basic ${Buffer.from(`${encodeURIComponent(client.clientId)}:${encodeURIComponent(secret)}`).toString("base64")}`,
-        )
-      const response = await fetch(endpoint, { method: "POST", headers, body })
-      const answer: unknown = await response.json().catch(() => null)
-      return readToken(response.status, answer)
-    },
-    catch: (cause) => new Error(`The token endpoint did not answer: ${String(cause)}`),
-  })
+const sha256 = OAuthToken.sha256
 
 const metadataKept = Duration.hours(1)
 
@@ -568,7 +457,7 @@ export const layer = Layer.effect(
       return Option.none()
     }
 
-    const valueOf = (taken: Session, client: Client, discovered: Discovered, token: Token): Credentials.Sealed => ({
+    const valueOf = (taken: Session, client: Client, discovered: Discovered, token: OAuthToken.Token): Credentials.Sealed => ({
       type: "oauth",
       accessToken: Redacted.make(token.accessToken),
       ...(taken.issuer && { issuer: taken.issuer }),
@@ -589,7 +478,7 @@ export const layer = Layer.effect(
     })
 
     // oxlint-disable-next-line ren/no-comments -- §7 rule 13 and §10a rule 5: a reconnect writes the same row, so the old value works until this save; a first sign-in inserts the row with its app, MCP and connection, which never change.
-    const save = Effect.fnUntraced(function* (taken: Session, value: Credentials.Sealed, token: Token, now: number) {
+    const save = Effect.fnUntraced(function* (taken: Session, value: Credentials.Sealed, token: OAuthToken.Token, now: number) {
       const release = (yield* database.db.select({ mcps: releases.mcps }).from(releases).where(eq(releases.id, taken.release_id)).pipe(Effect.orDie)).at(0)
       const transport = release?.mcps[taken.mcp]?.transport
       if (transport?.type !== "remote") return Option.none()
@@ -682,7 +571,7 @@ export const layer = Layer.effect(
       const refused = checkAnswer(taken, discovered.value, input)
       if (Option.isSome(refused)) return yield* fail(taken.id, refused.value)
       const client = Schema.decodeSync(ClientJson)(yield* open(taken.organization_id, "oauth_session", taken.id, taken.client_info))
-      const answered = yield* postToken(http.fetch, discovered.value.tokenEndpoint, client, {
+      const answered = yield* OAuthToken.post(http.fetch, discovered.value.tokenEndpoint, client, {
         grant_type: "authorization_code",
         code: input.code,
         redirect_uri: callbackUrl,
@@ -774,7 +663,7 @@ export const layerRefresher = Layer.effect(
         }
         if (value.issuer && (yield* issuerMoved(value.issuer)))
           return yield* new CredentialRefresh.Fatal({ message: "The authorization server names another issuer" })
-        const answered = yield* postToken(
+        const answered = yield* OAuthToken.post(
           http.fetch,
           refresh.tokenEndpoint,
           { clientId: refresh.clientId, tokenEndpointAuth: refresh.tokenEndpointAuth, ...(refresh.clientSecret && { clientSecret: refresh.clientSecret }) },
@@ -782,7 +671,7 @@ export const layerRefresher = Layer.effect(
         ).pipe(Effect.mapError((error) => new CredentialRefresh.Transient({ message: error.message })))
         if (Result.isFailure(answered)) {
           const failure = answered.failure
-          if (isFatal(failure)) return yield* new CredentialRefresh.Fatal({ message: failure.code })
+          if (OAuthToken.isFatal(failure, OAuthToken.refreshFatal)) return yield* new CredentialRefresh.Fatal({ message: failure.code })
           return yield* new CredentialRefresh.Transient({ message: `${failure.status} ${failure.code}` })
         }
         const token = answered.success
@@ -797,6 +686,29 @@ export const layerRefresher = Layer.effect(
         })
       }),
     }
-    return new Map([["oauth" as const, refresher]])
+    // oxlint-disable-next-line ren/no-comments -- §10c rule 4 (K43): exchange the stored id and secret again; `invalid_client` or `unauthorized_client` with 400 or 401 means the secret was rotated.
+    const clientCredentials: CredentialRefresh.Refresher = {
+      refresh: Effect.fnUntraced(function* (current) {
+        const value = current.value
+        if (value.type !== "client_credentials") return Option.none()
+        const answered = yield* OAuthToken.exchangeClientCredentials(http.fetch, value).pipe(
+          Effect.mapError((error) => new CredentialRefresh.Transient({ message: error.message })),
+        )
+        if (Result.isFailure(answered)) {
+          if (OAuthToken.isFatal(answered.failure, OAuthToken.clientCredentialsFatal))
+            return yield* new CredentialRefresh.Fatal({ message: answered.failure.code })
+          return yield* new CredentialRefresh.Transient({ message: `${answered.failure.status} ${answered.failure.code}` })
+        }
+        const now = yield* Clock.currentTimeMillis
+        return Option.some({
+          value: { ...value, accessToken: Redacted.make(answered.success.accessToken) },
+          expiresAt: Option.map(answered.success.expiresIn, (seconds) => new Date(now + seconds * 1000)),
+        })
+      }),
+    }
+    return new Map<Credential.Type, CredentialRefresh.Refresher>([
+      ["oauth", refresher],
+      ["client_credentials", clientCredentials],
+    ])
   }),
 )

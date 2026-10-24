@@ -61,11 +61,10 @@ const host = Layer.unwrap(
 
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(CredentialRefresh.layer.pipe(Layer.provide(OAuth.layerRefresher))),
-  Layer.provideMerge(OAuthFetch.layerPublic),
   Layer.provideMerge(CredentialSource.layer),
   Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
   Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
-  Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer)),
+  Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerPublic)),
 )
 
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(

@@ -20,6 +20,7 @@ import { DurableRunner } from "../src/durable-runner.js"
 import { Egress } from "../src/egress.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
+import { OAuthFetch } from "../src/oauth-fetch.js"
 import { Models } from "../src/models.js"
 import { Signer } from "../src/signer.js"
 import { Space } from "../src/space.js"
@@ -69,7 +70,7 @@ const it = testEffect(
     Layer.provideMerge(CredentialSource.layer),
     Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
     Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone)),
-    Layer.provideMerge(Layer.mergeAll(Access.layer, Envelope.layerLocal, EgressControl.layerHttp, Signer.layerLocal)),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, Envelope.layerLocal, EgressControl.layerHttp, Signer.layerLocal, OAuthFetch.layerUnchecked)),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(
