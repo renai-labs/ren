@@ -10,6 +10,8 @@ export const auth = BetterAuth.make({
   trustedOrigins: [],
   google: { clientId: "generate-auth-schema", clientSecret: "generate-auth-schema" },
   appURL: "http://localhost",
+  mcpResource: "http://localhost/mcp",
+  fetchClientMetadataResource: () => Promise.reject(new Error("generate-auth-schema does not fetch")),
   requireEmailVerification: true,
   sendEmail: () => {},
   signupGuard: {
@@ -23,3 +25,5 @@ export const auth = BetterAuth.make({
     archiveMemberships: () => Promise.resolve(),
   },
 })
+
+auth.$context.catch(() => undefined)

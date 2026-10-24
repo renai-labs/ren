@@ -19,6 +19,22 @@ export const MemberID = Identifier.make("mem", "Auth.MemberID")
 
 export const InvitationID = Identifier.make("inv", "Auth.InvitationID")
 
+export const JwkID = Identifier.make("jwk", "Auth.JwkID")
+
+export const OAuthClientID = Identifier.make("ocl", "Auth.OAuthClientID")
+
+export const OAuthResourceID = Identifier.make("ors", "Auth.OAuthResourceID")
+
+export const OAuthClientResourceID = Identifier.make("ocr", "Auth.OAuthClientResourceID")
+
+export const OAuthRefreshTokenID = Identifier.make("ort", "Auth.OAuthRefreshTokenID")
+
+export const OAuthAccessTokenID = Identifier.make("oat", "Auth.OAuthAccessTokenID")
+
+export const OAuthConsentID = Identifier.make("ocn", "Auth.OAuthConsentID")
+
+export const OAuthClientAssertionID = Identifier.make("oca", "Auth.OAuthClientAssertionID")
+
 export const Role = Schema.Literals(["owner", "admin", "member"]).annotate({ identifier: "Auth.Role" })
 export type Role = typeof Role.Type
 

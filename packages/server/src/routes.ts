@@ -71,6 +71,7 @@ const AuthRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const auth = yield* Auth.Service
     yield* router.add("*", "/auth/*", HttpEffect.fromWebHandler(auth.handler))
+    yield* router.add("GET", "/.well-known/*", HttpEffect.fromWebHandler(auth.handler))
   }),
 )
 
