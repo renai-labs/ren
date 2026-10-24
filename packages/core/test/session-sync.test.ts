@@ -374,7 +374,7 @@ describe("SessionSync", () => {
       const first = yield* Seed.session({ ...owner, brainId })
       const second = yield* Seed.session({ ...owner, brainId })
       const elsewhere = yield* Seed.session(owner)
-      const host = { brainId, organizationId: owner.organizationId, generation: 1 }
+      const host = { brainId, organizationId: owner.organizationId, spaceId: owner.spaceId, generation: 1 }
       yield* SyncFixture.pass(host, SyncFixture.session(first), 4, [])
       yield* SyncFixture.pass(host, SyncFixture.session(second), 5, [])
       expect(
@@ -396,7 +396,7 @@ describe("SessionSync", () => {
         const first = yield* Seed.session({ ...owner, brainId })
         const second = yield* Seed.session({ ...owner, brainId })
         const child = Session.ID.create()
-        const host = { brainId, organizationId: owner.organizationId, generation: 1 }
+        const host = { brainId, organizationId: owner.organizationId, spaceId: owner.spaceId, generation: 1 }
         yield* SyncFixture.pass(host, SyncFixture.session(first), 4, [])
         yield* SyncFixture.pass(host, SyncFixture.session(child, { parent_id: first }), 3, [])
         yield* SyncFixture.pass(host, SyncFixture.session(second), 5, [])
