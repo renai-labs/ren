@@ -25,6 +25,7 @@ export interface Current {
   readonly revision: number
   readonly scopes: ReadonlyArray<string>
   readonly expiresAt: Option.Option<Date>
+  readonly providerAccountId: Option.Option<string>
 }
 
 // oxlint-disable-next-line ren/no-comments -- A refresher reads and returns; only the sweep writes (K11). `scopes` keeps the old scopes when absent (§8 rule 4); `saved` runs after the write, for example a Composio cleanup of the old session.
@@ -162,6 +163,7 @@ export const layer = Layer.effect(
           revision: row.revision,
           scopes: row.scopes,
           expiresAt: Option.fromNullishOr(row.expires_at),
+          providerAccountId: Option.fromNullishOr(row.provider_account_id),
         })
         .pipe(
           Effect.flatMap(

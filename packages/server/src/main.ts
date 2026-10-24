@@ -8,6 +8,7 @@ import { Credentials } from "@ren/core/credentials"
 import { Egress } from "@ren/core/egress"
 import { OAuth } from "@ren/core/oauth"
 import { OAuthFetch } from "@ren/core/oauth-fetch"
+import { McpProvider } from "@ren/core/mcp-provider"
 import { Envelope } from "@ren/core/envelope"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
@@ -62,8 +63,12 @@ const host = Layer.unwrap(
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(CredentialRefresh.layer.pipe(Layer.provide(OAuth.layerRefresher))),
   Layer.provideMerge(CredentialSource.layer),
-  Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
+  Layer.provideMerge(
+    Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
+  ),
   Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
+  Layer.provideMerge(McpProvider.layerCleanup),
+  Layer.provideMerge(McpProvider.layerComposio),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerPublic)),
 )
 

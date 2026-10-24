@@ -12,6 +12,7 @@ import { DurableRunner } from "../src/durable-runner.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
 import { OAuth } from "../src/oauth.js"
+import { McpProvider } from "../src/mcp-provider.js"
 import { OAuthApps } from "../src/oauth-apps.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
 import { testEffect } from "./lib/effect.js"
@@ -33,6 +34,7 @@ const it = testEffect(
         Envelope.layerLocal,
         OAuthFetch.layerUnchecked,
         DurableRunner.layerMemory,
+        McpProvider.layerNone,
         Layer.succeed(
           EgressControl.Service,
           EgressControl.Service.of({

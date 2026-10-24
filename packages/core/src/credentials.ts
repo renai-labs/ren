@@ -89,7 +89,10 @@ export const match = (candidates: ReadonlyArray<Candidate>, request: Request): M
     return parsed ? [{ text, ...parsed }] : []
   })
   if (placeholders.length === 0) {
-    const byHost = ordered.filter((candidate) => candidate.inject.op !== "replace" && allowsHost(candidate, request))
+    const byHost = ordered.filter(
+      (candidate) =>
+        candidate.inject.op !== "replace" && candidate.source !== "provider" && allowsHost(candidate, request),
+    )
     const chosen = [...new Map(byHost.toReversed().map((candidate) => [candidate.label, candidate])).values()]
     if (chosen.length > 1) return { ok: false, reason: "ambiguous" }
     return { ok: true, matches: chosen.map((candidate) => ({ candidate, placeholder: Option.none() })) }
@@ -138,7 +141,7 @@ export const Sealed = Schema.Union([
     scope: Schema.optional(Schema.String),
     accessToken: Schema.optional(Token),
   }),
-  Schema.Struct({ type: Schema.Literal("route"), upstream: Token, sessionId: Schema.String }),
+  Schema.Struct({ type: Schema.Literal("route"), upstream: Token, sessionId: Schema.String, toolkit: Schema.String }),
   Schema.Struct({ type: Schema.Literal("cleared") }),
 ])
 export type Sealed = typeof Sealed.Type
@@ -267,7 +270,9 @@ export const layer = Layer.effect(
     const exchange = Effect.fnUntraced(function* (value: Sealed) {
       if (value.type !== "client_credentials") return { value, expiresAt: null }
       const answered = yield* OAuthToken.exchangeClientCredentials(http.fetch, value).pipe(
-        Effect.mapError(() => new Primitive.Invalid({ message: "Ren could not reach the token endpoint.", field: "value" })),
+        Effect.mapError(
+          () => new Primitive.Invalid({ message: "Ren could not reach the token endpoint.", field: "value" }),
+        ),
       )
       if (Result.isFailure(answered))
         return yield* new Primitive.Invalid({
@@ -277,7 +282,9 @@ export const layer = Layer.effect(
       const now = yield* Clock.currentTimeMillis
       return {
         value: { ...value, accessToken: Redacted.make(answered.success.accessToken) },
-        expiresAt: Option.getOrNull(Option.map(answered.success.expiresIn, (seconds) => new Date(now + seconds * 1000))),
+        expiresAt: Option.getOrNull(
+          Option.map(answered.success.expiresIn, (seconds) => new Date(now + seconds * 1000)),
+        ),
       }
     })
 
@@ -743,7 +750,20 @@ export const layer = Layer.effect(
         const info = toInfo(found.row, found.accountName)
         if (!info) return yield* notFound
         yield* database.db.delete(table).where(eq(table.id, id)).pipe(Effect.orDie)
-        yield* removed([found.row.label])
+        yield* CredentialOffboarding.invalidate({
+          labels: [found.row.label],
+          workloads: [],
+          providers: found.row.provider
+            ? [
+                {
+                  id,
+                  organizationId: found.row.organization_id,
+                  accountId: found.row.provider_account_id,
+                  value: found.row.value,
+                },
+              ]
+            : [],
+        }).pipe(Effect.provideService(EgressControl.Service, control))
         return info
       }),
 
@@ -806,7 +826,7 @@ export const layer = Layer.effect(
           .pipe(Effect.orDie)
         return rows.map((row): Candidate => ({
           id: row.id,
-          source: "static",
+          source: row.type === "route" ? "provider" : "static",
           label: row.label,
           owner: row.owner,
           hosts: row.hosts,

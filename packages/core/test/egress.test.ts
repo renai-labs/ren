@@ -21,6 +21,7 @@ import { Egress } from "../src/egress.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
+import { McpProvider } from "../src/mcp-provider.js"
 import { Models } from "../src/models.js"
 import { Signer } from "../src/signer.js"
 import { Space } from "../src/space.js"
@@ -68,9 +69,20 @@ const it = testEffect(
     Layer.provideMerge(CredentialRefresh.layer),
     Layer.provideMerge(Layer.mergeAll(refreshers, DurableRunner.layerMemory)),
     Layer.provideMerge(CredentialSource.layer),
-    Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
+    Layer.provideMerge(
+      Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
+    ),
     Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone)),
-    Layer.provideMerge(Layer.mergeAll(Access.layer, Envelope.layerLocal, EgressControl.layerHttp, Signer.layerLocal, OAuthFetch.layerUnchecked)),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        Access.layer,
+        Envelope.layerLocal,
+        EgressControl.layerHttp,
+        Signer.layerLocal,
+        OAuthFetch.layerUnchecked,
+        McpProvider.layerComposio,
+      ),
+    ),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(
@@ -87,6 +99,7 @@ const it = testEffect(
           ]),
           EGRESS_CONTROL_URLS: `http://127.0.0.1:${egress.port}`,
           REN_URL: "https://api.ren.test",
+          COMPOSIO_API_KEY: "composio-project-key",
         }),
       ),
     ),
@@ -460,6 +473,51 @@ describe("Egress.unauthorized", () => {
       expect(saved).toMatchObject({ status: "ok", revision: 1, scopes: ["read"] })
       expect(saved?.wanted_scopes.toSorted()).toEqual(["admin", "issues", "write"])
       expect(yield* Ref.get(refreshed)).toEqual([])
+    }),
+  )
+
+  it.live("a Composio credential routes by its path placeholder to the session URL and sets x-api-key (test 24)", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const database = yield* Database.Service
+      const envelope = yield* Envelope.Service
+      const found = yield* setup()
+      const id = Credential.ID.create()
+      const value = yield* envelope.seal(
+        Redacted.make(
+          encodeSealed({
+            type: "route",
+            upstream: Redacted.make("https://backend.composio.dev/tool_router/trs_secret/mcp"),
+            sessionId: "trs_secret",
+            toolkit: "gmail",
+          }),
+        ),
+        { organizationId: found.organizationId, kind: "credential", id },
+      )
+      yield* database.db.insert(Database.Schema.credential).values({
+        id,
+        organization_id: found.organizationId,
+        owner: "org",
+        label: "MCP_GMAIL",
+        type: "route",
+        provider: "composio",
+        provider_account_id: "ca_1",
+        value,
+        hosts: ["backend.composio.dev"],
+        inject: { op: "route" },
+      })
+      const reply = yield* resolver.resolve(all, request(found.proof, "backend.composio.dev", ["ren:MCP_GMAIL"]))
+      if (!reply.allow) return yield* Effect.die(new Error("expected an allow"))
+      expect(values(reply)).toEqual([
+        { op: "route", upstream: "https://backend.composio.dev/tool_router/trs_secret/mcp" },
+        { op: "setHeader", name: "x-api-key", value: "composio-project-key" },
+      ])
+      expect(reply.inject.at(0)).toMatchObject({ placeholder: "ren:MCP_GMAIL" })
+      expect(reply.refreshable).toEqual([{ label: "MCP_GMAIL", revision: 1 }])
+      expect(yield* resolver.resolve(all, request(found.proof, "backend.composio.dev", []))).toMatchObject({
+        allow: true,
+        inject: [],
+      })
     }),
   )
 })

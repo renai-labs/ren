@@ -125,8 +125,10 @@ export const start = (initial: Options = {}): Instance => {
         body,
         form,
       }
-      return routes.map((route) => route(context)).find((response) => response !== null) ??
+      return (
+        routes.map((route) => route(context)).find((response) => response !== null) ??
         new Response("not found", { status: 404 })
+      )
     },
   })
   const origin = `http://127.0.0.1:${server.port}`
