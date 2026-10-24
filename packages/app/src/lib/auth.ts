@@ -14,7 +14,7 @@ const Body = Schema.Record(Schema.String, Schema.Unknown)
 
 const decodeBody = Schema.decodeUnknownOption(Schema.fromJsonString(Body))
 
-const authorizationPaths = /\/(?:sign-in|sign-up|oauth2)\//u
+const authorizationPaths = /\/(?:sign-in|oauth2)\//u
 
 const oauthClient = (query: string | undefined) =>
   ({

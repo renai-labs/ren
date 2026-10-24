@@ -260,6 +260,7 @@ export const make = (input: Input) => {
           resource: input.mcpResource,
           loginPage: new URL("login", appURL).href,
           consentPage: new URL("consent", appURL).href,
+          signup: { page: new URL("signup", appURL).href },
           scopes: ["openid", "profile", "email", "offline_access", mcpScope],
           accessTokenExpiresIn: 60 * 60,
           refreshTokenExpiresIn: 60 * 60 * 24 * 30,
