@@ -21,6 +21,7 @@ import type { HarnessConfig } from "../src/harness/config.js"
 import { OpenCodeEvents } from "../src/harness/opencode/events.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
+import { McpPeer } from "./lib/mcp.js"
 import { ModelsTest } from "./lib/models.js"
 import { TestSettings } from "./lib/settings.js"
 import { Shared } from "./lib/shared.js"
@@ -399,6 +400,24 @@ describe("settings in the cell", () => {
       expect(parent.calls[0]?.tools).not.toContain("question")
       expect(parent.calls[0]?.tools).toContain("subagent")
       expect(child.calls).toHaveLength(0)
+    }),
+  )
+
+  it.live("a deny rule for an app's MCP tool refuses the call before it reaches the app's server", () =>
+    Effect.gen(function* () {
+      const peer = yield* McpPeer.make()
+      const layers = TestSettings.layers({
+        ren: { permissions: [{ action: "docs_marker", resource: "*", effect: "deny" }] },
+      })
+      const opened = yield* open(layers)
+      yield* opened.pull(layers, { apps: Option.some(McpPeer.catalog("first", [{ slug: "docs", url: peer.url }])) })
+      const denied = McpPeer.execute("docs.marker")
+      yield* opened.turn(denied)
+      expect(McpPeer.result(denied)).not.toBe("first")
+      expect((yield* Queue.clear(peer.requests)).map((request) => request.method)).not.toContain("tools/call")
+      const allowed = McpPeer.execute("docs.second")
+      yield* opened.turn(allowed)
+      expect(McpPeer.result(allowed)).toBe("first")
     }),
   )
 
