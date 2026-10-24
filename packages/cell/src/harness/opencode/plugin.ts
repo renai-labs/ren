@@ -400,7 +400,6 @@ export const make = (
           }),
           offer: (snapshot) =>
             boundaryOf(context.location).offer(
-              "config",
               Effect.gen(function* () {
                 if (snapshot.revision !== (yield* Ref.get(desired)).revision) return
                 const modelChanged =
