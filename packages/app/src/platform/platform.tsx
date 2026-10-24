@@ -23,6 +23,7 @@ interface Base {
   readonly notify: (title: string, body?: string) => Promise<void>
   readonly requestNotifications?: () => Promise<boolean>
   readonly fetch?: typeof globalThis.fetch
+  readonly authorizationQuery?: string | undefined
   readonly writeClipboardText?: (text: string) => Promise<void>
   readonly readClipboardImage?: () => Promise<File | undefined>
   readonly onLifecycle?: (listener: (event: "foreground" | "online") => void) => () => void

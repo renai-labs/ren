@@ -17,6 +17,9 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
     version: import.meta.env.VITE_REN_VERSION ?? "dev",
     serverUrl: import.meta.env.VITE_REN_API_URL ?? window.location.origin,
     appUrl: new URL(import.meta.env.BASE_URL, window.location.origin).href.replace(/\/$/, ""),
+    authorizationQuery: new URLSearchParams(window.location.search).has("sig")
+      ? window.location.search.slice(1)
+      : undefined,
     fetch: Object.assign(
       (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
         globalThis.fetch(input, { ...init, credentials: "include" }),
