@@ -1,0 +1,47 @@
+domains:
+  # Go module proxy and checksum database
+  - "proxy.golang.org"
+  - "sum.golang.org"
+  - "storage.googleapis.com"
+
+  # GitHub (for actions, releases, and module downloads)
+  - "github.com"
+  - "*.github.com"
+  - "*.githubusercontent.com"
+
+  # golangci-lint
+  - "*.golangci.com"
+  - "golangci-lint.run"
+  - "*.golangci-lint.run"
+
+  # Go toolchain
+  - "go.dev"
+  - "*.go.dev"
+  - "golang.org"
+  - "*.golang.org"
+
+  # Google (for gRPC/protobuf modules)
+  - "google.golang.org"
+
+  # Docker Hub (for release builds)
+  - "*.docker.io"
+  - "*.docker.com"
+
+  # GoReleaser
+  - "goreleaser.com"
+  - "*.goreleaser.com"
+  - "api.gumroad.com" # GoReleaser Pro license validation
+
+  # AWS (for integration tests)
+  - "secretsmanager.us-west-1.amazonaws.com"
+  - "ssm.us-west-1.amazonaws.com"
+
+  # Anthropic / OpenAI (for judge transform integration tests)
+  - "api.anthropic.com"
+  - "api.openai.com"
+
+  # 1Password (for 1password secret source integration tests)
+  - "ironsh.1password.com"
+
+  # GCP (for gcp_auth integration tests: oauth2 token exchange + BigQuery API)
+  - "*.googleapis.com"

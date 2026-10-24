@@ -1,0 +1,5 @@
+FROM alpine:latest
+ARG TARGETARCH
+RUN apk add --no-cache ca-certificates openssl
+COPY linux/${TARGETARCH}/iron-proxy /usr/local/bin/iron-proxy
+ENTRYPOINT ["iron-proxy"]

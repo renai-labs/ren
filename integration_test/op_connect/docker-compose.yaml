@@ -1,0 +1,25 @@
+services:
+  connect-api:
+    image: 1password/connect-api:latest
+    dns:
+      - 8.8.8.8
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./1password-credentials.json:/home/opuser/.op/1password-credentials.json:ro"
+      - "data:/home/opuser/.op/data"
+    restart: unless-stopped
+
+  connect-sync:
+    image: 1password/connect-sync:latest
+    dns:
+      - 8.8.8.8
+    ports:
+      - "8081:8080"
+    volumes:
+      - "./1password-credentials.json:/home/opuser/.op/1password-credentials.json:ro"
+      - "data:/home/opuser/.op/data"
+    restart: unless-stopped
+
+volumes:
+  data:
