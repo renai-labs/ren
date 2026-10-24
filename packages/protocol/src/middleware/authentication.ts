@@ -7,7 +7,7 @@ export class CurrentUser extends Context.Service<CurrentUser, Auth.User>()("@ren
 
 export interface AuthenticatedSession {
   readonly user: Auth.User
-  readonly session: { readonly activeOrganizationId?: string | null }
+  readonly session: { readonly activeOrganizationId?: string | null; readonly fixedOrganization?: boolean }
 }
 
 export class CurrentSession extends Context.Service<CurrentSession, AuthenticatedSession>()(
@@ -21,7 +21,10 @@ export class Authentication extends HttpApiMiddleware.Service<
   error: UnauthorizedError,
   security: {
     bearer: HttpApiSecurity.bearer.pipe(
-      HttpApiSecurity.annotate(OpenApi.Description, "A Better Auth session token, for the CLI and SDK."),
+      HttpApiSecurity.annotate(
+        OpenApi.Description,
+        "A Better Auth session token, for the CLI and SDK, or a Ren MCP access token.",
+      ),
     ),
     cookie: HttpApiSecurity.apiKey({ key: "better-auth.session_token", in: "cookie" }).pipe(
       HttpApiSecurity.annotate(

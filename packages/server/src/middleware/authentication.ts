@@ -17,9 +17,12 @@ export const AuthenticationLayer = Layer.effect(
     const auth = yield* Auth.Service
     const authenticate = Effect.gen(function* () {
       const request = yield* HttpServerRequest.HttpServerRequest
-      const session = yield* auth.getSession(new Headers(request.headers))
-      if (Option.isNone(session)) return yield* unauthorized
-      return session.value
+      const headers = new Headers(request.headers)
+      const session = yield* auth.getSession(headers)
+      if (Option.isSome(session)) return session.value
+      const token = yield* auth.getAccessToken(headers)
+      if (Option.isNone(token)) return yield* unauthorized
+      return token.value
     })
     const provideSession = <A, E, R>(httpEffect: Effect.Effect<A, E, R>, session: AuthenticatedSession) =>
       httpEffect.pipe(Effect.provideService(CurrentUser, session.user), Effect.provideService(CurrentSession, session))
