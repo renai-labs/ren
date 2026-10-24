@@ -5,6 +5,7 @@ import { BrainRejectedError, ModelsNotConfiguredError, SessionNotStartedError } 
 import { testEffect } from "@ren/executor/testing"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
+import { SessionMessage } from "@ren/schema/session/message"
 import { Cause, Effect, Option, type Scope } from "effect"
 import { BrainTest } from "./lib/brain.js"
 import { ModelsTest } from "./lib/models.js"
@@ -169,6 +170,24 @@ test.each<[string, Partial<StartBody>]>([
       expect(script.calls).toEqual([])
     }),
   ),
+)
+
+it.live("each send and each chat prompt checks Ren for changes before its turn", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    const sessionID = SessionID.make(brain.id)
+    yield* brain.start()
+    const started = yield* brain.pulls
+    yield* brain.send(`sent ${Shared.stub().script().marker}`)
+    expect(yield* brain.pulls).toBe(started + 1)
+    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.chat.session["session.prompt"]({
+      params: { sessionID: brain.id },
+      payload: { id: SessionMessage.ID.create(), text: Shared.stub().script().marker, delivery: "steer" },
+    })
+    expect(yield* brain.pulls).toBe(started + 2)
+    yield* brain.opencode.session.wait({ sessionID })
+  }),
 )
 
 it.live("send before start is a typed SessionNotStartedError", () =>

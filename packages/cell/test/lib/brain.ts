@@ -49,6 +49,7 @@ export const make = Effect.fnUntraced(function* (
   const issuer = yield* ModelsTest.issuer
   const id = options.id ?? Session.ID.create()
   const alarm: { at: number | null } = { at: null }
+  const pulls = yield* Ref.make(0)
   const services = yield* Layer.build(
     Layer.mergeAll(
       ModelRefresh.layer(issuer.url).pipe(
@@ -56,7 +57,7 @@ export const make = Effect.fnUntraced(function* (
         Layer.provideMerge(Fence.layer),
         Layer.provide(FetchHttpClient.layer),
       ),
-      Layer.succeed(HotReload.Service, HotReload.Service.of({ pull: Effect.void })),
+      Layer.succeed(HotReload.Service, HotReload.Service.of({ pull: Ref.update(pulls, (count) => count + 1) })),
       Layer.succeed(
         Cell.Info,
         Cell.Info.of({
@@ -202,6 +203,7 @@ export const make = Effect.fnUntraced(function* (
       alarm.at = null
     }).pipe(Effect.andThen(Cell.alarm()), Effect.provide(cell)),
     waited: Queue.take(waits),
+    pulls: Ref.get(pulls),
     client,
     fetch: (path: string, init?: RequestInit) =>
       Effect.promise(() => web.fetch(new Request(`http://cell${path}`, init))),

@@ -99,6 +99,8 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
       .handle("brain.send", (request) =>
         handle(
           Effect.gen(function* () {
+            const hotReload = yield* HotReload.Service
+            yield* hotReload.pull
             yield* configured
             const restore = yield* Restore.Service
             yield* restore
