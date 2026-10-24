@@ -16,28 +16,50 @@ export const make = (): {
     const existing = locations.get(key)
     if (existing) return existing
     const gate = Semaphore.makeUnsafe(1)
-    const state = { active: 0, pending: new Map<string, Effect.Effect<void>>() }
+    const state: {
+      active: number
+      pending: Effect.Effect<void> | undefined
+    } = { active: 0, pending: undefined }
     const flush = Effect.suspend(() => {
       if (state.active > 0) return Effect.void
-      const pending = [...state.pending.values()]
-      state.pending.clear()
-      return Effect.forEach(pending, (work) => work, { discard: true })
+      const pending = state.pending
+      state.pending = undefined
+      return pending
+        ? pending.pipe(
+            Effect.catchCause((cause) => Effect.logError(`The pending update for ${location.directory} failed`, cause)),
+          )
+        : Effect.void
     })
     const boundary: Boundary = {
       run: (work) =>
-        Effect.uninterruptibleMask((restore) =>
-          restore(gate.withPermit(Effect.sync(() => void (state.active += 1)))).pipe(
-            Effect.andThen(
-              restore(work).pipe(
-                Effect.ensuring(
-                  gate.withPermit(Effect.sync(() => void (state.active -= 1)).pipe(Effect.andThen(flush))),
-                ),
-              ),
+        Effect.suspend(() => {
+          let admitted = false
+          const admit = gate.withPermit(
+            Effect.sync(() => {
+              state.active += 1
+              admitted = true
+            }),
+          )
+          const release = gate.withPermit(
+            Effect.sync(() => {
+              if (!admitted) return
+              state.active -= 1
+              admitted = false
+            }).pipe(Effect.andThen(flush)),
+          )
+          return Effect.uninterruptibleMask((restore) =>
+            restore(admit).pipe(
+              Effect.andThen(restore(work)),
+              Effect.ensuring(Effect.suspend(() => (admitted ? release : Effect.void))),
             ),
-          ),
+          )
+        }),
+      offer: (work) =>
+        gate.withPermit(
+          Effect.sync(() => {
+            state.pending = work
+          }).pipe(Effect.andThen(flush)),
         ),
-      offer: (key, work) =>
-        gate.withPermit(Effect.sync(() => void state.pending.set(key, work)).pipe(Effect.andThen(flush))),
     }
     locations.set(key, boundary)
     return boundary
@@ -55,7 +77,9 @@ export const make = (): {
             const runner = yield* SessionRunner.Service
             const location = yield* Location.Service
             const boundary = get(location)
-            return SessionRunner.Service.of({ drain: (input) => boundary.run(runner.drain(input)) })
+            return SessionRunner.Service.of({
+              drain: (input) => boundary.run(runner.drain(input)),
+            })
           }),
         ),
       }),
@@ -65,5 +89,5 @@ export const make = (): {
 
 export interface Boundary {
   readonly run: <A, E, R>(work: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
-  readonly offer: (key: string, work: Effect.Effect<void>) => Effect.Effect<void>
+  readonly offer: (work: Effect.Effect<void>) => Effect.Effect<void>
 }

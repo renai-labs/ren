@@ -506,6 +506,37 @@ describe("settings in the cell", () => {
       ).toBe(true)
     }),
   )
+  it.live("REN-1486 a model catalog change waits for an active synthetic turn", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(
+        TestSettings.layers({ agents: [TestSettings.agent("ren", {}, { isSubagent: false })] }),
+      )
+      const held = stub.script({ hold: true })
+      yield* Effect.addFinalizer(() => Effect.sync(held.release))
+      yield* opened.client.session
+        .synthetic({ sessionID: opened.sessionID, text: `${held.marker} go` })
+        .pipe(Effect.orDie)
+      yield* Effect.promise(() => held.called())
+      expect(Object.keys(yield* opened.client.session.active().pipe(Effect.orDie))).toContain(opened.sessionID)
+      const added = { id: "after-synthetic", name: "After Synthetic", limit: { context: 100_000, output: 4000 } }
+      yield* opened.harness.configure({
+        models: opened.access.endpoints.map((endpoint) =>
+          endpoint.id === "stub" ? Struct.evolve(endpoint, { models: (models) => [...models, added] }) : endpoint,
+        ),
+      })
+      const models = yield* opened.client.model
+        .list({ location: { directory: join(opened.directory, opened.sessionId) } })
+        .pipe(Effect.orDie)
+      expect(models.data.some((model) => model.id === added.id)).toBe(false)
+      held.release()
+      yield* opened.client.session.wait({ sessionID: opened.sessionID }).pipe(Effect.orDie)
+      expect(
+        (yield* opened.client.model
+          .list({ location: { directory: join(opened.directory, opened.sessionId) } })
+          .pipe(Effect.orDie)).data.some((model) => model.id === added.id),
+      ).toBe(true)
+    }),
+  )
   it.live(
     "a removed endpoint keeps its credential while a busy chat's Location has it, and loses it after that turn ends",
     () =>
