@@ -1041,6 +1041,117 @@ const adaptGroupCredential = (raw: RawClient["credential"]) => ({
   remove: EndpointCredentialRemove(raw),
 })
 
+type CredentialConnectCredentialConnectRequest = Parameters<RawClient["credential-connect"]["credential.connect"]>[0]
+type CredentialConnectCredentialConnectInput = {
+  readonly owner: CredentialConnectCredentialConnectRequest["payload"]["owner"]
+  readonly target: CredentialConnectCredentialConnectRequest["payload"]["target"]
+  readonly reconnect?: CredentialConnectCredentialConnectRequest["payload"]["reconnect"]
+}
+const EndpointCredentialConnectCredentialConnect =
+  (raw: RawClient["credential-connect"]) => (input: CredentialConnectCredentialConnectInput) =>
+    raw["credential.connect"]({
+      payload: { owner: input["owner"], target: input["target"], reconnect: input["reconnect"] },
+    }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupCredentialConnect = (raw: RawClient["credential-connect"]) => ({
+  credential: { connect: EndpointCredentialConnectCredentialConnect(raw) },
+})
+
+type OauthSessionGetRequest = Parameters<RawClient["oauth-session"]["oauth-session.get"]>[0]
+type OauthSessionGetInput = { readonly idOrSlug: OauthSessionGetRequest["params"]["idOrSlug"] }
+const EndpointOauthSessionGet = (raw: RawClient["oauth-session"]) => (input: OauthSessionGetInput) =>
+  raw["oauth-session.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupOauthSession = (raw: RawClient["oauth-session"]) => ({ get: EndpointOauthSessionGet(raw) })
+
+type OauthAppListRequest = Parameters<RawClient["oauth-app"]["oauth-app.list"]>[0]
+type OauthAppListInput = {
+  readonly page: OauthAppListRequest["query"]["page"]
+  readonly pageSize: OauthAppListRequest["query"]["pageSize"]
+}
+const EndpointOauthAppList = (raw: RawClient["oauth-app"]) => (input: OauthAppListInput) =>
+  raw["oauth-app.list"]({ query: { page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type OauthAppGetRequest = Parameters<RawClient["oauth-app"]["oauth-app.get"]>[0]
+type OauthAppGetInput = { readonly idOrSlug: OauthAppGetRequest["params"]["idOrSlug"] }
+const EndpointOauthAppGet = (raw: RawClient["oauth-app"]) => (input: OauthAppGetInput) =>
+  raw["oauth-app.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type OauthAppCreateRequest = Parameters<RawClient["oauth-app"]["oauth-app.create"]>[0]
+type OauthAppCreateInput = {
+  readonly name: OauthAppCreateRequest["payload"]["name"]
+  readonly clientId: OauthAppCreateRequest["payload"]["clientId"]
+  readonly clientSecret?: OauthAppCreateRequest["payload"]["clientSecret"]
+  readonly scopes?: OauthAppCreateRequest["payload"]["scopes"]
+  readonly discovery?: OauthAppCreateRequest["payload"]["discovery"]
+  readonly authorizationEndpoint?: OauthAppCreateRequest["payload"]["authorizationEndpoint"]
+  readonly tokenEndpoint?: OauthAppCreateRequest["payload"]["tokenEndpoint"]
+  readonly tokenEndpointAuth?: OauthAppCreateRequest["payload"]["tokenEndpointAuth"]
+  readonly resource?: OauthAppCreateRequest["payload"]["resource"]
+  readonly authorizeParams?: OauthAppCreateRequest["payload"]["authorizeParams"]
+}
+const EndpointOauthAppCreate = (raw: RawClient["oauth-app"]) => (input: OauthAppCreateInput) =>
+  raw["oauth-app.create"]({
+    payload: {
+      name: input["name"],
+      clientId: input["clientId"],
+      clientSecret: input["clientSecret"],
+      scopes: input["scopes"],
+      discovery: input["discovery"],
+      authorizationEndpoint: input["authorizationEndpoint"],
+      tokenEndpoint: input["tokenEndpoint"],
+      tokenEndpointAuth: input["tokenEndpointAuth"],
+      resource: input["resource"],
+      authorizeParams: input["authorizeParams"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type OauthAppUpdateRequest = Parameters<RawClient["oauth-app"]["oauth-app.update"]>[0]
+type OauthAppUpdateInput = {
+  readonly id: OauthAppUpdateRequest["params"]["id"]
+  readonly name?: OauthAppUpdateRequest["payload"]["name"]
+  readonly clientId?: OauthAppUpdateRequest["payload"]["clientId"]
+  readonly clientSecret?: OauthAppUpdateRequest["payload"]["clientSecret"]
+  readonly scopes?: OauthAppUpdateRequest["payload"]["scopes"]
+  readonly discovery?: OauthAppUpdateRequest["payload"]["discovery"]
+  readonly authorizationEndpoint?: OauthAppUpdateRequest["payload"]["authorizationEndpoint"]
+  readonly tokenEndpoint?: OauthAppUpdateRequest["payload"]["tokenEndpoint"]
+  readonly tokenEndpointAuth?: OauthAppUpdateRequest["payload"]["tokenEndpointAuth"]
+  readonly resource?: OauthAppUpdateRequest["payload"]["resource"]
+  readonly authorizeParams?: OauthAppUpdateRequest["payload"]["authorizeParams"]
+}
+const EndpointOauthAppUpdate = (raw: RawClient["oauth-app"]) => (input: OauthAppUpdateInput) =>
+  raw["oauth-app.update"]({
+    params: { id: input["id"] },
+    payload: {
+      name: input["name"],
+      clientId: input["clientId"],
+      clientSecret: input["clientSecret"],
+      scopes: input["scopes"],
+      discovery: input["discovery"],
+      authorizationEndpoint: input["authorizationEndpoint"],
+      tokenEndpoint: input["tokenEndpoint"],
+      tokenEndpointAuth: input["tokenEndpointAuth"],
+      resource: input["resource"],
+      authorizeParams: input["authorizeParams"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type OauthAppArchiveRequest = Parameters<RawClient["oauth-app"]["oauth-app.archive"]>[0]
+type OauthAppArchiveInput = { readonly id: OauthAppArchiveRequest["params"]["id"] }
+const EndpointOauthAppArchive = (raw: RawClient["oauth-app"]) => (input: OauthAppArchiveInput) =>
+  raw["oauth-app.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupOauthApp = (raw: RawClient["oauth-app"]) => ({
+  list: EndpointOauthAppList(raw),
+  get: EndpointOauthAppGet(raw),
+  create: EndpointOauthAppCreate(raw),
+  update: EndpointOauthAppUpdate(raw),
+  archive: EndpointOauthAppArchive(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -1065,6 +1176,9 @@ const adaptClient = (raw: RawClient) => ({
   "task-activity": adaptGroupTaskActivity(raw["task-activity"]),
   label: adaptGroupLabel(raw["label"]),
   credential: adaptGroupCredential(raw["credential"]),
+  "credential-connect": adaptGroupCredentialConnect(raw["credential-connect"]),
+  "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),
+  "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

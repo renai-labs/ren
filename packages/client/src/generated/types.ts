@@ -180,6 +180,18 @@ export type CredentialConnection = string
 
 export type CredentialProvider = "composio"
 
+export type WriteResultRedirect = { redirectUrl: string; expiresAt: string }
+
+export type OAuthSessionID = string
+
+export type OAuthSessionStatus = "pending" | "complete" | "failed" | "expired"
+
+export type OAuthAppID = string
+
+export type OAuthAppDiscovery = "live" | "static"
+
+export type OAuthAppTokenEndpointAuth = "none" | "client_secret_basic" | "client_secret_post"
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -490,6 +502,35 @@ export type CredentialInject =
   | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
   | { op: "route" }
 
+export type OAuthSessionInfo = {
+  id: OAuthSessionID
+  status: OAuthSessionStatus
+  label: string
+  credentialId: CredentialID | null
+  failureReason: string | null
+  sameAccountAs: string | null
+  expiresAt: string
+}
+
+export type OAuthAppInfo = {
+  id: OAuthAppID
+  organizationId: AuthOrganizationID
+  name: string
+  clientId: string
+  hasClientSecret: boolean
+  scopes: Array<string>
+  discovery: OAuthAppDiscovery
+  authorizationEndpoint: string | null
+  tokenEndpoint: string | null
+  tokenEndpointAuth: OAuthAppTokenEndpointAuth
+  resource: string | null
+  authorizeParams: { [x: string]: string }
+  configuredBy: AuthUserID | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
 export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
@@ -662,6 +703,8 @@ export type CredentialInfo = {
   createdAt: string
   updatedAt: string
 }
+
+export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
@@ -5497,3 +5540,320 @@ export type CredentialCopyOutput = CredentialInfo
 export type CredentialRemoveInput = { readonly id: { readonly id: string }["id"] }
 
 export type CredentialRemoveOutput = CredentialInfo
+
+export type CredentialConnectCredentialConnectInput = {
+  readonly owner: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly target: {
+      readonly kind: "mcp"
+      readonly app: string
+      readonly mcp: string
+      readonly connection?: string | undefined
+      readonly connectionName?: string | undefined
+    }
+    readonly reconnect?: boolean | undefined
+  }["owner"]
+  readonly target: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly target: {
+      readonly kind: "mcp"
+      readonly app: string
+      readonly mcp: string
+      readonly connection?: string | undefined
+      readonly connectionName?: string | undefined
+    }
+    readonly reconnect?: boolean | undefined
+  }["target"]
+  readonly reconnect?: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly target: {
+      readonly kind: "mcp"
+      readonly app: string
+      readonly mcp: string
+      readonly connection?: string | undefined
+      readonly connectionName?: string | undefined
+    }
+    readonly reconnect?: boolean | undefined
+  }["reconnect"]
+}
+
+export type CredentialConnectCredentialConnectOutput = WriteResultRedirect | CredentialInfo
+
+export type OauthSessionGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type OauthSessionGetOutput = OAuthSessionInfo
+
+export type OauthAppListInput = {
+  readonly page: { readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: { readonly page: number; readonly pageSize: number }["pageSize"]
+}
+
+export type OauthAppListOutput = OAuthAppPage
+
+export type OauthAppGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type OauthAppGetOutput = OAuthAppInfo
+
+export type OauthAppCreateInput = {
+  readonly name: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["name"]
+  readonly clientId: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["clientId"]
+  readonly clientSecret?: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["clientSecret"]
+  readonly scopes?: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["scopes"]
+  readonly discovery?: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["discovery"]
+  readonly authorizationEndpoint?: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["authorizationEndpoint"]
+  readonly tokenEndpoint?: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["tokenEndpoint"]
+  readonly tokenEndpointAuth?: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["tokenEndpointAuth"]
+  readonly resource?: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["resource"]
+  readonly authorizeParams?: {
+    readonly name: string
+    readonly clientId: string
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["authorizeParams"]
+}
+
+export type OauthAppCreateOutput = OAuthAppInfo
+
+export type OauthAppUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["name"]
+  readonly clientId?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["clientId"]
+  readonly clientSecret?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["clientSecret"]
+  readonly scopes?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["scopes"]
+  readonly discovery?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["discovery"]
+  readonly authorizationEndpoint?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["authorizationEndpoint"]
+  readonly tokenEndpoint?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["tokenEndpoint"]
+  readonly tokenEndpointAuth?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["tokenEndpointAuth"]
+  readonly resource?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["resource"]
+  readonly authorizeParams?: {
+    readonly name?: string | null
+    readonly clientId?: string | null
+    readonly clientSecret?: string | null
+    readonly scopes?: ReadonlyArray<string> | null
+    readonly discovery?: ("live" | "static") | null
+    readonly authorizationEndpoint?: string | null
+    readonly tokenEndpoint?: string | null
+    readonly tokenEndpointAuth?: ("none" | "client_secret_basic" | "client_secret_post") | null
+    readonly resource?: string | null
+    readonly authorizeParams?: { readonly [x: string]: string } | null
+  }["authorizeParams"]
+}
+
+export type OauthAppUpdateOutput = OAuthAppInfo
+
+export type OauthAppArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type OauthAppArchiveOutput = OAuthAppInfo

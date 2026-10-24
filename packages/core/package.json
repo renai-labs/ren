@@ -23,6 +23,7 @@
     "@ren/db": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/util": "workspace:*",
+    "@modelcontextprotocol/client": "catalog:",
     "disposable-email-domains-js": "catalog:",
     "drizzle-orm": "catalog:",
     "effect": "catalog:"

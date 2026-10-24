@@ -40,6 +40,11 @@ import { SpaceAppHandler } from "./handlers/api/space-app.js"
 import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
 import { ChatHandler } from "./handlers/api/chat.js"
 import { CredentialHandler } from "./handlers/api/credential.js"
+import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
+import { OAuthAppHandler } from "./handlers/api/oauth-app.js"
+import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
+import { OAuthRoutes } from "./oauth-routes.js"
+import { OAuthApps } from "@ren/core/oauth-apps"
 import { HealthHandler } from "./handlers/api/health.js"
 import { InvitationHandler } from "./handlers/api/invitation.js"
 import { LabelHandler } from "./handlers/api/label.js"
@@ -110,6 +115,9 @@ export const layer = Layer.mergeAll(
         TaskCommentHandler,
         LabelHandler,
         CredentialHandler,
+        CredentialConnectHandler,
+        OAuthSessionHandler,
+        OAuthAppHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
       Layer.provide([
@@ -132,6 +140,7 @@ export const layer = Layer.mergeAll(
         SpaceApp.layer,
         AgentMembership.layer,
         Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+        OAuthApps.layer,
       ]),
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(
@@ -139,6 +148,7 @@ export const layer = Layer.mergeAll(
       Layer.provide(Brains.hostAuthentication),
     ),
     AuthRoute,
+    OAuthRoutes.layer,
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),

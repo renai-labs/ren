@@ -11,6 +11,10 @@ const exceptions = new Map([
     "The environment providers of the deployment and the config schema of each, for the environment template form.",
   ],
   [
+    "credential-connect",
+    "Starts a sign-in for one MCP of an app: a collection write that returns a redirect, which no primitive operation is.",
+  ],
+  [
     "chat",
     "Short-lived access to a session's brain for the Chat API, the session's saved messages while the brain is not ready, and the models a new session may use.",
   ],

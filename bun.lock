@@ -168,6 +168,7 @@
       "name": "@ren/core",
       "version": "0.0.0",
       "dependencies": {
+        "@modelcontextprotocol/client": "catalog:",
         "@ren/db": "workspace:*",
         "@ren/environment-api": "workspace:*",
         "@ren/host-api": "workspace:*",
@@ -483,6 +484,7 @@
     "@effect/sql-pg": "4.0.1",
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@mdxeditor/editor": "4.2.0",
+    "@modelcontextprotocol/client": "2.0.0",
     "@opencode/ai": "2.0.27",
     "@opencode/client": "2.0.27",
     "@opencode/core": "2.0.27",
