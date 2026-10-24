@@ -42,8 +42,11 @@ func Deny(reason, label string) *http.Response {
 // Applied is what Handle did to a request: the upstream of a route op, and
 // the values it put in, so the response can be masked (README §6.3 rule 11).
 type Applied struct {
-	Upstream *url.URL
-	masks    []mask
+	Upstream    *url.URL
+	masks       []mask
+	login       string
+	host        string
+	refreshable []Refreshable
 }
 
 // Handle runs Ren's step for one request of an authenticated login. It
@@ -91,7 +94,7 @@ func (c *Client) Handle(ctx context.Context, req *http.Request, login string) (*
 		}
 		return Deny("credential_missing", label), nil
 	}
-	applied := &Applied{masks: masksOf(reply.Inject)}
+	applied := &Applied{masks: masksOf(reply.Inject), login: login, host: host, refreshable: reply.Refreshable}
 	// An upstream answers in plain text when the request asks for no
 	// encoding, so the egress can find an injected value that comes back.
 	if len(applied.masks) > 0 {

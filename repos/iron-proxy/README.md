@@ -25,6 +25,8 @@ All outbound traffic of a workload (a brain or a hand) goes through the egress. 
 | 6. Invalidate by workload, label or login; a login also closes its connections | `internal/ren/client.go` (`Invalidate`), `internal/ren/handle.go` (`ServeControl`) |
 | 7. Placeholders in raw, percent-encoded and `Basic` form, in headers, query and path; a body is never searched or changed; every denial is `403` with `x-ren-egress`; supported ops sent on each resolve | `internal/ren/scan.go`, `internal/ren/handle.go` (`Deny`) |
 | 8. Mask: an injected value that comes back in a response header, or in a body of at most 1 MB that is not a stream, is replaced by its placeholder (`ren:MASKED` for a header Ren set). A request with injected values asks the upstream for no encoding. | `internal/ren/mask.go`, `internal/ren/handle.go` |
+| 9. Upstream 401 report: after a 401 to a request with `refreshable` labels, drop this copy's answers for them and send `POST /egress/v1/unauthorized` in the background; a 403 `insufficient_scope` sends its `scope` and keeps the answers. One report per label, revision and status per minute per copy. The workload gets the upstream's answer unchanged. | `internal/ren/report.go` (`Observe`), `internal/proxy/proxy.go` (next to `Mask`) |
+| 10. A `route` op with `placeholder` removes the first path segment when it is the placeholder, raw or percent-encoded, then appends the rest of the path to the upstream | `internal/ren/scan.go` (`removeFirstSegment`, `routeTarget`) |
 
 The hook is HTTP and JSON (`@ren/egress-api`), not the upstream gRPC `TransformService`, so that one contract serves Ren's own egress and other proxies.
 

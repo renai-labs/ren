@@ -171,11 +171,33 @@ func apply(req *http.Request, ops []Op) error {
 			}
 			req.Header.Set(op.Name, op.Value)
 		case "route":
+			removeFirstSegment(req, op.Placeholder)
 		default:
 			return fmt.Errorf("unknown op %q", op.Op)
 		}
 	}
 	return nil
+}
+
+// removeFirstSegment drops the first path segment when it is the route's
+// placeholder, raw or percent-encoded, so the workload can name a credential
+// on the provider's real host (fork change 10).
+func removeFirstSegment(req *http.Request, placeholder string) {
+	if placeholder == "" {
+		return
+	}
+	escaped := strings.TrimPrefix(req.URL.EscapedPath(), "/")
+	first, rest, _ := strings.Cut(escaped, "/")
+	if decoded, err := url.PathUnescape(first); err != nil || decoded != placeholder {
+		return
+	}
+	rest = "/" + rest
+	path, err := url.PathUnescape(rest)
+	if err != nil {
+		return
+	}
+	req.URL.Path = path
+	req.URL.RawPath = rest
 }
 
 // routeTarget is the upstream URL of a route op: the op's upstream, with the
@@ -188,6 +210,9 @@ func routeTarget(req *http.Request, upstream string) (*url.URL, error) {
 	target := *base
 	target.Path = strings.TrimSuffix(base.Path, "/") + req.URL.Path
 	target.RawPath = ""
+	if req.URL.RawPath != "" {
+		target.RawPath = strings.TrimSuffix(base.EscapedPath(), "/") + req.URL.RawPath
+	}
 	target.RawQuery = req.URL.RawQuery
 	return &target, nil
 }

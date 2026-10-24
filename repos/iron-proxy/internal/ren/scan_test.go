@@ -112,3 +112,20 @@ func TestRoute(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "http://ren-server:4000/base/host/pull?x=1", target.String())
 }
+
+func TestRouteRemovesItsPlaceholder(t *testing.T) {
+	cases := []struct{ name, url string }{
+		{"raw", "https://backend.composio.dev/ren:MCP_GMAIL/v3/mcp/abc?x=1"},
+		{"encoded", "https://backend.composio.dev/ren%3AMCP_GMAIL/v3/mcp/abc?x=1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := newRequest(t, "POST", tc.url, nil, "")
+			require.NoError(t, apply(req, []Op{{Op: "route", Upstream: "https://backend.composio.dev/tool_router/trs_1/mcp", Placeholder: "ren:MCP_GMAIL"}}))
+			require.Empty(t, findPlaceholders(req))
+			target, err := routeTarget(req, "https://backend.composio.dev/tool_router/trs_1/mcp")
+			require.NoError(t, err)
+			require.Equal(t, "https://backend.composio.dev/tool_router/trs_1/mcp/v3/mcp/abc?x=1", target.String())
+		})
+	}
+}

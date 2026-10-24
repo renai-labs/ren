@@ -16,7 +16,9 @@ import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Database } from "@ren/db/database"
+import { Credential } from "@ren/schema/credential"
+import { ConfigProvider, Deferred, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { EgressRoutes } from "../src/egress.js"
 import { EgressHarness } from "./lib/egress.js"
@@ -45,6 +47,8 @@ const upstream = Bun.serve({
       authorization: request.headers.get("authorization"),
       body: await request.text(),
     })
+    if (url.pathname === "/mcp" && request.headers.get("authorization") === "Bearer tok_old")
+      return new Response(null, { status: 401, headers: { "www-authenticate": 'Bearer error="invalid_token"' } })
     if (url.pathname === "/redirect") return Response.redirect(`http://other.test:${url.port}/landing`, 302)
     if (url.pathname === "/events")
       return new Response(
@@ -61,6 +65,28 @@ const upstream = Bun.serve({
     return Response.json({ authorization: request.headers.get("authorization"), query: url.search })
   },
 })
+
+const refreshed = Deferred.makeUnsafe<void>()
+
+// oxlint-disable-next-line ren/no-comments -- Stands in for the provider's token endpoint; the OAuth refresher has its own tests against a local authorization server.
+const refreshers = Layer.succeed(
+  CredentialRefresh.Refreshers,
+  new Map([
+    [
+      "oauth" as const,
+      {
+        refresh: () =>
+          Effect.succeed(
+            Option.some({
+              value: { type: "oauth" as const, accessToken: Redacted.make("tok_new") },
+              expiresAt: Option.none(),
+              saved: Deferred.succeed(refreshed, undefined).pipe(Effect.asVoid),
+            }),
+          ),
+      },
+    ],
+  ]),
+)
 
 const state: {
   certificates?: EgressHarness.Certificates
@@ -90,7 +116,7 @@ const ren = () => {
   return EgressRoutes.serve.pipe(
     Layer.provideMerge(Egress.layer),
     Layer.provideMerge(CredentialRefresh.layer),
-    Layer.provideMerge(Layer.mergeAll(CredentialRefresh.layerNoRefreshers, DurableRunner.layerMemory)),
+    Layer.provideMerge(Layer.mergeAll(refreshers, DurableRunner.layerMemory)),
     Layer.provideMerge(CredentialSource.layer),
     Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
     Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone)),
@@ -243,6 +269,47 @@ describe("egress (iron-proxy fork) with Ren", () => {
         label: "MISSING",
       })
       expect(seen.length).toBe(before)
+    }),
+  )
+
+  it.live("an upstream answers 401 once; the egress reports it, Ren refreshes, and the next request works", () =>
+    Effect.gen(function* () {
+      const found = yield* setup()
+      const database = yield* Database.Service
+      const envelope = yield* Envelope.Service
+      const id = Credential.ID.create()
+      const value = yield* envelope.seal(
+        Redacted.make(
+          Schema.encodeSync(Schema.fromJsonString(Credentials.Sealed))({
+            type: "oauth",
+            accessToken: Redacted.make("tok_old"),
+          }),
+        ),
+        { organizationId: found.organizationId, kind: "credential", id },
+      )
+      yield* database.db.insert(Database.Schema.credential).values({
+        id,
+        organization_id: found.organizationId,
+        owner: "org",
+        label: "MCP_LINEAR",
+        type: "oauth",
+        value,
+        hosts: ["mcp.linear.test"],
+        inject: { op: "replace", in: ["header"] },
+      })
+      const call = () =>
+        Effect.promise(() =>
+          EgressHarness.curl([
+            socks(found.login, found.password),
+            "-H",
+            "'Authorization: Bearer ren:MCP_LINEAR'",
+            at("/mcp", "mcp.linear.test"),
+          ]),
+        )
+      expect((yield* call()).status).toBe(401)
+      yield* Deferred.await(refreshed)
+      expect((yield* call()).status).toBe(200)
+      expect(seen.findLast((request) => request.path === "/mcp")?.authorization).toBe("Bearer tok_new")
     }),
   )
 
