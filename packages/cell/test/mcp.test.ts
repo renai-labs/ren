@@ -3,9 +3,7 @@ import { Plugin } from "@opencode/plugin/effect"
 import { Mcp } from "@opencode/schema/mcp"
 import { SessionID } from "@opencode/schema/session-id"
 import { testEffect } from "@ren/executor/testing"
-import { App } from "@ren/schema/app"
 import type { AppCatalog } from "@ren/schema/app-catalog"
-import { AppRelease } from "@ren/schema/app-release"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Effect, Layer, Queue } from "effect"
 import { BrainTest } from "./lib/brain.js"
@@ -15,43 +13,6 @@ import { Shared } from "./lib/shared.js"
 setDefaultTimeout(20_000)
 
 const it = testEffect(Layer.empty)
-
-const catalog = (
-  fingerprint: string,
-  mcps: ReadonlyArray<{
-    readonly slug: string
-    readonly url: string
-    readonly auth?: AppCatalog.McpEntry["declaration"]["auth"]
-  }>,
-): AppCatalog.Info => ({
-  fingerprint,
-  catalog: {
-    apps: [],
-    skills: [],
-    credentials: [],
-    mcps: mcps.map((mcp) => ({
-      appId: App.ID.create(),
-      releaseId: AppRelease.ID.create(),
-      appSlug: "docs",
-      version: "1.0.0",
-      slug: mcp.slug,
-      declaration: {
-        name: "Docs",
-        description: "Docs",
-        transport: { type: "remote", url: mcp.url },
-        auth: mcp.auth ?? { type: "none" },
-        requiredCredentials:
-          mcp.auth?.type === "header" ? [{ kind: "secret", name: mcp.auth.credential, optional: false }] : [],
-      },
-    })),
-  },
-})
-
-const execute = (path: string) =>
-  Shared.stub().script({ tools: [{ name: "execute", input: { code: `return await tools.${path}()` } }] })
-
-const result = (script: ReturnType<typeof execute>) =>
-  script.calls.at(-1)?.body.messages.findLast((message) => message.role === "tool")?.content
 
 const observed = Effect.fnUntraced(function* (apps?: AppCatalog.Info) {
   const tools = yield* Queue.unbounded<ReadonlyArray<{ readonly id: string; readonly description: string }>>()
@@ -92,44 +53,65 @@ it.live("an installed app's remote MCP is a tool the model calls, follows a new 
     yield* second.change("replacement")
     const test = yield* observed()
     yield* test.brain.configureApps(
-      catalog("first", [
+      McpPeer.catalog("first", [
         { slug: "docs", url: first.url },
         { slug: "keyed", url: keyed.url, auth: { type: "header", name: "Authorization", credential: "token" } },
       ]),
     )
-    const script = execute("docs.marker")
+    const script = McpPeer.execute("docs.marker")
     yield* test.prompt(`${script.marker} read the marker`)
     yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(result(script)).toBe("first")
+    expect(McpPeer.result(script)).toBe("first")
     expect(script.calls.at(0)?.system).not.toContain("tools.keyed")
     expect(Queue.sizeUnsafe(keyed.requests)).toBe(0)
     expect((yield* Queue.clear(first.requests)).filter((request) => request.method === "initialize")).toHaveLength(1)
 
-    yield* test.brain.configureApps(catalog("second", [{ slug: "docs", url: second.url }]))
-    const next = execute("docs.marker")
+    yield* test.brain.configureApps(McpPeer.catalog("second", [{ slug: "docs", url: second.url }]))
+    const next = McpPeer.execute("docs.marker")
     yield* test.prompt(`${next.marker} read the marker again`)
     yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(result(next)).toBe("replacement")
+    expect(McpPeer.result(next)).toBe("replacement")
     expect(JSON.stringify(next.calls.at(0)?.body.messages)).toContain(script.marker)
 
-    yield* test.brain.configureApps(catalog("third", []))
-    const removed = execute("docs.marker")
+    yield* test.brain.configureApps(McpPeer.catalog("third", []))
+    const removed = McpPeer.execute("docs.marker")
     yield* test.prompt(`${removed.marker} read the marker after removal`)
     yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(result(removed)).toContain("Unknown tool 'docs.marker'")
+    expect(McpPeer.result(removed)).toContain("Unknown tool 'docs.marker'")
+  }),
+)
+
+it.live("an app server that cannot connect leaves the chat and another app's tools usable", () =>
+  Effect.gen(function* () {
+    const peer = yield* McpPeer.make()
+    const test = yield* observed()
+    yield* test.brain.configureApps(
+      McpPeer.catalog("first", [
+        { slug: "docs", url: peer.url },
+        { slug: "broken", url: "http://127.0.0.1:1", timeouts: { startup: 500 } },
+      ]),
+    )
+    const script = McpPeer.execute("docs.marker")
+    yield* test.prompt(`${script.marker} read the marker`)
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+    expect(McpPeer.result(script)).toBe("first")
+    const broken = McpPeer.execute("broken.marker")
+    yield* test.prompt(`${broken.marker} read the broken marker`)
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+    expect(McpPeer.result(broken)).toContain("Unknown tool 'broken.marker'")
   }),
 )
 
 it.live("the first turn in a brain that opens with an installed app waits for the app's server to connect", () =>
   Effect.gen(function* () {
     const peer = yield* McpPeer.make({ holdInitialization: true })
-    const test = yield* observed(catalog("first", [{ slug: "docs", url: peer.url }]))
+    const test = yield* observed(McpPeer.catalog("first", [{ slug: "docs", url: peer.url }]))
     yield* Queue.take(peer.requests).pipe(Effect.repeat({ until: (request) => request.method === "initialize" }))
-    const script = execute("docs.marker")
+    const script = McpPeer.execute("docs.marker")
     yield* test.prompt(`${script.marker} read the marker`)
     peer.release()
     yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
-    expect(result(script)).toBe("first")
+    expect(McpPeer.result(script)).toBe("first")
   }),
 )
 
@@ -138,17 +120,17 @@ it.live("two app MCPs at one URL stay distinct, list every tool page and follow 
     const peer = yield* McpPeer.make()
     const test = yield* observed()
     yield* test.brain.configureApps(
-      catalog("first", [
+      McpPeer.catalog("first", [
         { slug: "docs", url: peer.url },
         { slug: "shared", url: peer.url },
       ]),
     )
-    const script = execute("shared.second")
+    const script = McpPeer.execute("shared.second")
     yield* test.prompt(`${script.marker} read the marker`)
     yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
     for (const tool of ["docs.marker", "docs.second", "shared.marker", "shared.second"])
       expect(script.calls.at(0)?.system).toContain(`tools.${tool}()`)
-    expect(result(script)).toBe("first")
+    expect(McpPeer.result(script)).toBe("first")
     expect(script.calls.at(0)?.system).toContain("Use the test tools")
 
     yield* peer.listening.pipe(

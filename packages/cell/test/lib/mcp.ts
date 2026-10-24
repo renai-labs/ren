@@ -1,6 +1,51 @@
 export * as McpPeer from "./mcp.js"
 
+import { App } from "@ren/schema/app"
+import type { AppCatalog } from "@ren/schema/app-catalog"
+import { AppRelease } from "@ren/schema/app-release"
 import { Deferred, Effect, Queue, Schema } from "effect"
+import { Shared } from "./shared.js"
+
+type Declaration = AppCatalog.McpEntry["declaration"]
+
+export const catalog = (
+  fingerprint: string,
+  mcps: ReadonlyArray<{
+    readonly slug: string
+    readonly url: string
+    readonly auth?: Declaration["auth"]
+    readonly timeouts?: Declaration["timeouts"]
+  }>,
+): AppCatalog.Info => ({
+  fingerprint,
+  catalog: {
+    apps: [],
+    skills: [],
+    credentials: [],
+    mcps: mcps.map((mcp) => ({
+      appId: App.ID.create(),
+      releaseId: AppRelease.ID.create(),
+      appSlug: "docs",
+      version: "1.0.0",
+      slug: mcp.slug,
+      declaration: {
+        name: "Docs",
+        description: "Docs",
+        transport: { type: "remote", url: mcp.url },
+        auth: mcp.auth ?? { type: "none" },
+        ...(mcp.timeouts && { timeouts: mcp.timeouts }),
+        requiredCredentials:
+          mcp.auth?.type === "header" ? [{ kind: "secret", name: mcp.auth.credential, optional: false }] : [],
+      },
+    })),
+  },
+})
+
+export const execute = (path: string) =>
+  Shared.stub().script({ tools: [{ name: "execute", input: { code: `return await tools.${path}()` } }] })
+
+export const result = (script: ReturnType<typeof execute>) =>
+  script.calls.at(-1)?.body.messages.findLast((message) => message.role === "tool")?.content
 
 const RequestBody = Schema.Struct({
   id: Schema.optionalKey(Schema.Union([Schema.String, Schema.Number])),
