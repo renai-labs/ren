@@ -149,3 +149,63 @@ it.live("MCP transforms discover all tool pages, refresh live tools and replace 
     )
   }),
 )
+
+it.live(
+  "a replacement waits for an actual MCP call and the next call uses the new connection in the same session",
+  () =>
+    Effect.gen(function* () {
+      const first = yield* McpPeer.make({ hold: true })
+      const second = yield* McpPeer.make({ holdInitialization: true })
+      yield* second.change("replacement")
+      const contexts = yield* Queue.unbounded<Plugin.Context>()
+      const state = { url: first.url }
+      const tools = yield* Queue.unbounded<{ readonly directory: string; readonly ids: ReadonlyArray<string> }>()
+      const brain = yield* BrainTest.make({
+        plugin: Plugin.define({
+          id: "held-mcp-test",
+          effect: (context) =>
+            Effect.gen(function* () {
+              yield* context.mcp.transform((editor) => {
+                editor.set(
+                  "docs",
+                  new Mcp.RemoteConfig({ type: "remote", url: state.url, oauth: false, codemode: false }),
+                )
+              })
+              yield* context.tool.transform((editor) => {
+                Queue.offerUnsafe(tools, {
+                  directory: context.location.directory,
+                  ids: editor.list().map((tool) => tool.id),
+                })
+              })
+              yield* Queue.offer(contexts, context)
+            }),
+        }),
+      })
+      yield* brain.start()
+      const context = yield* Queue.take(contexts).pipe(
+        Effect.repeat({ until: (context) => context.location.directory === brain.directory }),
+      )
+      const sessionID = SessionID.make(brain.id)
+      yield* Queue.take(tools).pipe(
+        Effect.repeat({
+          until: (catalog) => catalog.directory === brain.directory && catalog.ids.includes("docs_marker"),
+        }),
+      )
+      const held = Shared.stub().script({ tools: [{ name: "docs_marker", input: {} }] })
+      yield* brain.send(`${held.marker} read the marker`)
+      yield* Queue.take(first.requests).pipe(Effect.repeat({ until: (request) => request.method === "tools/call" }))
+      state.url = second.url
+      yield* brain.atBoundary(context.mcp.reload().pipe(Effect.orDie))
+      expect(Queue.sizeUnsafe(second.requests)).toBe(0)
+      first.release()
+      yield* Queue.take(second.requests).pipe(Effect.repeat({ until: (request) => request.method === "initialize" }))
+      const next = Shared.stub().script({ tools: [{ name: "docs_marker", input: {} }] })
+      yield* brain.send(`${next.marker} read again`)
+      expect(next.calls).toHaveLength(0)
+      second.release()
+      yield* brain.opencode.session.wait({ sessionID })
+      expect(JSON.stringify(held.calls.at(-1)?.body.messages)).toContain("first")
+      expect(JSON.stringify(next.calls.at(-1)?.body.messages)).toContain("replacement")
+      expect(JSON.stringify(next.calls.at(0)?.body.messages)).toContain(held.marker)
+    }),
+)

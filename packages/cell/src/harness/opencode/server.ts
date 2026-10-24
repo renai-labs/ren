@@ -233,6 +233,8 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     directoryOf: options.directoryOf,
     makeDirectory: options.makeDirectory ?? (() => Effect.void),
     activate: (sessionId) => located(sessionId, Effect.void),
+    atBoundary: (sessionId, work) =>
+      located(sessionId, Location.Service).pipe(Effect.flatMap((location) => executions.get(location).offer(work))),
     chats,
     configuration: Ref.get(locations).pipe(
       Effect.flatMap((all) => Effect.forEach(all, (location) => location.observation)),
@@ -279,6 +281,7 @@ export interface Instance {
   readonly directoryOf: (sessionId: string) => string
   readonly makeDirectory: (directory: string) => Effect.Effect<void>
   readonly activate: (sessionId: string) => Effect.Effect<void, Harness.NotFound>
+  readonly atBoundary: (sessionId: string, work: Effect.Effect<void>) => Effect.Effect<void, Harness.NotFound>
   readonly chats: Option.Option<RenPlugin.Chats>
   readonly configure: (update: Partial<Omit<HarnessConfig.Snapshot, "revision">>) => Effect.Effect<void>
   readonly configuration: Effect.Effect<ReadonlyArray<HarnessConfig.Observation>>

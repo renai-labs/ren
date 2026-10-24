@@ -10,12 +10,18 @@ const RequestBody = Schema.Struct({
   ),
 })
 
-export const make = Effect.fnUntraced(function* () {
+export const make = Effect.fnUntraced(function* (
+  options: { readonly hold?: boolean; readonly holdInitialization?: boolean } = {},
+) {
   const requests = yield* Queue.unbounded<typeof RequestBody.Type>()
   const listening = yield* Deferred.make<void>()
   const streams = new Map<Request, ReadableStreamDefaultController<Uint8Array>>()
   const encoder = new TextEncoder()
   const state = { label: "first" }
+  const release = Promise.withResolvers<void>()
+  const initialized = options.holdInitialization ? release.promise : Promise.resolve()
+  const called = options.hold ? release.promise : Promise.resolve()
+  yield* Effect.addFinalizer(() => Effect.sync(() => release.resolve()))
   const server = yield* Effect.acquireRelease(
     Effect.sync(() =>
       Bun.serve({
@@ -47,6 +53,7 @@ export const make = Effect.fnUntraced(function* () {
               { headers: { "mcp-session-id": request.headers.get("mcp-session-id") ?? crypto.randomUUID() } },
             )
           if (body.method === "initialize") {
+            await initialized
             return reply({
               protocolVersion: "2025-03-26",
               capabilities: { tools: { listChanged: true } },
@@ -67,6 +74,7 @@ export const make = Effect.fnUntraced(function* () {
               ...(body.params?.cursor ? {} : { nextCursor: "page-two" }),
             })
           if (body.method === "tools/call") {
+            await called
             return reply({ content: [{ type: "text", text: state.label }] })
           }
           if (body.method === "ping") return reply({})
@@ -80,6 +88,7 @@ export const make = Effect.fnUntraced(function* () {
     url: server.url.origin,
     requests,
     listening: Deferred.await(listening),
+    release: () => release.resolve(),
     change: (label: string) =>
       Effect.sync(() => {
         state.label = label
