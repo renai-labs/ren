@@ -139,7 +139,7 @@ export const layer = Layer.effect(
           and(
             eq(table.id, id),
             eq(table.status, "ok"),
-            options.revision === undefined ? undefined : eq(table.revision, options.revision),
+            typeof options.revision === "number" ? eq(table.revision, options.revision) : undefined,
             or(isNull(table.refresh_lease_at), lt(table.refresh_lease_at, new Date(now - Duration.toMillis(lease)))),
           ),
         )

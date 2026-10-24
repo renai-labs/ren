@@ -171,8 +171,8 @@ export const layer = Layer.effect(
             const row = ordered.find(
               (candidate) =>
                 candidate.label === need.label &&
-                (need.mcp === null ||
-                  (candidate.app_id === need.app && candidate.mcp === need.mcp && candidate.connection === null)),
+                (!need.mcp ||
+                  (candidate.app_id === need.app && candidate.mcp === need.mcp && !candidate.connection)),
             )
             const status = yield* Effect.suspend(() => {
               if (!row) return Effect.succeed("missing" as const)

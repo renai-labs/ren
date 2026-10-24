@@ -1,5 +1,6 @@
 import type { CredentialOwner, CredentialRequirementItem } from "@ren/client"
 import { Credential } from "@ren/schema/credential"
+import { Primitive } from "@ren/schema/primitive"
 import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
 import { Dialog } from "@ren/ui/dialog"
@@ -16,7 +17,7 @@ import { PasteCredentialDialog } from "../../components/paste-credential-dialog.
 const AnotherForm = Schema.toStandardSchemaV1(
   Schema.Struct({
     connection: Credential.Connection,
-    connectionName: Schema.String.check(Schema.isNonEmpty({ message: "Enter a display name." })),
+    connectionName: Primitive.Name,
   }),
 )
 

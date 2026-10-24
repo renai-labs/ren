@@ -12,7 +12,7 @@ const Body = Schema.Struct({
 const decodeBody = Schema.decodeUnknownOption(Schema.fromJsonString(Body))
 const decodeRaw = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
 
-export interface Request {
+interface Request {
   readonly method: string
   readonly path: string
   readonly query: URLSearchParams
@@ -21,7 +21,7 @@ export interface Request {
   readonly raw: unknown
 }
 
-export interface State {
+interface State {
   authConfigs: Array<{ id: string; toolkit: string; managed: boolean }>
   accounts: Map<string, { status: string; userId: string; authConfigId: string }>
   sessions: Map<string, { userId: string; body: unknown }>

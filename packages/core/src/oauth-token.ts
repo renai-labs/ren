@@ -56,7 +56,7 @@ const text = (value: unknown) => Option.liftPredicate(value, (found): found is s
 // oxlint-disable-next-line ren/no-comments -- §8 rule 6: the code is a string or `{ error: { code } }`; anything else is an unknown code, which is temporary (ren-v1 bug S15).
 const errorCodeOf = (error: unknown) =>
   Option.orElse(text(error), () =>
-    typeof error === "object" && error !== null && "code" in error ? text(error.code) : Option.none(),
+    error && typeof error === "object" && "code" in error ? text(error.code) : Option.none(),
   )
 
 // oxlint-disable-next-line ren/no-comments -- §7 rule 10: a number or a numeric string; zero, negative or anything else is missing.
@@ -112,7 +112,7 @@ export const post = (
   Effect.tryPromise({
     try: async () => {
       const body = new URLSearchParams(
-        Object.entries(form).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]])),
+        Object.entries(form).flatMap(([key, value]): Array<[string, string]> => (value ? [[key, value]] : [])),
       )
       body.set("client_id", client.clientId)
       const secret = client.clientSecret && Redacted.value(client.clientSecret)

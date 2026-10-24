@@ -1,7 +1,7 @@
 export * as OAuthFetch from "./oauth-fetch.js"
 
 import { lookup } from "node:dns/promises"
-import { request as httpsRequest } from "node:https"
+import { request } from "node:https"
 import { BlockList, isIP } from "node:net"
 import { Context, Layer } from "effect"
 
@@ -64,25 +64,25 @@ const isBlocked = (address: { readonly address: string; readonly family: number 
 
 // oxlint-disable-next-line ren/no-comments -- K31 and ren-v1 `util/public-https.ts`: HTTPS to a public address only, the connection pinned to the address Ren checked (no DNS rebinding), no redirect followed, 10 s, at most 1 MiB. `@better-auth/cimd/node` does the same for GET only, so it cannot send token requests.
 const fetchPublic: Fetch = async (input, init) => {
-  const request = new Request(input instanceof URL ? input.toString() : input, init)
-  const url = new URL(request.url)
+  const sent = input instanceof Request ? new Request(input, init) : new Request(input.toString(), init)
+  const url = new URL(sent.url)
   if (url.protocol !== "https:") throw new Error("Sign-in requests need HTTPS")
   if (url.username || url.password) throw new Error("Sign-in addresses cannot hold a user name or password")
   const hostname = url.hostname.replaceAll(/^\[|\]$/gu, "")
   const literal = isIP(hostname)
   const addresses =
-    literal === 0 ? await lookup(hostname, { all: true, order: "verbatim" }) : [{ address: hostname, family: literal }]
+    literal === 0 ? await lookup(hostname, { all: true }) : [{ address: hostname, family: literal }]
   const target = addresses.at(0)
   if (!target) throw new Error(`No address found for ${hostname}`)
   if (addresses.some(isBlocked)) throw new Error(`${hostname} has a private or reserved address`)
-  const body = request.body ? Buffer.from(await request.arrayBuffer()) : undefined
-  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMillis)])
+  const body = sent.body ? Buffer.from(await sent.arrayBuffer()) : undefined
+  const signal = AbortSignal.any([sent.signal, AbortSignal.timeout(timeoutMillis)])
   return new Promise<Response>((resolve, reject) => {
-    const outgoing = httpsRequest(
+    const outgoing = request(
       url,
       {
-        method: request.method,
-        headers: Object.fromEntries(request.headers),
+        method: sent.method,
+        headers: Object.fromEntries(sent.headers),
         signal,
         lookup: (_hostname, options, callback) =>
           options.all

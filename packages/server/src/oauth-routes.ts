@@ -38,10 +38,11 @@ export const layer = HttpRouter.use((router) =>
         const outcome = yield* oauth.callback(
           {
             state,
-            ...(code !== undefined && { code }),
+            ...(code && { code }),
+            // ast-grep-ignore: no-nullish-comparison, -- an empty `iss` is present and must fail the issuer check (K7)
             ...(iss !== undefined && { iss }),
-            ...(error !== undefined && { error }),
-            ...(errorDescription !== undefined && { errorDescription }),
+            ...(error && { error }),
+            ...(errorDescription && { errorDescription }),
           },
           Option.map(session, (found) => found.user.id),
         )

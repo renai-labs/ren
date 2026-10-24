@@ -41,7 +41,7 @@ export interface Candidate {
   readonly hosts: ReadonlyArray<string>
   readonly inject: Credential.Inject
   readonly type?: Credential.Type
-  readonly revision?: number | undefined
+  readonly revision?: number | null
   readonly status?: Credential.Status
 }
 
@@ -833,7 +833,7 @@ export const layer = Layer.effect(
           inject: row.inject,
           type: row.type,
           status: row.status,
-          revision: refreshableTypes.includes(row.type) ? row.revision : undefined,
+          revision: refreshableTypes.includes(row.type) ? row.revision : null,
         }))
       }),
 

@@ -41,7 +41,7 @@ const remove = Effect.fnUntraced(function* (transaction: Database.Transaction, w
   })
   return {
     labels: [...new Set(rows.map((row) => row.label))],
-    providers: rows.filter((row) => row.provider !== null).map((row): Provided => row),
+    providers: rows.filter((row) => Boolean(row.provider)).map((row): Provided => row),
   }
 })
 
