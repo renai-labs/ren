@@ -40,7 +40,7 @@ The scripts use the local `go` when it is Go 1.27 or newer, else Go 1.27 in Dock
 
 ## Development
 
-1. `bun run --cwd packages/egress certificates`
+1. `bun run --cwd repos/iron-proxy certificates`
 2. `docker compose --profile egress up -d` starts the egress with `dev.yaml` (tunnel on `localhost:1080`, control on `localhost:9443`).
 3. Start Ren with `EGRESS_PORT=4443`, `EGRESS_TLS_CERT`, `EGRESS_TLS_KEY`, `EGRESS_TLS_CA` (from `.dev/certs`), and `EGRESS_CONTROL_URLS=https://localhost:9443` with `EGRESS_CONTROL_TLS_CERT`, `EGRESS_CONTROL_TLS_KEY`, `EGRESS_CONTROL_TLS_CA`.
 

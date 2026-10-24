@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-const egressRoot = new URL("../../../egress/", import.meta.url).pathname
+const egressRoot = new URL("../../../../repos/iron-proxy/", import.meta.url).pathname
 
 export interface Certificates {
   readonly dir: string
