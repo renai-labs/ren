@@ -403,19 +403,37 @@ describe("settings in the cell", () => {
     }),
   )
 
-  it.live("a deny rule for an app's MCP tool refuses the call before it reaches the app's server", () =>
+  it.live("an app MCP tool that a deny rule covers leaves the model's catalog and never reaches its server", () =>
     Effect.gen(function* () {
-      const peer = yield* McpPeer.make()
+      const docs = yield* McpPeer.make()
+      const notes = yield* McpPeer.make()
       const layers = TestSettings.layers({
-        ren: { permissions: [{ action: "docs_marker", resource: "*", effect: "deny" }] },
+        ren: {
+          permissions: [
+            { action: "docs_*", resource: "*", effect: "deny" },
+            { action: "notes_second", resource: "*", effect: "deny" },
+          ],
+        },
       })
       const opened = yield* open(layers)
-      yield* opened.pull(layers, { apps: Option.some(McpPeer.catalog("first", [{ slug: "docs", url: peer.url }])) })
+      yield* opened.pull(layers, {
+        apps: Option.some(
+          McpPeer.catalog("first", [
+            { slug: "docs", url: docs.url },
+            { slug: "notes", url: notes.url },
+          ]),
+        ),
+      })
       const denied = McpPeer.execute("docs.marker")
       yield* opened.turn(denied)
-      expect(McpPeer.result(denied)).not.toBe("first")
-      expect((yield* Queue.clear(peer.requests)).map((request) => request.method)).not.toContain("tools/call")
-      const allowed = McpPeer.execute("docs.second")
+      const system = denied.calls.at(0)?.system
+      expect(system).toContain("tools.notes.marker()")
+      expect(system).not.toContain("tools.notes.second()")
+      expect(system).not.toContain("tools.docs.")
+      expect(system).not.toContain('<server name="docs">')
+      expect(McpPeer.result(denied)).toContain("Unknown tool 'docs.marker'")
+      expect((yield* Queue.clear(docs.requests)).map((request) => request.method)).not.toContain("tools/call")
+      const allowed = McpPeer.execute("notes.marker")
       yield* opened.turn(allowed)
       expect(McpPeer.result(allowed)).toBe("first")
     }),
