@@ -5,9 +5,11 @@ import { Agent } from "@ren/schema/agent"
 import { App } from "@ren/schema/app"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import type { Credential } from "@ren/schema/credential"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { EnvironmentProvider } from "@ren/schema/environment-provider"
 import { Session } from "@ren/schema/session"
+import type { Skill } from "@ren/schema/skill"
 import { Space } from "@ren/schema/space"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { and, eq } from "drizzle-orm"
@@ -22,6 +24,16 @@ export const appInput = (ownerSpaceId: Space.ID, slug: string, configuration: Pa
     description: `The ${slug} app`,
     ...configuration,
   })
+
+export const env = (name: string, optional = false): Credential.Env => ({ kind: "env", name, optional })
+
+export const skill = (description: string): Skill.Declaration => ({
+  type: "content",
+  description,
+  instructions: description,
+  files: {},
+  requiredCredentials: [],
+})
 
 export const organization = Effect.fnUntraced(function* () {
   const database = yield* Database.Service

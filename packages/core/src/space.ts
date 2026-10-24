@@ -253,10 +253,6 @@ export const layer = Layer.effect(
               return yield* new Primitive.Conflict({
                 message: `This space owns apps ${ownedApps.map((app) => app.slug).join(", ")}. Move or archive them first.`,
               })
-            yield* transaction
-              .update(Database.Schema.space_app)
-              .set({ archived_at: sql`now()` })
-              .where(and(eq(Database.Schema.space_app.space_id, id), isNull(Database.Schema.space_app.archived_at)))
             const archived = yield* transaction
               .update(Database.Schema.space)
               .set({ archived_at: sql`now()`, updated_at: sql`now()` })

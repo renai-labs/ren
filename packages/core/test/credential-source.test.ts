@@ -87,7 +87,7 @@ const scope: Credentials.Scope = {
 
 const modelKey = Effect.gen(function* () {
   const source = yield* CredentialSource.Minted
-  const candidates = yield* source.candidates(scope)
+  const candidates = yield* source.candidates(scope, [])
   const found = candidates.find((candidate) => candidate.label === "MODELS")
   if (!found) return yield* Effect.die(new Error("no MODELS candidate"))
   expect(found).toMatchObject({ hosts: ["api.anthropic.com"], owner: "workload" })
@@ -142,7 +142,7 @@ describe("CredentialSource.layerMinted", () => {
   it.effect("a brain gets REN for Ren's own host (REN_URL): its host token, in place of the placeholder", () =>
     Effect.gen(function* () {
       const source = yield* CredentialSource.Minted
-      const ren = (yield* source.candidates(scope)).find((candidate) => candidate.label === "REN")
+      const ren = (yield* source.candidates(scope, [])).find((candidate) => candidate.label === "REN")
       expect(ren).toMatchObject({ hosts: ["api.ren.test"], inject: { op: "replace", in: ["header"] } })
       if (!ren) return
       const value = yield* source.value(ren, scope)

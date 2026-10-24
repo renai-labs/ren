@@ -8,6 +8,7 @@ import { AgentPolicy } from "./agent/policy.js"
 import { CredentialPolicy } from "./credential/policy.js"
 import { OAuthAppPolicy } from "./oauth-app/policy.js"
 import { AppPolicy } from "./app/policy.js"
+import { AppProfilePolicy } from "./app/profile-policy.js"
 import { EnvironmentTemplatePolicy } from "./environment-templates/policy.js"
 import { SettingsPolicy } from "./settings/policy.js"
 import { SpacePolicy } from "./space/policy.js"
@@ -71,6 +72,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...SettingsPolicy.documents,
   ...AgentPolicy.documents,
   ...AppPolicy.documents,
+  ...AppProfilePolicy.documents,
   ...TaskPolicy.documents,
   ...CredentialPolicy.documents,
   ...OAuthAppPolicy.documents,

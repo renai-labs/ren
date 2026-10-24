@@ -1,11 +1,12 @@
 export * as CredentialOffboarding from "./offboarding.js"
 
 import { Database } from "@ren/db/database"
+import type { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
 import type { Credential } from "@ren/schema/credential"
 import type { Envelope } from "@ren/schema/envelope"
 import type { Space } from "@ren/schema/space"
-import { and, eq, or, type SQL } from "drizzle-orm"
+import { and, eq, inArray, or, type SQL } from "drizzle-orm"
 import { Effect } from "effect"
 import { EgressControl } from "../egress-control.js"
 import { McpProvider } from "../mcp-provider.js"
@@ -15,6 +16,8 @@ const table = Database.Schema.credential
 const brains = Database.Schema.brain
 
 const chats = Database.Schema.agent_session
+
+const profiles = Database.Schema.app_profile
 
 // oxlint-disable-next-line ren/no-comments -- `providers` are the deleted `route` credentials whose session and account at the provider Ren cleans up (§10 rule 9).
 export interface Removed {
@@ -26,6 +29,7 @@ export interface Removed {
 export interface Provided {
   readonly id: Credential.ID
   readonly organizationId: Auth.OrganizationID
+  readonly provider: Credential.Provider
   readonly accountId: string | null
   readonly value: Envelope.Sealed
 }
@@ -41,7 +45,9 @@ const remove = Effect.fnUntraced(function* (transaction: Database.Transaction, w
   })
   return {
     labels: [...new Set(rows.map((row) => row.label))],
-    providers: rows.filter((row) => Boolean(row.provider)).map((row): Provided => row),
+    providers: rows.flatMap((row): ReadonlyArray<Provided> =>
+      row.provider ? [{ ...row, provider: row.provider }] : [],
+    ),
   }
 })
 
@@ -63,13 +69,38 @@ export const forMember = Effect.fnUntraced(function* (
   organizationId: Auth.OrganizationID,
   userId: Auth.UserID,
 ) {
+  const privates = yield* transaction
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(
+      and(eq(profiles.organization_id, organizationId), eq(profiles.kind, "private"), eq(profiles.user_id, userId)),
+    )
   const removed = yield* remove(
     transaction,
     and(
       eq(table.organization_id, organizationId),
-      or(and(eq(table.owner, "person"), eq(table.user_id, userId)), eq(table.account_user_id, userId)),
+      or(
+        and(eq(table.owner, "person"), eq(table.user_id, userId)),
+        eq(table.account_user_id, userId),
+        privates.length
+          ? and(
+              eq(table.owner, "profile"),
+              inArray(
+                table.profile_id,
+                privates.map((row) => row.id),
+              ),
+            )
+          : undefined,
+      ),
     ),
   )
+  if (privates.length)
+    yield* transaction.delete(profiles).where(
+      inArray(
+        profiles.id,
+        privates.map((row) => row.id),
+      ),
+    )
   const workloads = yield* sessionBrains(transaction, {
     userId,
     spaces: eq(brains.organization_id, organizationId),
@@ -88,13 +119,51 @@ export const forSpaceMember = Effect.fnUntraced(function* (
   )
   return {
     ...removed,
-    workloads: yield* sessionBrains(transaction, { userId, spaces: eq(brains.space_id, spaceId) }),
+    workloads: [
+      ...(yield* sessionBrains(transaction, { userId, spaces: eq(brains.space_id, spaceId) })),
+      ...(yield* reachBrains(transaction, spaceId, userId)),
+    ],
   } satisfies Removed
 })
 
+// oxlint-disable-next-line ren/no-comments -- A member who joins or leaves a space changes the reach of that space and of the person's one-member spaces (profiles.md §7 rule 3, §11).
+export const reachBrains = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  spaceId: Space.ID,
+  userId: Auth.UserID,
+) {
+  const own = yield* transaction
+    .select({ id: Database.Schema.space_member.space_id })
+    .from(Database.Schema.space_member)
+    .where(eq(Database.Schema.space_member.user_id, userId))
+  return yield* spaceBrains(transaction, [...new Set([spaceId, ...own.map((row) => row.id)])])
+})
+
+// oxlint-disable-next-line ren/no-comments -- An archived space leaves every access list (profiles.md §11).
 export const forSpace = Effect.fnUntraced(function* (transaction: Database.Transaction, spaceId: Space.ID) {
   const removed = yield* remove(transaction, and(eq(table.owner, "space"), eq(table.space_id, spaceId)))
+  yield* transaction
+    .delete(Database.Schema.app_profile_space)
+    .where(eq(Database.Schema.app_profile_space.space_id, spaceId))
+  return { ...removed, workloads: yield* spaceBrains(transaction, [spaceId]) } satisfies Removed
+})
+
+export const forProfile = Effect.fnUntraced(function* (transaction: Database.Transaction, profileId: AppProfile.ID) {
+  const removed = yield* remove(transaction, and(eq(table.owner, "profile"), eq(table.profile_id, profileId)))
   return { ...removed, workloads: [] } satisfies Removed
+})
+
+// oxlint-disable-next-line ren/no-comments -- Every brain of the spaces, for a reach change (profiles.md §11): a member joins or leaves, or a space is archived.
+export const spaceBrains = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  spaceIds: ReadonlyArray<Space.ID>,
+) {
+  if (!spaceIds.length) return []
+  const rows = yield* transaction
+    .select({ id: brains.id })
+    .from(brains)
+    .where(inArray(brains.space_id, [...spaceIds]))
+  return rows.map((row) => ({ kind: "brain" as const, id: row.id }))
 })
 
 export const forWorkload = Effect.fnUntraced(function* (
@@ -116,8 +185,8 @@ export const invalidate = Effect.fnUntraced(function* (removed: Removed) {
     removed.providers,
     (provided) =>
       cleanup.start({
-        provider: "composio",
-        accountId: provided.accountId ?? undefined,
+        provider: provided.provider,
+        account: provided.accountId ?? undefined,
         sealed: { organizationId: provided.organizationId, credentialId: provided.id, value: provided.value },
       }),
     { discard: true },

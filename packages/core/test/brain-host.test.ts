@@ -8,6 +8,7 @@ import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { Signature } from "@ren/schema/signature"
 import { eq, sql } from "drizzle-orm"
 import { Clock, ConfigProvider, Context, Duration, Effect, Fiber, Layer, Option, Queue, Redacted, Schema } from "effect"
@@ -17,10 +18,14 @@ import { Access } from "../src/access.js"
 import { App } from "../src/app.js"
 import { BrainClient } from "../src/brain-client.js"
 import { Brains } from "../src/brains.js"
+import { Credentials } from "../src/credentials.js"
+import { EgressControl } from "../src/egress-control.js"
+import { Envelope } from "../src/envelope.js"
+import { OAuthFetch } from "../src/oauth-fetch.js"
 import { EnvironmentProvider } from "../src/environment-provider.js"
 import { Environments } from "../src/environments.js"
 import { Models } from "../src/models.js"
-import { SpaceApp } from "../src/space/app.js"
+import { AppProfiles } from "../src/app/profiles.js"
 import { testEffect } from "./lib/effect.js"
 import { TestProvider } from "./lib/environment-provider.js"
 import { Host } from "./lib/host.js"
@@ -221,10 +226,22 @@ describe("BrainHost pull", () => {
         spaceId: subject.owner.spaceId,
         generation: 1,
       }
-      const uses = yield* SpaceApp.Service
       const apps = yield* App.Service
+      const profiles = yield* AppProfiles.Service
+      const database = yield* Database.Service
+      yield* database.db.insert(Database.Schema.space_member).values({
+        id: Space.MembershipID.create(),
+        space_id: subject.owner.spaceId,
+        user_id: actor.userId,
+      })
       const app = yield* apps.create(actor, Seed.appInput(yield* Seed.space(actor.organizationId), "notes"))
-      const use = yield* uses.create(actor, { spaceId: subject.owner.spaceId, appId: app.id })
+      const use = yield* profiles.create(actor, {
+        appId: app.id,
+        name: "Listed",
+        slug: "listed",
+        kind: "shared",
+        spaceIds: [subject.owner.spaceId],
+      })
       const brain = yield* Brains.Service
       const request = { version: "test", keyIds: [], models: null, layers: { agents: {} }, sessions: [] }
       expect(yield* brain.pull(host, request)).not.toHaveProperty("apps")
@@ -235,13 +252,18 @@ describe("BrainHost pull", () => {
         fingerprint: first.fingerprint,
       })
       expect((yield* brain.pull(host, { ...request, apps: "stale" })).apps).toEqual(first)
-      yield* uses.archive(actor, use.id)
+      yield* profiles.delete(actor, use.id)
       const removed = yield* brain.pull(host, { ...request, apps: first.fingerprint })
       expect(removed.apps?.fingerprint).not.toBe(first.fingerprint)
       expect(removed.apps?.catalog?.apps).toEqual([])
     }).pipe(
       Effect.provide(
-        Layer.mergeAll(App.layer, SpaceApp.layer, cell("http://127.0.0.1:9")).pipe(Layer.provide(Access.layer)),
+        Layer.mergeAll(App.layer, AppProfiles.layer, cell("http://127.0.0.1:9")).pipe(
+          Layer.provideMerge(Credentials.layer),
+          Layer.provideMerge(
+            Layer.mergeAll(Access.layer, Envelope.layerLocal, OAuthFetch.layerUnchecked, EgressControl.layerNone),
+          ),
+        ),
       ),
     ),
   )
@@ -281,8 +303,9 @@ describe("BrainHost pull", () => {
         spaceId: subject.owner.spaceId,
         generation: 1,
       }
-      yield* Effect.acquireRelease(database.db.execute(sql`alter table app rename to app_unreadable`), () =>
-        database.db.execute(sql`alter table app_unreadable rename to app`).pipe(Effect.orDie),
+      yield* Effect.acquireRelease(
+        database.db.execute(sql`alter table app_profile rename to app_profile_unreadable`),
+        () => database.db.execute(sql`alter table app_profile_unreadable rename to app_profile`).pipe(Effect.orDie),
       )
       const reply = yield* brain.pull(host, {
         version: "test",

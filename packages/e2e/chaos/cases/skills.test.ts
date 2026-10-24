@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { AppRegistry } from "@ren/core/app/registry"
-import { SpaceApp } from "@ren/core/space/app"
+import { Database } from "@ren/db/database"
+import { AppProfile } from "@ren/schema/app-profile"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Effect, Schema } from "effect"
 import { Platform } from "../lib/platform.js"
@@ -66,12 +67,21 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       const appId = published.apps.at(0)?.appId
       if (!appId) throw new Error("the app was not published")
       await stack().run(
-        SpaceApp.Service.use((service) =>
-          service.create(
-            { userId: owner.createdBy, organizationId: owner.organizationId, roles: ["owner"] },
-            { spaceId: owner.spaceId, appId },
-          ),
-        ).pipe(Effect.provide(SpaceApp.layer)),
+        Effect.gen(function* () {
+          const database = yield* Database.Service
+          const profileId = AppProfile.ID.create()
+          yield* database.db.insert(Database.Schema.app_profile).values({
+            id: profileId,
+            organization_id: owner.organizationId,
+            app_id: appId,
+            slug: "team",
+            name: "Team",
+            kind: "shared",
+          })
+          yield* database.db
+            .insert(Database.Schema.app_profile_space)
+            .values({ profile_id: profileId, space_id: owner.spaceId })
+        }),
       )
       const session = await stack().session()
       const issued = stack().issued()

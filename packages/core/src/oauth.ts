@@ -11,12 +11,13 @@ import {
 } from "@modelcontextprotocol/client"
 import { Database } from "@ren/db/database"
 import type { App } from "@ren/schema/app"
+import type { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
 import { Credential } from "@ren/schema/credential"
 import type { Mcp } from "@ren/schema/mcp"
 import { OAuthSession } from "@ren/schema/oauth-session"
 import type { WriteResult } from "@ren/schema/write-result"
-import { and, eq, isNull, ne, or, sql } from "drizzle-orm"
+import { and, eq, isNull, ne, or } from "drizzle-orm"
 import {
   Cache,
   Clock,
@@ -32,11 +33,14 @@ import {
   Schema,
 } from "effect"
 import type { Actor } from "./actor.js"
+import { ProfileItems } from "./app/profile-items.js"
+import { ProfileLabel } from "./app/profile-label.js"
 import { CredentialRefresh } from "./credential-refresh.js"
+import { SignIn } from "./credential/sign-in.js"
 import { Credentials } from "./credentials.js"
 import { EgressControl } from "./egress-control.js"
 import { Envelope } from "./envelope.js"
-import { McpProvider } from "./mcp-provider.js"
+import { ProviderConnect } from "./mcp-provider/connect.js"
 import { OAuthFetch } from "./oauth-fetch.js"
 import { OAuthToken } from "./oauth-token.js"
 import { Primitive } from "./primitive.js"
@@ -68,12 +72,6 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/OAuth") {}
 
-const upper = (slug: string) => slug.toUpperCase().replaceAll("-", "_")
-
-// oxlint-disable-next-line ren/no-comments -- owner-access §6 and K40: the MCP slug in upper case with `-` as `_`; `__` separates a named connection.
-export const labelOf = (mcp: string, connection?: string) =>
-  `${Credential.connectedPrefix}${upper(mcp)}${connection ? `__${upper(connection)}` : ""}`
-
 const Client = OAuthToken.Client
 type Client = OAuthToken.Client
 const TokenEndpointAuth = OAuthToken.TokenEndpointAuth
@@ -87,15 +85,6 @@ const Discovered = Schema.Struct({
 type Discovered = typeof Discovered.Type
 const decodeDiscovered = Schema.decodeUnknownOption(Discovered)
 
-const ProviderState = Schema.Struct({
-  kind: Schema.Literal("provider"),
-  provider: Schema.Literals(["composio"]),
-  toolkit: Schema.String,
-  accountId: Schema.String,
-})
-type ProviderState = typeof ProviderState.Type
-const decodeProviderState = Schema.decodeUnknownOption(ProviderState)
-
 const SealedJson = Schema.fromJsonString(Credentials.Sealed)
 
 const random = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")
@@ -106,7 +95,6 @@ const metadataKept = Duration.hours(1)
 
 const sessions = Database.Schema.oauth_session
 const credentials = Database.Schema.credential
-const releases = Database.Schema.app_release
 
 type OAuthDeclaration = Extract<Mcp.Auth, { readonly type: "oauth" }>
 type OrgApp = typeof Database.Schema.oauth_app.$inferSelect
@@ -232,20 +220,6 @@ const sessionDiscovery = (endpoints: Endpoints) => ({
   } satisfies Discovered,
 })
 
-// oxlint-disable-next-line ren/no-comments -- §10 rule 8 (K26): what a Composio reconnect replaced, read before the save: the old session, and the old account when the new consent gave another one.
-const replaced = (previous: Option.Option<Credentials.Sealed>, oldAccount: string | null, newAccount: string) => ({
-  sessionId: Option.getOrUndefined(
-    Option.flatMap(previous, (found) => (found.type === "route" ? Option.some(found.sessionId) : Option.none())),
-  ),
-  ...(oldAccount && oldAccount !== newAccount && { accountId: oldAccount }),
-})
-
-const ownerColumns = (owner: Credential.Owner) => ({
-  owner: owner.kind,
-  space_id: owner.kind === "space" ? owner.spaceId : null,
-  user_id: owner.kind === "person" ? owner.userId : null,
-})
-
 const authorizeUrl = (endpoint: string, params: Readonly<Record<string, string>>, scopes: ReadonlyArray<string>) => {
   const url = new URL(endpoint)
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
@@ -261,8 +235,7 @@ export const layer = Layer.effect(
     const store = yield* Credentials.Service
     const control = yield* EgressControl.Service
     const http = yield* OAuthFetch.Service
-    const providers = yield* McpProvider.Service
-    const cleanup = yield* McpProvider.Cleanup
+    const providerConnect = yield* ProviderConnect.Service
     const base = (yield* Config.String("REN_URL").pipe(Config.withDefault("http://localhost:4000"))).replace(/\/$/u, "")
     const callbackUrl = `${base}/oauth/callback`
     const clientDocument = `${base}/oauth/client.json`
@@ -281,41 +254,7 @@ export const layer = Layer.effect(
       value: Envelope.Sealed,
     ) => envelope.open(value, { organizationId, kind, id }).pipe(Effect.orDie, Effect.map(Redacted.value))
 
-    const releaseOf = Effect.fnUntraced(function* (actor: Actor.Info, owner: Credential.Owner, appId: App.ID) {
-      const found = (yield* database.db
-        .select({ app: Database.Schema.app, release: releases })
-        .from(Database.Schema.app)
-        .leftJoin(
-          Database.Schema.space_app,
-          and(
-            eq(Database.Schema.space_app.app_id, Database.Schema.app.id),
-            owner.kind === "space" ? eq(Database.Schema.space_app.space_id, owner.spaceId) : sql`false`,
-            isNull(Database.Schema.space_app.archived_at),
-          ),
-        )
-        .innerJoin(
-          releases,
-          eq(
-            releases.id,
-            sql`coalesce(${Database.Schema.space_app.pinned_release_id}, ${Database.Schema.app.latest_release_id})`,
-          ),
-        )
-        .where(
-          and(
-            eq(Database.Schema.app.id, appId),
-            isNull(Database.Schema.app.archived_at),
-            or(
-              isNull(Database.Schema.app.organization_id),
-              eq(Database.Schema.app.organization_id, actor.organizationId),
-            ),
-          ),
-        )
-        .pipe(Effect.orDie)).at(0)
-      if (!found) return yield* new Primitive.NotFound({ message: "App not found." })
-      return found
-    })
-
-    const existingOf = Effect.fnUntraced(function* (actor: Actor.Info, owner: Credential.Owner, label: string) {
+    const existingOf = Effect.fnUntraced(function* (profileId: AppProfile.ID, label: string) {
       const rows = yield* database.db
         .select({
           id: credentials.id,
@@ -325,13 +264,7 @@ export const layer = Layer.effect(
         })
         .from(credentials)
         .where(
-          and(
-            eq(credentials.organization_id, actor.organizationId),
-            eq(credentials.owner, owner.kind),
-            eq(credentials.label, label),
-            owner.kind === "space" ? eq(credentials.space_id, owner.spaceId) : isNull(credentials.space_id),
-            owner.kind === "person" ? eq(credentials.user_id, owner.userId) : isNull(credentials.user_id),
-          ),
+          and(eq(credentials.owner, "profile"), eq(credentials.profile_id, profileId), eq(credentials.label, label)),
         )
         .pipe(Effect.orDie)
       return Option.fromNullishOr(rows.at(0)).pipe(Option.map((row): Existing => row))
@@ -449,152 +382,35 @@ export const layer = Layer.effect(
       return yield* invalid("This server lets Ren register no client; set up an OAuth app (AppNotConfigured).")
     })
 
-    // oxlint-disable-next-line ren/no-comments -- §10 rules 4 and 5 (K22, P5): the Composio user is the credential id, chosen here; the Connect Link returns to Ren's callback with `state` in its query.
-    const connectProvider = Effect.fnUntraced(function* (
-      actor: Actor.Info,
-      input: Credential.ConnectInput,
-      found: Effect.Success<ReturnType<typeof releaseOf>>,
-      transport: Extract<Mcp.Transport, { readonly type: "provider" }>,
-    ) {
-      const provider = yield* providers
-        .get(transport.provider)
-        .pipe(Effect.mapError((error) => invalid(`${error.message} (McpProvider.Unavailable).`)))
-      const label = labelOf(input.target.mcp, input.target.connection)
-      const existing = yield* existingOf(actor, input.owner, label)
+    // oxlint-disable-next-line ren/no-comments -- connections.md §7 rules 1 to 8, profiles.md §9 rules 5 and 7 (P18, P34): the profile rules run before consent; the session records the credential id, profile, label, name, hosts and binding hash, and the client, endpoints, issuer, scope and resource it chose, so the callback looks nothing up again.
+    const connect = Effect.fn("OAuth.connect")(function* (actor: Actor.Info, input: Credential.ConnectInput) {
+      const found = yield* store.profile(actor, input.profileId)
+      const declaration = found.app.mcps[input.item.mcp]
+      if (!declaration) return yield* new Primitive.NotFound({ message: "MCP not found in this app." })
+      const label = ProfileLabel.labelOf(input.item, found.profile.slug)
+      const existing = yield* existingOf(found.profile.id, label)
       if (Option.isSome(existing) && !input.reconnect) return yield* store.get(actor, existing.value.id)
       const credentialId = Option.match(existing, { onNone: () => Credential.ID.create(), onSome: (row) => row.id })
-      const state = random()
-      const expiresAt = new Date((yield* Clock.currentTimeMillis) + OAuthSession.lifetimeMinutes * 60_000)
-      const link = yield* provider
-        .connect({ credentialId, toolkit: transport.toolkit, callbackUrl: `${callbackUrl}?state=${state}` })
-        .pipe(Effect.mapError((error) => invalid(error.message)))
-      yield* database.db
-        .insert(sessions)
-        .values({
-          id: OAuthSession.ID.create(),
-          organization_id: actor.organizationId,
-          ...ownerColumns(input.owner),
+      const madeFor = ProfileItems.madeFor(declaration)
+      const transport = declaration.transport
+      if (transport.type === "provider")
+        return yield* providerConnect.start({
+          organizationId: actor.organizationId,
+          initiator: actor.userId,
+          profileId: found.profile.id,
+          credentialId,
           label,
-          name:
-            firstOf(input.target.connectionName, Option.getOrUndefined(existing)?.name) ??
-            found.release.mcps[input.target.mcp]?.name ??
-            label,
-          credential_id: credentialId,
-          app_id: found.app.id,
-          release_id: found.release.id,
-          mcp: input.target.mcp,
-          connection: input.target.connection ?? null,
-          initiator_user_id: actor.userId,
-          state,
-          discovery_state: {
-            kind: "provider",
-            provider: transport.provider,
-            toolkit: transport.toolkit,
-            accountId: link.accountId,
-          } satisfies ProviderState,
-          expires_at: expiresAt,
+          name: declaration.name,
+          madeFor,
+          provider: transport.provider,
+          integration: transport.integration,
+          state: random(),
+          callbackUrl,
         })
-        .pipe(Effect.orDie)
-      return { redirectUrl: link.redirectUrl, expiresAt: DateTime.fromDateUnsafe(expiresAt) }
-    })
-
-    // oxlint-disable-next-line ren/no-comments -- §10 rules 5 and 8 (K23, K26): wait for ACTIVE for 10 s, create the pinned session, save on the same row, then clean up what the save replaced. An account that never gets ACTIVE is cleaned up too.
-    const completeProvider = Effect.fnUntraced(function* (taken: Session, state: ProviderState) {
-      const provider = yield* providers.get(state.provider)
-      const active = yield* provider.active(state.accountId)
-      if (!active) {
-        yield* cleanup.start({ provider: state.provider, accountId: state.accountId })
-        return Option.none()
-      }
-      const created = yield* provider.session({
-        credentialId: taken.credential_id,
-        toolkit: state.toolkit,
-        accountId: state.accountId,
-      })
-      const before = (yield* database.db
-        .select({ value: credentials.value, accountId: credentials.provider_account_id })
-        .from(credentials)
-        .where(eq(credentials.id, taken.credential_id))
-        .pipe(Effect.orDie)).at(0)
-      const previous = before
-        ? Schema.decodeUnknownOption(SealedJson)(
-            yield* open(taken.organization_id, "credential", taken.credential_id, before.value),
-          )
-        : Option.none()
-      const value: Credentials.Sealed = {
-        type: "route",
-        upstream: Redacted.make(created.upstream),
-        sessionId: created.sessionId,
-        toolkit: state.toolkit,
-      }
-      const sealed = yield* seal(
-        taken.organization_id,
-        "credential",
-        taken.credential_id,
-        Schema.encodeSync(SealedJson)(value),
-      )
-      const columns = {
-        value: sealed,
-        provider: state.provider,
-        provider_account_id: state.accountId,
-        hosts: [new URL(created.upstream).hostname],
-      }
-      if (before)
-        yield* database.db
-          .update(credentials)
-          .set({ ...columns, status: "ok", revision: sql`${credentials.revision} + 1`, updated_at: sql`now()` })
-          .where(eq(credentials.id, taken.credential_id))
-          .pipe(Effect.orDie)
-      else
-        yield* database.db
-          .insert(credentials)
-          .values({
-            ...columns,
-            id: taken.credential_id,
-            organization_id: taken.organization_id,
-            owner: taken.owner,
-            space_id: taken.space_id,
-            user_id: taken.user_id,
-            label: taken.label,
-            name: taken.name,
-            type: "route",
-            inject: { op: "route" },
-            account_user_id: taken.initiator_user_id,
-            app_id: taken.app_id,
-            mcp: taken.mcp,
-            connection: taken.connection,
-            created_by_user_id: taken.initiator_user_id,
-          })
-          .pipe(Effect.orDie)
-      yield* control.invalidate({ label: taken.label })
-      yield* cleanup.start({
-        provider: state.provider,
-        ...replaced(previous, before?.accountId ?? null, state.accountId),
-      })
-      return Option.some(taken.label)
-    })
-
-    // oxlint-disable-next-line ren/no-comments -- §7 rules 1 to 8: the owner rules run before consent; the session records the client, endpoints, issuer, scope and resource it chose, and the release the space uses, so the callback looks nothing up again (S7, §10a rule 6).
-    const connect = Effect.fn("OAuth.connect")(function* (actor: Actor.Info, input: Credential.ConnectInput) {
-      yield* store.authorize(actor, input.owner)
-      const found = yield* releaseOf(actor, input.owner, input.target.app)
-      const transport = found.release.mcps[input.target.mcp]?.transport
-      if (transport?.type === "provider") return yield* connectProvider(actor, input, found, transport)
-      return yield* connectOAuth(actor, input, found)
-    })
-
-    const connectOAuth = Effect.fnUntraced(function* (
-      actor: Actor.Info,
-      input: Credential.ConnectInput,
-      found: Effect.Success<ReturnType<typeof releaseOf>>,
-    ) {
-      const target = targetOf(found.release.mcps[input.target.mcp])
+      const target = targetOf(declaration)
       if (Result.isFailure(target)) return yield* target.failure
       const auth = target.success.auth
-      const label = labelOf(input.target.mcp, input.target.connection)
-      const existing = yield* existingOf(actor, input.owner, label)
-      if (Option.isSome(existing) && !input.reconnect) return yield* store.get(actor, existing.value.id)
-      const app = yield* orgAppOf(actor, target.success.declaration)
+      const app = yield* orgAppOf(actor, declaration)
       const discovery = yield* Effect.when(
         discover(target.success.url),
         Effect.sync(
@@ -641,16 +457,12 @@ export const layer = Layer.effect(
         .values({
           id,
           organization_id: actor.organizationId,
-          ...ownerColumns(input.owner),
+          credential_id: credentialId,
+          profile_id: found.profile.id,
           label,
-          name:
-            firstOf(input.target.connectionName, Option.getOrUndefined(existing)?.name) ??
-            target.success.declaration.name,
-          credential_id: Option.match(existing, { onNone: () => Credential.ID.create(), onSome: (row) => row.id }),
-          app_id: found.app.id,
-          release_id: found.release.id,
-          mcp: input.target.mcp,
-          connection: input.target.connection ?? null,
+          name: declaration.name,
+          hosts: [new URL(target.success.url).hostname],
+          made_for: madeFor,
           initiator_user_id: actor.userId,
           oauth_app_id: Option.getOrNull(Option.map(app, (own) => own.id)),
           state,
@@ -724,20 +536,41 @@ export const layer = Layer.effect(
       }),
     })
 
-    // oxlint-disable-next-line ren/no-comments -- §7 rule 13 and §10a rule 5: a reconnect writes the same row, so the old value works until this save; a first sign-in inserts the row with its app, MCP and connection, which never change.
+    // oxlint-disable-next-line ren/no-comments -- profiles.md §9 rule 8: the callback fails, and a provider account is cleaned up, when the profile is gone, the initiator can no longer see it, or the app no longer declares the item.
+    const stillValid = Effect.fnUntraced(function* (taken: Session) {
+      if (!taken.profile_id) return Result.fail("This profile was deleted.")
+      const roles = (yield* database.db
+        .select({ role: Database.Schema.member.role })
+        .from(Database.Schema.member)
+        .where(
+          and(
+            eq(Database.Schema.member.organizationId, taken.organization_id),
+            eq(Database.Schema.member.userId, taken.initiator_user_id),
+          ),
+        )
+        .pipe(Effect.orDie)).map((row) => row.role)
+      const found = yield* store
+        .profile({ userId: taken.initiator_user_id, organizationId: taken.organization_id, roles }, taken.profile_id)
+        .pipe(Effect.option)
+      if (Option.isNone(found) || roles.length === 0) return Result.fail("You can no longer use this profile.")
+      const item = ProfileItems.declared(
+        {
+          mcps: found.value.app.mcps,
+          skills: found.value.app.skills,
+          requiredCredentials: found.value.app.required_credentials,
+        },
+        found.value.profile.slug,
+      ).find((entry) => entry.label === taken.label)
+      if (!item?.mcp || !("mcp" in item.item)) return Result.fail("The app no longer declares this MCP.")
+      return Result.succeed({ app: found.value.app, mcp: item.item.mcp })
+    })
+
     const save = Effect.fnUntraced(function* (
       taken: Session,
       value: Credentials.Sealed,
       token: OAuthToken.Token,
       now: number,
     ) {
-      const release = (yield* database.db
-        .select({ mcps: releases.mcps })
-        .from(releases)
-        .where(eq(releases.id, taken.release_id))
-        .pipe(Effect.orDie)).at(0)
-      const transport = release?.mcps[taken.mcp]?.transport
-      if (transport?.type !== "remote") return Option.none()
       const sealed = yield* seal(
         taken.organization_id,
         "credential",
@@ -745,97 +578,47 @@ export const layer = Layer.effect(
         Schema.encodeSync(SealedJson)(value),
       )
       const subjectHash = Option.getOrNull(Option.map(token.subject, (subject) => sha256(subject, "hex")))
-      const scopes = Option.getOrElse(token.scope, () => taken.scope ?? "")
-        .split(" ")
-        .filter((scope) => scope.length > 0)
-      const expiresAt = Option.getOrNull(Option.map(token.expiresIn, (seconds) => new Date(now + seconds * 1000)))
-      const saved = yield* database.db
-        .update(credentials)
-        .set({
-          value: sealed,
-          status: "ok",
-          revision: sql`${credentials.revision} + 1`,
-          scopes,
-          wanted_scopes: [],
-          expires_at: expiresAt,
-          refresh_failures: 0,
-          account_subject_hash: subjectHash,
-          updated_at: sql`now()`,
-        })
-        .where(eq(credentials.id, taken.credential_id))
-        .returning({ id: credentials.id })
-        .pipe(Effect.orDie)
-      if (saved.length === 0)
-        yield* database.db
-          .insert(credentials)
-          .values({
-            id: taken.credential_id,
-            organization_id: taken.organization_id,
-            owner: taken.owner,
-            space_id: taken.space_id,
-            user_id: taken.user_id,
-            label: taken.label,
-            name: taken.name,
-            type: "oauth",
-            value: sealed,
-            hosts: [new URL(transport.url).hostname],
-            inject: { op: "replace", in: ["header"] },
-            account_user_id: taken.initiator_user_id,
-            oauth_app_id: taken.oauth_app_id,
-            app_id: taken.app_id,
-            mcp: taken.mcp,
-            connection: taken.connection,
-            scopes,
-            expires_at: expiresAt,
-            account_subject_hash: subjectHash,
-            created_by_user_id: taken.initiator_user_id,
-          })
-          .pipe(Effect.orDie)
-      yield* control.invalidate({ label: taken.label })
-      return Option.some(subjectHash)
+      const saved = yield* SignIn.save(database.db, taken, {
+        type: "oauth",
+        value: sealed,
+        hosts: taken.hosts,
+        inject: { op: "replace", in: ["header"] },
+        scopes: Option.getOrElse(token.scope, () => taken.scope ?? "")
+          .split(" ")
+          .filter((scope) => scope.length > 0),
+        expiresAt: Option.getOrNull(Option.map(token.expiresIn, (seconds) => new Date(now + seconds * 1000))),
+        accountSubjectHash: subjectHash,
+        oauthAppId: taken.oauth_app_id,
+      })
+      if (Result.isSuccess(saved)) yield* control.invalidate({ label: taken.label })
+      return Result.map(saved, () => subjectHash)
     })
 
-    // oxlint-disable-next-line ren/no-comments -- §10b rule 9 (K41): a match with another connection of the same MCP and owner completes with a warning.
-    const sameAccount = Effect.fnUntraced(function* (taken: Session, subjectHash: string | null) {
+    // oxlint-disable-next-line ren/no-comments -- profiles.md §9 rule 12 (K41): the same account in the same item of another profile of the app completes with a warning. Only shared profiles and the person's own private profiles count.
+    const sameAccount = Effect.fnUntraced(function* (
+      taken: Session,
+      found: { readonly app: { readonly id: App.ID }; readonly mcp: string },
+      subjectHash: string | null,
+    ) {
       if (!subjectHash) return Option.none<string>()
+      const profiles = Database.Schema.app_profile
       const rows = yield* database.db
-        .select({ name: credentials.name, label: credentials.label })
+        .select({ label: credentials.label, slug: profiles.slug, name: profiles.name })
         .from(credentials)
+        .innerJoin(profiles, eq(profiles.id, credentials.profile_id))
         .where(
           and(
             eq(credentials.organization_id, taken.organization_id),
-            eq(credentials.app_id, taken.app_id),
-            eq(credentials.mcp, taken.mcp),
-            eq(credentials.owner, taken.owner),
-            taken.space_id ? eq(credentials.space_id, taken.space_id) : isNull(credentials.space_id),
-            taken.user_id ? eq(credentials.user_id, taken.user_id) : isNull(credentials.user_id),
+            eq(profiles.app_id, found.app.id),
             eq(credentials.account_subject_hash, subjectHash),
             ne(credentials.id, taken.credential_id),
+            or(eq(profiles.kind, "shared"), eq(profiles.user_id, taken.initiator_user_id)),
           ),
         )
         .pipe(Effect.orDie)
-      return Option.map(Option.fromNullishOr(rows.at(0)), (row) => row.name ?? row.label)
+      const match = rows.find((row) => row.label === ProfileLabel.labelOf({ mcp: found.mcp }, row.slug))
+      return Option.map(Option.fromNullishOr(match), (row) => row.name)
     })
-
-    const finishProvider = (taken: Session, state: ProviderState) =>
-      completeProvider(taken, state).pipe(
-        Effect.flatMap((label): Effect.Effect<Outcome> =>
-          Option.isNone(label)
-            ? fail(taken.id, "Composio did not finish the connection.")
-            : database.db
-                .update(sessions)
-                .set({ status: "complete" })
-                .where(eq(sessions.id, taken.id))
-                .pipe(
-                  Effect.orDie,
-                  Effect.as({ ok: true as const, label: label.value, sameAccountAs: Option.none<string>() }),
-                ),
-        ),
-        Effect.catchTags({
-          "McpProvider.Failed": (error) => fail(taken.id, error.message),
-          "McpProvider.Unavailable": (error) => fail(taken.id, error.message),
-        }),
-      )
 
     const gate = Effect.fnUntraced(function* (taken: Session, now: number, browser: Option.Option<Auth.UserID>) {
       if (taken.expires_at.getTime() <= now) {
@@ -851,7 +634,14 @@ export const layer = Layer.effect(
       return Option.none<Outcome>()
     })
 
-    // oxlint-disable-next-line ren/no-comments -- §7 rule 9: `state` is consumed once (ren-v1 bug 13); an expired or another person's sign-in fails.
+    const complete = (taken: Session, sameAccountAs: Option.Option<string>) =>
+      database.db
+        .update(sessions)
+        .set({ status: "complete", same_account_as: Option.getOrNull(sameAccountAs) })
+        .where(eq(sessions.id, taken.id))
+        .pipe(Effect.orDie, Effect.as({ ok: true as const, label: taken.label, sameAccountAs }))
+
+    // oxlint-disable-next-line ren/no-comments -- §7 rule 9: `state` is consumed once (ren-v1 bug 13); an expired or another person's sign-in fails. A provider session goes to ProviderConnect (profiles.md §14 rule 5).
     const callback = Effect.fn("OAuth.callback")(function* (input: Callback, browser: Option.Option<Auth.UserID>) {
       const now = yield* Clock.currentTimeMillis
       const consumed = yield* consume(input.state, now)
@@ -859,8 +649,27 @@ export const layer = Layer.effect(
       const taken = consumed.success
       const refused = yield* gate(taken, now, browser)
       if (Option.isSome(refused)) return refused.value
-      const providerState = decodeProviderState(taken.discovery_state)
-      if (Option.isSome(providerState)) return yield* finishProvider(taken, providerState.value)
+      const valid = yield* stillValid(taken)
+      if (Option.isSome(ProviderConnect.decodePending(taken.discovery_state))) {
+        if (Result.isFailure(valid)) {
+          yield* providerConnect.abandon(taken)
+          return yield* fail(taken.id, valid.failure)
+        }
+        const finished = yield* providerConnect.finish(taken)
+        return Result.isFailure(finished)
+          ? yield* fail(taken.id, finished.failure)
+          : yield* complete(taken, Option.none())
+      }
+      if (Result.isFailure(valid)) return yield* fail(taken.id, valid.failure)
+      return yield* finishOAuth(taken, input, valid.success, now)
+    })
+
+    const finishOAuth = Effect.fnUntraced(function* (
+      taken: Session,
+      input: Callback,
+      found: Result.Result.Success<Effect.Success<ReturnType<typeof stillValid>>>,
+      now: number,
+    ) {
       const discovered = decodeDiscovered(taken.discovery_state)
       if (Option.isNone(discovered) || !taken.client_info || !taken.code_verifier)
         return yield* fail(taken.id, "The sign-in session is damaged.")
@@ -881,14 +690,8 @@ export const layer = Layer.effect(
         return yield* fail(taken.id, `The server refused the sign-in (${answered.value.failure.code}).`)
       const token = answered.value.success
       const saved = yield* save(taken, valueOf(taken, client, discovered.value, token), token, now)
-      if (Option.isNone(saved)) return yield* fail(taken.id, "The app no longer declares this MCP.")
-      const sameAccountAs = yield* sameAccount(taken, saved.value)
-      yield* database.db
-        .update(sessions)
-        .set({ status: "complete", same_account_as: Option.getOrNull(sameAccountAs) })
-        .where(eq(sessions.id, taken.id))
-        .pipe(Effect.orDie)
-      return { ok: true as const, label: taken.label, sameAccountAs }
+      if (Result.isFailure(saved)) return yield* fail(taken.id, saved.failure)
+      return yield* complete(taken, yield* sameAccount(taken, found, saved.success))
     })
 
     const session = Effect.fn("OAuth.session")(function* (actor: Actor.Info, id: string) {
@@ -940,8 +743,6 @@ export const layerRefresher = Layer.effect(
   CredentialRefresh.Refreshers,
   Effect.gen(function* () {
     const http = yield* OAuthFetch.Service
-    const providers = yield* McpProvider.Service
-    const cleanup = yield* McpProvider.Cleanup
     const issuers = yield* Cache.makeWith(
       (issuer: string) =>
         Effect.tryPromise({
@@ -1028,34 +829,9 @@ export const layerRefresher = Layer.effect(
         })
       }),
     }
-    // oxlint-disable-next-line ren/no-comments -- §10 rule 11 (K29): after a 401 from Composio, an ACTIVE account gets a new session for the same account and only the old session is cleaned up; any other status is fatal.
-    const route: CredentialRefresh.Refresher = {
-      refresh: Effect.fnUntraced(function* (current) {
-        const value = current.value
-        if (value.type !== "route" || Option.isNone(current.providerAccountId)) return Option.none()
-        const accountId = current.providerAccountId.value
-        const provider = yield* providers
-          .get("composio")
-          .pipe(Effect.mapError((error) => new CredentialRefresh.Transient({ message: error.message })))
-        const status = yield* provider
-          .liveStatus(accountId)
-          .pipe(Effect.mapError((error) => new CredentialRefresh.Transient({ message: error.message })))
-        if (status !== "ACTIVE")
-          return yield* new CredentialRefresh.Fatal({ message: `The Composio account is ${status}` })
-        const created = yield* provider
-          .session({ credentialId: current.id, toolkit: value.toolkit, accountId })
-          .pipe(Effect.mapError((error) => new CredentialRefresh.Transient({ message: error.message })))
-        return Option.some({
-          value: { ...value, upstream: Redacted.make(created.upstream), sessionId: created.sessionId },
-          expiresAt: Option.none(),
-          saved: cleanup.start({ provider: "composio", sessionId: value.sessionId }),
-        })
-      }),
-    }
     return new Map<Credential.Type, CredentialRefresh.Refresher>([
       ["oauth", refresher],
       ["client_credentials", clientCredentials],
-      ["route", route],
     ])
   }),
 )

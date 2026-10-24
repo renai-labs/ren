@@ -25,6 +25,7 @@ export interface Current {
   readonly revision: number
   readonly scopes: ReadonlyArray<string>
   readonly expiresAt: Option.Option<Date>
+  readonly provider: Option.Option<Credential.Provider>
   readonly providerAccountId: Option.Option<string>
 }
 
@@ -163,6 +164,7 @@ export const layer = Layer.effect(
           revision: row.revision,
           scopes: row.scopes,
           expiresAt: Option.fromNullishOr(row.expires_at),
+          provider: Option.fromNullishOr(row.provider),
           providerAccountId: Option.fromNullishOr(row.provider_account_id),
         })
         .pipe(

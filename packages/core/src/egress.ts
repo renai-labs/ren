@@ -4,6 +4,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Credential } from "@ren/schema/credential"
 import { Workload } from "@ren/schema/workload"
 import { Context, DateTime, Effect, Layer, Option, Result, Schema } from "effect"
+import { AppProfiles } from "./app/profiles.js"
 import { CredentialCallers } from "./credential-callers.js"
 import { CredentialRefresh } from "./credential-refresh.js"
 import { CredentialSource } from "./credential-source.js"
@@ -53,7 +54,7 @@ export const ttlSeconds = 30
 const deny = (reason: Injection.DenyReason, label?: string): Injection.Reply =>
   label ? { allow: false, reason, label } : { allow: false, reason }
 
-// oxlint-disable-next-line ren/no-comments -- README §6.3 and C36: who (CredentialCallers), which (Credentials.match), value (CredentialSource), where (Injection.plan). Logs hold labels, never values (C31, C50).
+// oxlint-disable-next-line ren/no-comments -- README §6.3 and C36: who (CredentialCallers), what it reaches (AppProfiles), which (Credentials.match), value (CredentialSource), where (Injection.plan). Logs hold labels, never values (C31, C50).
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -62,6 +63,16 @@ export const layer = Layer.effect(
     const sources = yield* CredentialSource.Service
     const refresh = yield* CredentialRefresh.Service
     const control = yield* EgressControl.Service
+    const profiles = yield* AppProfiles.Service
+
+    // oxlint-disable-next-line ren/no-comments -- profiles.md §13 rule 1 (P41): reach decides which profiles' credentials are candidates; Credentials never reads reach.
+    const candidatesOf = Effect.fnUntraced(function* (scope: Credentials.Scope) {
+      const reached = yield* profiles.reachable(scope)
+      return yield* sources.candidates(
+        scope,
+        reached.map((profile) => profile.id),
+      )
+    })
 
     const caller = Effect.fnUntraced(function* (principal: Principal, proof: CredentialCallers.Proof) {
       if (proof.kind === "Login" && principal.kind !== "ren") return Result.fail("unknown_workload" as const)
@@ -111,7 +122,7 @@ export const layer = Layer.effect(
         const scope = yield* credentials.scopeOf(found.success.workload)
         if (Option.isNone(scope)) return deny("unknown_workload")
         const workload = Workload.key(found.success.workload)
-        const matched = Credentials.match(yield* sources.candidates(scope.value), request)
+        const matched = Credentials.match(yield* candidatesOf(scope.value), request)
         if (!matched.ok) {
           yield* Effect.logInfo("Egress denied a request").pipe(
             Effect.annotateLogs({ workload, host: request.host, reason: matched.reason, label: matched.label ?? "" }),
@@ -175,7 +186,7 @@ export const layer = Layer.effect(
         }
         const scope = yield* credentials.scopeOf(found.success.workload)
         if (Option.isNone(scope)) return
-        const candidates = yield* sources.candidates(scope.value)
+        const candidates = yield* candidatesOf(scope.value)
         yield* Effect.forEach(
           report.labels,
           (reported) => {

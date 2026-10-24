@@ -12,6 +12,7 @@ export const relationships = {
   spaceMember: "credential.spaceMember",
   person: "credential.person",
   self: "credential.self",
+  profile: "credential.profile",
 } as const
 
 const read = Primitive.actions(Credential.definition, ["list", "get"])
@@ -24,7 +25,7 @@ const every = SpacePolicy.organizationRoles
 
 const admins = SpacePolicy.administratorRoles
 
-// oxlint-disable-next-line ren/no-comments -- owner-access §4. An admin sees a person's credential and may delete it, never use, move or copy it. "Only the account holder moves an account credential" is checked in `Credentials.move`, because a statement cannot name the holder.
+// oxlint-disable-next-line ren/no-comments -- owner-access §4. A profile's credentials follow who sees the profile (profiles.md §10), which `Credentials` checks before this statement applies. An admin sees a person's credential and may delete it, never use, move or copy it. "Only the account holder moves an account credential" is checked in `Credentials.move`, because a statement cannot name the holder.
 export const documents = [
   {
     primitive: Credential.definition.name,
@@ -34,6 +35,7 @@ export const documents = [
       { actions: [...read, ...write], roles: every, on: relationships.spaceMember },
       { actions: [...read, ...write], roles: every, on: relationships.self },
       { actions: [...read, ...remove], roles: admins, on: relationships.person },
+      { actions: [...read, ...write], roles: every, on: relationships.profile },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
@@ -48,5 +50,6 @@ export const resource = (
       relationships: [relationships.space, ...(context.isSpaceMember ? [relationships.spaceMember] : [])],
       spaceId: owner.spaceId,
     }
+  if (owner.kind === "profile") return { relationships: [relationships.profile] }
   return { relationships: [owner.userId === context.userId ? relationships.self : relationships.person] }
 }

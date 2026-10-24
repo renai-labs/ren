@@ -1,19 +1,21 @@
 import { afterAll, describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import type { AppProfile } from "@ren/schema/app-profile"
 import type { Mcp } from "@ren/schema/mcp"
 import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { Access } from "../src/access.js"
 import { App } from "../src/app.js"
-import { AppRelease } from "../src/app/release.js"
+import { AppProfiles } from "../src/app/profiles.js"
 import { CredentialRefresh } from "../src/credential-refresh.js"
 import { Credentials } from "../src/credentials.js"
 import { DurableRunner } from "../src/durable-runner.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
 import { OAuth } from "../src/oauth.js"
-import { McpProvider } from "../src/mcp-provider.js"
+import { ProfileItems } from "../src/app/profile-items.js"
+import { ProviderConnect } from "../src/mcp-provider/connect.js"
 import { OAuthApps } from "../src/oauth-apps.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
 import { testEffect } from "./lib/effect.js"
@@ -26,8 +28,9 @@ afterAll(() => server.stop())
 const invalidated: Array<string> = []
 
 const it = testEffect(
-  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer, AppRelease.layer, OAuthApps.layer).pipe(
+  Layer.mergeAll(OAuth.layer, CredentialRefresh.layer, App.layer, AppProfiles.layer, OAuthApps.layer).pipe(
     Layer.provideMerge(OAuth.layerRefresher),
+    Layer.provideMerge(ProviderConnect.layer),
     Layer.provideMerge(Credentials.layer),
     Layer.provideMerge(
       Layer.mergeAll(
@@ -35,7 +38,6 @@ const it = testEffect(
         Envelope.layerLocal,
         OAuthFetch.layerUnchecked,
         DurableRunner.layerMemory,
-        McpProvider.layerNone,
         Layer.succeed(
           EgressControl.Service,
           EgressControl.Service.of({
@@ -73,6 +75,7 @@ const oauth = (
 
 const setup = Effect.fnUntraced(function* (declaration: Mcp.Declaration = oauth()) {
   const apps = yield* App.Service
+  const profiles = yield* AppProfiles.Service
   const database = yield* Database.Service
   const organizationId = yield* Seed.organization()
   const actor = yield* Seed.actor(organizationId, "admin")
@@ -81,41 +84,44 @@ const setup = Effect.fnUntraced(function* (declaration: Mcp.Declaration = oauth(
     actor,
     Seed.appInput(space, `linear-${crypto.randomUUID().slice(0, 8)}`, { mcps: { linear: declaration } }),
   )
+  const local: Mcp.Declaration = {
+    name: declaration.name,
+    description: declaration.description,
+    auth: declaration.auth,
+    requiredCredentials: declaration.requiredCredentials,
+    transport: { type: "remote", url: server.mcpUrl },
+  }
   yield* database.db
-    .update(Database.Schema.app_release)
-    .set({
-      mcps: {
-        linear: {
-          name: declaration.name,
-          description: declaration.description,
-          auth: declaration.auth,
-          requiredCredentials: declaration.requiredCredentials,
-          transport: { type: "remote", url: server.mcpUrl },
-        },
-      },
-    })
-    .where(eq(Database.Schema.app_release.id, app.latestReleaseId))
-  return { actor, app, space, declaration, owner: { kind: "person" as const, userId: actor.userId } }
+    .update(Database.Schema.app)
+    .set({ mcps: { linear: local } })
+    .where(eq(Database.Schema.app.id, app.id))
+  const profile = (yield* profiles.list(actor, { appId: app.id, page: 1, pageSize: 50 })).items.at(0)
+  if (!profile) return yield* Effect.die(new Error("expected the owner-space profile"))
+  return { actor, app, space, declaration: local, profile }
+})
+
+type Found = Effect.Success<ReturnType<typeof setup>>
+
+const second = Effect.fnUntraced(function* (found: Found, slug: string) {
+  const profiles = yield* AppProfiles.Service
+  return yield* profiles.create(found.actor, { appId: found.app.id, slug, name: slug, kind: "shared", spaceIds: [] })
 })
 
 const connect = Effect.fnUntraced(function* (
-  found: Effect.Success<ReturnType<typeof setup>>,
-  options: { readonly connection?: string; readonly reconnect?: boolean } = {},
+  found: Found,
+  options: { readonly profileId?: AppProfile.ID; readonly reconnect?: boolean } = {},
 ) {
   const service = yield* OAuth.Service
   const result = yield* service.connect(found.actor, {
-    owner: found.owner,
-    target: {
-      kind: "mcp",
-      app: found.app.id,
-      mcp: "linear",
-      ...(options.connection && { connection: options.connection }),
-    },
+    profileId: options.profileId ?? found.profile.id,
+    item: { mcp: "linear" },
     ...(options.reconnect && { reconnect: true }),
   })
   if (!("redirectUrl" in result)) return yield* Effect.die(new Error("expected a redirect"))
   return new URL(result.redirectUrl)
 })
+
+const LABEL = "MCP_LINEAR__TEAM"
 
 const stored = Effect.fnUntraced(function* (label: string) {
   const database = yield* Database.Service
@@ -187,7 +193,7 @@ describe("OAuth.connect: discovery (§7 rule 2, test 8)", () => {
       const service = yield* OAuth.Service
       const found = yield* setup()
       const error = yield* Effect.flip(
-        service.connect(found.actor, { owner: found.owner, target: { kind: "mcp", app: found.app.id, mcp: "linear" } }),
+        service.connect(found.actor, { profileId: found.profile.id, item: { mcp: "linear" } }),
       )
       expect(error.message).toContain("does not ask for sign-in")
     }),
@@ -237,7 +243,7 @@ describe("OAuth.connect: client, scope, resource and PKCE (tests 9, 10, 11, 32)"
       const service = yield* OAuth.Service
       const found = yield* setup()
       const error = yield* Effect.flip(
-        service.connect(found.actor, { owner: found.owner, target: { kind: "mcp", app: found.app.id, mcp: "linear" } }),
+        service.connect(found.actor, { profileId: found.profile.id, item: { mcp: "linear" } }),
       )
       expect(error.message).toContain("S256")
       yield* reset({ metadata: { code_challenge_methods_supported: undefined } })
@@ -257,10 +263,7 @@ describe("OAuth.connect: org apps (test 9, owner-access §7)", () => {
         const declaration = oauth({}, [{ kind: "oauth_app", name: "Linear", optional: false }])
         const found = yield* setup(declaration)
         const missing = yield* Effect.flip(
-          service.connect(found.actor, {
-            owner: found.owner,
-            target: { kind: "mcp", app: found.app.id, mcp: "linear" },
-          }),
+          service.connect(found.actor, { profileId: found.profile.id, item: { mcp: "linear" } }),
         )
         expect(missing.message).toContain("AppNotConfigured")
         const app = yield* apps.create(found.actor, {
@@ -283,8 +286,9 @@ describe("OAuth.connect: org apps (test 9, owner-access §7)", () => {
           .update(Database.Schema.oauth_app)
           .set({ token_endpoint: `${server.origin}/token` })
           .where(eq(Database.Schema.oauth_app.id, app.id))
-        const second = yield* connect(found, { connection: "two" })
-        yield* service.callback({ state: second.searchParams.get("state") ?? "", code: "c" }, Option.none())
+        const two = yield* second(found, "two")
+        const signIn = yield* connect(found, { profileId: two.id })
+        yield* service.callback({ state: signIn.searchParams.get("state") ?? "", code: "c" }, Option.none())
         expect(server.seen.find((seen) => seen.path === "/token")?.form.get("client_secret")).toBe("org-secret")
         expect((yield* Effect.flip(apps.archive(found.actor, app.id))).message).toContain("InUse")
         yield* apps.archive(found.actor, app.id, { force: true })
@@ -295,31 +299,45 @@ describe("OAuth.connect: org apps (test 9, owner-access §7)", () => {
 
 describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
   it.live(
-    "a sign-in saves an oauth credential with app, mcp and resource; the token request sends the verifier and resource",
+    "connect by profile and item: the session holds the five fields; the callback saves owner profile with the holder",
     () =>
       Effect.gen(function* () {
         yield* reset()
         const service = yield* OAuth.Service
+        const database = yield* Database.Service
         const found = yield* setup()
         const redirect = yield* connect(found)
         const state = redirect.searchParams.get("state") ?? ""
+        const session = (yield* database.db
+          .select()
+          .from(Database.Schema.oauth_session)
+          .where(eq(Database.Schema.oauth_session.state, state))).at(0)
+        if (!session) return yield* Effect.die(new Error("expected a sign-in session"))
+        expect(session).toMatchObject({
+          profile_id: found.profile.id,
+          label: LABEL,
+          name: "Linear",
+          hosts: ["127.0.0.1"],
+          made_for: ProfileItems.madeFor(found.declaration),
+        })
         const outcome = yield* service.callback({ state, code: "c1" }, Option.none())
-        expect(outcome).toMatchObject({ ok: true, label: "MCP_LINEAR" })
-        const saved = yield* stored("MCP_LINEAR")
+        expect(outcome).toMatchObject({ ok: true, label: LABEL })
+        const saved = yield* stored(LABEL)
         expect(saved?.row).toMatchObject({
+          id: session.credential_id,
           type: "oauth",
-          app_id: found.app.id,
-          mcp: "linear",
-          connection: null,
+          owner: "profile",
+          profile_id: found.profile.id,
           account_user_id: found.actor.userId,
           hosts: ["127.0.0.1"],
         })
+        expect(saved?.row.made_for).toBe(session.made_for)
         expect(saved?.row.expires_at).not.toBeNull()
         expect(saved?.value.type === "oauth" && saved.value.refresh?.resource).toBe(server.mcpUrl)
         const token = server.seen.find((seen) => seen.path === "/token")
         expect(token?.form.get("code_verifier")).toBeTruthy()
         expect(token?.form.get("resource")).toBe(server.mcpUrl)
-        expect(invalidated).toEqual(["MCP_LINEAR"])
+        expect(invalidated).toEqual([LABEL])
         expect(yield* service.callback({ state, code: "c1" }, Option.none())).toEqual({
           ok: false,
           reason: "StateInvalid: used",
@@ -327,33 +345,64 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
       }),
   )
 
-  it.live("the callback uses the release recorded at start, also after a newer release (test 27)", () =>
-    Effect.gen(function* () {
-      yield* reset()
-      const service = yield* OAuth.Service
-      const releases = yield* AppRelease.Service
-      const found = yield* setup()
-      const redirect = yield* connect(found)
-      yield* releases.create(found.actor, {
-        requiredCredentials: [],
-        skills: {},
-        dependsOn: [],
-        appId: found.app.id,
-        expectedLatestReleaseId: found.app.latestReleaseId,
-        version: "0.0.2",
-        mcps: {
-          linear: {
-            name: "Linear",
-            description: "Linear issues",
-            auth: found.declaration.auth,
-            requiredCredentials: [],
-            transport: { type: "remote", url: "https://linear-v2.example.test/mcp" },
+  it.live(
+    "the callback fails when the profile is gone, the initiator lost it, or the app dropped the MCP (§9 rule 8)",
+    () =>
+      Effect.gen(function* () {
+        yield* reset()
+        const service = yield* OAuth.Service
+        const profiles = yield* AppProfiles.Service
+        const apps = yield* App.Service
+        const database = yield* Database.Service
+        const callback = (url: URL) =>
+          service.callback({ state: url.searchParams.get("state") ?? "", code: "c" }, Option.none())
+        const gone = yield* setup()
+        const deleted = yield* connect(gone)
+        yield* profiles.delete(gone.actor, gone.profile.id)
+        expect(yield* callback(deleted)).toEqual({ ok: false, reason: "This profile was deleted." })
+        const lost = yield* setup()
+        const started = yield* connect(lost)
+        yield* database.db.delete(Database.Schema.member).where(eq(Database.Schema.member.userId, lost.actor.userId))
+        expect(yield* callback(started)).toEqual({ ok: false, reason: "You can no longer use this profile." })
+        const dropped = yield* setup()
+        const before = yield* connect(dropped)
+        yield* apps.update(dropped.actor, dropped.app.id, {
+          requiredCredentials: [],
+          mcps: {},
+          skills: {},
+          dependsOn: [],
+          expectedRevision: dropped.app.revision,
+        })
+        expect(yield* callback(before)).toEqual({ ok: false, reason: "The app no longer declares this MCP." })
+        expect(yield* stored(LABEL)).toBeUndefined()
+      }),
+  )
+
+  it.live(
+    "two people connect one empty item at once: the first callback saves, the second fails and names the holder",
+    () =>
+      Effect.gen(function* () {
+        yield* reset()
+        const service = yield* OAuth.Service
+        const found = yield* setup()
+        const bob = yield* Seed.user({ name: "Bob" })
+        yield* Seed.member(found.actor.organizationId, bob.id, "admin")
+        const first = yield* connect(found)
+        const other = yield* service.connect(
+          { userId: bob.id, organizationId: found.actor.organizationId, roles: ["admin"] },
+          { profileId: found.profile.id, item: { mcp: "linear" } },
+        )
+        if (!("redirectUrl" in other)) return yield* Effect.die(new Error("expected a redirect"))
+        const state = (url: URL) => url.searchParams.get("state") ?? ""
+        expect((yield* service.callback({ state: state(first), code: "c" }, Option.none())).ok).toBe(true)
+        expect(yield* service.callback({ state: state(new URL(other.redirectUrl)), code: "c" }, Option.none())).toEqual(
+          {
+            ok: false,
+            reason: "Ada connected this first.",
           },
-        },
-      })
-      yield* service.callback({ state: redirect.searchParams.get("state") ?? "", code: "c" }, Option.none())
-      expect((yield* stored("MCP_LINEAR"))?.row.hosts).toEqual(["127.0.0.1"])
-    }),
+        )
+        expect((yield* stored(LABEL))?.row.account_user_id).toBe(found.actor.userId)
+      }),
   )
 
   it.live("token answers: no refresh token and expires_in as a string are accepted; a 2xx error and DPoP fail", () =>
@@ -376,7 +425,7 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
         }),
       )
       expect(outcomes).toEqual(answers.map((answer) => answer.ok))
-      const last = yield* stored("MCP_LINEAR")
+      const last = yield* stored(LABEL)
       expect(last?.row.expires_at).toBeNull()
     }),
   )
@@ -386,7 +435,11 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
     () =>
       Effect.gen(function* () {
         const service = yield* OAuth.Service
-        const run = (options: { readonly supported: boolean }, iss: string | undefined, extra: Partial<OAuth.Callback> = {}) =>
+        const run = (
+          options: { readonly supported: boolean },
+          iss: string | undefined,
+          extra: Partial<OAuth.Callback> = {},
+        ) =>
           Effect.gen(function* () {
             yield* reset({ metadata: { authorization_response_iss_parameter_supported: options.supported } })
             const redirect = yield* connect(yield* setup())
@@ -410,7 +463,10 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
         })
         expect(mismatch.ok).toBe(false)
         expect(JSON.stringify(mismatch)).not.toContain("evil.test")
-        const denied = yield* run({ supported: false }, undefined, { error: "access_denied", errorDescription: "The person said no" })
+        const denied = yield* run({ supported: false }, undefined, {
+          error: "access_denied",
+          errorDescription: "The person said no",
+        })
         expect(denied).toEqual({ ok: false, reason: "The person said no" })
       }),
   )
@@ -425,16 +481,16 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
         const found = yield* setup()
         const first = yield* connect(found)
         yield* service.callback({ state: first.searchParams.get("state") ?? "", code: "c" }, Option.none())
-        const before = yield* stored("MCP_LINEAR")
+        const before = yield* stored(LABEL)
         if (!before) return yield* Effect.die(new Error("expected a credential"))
         yield* credentials.addWantedScopes(before.row.id, ["write"])
         const again = yield* connect(found, { reconnect: true })
         expect(again.searchParams.get("scope")?.split(" ").toSorted()).toEqual(["read", "write"])
-        const during = yield* stored("MCP_LINEAR")
+        const during = yield* stored(LABEL)
         expect(during?.value.type === "oauth" && Redacted.value(during.value.accessToken)).toBe("tok_first")
         server.options = { token: () => OAuthServer.bearer("tok_second", { scope: "read write" }) }
         yield* service.callback({ state: again.searchParams.get("state") ?? "", code: "c" }, Option.none())
-        const after = yield* stored("MCP_LINEAR")
+        const after = yield* stored(LABEL)
         expect(after?.row).toMatchObject({
           id: before.row.id,
           revision: 2,
@@ -445,7 +501,7 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
       }),
   )
 
-  it.live("a second connection with the same sub warns; another sub does not; the hash, not the id, is stored", () =>
+  it.live("the same account in another profile of the app warns; another account does not; the hash is stored", () =>
     Effect.gen(function* () {
       const service = yield* OAuth.Service
       const idToken = (sub: string) => `x.${Buffer.from(JSON.stringify({ sub })).toString("base64url")}.y`
@@ -453,16 +509,17 @@ describe("OAuth.callback (tests 12, 13, 27, 29, 32)", () => {
       const found = yield* setup()
       const first = yield* connect(found)
       yield* service.callback({ state: first.searchParams.get("state") ?? "", code: "c" }, Option.none())
-      const second = yield* connect(found, { connection: "acme" })
-      const same = yield* service.callback({ state: second.searchParams.get("state") ?? "", code: "c" }, Option.none())
-      expect(same).toMatchObject({ ok: true, label: "MCP_LINEAR__ACME", sameAccountAs: Option.some("Linear") })
+      const acme = yield* second(found, "acme")
+      const again = yield* connect(found, { profileId: acme.id })
+      const same = yield* service.callback({ state: again.searchParams.get("state") ?? "", code: "c" }, Option.none())
+      expect(same).toMatchObject({ ok: true, label: "MCP_LINEAR__ACME", sameAccountAs: Option.some("Team") })
       server.options = { token: () => OAuthServer.bearer("t", { id_token: idToken("user-2") }) }
-      const third = yield* connect(found, { connection: "globex" })
+      const globex = yield* second(found, "globex")
+      const third = yield* connect(found, { profileId: globex.id })
       const other = yield* service.callback({ state: third.searchParams.get("state") ?? "", code: "c" }, Option.none())
       expect(other).toMatchObject({ ok: true, sameAccountAs: Option.none() })
       const row = (yield* stored("MCP_LINEAR__ACME"))?.row
       expect(row?.account_subject_hash).toBe(new Bun.CryptoHasher("sha256").update("user-1").digest("hex"))
-      expect(row?.connection).toBe("acme")
     }),
   )
 })
@@ -474,7 +531,7 @@ describe("OAuth refresher (§8; tests 3, 5, 6, 7, 10)", () => {
     const database = yield* Database.Service
     const redirect = yield* connect(yield* setup())
     yield* service.callback({ state: redirect.searchParams.get("state") ?? "", code: "c" }, Option.none())
-    const saved = yield* stored("MCP_LINEAR")
+    const saved = yield* stored(LABEL)
     if (!saved) return yield* Effect.die(new Error("expected a credential"))
     yield* database.db
       .update(Database.Schema.credential)
@@ -496,7 +553,7 @@ describe("OAuth refresher (§8; tests 3, 5, 6, 7, 10)", () => {
       expect(request?.form.get("grant_type")).toBe("refresh_token")
       expect(request?.form.get("resource")).toBe(server.mcpUrl)
       expect(request?.form.get("client_id")).toBe("registered-client")
-      const saved = yield* stored("MCP_LINEAR")
+      const saved = yield* stored(LABEL)
       expect(saved?.row).toMatchObject({ revision: 2, scopes: ["read"] })
       expect(
         saved?.value.type === "oauth" && saved.value.refresh && Redacted.value(saved.value.refresh.refreshToken),
@@ -521,7 +578,7 @@ describe("OAuth refresher (§8; tests 3, 5, 6, 7, 10)", () => {
           const id = yield* signedIn(() => OAuthServer.bearer("tok_1", { refresh_token: "ref_1", expires_in: 3600 }))
           server.options = { token: () => ({ status: answer.status, body: answer.body }) }
           yield* refresh.refresh(id, {})
-          return (yield* stored("MCP_LINEAR"))?.row.status
+          return (yield* stored(LABEL))?.row.status
         }),
       )
       expect(statuses).toEqual(answers.map((answer) => answer.after))
@@ -534,13 +591,13 @@ describe("OAuth refresher (§8; tests 3, 5, 6, 7, 10)", () => {
       const database = yield* Database.Service
       const id = yield* signedIn(() => OAuthServer.bearer("tok_1", { expires_in: 3600 }))
       yield* refresh.refresh(id, {})
-      expect((yield* stored("MCP_LINEAR"))?.row).toMatchObject({ status: "ok", revision: 1 })
+      expect((yield* stored(LABEL))?.row).toMatchObject({ status: "ok", revision: 1 })
       yield* database.db
         .update(Database.Schema.credential)
         .set({ expires_at: new Date(Date.now() - 1000) })
         .where(eq(Database.Schema.credential.id, id))
       yield* refresh.refresh(id, {})
-      expect((yield* stored("MCP_LINEAR"))?.row.status).toBe("reconnect")
+      expect((yield* stored(LABEL))?.row.status).toBe("reconnect")
     }),
   )
 
@@ -551,7 +608,7 @@ describe("OAuth refresher (§8; tests 3, 5, 6, 7, 10)", () => {
       server.options = { metadata: { issuer: "https://other.test" } }
       yield* refresh.refresh(id, {})
       expect(server.seen.map((seen) => seen.path)).not.toContain("/token")
-      expect((yield* stored("MCP_LINEAR"))?.row.status).toBe("reconnect")
+      expect((yield* stored(LABEL))?.row.status).toBe("reconnect")
     }),
   )
 })

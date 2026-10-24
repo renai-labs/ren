@@ -5,7 +5,6 @@ import { Database } from "@ren/db/database"
 import { App } from "@ren/schema/app"
 import type { AppListing } from "@ren/schema/app-listing"
 import { AppRegistry } from "@ren/schema/app-registry"
-import { AppRelease } from "@ren/schema/app-release"
 import { Pagination } from "@ren/util/pagination"
 import { and, asc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm"
 import { Context, Data, DateTime, Effect, Layer } from "effect"
@@ -48,16 +47,13 @@ const listedDependencies = Effect.fnUntraced(function* (
 ) {
   if (!apps.length) return
   const edges = yield* transaction
-    .select({ releaseId: Database.Schema.app_release_dependency.app_release_id, dependency: Database.Schema.app })
-    .from(Database.Schema.app_release_dependency)
-    .innerJoin(
-      Database.Schema.app,
-      eq(Database.Schema.app.id, Database.Schema.app_release_dependency.dependency_app_id),
-    )
+    .select({ dependency: Database.Schema.app })
+    .from(Database.Schema.app_dependency)
+    .innerJoin(Database.Schema.app, eq(Database.Schema.app.id, Database.Schema.app_dependency.dependency_app_id))
     .where(
       inArray(
-        Database.Schema.app_release_dependency.app_release_id,
-        apps.map((app) => app.latest_release_id),
+        Database.Schema.app_dependency.app_id,
+        apps.map((app) => app.id),
       ),
     )
   if (!edges.length) return
@@ -81,40 +77,33 @@ const entries = Effect.fnUntraced(function* (
     readonly listing: typeof Database.Schema.app_listing.$inferSelect
   }>,
 ) {
-  const releases = rows.length
-    ? yield* AppQueries.releaseInfos(
-        transaction,
-        yield* transaction
-          .select()
-          .from(Database.Schema.app_release)
-          .where(
-            inArray(
-              Database.Schema.app_release.id,
-              rows.map((row) => row.app.latest_release_id),
-            ),
-          ),
-      )
-    : new Map<AppRelease.ID, AppRelease.Info>()
-  return yield* Effect.forEach(rows, (row) => {
-    const release = releases.get(row.app.latest_release_id)
-    if (!release) return Effect.die(new Error("Latest release is missing"))
-    return Effect.succeed({
-      id: row.app.id,
-      slug: row.app.slug,
-      name: row.app.name,
-      description: row.app.description,
-      icon: row.app.icon,
-      listing: listingInfo(row.listing),
-      release,
-    })
+  const infos = yield* AppQueries.infos(
+    transaction,
+    rows.map((row) => row.app),
+  )
+  return rows.flatMap((row, index): ReadonlyArray<AppRegistry.Info> => {
+    const info = infos.at(index)
+    if (!info) return []
+    return [
+      {
+        id: info.id,
+        slug: info.slug,
+        name: info.name,
+        description: info.description,
+        icon: info.icon,
+        listing: listingInfo(row.listing),
+        requiredCredentials: info.requiredCredentials,
+        ...(info.environment && { environment: info.environment }),
+        mcps: info.mcps,
+        skills: info.skills,
+        dependsOn: info.dependsOn,
+        revision: info.revision,
+      },
+    ]
   })
 })
 
-const dependencyApps = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  batch: AppRegistry.Batch,
-  locked: ReadonlyMap<string, typeof Database.Schema.app.$inferSelect>,
-) {
+const dependencyApps = Effect.fnUntraced(function* (transaction: Database.Transaction, batch: AppRegistry.Batch) {
   const duplicate = batch.apps
     .flatMap((app) =>
       app.dependsOn.flatMap((slug, index) =>
@@ -131,23 +120,13 @@ const dependencyApps = Effect.fnUntraced(function* (
       .select()
       .from(Database.Schema.app)
       .where(and(inArray(Database.Schema.app.slug, pending), isNull(Database.Schema.app.archived_at)))
-    const releases = yield* AppQueries.releaseInfos(
+    const edges = yield* AppQueries.dependsOn(
       transaction,
-      rows.length
-        ? yield* transaction
-            .select()
-            .from(Database.Schema.app_release)
-            .where(
-              inArray(
-                Database.Schema.app_release.id,
-                rows.map((row) => row.latest_release_id),
-              ),
-            )
-        : [],
+      rows.map((row) => row.id),
     )
     for (const row of rows) {
       outside.set(row.slug, row)
-      graph.set(row.slug, { dependsOn: releases.get(row.latest_release_id)?.dependsOn ?? [] })
+      graph.set(row.slug, { dependsOn: edges.get(row.id) ?? [] })
     }
     pending = [...new Set(rows.flatMap((row) => graph.get(row.slug)?.dependsOn ?? []))].filter(
       (slug) => !graph.has(slug),
@@ -168,12 +147,8 @@ const dependencyApps = Effect.fnUntraced(function* (
   const unavailable = batch.apps.flatMap((app) =>
     app.dependsOn.flatMap((slug) => {
       const dependency = outside.get(slug)
-      const organizationId = locked.get(app.slug)?.organization_id ?? null
-      return dependency &&
-        dependency.organization_id &&
-        dependency.organization_id !== organizationId &&
-        !visible.has(dependency.id)
-        ? [`App “${app.slug}” cannot depend on “${slug}”, which its users cannot install.`]
+      return dependency?.organization_id && !visible.has(dependency.id)
+        ? [`App “${app.slug}” cannot depend on “${slug}”, which its users cannot use.`]
         : []
     }),
   )
@@ -218,52 +193,24 @@ export const layer = Layer.effect(
     const publish = Effect.fnUntraced(function* (transaction: Database.Transaction, batch: AppRegistry.Batch) {
       yield* AppQueries.registryLock(transaction)
       const slugs = batch.apps.map((app) => app.slug)
-      const existing = slugs.length
-        ? yield* transaction.select().from(Database.Schema.app).where(inArray(Database.Schema.app.slug, slugs))
-        : []
-      yield* Effect.forEach(
-        [...new Set(existing.flatMap((app) => (app.organization_id ? [app.organization_id] : [])))].toSorted(),
-        (organizationId) =>
-          transaction.execute(
-            sql`select pg_advisory_xact_lock(${AppQueries.gate.namespace}::int, hashtext(${organizationId}))`,
-          ),
-        { discard: true },
-      )
       const locked = new Map(
-        (existing.length
-          ? yield* transaction
-              .select()
-              .from(Database.Schema.app)
-              .where(
-                inArray(
-                  Database.Schema.app.id,
-                  existing.map((app) => app.id),
-                ),
-              )
+        (slugs.length
+          ? yield* transaction.select().from(Database.Schema.app).where(inArray(Database.Schema.app.slug, slugs))
           : []
         ).map((app) => [app.slug, app]),
       )
+      // oxlint-disable-next-line ren/no-comments -- P37: a publication writes registry apps only; a custom app's slug is refused, never written onto.
+      const custom = [...locked.values()].find((app) => app.organization_id)
+      if (custom)
+        return yield* new Primitive.Conflict({
+          message: `“${custom.slug}” is an organization’s app. Publication changes registry apps only.`,
+        })
       const archived = [...locked.values()].find((app) => app.archived_at)
       if (archived)
         return yield* new Primitive.Conflict({
           message: `App “${archived.slug}” is archived. Publication does not restore it.`,
         })
-      const misowned = batch.apps
-        .flatMap((publication) => {
-          const current = locked.get(publication.slug)
-          const named = publication.organizationId ?? null
-          if (current ? current.organization_id === named : !named) return []
-          if (!current)
-            return [`No app “${publication.slug}” belongs to organization ${named}. Publication does not create one.`]
-          return [
-            current.organization_id
-              ? `“${publication.slug}” is an organization’s app. Name its organization to list it.`
-              : `“${publication.slug}” is a registry app, which no organization owns.`,
-          ]
-        })
-        .at(0)
-      if (misowned) return yield* new Primitive.Conflict({ message: misowned })
-      const outside = yield* dependencyApps(transaction, batch, locked)
+      const outside = yield* dependencyApps(transaction, batch)
       const ordered: Array<AppRegistry.Publication> = []
       const visit = (slug: string): void => {
         const app = batch.apps.find((entry) => entry.slug === slug)
@@ -285,25 +232,20 @@ export const layer = Layer.effect(
             description: publication.description,
             icon: publication.icon ?? null,
           }
-          const release = {
+          const definition = {
             required_credentials: publication.requiredCredentials,
-            environment: publication.environment,
+            environment: publication.environment ?? null,
             skills: publication.skills,
             mcps: publication.mcps,
           }
           const written = current
             ? yield* Effect.gen(function* () {
-                const latest = (yield* transaction
-                  .select()
-                  .from(Database.Schema.app_release)
-                  .where(eq(Database.Schema.app_release.id, current.latest_release_id))).at(0)
-                if (!latest) return yield* Effect.die(new Error("Latest release is missing"))
                 const isMetadataChanged =
                   current.name !== metadata.name ||
                   current.description !== metadata.description ||
                   current.icon !== metadata.icon
                 const isExecutionChanged =
-                  AppValidation.execution(yield* AppQueries.releaseInfo(transaction, latest)) !==
+                  AppValidation.execution(yield* AppQueries.info(transaction, current)) !==
                   AppValidation.execution(publication)
                 if (!isExecutionChanged) {
                   if (isMetadataChanged)
@@ -311,41 +253,24 @@ export const layer = Layer.effect(
                       .update(Database.Schema.app)
                       .set({ ...metadata, updated_at: sql`now()` })
                       .where(eq(Database.Schema.app.id, current.id))
-                  return {
-                    appId: current.id,
-                    releaseId: latest.id,
-                    version: latest.version,
-                    isMetadataChanged,
-                    isExecutionChanged,
-                  }
+                  return { appId: current.id, revision: current.revision, isMetadataChanged, isExecutionChanged }
                 }
-                if (publication.expectedCurrentReleaseId && publication.expectedCurrentReleaseId !== latest.id)
+                if (publication.expectedRevision && publication.expectedRevision !== current.revision)
                   return yield* new Primitive.Conflict({
-                    message: `The latest release of “${publication.slug}” changed. Reload before publishing a successor.`,
+                    message: `“${publication.slug}” changed since revision ${publication.expectedRevision}. Reload before publishing.`,
                   })
-                const version = publication.version ?? AppRelease.nextVersion(latest.version, publication.bump)
-                if (Bun.semver.order(version, latest.version) <= 0)
-                  return yield* new Primitive.Conflict({
-                    message: `“${publication.slug}” ${version} changes the execution configuration of its latest release ${latest.version}. Publish a greater version.`,
-                  })
-                const releaseId = AppRelease.ID.create()
-                yield* transaction
-                  .insert(Database.Schema.app_release)
-                  .values({ id: releaseId, app_id: current.id, version, ...release })
-                yield* AppValidation.writeDependencies(transaction, releaseId, dependencies)
                 yield* transaction
                   .update(Database.Schema.app)
-                  .set({ ...metadata, latest_release_id: releaseId, updated_at: sql`now()` })
+                  .set({ ...metadata, ...definition, revision: current.revision + 1, updated_at: sql`now()` })
                   .where(eq(Database.Schema.app.id, current.id))
-                return { appId: current.id, releaseId, version, isMetadataChanged, isExecutionChanged }
+                yield* AppValidation.writeDependencies(transaction, current, dependencies)
+                return { appId: current.id, revision: current.revision + 1, isMetadataChanged, isExecutionChanged }
               })
             : yield* Effect.gen(function* () {
                 const appId = App.ID.create()
-                const releaseId = AppRelease.ID.create()
-                const version = publication.version ?? "1.0.0"
                 yield* transaction
                   .insert(Database.Schema.app)
-                  .values({ id: appId, slug: publication.slug, ...metadata, latest_release_id: releaseId })
+                  .values({ id: appId, slug: publication.slug, ...metadata, ...definition })
                   .pipe(
                     Effect.catchTag(
                       "EffectDrizzleQueryError",
@@ -355,12 +280,9 @@ export const layer = Layer.effect(
                       ),
                     ),
                   )
-                yield* transaction
-                  .insert(Database.Schema.app_release)
-                  .values({ id: releaseId, app_id: appId, version, ...release })
-                yield* AppValidation.writeDependencies(transaction, releaseId, dependencies)
+                yield* AppValidation.writeDependencies(transaction, { id: appId, slug: publication.slug }, dependencies)
                 ids.set(publication.slug, appId)
-                return { appId, releaseId, version, isMetadataChanged: true, isExecutionChanged: true }
+                return { appId, revision: 1, isMetadataChanged: true, isExecutionChanged: true }
               })
           const previous = (yield* transaction
             .select()
@@ -390,8 +312,7 @@ export const layer = Layer.effect(
           return {
             appId: written.appId,
             slug: publication.slug,
-            releaseId: written.releaseId,
-            version: written.version,
+            revision: written.revision,
             changed: {
               execution: written.isExecutionChanged,
               metadata: written.isMetadataChanged,
@@ -412,29 +333,6 @@ export const layer = Layer.effect(
       yield* listedDependencies(
         transaction,
         listedApps.map((row) => row.app),
-      )
-      const consumers = [
-        ...new Set(
-          (yield* Effect.forEach(
-            published.filter((result) => result.changed.execution),
-            (result) => AppQueries.consumers(transaction, result.appId),
-          )).flat(),
-        ),
-      ]
-      const spaces = consumers.length
-        ? yield* transaction
-            .select({ id: Database.Schema.space.id, organizationId: Database.Schema.space.organization_id })
-            .from(Database.Schema.space)
-            .where(inArray(Database.Schema.space.id, consumers))
-        : []
-      yield* Effect.forEach(
-        [...new Set(spaces.map((space) => space.organizationId))],
-        (organizationId) =>
-          AppValidation.finalGraph(transaction, {
-            organizationId,
-            spaceIds: spaces.filter((space) => space.organizationId === organizationId).map((space) => space.id),
-          }),
-        { discard: true },
       )
       return {
         apps: slugs.flatMap((slug) => {
@@ -515,10 +413,10 @@ export const layer = Layer.effect(
                 ),
               )
               .innerJoin(
-                Database.Schema.app_release_dependency,
+                Database.Schema.app_dependency,
                 and(
-                  eq(Database.Schema.app_release_dependency.app_release_id, Database.Schema.app.latest_release_id),
-                  eq(Database.Schema.app_release_dependency.dependency_app_id, found.app.id),
+                  eq(Database.Schema.app_dependency.app_id, Database.Schema.app.id),
+                  eq(Database.Schema.app_dependency.dependency_app_id, found.app.id),
                 ),
               )
               .where(isNull(Database.Schema.app.archived_at))

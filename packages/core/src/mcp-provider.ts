@@ -1,8 +1,21 @@
 export * as McpProvider from "./mcp-provider.js"
 
-import type { Credential } from "@ren/schema/credential"
 import { Auth } from "@ren/schema/auth"
-import { Cache, Clock, Config, Context, Duration, Effect, Layer, Option, Redacted, Schedule, Schema } from "effect"
+import type { Credential } from "@ren/schema/credential"
+import {
+  Cache,
+  Clock,
+  Config,
+  Context,
+  DateTime,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Redacted,
+  Schedule,
+  Schema,
+} from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { WorkflowEngine } from "effect/workflow"
 import { DurableRunner } from "./durable-runner.js"
@@ -15,43 +28,64 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("McpProvider.
 export class Failed extends Schema.TaggedError<Failed>()("McpProvider.Failed", {
   message: Schema.String,
   status: Schema.optional(Schema.Number),
+  isFatal: Schema.optional(Schema.Boolean).annotate({ description: "The account is gone; a retry cannot help." }),
 }) {}
 
-export interface Session {
-  readonly upstream: string
-  readonly sessionId: string
+// oxlint-disable-next-line ren/no-comments -- The provider's own state for one credential. Core seals it and never reads it (P39).
+export const State = Schema.Json
+export type State = typeof State.Type
+
+export const AccountStatus = Schema.Literals(["active", "pending", "gone"])
+export type AccountStatus = typeof AccountStatus.Type
+
+export interface Route {
+  readonly upstream: Redacted.Redacted
+  readonly headers: ReadonlyArray<{ readonly name: string; readonly value: Redacted.Redacted }>
+  readonly expiresAt?: DateTime.Utc
 }
 
+// oxlint-disable-next-line ren/no-comments -- profiles.md §14, in Ren words only (P39). `account` is the provider's id for the person's account; each credential pins one, so the provider never picks one (K24). `remove` counts "already gone" as done.
 export interface Provider {
   readonly id: Credential.Provider
   readonly connect: (input: {
     readonly credentialId: Credential.ID
-    readonly toolkit: string
+    readonly integration: string
     readonly callbackUrl: string
-  }) => Effect.Effect<{ readonly redirectUrl: string; readonly accountId: string }, Failed>
-  readonly active: (accountId: string) => Effect.Effect<boolean, Failed>
-  readonly session: (input: {
+  }) => Effect.Effect<{ readonly redirectUrl: string; readonly account: string }, Failed>
+  readonly status: (account: string) => Effect.Effect<AccountStatus, Failed>
+  readonly open: (input: {
     readonly credentialId: Credential.ID
-    readonly toolkit: string
-    readonly accountId: string
-  }) => Effect.Effect<Session, Failed>
-  readonly status: (accountId: string) => Effect.Effect<string, Failed>
-  readonly liveStatus: (accountId: string) => Effect.Effect<string, Failed>
-  readonly removeSession: (sessionId: string) => Effect.Effect<void, Failed>
-  readonly removeAccount: (accountId: string) => Effect.Effect<void, Failed>
-  readonly headers: ReadonlyArray<{ readonly name: string; readonly value: Redacted.Redacted }>
+    readonly integration: string
+    readonly account: string
+  }) => Effect.Effect<State, Failed>
+  readonly route: (state: State) => Effect.Effect<Route, Failed>
+  readonly renew: (state: State) => Effect.Effect<State, Failed>
+  readonly remove: (input: { readonly state?: State; readonly account?: string }) => Effect.Effect<void, Failed>
 }
 
-export interface Interface {
+export interface RegistryInterface {
   readonly get: (id: Credential.Provider) => Effect.Effect<Provider, Unavailable>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@ren/core/McpProvider") {}
+export const registryOf = (providers: ReadonlyArray<Provider>): RegistryInterface => ({
+  get: (id) => {
+    const provider = providers.find((found) => found.id === id)
+    return provider
+      ? Effect.succeed(provider)
+      : Effect.fail(new Unavailable({ message: `The provider ${id} is not set up on this Ren` }))
+  },
+})
 
-export const layerNone = Layer.succeed(
-  Service,
-  Service.of({ get: (id) => Effect.fail(new Unavailable({ message: `${id} is not set up on this Ren` })) }),
-)
+// oxlint-disable-next-line ren/no-comments -- §14 rule 1 (P38): the deployment's providers. A provider layer adds itself to the registry it finds; with none, every provider id is Unavailable and apps still decode.
+export class Registry extends Context.Reference<RegistryInterface>("@ren/core/McpProvider/Registry", {
+  defaultValue: () => registryOf([]),
+}) {}
+
+export const layer = <E, R>(providers: ReadonlyArray<Effect.Effect<Option.Option<Provider>, E, R>>) =>
+  Layer.effect(
+    Registry,
+    Effect.map(Effect.all(providers), (found) => registryOf(found.flatMap((provider) => Option.toArray(provider)))),
+  )
 
 export const activeWait = Duration.seconds(10)
 
@@ -62,123 +96,165 @@ const CreatedAuthConfig = Schema.Struct({ auth_config: Schema.Struct({ id: Schem
 const Link = Schema.Struct({ redirect_url: Schema.String, connected_account_id: Schema.String })
 const Account = Schema.Struct({ status: Schema.String })
 const CreatedSession = Schema.Struct({ session_id: Schema.String, mcp: Schema.Struct({ url: Schema.String }) })
+const ComposioState = Schema.Struct({
+  sessionId: Schema.String,
+  url: Schema.String,
+  user: Schema.String,
+  integration: Schema.String,
+  account: Schema.String,
+})
+const decodeComposioState = Schema.decodeUnknownOption(ComposioState)
 
-// oxlint-disable-next-line ren/no-comments -- §10 (P1, K20 to K24): COMPOSIO_API_KEY stays in Ren; without it a Composio connect fails with Unavailable. The auth config is found or created at run time per toolkit and kept in memory. The Composio user is the credential id; each session enables one toolkit, pins the account, and turns off connection management, the workbench, proxy execute and instant tools. Calls go to REST v3.1 with Effect's HttpClient.
-export const layerComposio = Layer.effect(
-  Service,
-  Effect.gen(function* () {
-    const key = yield* Config.option(Config.Redacted("COMPOSIO_API_KEY"))
-    const base = (yield* Config.String("COMPOSIO_URL").pipe(
-      Config.withDefault("https://backend.composio.dev"),
-    )).replace(/\/$/u, "")
-    const http = yield* HttpClient.HttpClient
-    if (Option.isNone(key)) return Service.of(layerNoneService)
-    const apiKey = key.value
-
-    const call = <A, I>(schema: Schema.Codec<A, I>, method: "GET" | "POST" | "DELETE", path: string, body?: unknown) =>
-      Effect.gen(function* () {
-        const request = HttpClientRequest.make(method)(`${base}/api/v3.1${path}`).pipe(
-          HttpClientRequest.setHeader("x-api-key", Redacted.value(apiKey)),
-          HttpClientRequest.acceptJson,
-          body ? HttpClientRequest.bodyJsonUnsafe(body) : (self) => self,
-        )
-        const response = yield* http.execute(request).pipe(
-          Effect.timeout("10 seconds"),
-          Effect.mapError((cause) => new Failed({ message: `Composio did not answer: ${String(cause)}` })),
-        )
-        if (response.status < 200 || response.status >= 300)
-          return yield* new Failed({
-            message: `Composio answered ${response.status} to ${method} ${path}`,
-            status: response.status,
-          })
-        const json = yield* response.json.pipe(Effect.mapError(() => new Failed({ message: "Composio sent no JSON" })))
-        return yield* Schema.decodeUnknownEffect(schema)(json).pipe(
-          Effect.mapError(() => new Failed({ message: `Composio sent an unexpected answer to ${path}` })),
-        )
-      })
-
-    const authConfigs = yield* Cache.makeWith(
-      (toolkit: string) =>
-        Effect.gen(function* () {
-          const found = yield* call(
-            AuthConfigs,
-            "GET",
-            `/auth_configs?toolkit_slug=${encodeURIComponent(toolkit)}&is_composio_managed=true`,
-          )
-          const existing = found.items.at(0)
-          if (existing) return existing.id
-          const created = yield* call(CreatedAuthConfig, "POST", "/auth_configs", {
-            toolkit: { slug: toolkit },
-            auth_config: { type: "use_composio_managed_auth" },
-          })
-          return created.auth_config.id
-        }),
-      { capacity: 1000, timeToLive: (exit) => (exit._tag === "Success" ? Duration.infinity : Duration.zero) },
-    )
-
-    const statuses = yield* Cache.makeWith(
-      (accountId: string) =>
-        Effect.map(call(Account, "GET", `/connected_accounts/${accountId}`), (account) => account.status),
-      { capacity: 10_000, timeToLive: (exit) => (exit._tag === "Success" ? statusKept : Duration.zero) },
-    )
-
-    const readStatus = (accountId: string) =>
-      Effect.map(call(Account, "GET", `/connected_accounts/${accountId}`), (account) => account.status)
-
-    const provider: Provider = {
-      id: "composio",
-      connect: Effect.fn("McpProvider.composio.connect")(function* (input) {
-        const link = yield* call(Link, "POST", "/connected_accounts/link", {
-          auth_config_id: yield* Cache.get(authConfigs, input.toolkit),
-          user_id: input.credentialId,
-          callback_url: input.callbackUrl,
-        })
-        return { redirectUrl: link.redirect_url, accountId: link.connected_account_id }
-      }),
-      // oxlint-disable-next-line ren/no-comments -- K23 (P4): once per second, for at most 10 seconds.
-      active: (accountId) =>
-        readStatus(accountId).pipe(
-          Effect.repeat({
-            schedule: Schedule.spaced(Duration.seconds(1)),
-            until: (status) => status === "ACTIVE",
-            times: Duration.toSeconds(activeWait),
-          }),
-          Effect.map((status) => status === "ACTIVE"),
-        ),
-      session: Effect.fn("McpProvider.composio.session")(function* (input) {
-        const created = yield* call(CreatedSession, "POST", "/tool_router/session", {
-          user_id: input.credentialId,
-          toolkits: { enable: [input.toolkit] },
-          auth_configs: { [input.toolkit]: yield* Cache.get(authConfigs, input.toolkit) },
-          connected_accounts: { [input.toolkit]: [input.accountId] },
-          manage_connections: { enable: false },
-          workbench: { enable: false },
-          proxy_execute: { enable: false },
-          instant: false,
-        })
-        return { upstream: created.mcp.url, sessionId: created.session_id }
-      }),
-      status: (accountId) => Cache.get(statuses, accountId),
-      liveStatus: (accountId) => Effect.tap(readStatus(accountId), () => Cache.invalidate(statuses, accountId)),
-      removeSession: (sessionId) =>
-        call(Schema.Unknown, "DELETE", `/tool_router/session/${sessionId}`).pipe(Effect.asVoid),
-      removeAccount: (accountId) =>
-        call(Schema.Unknown, "DELETE", `/connected_accounts/${accountId}?revoke_on_delete=true`).pipe(Effect.asVoid),
-      headers: [{ name: "x-api-key", value: apiKey }],
-    }
-    return Service.of({ get: () => Effect.succeed(provider) })
-  }),
-)
-
-const layerNoneService: Interface = {
-  get: (id) => Effect.fail(new Unavailable({ message: `${id} is not set up on this Ren (COMPOSIO_API_KEY)` })),
+const composioStatus = (status: string): AccountStatus => {
+  if (status === "ACTIVE") return "active"
+  if (status === "INITIATED" || status === "INITIALIZING") return "pending"
+  return "gone"
 }
 
-// oxlint-disable-next-line ren/no-comments -- `sealed` is a deleted credential's value; the run opens it for the session id, so a delete inside a transaction needs no Envelope.
+// oxlint-disable-next-line ren/no-comments -- connections.md §10 (K20 to K24): COMPOSIO_API_KEY stays in Ren; without it the layer adds nothing. The auth config is found or created at run time per toolkit and kept in memory. The Composio user is the credential id; each session enables one toolkit, pins the account, and turns off connection management, the workbench, proxy execute and instant tools. Calls go to REST v3.1 with Effect's HttpClient. An ACTIVE status is kept 5 minutes.
+export const composio = Effect.gen(function* () {
+  const key = yield* Config.option(Config.Redacted("COMPOSIO_API_KEY"))
+  const base = (yield* Config.String("COMPOSIO_URL").pipe(Config.withDefault("https://backend.composio.dev"))).replace(
+    /\/$/u,
+    "",
+  )
+  const http = yield* HttpClient.HttpClient
+  if (Option.isNone(key)) return Option.none<Provider>()
+  const apiKey = key.value
+
+  const call = <A, I>(schema: Schema.Codec<A, I>, method: "GET" | "POST" | "DELETE", path: string, body?: unknown) =>
+    Effect.gen(function* () {
+      const request = HttpClientRequest.make(method)(`${base}/api/v3.1${path}`).pipe(
+        HttpClientRequest.setHeader("x-api-key", Redacted.value(apiKey)),
+        HttpClientRequest.acceptJson,
+        body ? HttpClientRequest.bodyJsonUnsafe(body) : (self) => self,
+      )
+      const response = yield* http.execute(request).pipe(
+        Effect.timeout("10 seconds"),
+        Effect.mapError((cause) => new Failed({ message: `Composio did not answer: ${String(cause)}` })),
+      )
+      if (response.status < 200 || response.status >= 300)
+        return yield* new Failed({
+          message: `Composio answered ${response.status} to ${method} ${path}`,
+          status: response.status,
+        })
+      const json = yield* response.json.pipe(Effect.mapError(() => new Failed({ message: "Composio sent no JSON" })))
+      return yield* Schema.decodeUnknownEffect(schema)(json).pipe(
+        Effect.mapError(() => new Failed({ message: `Composio sent an unexpected answer to ${path}` })),
+      )
+    })
+
+  const authConfigs = yield* Cache.makeWith(
+    (toolkit: string) =>
+      Effect.gen(function* () {
+        const found = yield* call(
+          AuthConfigs,
+          "GET",
+          `/auth_configs?toolkit_slug=${encodeURIComponent(toolkit)}&is_composio_managed=true`,
+        )
+        const existing = found.items.at(0)
+        if (existing) return existing.id
+        const created = yield* call(CreatedAuthConfig, "POST", "/auth_configs", {
+          toolkit: { slug: toolkit },
+          auth_config: { type: "use_composio_managed_auth" },
+        })
+        return created.auth_config.id
+      }),
+    { capacity: 1000, timeToLive: (exit) => (exit._tag === "Success" ? Duration.infinity : Duration.zero) },
+  )
+
+  const statuses = yield* Cache.makeWith(
+    (account: string) =>
+      Effect.map(call(Account, "GET", `/connected_accounts/${account}`), (found) => composioStatus(found.status)),
+    {
+      capacity: 10_000,
+      timeToLive: (exit) => (exit._tag === "Success" && exit.value === "active" ? statusKept : Duration.zero),
+    },
+  )
+
+  const session = Effect.fnUntraced(function* (input: {
+    readonly user: string
+    readonly integration: string
+    readonly account: string
+  }) {
+    const created = yield* call(CreatedSession, "POST", "/tool_router/session", {
+      user_id: input.user,
+      toolkits: { enable: [input.integration] },
+      auth_configs: { [input.integration]: yield* Cache.get(authConfigs, input.integration) },
+      connected_accounts: { [input.integration]: [input.account] },
+      manage_connections: { enable: false },
+      workbench: { enable: false },
+      proxy_execute: { enable: false },
+      instant: false,
+    })
+    return Schema.encodeSync(ComposioState)({ ...input, sessionId: created.session_id, url: created.mcp.url })
+  })
+
+  const stateOf = (state: State) =>
+    Option.match(decodeComposioState(state), {
+      onNone: () => Effect.fail(new Failed({ message: "The Composio state is damaged" })),
+      onSome: Effect.succeed,
+    })
+
+  const gone = (error: Failed) => error.status === 404
+
+  const provider: Provider = {
+    id: "composio",
+    connect: Effect.fn("McpProvider.composio.connect")(function* (input) {
+      const link = yield* call(Link, "POST", "/connected_accounts/link", {
+        auth_config_id: yield* Cache.get(authConfigs, input.integration),
+        user_id: input.credentialId,
+        callback_url: input.callbackUrl,
+      })
+      return { redirectUrl: link.redirect_url, account: link.connected_account_id }
+    }),
+    status: (account) => Cache.get(statuses, account),
+    open: (input) => session({ user: input.credentialId, integration: input.integration, account: input.account }),
+    route: Effect.fn("McpProvider.composio.route")(function* (state) {
+      const found = yield* stateOf(state)
+      return { upstream: Redacted.make(found.url), headers: [{ name: "x-api-key", value: apiKey }] }
+    }),
+    // oxlint-disable-next-line ren/no-comments -- K29: a new session for the same account; the caller cleans up the old one.
+    renew: Effect.fn("McpProvider.composio.renew")(function* (state) {
+      const found = yield* stateOf(state)
+      yield* Cache.invalidate(statuses, found.account)
+      if ((yield* Cache.get(statuses, found.account)) !== "active")
+        return yield* new Failed({ message: "The Composio account is not active", isFatal: true })
+      return yield* session(found)
+    }),
+    remove: Effect.fn("McpProvider.composio.remove")(function* (input) {
+      const found = input.state ? Option.getOrUndefined(decodeComposioState(input.state)) : undefined
+      if (found)
+        yield* call(Schema.Unknown, "DELETE", `/tool_router/session/${found.sessionId}`).pipe(
+          Effect.catchIf(gone, () => Effect.void),
+        )
+      if (input.account)
+        yield* call(Schema.Unknown, "DELETE", `/connected_accounts/${input.account}?revoke_on_delete=true`).pipe(
+          Effect.catchIf(gone, () => Effect.void),
+        )
+    }),
+  }
+  return Option.some(provider)
+})
+
+export const layerComposio = layer([composio])
+
+// oxlint-disable-next-line ren/no-comments -- K23: wait until the account is active, once per second for at most 10 seconds.
+export const waitActive = (provider: Provider, account: string) =>
+  provider.status(account).pipe(
+    Effect.repeat({
+      schedule: Schedule.spaced(Duration.seconds(1)),
+      until: (status) => status !== "pending",
+      times: Duration.toSeconds(activeWait),
+    }),
+    Effect.map((status) => status === "active"),
+  )
+
+// oxlint-disable-next-line ren/no-comments -- `sealed` is a deleted credential's value; the run opens it for the state, so a delete inside a transaction needs no Envelope.
 export interface Leftover {
   readonly provider: Credential.Provider
-  readonly sessionId?: string | undefined
-  readonly accountId?: string | undefined
+  readonly state?: State | undefined
+  readonly account?: string | undefined
   readonly sealed?:
     | {
         readonly organizationId: Auth.OrganizationID
@@ -193,7 +269,7 @@ export interface CleanupInterface {
   readonly wait: (leftover: Leftover) => Effect.Effect<void>
 }
 
-// oxlint-disable-next-line ren/no-comments -- What deletes a provider's session and account after Ren no longer needs them. The default does nothing, so code that deletes credentials needs no provider to run.
+// oxlint-disable-next-line ren/no-comments -- What deletes a provider's state and account after Ren no longer needs them. The default does nothing, so code that deletes credentials needs no provider to run.
 export class Cleanup extends Context.Reference<CleanupInterface>("@ren/core/McpProvider/Cleanup", {
   defaultValue: () => ({ start: () => Effect.void, wait: () => Effect.void }),
 }) {}
@@ -206,57 +282,52 @@ const backoff = Schedule.exponential(Duration.minutes(1)).pipe(
 
 const CleanupRun = DurableRunner.make("McpProviderCleanup", {
   payload: {
-    provider: Schema.Literals(["composio"]),
-    sessionId: Schema.optional(Schema.String),
-    accountId: Schema.optional(Schema.String),
+    provider: Schema.String,
+    state: Schema.optional(State),
+    account: Schema.optional(Schema.String),
     sealed: Schema.optional(
       Schema.Struct({ organizationId: Auth.OrganizationID, credentialId: Schema.String, value: Envelope.Sealed }),
     ),
   },
   idempotencyKey: (payload) =>
-    `${payload.provider}-cleanup:${payload.accountId ?? payload.sessionId ?? payload.sealed?.credentialId ?? ""}`,
+    `${payload.provider}-cleanup:${payload.account ?? payload.sealed?.credentialId ?? JSON.stringify(payload.state ?? null)}`,
 })
 
-// oxlint-disable-next-line ren/no-comments -- §10 rule 9 (K27): delete the session, then the account with `revoke_on_delete=true`; one already gone counts as done. A failure retries with a backoff from 1 minute to 1 hour; after 24 hours it stops, logs both ids and alerts.
+// oxlint-disable-next-line ren/no-comments -- connections.md §10 rule 9 (K27): remove the state, then the account; one already gone counts as done. A failure retries with a backoff from 1 minute to 1 hour; after 24 hours it stops, logs and alerts.
 export const cleanUp = Effect.fnUntraced(function* (
   provider: Provider,
-  leftover: { readonly sessionId?: string | undefined; readonly accountId?: string | undefined },
+  leftover: { readonly state?: State | undefined; readonly account?: string | undefined },
 ) {
   const started = yield* Clock.currentTimeMillis
-  const gone = (error: Failed) => error.status === 404
-  const attempt = Effect.gen(function* () {
-    if (leftover.sessionId)
-      yield* provider.removeSession(leftover.sessionId).pipe(Effect.catchIf(gone, () => Effect.void))
-    if (leftover.accountId)
-      yield* provider.removeAccount(leftover.accountId).pipe(Effect.catchIf(gone, () => Effect.void))
-  })
-  yield* attempt.pipe(
-    Effect.tapError((error) => Effect.logWarning(`The ${provider.id} cleanup failed; it retries`, error)),
-    Effect.retry({
-      schedule: backoff,
-      while: () => Effect.map(Clock.currentTimeMillis, (now) => now - started < Duration.toMillis(cleanupFor)),
-    }),
-    Effect.catchCause(() =>
-      Effect.logError(`alert: the ${provider.id} cleanup stopped after 24 hours`).pipe(
-        Effect.annotateLogs({
-          alert: "provider_cleanup",
-          session: leftover.sessionId ?? "",
-          account: leftover.accountId ?? "",
-        }),
+  yield* provider
+    .remove({
+      ...(leftover.state && { state: leftover.state }),
+      ...(leftover.account && { account: leftover.account }),
+    })
+    .pipe(
+      Effect.tapError((error) => Effect.logWarning(`The ${provider.id} cleanup failed; it retries`, error)),
+      Effect.retry({
+        schedule: backoff,
+        while: () => Effect.map(Clock.currentTimeMillis, (now) => now - started < Duration.toMillis(cleanupFor)),
+      }),
+      Effect.catchCause(() =>
+        Effect.logError(`alert: the ${provider.id} cleanup stopped after 24 hours`).pipe(
+          Effect.annotateLogs({ alert: "provider_cleanup", account: leftover.account ?? "" }),
+        ),
       ),
-    ),
-  )
+    )
 })
+
+const RouteJson = Schema.fromJsonString(Schema.Struct({ type: Schema.Literal("route"), state: State }))
 
 // oxlint-disable-next-line ren/no-comments -- One durable run per leftover, so a cleanup survives a restart of Ren.
 export const layerCleanup = Layer.effect(
   Cleanup,
   Effect.gen(function* () {
-    const providers = yield* Service
+    const registry = yield* Registry
     const envelope = yield* Envelope.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
-    const RouteJson = Schema.fromJsonString(Schema.Struct({ type: Schema.Literal("route"), sessionId: Schema.String }))
-    const sessionOf = (payload: typeof CleanupRun.payloadSchema.Type) =>
+    const stateOf = (payload: typeof CleanupRun.payloadSchema.Type) =>
       payload.sealed
         ? envelope
             .open(payload.sealed.value, {
@@ -267,22 +338,21 @@ export const layerCleanup = Layer.effect(
             .pipe(
               Effect.map((opened) =>
                 Option.getOrUndefined(
-                  Option.map(Schema.decodeUnknownOption(RouteJson)(Redacted.value(opened)), (value) => value.sessionId),
+                  Option.map(Schema.decodeUnknownOption(RouteJson)(Redacted.value(opened)), (value) => value.state),
                 ),
               ),
-              Effect.orElseSucceed(() => payload.sessionId),
+              Effect.orElseSucceed(() => payload.state),
             )
-        : Effect.succeed(payload.sessionId)
+        : Effect.succeed(payload.state)
     yield* DurableRunner.register(CleanupRun, (payload) =>
       Effect.gen(function* () {
-        const provider = yield* providers.get(payload.provider)
-        const sessionId = yield* sessionOf(payload)
-        yield* cleanUp(provider, { ...payload, sessionId })
+        const provider = yield* registry.get(payload.provider)
+        yield* cleanUp(provider, { state: yield* stateOf(payload), account: payload.account })
       }).pipe(Effect.catchTag("McpProvider.Unavailable", (error) => Effect.logError(`alert: ${error.message}`))),
     )
     return Cleanup.of({
       start: (leftover) =>
-        leftover.sessionId || leftover.accountId || leftover.sealed
+        leftover.state || leftover.account || leftover.sealed
           ? DurableRunner.ensure(CleanupRun, leftover).pipe(
               Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
             )
