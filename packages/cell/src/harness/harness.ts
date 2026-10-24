@@ -15,7 +15,7 @@ import type { SessionModel } from "@ren/schema/session/model"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
 import type { Sync } from "@ren/schema/sync"
-import { Context, Effect, Exit, Layer, type Option, Schema, Scope, type Stream } from "effect"
+import { Context, Effect, Exit, Layer, Option, Schema, Scope, type Stream } from "effect"
 import { Lease } from "../lease.js"
 import type { Reconcile } from "../reconcile.js"
 import type { HarnessConfig } from "./config.js"
@@ -169,6 +169,7 @@ export interface Instance {
 
 export interface Interface {
   readonly get: Effect.Effect<Instance, never, Scope.Scope>
+  readonly getIfOpen: Effect.Effect<Option.Option<Instance>, never, Scope.Scope>
   readonly state: Effect.Effect<{ readonly isOpen: boolean; readonly holders: number }>
   readonly close: Effect.Effect<void>
 }
@@ -194,6 +195,7 @@ export const layer = (open: Effect.Effect<Instance, Error, Scope.Scope>) => {
         Effect.map((opened) => opened.instance),
         Effect.orDie,
       ),
+      getIfOpen: lease.acquireIfOpen.pipe(Effect.map(Option.map((opened) => opened.instance)), Effect.orDie),
       state: Effect.sync(() => ({ isOpen: lease.state().open, holders: lease.state().leases })),
       close: lease.close,
     }),

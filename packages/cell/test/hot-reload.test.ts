@@ -7,7 +7,7 @@ import { AppCatalog } from "@ren/schema/app-catalog"
 import { App } from "@ren/schema/app"
 import { AppRelease } from "@ren/schema/app-release"
 import { Session } from "@ren/schema/session"
-import { Context, Effect, Layer, Option, Schema } from "effect"
+import { Context, Effect, Fiber, Layer, Option, Schema } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -130,7 +130,10 @@ const open = Effect.fnUntraced(function* (options: { readonly active?: boolean }
     chats: [],
     deleted: [],
   } satisfies PullReply
-  const state: { reply: PullReply } = { reply }
+  const state: {
+    reply: PullReply
+    hold?: { readonly entered: PromiseWithResolvers<void>; readonly release: PromiseWithResolvers<void> }
+  } = { reply }
   const token = yield* Effect.promise(() => FakeRen.hostToken())
   const server = yield* Effect.acquireRelease(
     Effect.sync(() =>
@@ -141,6 +144,12 @@ const open = Effect.fnUntraced(function* (options: { readonly active?: boolean }
           if (new URL(request.url).pathname !== "/host/pull") return new Response(null, { status: 404 })
           if (request.headers.get("authorization") !== `Bearer ${token}`) return new Response(null, { status: 401 })
           requests.push(Schema.decodeUnknownSync(PullRequest)(await request.json()))
+          const hold = state.hold
+          delete state.hold
+          if (hold) {
+            hold.entered.resolve()
+            await hold.release.promise
+          }
           return Response.json(Schema.encodeSync(Schema.toCodecJson(PullReply))(state.reply))
         },
       }),
@@ -217,6 +226,11 @@ const open = Effect.fnUntraced(function* (options: { readonly active?: boolean }
     requests,
     reload: Context.get(services, HotReload.Service),
     harness: Context.get(services, Harness.Service),
+    holdNextPull: () => {
+      const hold = { entered: Promise.withResolvers<void>(), release: Promise.withResolvers<void>() }
+      state.hold = hold
+      return { entered: Effect.promise(() => hold.entered.promise), release: () => hold.release.resolve() }
+    },
     answer: (apps?: PullApps, update: Partial<Omit<PullReply, "apps">> = {}) => {
       state.reply = { ...reply, ...update, ...(apps && { apps }) }
     },
@@ -308,5 +322,30 @@ it.live("an open harness gets one saved config even when the new app catalog can
     expect(
       (yield* harness.configuration).find((location) => location.directory.endsWith(sessionId))?.appFingerprint,
     ).toEqual(Option.some(empty.fingerprint))
+  }),
+)
+
+it.live("a pull that finishes after the harness closes does not reopen it to offer config", () =>
+  Effect.gen(function* () {
+    const opened = yield* open({ active: true })
+    yield* opened.reload.pull
+    yield* Effect.scoped(
+      Effect.flatMap(opened.harness.get, (harness) =>
+        harness.start({
+          sessionId: Session.ID.create(),
+          harness: "opencode",
+          interactive: true,
+        }),
+      ),
+    )
+    const hold = opened.holdNextPull()
+    yield* Effect.addFinalizer(() => Effect.sync(hold.release))
+    const pulling = yield* opened.reload.pull.pipe(Effect.forkScoped)
+    yield* hold.entered
+    yield* opened.harness.close
+    expect((yield* opened.harness.state).isOpen).toBe(false)
+    hold.release()
+    yield* Fiber.join(pulling)
+    expect((yield* opened.harness.state).isOpen).toBe(false)
   }),
 )
