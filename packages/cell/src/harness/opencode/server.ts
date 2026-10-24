@@ -19,12 +19,15 @@ import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
 import type { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { SkillCache } from "@ren/brain/skill/cache"
+import { SkillSource } from "@ren/brain/skill/source"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
 import type { Models } from "@ren/schema/models"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import {
   Context,
   Deferred,
+  type Duration,
   Effect,
   Fiber,
   Layer,
@@ -54,6 +57,7 @@ export interface Options {
   readonly confinement?: RenPlugin.Confinement
   readonly makeDirectory?: (directory: string) => Effect.Effect<void>
   readonly apps?: Option.Option<AppCatalog.Info>
+  readonly skills?: { readonly hosts?: SkillSource.Hosts; readonly refresh?: Duration.Input }
 }
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
@@ -190,6 +194,8 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       ),
     )
   const api = yield* client(fetch)
+  const skillSource = yield* SkillSource.make(options.skills?.hosts).pipe(Effect.provide(FetchHttpClient.layer))
+  const skillCache = yield* SkillCache.make(skillSource, { refresh: options.skills?.refresh ?? "5 minutes" })
   const approvals = (sessionId: string) =>
     located(sessionId, Location.Service).pipe(
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
@@ -208,6 +214,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       approvals,
       executions.get,
       options.directoryOf,
+      { source: skillSource, cache: skillCache },
     ),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.

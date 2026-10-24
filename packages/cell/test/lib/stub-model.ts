@@ -12,6 +12,7 @@ interface Behaviour {
   readonly dripMs?: number
   readonly tool?: { readonly name: string; readonly input: unknown }
   readonly tools?: ReadonlyArray<{ readonly name: string; readonly input: unknown }>
+  readonly parallelTools?: ReadonlyArray<{ readonly name: string; readonly input: unknown }>
   readonly summary?: string
   readonly reasoning?: string
 }
@@ -172,27 +173,36 @@ const toCall = (body: ChatRequest, request: Request): Call => {
 async function* reply(body: ChatRequest, behaviour: Behaviour, gate: Promise<void>) {
   const last = body.messages.findLastIndex((message) => message.role === "user")
   const results = body.messages.slice(last + 1).filter((message) => message.role === "tool").length
-  const tool = (behaviour.tools ?? (behaviour.tool ? [behaviour.tool] : [])).at(results)
-  const words = tool ? [] : (behaviour.reply ?? "stub reply").split(/(?<= )/)
+  const tools = Option.match(Option.fromUndefinedOr(behaviour.parallelTools), {
+    onNone: () =>
+      (behaviour.tools ?? Option.toArray(Option.fromUndefinedOr(behaviour.tool))).slice(results, results + 1),
+    onSome: (batch) => (results === 0 ? batch : []),
+  })
+  const words = tools.length ? [] : (behaviour.reply ?? "stub reply").split(/(?<= )/)
   const pause = () => (behaviour.dripMs ? Bun.sleep(behaviour.dripMs) : Promise.resolve())
   yield chunk({ role: "assistant", content: "" })
   await pause()
   if (behaviour.malformed) yield encoder.encode("data: {not json\n\n")
   if (behaviour.reasoning) yield chunk({ reasoning_content: behaviour.reasoning })
-  if (tool) {
-    const input = JSON.stringify(tool.input)
-    const half = Math.floor(input.length / 2)
+  if (tools.length) {
+    const inputs = tools.map((item) => JSON.stringify(item.input))
     yield chunk({
-      tool_calls: [
-        {
-          index: 0,
+      tool_calls: tools.map((item, index) => {
+        const input = inputs[index] ?? ""
+        return {
+          index,
           id: `call_${crypto.randomUUID().slice(0, 8)}`,
           type: "function",
-          function: { name: tool.name, arguments: input.slice(0, half) },
-        },
-      ],
+          function: { name: item.name, arguments: input.slice(0, Math.floor(input.length / 2)) },
+        }
+      }),
     })
-    yield chunk({ tool_calls: [{ index: 0, function: { arguments: input.slice(half) } }] })
+    yield chunk({
+      tool_calls: inputs.map((input, index) => ({
+        index,
+        function: { arguments: input.slice(Math.floor(input.length / 2)) },
+      })),
+    })
   }
   yield* words.slice(0, 1).map((word) => chunk({ content: word }))
   if (behaviour.cut) {
@@ -206,7 +216,7 @@ async function* reply(body: ChatRequest, behaviour: Behaviour, gate: Promise<voi
     await pause()
     yield chunk({ content: word })
   }
-  yield chunk({}, tool ? "tool_calls" : "stop")
+  yield chunk({}, tools.length ? "tool_calls" : "stop")
   yield usage
   yield encoder.encode("data: [DONE]\n\n")
 }

@@ -2,6 +2,7 @@ export * as RealStack from "./real-stack.js"
 
 import { PgClient } from "@effect/sql-pg"
 import { OpenCode } from "@opencode/client"
+import { Ren } from "@ren/client/chat"
 import { Signature } from "@ren/schema/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { BrainClient } from "@ren/core/brain-client"
@@ -359,9 +360,13 @@ export const start = async (options: {
         }),
       ),
     )
-    const access = await core(Brains.Service.use((brain) => brain.access(sessionId, { userId: owner.createdBy })))
-    if (access.status !== "ready") throw new Error(`the brain of ${sessionId} is ${access.status}`)
+    const access = await Wait.until(`the brain of ${sessionId} to be ready`, 120_000, async () => {
+      const found = await core(Brains.Service.use((brain) => brain.access(sessionId, { userId: owner.createdBy })))
+      if (found.status === "failed") throw new Error(`the brain of ${sessionId} failed: ${found.reason}`)
+      return found.status === "ready" ? found : undefined
+    })
     const opencode = OpenCode.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
+    const chat = Ren.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
     const send = (text: string) =>
       core(
         SessionRunner.Service.use((sessions) =>
@@ -375,6 +380,11 @@ export const start = async (options: {
         ),
       )
     const messages = () => SessionDriver.messages(opencode, sessionId)
+    // oxlint-disable-next-line ren/no-comments -- A client token reaches only the Chat API, so the wait reads the Chat API's status.
+    const idle = (ms: number) =>
+      Wait.until(`session ${sessionId} to settle`, ms, async () =>
+        (await chat.session.status())[sessionId]?.type === "busy" ? undefined : true,
+      )
     const rows = (read: { readonly messages: ReadonlyArray<{ readonly id: string; readonly type: string }> }) =>
       read.messages.map((message) => `${message.id} ${message.type}`).toSorted()
     const local = async (): Promise<Local> => ({
@@ -384,13 +394,15 @@ export const start = async (options: {
     return {
       sessionId,
       opencode,
+      chat,
       start: startSession,
       send,
       messages,
       settled: async (ms = 60_000) => {
-        await Wait.deadline(`session ${sessionId} to settle`, ms, opencode.session.wait({ sessionID: sessionId }))
+        await idle(ms)
         return messages()
       },
+      idle,
       turn: async (steps: ReadonlyArray<ModelProvider.Step>, text = "work") => {
         const script = provider.script(steps)
         await send(`${text} ${script.marker}`)
@@ -400,7 +412,7 @@ export const start = async (options: {
         const script = provider.script([ModelProvider.tool(name, input), ModelProvider.text("ok")])
         await send(`work ${script.marker}`)
         const result = (await script.called(2, ms)).toolResults
-        await Wait.deadline(`session ${sessionId} to settle`, 60_000, opencode.session.wait({ sessionID: sessionId }))
+        await idle(60_000)
         return result
       },
       local,

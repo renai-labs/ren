@@ -44,6 +44,9 @@ export interface Files {
     to: string,
   ) => Effect.Effect<void, EnvironmentApi.FileNotFoundError | EnvironmentApi.FileSystemError | Unreached>
   readonly mkdir: (path: string) => Effect.Effect<void, EnvironmentApi.FileSystemError | Unreached>
+  readonly unpack: (
+    input: EnvironmentApi.UnpackInput,
+  ) => Effect.Effect<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError | Unreached>
 }
 
 export interface Interface {
@@ -105,6 +108,9 @@ export const make = (
       ),
       mkdir: Effect.fn("EnvironmentSession.mkdir")((path: string) =>
         withConnection((connection) => connection.client["files.mkdir"]({ path })),
+      ),
+      unpack: Effect.fn("EnvironmentSession.unpack")((input: EnvironmentApi.UnpackInput) =>
+        withConnection((connection) => connection.client["files.unpack"](input)),
       ),
     },
   }

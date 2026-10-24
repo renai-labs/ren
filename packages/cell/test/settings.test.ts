@@ -1,6 +1,7 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { OpenCode, Session } from "@opencode/client/effect"
 import { Permission } from "@opencode/schema/permission"
+import { Skill } from "@opencode/schema/skill"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainSettings } from "@ren/brain/settings"
 import { testEffect } from "@ren/executor/testing"
@@ -436,6 +437,55 @@ describe("settings in the cell", () => {
       const allowed = McpPeer.execute("notes.marker")
       yield* opened.turn(allowed)
       expect(McpPeer.result(allowed)).toBe("first")
+    }),
+  )
+
+  it.live("an app skill that a deny rule covers is refused by the skill tool and left out of a mention", () =>
+    Effect.gen(function* () {
+      const layers = TestSettings.layers({
+        ren: { permissions: [{ action: "skill", resource: "secret", effect: "deny" }] },
+      })
+      const opened = yield* open(layers)
+      const body = `secret-${crypto.randomUUID()}`
+      const releaseId = AppRelease.ID.create()
+      yield* opened.pull(layers, {
+        apps: Option.some({
+          fingerprint: "skills",
+          catalog: {
+            apps: [],
+            mcps: [],
+            credentials: [],
+            skills: ["secret", "open"].map((slug) => ({
+              appId: App.ID.create(),
+              releaseId,
+              appSlug: "docs",
+              version: "1.0.0",
+              slug,
+              declaration: {
+                type: "content" as const,
+                description: `The ${slug} skill`,
+                requiredCredentials: [],
+                instructions: `${slug} ${body}`,
+                files: {},
+              },
+            })),
+          },
+        }),
+      })
+      const refused = stub.script({ tool: { name: "skill", input: { id: "secret" } } })
+      yield* opened.turn(refused)
+      expect(JSON.stringify(refused.calls.at(-1)?.body.messages)).not.toContain(`secret ${body}`)
+      const mentioned = stub.script()
+      yield* opened.client.session
+        .prompt({
+          sessionID: opened.sessionID,
+          text: `${mentioned.marker} use them`,
+          skills: [{ id: Skill.ID.make("secret") }, { id: Skill.ID.make("open") }],
+        })
+        .pipe(Effect.andThen(opened.client.session.wait({ sessionID: opened.sessionID })), Effect.orDie)
+      const sent = JSON.stringify(mentioned.calls.at(0)?.body.messages)
+      expect([sent.includes(`secret ${body}`), sent.includes(`open ${body}`)]).toEqual([false, true])
+      expect(sent).toContain("Ren did not load the skill secret: it is not allowed in this chat.")
     }),
   )
 

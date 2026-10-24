@@ -64,6 +64,9 @@ export interface Interface {
     to: string,
   ) => Effect.Effect<void, EnvironmentApi.FileNotFoundError | EnvironmentApi.FileSystemError>
   readonly mkdir: (path: string) => Effect.Effect<void, EnvironmentApi.FileSystemError>
+  readonly unpack: (
+    input: EnvironmentApi.UnpackInput,
+  ) => Effect.Effect<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/executor/Executor") {}
