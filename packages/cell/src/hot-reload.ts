@@ -59,20 +59,17 @@ export const layer = Layer.effect(
       if (yield* fence.isRetired) return
       const token = yield* hostToken.current
       if (Option.isNone(token)) return yield* Effect.logWarning("The brain has no valid host token; it skips a pull")
-      const isOpen = (yield* harness.state).isOpen
-      const sessions: ReadonlyArray<PullSession> = isOpen
-        ? yield* Effect.scoped(
-            Effect.flatMap(harness.get, (opened) => opened.sessions).pipe(
-              Effect.map((all) =>
-                all.map((session) => ({
-                  id: Session.ID.make(session.id),
-                  busy: session.active,
-                  progress: session.progress,
-                })),
-              ),
-            ),
-          )
-        : []
+      const sessions: ReadonlyArray<PullSession> = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const opened = yield* harness.getIfOpen
+          if (Option.isNone(opened)) return []
+          return (yield* opened.value.sessions).map((session) => ({
+            id: Session.ID.make(session.id),
+            busy: session.active,
+            progress: session.progress,
+          }))
+        }),
+      )
       const layers = yield* settings.layers
       const reply = yield* host.pull
         .pull({
@@ -98,10 +95,11 @@ export const layer = Layer.effect(
       const access = reply.models.access
       if (access) yield* store.install(access, reply.models.hash)
       yield* settings.save(BrainSettings.merge(layers, reply.layers), reply.chats)
-      if (!isOpen) return
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const opened = yield* harness.get
+          const current = yield* harness.getIfOpen
+          if (Option.isNone(current)) return
+          const opened = current.value
           yield* opened.configure({
             models: Option.match(yield* store.read, { onNone: () => [], onSome: (saved) => saved.endpoints }),
             apps: yield* apps.current,
