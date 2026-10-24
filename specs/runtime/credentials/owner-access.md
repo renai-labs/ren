@@ -2,6 +2,8 @@
 
 Status: spec written, not built. Linear: REN-1432. Write and build it together with [`README.md`](README.md) (C34). It uses the credential shape and the owner rules of README section 6.4.
 
+> Superseded in part by [`profiles.md`](profiles.md) (§17 there): §6 rule 3 (server names), §10 (requirements), A6 on leaving a space, A13, A25, A28.
+
 This file is the core of the spec. The references hold the evidence:
 
 | Reference                                            | Contents                                               |
