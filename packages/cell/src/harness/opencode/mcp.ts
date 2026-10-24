@@ -3,7 +3,8 @@ export * as OpenCodeMcp from "./mcp.js"
 import type { Plugin } from "@opencode/plugin/effect"
 import { Mcp } from "@opencode/schema/mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
-import { Effect, Option, Schedule } from "effect"
+import { Effect, Option, Ref, Schedule } from "effect"
+import type { OpenCodeExecution } from "./execution.js"
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 waits 30 seconds for each of startup and tools/list when a server declares no timeout.
 const openCodeTimeout = 30_000
@@ -13,43 +14,49 @@ const published = "1 second"
 
 const checks = Schedule.spaced("25 millis")
 
-export interface Server {
+interface Server {
   readonly name: string
-  readonly config: Mcp.RemoteConfig
+  readonly config: Mcp.RemoteConfig | Mcp.LocalConfig
   readonly within: number
 }
 
-export const servers = (apps: Option.Option<AppCatalog.Info>): ReadonlyArray<Server> => {
-  const mcps: ReadonlyArray<AppCatalog.McpEntry> = Option.match(apps, {
-    onNone: () => [],
-    onSome: (info) => info.catalog.mcps,
-  })
-  return mcps.flatMap((entry) => {
-    const declaration = entry.declaration
-    if (
-      declaration.transport.type !== "remote" ||
-      declaration.auth.type !== "none" ||
-      !declaration.requiredCredentials.every((requirement) => requirement.optional)
-    )
-      return []
+const entries = (apps: Option.Option<AppCatalog.Info>): ReadonlyArray<AppCatalog.McpEntry> =>
+  Option.match(apps, { onNone: () => [], onSome: (info) => info.catalog.mcps }).filter(
+    (entry) =>
+      entry.declaration.auth.type === "none" &&
+      entry.declaration.requiredCredentials.every((requirement) => requirement.optional),
+  )
+
+const servers = (apps: Option.Option<AppCatalog.Info>, options: { readonly local: boolean }): ReadonlyArray<Server> =>
+  entries(apps).flatMap((entry) => {
+    const timeouts = entry.declaration.timeouts
+    const timeout = timeouts && { timeout: new Mcp.TimeoutConfig(timeouts) }
+    const transport = entry.declaration.transport
+    const config =
+      transport.type === "remote"
+        ? new Mcp.RemoteConfig({ type: "remote", url: transport.url, oauth: false, ...timeout })
+        : transport.type === "local" &&
+          options.local &&
+          new Mcp.LocalConfig({
+            type: "local",
+            command: transport.command,
+            ...(transport.cwd && { cwd: transport.cwd }),
+            ...(transport.env && { environment: transport.env }),
+            ...timeout,
+          })
+    if (!config) return []
     return [
       {
         name: entry.slug,
-        config: new Mcp.RemoteConfig({
-          type: "remote",
-          url: declaration.transport.url,
-          oauth: false,
-          ...(declaration.timeouts && { timeout: new Mcp.TimeoutConfig(declaration.timeouts) }),
-        }),
-        within: (declaration.timeouts?.startup ?? openCodeTimeout) + (declaration.timeouts?.catalog ?? openCodeTimeout),
+        config,
+        within: (timeouts?.startup ?? openCodeTimeout) + (timeouts?.catalog ?? openCodeTimeout),
       },
     ]
   })
-}
 
 const namespace = (name: string) => name.replaceAll(/[^A-Za-z0-9_-]/gu, "_")
 
-export const ready = Effect.fn("OpenCodeMcp.ready")(function* (
+const ready = Effect.fn("OpenCodeMcp.ready")(function* (
   context: Pick<Plugin.Context, "mcp" | "tool">,
   before: ReadonlyArray<Server>,
   after: ReadonlyArray<Server>,
@@ -81,4 +88,47 @@ export const ready = Effect.fn("OpenCodeMcp.ready")(function* (
     }),
     Effect.timeoutOption(published),
   )
+})
+
+export const make = Effect.fnUntraced(function* (input: {
+  readonly context: Pick<Plugin.Context, "mcp" | "tool" | "session">
+  readonly boundary: OpenCodeExecution.Boundary
+  readonly isSession: boolean
+  readonly hasEnvironment: boolean
+  readonly apps: Option.Option<AppCatalog.Info>
+}) {
+  if (!input.isSession) return { apply: () => Effect.void }
+  const latest = yield* Ref.make(input.apps)
+  const applied = yield* Ref.make(servers(input.apps, { local: input.hasEnvironment }))
+  yield* input.context.mcp.transform((editor) => {
+    for (const server of Ref.getUnsafe(applied)) editor.set(server.name, server.config)
+  })
+  const opening = yield* Ref.get(applied)
+  if (opening.length)
+    yield* input.boundary.offer(ready(input.context, [], opening)).pipe(Effect.forkScoped({ startImmediately: true }))
+  if (!input.hasEnvironment)
+    yield* input.context.session.hook("context", (event) =>
+      Effect.sync(() => {
+        const apps = new Set(
+          entries(Ref.getUnsafe(latest))
+            .filter((entry) => entry.declaration.transport.type === "local")
+            .map((entry) => entry.appSlug),
+        )
+        for (const app of apps)
+          event.system.push({
+            type: "text",
+            text: `The app ${app} needs an execution environment, and this chat has none, so its local tools are not available here.`,
+          })
+      }),
+    )
+  return {
+    apply: Effect.fnUntraced(function* (apps: Option.Option<AppCatalog.Info>) {
+      yield* Ref.set(latest, apps)
+      const next = servers(apps, { local: input.hasEnvironment })
+      const before = yield* Ref.getAndSet(applied, next)
+      if (JSON.stringify(before) === JSON.stringify(next)) return
+      yield* input.context.mcp.reload()
+      yield* ready(input.context, before, next)
+    }),
+  }
 })

@@ -21,6 +21,7 @@ import type { Harness } from "../src/harness/harness.js"
 import { OpenCodeHarness } from "../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../src/harness/opencode/server.js"
 import { RenWorkspaceDriver } from "../src/harness/opencode/workspace-driver.js"
+import { McpPeer } from "./lib/mcp.js"
 import { Pid } from "./lib/pid.js"
 import { Shared } from "./lib/shared.js"
 import type { StubModel } from "./lib/stub-model.js"
@@ -839,5 +840,58 @@ it.live("destroying the ren workspace leaves the sandbox's folder and Ren untouc
     yield* opened.host.workspaces.destroy(RenWorkspaceDriver.workspaceId(session.sessionId))
     expect(yield* text(join(folder(session.sessionId), "kept.txt"))).toBe("kept\n")
     expect(yield* opened.opens).toBe(1)
+  }),
+)
+
+const whereServer = (marker: string) =>
+  Option.some(
+    McpPeer.catalog(marker, [
+      {
+        slug: "where",
+        transport: {
+          type: "local",
+          command: [process.execPath, join(import.meta.dir, "lib", "mcp-stdio.ts"), "one two"],
+          env: { REN_TEST_VALUE: `literal ${marker}` },
+        },
+      },
+    ]),
+  )
+
+it.live(
+  "an app's local MCP server starts on the session's sandbox when the catalog arrives, with its arguments and env",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open()
+      const session = yield* begin(opened)
+      yield* session.turn(stub.script(), 1)
+      yield* opened.host.client.session.wait({ sessionID: SessionID.make(session.sessionId) }).pipe(Effect.orDie)
+      expect(yield* opened.opens).toBe(0)
+      const value = crypto.randomUUID()
+      yield* Effect.promise(() => Bun.write(join(folder(session.sessionId), "marker.txt"), value))
+      yield* opened.harness.configure({ apps: whereServer(value) })
+      expect(yield* opened.opens).toBe(1)
+      expect(yield* Effect.promise(() => Bun.file(join(folder(session.sessionId), "started")).exists())).toBe(true)
+      const result = toolOutput(
+        yield* session.turn(
+          stub.script({ tool: { name: "execute", input: { code: "return await tools.where.where()" } } }),
+        ),
+      )
+      expect(yield* opened.opens).toBe(1)
+      expect(
+        [folder(session.sessionId), "one two", `literal ${value}`, value].filter((part) => !result.includes(part)),
+      ).toEqual([])
+    }),
+)
+
+it.live("a chat with no environment is told that an app needs one, and the app's server does not start", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    const session = yield* begin(opened, { onEnvironment: false })
+    yield* opened.harness.configure({ apps: whereServer(crypto.randomUUID()) })
+    const call = yield* session.turn(stub.script(), 1)
+    expect(call.system).toContain("needs an execution environment")
+    expect(call.system).not.toContain("tools.where.where")
+    expect(yield* opened.opens).toBe(0)
+    expect(yield* Effect.promise(() => Bun.file(join(local, "started")).exists())).toBe(false)
   }),
 )
