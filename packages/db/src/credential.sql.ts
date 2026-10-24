@@ -1,5 +1,4 @@
-import type { App } from "@ren/schema/app"
-import type { AppRelease } from "@ren/schema/app-release"
+import type { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
 import type { Credential } from "@ren/schema/credential"
 import type { Envelope } from "@ren/schema/envelope"
@@ -21,7 +20,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core"
-import { app, app_release } from "./app.sql.js"
+import { app_profile } from "./app.sql.js"
 import { organization, user } from "./auth.sql.js"
 import { space } from "./space.sql.js"
 
@@ -30,6 +29,7 @@ export const credentialOwnerLabelConstraints = {
   space: "credential_space_label_uidx",
   person: "credential_person_label_uidx",
   workload: "credential_workload_label_uidx",
+  profile: "credential_profile_label_uidx",
 } as const
 
 export const credential = pgTable(
@@ -49,6 +49,9 @@ export const credential = pgTable(
       .references(() => space.id, { onDelete: "cascade" }),
     workload_kind: text().$type<Workload.Kind>(),
     workload_id: text(),
+    profile_id: text()
+      .$type<AppProfile.ID>()
+      .references(() => app_profile.id, { onDelete: "cascade" }),
     label: text().notNull(),
     name: text(),
     type: text().$type<Credential.Type>().notNull(),
@@ -75,11 +78,7 @@ export const credential = pgTable(
     oauth_app_id: text()
       .$type<OAuthApp.ID>()
       .references(() => oauth_app.id),
-    app_id: text()
-      .$type<App.ID>()
-      .references(() => app.id),
-    mcp: text(),
-    connection: text(),
+    made_for: text(),
     account_subject_hash: text(),
     unauthorized_refresh_at: timestamp(),
     wanted_scopes: text()
@@ -98,10 +97,11 @@ export const credential = pgTable(
   (table) => [
     check(
       "credential_owner_check",
-      sql`(${table.owner} = 'org' and ${table.user_id} is null and ${table.space_id} is null and ${table.workload_kind} is null and ${table.workload_id} is null)
-       or (${table.owner} = 'space' and ${table.user_id} is null and ${table.space_id} is not null and ${table.workload_kind} is null and ${table.workload_id} is null)
-       or (${table.owner} = 'person' and ${table.user_id} is not null and ${table.space_id} is null and ${table.workload_kind} is null and ${table.workload_id} is null)
-       or (${table.owner} = 'workload' and ${table.user_id} is null and ${table.space_id} is null and ${table.workload_kind} is not null and ${table.workload_id} is not null)`,
+      sql`(${table.owner} = 'org' and ${table.user_id} is null and ${table.space_id} is null and ${table.workload_kind} is null and ${table.workload_id} is null and ${table.profile_id} is null)
+       or (${table.owner} = 'space' and ${table.user_id} is null and ${table.space_id} is not null and ${table.workload_kind} is null and ${table.workload_id} is null and ${table.profile_id} is null)
+       or (${table.owner} = 'person' and ${table.user_id} is not null and ${table.space_id} is null and ${table.workload_kind} is null and ${table.workload_id} is null and ${table.profile_id} is null)
+       or (${table.owner} = 'workload' and ${table.user_id} is null and ${table.space_id} is null and ${table.workload_kind} is not null and ${table.workload_id} is not null and ${table.profile_id} is null)
+       or (${table.owner} = 'profile' and ${table.user_id} is null and ${table.space_id} is null and ${table.workload_kind} is null and ${table.workload_id} is null and ${table.profile_id} is not null)`,
     ),
     uniqueIndex(credentialOwnerLabelConstraints.org)
       .on(table.organization_id, table.label)
@@ -115,11 +115,14 @@ export const credential = pgTable(
     uniqueIndex(credentialOwnerLabelConstraints.workload)
       .on(table.workload_kind, table.workload_id, table.label)
       .where(sql`${table.owner} = 'workload'`),
+    uniqueIndex(credentialOwnerLabelConstraints.profile)
+      .on(table.profile_id, table.label)
+      .where(sql`${table.owner} = 'profile'`),
     index("credential_expires_at_idx")
       .on(table.expires_at)
       .where(sql`${table.expires_at} is not null`),
     index("credential_account_user_id_idx").on(table.account_user_id),
-    index("credential_app_id_mcp_idx").on(table.app_id, table.mcp),
+    index("credential_profile_id_idx").on(table.profile_id),
   ],
 )
 
@@ -174,26 +177,14 @@ export const oauth_session = pgTable(
       .$type<Auth.OrganizationID>()
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    owner: text().$type<Credential.OwnerKind>().notNull(),
-    user_id: text()
-      .$type<Auth.UserID>()
-      .references(() => user.id, { onDelete: "cascade" }),
-    space_id: text()
-      .$type<Space.ID>()
-      .references(() => space.id, { onDelete: "cascade" }),
+    credential_id: text().$type<Credential.ID>().notNull(),
+    profile_id: text()
+      .$type<AppProfile.ID>()
+      .references(() => app_profile.id, { onDelete: "set null" }),
     label: text().notNull(),
     name: text(),
-    credential_id: text().$type<Credential.ID>().notNull(),
-    app_id: text()
-      .$type<App.ID>()
-      .notNull()
-      .references(() => app.id),
-    release_id: text()
-      .$type<AppRelease.ID>()
-      .notNull()
-      .references(() => app_release.id),
-    mcp: text().notNull(),
-    connection: text(),
+    hosts: text().array().notNull(),
+    made_for: text().notNull(),
     initiator_user_id: text()
       .$type<Auth.UserID>()
       .notNull()
@@ -218,12 +209,6 @@ export const oauth_session = pgTable(
   (table) => [
     uniqueIndex("oauth_session_state_uidx").on(table.state),
     index("oauth_session_expires_at_idx").on(table.expires_at),
-    check(
-      "oauth_session_owner_check",
-      sql`(${table.owner} = 'org' and ${table.user_id} is null and ${table.space_id} is null)
-       or (${table.owner} = 'space' and ${table.user_id} is null and ${table.space_id} is not null)
-       or (${table.owner} = 'person' and ${table.user_id} is not null and ${table.space_id} is null)`,
-    ),
   ],
 )
 

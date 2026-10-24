@@ -1,9 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "8a557d53-4a30-4e99-88aa-355755542802",
+  "id": "a3871c74-91e1-4563-a01f-d0ac29d9a2d6",
   "prevIds": [
-    "7ae9b331-d9f0-4b7c-b013-484453d2aba3",
     "ca8799bc-da35-4253-89cd-e561b4df4556"
   ],
   "ddl": [
@@ -33,13 +32,25 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "app_release",
+      "name": "app_dependency",
       "entityType": "tables",
       "schema": "public"
     },
     {
       "isRlsEnabled": false,
-      "name": "app_release_dependency",
+      "name": "app_profile",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "app_profile_link",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "app_profile_space",
       "entityType": "tables",
       "schema": "public"
     },
@@ -166,12 +177,6 @@
     {
       "isRlsEnabled": false,
       "name": "settings",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "space_app",
       "entityType": "tables",
       "schema": "public"
     },
@@ -599,14 +604,66 @@
       "table": "app"
     },
     {
-      "type": "text",
+      "type": "jsonb",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "latest_release_id",
+      "name": "required_credentials",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "environment",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "mcps",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "skills",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "revision",
       "entityType": "columns",
       "schema": "public",
       "table": "app"
@@ -658,114 +715,10 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
       "name": "app_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "version",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "required_credentials",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "environment",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "mcps",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "type": "jsonb",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "skills",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "app_release_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "app_release_dependency"
+      "table": "app_dependency"
     },
     {
       "type": "text",
@@ -778,7 +731,215 @@
       "name": "dependency_app_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "app_release_dependency"
+      "table": "app_dependency"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "app_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "slug",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "all_spaces",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_by_user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "profile_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile_link"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "dependency_app_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile_link"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "dependency_profile_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile_link"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "profile_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile_space"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "space_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "app_profile_space"
     },
     {
       "type": "text",
@@ -1836,6 +1997,19 @@
     {
       "type": "text",
       "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "profile_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "credential"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -2049,33 +2223,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "app_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "credential"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "mcp",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "credential"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "connection",
+      "name": "made_for",
       "entityType": "columns",
       "schema": "public",
       "table": "credential"
@@ -2608,7 +2756,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "owner",
+      "name": "credential_id",
       "entityType": "columns",
       "schema": "public",
       "table": "oauth_session"
@@ -2621,20 +2769,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "user_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "oauth_session"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "space_id",
+      "name": "profile_id",
       "entityType": "columns",
       "schema": "public",
       "table": "oauth_session"
@@ -2669,11 +2804,11 @@
       "type": "text",
       "typeSchema": null,
       "notNull": true,
-      "dimensions": 0,
+      "dimensions": 1,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "credential_id",
+      "name": "hosts",
       "entityType": "columns",
       "schema": "public",
       "table": "oauth_session"
@@ -2686,46 +2821,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "app_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "oauth_session"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "release_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "oauth_session"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "mcp",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "oauth_session"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "connection",
+      "name": "made_for",
       "entityType": "columns",
       "schema": "public",
       "table": "oauth_session"
@@ -2869,6 +2965,19 @@
       "generated": null,
       "identity": null,
       "name": "failure_reason",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "oauth_session"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "same_account_as",
       "entityType": "columns",
       "schema": "public",
       "table": "oauth_session"
@@ -4139,84 +4248,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "settings"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "space_app"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "space_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "space_app"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "app_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "space_app"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "pinned_release_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "space_app"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "space_app"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "archived_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "space_app"
     },
     {
       "type": "text",
@@ -5516,10 +5547,129 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "app_release_dependency_app_idx",
+      "name": "app_dependency_dependency_app_id_idx",
       "entityType": "indexes",
       "schema": "public",
-      "table": "app_release_dependency"
+      "table": "app_dependency"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "app_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "slug",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "app_profile_slug_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "app_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "app_profile_app_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "app_profile_user_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "dependency_profile_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "app_profile_link_dependency_profile_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "app_profile_link"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "space_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "app_profile_space_space_id_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "app_profile_space"
     },
     {
       "nameExplicit": true,
@@ -5889,6 +6039,34 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "profile_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "label",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"owner\" = 'profile'",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "credential_profile_label_uidx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "credential"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "expires_at",
           "isExpression": false,
           "asc": true,
@@ -5931,14 +6109,7 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "app_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "mcp",
+          "value": "profile_id",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -5950,7 +6121,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "credential_app_id_mcp_idx",
+      "name": "credential_profile_id_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "credential"
@@ -6290,55 +6461,6 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "opencode_message"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "space_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "app_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": "(\"archived_at\" is null)",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "space_app_space_id_app_id_uidx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "space_app"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "app_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "space_app_app_id_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "space_app"
     },
     {
       "nameExplicit": true,
@@ -7034,25 +7156,6 @@
       "table": "app"
     },
     {
-      "nameExplicit": true,
-      "columns": [
-        "id",
-        "latest_release_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "app_release",
-      "columnsTo": [
-        "app_id",
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "name": "app_latest_release_fk",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "app"
-    },
-    {
       "nameExplicit": false,
       "columns": [
         "app_id"
@@ -7064,27 +7167,10 @@
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
-      "name": "app_release_app_id_app_id_fkey",
+      "name": "app_dependency_app_id_app_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "app_release_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "app_release",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "name": "app_release_dependency_app_release_id_app_release_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "app_release_dependency"
+      "table": "app_dependency"
     },
     {
       "nameExplicit": false,
@@ -7098,10 +7184,163 @@
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
-      "name": "app_release_dependency_dependency_app_id_app_id_fkey",
+      "name": "app_dependency_dependency_app_id_app_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "app_release_dependency"
+      "table": "app_dependency"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "app_profile_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "app_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "app",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "app_profile_app_id_app_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "app_profile_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "created_by_user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "app_profile_created_by_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "profile_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "app_profile",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "app_profile_link_profile_id_app_profile_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "app_profile_link"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "dependency_app_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "app",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "app_profile_link_dependency_app_id_app_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "app_profile_link"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "dependency_profile_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "app_profile",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "app_profile_link_dependency_profile_id_app_profile_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "app_profile_link"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "profile_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "app_profile",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "app_profile_space_profile_id_app_profile_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "app_profile_space"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "space_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "space",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "app_profile_space_space_id_space_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "app_profile_space"
     },
     {
       "nameExplicit": false,
@@ -7293,6 +7532,23 @@
     {
       "nameExplicit": false,
       "columns": [
+        "profile_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "app_profile",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "credential_profile_id_app_profile_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "credential"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
         "account_user_id"
       ],
       "schemaTo": "public",
@@ -7320,23 +7576,6 @@
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "credential_oauth_app_id_oauth_app_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "credential"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "app_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "app",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "name": "credential_app_id_app_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "credential"
@@ -7429,67 +7668,16 @@
     {
       "nameExplicit": false,
       "columns": [
-        "user_id"
+        "profile_id"
       ],
       "schemaTo": "public",
-      "tableTo": "user",
+      "tableTo": "app_profile",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "oauth_session_user_id_user_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "oauth_session"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "space_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "space",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "oauth_session_space_id_space_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "oauth_session"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "app_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "app",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "name": "oauth_session_app_id_app_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "oauth_session"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "release_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "app_release",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "name": "oauth_session_release_id_app_release_id_fkey",
+      "onDelete": "SET NULL",
+      "name": "oauth_session_profile_id_app_profile_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "oauth_session"
@@ -7833,59 +8021,6 @@
       "entityType": "fks",
       "schema": "public",
       "table": "settings"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "space_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "space",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "name": "space_app_space_id_space_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "space_app"
-    },
-    {
-      "nameExplicit": false,
-      "columns": [
-        "app_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "app",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "name": "space_app_app_id_app_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "space_app"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        "app_id",
-        "pinned_release_id"
-      ],
-      "schemaTo": "public",
-      "tableTo": "app_release",
-      "columnsTo": [
-        "app_id",
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "name": "space_app_pin_fk",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "space_app"
     },
     {
       "nameExplicit": false,
@@ -8418,14 +8553,36 @@
     },
     {
       "columns": [
-        "app_release_id",
+        "app_id",
         "dependency_app_id"
       ],
       "nameExplicit": false,
-      "name": "app_release_dependency_pkey",
+      "name": "app_dependency_pkey",
       "entityType": "pks",
       "schema": "public",
-      "table": "app_release_dependency"
+      "table": "app_dependency"
+    },
+    {
+      "columns": [
+        "profile_id",
+        "dependency_app_id"
+      ],
+      "nameExplicit": false,
+      "name": "app_profile_link_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "app_profile_link"
+    },
+    {
+      "columns": [
+        "profile_id",
+        "space_id"
+      ],
+      "nameExplicit": false,
+      "name": "app_profile_space_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "app_profile_space"
     },
     {
       "columns": [
@@ -8528,9 +8685,9 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "app_release_pkey",
+      "name": "app_profile_pkey",
       "schema": "public",
-      "table": "app_release",
+      "table": "app_profile",
       "entityType": "pks"
     },
     {
@@ -8718,16 +8875,6 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "space_app_pkey",
-      "schema": "public",
-      "table": "space_app",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
       "name": "space_environment_template_pkey",
       "schema": "public",
       "table": "space_environment_template",
@@ -8826,30 +8973,6 @@
     {
       "nameExplicit": true,
       "columns": [
-        "app_id",
-        "id"
-      ],
-      "nullsNotDistinct": false,
-      "name": "app_release_app_id_id_unique",
-      "entityType": "uniques",
-      "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        "app_id",
-        "version"
-      ],
-      "nullsNotDistinct": false,
-      "name": "app_release_app_id_version_unique",
-      "entityType": "uniques",
-      "schema": "public",
-      "table": "app_release"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
         "id",
         "space_id"
       ],
@@ -8914,7 +9037,21 @@
       "table": "app"
     },
     {
-      "value": "(\"owner\" = 'org' and \"user_id\" is null and \"space_id\" is null and \"workload_kind\" is null and \"workload_id\" is null)\n       or (\"owner\" = 'space' and \"user_id\" is null and \"space_id\" is not null and \"workload_kind\" is null and \"workload_id\" is null)\n       or (\"owner\" = 'person' and \"user_id\" is not null and \"space_id\" is null and \"workload_kind\" is null and \"workload_id\" is null)\n       or (\"owner\" = 'workload' and \"user_id\" is null and \"space_id\" is null and \"workload_kind\" is not null and \"workload_id\" is not null)",
+      "value": "(\"kind\" = 'private') = (\"user_id\" is not null)",
+      "name": "app_profile_kind_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "value": "not (\"kind\" = 'private' and \"all_spaces\")",
+      "name": "app_profile_all_spaces_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "app_profile"
+    },
+    {
+      "value": "(\"owner\" = 'org' and \"user_id\" is null and \"space_id\" is null and \"workload_kind\" is null and \"workload_id\" is null and \"profile_id\" is null)\n       or (\"owner\" = 'space' and \"user_id\" is null and \"space_id\" is not null and \"workload_kind\" is null and \"workload_id\" is null and \"profile_id\" is null)\n       or (\"owner\" = 'person' and \"user_id\" is not null and \"space_id\" is null and \"workload_kind\" is null and \"workload_id\" is null and \"profile_id\" is null)\n       or (\"owner\" = 'workload' and \"user_id\" is null and \"space_id\" is null and \"workload_kind\" is not null and \"workload_id\" is not null and \"profile_id\" is null)\n       or (\"owner\" = 'profile' and \"user_id\" is null and \"space_id\" is null and \"workload_kind\" is null and \"workload_id\" is null and \"profile_id\" is not null)",
       "name": "credential_owner_check",
       "entityType": "checks",
       "schema": "public",
@@ -8926,13 +9063,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "credential_caller"
-    },
-    {
-      "value": "(\"owner\" = 'org' and \"user_id\" is null and \"space_id\" is null)\n       or (\"owner\" = 'space' and \"user_id\" is null and \"space_id\" is not null)\n       or (\"owner\" = 'person' and \"user_id\" is not null and \"space_id\" is null)",
-      "name": "oauth_session_owner_check",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "oauth_session"
     },
     {
       "value": "char_length(\"name\") between 1 and 256",
