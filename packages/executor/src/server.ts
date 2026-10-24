@@ -92,6 +92,7 @@ const operations = EnvironmentApi.Rpcs.toLayer(
       "files.remove": (input) => executor.remove(input.path),
       "files.move": (input) => executor.move(input.from, input.to),
       "files.mkdir": (input) => executor.mkdir(input.path),
+      "files.unpack": (input) => executor.unpack(input),
     })
   }),
 )

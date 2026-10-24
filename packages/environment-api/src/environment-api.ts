@@ -7,7 +7,7 @@ import { Context, Duration, Effect, Schema } from "effect"
 import { Rpc, type RpcClientError, RpcGroup, RpcMiddleware } from "effect/rpc"
 import { Signal } from "./signal.js"
 
-export const protocol = 1
+export const protocol = 2
 
 export const port = 4100
 
@@ -20,6 +20,10 @@ export const orphanAfter = Duration.seconds(30)
 
 // oxlint-disable-next-line ren/no-comments -- Effect RPC frames one NDJSON message in at most 16 MiB and bytes travel as base64, so a message holds about 12 MiB of a file.
 export const maxFileBytes = 8 * 1024 * 1024
+
+export const maxUnpackBytes = 100 * 1024 * 1024
+
+export const maxUnpackFiles = 2000
 
 export const ProcessID = Identifier.make("prc", "Executor.ProcessID")
 export type ProcessID = typeof ProcessID.Type
@@ -150,6 +154,23 @@ export class FileTooLargeError extends Schema.TaggedError<FileTooLargeError>()("
   maxBytes: Schema.Int,
 }) {}
 
+export class ArchiveError extends Schema.TaggedError<ArchiveError>()("ArchiveError", {
+  url: Schema.String,
+  message: Schema.String,
+}) {}
+
+export interface UnpackInput extends Schema.Schema.Type<typeof UnpackInput> {}
+export const UnpackInput = Schema.Struct({
+  url: Schema.String.annotate({
+    description: "A .tar.gz archive with one top-level folder, as GitHub serves a commit",
+  }),
+  folder: Schema.String.annotate({ description: "The folder inside the archive to keep, or . for all of it" }),
+  path: Schema.String.annotate({
+    description:
+      "Where the folder’s files go. The path appears only when every file is there. An existing path is kept, and nothing is downloaded",
+  }),
+}).annotate({ identifier: "Executor.UnpackInput" })
+
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {
   id: ProcessID,
 }) {}
@@ -216,4 +237,5 @@ export const Rpcs = RpcGroup.make(
     error: Schema.Union([FileNotFoundError, FileSystemError]),
   }),
   Rpc.make("files.mkdir", { payload: Path, error: FileSystemError }),
+  Rpc.make("files.unpack", { payload: UnpackInput, error: Schema.Union([ArchiveError, FileSystemError]) }),
 ).middleware(Authentication)

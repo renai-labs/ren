@@ -27,6 +27,7 @@ import { access, mkdir, open, realpath } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import manifest from "../package.json"
 import { Executor } from "./executor.js"
+import { SandboxArchive } from "./sandbox/archive.js"
 import { SandboxFiles } from "./sandbox/files.js"
 import { OutputLog } from "./sandbox/output-log.js"
 
@@ -277,6 +278,7 @@ export const layer = Layer.effect(
       heartbeat,
       kill,
       ...SandboxFiles.make(workspace),
+      unpack: SandboxArchive.unpack(workspace),
     })
   }),
 )

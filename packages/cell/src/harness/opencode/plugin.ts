@@ -8,6 +8,7 @@ import { SessionID } from "@opencode/schema/session-id"
 import { Tool } from "@opencode/schema/tool"
 import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { EnvironmentSession } from "@ren/brain/environment/session"
 import { BrainSettings } from "@ren/brain/settings"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { Session } from "@ren/schema/session"
@@ -32,9 +33,8 @@ import { basename } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import type { OpenCodeExecution } from "./execution.js"
 import { OpenCodeMcp } from "./mcp.js"
+import { OpenCodeSkills } from "./skills.js"
 import type { HarnessConfig } from "../config.js"
-
-const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 keys a skill by its id and an MCP's tools by the server key with each character outside [A-Za-z0-9_-] as "_"; a later registration silently replaces an earlier one with the same name.
 const naming: AppCatalog.Naming = {
@@ -193,6 +193,7 @@ export const make = (
   ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
   boundaryOf: (location: Plugin.Context["location"]) => OpenCodeExecution.Boundary,
   directoryOf: (sessionId: string) => string,
+  skillSources: OpenCodeSkills.Sources,
 ) =>
   Plugin.define({
     id: "ren",
@@ -203,7 +204,7 @@ export const make = (
         const provider = context.provider
         if (Option.isNone(connections))
           yield* tool.transform((editor) => {
-            for (const id of environmentTools) editor.remove(id)
+            for (const id of OpenCodeSkills.environmentTools) editor.remove(id)
           })
         if (Option.isSome(connections))
           yield* tool.hook("execute.after", (event) =>
@@ -293,6 +294,21 @@ export const make = (
           isSession,
           hasEnvironment: Boolean(workspaceID),
           apps: (yield* Ref.get(applied)).apps,
+        })
+        const refreshSkills = yield* Ref.make<Effect.Effect<void>>(Effect.void)
+        const skills = yield* OpenCodeSkills.make({
+          context,
+          isSession,
+          files: Option.flatMap(connections, (each) =>
+            workspaceID
+              ? Option.some(
+                  EnvironmentSession.make(each, Session.ID.make(sessionId), RenWorkspaceDriver.killedBySignal).files,
+                )
+              : Option.none(),
+          ),
+          sources: skillSources,
+          apps: (yield* Ref.get(applied)).apps,
+          onPrompt: Effect.flatten(Ref.get(refreshSkills)),
         })
         const models = yield* Ref.make(initial.models)
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(models)))
@@ -423,6 +439,29 @@ export const make = (
           }),
           Effect.forkScoped,
         )
+        const offer = (snapshot: HarnessConfig.Snapshot, prepared: ReadonlyArray<OpenCodeSkills.Registration>) =>
+          boundaryOf(context.location).offer(
+            Effect.gen(function* () {
+              if (snapshot.revision !== (yield* Ref.get(desired)).revision) return
+              const modelChanged = JSON.stringify(snapshot.models) !== JSON.stringify((yield* Ref.get(applied)).models)
+              yield* Ref.set(models, snapshot.models)
+              if (modelChanged) {
+                yield* integration.reload()
+                yield* provider.reload()
+              }
+              if (Option.isSome(settings)) yield* settings.value.install(sessionId, snapshot.chats.get(sessionId))
+              const conflicts = conflictsOf(snapshot.apps)
+              const previous = yield* Ref.getAndSet(appConflicts, conflicts)
+              if (conflicts.length && conflicts.join("\n") !== previous.join("\n"))
+                yield* Effect.logWarning(`The brain keeps its applied app catalog:\n${conflicts.join("\n")}`)
+              const before = (yield* Ref.get(applied)).apps
+              const apps = conflicts.length ? before : snapshot.apps
+              yield* Ref.set(applied, { ...snapshot, apps })
+              yield* mcp.apply(apps)
+              if (!conflicts.length) yield* skills.apply(prepared)
+              yield* synced
+            }),
+          )
         const location: HarnessConfig.Location = {
           models: Ref.get(models),
           observation: Effect.gen(function* () {
@@ -437,29 +476,16 @@ export const make = (
             }
           }),
           offer: (snapshot) =>
-            boundaryOf(context.location).offer(
-              Effect.gen(function* () {
-                if (snapshot.revision !== (yield* Ref.get(desired)).revision) return
-                const modelChanged =
-                  JSON.stringify(snapshot.models) !== JSON.stringify((yield* Ref.get(applied)).models)
-                yield* Ref.set(models, snapshot.models)
-                if (modelChanged) {
-                  yield* integration.reload()
-                  yield* provider.reload()
-                }
-                if (Option.isSome(settings)) yield* settings.value.install(sessionId, snapshot.chats.get(sessionId))
-                const conflicts = conflictsOf(snapshot.apps)
-                const previous = yield* Ref.getAndSet(appConflicts, conflicts)
-                if (conflicts.length && conflicts.join("\n") !== previous.join("\n"))
-                  yield* Effect.logWarning(`The brain keeps its applied app catalog:\n${conflicts.join("\n")}`)
-                const before = (yield* Ref.get(applied)).apps
-                const apps = conflicts.length ? before : snapshot.apps
-                yield* Ref.set(applied, { ...snapshot, apps })
-                yield* mcp.apply(apps)
-                yield* synced
-              }),
-            ),
+            skills.prepare(snapshot.apps).pipe(Effect.flatMap((prepared) => offer(snapshot, prepared))),
         }
+        yield* Ref.set(
+          refreshSkills,
+          Effect.gen(function* () {
+            const snapshot = yield* Ref.get(desired)
+            const prepared = yield* skills.prepare(snapshot.apps)
+            if (skills.isChanged(prepared)) yield* offer(snapshot, prepared)
+          }),
+        )
         yield* Ref.update(locations, (all) => [...all, location])
         yield* Effect.addFinalizer(() => Ref.update(locations, (all) => all.filter((each) => each !== location)))
         yield* Deferred.succeed(loaded, undefined)

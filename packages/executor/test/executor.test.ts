@@ -6,7 +6,19 @@ import { Environment } from "@ren/schema/environment"
 import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { existsSync } from "node:fs"
-import { chmod, mkdir, mkdtemp, realpath, rename, rm, stat, symlink, truncate, writeFile } from "node:fs/promises"
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  symlink,
+  truncate,
+  writeFile,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
 import { heapStats } from "bun:jsc"
@@ -371,6 +383,91 @@ it.live(
       ).toBe("FileTooLargeError")
       expect((yield* executor.stat("copy.bin").pipe(Effect.flip))._tag).toBe("FileNotFoundError")
     }),
+)
+
+const archives = Effect.fnUntraced(function* (folders: Readonly<Record<string, (root: string) => Promise<void>>>) {
+  const source = yield* Effect.promise(() => mkdtemp(join(tmpdir(), "ren-archive-")))
+  yield* Effect.forEach(Object.entries(folders), (entry) =>
+    Effect.promise(async () => {
+      const root = join(source, entry[0], "repo-c1")
+      await mkdir(root, { recursive: true })
+      await entry[1](root)
+      const packed = Bun.spawnSync(
+        ["tar", "-czf", join(source, `${entry[0]}.tar.gz`), "-C", join(source, entry[0]), "repo-c1"],
+        {
+          env: { ...process.env, COPYFILE_DISABLE: "1" },
+        },
+      )
+      if (packed.exitCode !== 0) throw new Error(packed.stderr.toString())
+    }),
+  )
+  const requests: Array<string> = []
+  const server = yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: (request) => {
+          const name = new URL(request.url).pathname.slice(1)
+          requests.push(name)
+          const file = Bun.file(join(source, name))
+          return file.exists().then((found) => (found ? new Response(file) : new Response("missing", { status: 404 })))
+        },
+      }),
+    ),
+    (served) => Effect.promise(() => served.stop(true)),
+  )
+  return { url: (name: string) => `http://127.0.0.1:${server.port}/${name}`, requests: () => [...requests] }
+})
+
+const put = (path: string, text: string) =>
+  mkdir(join(path, ".."), { recursive: true }).then(() => writeFile(path, text))
+
+it.live(
+  "unpacks only an archive's folder, makes the path appear whole, and downloads nothing for a path that exists",
+  () =>
+    Effect.gen(function* () {
+      const executor = yield* Executor.Service
+      const served = yield* archives({
+        skills: async (root) => {
+          await put(join(root, "skills/pdf/SKILL.md"), "body")
+          await put(join(root, "skills/pdf/scripts/fill.sh"), "echo fill\n")
+          await put(join(root, "skills/pdf/empty.txt"), "")
+          await put(join(root, "README.md"), "repository")
+        },
+      })
+      yield* executor.unpack({ url: served.url("skills.tar.gz"), folder: "skills/pdf", path: "unpacked/pdf/c1" })
+      const target = join(workspace, "unpacked/pdf/c1")
+      expect(
+        yield* Effect.promise(() =>
+          Promise.all(["SKILL.md", "scripts/fill.sh", "empty.txt"].map((name) => Bun.file(join(target, name)).text())),
+        ),
+      ).toEqual(["body", "echo fill\n", ""])
+      expect(existsSync(join(target, "README.md"))).toBe(false)
+      yield* executor.unpack({ url: served.url("skills.tar.gz"), folder: "skills/pdf", path: "unpacked/pdf/c1" })
+      expect(served.requests()).toEqual(["skills.tar.gz"])
+    }),
+)
+
+it.live("an archive with a link or a download that fails leaves nothing at the path", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* archives({
+      linked: async (root) => {
+        await put(join(root, "SKILL.md"), "body")
+        await symlink("/etc/passwd", join(root, "escape"))
+      },
+    })
+    const linked = yield* executor
+      .unpack({ url: served.url("linked.tar.gz"), folder: ".", path: "refused/linked" })
+      .pipe(Effect.flip)
+    expect(linked.message).toBe("The archive has a link at escape, and the executor copies only files")
+    const missing = yield* executor
+      .unpack({ url: served.url("missing.tar.gz"), folder: ".", path: "refused/missing" })
+      .pipe(Effect.flip)
+    expect(missing.message).toBe("The archive answered 404")
+    expect(yield* Effect.promise(() => readdir(join(workspace, "refused")).catch(() => []))).toEqual([])
+  }),
 )
 
 it.effect("kills the whole group of a process that nobody reads or names for 30 seconds", () =>

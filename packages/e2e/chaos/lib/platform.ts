@@ -19,6 +19,11 @@ export const wrangler = unless({
 
 export const docker = unless({ met: probe(["docker", "info"]), reason: "the Docker daemon is not reachable" })
 
+export const github = unless({
+  met: probe(["git", "ls-remote", "--exit-code", "https://github.com/anthropics/skills", "HEAD"]),
+  reason: "GitHub is not reachable for the real remote skill",
+})
+
 export const live = unless({
   met: mode !== "local" && Boolean(process.env.CHAOS_LIVE_MODEL),
   reason: "live model cases run under chaos:live or chaos:deployed with CHAOS_LIVE_MODEL set",
@@ -49,4 +54,4 @@ export const soak = unless({
   reason: "soak cases run with CHAOS_SOAK_MS set to a duration",
 })
 
-export const unmet = { wrangler, docker, live, litellm, e2b, cloudflare, slow, soak }
+export const unmet = { wrangler, docker, github, live, litellm, e2b, cloudflare, slow, soak }

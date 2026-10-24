@@ -1,6 +1,6 @@
 import { expect } from "bun:test"
 import { TestAccess } from "./lib/access.js"
-import type { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Executor } from "@ren/executor/executor"
 import { Sandbox } from "@ren/executor/sandbox"
 import { EnvironmentClient } from "@ren/environment-api/environment-client"
@@ -474,10 +474,12 @@ it.live("refuses an executor that speaks another protocol", () =>
       const url = yield* machine({ environmentId, workspace, executor: reporting(hello) })
       return yield* environmentsWith(TestAccess.fixed(new Map([[sessionId, yield* accessAt(url)]])))
     })
-    const newer = yield* Effect.scoped(connect(yield* environmentsFor({ protocol: 2 }))).pipe(Effect.flip)
-    expect([newer.reason, newer.message]).toEqual([
+    const older = yield* Effect.scoped(connect(yield* environmentsFor({ protocol: EnvironmentApi.protocol - 1 }))).pipe(
+      Effect.flip,
+    )
+    expect([older.reason, older.message]).toEqual([
       "incompatible",
-      "The executor is not compatible: it speaks protocol 2, not 1",
+      `The executor is not compatible: it speaks protocol ${EnvironmentApi.protocol - 1}, not ${EnvironmentApi.protocol}`,
     ])
   }),
 )

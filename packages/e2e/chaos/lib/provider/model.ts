@@ -56,6 +56,7 @@ interface Call {
   readonly system: string
   readonly key: string | undefined
   readonly tools: ReadonlyArray<string>
+  readonly prompt: string
   readonly toolResults: string
   readonly at: number
 }
@@ -168,6 +169,7 @@ const toCall = (body: typeof ChatRequest.Type, authorization: string, known: (ma
     system,
     key: /^Bearer\s+(\S+)$/i.exec(authorization)?.[1],
     tools: body.tools?.map((item) => item.function.name) ?? [],
+    prompt: flatten(body.messages.findLast((message) => message.role === "user")?.content),
     toolResults: body.messages
       .slice(body.messages.findLastIndex((message) => message.role === "user") + 1)
       .filter((message) => message.role === "tool")

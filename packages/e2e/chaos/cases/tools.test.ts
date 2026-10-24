@@ -1,6 +1,7 @@
 import { TestAccess } from "@ren/brain/testing"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentSession } from "@ren/brain/environment/session"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Layer, Stream } from "effect"
@@ -209,7 +210,7 @@ describe.skipIf(Platform.wrangler !== undefined)("tools through the cell's dispa
       const after = await environment.container.memoryBytes()
       expect(spawned.length).toBe(40)
       expect(after - before).toBeLessThan(64 * 1024 * 1024 + 64 * 1024 * 1024)
-      expect(await driver.ok(driver.client["executor.hello"]())).toMatchObject({ protocol: 1 })
+      expect(await driver.ok(driver.client["executor.hello"]())).toMatchObject({ protocol: EnvironmentApi.protocol })
       await driver.dispose()
     },
     300_000,
