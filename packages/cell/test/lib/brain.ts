@@ -212,6 +212,7 @@ export const make = Effect.fnUntraced(function* (
     chatAs,
     chatFetch,
     credentials: host.credentials,
+    atBoundary: (work: Effect.Effect<void>) => host.atBoundary(id, work),
     start: (input: Partial<Session.StartInput> = {}) =>
       client.brain["brain.start"]({
         payload: {
