@@ -17,7 +17,10 @@
     "typecheck": "tsgo -b"
   },
   "dependencies": {
+    "@better-auth/cimd": "catalog:",
     "@better-auth/drizzle-adapter": "catalog:",
+    "@better-auth/mcp": "catalog:",
+    "@better-auth/oauth-provider": "catalog:",
     "@effect/platform-bun": "catalog:",
     "@ren/host-api": "workspace:*",
     "@ren/core": "workspace:*",
@@ -40,6 +43,7 @@
     "@types/bun": "catalog:",
     "@typescript/native-preview": "catalog:",
     "auth": "catalog:",
+    "jose": "catalog:",
     "prettier": "catalog:"
   }
 }

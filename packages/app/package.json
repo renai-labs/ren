@@ -15,6 +15,7 @@
     "check:generated": "bun run generate && git diff --exit-code -- src/route-tree.gen.ts"
   },
   "dependencies": {
+    "@better-auth/oauth-provider": "catalog:",
     "@effect/atom-react": "catalog:",
     "@ren/chat": "workspace:*",
     "@ren/client": "workspace:*",

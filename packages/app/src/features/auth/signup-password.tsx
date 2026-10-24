@@ -21,7 +21,7 @@ export function SignupPassword(props: {
 }) {
   const auth = Auth.useClient()
   const navigate = useNavigate()
-  const completeAuth = CompleteAuth.useCompleteAuth(props.destination)
+  const completeAuth = CompleteAuth.useCompleteAuth(props.destination, { continueAuthorization: true })
   const [error, setError] = useState("")
   const form = Form.useForm({
     defaultValues: { password: "" },

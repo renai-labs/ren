@@ -8,7 +8,7 @@ import { CompleteAuth } from "./complete-auth.js"
 
 export function VerifyEmail(props: { email: string; destination: CompleteAuth.Destination }) {
   const auth = Auth.useClient()
-  const completeAuth = CompleteAuth.useCompleteAuth(props.destination)
+  const completeAuth = CompleteAuth.useCompleteAuth(props.destination, { continueAuthorization: true })
   return (
     <AuthFlowLayout>
       <CodeVerification

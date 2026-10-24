@@ -14,7 +14,10 @@ export const Route = createFileRoute("/signup")({
   ),
   beforeLoad: async (options) => {
     const session = await options.context.queryClient.query(Auth.sessionOptions(options.context.auth))
-    if (session !== null) throw redirect({ href: CompleteAuth.href(options.search) })
+    if (session === null) return
+    if (options.context.platform.authorizationQuery === undefined)
+      throw redirect({ href: CompleteAuth.href(options.search) })
+    await CompleteAuth.continueAuthorization(options.context.auth)
   },
   loaderDeps: (options) => ({ invitationId: options.search.invitationId, redirect: options.search.redirect }),
   loader: async (options) => {

@@ -1,5 +1,7 @@
 export * as Auth from "./auth.js"
 
+import { fetchClientMetadataResource } from "@better-auth/cimd/node"
+import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
 import { Mailer } from "@ren/core/mailer"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { SpaceProvisioning } from "@ren/core/space/provisioning"
@@ -7,6 +9,7 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { type AuthenticatedSession } from "@ren/protocol/middleware/authentication"
 import { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/util/environment"
+import { verifyJwsAccessToken } from "better-auth/oauth2"
 import { Config, Context, Effect, FiberSet, Layer, Option, Redacted, Schema } from "effect"
 import { BetterAuth } from "./better-auth.js"
 
@@ -14,6 +17,8 @@ interface Interface {
   readonly handler: (request: Request) => Promise<Response>
   readonly trustedOrigins: ReadonlyArray<string>
   readonly getSession: (headers: Headers) => Effect.Effect<Option.Option<AuthenticatedSession>>
+  readonly getAccessToken: (headers: Headers) => Effect.Effect<Option.Option<AuthenticatedSession>>
+  readonly mcpChallenge: string
   readonly getActiveMembership: (
     session: AuthenticatedSession,
     headers: Headers,
@@ -27,6 +32,21 @@ interface Membership {
 
 export class Service extends Context.Service<Service, Interface>()("@ren/server/Auth") {}
 
+export const ClientMetadataFetch = Context.Reference<ClientMetadataResourceFetch>(
+  "@ren/server/Auth/ClientMetadataFetch",
+  {
+    defaultValue: () => fetchClientMetadataResource,
+  },
+)
+
+export const mcpPath = "/mcp"
+
+const AccessToken = Schema.Struct({
+  sub: Auth.UserID,
+  [BetterAuth.organizationClaim]: Auth.OrganizationID,
+  scope: Schema.String,
+})
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -35,6 +55,7 @@ export const layer = Layer.effect(
     const signupGuard = yield* SignupGuard.Service
     const provisioning = yield* SpaceProvisioning.Service
     const toProvisioningUser = (user: BetterAuth.ProvisioningUser) => ({ ...user, id: Auth.UserID.make(user.id) })
+    const clientMetadataFetch = yield* ClientMetadataFetch
     const run = yield* FiberSet.makeRuntime()
     const runPromise = yield* FiberSet.makeRuntimePromise()
     const config = yield* Config.all({
@@ -50,6 +71,7 @@ export const layer = Layer.effect(
     if (config.skipEmailVerification && !config.local) {
       return yield* Effect.die(new Error("SKIP_EMAIL_VERIFICATION requires NODE_ENV=development or test"))
     }
+    const mcpResource = new URL(mcpPath, config.baseURL).href
     const auth = BetterAuth.make({
       database: database.db,
       secret: Redacted.value(config.secret),
@@ -57,6 +79,8 @@ export const layer = Layer.effect(
       trustedOrigins: config.trustedOrigins,
       google: { clientId: config.googleClientId, clientSecret: Redacted.value(config.googleClientSecret) },
       appURL: config.appURL,
+      mcpResource,
+      fetchClientMetadataResource: clientMetadataFetch,
       requireEmailVerification: !config.skipEmailVerification,
       sendEmail: (email) => {
         run(mailer.send(email).pipe(Effect.ignoreCause({ log: "Error", message: "Failed to send email" })))
@@ -81,6 +105,8 @@ export const layer = Layer.effect(
           ),
       },
     })
+    const context = yield* Effect.promise(() => auth.$context)
+    const jwksCache = {}
     return Service.of({
       handler: auth.handler,
       trustedOrigins: config.trustedOrigins,
@@ -93,6 +119,35 @@ export const layer = Layer.effect(
           session: { activeOrganizationId: session.session.activeOrganizationId ?? null },
         })
       }),
+      getAccessToken: Effect.fn("Auth.getAccessToken")(function* (headers: Headers) {
+        const token = /^Bearer\s+(\S+)$/iu.exec(headers.get("authorization") ?? "")?.at(1)
+        if (!token) return Option.none()
+        const payload = yield* Effect.tryPromise(() =>
+          verifyJwsAccessToken(token, {
+            jwksFetch: () => auth.api.getJwks(),
+            jwksCacheKey: jwksCache,
+            verifyOptions: { issuer: context.baseURL, audience: mcpResource },
+          }),
+        ).pipe(Effect.option)
+        if (Option.isNone(payload) || "cnf" in payload.value) return Option.none()
+        const claims = Schema.decodeUnknownOption(AccessToken)(payload.value)
+        if (Option.isNone(claims) || !claims.value.scope.split(" ").includes(BetterAuth.mcpScope)) return Option.none()
+        const organizationId = claims.value[BetterAuth.organizationClaim]
+        const member = yield* Effect.promise(() =>
+          database.db.query.member.findFirst({
+            columns: {},
+            with: { user: { columns: { id: true, name: true, email: true, emailVerified: true, image: true } } },
+            where: { userId: claims.value.sub, organizationId },
+          }),
+        )
+        if (!member?.user) return Option.none()
+        const user: typeof Auth.User.Encoded = member.user
+        return Option.some({
+          user: yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie),
+          session: { activeOrganizationId: organizationId, fixedOrganization: true },
+        })
+      }),
+      mcpChallenge: `Bearer resource_metadata="${new URL(`/.well-known/oauth-protected-resource${mcpPath}`, config.baseURL).href}", scope="${BetterAuth.mcpScope}"`,
       getActiveMembership: Effect.fn("Auth.getActiveMembership")(function* (
         session: AuthenticatedSession,
         headers: Headers,
@@ -101,7 +156,9 @@ export const layer = Layer.effect(
           database.db.query.member.findFirst({
             columns: { role: true },
             with: { organization: { columns: { id: true, name: true, slug: true, logo: true } } },
-            where: { userId: session.user.id },
+            where: session.session.fixedOrganization
+              ? { userId: session.user.id, organizationId: session.session.activeOrganizationId ?? "" }
+              : { userId: session.user.id },
             orderBy: (member, { asc, desc, sql }) => [
               desc(sql`${member.organizationId} is not distinct from ${session.session.activeOrganizationId}`),
               asc(member.createdAt),

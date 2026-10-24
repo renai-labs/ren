@@ -13,7 +13,9 @@ export const Route = createFileRoute("/login")({
   ),
   beforeLoad: async (options) => {
     const session = await options.context.queryClient.query(Auth.sessionOptions(options.context.auth))
-    if (session !== null) throw redirect({ href: CompleteAuth.href(options.search) })
+    if (session !== null && options.context.platform.authorizationQuery === undefined) {
+      throw redirect({ href: CompleteAuth.href(options.search) })
+    }
   },
   pendingComponent: AppBoot,
   component: LoginPage,

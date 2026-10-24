@@ -10,6 +10,23 @@ const decodeShared = Schema.decodeUnknownOption(
   Schema.Struct({ key: Schema.String, value: Schema.UndefinedOr(Schema.String) }),
 )
 
+const decodeValue = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
+)
+
+export function authorizationQuery(search: string) {
+  const params = new URLSearchParams(search)
+  if (!params.has("sig")) return
+  return new URLSearchParams(
+    [...params.entries()].flatMap((entry) =>
+      Option.match(decodeValue(entry[1]), {
+        onNone: () => [entry],
+        onSome: (value) => (typeof value === "string" ? [[entry[0], value]] : value.map((item) => [entry[0], item])),
+      }),
+    ),
+  ).toString()
+}
+
 export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
   const channel = typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel("ren-drafts")
   return {
@@ -17,6 +34,7 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
     version: import.meta.env.VITE_REN_VERSION ?? "dev",
     serverUrl: import.meta.env.VITE_REN_API_URL ?? window.location.origin,
     appUrl: new URL(import.meta.env.BASE_URL, window.location.origin).href.replace(/\/$/, ""),
+    authorizationQuery: authorizationQuery(window.location.search),
     fetch: Object.assign(
       (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
         globalThis.fetch(input, { ...init, credentials: "include" }),
