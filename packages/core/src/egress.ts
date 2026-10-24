@@ -110,6 +110,7 @@ export const layer = Layer.effect(
           ...(expiries.length > 0 && { expiresAt: Math.min(...expiries) }),
           labels: [...new Set(matched.matches.map((match) => match.candidate.label))],
           inject: planned,
+          refreshable: [],
         }
       }),
     })

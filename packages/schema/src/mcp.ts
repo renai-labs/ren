@@ -29,8 +29,15 @@ export type Transport = typeof Transport.Type
 const NoAuth = Schema.Struct({ type: Schema.Literal("none") })
 const OAuth = Schema.Struct({
   type: Schema.Literal("oauth"),
-  authorizationEndpoint: Primitive.HttpsUrl,
-  tokenEndpoint: Primitive.HttpsUrl,
+  authorizationEndpoint: Schema.optionalKey(Primitive.HttpsUrl).annotate({
+    description: "Used only when discovery finds no authorization server metadata.",
+  }),
+  tokenEndpoint: Schema.optionalKey(Primitive.HttpsUrl).annotate({
+    description: "Used only when discovery finds no authorization server metadata.",
+  }),
+  scopes: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)).annotate({
+    description: "Asked for when neither the server’s challenge nor its metadata names scopes.",
+  }),
   tokenEndpointAuth: Schema.Literals(["client_secret_basic", "client_secret_post", "none"]),
   client: Schema.optionalKey(
     Schema.Struct({
@@ -93,8 +100,8 @@ export const Info = Schema.Struct({
     NoAuth,
     Schema.Struct({
       ...OAuth.fields,
-      authorizationEndpoint: Schema.String,
-      tokenEndpoint: Schema.String,
+      authorizationEndpoint: Schema.optionalKey(Schema.String),
+      tokenEndpoint: Schema.optionalKey(Schema.String),
       client: Schema.optionalKey(
         Schema.Struct({
           clientId: Schema.NonEmptyString,

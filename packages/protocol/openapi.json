@@ -7834,6 +7834,17 @@
         "required": ["userId", "name"],
         "additionalProperties": false
       },
+      "Credential.Connection": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "allOf": [
+          {
+            "maxLength": 58,
+            "description": "A second or later account for one MCP. Its label is `MCP_<MCP>__<CONNECTION>`."
+          }
+        ]
+      },
       "Credential.CreateInput": {
         "type": "object",
         "properties": {
@@ -7841,7 +7852,9 @@
             "$ref": "#/components/schemas/Credential.Owner"
           },
           "label": {
-            "$ref": "#/components/schemas/Credential.Label"
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Z_][A-Z0-9_]*$"
           },
           "name": {
             "anyOf": [
@@ -8033,6 +8046,49 @@
           "status": {
             "$ref": "#/components/schemas/Credential.Status"
           },
+          "app": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/App.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The app whose MCP this connection serves."
+          },
+          "mcp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.Slug"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The MCP of the app that this connection serves."
+          },
+          "connection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credential.Connection"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for the default connection of an MCP."
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credential.Provider"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "expiresAt": {
             "anyOf": [
               {
@@ -8075,6 +8131,10 @@
           "account",
           "scopes",
           "status",
+          "app",
+          "mcp",
+          "connection",
+          "provider",
           "expiresAt",
           "createdBy",
           "createdAt",
@@ -8139,11 +8199,6 @@
           }
         ],
         "description": "Where the egress puts the value: `replace` swaps the placeholder where it is found, `setHeader` sets a header on every request to the hosts, `route` forwards to the value as the upstream URL."
-      },
-      "Credential.Label": {
-        "type": "string",
-        "maxLength": 128,
-        "pattern": "^[A-Z_][A-Z0-9_]*$"
       },
       "Credential.Location": {
         "type": "string",
@@ -8278,6 +8333,15 @@
         },
         "required": ["items", "page", "pageSize", "total"],
         "additionalProperties": false
+      },
+      "Credential.Provider": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["composio"]
+          }
+        ],
+        "description": "The managed MCP provider that holds the account of a `route` credential."
       },
       "Credential.RemoveInput": {
         "not": {
@@ -8527,9 +8591,57 @@
             },
             "required": ["type", "fields"],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["client_credentials"]
+              },
+              "clientId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "clientSecret": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tokenEndpoint": {
+                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+              },
+              "tokenEndpointAuth": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": ["client_secret_post", "client_secret_basic"]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "scopes": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": ["type", "clientId", "clientSecret", "tokenEndpoint"],
+            "additionalProperties": false,
+            "description": "An app’s client id and secret. Ren exchanges them for an access token, and again before it expires."
           }
         ],
-        "description": "A pasted value. Ren never returns it."
+        "description": "A value a person gives. Ren never returns it."
       },
       "Credential.When": {
         "type": "object",
@@ -9079,10 +9191,18 @@
                 "enum": ["oauth"]
               },
               "authorizationEndpoint": {
-                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+                "$ref": "#/components/schemas/Primitive.HttpsUrl_1"
               },
               "tokenEndpoint": {
-                "$ref": "#/components/schemas/Primitive.HttpsUrl"
+                "$ref": "#/components/schemas/Primitive.HttpsUrl_2"
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "Asked for when neither the server’s challenge nor its metadata names scopes."
               },
               "tokenEndpointAuth": {
                 "type": "string",
@@ -9107,7 +9227,7 @@
                 "description": "A partner’s OAuth client that Ren borrows, instead of registering its own."
               }
             },
-            "required": ["type", "authorizationEndpoint", "tokenEndpoint", "tokenEndpointAuth"],
+            "required": ["type", "tokenEndpointAuth"],
             "additionalProperties": false
           },
           {
@@ -9299,6 +9419,14 @@
                   "tokenEndpoint": {
                     "type": "string"
                   },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "description": "Asked for when neither the server’s challenge nor its metadata names scopes."
+                  },
                   "tokenEndpointAuth": {
                     "type": "string",
                     "enum": ["client_secret_basic", "client_secret_post", "none"]
@@ -9321,7 +9449,7 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "authorizationEndpoint", "tokenEndpoint", "tokenEndpointAuth"],
+                "required": ["type", "tokenEndpointAuth"],
                 "additionalProperties": false
               },
               {
@@ -9563,6 +9691,12 @@
         }
       },
       "Primitive.HttpsUrl": {
+        "type": "string"
+      },
+      "Primitive.HttpsUrl_1": {
+        "type": "string"
+      },
+      "Primitive.HttpsUrl_2": {
         "type": "string"
       },
       "Primitive.Slug": {

@@ -176,6 +176,10 @@ export type CredentialDelivery = "egress" | "delivered"
 
 export type CredentialStatus = "ok" | "reconnect"
 
+export type CredentialConnection = string
+
+export type CredentialProvider = "composio"
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -649,6 +653,10 @@ export type CredentialInfo = {
   account: CredentialAccount | null
   scopes: Array<string>
   status: CredentialStatus
+  app: AppID | null
+  mcp: PrimitiveSlug | null
+  connection: CredentialConnection | null
+  provider: CredentialProvider | null
   expiresAt: string | null
   createdBy: AuthUserID | null
   createdAt: string
@@ -731,8 +739,9 @@ export type McpInfo = {
     | { type: "none" }
     | {
         type: "oauth"
-        authorizationEndpoint: string
-        tokenEndpoint: string
+        authorizationEndpoint?: string
+        tokenEndpoint?: string
+        scopes?: Array<string>
         tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
         client?: { clientId: string; resource?: string; redirectUri?: string }
       }
@@ -1509,8 +1518,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -1661,8 +1671,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -1813,8 +1824,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -1965,8 +1977,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -2117,8 +2130,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -2269,8 +2283,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -2421,8 +2436,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -2573,8 +2589,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -2725,8 +2742,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -2877,8 +2895,9 @@ export type AppCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -3076,8 +3095,9 @@ export type AppReleaseCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -3227,8 +3247,9 @@ export type AppReleaseCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -3378,8 +3399,9 @@ export type AppReleaseCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -3529,8 +3551,9 @@ export type AppReleaseCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -3680,8 +3703,9 @@ export type AppReleaseCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -3831,8 +3855,9 @@ export type AppReleaseCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -3982,8 +4007,9 @@ export type AppReleaseCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -4133,8 +4159,9 @@ export type AppReleaseCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -4284,8 +4311,9 @@ export type AppReleaseCreateInput = {
           | { readonly type: "none" }
           | {
               readonly type: "oauth"
-              readonly authorizationEndpoint: string
-              readonly tokenEndpoint: string
+              readonly authorizationEndpoint?: string
+              readonly tokenEndpoint?: string
+              readonly scopes?: ReadonlyArray<string>
               readonly tokenEndpointAuth: "client_secret_basic" | "client_secret_post" | "none"
               readonly client?: { readonly clientId: string; readonly resource?: string; readonly redirectUri?: string }
             }
@@ -5172,6 +5200,14 @@ export type CredentialCreateInput = {
       | { readonly type: "key"; readonly value: string }
       | { readonly type: "basic"; readonly username: string; readonly password: string }
       | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+      | {
+          readonly type: "client_credentials"
+          readonly clientId: string
+          readonly clientSecret: string
+          readonly tokenEndpoint: string
+          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+          readonly scopes?: ReadonlyArray<string> | null
+        }
   }["owner"]
   readonly label: {
     readonly owner:
@@ -5200,6 +5236,14 @@ export type CredentialCreateInput = {
       | { readonly type: "key"; readonly value: string }
       | { readonly type: "basic"; readonly username: string; readonly password: string }
       | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+      | {
+          readonly type: "client_credentials"
+          readonly clientId: string
+          readonly clientSecret: string
+          readonly tokenEndpoint: string
+          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+          readonly scopes?: ReadonlyArray<string> | null
+        }
   }["label"]
   readonly name?: {
     readonly owner:
@@ -5228,6 +5272,14 @@ export type CredentialCreateInput = {
       | { readonly type: "key"; readonly value: string }
       | { readonly type: "basic"; readonly username: string; readonly password: string }
       | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+      | {
+          readonly type: "client_credentials"
+          readonly clientId: string
+          readonly clientSecret: string
+          readonly tokenEndpoint: string
+          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+          readonly scopes?: ReadonlyArray<string> | null
+        }
   }["name"]
   readonly hosts: {
     readonly owner:
@@ -5256,6 +5308,14 @@ export type CredentialCreateInput = {
       | { readonly type: "key"; readonly value: string }
       | { readonly type: "basic"; readonly username: string; readonly password: string }
       | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+      | {
+          readonly type: "client_credentials"
+          readonly clientId: string
+          readonly clientSecret: string
+          readonly tokenEndpoint: string
+          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+          readonly scopes?: ReadonlyArray<string> | null
+        }
   }["hosts"]
   readonly inject?: {
     readonly owner:
@@ -5284,6 +5344,14 @@ export type CredentialCreateInput = {
       | { readonly type: "key"; readonly value: string }
       | { readonly type: "basic"; readonly username: string; readonly password: string }
       | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+      | {
+          readonly type: "client_credentials"
+          readonly clientId: string
+          readonly clientSecret: string
+          readonly tokenEndpoint: string
+          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+          readonly scopes?: ReadonlyArray<string> | null
+        }
   }["inject"]
   readonly delivery?: {
     readonly owner:
@@ -5312,6 +5380,14 @@ export type CredentialCreateInput = {
       | { readonly type: "key"; readonly value: string }
       | { readonly type: "basic"; readonly username: string; readonly password: string }
       | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+      | {
+          readonly type: "client_credentials"
+          readonly clientId: string
+          readonly clientSecret: string
+          readonly tokenEndpoint: string
+          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+          readonly scopes?: ReadonlyArray<string> | null
+        }
   }["delivery"]
   readonly value: {
     readonly owner:
@@ -5340,6 +5416,14 @@ export type CredentialCreateInput = {
       | { readonly type: "key"; readonly value: string }
       | { readonly type: "basic"; readonly username: string; readonly password: string }
       | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+      | {
+          readonly type: "client_credentials"
+          readonly clientId: string
+          readonly clientSecret: string
+          readonly tokenEndpoint: string
+          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+          readonly scopes?: ReadonlyArray<string> | null
+        }
   }["value"]
 }
 
@@ -5373,6 +5457,14 @@ export type CredentialRotateInput = {
       | { readonly type: "key"; readonly value: string }
       | { readonly type: "basic"; readonly username: string; readonly password: string }
       | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+      | {
+          readonly type: "client_credentials"
+          readonly clientId: string
+          readonly clientSecret: string
+          readonly tokenEndpoint: string
+          readonly tokenEndpointAuth?: "client_secret_post" | "client_secret_basic" | null
+          readonly scopes?: ReadonlyArray<string> | null
+        }
   }["value"]
 }
 

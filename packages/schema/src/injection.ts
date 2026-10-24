@@ -16,7 +16,14 @@ export const Op = Schema.Union([
     in: Schema.NonEmptyArray(Credential.Location),
   }),
   Schema.Struct({ op: Schema.Literal("setHeader"), name: Schema.String, value: Schema.Redacted(Schema.String) }),
-  Schema.Struct({ op: Schema.Literal("route"), upstream: Schema.Redacted(Schema.String) }),
+  Schema.Struct({
+    op: Schema.Literal("route"),
+    upstream: Schema.Redacted(Schema.String),
+    placeholder: Schema.optional(Schema.String).annotate({
+      description:
+        "The first path segment, such as `ren:MCP_GMAIL`, that the egress removes before it appends the rest of the path to the upstream.",
+    }),
+  }),
 ]).annotate({
   identifier: "Injection.Op",
   description: "One change the egress makes to a request. The egress knows no credential type, only these ops.",
@@ -31,6 +38,7 @@ export const DenyReason = Schema.Literals([
   "ambiguous",
   "principal_scope",
   "egress_outdated",
+  "credential_reconnect",
 ]).annotate({ identifier: "Injection.DenyReason" })
 export type DenyReason = typeof DenyReason.Type
 
@@ -47,6 +55,10 @@ export const Reply = Schema.Union([
       description: "The labels the answer used, so Ren can tell the egress to drop it when one of them changes.",
     }),
     inject: Schema.Array(Op),
+    refreshable: Schema.Array(Schema.Struct({ label: Schema.String, revision: Schema.Int })).annotate({
+      description:
+        "The labels in this answer that Ren can renew, with the revision it injected. After an upstream 401 the egress reports them.",
+    }),
   }),
   Schema.Struct({
     allow: Schema.Literal(false),
