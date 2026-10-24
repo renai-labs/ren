@@ -16,9 +16,10 @@ import { HttpEffect, HttpRouter, HttpServer, HttpServerRequest } from "effect/ht
 import { HttpApiBuilder } from "effect/http-api"
 import { Cell } from "./cell.js"
 import { Harness } from "./harness/harness.js"
+import { HotReload } from "./hot-reload.js"
 import { Restore } from "./restore.js"
 
-type Services = Cell.Info | Cell.Activity | Harness.Service | Restore.Service
+type Services = Cell.Info | Cell.Activity | Harness.Service | HotReload.Service | Restore.Service
 
 const prefix = "/chat"
 
@@ -309,6 +310,8 @@ const handlers = Layer.mergeAll(
         .handle("session.prompt", (request) =>
           run((harness) =>
             Effect.gen(function* () {
+              const hotReload = yield* HotReload.Service
+              yield* hotReload.pull
               yield* harness.chat.prompt(request.params.sessionID, { ...request.payload, sender: yield* sender })
               return { id: request.payload.id }
             }).pipe(notFound, conflict),
