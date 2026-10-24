@@ -31,6 +31,7 @@ import { ModelProviders } from "./model-providers.js"
 import { basename } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import type { OpenCodeExecution } from "./execution.js"
+import { OpenCodeMcp } from "./mcp.js"
 import type { HarnessConfig } from "../config.js"
 
 const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
@@ -191,6 +192,7 @@ export const make = (
     sessionId: string,
   ) => Effect.Effect<ReadonlyArray<{ readonly action: string; readonly resource: string }>, Harness.NotFound>,
   boundaryOf: (location: Plugin.Context["location"]) => OpenCodeExecution.Boundary,
+  directoryOf: (sessionId: string) => string,
 ) =>
   Plugin.define({
     id: "ren",
@@ -233,6 +235,11 @@ export const make = (
         }
         const turns = { running: new Set<string>(), ended: [] as Array<(sessionID: string) => Effect.Effect<void>> }
         const workspaceID = context.location.workspaceID
+        const sessionId = workspaceID
+          ? RenWorkspaceDriver.sessionIdOf(workspaceID)
+          : basename(context.location.directory)
+        const isSession = Boolean(workspaceID) || directoryOf(sessionId) === context.location.directory
+        const appServers = (apps: Option.Option<AppCatalog.Info>) => (isSession ? OpenCodeMcp.servers(apps) : [])
         if (Option.isSome(connections) && workspaceID) {
           const own = RenWorkspaceDriver.sessionIdOf(workspaceID)
           turns.ended.push((sessionID) =>
@@ -281,6 +288,14 @@ export const make = (
         const applied = yield* Ref.make(
           (yield* Ref.get(appConflicts)).length ? { ...initial, apps: Option.none<AppCatalog.Info>() } : initial,
         )
+        yield* context.mcp.transform((editor) => {
+          for (const server of appServers(Ref.getUnsafe(applied).apps)) editor.set(server.name, server.config)
+        })
+        const opening = appServers((yield* Ref.get(applied)).apps)
+        if (opening.length)
+          yield* boundaryOf(context.location)
+            .offer(OpenCodeMcp.ready(context, [], opening))
+            .pipe(Effect.forkScoped({ startImmediately: true }))
         const models = yield* Ref.make(initial.models)
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(models)))
         yield* integration.transform((editor) => {
@@ -295,10 +310,6 @@ export const make = (
         })
         if (Option.isSome(settings)) {
           const shared = settings.value
-          const directory = context.location.directory
-          const sessionId = context.location.workspaceID
-            ? RenWorkspaceDriver.sessionIdOf(context.location.workspaceID)
-            : basename(directory)
           const saved = initial.chats.get(sessionId)
           const installed = yield* Ref.make(Option.fromUndefinedOr(saved))
           const agentOf = (name: string | undefined) =>
@@ -434,20 +445,20 @@ export const make = (
                   yield* integration.reload()
                   yield* provider.reload()
                 }
-                if (Option.isSome(settings)) {
-                  const sessionId = context.location.workspaceID
-                    ? RenWorkspaceDriver.sessionIdOf(context.location.workspaceID)
-                    : basename(context.location.directory)
-                  yield* settings.value.install(sessionId, snapshot.chats.get(sessionId))
-                }
+                if (Option.isSome(settings)) yield* settings.value.install(sessionId, snapshot.chats.get(sessionId))
                 const conflicts = conflictsOf(snapshot.apps)
                 const previous = yield* Ref.getAndSet(appConflicts, conflicts)
                 if (conflicts.length && conflicts.join("\n") !== previous.join("\n"))
                   yield* Effect.logWarning(`The brain keeps its applied app catalog:\n${conflicts.join("\n")}`)
-                yield* Ref.set(
-                  applied,
-                  conflicts.length ? { ...snapshot, apps: (yield* Ref.get(applied)).apps } : snapshot,
-                )
+                const before = (yield* Ref.get(applied)).apps
+                const apps = conflicts.length ? before : snapshot.apps
+                yield* Ref.set(applied, { ...snapshot, apps })
+                const fingerprint = (info: Option.Option<AppCatalog.Info>) =>
+                  Option.getOrUndefined(Option.map(info, (each) => each.fingerprint))
+                if (fingerprint(before) !== fingerprint(apps)) {
+                  yield* context.mcp.reload()
+                  yield* OpenCodeMcp.ready(context, appServers(before), appServers(apps))
+                }
                 yield* synced
               }),
             ),

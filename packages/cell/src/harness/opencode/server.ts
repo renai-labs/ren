@@ -207,6 +207,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       Option.fromUndefinedOr(options.confinement),
       approvals,
       executions.get,
+      options.directoryOf,
     ),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.

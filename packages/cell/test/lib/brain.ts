@@ -6,6 +6,7 @@ import type { Plugin } from "@opencode/plugin/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/host-api/brain-api"
 import { ChatApi } from "@ren/protocol/chat"
+import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Ref, Schema, Semaphore } from "effect"
@@ -39,6 +40,7 @@ export const make = Effect.fnUntraced(function* (
     readonly id?: Session.ID
     readonly vars?: Readonly<Record<string, string>>
     readonly plugin?: Plugin.Plugin
+    readonly apps?: AppCatalog.Info
   } = {},
 ) {
   const vars = Schema.decodeUnknownSync(Env.Vars)({ ...Shared.vars(Shared.stub().url), ...options.vars })
@@ -110,7 +112,7 @@ export const make = Effect.fnUntraced(function* (
     [],
     Context.get(services, ModelRefresh.Service),
     Option.none(),
-    { saved: Option.none(), directoryOf: () => directory },
+    { saved: Option.none(), directoryOf: () => directory, apps: Option.fromUndefinedOr(options.apps) },
   )
   const harness = yield* OpenCodeHarness.make(host, [])
   const waits = yield* Queue.unbounded<number>()
@@ -198,6 +200,12 @@ export const make = Effect.fnUntraced(function* (
       install(Shared.access(apiKeys, Shared.stub().url), hostToken),
     install,
     removeModels: install({ endpoints: [] }),
+    configureApps: (apps: AppCatalog.Info) =>
+      Effect.scoped(
+        Effect.flatMap(Context.get(cell, Harness.Service).get, (instance) =>
+          instance.configure({ apps: Option.some(apps) }),
+        ),
+      ),
     state: client.brain["brain.state"](),
     alarm: Effect.sync(() => {
       alarm.at = null

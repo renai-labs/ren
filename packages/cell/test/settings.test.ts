@@ -241,7 +241,7 @@ describe("settings in the cell", () => {
                   declaration: {
                     name: "Tools",
                     description: "Tools",
-                    transport: { type: "remote", url: "https://tools.example.com/mcp" },
+                    transport: { type: "remote", url: "https://127.0.0.1:1/mcp" },
                     auth: { type: "none" },
                   },
                 },
