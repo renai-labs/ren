@@ -170,10 +170,3 @@ export const evaluate = (
     }
   return { effect }
 }
-
-export const hiddenTools = (agent: Agent, denied: Permission.RuleList, tools: ReadonlyArray<string>) =>
-  tools.filter((tool) =>
-    [...agent.permissions, ...denied].some(
-      (rule) => rule.effect === "deny" && rule.resource === "*" && matches(tool, rule.action),
-    ),
-  )

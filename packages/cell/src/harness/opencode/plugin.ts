@@ -329,6 +329,12 @@ export const make = (
                 info.mode = agent === resolved.primary ? "primary" : "subagent"
                 info.model = modelRef(agent.model)
                 if (agent.description) info.description = agent.description
+                info.permissions = [
+                  ...info.permissions,
+                  ...(["ask", "deny"] as const).flatMap((effect) =>
+                    agent.permissions.filter((rule) => rule.effect === effect),
+                  ),
+                ]
               })
             editor.default(resolved.primary.name)
           })
@@ -346,8 +352,6 @@ export const make = (
               const agent = Option.getOrUndefined(agentOf(event.agent))
               if (!agent) return
               event.system.push(...agent.instructions.map((text) => ({ type: "text" as const, text })))
-              const hidden = new Set(BrainSettings.hiddenTools(agent, [], Object.keys(event.tools)))
-              event.tools = Record.filter(event.tools, (_, name) => !hidden.has(name))
               const subagent = event.tools.subagent
               if (subagent && Predicate.isObject(subagent.input) && Predicate.isObject(subagent.input.properties))
                 subagent.input = { ...subagent.input, properties: withoutModel(subagent.input.properties) }

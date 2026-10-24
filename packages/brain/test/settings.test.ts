@@ -201,25 +201,4 @@ describe("BrainSettings.evaluate", () => {
       [rule("edit", "*", "ask"), rule("shell", "*", "deny")],
     ])
   })
-
-  test("a deny for every resource hides the tool, and a narrower deny keeps it", () => {
-    const resolved = agent([
-      rule("shell", "*", "deny"),
-      rule("edit", "/references/*", "deny"),
-      rule("webfetch", "*", "ask"),
-    ])
-    expect(
-      BrainSettings.hiddenTools(resolved, [rule("question", "*", "deny")], ["shell", "question", "edit", "webfetch"]),
-    ).toEqual(["shell", "question"])
-  })
-
-  test("wildcard whole-resource denies hide matching tool names", () => {
-    const resolved = agent([rule("linear_*", "*", "deny"), rule("rea?", "*", "deny")])
-    expect(BrainSettings.hiddenTools(resolved, [], ["linear_read", "linear_edit", "read", "shell"])).toEqual([
-      "linear_read",
-      "linear_edit",
-      "read",
-    ])
-    expect(BrainSettings.hiddenTools(resolved, [rule("*", "*", "deny")], ["read", "shell"])).toEqual(["read", "shell"])
-  })
 })
