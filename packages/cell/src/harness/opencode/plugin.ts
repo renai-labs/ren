@@ -239,7 +239,6 @@ export const make = (
           ? RenWorkspaceDriver.sessionIdOf(workspaceID)
           : basename(context.location.directory)
         const isSession = Boolean(workspaceID) || directoryOf(sessionId) === context.location.directory
-        const appServers = (apps: Option.Option<AppCatalog.Info>) => (isSession ? OpenCodeMcp.servers(apps) : [])
         if (Option.isSome(connections) && workspaceID) {
           const own = RenWorkspaceDriver.sessionIdOf(workspaceID)
           turns.ended.push((sessionID) =>
@@ -288,14 +287,13 @@ export const make = (
         const applied = yield* Ref.make(
           (yield* Ref.get(appConflicts)).length ? { ...initial, apps: Option.none<AppCatalog.Info>() } : initial,
         )
-        yield* context.mcp.transform((editor) => {
-          for (const server of appServers(Ref.getUnsafe(applied).apps)) editor.set(server.name, server.config)
+        const mcp = yield* OpenCodeMcp.make({
+          context,
+          boundary: boundaryOf(context.location),
+          isSession,
+          hasEnvironment: Boolean(workspaceID),
+          apps: (yield* Ref.get(applied)).apps,
         })
-        const opening = appServers((yield* Ref.get(applied)).apps)
-        if (opening.length)
-          yield* boundaryOf(context.location)
-            .offer(OpenCodeMcp.ready(context, [], opening))
-            .pipe(Effect.forkScoped({ startImmediately: true }))
         const models = yield* Ref.make(initial.models)
         yield* provider.transform((editor) => ModelProviders.apply(editor, Ref.getUnsafe(models)))
         yield* integration.transform((editor) => {
@@ -457,12 +455,7 @@ export const make = (
                 const before = (yield* Ref.get(applied)).apps
                 const apps = conflicts.length ? before : snapshot.apps
                 yield* Ref.set(applied, { ...snapshot, apps })
-                const fingerprint = (info: Option.Option<AppCatalog.Info>) =>
-                  Option.getOrUndefined(Option.map(info, (each) => each.fingerprint))
-                if (fingerprint(before) !== fingerprint(apps)) {
-                  yield* context.mcp.reload()
-                  yield* OpenCodeMcp.ready(context, appServers(before), appServers(apps))
-                }
+                yield* mcp.apply(apps)
                 yield* synced
               }),
             ),

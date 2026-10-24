@@ -10,12 +10,13 @@ type Declaration = AppCatalog.McpEntry["declaration"]
 
 export const catalog = (
   fingerprint: string,
-  mcps: ReadonlyArray<{
-    readonly slug: string
-    readonly url: string
-    readonly auth?: Declaration["auth"]
-    readonly timeouts?: Declaration["timeouts"]
-  }>,
+  mcps: ReadonlyArray<
+    ({ readonly url: string } | { readonly transport: Declaration["transport"] }) & {
+      readonly slug: string
+      readonly auth?: Declaration["auth"]
+      readonly timeouts?: Declaration["timeouts"]
+    }
+  >,
 ): AppCatalog.Info => ({
   fingerprint,
   catalog: {
@@ -31,7 +32,7 @@ export const catalog = (
       declaration: {
         name: "Docs",
         description: "Docs",
-        transport: { type: "remote", url: mcp.url },
+        transport: "transport" in mcp ? mcp.transport : { type: "remote", url: mcp.url },
         auth: mcp.auth ?? { type: "none" },
         ...(mcp.timeouts && { timeouts: mcp.timeouts }),
         requiredCredentials:

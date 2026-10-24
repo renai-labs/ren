@@ -21,6 +21,7 @@
         "test/lib/environment-worker.ts",
         "test/lib/sync-storage-worker.ts",
         "test/lib/crash-host.ts",
+        "test/lib/mcp-stdio.ts",
         "test/**/*.test.ts",
         "test/lib/preload.ts"
       ],
