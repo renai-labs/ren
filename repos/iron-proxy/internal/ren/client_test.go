@@ -17,6 +17,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -90,6 +92,7 @@ type hook struct {
 	answer   atomic.Value
 	lastBody atomic.Value
 	hold     atomic.Pointer[held]
+	reports  chan string
 }
 
 // held stops the hook after it read a request: entered closes, then the
@@ -107,7 +110,7 @@ func (h *hook) holdNext() *held {
 
 func newHook(t *testing.T, c certs) *hook {
 	t.Helper()
-	h := &hook{}
+	h := &hook{reports: make(chan string, 100)}
 	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", TTL: 30, Labels: []string{"STRIPE_API_KEY"}, Inject: []Op{{Op: "replace", Placeholder: "ren:STRIPE_API_KEY", Value: "sk_live_real", In: []string{"header"}}}})
 	h.server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.calls.Add(1)
@@ -119,6 +122,11 @@ func newHook(t *testing.T, c certs) *hook {
 		}
 		if h.down.Load() {
 			http.Error(w, "down", http.StatusServiceUnavailable)
+			return
+		}
+		if r.URL.Path == "/egress/v1/unauthorized" {
+			h.reports <- string(body)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		if r.URL.Path == "/egress/v1/authenticate" {
@@ -359,4 +367,73 @@ func TestHandleSaysWhenAPlaceholderSitsWhereItsCredentialDoesNotGo(t *testing.T)
 	body, err := io.ReadAll(denied.Body)
 	require.NoError(t, err)
 	require.JSONEq(t, `{"error":"ren_location_not_allowed","label":"STRIPE_API_KEY"}`, string(body))
+}
+
+func linear(t *testing.T, client *Client) *Applied {
+	t.Helper()
+	req := newRequest(t, "POST", "https://mcp.linear.app/mcp", nil, "")
+	req.Host = "mcp.linear.app"
+	req.Header.Set("Authorization", "Bearer ren:MCP_LINEAR")
+	denied, applied := client.Handle(t.Context(), req, "ren-a")
+	require.Nil(t, denied)
+	return applied
+}
+
+func upstreamAnswer(status int, challenge string) *http.Response {
+	header := http.Header{}
+	if challenge != "" {
+		header.Set("WWW-Authenticate", challenge)
+	}
+	return &http.Response{StatusCode: status, Header: header, Body: io.NopCloser(strings.NewReader(""))}
+}
+
+func TestObserveReportsOneUpstream401AndDropsTheKeptAnswer(t *testing.T) {
+	client, h, _ := newClient(t)
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", TTL: 30, Labels: []string{"MCP_LINEAR"},
+		Refreshable: []Refreshable{{Label: "MCP_LINEAR", Revision: 3}},
+		Inject:      []Op{{Op: "replace", Placeholder: "ren:MCP_LINEAR", Value: "tok_old", In: []string{"header"}}}})
+	applied := linear(t, client)
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp := upstreamAnswer(http.StatusUnauthorized, `Bearer error="invalid_token"`)
+			client.Observe(applied, resp)
+			require.Equal(t, http.StatusUnauthorized, resp.StatusCode, "the 401 goes back to the workload unchanged")
+		}()
+	}
+	wg.Wait()
+	client.reporting.Wait()
+	require.Len(t, h.reports, 1, "10 parallel 401s for one revision send one report")
+	require.JSONEq(t, `{"login":"ren-a","host":"mcp.linear.app","status":401,"labels":[{"label":"MCP_LINEAR","revision":3}]}`, <-h.reports)
+	calls := h.calls.Load()
+	linear(t, client)
+	require.Equal(t, calls+1, h.calls.Load(), "the kept answer was dropped, so Ren is asked again")
+}
+
+func TestObserveReportsAScopeChallengeAndKeepsTheAnswer(t *testing.T) {
+	client, h, _ := newClient(t)
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", TTL: 30, Labels: []string{"MCP_LINEAR"},
+		Refreshable: []Refreshable{{Label: "MCP_LINEAR", Revision: 1}},
+		Inject:      []Op{{Op: "replace", Placeholder: "ren:MCP_LINEAR", Value: "tok", In: []string{"header"}}}})
+	applied := linear(t, client)
+	client.Observe(applied, upstreamAnswer(http.StatusForbidden, `Bearer error="forbidden"`))
+	client.Observe(applied, upstreamAnswer(http.StatusForbidden, `Bearer error="insufficient_scope", scope="issues:write admin"`))
+	client.reporting.Wait()
+	require.Len(t, h.reports, 1, "only an insufficient_scope 403 is reported")
+	require.JSONEq(t, `{"login":"ren-a","host":"mcp.linear.app","status":403,"scope":"issues:write admin","labels":[{"label":"MCP_LINEAR","revision":1}]}`, <-h.reports)
+	calls := h.calls.Load()
+	linear(t, client)
+	require.Equal(t, calls, h.calls.Load(), "a 403 keeps the answer")
+}
+
+func TestObserveIgnoresAnswersWithoutRefreshableLabels(t *testing.T) {
+	client, h, _ := newClient(t)
+	h.answer.Store(Reply{Allow: true, Workload: "brain:brn_1:1", Labels: []string{"MCP_LINEAR"},
+		Inject: []Op{{Op: "replace", Placeholder: "ren:MCP_LINEAR", Value: "tok", In: []string{"header"}}}})
+	client.Observe(linear(t, client), upstreamAnswer(http.StatusUnauthorized, ""))
+	client.Observe(nil, upstreamAnswer(http.StatusUnauthorized, ""))
+	client.reporting.Wait()
+	require.Empty(t, h.reports)
 }

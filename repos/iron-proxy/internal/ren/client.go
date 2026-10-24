@@ -102,8 +102,11 @@ type Reply struct {
 	ExpiresAt int64    `json:"expiresAt,omitempty"`
 	Labels    []string `json:"labels,omitempty"`
 	Inject    []Op     `json:"inject,omitempty"`
-	Reason    string   `json:"reason,omitempty"`
-	Label     string   `json:"label,omitempty"`
+	// Refreshable are the labels Ren can renew after an upstream 401, with
+	// the revision it injected (fork change 9).
+	Refreshable []Refreshable `json:"refreshable,omitempty"`
+	Reason      string        `json:"reason,omitempty"`
+	Label       string        `json:"label,omitempty"`
 }
 
 type entry struct {
@@ -134,6 +137,10 @@ type Client struct {
 	// ran while it was in flight, because Ren may have read the old value.
 	epoch     uint64
 	lastSweep time.Time
+	// reported holds when each label, revision and status was last
+	// reported, so a burst of 401s sends one report per minute.
+	reported  map[string]time.Time
+	reporting sync.WaitGroup
 }
 
 // fresh is how long an answer is reused without asking Ren: Ren's ttl,
@@ -174,6 +181,11 @@ func (c *Client) sweep() {
 			delete(c.logins, key)
 		}
 	}
+	for key, at := range c.reported {
+		if now.Sub(at) >= reportEvery {
+			delete(c.reported, key)
+		}
+	}
 }
 
 // New builds a client from a validated config.
@@ -194,13 +206,14 @@ func New(cfg Config, logger *slog.Logger) (*Client, error) {
 		MaxIdleConnsPerHost: 32,
 	}
 	return &Client{
-		cfg:     cfg,
-		http:    &http.Client{Transport: transport, Timeout: 5 * time.Second},
-		logger:  logger,
-		now:     time.Now,
-		answers: map[string]entry{},
-		logins:  map[string]authEntry{},
-		conns:   map[string]map[net.Conn]struct{}{},
+		cfg:      cfg,
+		http:     &http.Client{Transport: transport, Timeout: 5 * time.Second},
+		logger:   logger,
+		now:      time.Now,
+		answers:  map[string]entry{},
+		logins:   map[string]authEntry{},
+		conns:    map[string]map[net.Conn]struct{}{},
+		reported: map[string]time.Time{},
 	}, nil
 }
 
@@ -216,17 +229,21 @@ func loadPool(file string) (*x509.CertPool, error) {
 	return pool, nil
 }
 
-func (c *Client) post(ctx context.Context, path string, body any, out any) error {
+func (c *Client) request(ctx context.Context, path string, body any) (*http.Response, error) {
 	encoded, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(c.cfg.Hook, "/")+path, bytes.NewReader(encoded))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.http.Do(req)
+	return c.http.Do(req)
+}
+
+func (c *Client) post(ctx context.Context, path string, body any, out any) error {
+	resp, err := c.request(ctx, path, body)
 	if err != nil {
 		return err
 	}

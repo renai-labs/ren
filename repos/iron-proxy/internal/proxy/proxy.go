@@ -688,6 +688,8 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 
 	// Ren: an injected value never goes back to the workload (README fork changes, Mask).
 	renApplied.Mask(finalResp)
+	// Ren: an upstream 401 or scope challenge on a refreshable credential is reported (fork change 9).
+	p.ren.Observe(renApplied, finalResp)
 
 	// SSE: stream with flushing
 	if isSSE(finalResp) {
