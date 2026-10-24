@@ -10,7 +10,7 @@ import { Egress } from "@ren/core/egress"
 import { EgressControl } from "@ren/core/egress-control"
 import { Envelope } from "@ren/core/envelope"
 import { OAuthFetch } from "@ren/core/oauth-fetch"
-import { McpProvider } from "@ren/core/mcp-provider"
+import { AppProfiles } from "@ren/core/app/profiles"
 import { Models } from "@ren/core/models"
 import { Signer } from "@ren/core/signer"
 import { Seed, testEffect } from "@ren/core/testing"
@@ -20,6 +20,9 @@ import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
 import { Credential } from "@ren/schema/credential"
+import { App } from "@ren/schema/app"
+import { AppProfile } from "@ren/schema/app-profile"
+import { eq } from "drizzle-orm"
 import { ConfigProvider, Deferred, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { EgressRoutes } from "../src/egress.js"
@@ -117,6 +120,7 @@ const ren = () => {
   const certs = certificates()
   return EgressRoutes.serve.pipe(
     Layer.provideMerge(Egress.layer),
+    Layer.provideMerge(AppProfiles.layer),
     Layer.provideMerge(CredentialRefresh.layer),
     Layer.provideMerge(Layer.mergeAll(refreshers, DurableRunner.layerMemory)),
     Layer.provideMerge(CredentialSource.layer),
@@ -131,7 +135,6 @@ const ren = () => {
         EgressControl.layerHttp,
         Signer.layerLocal,
         OAuthFetch.layerUnchecked,
-        McpProvider.layerNone,
       ),
     ),
     Layer.provideMerge(Testing.layer),
@@ -208,7 +211,95 @@ const http = (login: string, password: string) =>
 
 const at = (path: string, host = "api.stripe.test") => `'http://${host}:${upstream.port}${path}'`
 
+// oxlint-disable-next-line ren/no-comments -- profiles.md §1: two profiles of one app that a space reaches, each with its own sign-in, and one profile the space does not reach.
+const profiles = Effect.fnUntraced(function* (found: Effect.Success<ReturnType<typeof setup>>) {
+  const database = yield* Database.Service
+  const envelope = yield* Envelope.Service
+  const spaceId = (yield* database.db
+    .select({ spaceId: Database.Schema.brain.space_id })
+    .from(Database.Schema.brain)
+    .where(eq(Database.Schema.brain.id, found.brainId))).at(0)?.spaceId
+  if (!spaceId) return yield* Effect.die(new Error("expected the brain's space"))
+  const appId = App.ID.create()
+  yield* database.db.insert(Database.Schema.app).values({
+    id: appId,
+    slug: `mail-${appId.slice(-6).toLowerCase()}`,
+    name: "Mail",
+    description: "Mail",
+    required_credentials: [],
+    skills: {},
+    mcps: {
+      gmail: {
+        name: "Gmail",
+        description: "Gmail",
+        transport: { type: "remote", url: "https://mail.test/mcp" },
+        auth: { type: "oauth", tokenEndpointAuth: "none" },
+        requiredCredentials: [],
+      },
+    },
+  })
+  yield* Effect.forEach(
+    [
+      { slug: "acme", listed: true },
+      { slug: "globex", listed: true },
+      { slug: "other", listed: false },
+    ],
+    Effect.fnUntraced(function* (entry) {
+      const profileId = AppProfile.ID.create()
+      yield* database.db.insert(Database.Schema.app_profile).values({
+        id: profileId,
+        organization_id: found.organizationId,
+        app_id: appId,
+        slug: entry.slug,
+        name: entry.slug,
+        kind: "shared",
+      })
+      if (entry.listed)
+        yield* database.db.insert(Database.Schema.app_profile_space).values({ profile_id: profileId, space_id: spaceId })
+      const id = Credential.ID.create()
+      const value = yield* envelope.seal(
+        Redacted.make(JSON.stringify({ type: "oauth", accessToken: `tok_${entry.slug}` })),
+        { organizationId: found.organizationId, kind: "credential", id },
+      )
+      yield* database.db.insert(Database.Schema.credential).values({
+        id,
+        organization_id: found.organizationId,
+        owner: "profile",
+        profile_id: profileId,
+        label: `MCP_GMAIL__${entry.slug.toUpperCase()}`,
+        type: "oauth",
+        value,
+        hosts: ["mail.test"],
+        inject: { op: "replace", in: ["header"] },
+      })
+    }),
+  )
+})
+
 describe("egress (iron-proxy fork) with Ren", () => {
+  it.live("two profiles of one app: each server's placeholder reaches the upstream with its own token", () =>
+    Effect.gen(function* () {
+      const found = yield* setup()
+      yield* profiles(found)
+      const call = (label: string) =>
+        Effect.promise(() =>
+          EgressHarness.curl([
+            socks(found.login, found.password),
+            "-H",
+            `'Authorization: Bearer ren:${label}'`,
+            at("/mcp-profile", "mail.test"),
+          ]),
+        )
+      expect((yield* call("MCP_GMAIL__ACME")).status).toBe(200)
+      expect(seen.findLast((request) => request.path === "/mcp-profile")?.authorization).toBe("Bearer tok_acme")
+      expect((yield* call("MCP_GMAIL__GLOBEX")).status).toBe(200)
+      expect(seen.findLast((request) => request.path === "/mcp-profile")?.authorization).toBe("Bearer tok_globex")
+      const before = seen.length
+      expect((yield* call("MCP_GMAIL__OTHER")).status).toBe(403)
+      expect(seen.length).toBe(before)
+    }),
+  )
+
   it.live(
     "a process with only the placeholder reaches the upstream with the real key, over SOCKS5 and HTTP proxy",
     () =>

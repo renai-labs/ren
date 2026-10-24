@@ -18,21 +18,7 @@ export const CredentialConnectGroup = HttpApiGroup.make("credential-connect")
         identifier: "credential.connect",
         summary: "Connect an MCP",
         description:
-          "Start a sign-in for one MCP of an app and return the address of the consent page, or return the credential when it is already connected and `reconnect` is not set. Read the sign-in with `oauth-session.get`.",
-      }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.get("credential.requirements", "/credential-requirements", {
-      query: Credential.RequirementsInput,
-      success: Credential.Requirements,
-      error: NotFoundError,
-    }).annotateMerge(
-      OpenApi.annotations({
-        identifier: "credential.requirements",
-        summary: "List what an app needs connected",
-        description:
-          "Return the items of an app’s connect dialog in a space: one per MCP that needs a credential and one per env key, then the items of the apps it depends on, with the status of each.",
+          "Start a sign-in for one MCP of a profile’s app and return the address of the consent page, or return the credential when it is already connected and `reconnect` is not set. Read the sign-in with `oauth-session.get`.",
       }),
     ),
   )

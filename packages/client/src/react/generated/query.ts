@@ -34,16 +34,18 @@ import type {
   AppUpdateInput,
   AppArchiveInput,
   AppTransferOwnershipInput,
-  AppReleaseListInput,
-  AppReleaseGetInput,
-  AppReleaseCreateInput,
+  AppProfileListInput,
+  AppProfileGetInput,
+  AppProfileCreateInput,
+  AppProfileUpdateInput,
+  AppProfileAccessInput,
+  AppProfileLinkInput,
+  AppProfilePromoteInput,
+  AppProfileReachAppProfileDeleteInput,
+  AppProfileReachSessionProfilesInput,
+  AppProfileReachSpaceProfilesInput,
   AppRegistryListInput,
   AppRegistryGetInput,
-  SpaceAppListInput,
-  SpaceAppGetInput,
-  SpaceAppCreateInput,
-  SpaceAppUpdateInput,
-  SpaceAppArchiveInput,
   AgentMembershipListInput,
   AgentMembershipCreateInput,
   AgentMembershipArchiveInput,
@@ -81,7 +83,6 @@ import type {
   CredentialCopyInput,
   CredentialRemoveInput,
   CredentialConnectCredentialConnectInput,
-  CredentialConnectCredentialRequirementsInput,
   OauthSessionGetInput,
   OauthAppListInput,
   OauthAppGetInput,
@@ -427,32 +428,104 @@ export function make(client: ReturnType<typeof Ren.make>) {
           }),
       },
     },
-    "app-release": {
+    "app-profile": {
       list: {
-        queryKey: (input?: AppReleaseListInput) =>
-          input === undefined ? (["app-release", "list"] as const) : (["app-release", "list", input] as const),
-        queryOptions: (input: AppReleaseListInput) =>
+        queryKey: (input?: AppProfileListInput) =>
+          input === undefined ? (["app-profile", "list"] as const) : (["app-profile", "list", input] as const),
+        queryOptions: (input: AppProfileListInput) =>
           queryOptions({
-            queryKey: ["app-release", "list", input] as const,
-            queryFn: (context) => client["app-release"]["list"](input, { signal: context.signal }),
+            queryKey: ["app-profile", "list", input] as const,
+            queryFn: (context) => client["app-profile"]["list"](input, { signal: context.signal }),
           }),
       },
       get: {
-        queryKey: (input?: AppReleaseGetInput) =>
-          input === undefined ? (["app-release", "get"] as const) : (["app-release", "get", input] as const),
-        queryOptions: (input: AppReleaseGetInput) =>
+        queryKey: (input?: AppProfileGetInput) =>
+          input === undefined ? (["app-profile", "get"] as const) : (["app-profile", "get", input] as const),
+        queryOptions: (input: AppProfileGetInput) =>
           queryOptions({
-            queryKey: ["app-release", "get", input] as const,
-            queryFn: (context) => client["app-release"]["get"](input, { signal: context.signal }),
+            queryKey: ["app-profile", "get", input] as const,
+            queryFn: (context) => client["app-profile"]["get"](input, { signal: context.signal }),
           }),
       },
       create: {
-        mutationKey: () => ["app-release", "create"] as const,
+        mutationKey: () => ["app-profile", "create"] as const,
         mutationOptions: () =>
           mutationOptions({
-            mutationKey: ["app-release", "create"] as const,
-            mutationFn: (input: AppReleaseCreateInput) => client["app-release"]["create"](input),
+            mutationKey: ["app-profile", "create"] as const,
+            mutationFn: (input: AppProfileCreateInput) => client["app-profile"]["create"](input),
           }),
+      },
+      update: {
+        mutationKey: () => ["app-profile", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["app-profile", "update"] as const,
+            mutationFn: (input: AppProfileUpdateInput) => client["app-profile"]["update"](input),
+          }),
+      },
+      access: {
+        mutationKey: () => ["app-profile", "access"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["app-profile", "access"] as const,
+            mutationFn: (input: AppProfileAccessInput) => client["app-profile"]["access"](input),
+          }),
+      },
+      link: {
+        mutationKey: () => ["app-profile", "link"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["app-profile", "link"] as const,
+            mutationFn: (input: AppProfileLinkInput) => client["app-profile"]["link"](input),
+          }),
+      },
+      promote: {
+        mutationKey: () => ["app-profile", "promote"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["app-profile", "promote"] as const,
+            mutationFn: (input: AppProfilePromoteInput) => client["app-profile"]["promote"](input),
+          }),
+      },
+    },
+    "app-profile-reach": {
+      "app-profile": {
+        delete: {
+          mutationKey: () => ["app-profile-reach", "app-profile", "delete"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["app-profile-reach", "app-profile", "delete"] as const,
+              mutationFn: (input: AppProfileReachAppProfileDeleteInput) =>
+                client["app-profile-reach"]["app-profile"]["delete"](input),
+            }),
+        },
+      },
+      session: {
+        profiles: {
+          queryKey: (input?: AppProfileReachSessionProfilesInput) =>
+            input === undefined
+              ? (["app-profile-reach", "session", "profiles"] as const)
+              : (["app-profile-reach", "session", "profiles", input] as const),
+          queryOptions: (input: AppProfileReachSessionProfilesInput) =>
+            queryOptions({
+              queryKey: ["app-profile-reach", "session", "profiles", input] as const,
+              queryFn: (context) =>
+                client["app-profile-reach"]["session"]["profiles"](input, { signal: context.signal }),
+            }),
+        },
+      },
+      space: {
+        profiles: {
+          queryKey: (input?: AppProfileReachSpaceProfilesInput) =>
+            input === undefined
+              ? (["app-profile-reach", "space", "profiles"] as const)
+              : (["app-profile-reach", "space", "profiles", input] as const),
+          queryOptions: (input: AppProfileReachSpaceProfilesInput) =>
+            queryOptions({
+              queryKey: ["app-profile-reach", "space", "profiles", input] as const,
+              queryFn: (context) => client["app-profile-reach"]["space"]["profiles"](input, { signal: context.signal }),
+            }),
+        },
       },
     },
     "app-registry": {
@@ -472,50 +545,6 @@ export function make(client: ReturnType<typeof Ren.make>) {
           queryOptions({
             queryKey: ["app-registry", "get", input] as const,
             queryFn: (context) => client["app-registry"]["get"](input, { signal: context.signal }),
-          }),
-      },
-    },
-    "space-app": {
-      list: {
-        queryKey: (input?: SpaceAppListInput) =>
-          input === undefined ? (["space-app", "list"] as const) : (["space-app", "list", input] as const),
-        queryOptions: (input: SpaceAppListInput) =>
-          queryOptions({
-            queryKey: ["space-app", "list", input] as const,
-            queryFn: (context) => client["space-app"]["list"](input, { signal: context.signal }),
-          }),
-      },
-      get: {
-        queryKey: (input?: SpaceAppGetInput) =>
-          input === undefined ? (["space-app", "get"] as const) : (["space-app", "get", input] as const),
-        queryOptions: (input: SpaceAppGetInput) =>
-          queryOptions({
-            queryKey: ["space-app", "get", input] as const,
-            queryFn: (context) => client["space-app"]["get"](input, { signal: context.signal }),
-          }),
-      },
-      create: {
-        mutationKey: () => ["space-app", "create"] as const,
-        mutationOptions: () =>
-          mutationOptions({
-            mutationKey: ["space-app", "create"] as const,
-            mutationFn: (input: SpaceAppCreateInput) => client["space-app"]["create"](input),
-          }),
-      },
-      update: {
-        mutationKey: () => ["space-app", "update"] as const,
-        mutationOptions: () =>
-          mutationOptions({
-            mutationKey: ["space-app", "update"] as const,
-            mutationFn: (input: SpaceAppUpdateInput) => client["space-app"]["update"](input),
-          }),
-      },
-      archive: {
-        mutationKey: () => ["space-app", "archive"] as const,
-        mutationOptions: () =>
-          mutationOptions({
-            mutationKey: ["space-app", "archive"] as const,
-            mutationFn: (input: SpaceAppArchiveInput) => client["space-app"]["archive"](input),
           }),
       },
     },
@@ -845,18 +874,6 @@ export function make(client: ReturnType<typeof Ren.make>) {
               mutationKey: ["credential-connect", "credential", "connect"] as const,
               mutationFn: (input: CredentialConnectCredentialConnectInput) =>
                 client["credential-connect"]["credential"]["connect"](input),
-            }),
-        },
-        requirements: {
-          queryKey: (input?: CredentialConnectCredentialRequirementsInput) =>
-            input === undefined
-              ? (["credential-connect", "credential", "requirements"] as const)
-              : (["credential-connect", "credential", "requirements", input] as const),
-          queryOptions: (input: CredentialConnectCredentialRequirementsInput) =>
-            queryOptions({
-              queryKey: ["credential-connect", "credential", "requirements", input] as const,
-              queryFn: (context) =>
-                client["credential-connect"]["credential"]["requirements"](input, { signal: context.signal }),
             }),
         },
       },

@@ -85,10 +85,12 @@ it.live("members browse listed apps and install them, but app routes cannot publ
     expect((yield* request("GET", "/app-registry/context7", cookie)).body).toMatchObject({
       id: listed?.appId,
       listing: { body: "Library docs" },
-      release: { version: "1.0.0" },
+      revision: 1,
     })
     expect((yield* request("GET", "/app-registry/unlisted", cookie)).status).toBe(404)
-    expect((yield* request("PATCH", `/apps/${listed?.appId}`, cookie, { name: "Mine" })).status).toBe(403)
+    expect(
+      (yield* request("PATCH", `/apps/${listed?.appId}`, cookie, { name: "Mine", expectedRevision: 1 })).status,
+    ).toBe(403)
     const spaces = Schema.decodeUnknownSync(Page({ id: Schema.String }))(
       (yield* request("GET", "/spaces", cookie)).body,
     )
@@ -101,8 +103,13 @@ it.live("members browse listed apps and install them, but app routes cannot publ
     })
     expect(created.status).toBe(200)
     expect((yield* request("GET", "/app-registry/custom", cookie)).status).toBe(404)
-    const installed = yield* request("POST", "/space-apps", cookie, { spaceId, appId: listed?.appId })
-    expect(installed.status).toBe(200)
-    expect(installed.body).toMatchObject({ pinnedReleaseId: null, release: { id: listed?.releaseId } })
+    const profile = yield* request("POST", "/app-profiles", cookie, {
+      appId: listed?.appId,
+      name: "Docs",
+      slug: "docs",
+      kind: "shared",
+      spaceIds: [spaceId],
+    })
+    expect(profile.status).toBe(200)
   }),
 )
