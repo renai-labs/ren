@@ -29,7 +29,7 @@ export type Value =
   | {
       readonly type: "route"
       readonly upstream: Redacted.Redacted
-      readonly headers: Readonly<Record<string, Redacted.Redacted>>
+      readonly headers: ReadonlyArray<{ readonly name: string; readonly value: Redacted.Redacted }>
     }
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("CredentialSource.Unavailable", {
@@ -184,7 +184,7 @@ export const layerMinted = Layer.effect(
           return Option.some({
             type: "route",
             upstream: Redacted.make(upstream),
-            headers: { Authorization: Redacted.make(`Bearer ${token}`) },
+            headers: [{ name: "Authorization", value: Redacted.make(`Bearer ${token}`) }],
           } satisfies Value)
         }
         const granted = yield* cachedGrant(scope).pipe(

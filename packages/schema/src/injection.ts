@@ -39,6 +39,9 @@ export const Reply = Schema.Union([
     allow: Schema.Literal(true),
     workload: Schema.String,
     ttl: Schema.Int,
+    labels: Schema.Array(Schema.String).annotate({
+      description: "The labels the answer used, so Ren can tell the egress to drop it when one of them changes.",
+    }),
     inject: Schema.Array(Op),
   }),
   Schema.Struct({

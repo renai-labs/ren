@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/ironsh/iron-proxy/internal/dnsguard"
+	"github.com/ironsh/iron-proxy/internal/ren"
 )
 
 const (
@@ -63,6 +64,9 @@ type Config struct {
 	Management   Management   `yaml:"management"`
 	ControlPlane ControlPlane `yaml:"control_plane"`
 	Log          Log          `yaml:"log"`
+	// Ren connects the proxy to Ren (the Ren fork). When any field is set,
+	// all of hook, ca_cert, cert, key and control_listen are required.
+	Ren ren.Config `yaml:"ren"`
 }
 
 // DNS configures the built-in DNS server.

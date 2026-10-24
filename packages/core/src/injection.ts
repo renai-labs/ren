@@ -28,11 +28,10 @@ export const plan = (
   const inject = candidate.inject
   if (inject.op === "route") {
     if (value.type !== "route") return Result.fail("invalid_value")
-    const headers = Object.entries(value.headers)
-    if (headers.some((header) => breaksHeader(Redacted.value(header[1])))) return Result.fail("invalid_value")
+    if (value.headers.some((header) => breaksHeader(Redacted.value(header.value)))) return Result.fail("invalid_value")
     return Result.succeed([
       { op: "route", upstream: value.upstream },
-      ...headers.map((header): Op => ({ op: "setHeader", name: header[0], value: header[1] })),
+      ...value.headers.map((header): Op => ({ op: "setHeader", name: header.name, value: header.value })),
     ])
   }
   const secret = secretOf(

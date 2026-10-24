@@ -224,6 +224,18 @@
         "effect": "catalog:",
       },
     },
+    "packages/egress-api": {
+      "name": "@ren/egress-api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ren/schema": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+      },
+    },
     "packages/environment-api": {
       "name": "@ren/environment-api",
       "version": "0.0.0",
@@ -334,6 +346,7 @@
         "@effect/platform-bun": "catalog:",
         "@ren/core": "workspace:*",
         "@ren/db": "workspace:*",
+        "@ren/egress-api": "workspace:*",
         "@ren/host-api": "workspace:*",
         "@ren/opencode-transcript": "workspace:*",
         "@ren/protocol": "workspace:*",
@@ -1596,6 +1609,8 @@
     "@ren/db": ["@ren/db@workspace:packages/db"],
 
     "@ren/e2e": ["@ren/e2e@workspace:packages/e2e"],
+
+    "@ren/egress-api": ["@ren/egress-api@workspace:packages/egress-api"],
 
     "@ren/environment-api": ["@ren/environment-api@workspace:packages/environment-api"],
 

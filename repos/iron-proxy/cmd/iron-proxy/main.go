@@ -28,6 +28,7 @@ import (
 	iotel "github.com/ironsh/iron-proxy/internal/otel"
 	"github.com/ironsh/iron-proxy/internal/postgres"
 	"github.com/ironsh/iron-proxy/internal/proxy"
+	"github.com/ironsh/iron-proxy/internal/ren"
 	"github.com/ironsh/iron-proxy/internal/responseretry"
 	"github.com/ironsh/iron-proxy/internal/transform"
 	"github.com/ironsh/iron-proxy/internal/version"
@@ -228,8 +229,22 @@ func main() {
 		logger.Info("response retry handler enabled", slog.Any("statuses", responseRetryStatuses))
 	}
 
+	// Ren: the proxy refuses to start without its hook address and
+	// certificates (fork change 4).
+	var renClient *ren.Client
+	if cfg.Ren != (ren.Config{}) {
+		renClient, err = ren.New(cfg.Ren, logger)
+		if err != nil {
+			logger.Error("ren config", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		go func() { errc <- fmt.Errorf("ren control: %w", renClient.ServeControl(ctx)) }()
+		logger.Info("ren enabled", slog.String("hook", cfg.Ren.Hook), slog.String("control_listen", cfg.Ren.ControlListen))
+	}
+
 	// Initialize proxy.
 	p := proxy.New(proxy.Options{
+		Ren:                           renClient,
 		HTTPAddr:                      cfg.Proxy.HTTPListen,
 		HTTPSAddr:                     cfg.Proxy.HTTPSListen,
 		TunnelAddr:                    cfg.Proxy.TunnelListen,
@@ -310,6 +325,16 @@ func main() {
 		logger.Info("received signal, shutting down", slog.String("signal", sig.String()))
 	case err := <-errc:
 		logger.Error("fatal error", slog.String("error", err.Error()))
+	}
+
+	// Ren: drain. Stop taking tunnels, keep open ones until they close or
+	// the drain time ends (README C39), then stop the rest.
+	if renClient != nil {
+		p.CloseTunnelListener()
+		drain, drainCancel := context.WithTimeout(context.Background(), cfg.Ren.DrainTimeout())
+		logger.Info("draining open connections", slog.Duration("for", cfg.Ren.DrainTimeout()))
+		renClient.Drain(drain)
+		drainCancel()
 	}
 
 	// Cancel context to stop the poller, then shut down services.

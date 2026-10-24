@@ -1,7 +1,7 @@
 export * as EgressControl from "./egress-control.js"
 
-import { Config, Context, Duration, Effect, Layer, Schedule } from "effect"
-import { HttpClient, HttpClientRequest } from "effect/http"
+import { Config, Context, Duration, Effect, Layer, Option, Schedule } from "effect"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 
 export interface Selector {
   readonly workload?: string
@@ -32,6 +32,15 @@ export const layerHttp = Layer.effect(
           .filter((url) => url.length > 0),
       ),
     )
+    const tls = yield* Config.all({
+      cert: Config.option(Config.String("EGRESS_CONTROL_TLS_CERT")),
+      key: Config.option(Config.String("EGRESS_CONTROL_TLS_KEY")),
+      ca: Config.option(Config.String("EGRESS_CONTROL_TLS_CA")),
+    })
+    const init: BunFetchRequestInit =
+      Option.isSome(tls.cert) && Option.isSome(tls.key) && Option.isSome(tls.ca)
+        ? { tls: { cert: Bun.file(tls.cert.value), key: Bun.file(tls.key.value), ca: Bun.file(tls.ca.value) } }
+        : {}
     const http = yield* HttpClient.HttpClient
     const scope = yield* Effect.scope
     return Service.of({
@@ -42,6 +51,7 @@ export const layerHttp = Layer.effect(
             const send = HttpClientRequest.post(new URL("/egress/v1/invalidate", url)).pipe(
               HttpClientRequest.bodyJsonUnsafe(selector),
               http.execute,
+              Effect.provideService(FetchHttpClient.RequestInit, init),
               Effect.flatMap((response) =>
                 response.status === 204 || response.status === 200
                   ? Effect.void
@@ -68,6 +78,6 @@ export const layerHttp = Layer.effect(
 
 export const layerConfig = Layer.unwrap(
   Effect.map(Config.option(Config.String("EGRESS_CONTROL_URLS")), (urls) =>
-    urls._tag === "Some" ? layerHttp : layerNone,
+    Option.isSome(urls) ? layerHttp : layerNone,
   ),
 )

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@ren/egress",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "bun script/build.ts",
+    "certificates": "bun script/certificates.ts",
+    "test:go": "bun script/go.ts test ./internal/... ./cmd/..."
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:"
+  }
+}

@@ -76,11 +76,7 @@ export const layer = Layer.effect(
       if (!found) return
       yield* refresher.refresh(row.id).pipe(
         Effect.andThen(
-          database.db
-            .update(table)
-            .set({ refresh_failures: 0 })
-            .where(eq(table.id, row.id))
-            .pipe(Effect.orDie),
+          database.db.update(table).set({ refresh_failures: 0 }).where(eq(table.id, row.id)).pipe(Effect.orDie),
         ),
         Effect.catchTag("CredentialRefresh.Fatal", (error) =>
           database.db

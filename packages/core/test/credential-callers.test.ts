@@ -57,6 +57,14 @@ describe("CredentialCallers", () => {
         ok: false,
         reason: "unknown_workload",
       })
+      expect(yield* callers.verify({ kind: "Login", username: placement.username })).toEqual({
+        ok: true,
+        caller: { workload, organizationId: seeded.organizationId },
+      })
+      expect(yield* callers.verify({ kind: "Login", username: "nobody" })).toEqual({
+        ok: false,
+        reason: "unknown_workload",
+      })
     }),
   )
 

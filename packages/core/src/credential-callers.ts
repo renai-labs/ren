@@ -19,8 +19,10 @@ export type Placement =
   | { readonly kind: "ProxyLogin"; readonly username: string; readonly password: Redacted.Redacted }
   | { readonly kind: "Token"; readonly token: Redacted.Redacted; readonly exp: number }
 
+// oxlint-disable-next-line ren/no-comments -- `Login` is a proxy login that the egress already checked with `ProxyLogin` when the connection opened; the password is not sent again (iron-proxy fork change 2). Only Ren's own egress may send it.
 export type Proof =
   | { readonly kind: "ProxyLogin"; readonly username: string; readonly password: Redacted.Redacted }
+  | { readonly kind: "Login"; readonly username: string }
   | { readonly kind: "Token"; readonly token: string }
 
 export type Verified =
@@ -134,7 +136,11 @@ export const layer = Layer.effect(
           const keys = yield* signer.publicKeys("brain").pipe(Effect.orDie)
           const claims = yield* Signature.verify(keys, TokenClaims, proof.token)
           if (Option.isNone(claims)) return unknown
-          const workload = decodeWorkload({ kind: claims.value.kind, id: claims.value.id, generation: claims.value.gen })
+          const workload = decodeWorkload({
+            kind: claims.value.kind,
+            id: claims.value.id,
+            generation: claims.value.gen,
+          })
           if (Option.isNone(workload)) return unknown
           if (yield* retired(workload.value)) return { ok: false, reason: "generation_retired" } as const
           return { ok: true, caller: { workload: workload.value, organizationId: claims.value.org } } as const
@@ -145,7 +151,9 @@ export const layer = Layer.effect(
           .where(eq(table.username, proof.username))
           .pipe(Effect.orDie)
         const row = rows.at(0)
-        if (!row || row.password_hash !== (yield* hash(Redacted.value(proof.password)))) return unknown
+        if (!row) return unknown
+        if (proof.kind === "ProxyLogin" && row.password_hash !== (yield* hash(Redacted.value(proof.password))))
+          return unknown
         const workload = decodeWorkload({ kind: row.workload_kind, id: row.workload_id, generation: row.generation })
         if (Option.isNone(workload)) return unknown
         if (yield* retired(workload.value)) return { ok: false, reason: "generation_retired" } as const
@@ -156,7 +164,9 @@ export const layer = Layer.effect(
         const rows = yield* database.db
           .update(table)
           .set({ revoked_at: sql`now()`, address: null })
-          .where(and(eq(table.workload_kind, workload.kind), eq(table.workload_id, workload.id), isNull(table.revoked_at)))
+          .where(
+            and(eq(table.workload_kind, workload.kind), eq(table.workload_id, workload.id), isNull(table.revoked_at)),
+          )
           .returning({ username: table.username })
           .pipe(Effect.orDie)
         return { logins: rows.flatMap((row) => (row.username ? [row.username] : [])) }

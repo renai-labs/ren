@@ -1,0 +1,22 @@
+# Local egress for `docker compose up`. Workloads reach it with
+# HTTPS_PROXY=http://<login>:<password>@localhost:1080 (README "Development").
+dns:
+  enabled: false
+proxy:
+  http_listen: "127.0.0.1:8080"
+  https_listen: "127.0.0.1:8443"
+  tunnel_listen: "0.0.0.0:1080"
+  # Development reaches local upstreams (LiteLLM, Ren). Production keeps the
+  # default deny list and adds the private ranges (README C25).
+  upstream_deny_cidrs: []
+tls:
+  ca_cert: "/certs/mitm-ca.pem"
+  ca_key: "/certs/mitm-ca.key"
+metrics:
+  listen: "127.0.0.1:9090"
+ren:
+  hook: "https://host.docker.internal:4443"
+  ca_cert: "/certs/ca.pem"
+  cert: "/certs/leaf.pem"
+  key: "/certs/leaf.key"
+  control_listen: "0.0.0.0:9443"

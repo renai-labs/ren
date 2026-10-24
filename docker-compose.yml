@@ -29,6 +29,24 @@ services:
       - .:/repo
       - celld:/repo/packages/cell/.celld
 
+  # The egress proxy (iron-proxy fork). Make its certificates first, then
+  # `docker compose --profile egress up -d`:
+  # bun run --cwd packages/egress certificates
+  egress:
+    profiles: ["egress"]
+    build: packages/egress
+    image: ren-egress
+    command: ["--config", "/etc/ren-egress/dev.yaml"]
+    ports:
+      - "127.0.0.1:1080:1080"
+      - "127.0.0.1:9443:9443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./packages/egress/dev.yaml:/etc/ren-egress/dev.yaml:ro
+      - ./packages/egress/.dev/certs:/certs:ro
+    stop_grace_period: 15m
+
 volumes:
   postgres:
   celld:

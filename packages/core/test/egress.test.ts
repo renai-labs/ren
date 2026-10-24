@@ -63,7 +63,7 @@ const it = testEffect(
 
 const everyOp = Injection.opNames
 
-const all: Egress.Principal = { orgs: "all" }
+const all: Egress.Principal = { kind: "ren", orgs: "all" }
 
 const setup = Effect.fnUntraced(function* () {
   const callers = yield* CredentialCallers.Service
@@ -136,12 +136,17 @@ describe("Egress.resolve", () => {
       const resolver = yield* Egress.Service
       const found = yield* setup()
       const otherOrg: Auth.OrganizationID = yield* Seed.organization()
-      expect(yield* resolver.resolve({ orgs: [otherOrg] }, request(found.proof, "api.stripe.com", []))).toEqual({
+      expect(
+        yield* resolver.resolve({ kind: "registered", orgs: [otherOrg] }, request(found.proof, "api.stripe.com", [])),
+      ).toEqual({
         allow: false,
         reason: "principal_scope",
       })
       expect(
-        yield* resolver.resolve({ orgs: [found.organizationId] }, request(found.proof, "api.stripe.com", [])),
+        yield* resolver.resolve(
+          { kind: "registered", orgs: [found.organizationId] },
+          request(found.proof, "api.stripe.com", []),
+        ),
       ).toMatchObject({
         allow: true,
       })

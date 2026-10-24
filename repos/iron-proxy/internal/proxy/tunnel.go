@@ -87,6 +87,14 @@ func (p *Proxy) serveTunnelProxyHTTP(conn net.Conn) error {
 			http.Error(w, "unsupported proxy request scheme", http.StatusBadRequest)
 			return
 		}
+		login, authenticated := p.renLogin(w, r)
+		if !authenticated {
+			return
+		}
+		if p.ren != nil {
+			p.handleHTTP(w, r, &transform.TunnelInfo{Target: r.Host, ProxyLogin: login})
+			return
+		}
 		p.handleDirectHTTP(w, r)
 	}))
 }
@@ -99,6 +107,11 @@ func (p *Proxy) handleTunnelCONNECT(w http.ResponseWriter, req *http.Request) {
 	}
 
 	p.logger.Debug("tunnel CONNECT", slog.String("target", host))
+
+	login, authenticated := p.renLogin(w, req)
+	if !authenticated {
+		return
+	}
 
 	ok, rejectResp, tunnelInfo := p.tunnelTransformCheck(req.RemoteAddr, host, req.Header)
 	if !ok {
@@ -122,6 +135,10 @@ func (p *Proxy) handleTunnelCONNECT(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer conn.Close()
+	if p.ren != nil {
+		tunnelInfo.ProxyLogin = login
+		defer p.ren.Track(login, conn)()
+	}
 
 	// Send 200 to signal tunnel established.
 	if _, err := rw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
@@ -160,23 +177,32 @@ func (p *Proxy) handleSOCKS5(conn net.Conn, br *bufio.Reader) error {
 		return fmt.Errorf("read methods: %w", err)
 	}
 
-	// We only support no-auth (0x00)
-	hasNoAuth := false
-	for _, m := range methods {
-		if m == 0x00 {
-			hasNoAuth = true
-			break
-		}
+	// Without Ren, only no-auth (0x00). With Ren, only username and password
+	// (0x02, RFC 1929), checked by Ren (fork change 1).
+	wanted := byte(0x00)
+	if p.ren != nil {
+		wanted = 0x02
 	}
-	if !hasNoAuth {
+	if !slices.Contains(methods, wanted) {
 		if err := p.socks5Reply(conn, 0xFF); err != nil {
 			return fmt.Errorf("write no-acceptable-methods: %w", err)
 		}
 		return nil
 	}
-	// Reply: use no-auth
-	if _, err := conn.Write([]byte{0x05, 0x00}); err != nil {
+	if _, err := conn.Write([]byte{0x05, wanted}); err != nil {
 		return fmt.Errorf("write auth reply: %w", err)
+	}
+	login := ""
+	if p.ren != nil {
+		authenticated, err := p.socks5Login(conn, br)
+		if err != nil {
+			return err
+		}
+		if authenticated == "" {
+			return nil
+		}
+		login = authenticated
+		defer p.ren.Track(login, conn)()
 	}
 
 	// --- Connect request ---
@@ -249,6 +275,7 @@ func (p *Proxy) handleSOCKS5(conn net.Conn, br *bufio.Reader) error {
 		return fmt.Errorf("write success reply: %w", err)
 	}
 
+	tunnelInfo.ProxyLogin = login
 	return p.serveTunnel(conn, target, tunnelInfo)
 }
 
@@ -451,6 +478,7 @@ func cloneTunnelInfo(info *transform.TunnelInfo) *transform.TunnelInfo {
 	return &transform.TunnelInfo{
 		Target:            info.Target,
 		RequestTransforms: traces,
+		ProxyLogin:        info.ProxyLogin,
 	}
 }
 
@@ -517,4 +545,46 @@ func newPeekedConn(conn net.Conn, r *bufio.Reader) *peekedConn {
 
 func (c *peekedConn) Read(p []byte) (int, error) {
 	return c.r.Read(p)
+}
+
+// socks5Login reads an RFC 1929 username and password and checks them with
+// Ren. It returns the login, or "" after a refusal reply.
+func (p *Proxy) socks5Login(conn net.Conn, br *bufio.Reader) (string, error) {
+	version, err := br.ReadByte()
+	if err != nil {
+		return "", fmt.Errorf("read auth version: %w", err)
+	}
+	if version != 0x01 {
+		return "", fmt.Errorf("unsupported socks auth version: %d", version)
+	}
+	read := func() (string, error) {
+		length, err := br.ReadByte()
+		if err != nil {
+			return "", err
+		}
+		value := make([]byte, length)
+		if _, err := io.ReadFull(br, value); err != nil {
+			return "", err
+		}
+		return string(value), nil
+	}
+	login, err := read()
+	if err != nil {
+		return "", fmt.Errorf("read username: %w", err)
+	}
+	password, err := read()
+	if err != nil {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	if _, err := p.ren.Authenticate(context.Background(), login, password, conn.RemoteAddr().String()); err != nil {
+		p.logger.Info("ren refused a socks5 login", slog.String("error", err.Error()))
+		if _, writeErr := conn.Write([]byte{0x01, 0x01}); writeErr != nil {
+			return "", fmt.Errorf("write auth failure: %w", writeErr)
+		}
+		return "", nil
+	}
+	if _, err := conn.Write([]byte{0x01, 0x00}); err != nil {
+		return "", fmt.Errorf("write auth success: %w", err)
+	}
+	return login, nil
 }

@@ -1,3 +1,10 @@
+# @ren/egress
+
+- This package is a fork of iron-proxy (Go). Ren's changes live in `internal/ren/` and in small, marked edits to `internal/proxy/`, `internal/config/` and `cmd/iron-proxy/`. Keep upstream files otherwise unchanged, so upstream changes merge.
+- `README.md` lists each fork change and where it is. Update it with each change.
+- Build and test with `bun run build` and `bun run test:go`. Never change the machine's Go.
+- The upstream guidance below applies to Go code here.
+
 # AGENTS.md
 
 Guidance for AI coding agents working in this repo. Optimized for the review

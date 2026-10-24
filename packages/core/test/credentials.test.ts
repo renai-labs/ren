@@ -4,7 +4,6 @@ import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Credential } from "@ren/schema/credential"
-import { Space as SpaceSchema } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Exit, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -294,7 +293,7 @@ describe("Credentials: move and copy (owner-access §4 rules 2 to 4)", () => {
         const elsewhere = yield* Seed.organization()
         const foreign = yield* Effect.exit(
           credentials.move(setup.ada, pasted.id, {
-            owner: { kind: "space", spaceId: SpaceSchema.ID.make(yield* Seed.space(elsewhere)) },
+            owner: { kind: "space", spaceId: yield* Seed.space(elsewhere) },
           }),
         )
         expect(failure(foreign)).toContain("Primitive.NotFound")

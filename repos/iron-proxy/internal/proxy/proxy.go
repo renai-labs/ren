@@ -6,6 +6,7 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/base64"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -17,11 +18,13 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ironsh/iron-proxy/internal/certcache"
 	"github.com/ironsh/iron-proxy/internal/config"
 	"github.com/ironsh/iron-proxy/internal/dnsguard"
+	"github.com/ironsh/iron-proxy/internal/ren"
 	"github.com/ironsh/iron-proxy/internal/mcp"
 	"github.com/ironsh/iron-proxy/internal/mcpgateway"
 	"github.com/ironsh/iron-proxy/internal/responseretry"
@@ -42,6 +45,7 @@ type Proxy struct {
 	tunnelAddr           string
 	tunnelListener       net.Listener
 	tunnelDone           chan struct{}
+	tunnelClose          sync.Once
 	certCache            *certcache.Cache
 	pipeline             *transform.PipelineHolder
 	transport            *http.Transport
@@ -51,6 +55,7 @@ type Proxy struct {
 	mcpGateway           *mcpgateway.Holder
 	responseRetryHandler *responseretry.Handler
 	logger               *slog.Logger
+	ren                  *ren.Client
 
 	// shutdownCtx is canceled by Shutdown to unblock in-flight TCP-passthrough
 	// connections that would otherwise sit on blocking Reads.
@@ -96,6 +101,9 @@ type Options struct {
 	// requests can never pass through un-transformed (leaking placeholder
 	// credentials upstream) during startup.
 	Ready func() bool
+	// Ren, when non-nil, makes every tunnel authenticate with a proxy login
+	// that Ren checks, and runs Ren's resolve on every request (Ren fork).
+	Ren *ren.Client
 }
 
 // New creates a new Proxy. In TLSModeMITM, certCache must be non-nil. In
@@ -124,6 +132,7 @@ func New(opts Options) *Proxy {
 		mcpGateway:           opts.MCPGateway,
 		responseRetryHandler: opts.ResponseRetryHandler,
 		logger:               opts.Logger,
+		ren:                  opts.Ren,
 		shutdownCtx:          shutdownCtx,
 		shutdownCancel:       shutdownCancel,
 	}
@@ -236,11 +245,7 @@ func (p *Proxy) Shutdown(ctx context.Context) error {
 		errHTTPS = p.httpsServer.Shutdown(ctx)
 	}
 
-	// Signal tunnel accept loop to stop, then close the listener.
-	close(p.tunnelDone)
-	if p.tunnelListener != nil {
-		p.tunnelListener.Close()
-	}
+	p.CloseTunnelListener()
 
 	if errHTTP != nil {
 		return errHTTP
@@ -339,6 +344,31 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 		}
 	}
 
+	// Ren: a request inside a tunnel must go to the host the tunnel was opened
+	// for, so the CONNECT target, SNI and Host name one host (fork change 3).
+	if p.ren != nil {
+		if tunnelInfo == nil || tunnelInfo.ProxyLogin == "" {
+			p.writeResponse(w, ren.Deny("unknown_workload", ""))
+			return
+		}
+		targetHost, _, err := net.SplitHostPort(tunnelInfo.Target)
+		if err != nil {
+			targetHost = tunnelInfo.Target
+		}
+		requestHost := r.Host
+		if h, _, err := net.SplitHostPort(requestHost); err == nil {
+			requestHost = h
+		}
+		if !strings.EqualFold(targetHost, requestHost) {
+			p.logger.Warn("tunnel target and Host differ",
+				slog.String("target", tunnelInfo.Target),
+				slog.String("host", r.Host),
+			)
+			p.writeResponse(w, ren.Deny("host_mismatch", ""))
+			return
+		}
+	}
+
 	// Clone tunnelInfo so a transform that mutates the annotations map can't
 	// leak state into sibling requests that share the same tunnel.
 	tctx := &transform.TransformContext{
@@ -396,6 +426,20 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 		return
 	}
 
+	// Ren: ask Ren what this request gets and carry out its ops. A denial,
+	// or a placeholder left after the ops, is never forwarded.
+	var renUpstream *url.URL
+	if p.ren != nil {
+		denied, routed := p.ren.Handle(r.Context(), r, tctx.Tunnel.ProxyLogin)
+		if denied != nil {
+			result.Action = transform.ActionReject
+			result.StatusCode = denied.StatusCode
+			p.writeResponse(w, denied)
+			return
+		}
+		renUpstream = routed
+	}
+
 	// MCP policy: evaluate the request against any matching MCP server. Runs
 	// after the transform pipeline so allowlist/secrets have already applied.
 	// Snapshot once per request so a hot-swap mid-request stays consistent.
@@ -440,6 +484,9 @@ func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnelInfo *t
 	upstreamPath := r.URL.Path
 	upstreamRawPath := r.URL.RawPath
 	upstreamURL := ""
+	if renUpstream != nil {
+		upstreamURL = renUpstream.String()
+	}
 
 	if mcpServer != nil {
 		gateway := p.mcpGateway.Load()
@@ -976,4 +1023,48 @@ func writeTrailers(w http.ResponseWriter, resp *http.Response) {
 			w.Header().Add(http.TrailerPrefix+k, v)
 		}
 	}
+}
+
+// renLogin reads the proxy login of an HTTP proxy request (CONNECT or
+// absolute form) and checks it with Ren. Without Ren it allows every request.
+// On a missing or refused login it writes 407 and returns false.
+func (p *Proxy) renLogin(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if p.ren == nil {
+		return "", true
+	}
+	login, password, ok := parseProxyBasic(r.Header.Get("Proxy-Authorization"))
+	if ok {
+		if _, err := p.ren.Authenticate(r.Context(), login, password, r.RemoteAddr); err == nil {
+			return login, true
+		} else {
+			p.logger.Info("ren refused a proxy login", slog.String("error", err.Error()))
+		}
+	}
+	w.Header().Set("Proxy-Authenticate", `Basic realm="ren"`)
+	w.Header().Set("Connection", "close")
+	http.Error(w, "proxy login required", http.StatusProxyAuthRequired)
+	return "", false
+}
+
+func parseProxyBasic(value string) (string, string, bool) {
+	encoded, ok := strings.CutPrefix(value, "Basic ")
+	if !ok {
+		return "", "", false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", "", false
+	}
+	return strings.Cut(string(decoded), ":")
+}
+
+// CloseTunnelListener stops taking new tunnels. Open tunnels keep running.
+// It is safe to call more than once.
+func (p *Proxy) CloseTunnelListener() {
+	p.tunnelClose.Do(func() {
+		close(p.tunnelDone)
+		if p.tunnelListener != nil {
+			_ = p.tunnelListener.Close() // the accept loop sees tunnelDone
+		}
+	})
 }

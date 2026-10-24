@@ -1,7 +1,6 @@
 export * as Egress from "./egress.js"
 
 import type { Auth } from "@ren/schema/auth"
-import { Injection as InjectionSchema } from "@ren/schema/injection"
 import { Workload } from "@ren/schema/workload"
 import { Context, Effect, Layer, Option, Result } from "effect"
 import { CredentialCallers } from "./credential-callers.js"
@@ -9,7 +8,9 @@ import { CredentialSource } from "./credential-source.js"
 import { Credentials } from "./credentials.js"
 import { Injection } from "./injection.js"
 
+// oxlint-disable-next-line ren/no-comments -- Ren's own egress authenticates with mTLS and may name a connection by the login it checked (`Login` proof). Another proxy is limited to its orgs (README §6.6).
 export interface Principal {
+  readonly kind: "ren" | "registered"
   readonly orgs: "all" | ReadonlyArray<Auth.OrganizationID>
 }
 
@@ -20,7 +21,7 @@ export interface Request {
   readonly method: string
   readonly path: string
   readonly placeholders: ReadonlyArray<string>
-  readonly ops: ReadonlyArray<InjectionSchema.OpName>
+  readonly ops: ReadonlyArray<Injection.OpName>
 }
 
 export type Authenticated =
@@ -28,7 +29,7 @@ export type Authenticated =
   | { readonly ok: false; readonly reason: "unknown_workload" | "generation_retired" | "principal_scope" }
 
 export interface Interface {
-  readonly resolve: (principal: Principal, request: Request) => Effect.Effect<InjectionSchema.Reply>
+  readonly resolve: (principal: Principal, request: Request) => Effect.Effect<Injection.Reply>
   readonly authenticate: (principal: Principal, proof: CredentialCallers.Proof) => Effect.Effect<Authenticated>
 }
 
@@ -36,8 +37,8 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Eg
 
 export const ttlSeconds = 30
 
-const deny = (reason: InjectionSchema.DenyReason, label?: string): InjectionSchema.Reply =>
-  label === undefined ? { allow: false, reason } : { allow: false, reason, label }
+const deny = (reason: Injection.DenyReason, label?: string): Injection.Reply =>
+  label ? { allow: false, reason, label } : { allow: false, reason }
 
 // oxlint-disable-next-line ren/no-comments -- README §6.3 and C36: who (CredentialCallers), which (Credentials.match), value (CredentialSource), where (Injection.plan). Logs hold labels, never values (C31, C50).
 export const layer = Layer.effect(
@@ -48,6 +49,7 @@ export const layer = Layer.effect(
     const sources = yield* CredentialSource.Service
 
     const caller = Effect.fnUntraced(function* (principal: Principal, proof: CredentialCallers.Proof) {
+      if (proof.kind === "Login" && principal.kind !== "ren") return Result.fail("unknown_workload" as const)
       const verified = yield* callers.verify(proof)
       if (!verified.ok) return Result.fail(verified.reason)
       if (principal.orgs !== "all" && !principal.orgs.includes(verified.caller.organizationId))
@@ -75,7 +77,7 @@ export const layer = Layer.effect(
           )
           return deny(matched.reason, matched.label)
         }
-        const planned: Array<InjectionSchema.Op> = []
+        const planned: Array<Injection.Op> = []
         for (const match of matched.matches) {
           const label = match.candidate.label
           const value = yield* sources
@@ -99,7 +101,13 @@ export const layer = Layer.effect(
             labels: matched.matches.map((match) => match.candidate.label).join(","),
           }),
         )
-        return { allow: true, workload, ttl: ttlSeconds, inject: planned }
+        return {
+          allow: true,
+          workload,
+          ttl: ttlSeconds,
+          labels: [...new Set(matched.matches.map((match) => match.candidate.label))],
+          inject: planned,
+        }
       }),
     })
   }),

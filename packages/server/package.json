@@ -22,6 +22,7 @@
     "@ren/host-api": "workspace:*",
     "@ren/core": "workspace:*",
     "@ren/db": "workspace:*",
+    "@ren/egress-api": "workspace:*",
     "@ren/opencode-transcript": "workspace:*",
     "@ren/protocol": "workspace:*",
     "@ren/schema": "workspace:*",

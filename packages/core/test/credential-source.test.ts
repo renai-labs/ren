@@ -1,7 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
-import { Models as ModelsSchema } from "@ren/schema/models"
 import { Signature } from "@ren/schema/signature"
 import {
   ConfigProvider,
@@ -42,7 +41,7 @@ const models = Layer.succeed(
         if ((yield* Ref.getAndUpdate(failuresLeft, (left) => Math.max(0, left - 1))) > 0)
           return yield* new Models.Unavailable({ cause: new Error("upstream 503") })
         const count = yield* Ref.updateAndGet(grants, (value) => value + 1)
-        return ModelsSchema.Access.make({
+        return Models.Access.make({
           endpoints: [
             {
               id: "anthropic",
@@ -134,9 +133,9 @@ describe("CredentialSource.layerMinted", () => {
       const value = yield* source.value(ren, scope)
       if (Option.isNone(value) || value.value.type !== "route") return yield* Effect.die(new Error("expected a route"))
       expect(Redacted.value(value.value.upstream)).toBe("http://ren-server:4000")
-      expect(
-        Object.entries(value.value.headers).map((header) => [header[0], Redacted.value(header[1]).slice(0, 9)]),
-      ).toEqual([["Authorization", "Bearer ey"]])
+      expect(value.value.headers.map((header) => [header.name, Redacted.value(header.value).slice(0, 9)])).toEqual([
+        ["Authorization", "Bearer ey"],
+      ])
     }),
   )
 })

@@ -104,6 +104,10 @@ type TunnelInfo struct {
 	// audit consume this to attribute tunnel-level annotations to the
 	// transform that produced them.
 	RequestTransforms []TransformTrace
+
+	// ProxyLogin is the proxy login that the tunnel authenticated with, when
+	// the proxy delegates logins to Ren. The password is not kept.
+	ProxyLogin string
 }
 
 // Annotate attaches audit metadata to the current transform's trace.

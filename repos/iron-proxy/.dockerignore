@@ -1,0 +1,6 @@
+bin
+.dev
+node_modules
+charts
+examples
+integration_test

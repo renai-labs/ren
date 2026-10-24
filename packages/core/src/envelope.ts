@@ -1,11 +1,10 @@
 export * as Envelope from "./envelope.js"
 
 import type { Envelope } from "@ren/schema/envelope"
-import { Array, Config, Context as EffectContext, Effect, Layer, Redacted, Schema } from "effect"
+import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 
 export { Context, Sealed } from "@ren/schema/envelope"
 
-type Context = Envelope.Context
 type Sealed = Envelope.Sealed
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Envelope.Unavailable", {
@@ -15,12 +14,12 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Envelope.Una
 export class Tampered extends Schema.TaggedError<Tampered>()("Envelope.Tampered", { message: Schema.String }) {}
 
 export interface Interface {
-  readonly seal: (value: Redacted.Redacted, context: Context) => Effect.Effect<Sealed, Unavailable>
-  readonly open: (sealed: Sealed, context: Context) => Effect.Effect<Redacted.Redacted, Unavailable | Tampered>
-  readonly rewrap: (sealed: Sealed, context: Context) => Effect.Effect<Sealed, Unavailable | Tampered>
+  readonly seal: (value: Redacted.Redacted, context: Envelope.Context) => Effect.Effect<Sealed, Unavailable>
+  readonly open: (sealed: Sealed, context: Envelope.Context) => Effect.Effect<Redacted.Redacted, Unavailable | Tampered>
+  readonly rewrap: (sealed: Sealed, context: Envelope.Context) => Effect.Effect<Sealed, Unavailable | Tampered>
 }
 
-export class Service extends EffectContext.Service<Service, Interface>()("@ren/core/Envelope") {}
+export class Service extends Context.Service<Service, Interface>()("@ren/core/Envelope") {}
 
 const MasterKeys = Schema.fromJsonString(
   Schema.NonEmptyArray(
@@ -38,7 +37,7 @@ const algorithm = "AES-GCM"
 const base64 = Schema.encodeSync(Schema.Uint8ArrayFromBase64)
 const fromBase64 = Schema.decodeUnknownOption(Schema.Uint8ArrayFromBase64)
 
-const additionalData = (context: Context) =>
+const additionalData = (context: Envelope.Context) =>
   new TextEncoder().encode(JSON.stringify([context.organizationId, context.kind, context.id]))
 
 const importKey = (raw: Uint8Array) =>
@@ -74,17 +73,18 @@ const decode = (field: string) =>
 export const layerLocal = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const configured = Redacted.value(yield* Config.schema(Schema.RedactedFromValue(MasterKeys), "ENVELOPE_KEYS"))
-    const masters = new Map(
-      yield* Effect.forEach(configured, (master) =>
-        Effect.map(importKey(master.key), (key) => [master.id, key] as const),
-      ),
+    const configured = yield* Config.option(Config.schema(Schema.RedactedFromValue(MasterKeys), "ENVELOPE_KEYS")).pipe(
+      Effect.map(Option.map(Redacted.value)),
     )
-    const newest = Array.headNonEmpty(configured).id
+    const keys = Option.getOrElse(configured, () => [])
+    const masters = new Map(
+      yield* Effect.forEach(keys, (master) => Effect.map(importKey(master.key), (key) => [master.id, key] as const)),
+    )
+    const newest = keys.at(0)?.id ?? "local:none"
 
-    const seal = Effect.fn("Envelope.seal")(function* (value: Redacted.Redacted, context: Context) {
+    const seal = Effect.fn("Envelope.seal")(function* (value: Redacted.Redacted, context: Envelope.Context) {
       const master = masters.get(newest)
-      if (!master) return yield* new Unavailable({ message: `Envelope key ${newest} is not loaded.` })
+      if (!master) return yield* new Unavailable({ message: "ENVELOPE_KEYS has no key." })
       const data = additionalData(context)
       const dataKey = crypto.getRandomValues(new Uint8Array(32))
       const wrapped = yield* encrypt(master, dataKey, data)
@@ -98,7 +98,7 @@ export const layerLocal = Layer.effect(
       }
     })
 
-    const open = Effect.fn("Envelope.open")(function* (sealed: Sealed, context: Context) {
+    const open = Effect.fn("Envelope.open")(function* (sealed: Sealed, context: Envelope.Context) {
       const master = masters.get(sealed.keyId)
       if (!master) return yield* new Unavailable({ message: `Envelope key ${sealed.keyId} is not loaded.` })
       const data = additionalData(context)
@@ -116,7 +116,7 @@ export const layerLocal = Layer.effect(
     return Service.of({
       seal,
       open,
-      rewrap: Effect.fn("Envelope.rewrap")(function* (sealed: Sealed, context: Context) {
+      rewrap: Effect.fn("Envelope.rewrap")(function* (sealed: Sealed, context: Envelope.Context) {
         return sealed.keyId === newest ? sealed : yield* seal(yield* open(sealed, context), context)
       }),
     })
@@ -130,12 +130,12 @@ export const layerMove = <E1, R1, E2, R2>(from: Layer.Layer<Service, E1, R1>, to
     Effect.gen(function* () {
       const source = yield* Service.pipe(Effect.provide(from))
       const target = yield* Service.pipe(Effect.provide(to))
-      const open = (sealed: Sealed, context: Context) =>
+      const open = (sealed: Sealed, context: Envelope.Context) =>
         target.open(sealed, context).pipe(Effect.catchTag("Envelope.Unavailable", () => source.open(sealed, context)))
       return Service.of({
         seal: target.seal,
         open,
-        rewrap: Effect.fn("Envelope.rewrap")(function* (sealed: Sealed, context: Context) {
+        rewrap: Effect.fn("Envelope.rewrap")(function* (sealed: Sealed, context: Envelope.Context) {
           return yield* target.seal(yield* open(sealed, context), context)
         }),
       })

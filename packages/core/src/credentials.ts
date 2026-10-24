@@ -61,7 +61,8 @@ export type Match =
 
 const parse = (text: string) => {
   const found = [...text.matchAll(Credential.placeholderPattern)].at(0)
-  return found?.[1] ? { label: found[1], field: Option.fromNullishOr(found[2]) } : undefined
+  const label = found?.at(1)
+  return label ? { label, field: Option.fromNullishOr(found?.at(2)) } : undefined
 }
 
 const allowsHost = (candidate: Candidate, request: Request) =>

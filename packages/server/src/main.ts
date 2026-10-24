@@ -1,4 +1,11 @@
 import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
+import { Access } from "@ren/core/access"
+import { CredentialCallers } from "@ren/core/credential-callers"
+import { CredentialRefresh } from "@ren/core/credential-refresh"
+import { CredentialSource } from "@ren/core/credential-source"
+import { Credentials } from "@ren/core/credentials"
+import { Egress } from "@ren/core/egress"
+import { Envelope } from "@ren/core/envelope"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
@@ -23,6 +30,7 @@ import { Config, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
+import { EgressRoutes } from "./egress.js"
 import { Routes } from "./routes.js"
 import { Signer } from "@ren/core/signer"
 import { EgressControl } from "@ren/core/egress-control"
@@ -47,18 +55,28 @@ const host = Layer.unwrap(
   }),
 )
 
-HttpRouter.serve(Routes.layer).pipe(
+const credentials = Egress.layer.pipe(
+  Layer.provideMerge(CredentialSource.layer),
+  Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
+  Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
+  Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer)),
+)
+
+Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([
-    Layer.mergeAll(Brains.layer.pipe(Layer.provide(host)), Retention.layer).pipe(
-      Layer.provide(DurableRunner.layerEffect),
-    ),
+    Layer.mergeAll(
+      Brains.layer.pipe(Layer.provide(host)),
+      Retention.layer,
+      CredentialRefresh.layer.pipe(Layer.provide(CredentialRefresh.layerNoRefreshers)),
+    ).pipe(Layer.provide(DurableRunner.layerEffect)),
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   ]),
-  Layer.provide([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
-  Layer.provide([Models.layerConfig, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
-  Layer.provide(EgressControl.layerConfig),
+  Layer.provideMerge(credentials),
+  Layer.provide([BrainClient.layer, Settings.layer]),
+  Layer.provide([Models.layerConfig, Environments.layer]),
+  Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),
