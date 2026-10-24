@@ -15,6 +15,7 @@ import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
 import { Failure } from "./failure.js"
 import { ComposerModelPicker } from "./composer-model-picker.js"
+import { SpaceProfilesPill } from "../../components/profiles-pill.js"
 import { SessionDrafts } from "./session-drafts.js"
 
 export function NewChat(props: { name: string; userId: string }) {
@@ -117,15 +118,18 @@ export function NewChat(props: { name: string; userId: string }) {
               )
             }}
             footerLeading={
-              <Select.Root
-                label="Space"
-                appearance="plain"
-                size="small"
-                options={options}
-                value={spaceId ?? null}
-                onValueChange={setChosen}
-                placeholder="Choose a space"
-              />
+              <>
+                <Select.Root
+                  label="Space"
+                  appearance="plain"
+                  size="small"
+                  options={options}
+                  value={spaceId ?? null}
+                  onValueChange={setChosen}
+                  placeholder="Choose a space"
+                />
+                {spaceId ? <SpaceProfilesPill spaceId={spaceId} /> : null}
+              </>
             }
             footerTrailing={
               <>

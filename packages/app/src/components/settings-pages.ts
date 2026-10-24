@@ -4,13 +4,14 @@ import type { Glyph } from "@ren/ui/icon"
 
 export type Page = {
   label: string
-  to: "/settings/preferences" | "/settings/credentials" | "/settings/general" | "/settings/members"
+  to: "/settings/preferences" | "/settings/credentials" | "/settings/apps" | "/settings/general" | "/settings/members"
   glyph: Glyph
 }
 
 export const personal: ReadonlyArray<Page> = [
   { label: "Preferences", to: "/settings/preferences", glyph: "Sliders" },
   { label: "Keys", to: "/settings/credentials", glyph: "KeyRound" },
+  { label: "Apps", to: "/settings/apps", glyph: "Extension" },
 ]
 
 export const organization: ReadonlyArray<Page> = [
