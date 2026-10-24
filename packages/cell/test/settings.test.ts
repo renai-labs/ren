@@ -10,7 +10,6 @@ import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
 import { App } from "@ren/schema/app"
 import { AppCatalog } from "@ren/schema/app-catalog"
-import { AppRelease } from "@ren/schema/app-release"
 import { Context, Effect, Layer, Option, Predicate, Queue, Redacted, Schedule, Schema, Stream, Struct } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
@@ -191,7 +190,7 @@ describe("settings in the cell", () => {
               apps: [],
               mcps: [],
               skills: [],
-              credentials: [],
+              unavailable: [],
             },
           }),
         },
@@ -232,14 +231,15 @@ describe("settings in the cell", () => {
             catalog: {
               apps: [],
               skills: [],
-              credentials: [],
+              unavailable: [],
               mcps: [
                 {
                   appId: App.ID.create(),
-                  releaseId: AppRelease.ID.create(),
                   appSlug: "tools",
-                  version: "1.0.0",
                   slug,
+                  server: slug,
+                  profile: null,
+                  label: null,
                   declaration: {
                     name: "Tools",
                     description: "Tools",
@@ -259,7 +259,7 @@ describe("settings in the cell", () => {
       yield* opened.pull(TestSettings.layers(), { apps: catalog("second", "browser") })
       const observed = yield* location
       expect(observed?.appFingerprint).toEqual(Option.some("first"))
-      expect(observed?.appConflicts.join("\n")).toContain("tools@1.0.0")
+      expect(observed?.appConflicts.join("\n")).toContain("tools (app_")
       expect(observed?.appConflicts.join("\n")).toContain("OpenCode")
       yield* opened.pull(TestSettings.layers(), { apps: catalog("third", "search") })
       expect(yield* location).toMatchObject({ appFingerprint: Option.some("third"), appConflicts: [] })
@@ -447,19 +447,16 @@ describe("settings in the cell", () => {
       })
       const opened = yield* open(layers)
       const body = `secret-${crypto.randomUUID()}`
-      const releaseId = AppRelease.ID.create()
       yield* opened.pull(layers, {
         apps: Option.some({
           fingerprint: "skills",
           catalog: {
             apps: [],
             mcps: [],
-            credentials: [],
+            unavailable: [],
             skills: ["secret", "open"].map((slug) => ({
               appId: App.ID.create(),
-              releaseId,
               appSlug: "docs",
-              version: "1.0.0",
               slug,
               declaration: {
                 type: "content" as const,

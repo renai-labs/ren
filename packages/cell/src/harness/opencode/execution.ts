@@ -19,16 +19,20 @@ export const make = (): {
     const state: {
       active: number
       pending: Effect.Effect<void> | undefined
-    } = { active: 0, pending: undefined }
+      idle: Array<Effect.Effect<void>>
+    } = { active: 0, pending: undefined, idle: [] }
     const flush = Effect.suspend(() => {
       if (state.active > 0) return Effect.void
-      const pending = state.pending
+      const work = [...(state.pending ? [state.pending] : []), ...state.idle.splice(0)]
       state.pending = undefined
-      return pending
-        ? pending.pipe(
+      return Effect.forEach(
+        work,
+        (each) =>
+          each.pipe(
             Effect.catchCause((cause) => Effect.logError(`The pending update for ${location.directory} failed`, cause)),
-          )
-        : Effect.void
+          ),
+        { discard: true },
+      )
     })
     const boundary: Boundary = {
       run: (work) =>
@@ -60,6 +64,12 @@ export const make = (): {
             state.pending = work
           }).pipe(Effect.andThen(flush)),
         ),
+      idle: (work) =>
+        gate.withPermit(
+          Effect.sync(() => {
+            state.idle.push(work)
+          }).pipe(Effect.andThen(flush)),
+        ),
     }
     locations.set(key, boundary)
     return boundary
@@ -87,7 +97,9 @@ export const make = (): {
   }
 }
 
+// oxlint-disable-next-line ren/no-comments -- `offer` keeps only the latest update; `idle` runs each work once, after the update, when no turn is running.
 export interface Boundary {
   readonly run: <A, E, R>(work: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
   readonly offer: (work: Effect.Effect<void>) => Effect.Effect<void>
+  readonly idle: (work: Effect.Effect<void>) => Effect.Effect<void>
 }

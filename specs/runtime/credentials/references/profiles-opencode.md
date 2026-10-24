@@ -7,10 +7,9 @@ A note for the work after the app-profiles PR. Spec: [`../profiles.md`](../profi
 | Part                                                                                                                                                                                                               | Where                              |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
 | Profile servers in OpenCode: name `server` (`<mcp>__<profile slug>`, or `<mcp>` for auth `none`), placeholder header from `label`, provider path segment, `env` for local servers, profile name in the description | `profiles.md` §6.4 rules 1–6 (P46) |
-| Retries of failed servers at turn start and after 10 s, 1 min, 5 min                                                                                                                                               | §6.4 rule 7 (P47)                  |
+| Retries of failed servers at turn start and after 10 s, 1 min, 5 min: two reloads, without and then with the down servers, because a reload alone skips a server whose config did not change | §6.4 rule 7 (P47)                  |
 | The env note per app                                                                                                                                                                                               | §6.4 rule 8 (P26, P47)             |
 | `unavailable` reasons (provider not set up, no egress)                                                                                                                                                             | §6.4 rule 9 (P47)                  |
-| Duplicate tool ids: the later server is removed and both are logged                                                                                                                                                | §6.4 rule 10 (P47)                 |
 | No-auth remote servers, local servers on the session's environment, the wait before a turn                                                                                                                         | #51 (`def547bc4`, `335d06f17`)     |
 
 ## 2. Next: app skills in OpenCode
