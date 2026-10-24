@@ -8,7 +8,6 @@ import { SqlError } from "effect/sql/SqlError"
 import { agentRelations } from "./agent.sql.js"
 import { appRelations } from "./app.sql.js"
 import { appListingRelations } from "./app-listing.sql.js"
-import { spaceAppRelations } from "./space-app.sql.js"
 import { authRelations } from "./auth.sql.js"
 import { environmentTemplateRelations } from "./environment.sql.js"
 import { sessionRelations } from "./session.sql.js"
@@ -27,7 +26,6 @@ const make = makeWithDefaults({
     ...agentRelations,
     ...appRelations,
     ...appListingRelations,
-    ...spaceAppRelations,
     ...settingsRelations,
     ...taskRelations,
   },
