@@ -54,7 +54,7 @@ import { SyncHandler } from "./handlers/sync.js"
 import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 import { bodyLimit } from "./middleware/body-limit.js"
-import { Mcp } from "./mcp.js"
+import { RenMcp } from "./ren-mcp.js"
 
 // oxlint-disable-next-line react-hooks/rules-of-hooks -- Effect's HttpRouter.use, not a React hook
 const AuthRoute = HttpRouter.use((router) =>
@@ -125,7 +125,7 @@ export const layer = Layer.mergeAll(
       Layer.provide(Brains.hostAuthentication),
     ),
     AuthRoute,
-    Mcp.layer,
+    RenMcp.layer,
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
