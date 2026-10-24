@@ -6,6 +6,7 @@ import { useNavigate } from "@tanstack/react-router"
 export interface Destination {
   readonly invitationId?: string | undefined
   readonly redirect?: string | undefined
+  readonly authorization?: boolean | undefined
 }
 
 export function href(destination: Destination & { readonly join?: boolean }) {
@@ -20,6 +21,7 @@ export function useCompleteAuth(destination: Destination) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   return async () => {
+    if (destination.authorization === true) return
     queryClient.clear()
     await navigate({ href: href({ ...destination, join: true }) })
   }

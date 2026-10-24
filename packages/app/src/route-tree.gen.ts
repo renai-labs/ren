@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from "./routes/__root"
 import { Route as AuthedRouteImport } from "./routes/_authed"
+import { Route as ConsentRouteImport } from "./routes/consent"
 import { Route as ForgotPasswordRouteImport } from "./routes/forgot-password"
 import { Route as LoginRouteImport } from "./routes/login"
 import { Route as ResetPasswordRouteImport } from "./routes/reset-password"
@@ -37,6 +38,11 @@ import { Route as AuthedShellSettingsAdminMembersIndexRouteImport } from "./rout
 
 const AuthedRoute = AuthedRouteImport.update({
   id: "/_authed",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConsentRoute = ConsentRouteImport.update({
+  id: "/consent",
+  path: "/consent",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -178,6 +184,7 @@ const AuthedShellSettingsAdminMembersIndexRoute =
 
 export interface FileRoutesByFullPath {
   "/": typeof AuthedShellIndexRoute
+  "/consent": typeof ConsentRoute
   "/forgot-password": typeof ForgotPasswordRoute
   "/login": typeof LoginRoute
   "/reset-password": typeof ResetPasswordRoute
@@ -203,6 +210,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   "/": typeof AuthedShellIndexRoute
+  "/consent": typeof ConsentRoute
   "/forgot-password": typeof ForgotPasswordRoute
   "/login": typeof LoginRoute
   "/reset-password": typeof ResetPasswordRoute
@@ -227,6 +235,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   "/_authed": typeof AuthedRouteWithChildren
+  "/consent": typeof ConsentRoute
   "/forgot-password": typeof ForgotPasswordRoute
   "/login": typeof LoginRoute
   "/reset-password": typeof ResetPasswordRoute
@@ -256,6 +265,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | "/"
+    | "/consent"
     | "/forgot-password"
     | "/login"
     | "/reset-password"
@@ -281,6 +291,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
+    | "/consent"
     | "/forgot-password"
     | "/login"
     | "/reset-password"
@@ -304,6 +315,7 @@ export interface FileRouteTypes {
   id:
     | "__root__"
     | "/_authed"
+    | "/consent"
     | "/forgot-password"
     | "/login"
     | "/reset-password"
@@ -332,6 +344,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
+  ConsentRoute: typeof ConsentRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -347,6 +360,13 @@ declare module "@tanstack/react-router" {
       path: ""
       fullPath: "/"
       preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/consent": {
+      id: "/consent"
+      path: "/consent"
+      fullPath: "/consent"
+      preLoaderRoute: typeof ConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/forgot-password": {
@@ -605,6 +625,7 @@ const AuthedRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
+  ConsentRoute: ConsentRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,

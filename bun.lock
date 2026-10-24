@@ -23,6 +23,7 @@
       "name": "@ren/app",
       "version": "0.0.0",
       "dependencies": {
+        "@better-auth/oauth-provider": "catalog:",
         "@effect/atom-react": "catalog:",
         "@ren/chat": "workspace:*",
         "@ren/client": "workspace:*",
