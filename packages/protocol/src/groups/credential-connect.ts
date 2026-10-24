@@ -22,6 +22,20 @@ export const CredentialConnectGroup = HttpApiGroup.make("credential-connect")
       }),
     ),
   )
+  .add(
+    HttpApiEndpoint.get("credential.requirements", "/credential-requirements", {
+      query: Credential.RequirementsInput,
+      success: Credential.Requirements,
+      error: NotFoundError,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "credential.requirements",
+        summary: "List what an app needs connected",
+        description:
+          "Return the items of an app’s connect dialog in a space: one per MCP that needs a credential and one per env key, then the items of the apps it depends on, with the status of each.",
+      }),
+    ),
+  )
   .middleware(ActiveOrganization)
   .middleware(Authentication)
   .annotate(Exposure, "sdk")

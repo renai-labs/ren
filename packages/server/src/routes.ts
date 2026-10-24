@@ -45,6 +45,7 @@ import { OAuthAppHandler } from "./handlers/api/oauth-app.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { OAuthApps } from "@ren/core/oauth-apps"
+import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { HealthHandler } from "./handlers/api/health.js"
 import { InvitationHandler } from "./handlers/api/invitation.js"
 import { LabelHandler } from "./handlers/api/label.js"
@@ -141,6 +142,7 @@ export const layer = Layer.mergeAll(
         AgentMembership.layer,
         Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
         OAuthApps.layer,
+        CredentialRequirements.layer,
       ]),
     ),
     HttpApiBuilder.layer(RenHostApi).pipe(

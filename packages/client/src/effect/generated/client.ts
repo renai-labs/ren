@@ -1053,8 +1053,24 @@ const EndpointCredentialConnectCredentialConnect =
       payload: { owner: input["owner"], target: input["target"], reconnect: input["reconnect"] },
     }).pipe(Effect.mapError(mapClientError))
 
+type CredentialConnectCredentialRequirementsRequest = Parameters<
+  RawClient["credential-connect"]["credential.requirements"]
+>[0]
+type CredentialConnectCredentialRequirementsInput = {
+  readonly spaceId: CredentialConnectCredentialRequirementsRequest["query"]["spaceId"]
+  readonly appId: CredentialConnectCredentialRequirementsRequest["query"]["appId"]
+}
+const EndpointCredentialConnectCredentialRequirements =
+  (raw: RawClient["credential-connect"]) => (input: CredentialConnectCredentialRequirementsInput) =>
+    raw["credential.requirements"]({ query: { spaceId: input["spaceId"], appId: input["appId"] } }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
 const adaptGroupCredentialConnect = (raw: RawClient["credential-connect"]) => ({
-  credential: { connect: EndpointCredentialConnectCredentialConnect(raw) },
+  credential: {
+    connect: EndpointCredentialConnectCredentialConnect(raw),
+    requirements: EndpointCredentialConnectCredentialRequirements(raw),
+  },
 })
 
 type OauthSessionGetRequest = Parameters<RawClient["oauth-session"]["oauth-session.get"]>[0]

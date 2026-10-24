@@ -182,6 +182,10 @@ export type CredentialProvider = "composio"
 
 export type WriteResultRedirect = { redirectUrl: string; expiresAt: string }
 
+export type CredentialRequirementKind = "oauth" | "provider" | "fields" | "env"
+
+export type CredentialOwnerKind = "org" | "space" | "person"
+
 export type OAuthSessionID = string
 
 export type OAuthSessionStatus = "pending" | "complete" | "failed" | "expired"
@@ -502,6 +506,19 @@ export type CredentialInject =
   | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
   | { op: "route" }
 
+export type CredentialRequirementItem = {
+  key: string
+  group: AppID
+  app: AppID
+  mcp: PrimitiveSlug | null
+  label: CredentialEnvName
+  name: string
+  kind: CredentialRequirementKind
+  status: "ok" | "missing" | "reconnect"
+  credentialId: CredentialID | null
+  destinations: Array<CredentialOwnerKind>
+}
+
 export type OAuthSessionInfo = {
   id: OAuthSessionID
   status: OAuthSessionStatus
@@ -703,6 +720,8 @@ export type CredentialInfo = {
   createdAt: string
   updatedAt: string
 }
+
+export type CredentialRequirements = { items: Array<CredentialRequirementItem> }
 
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
@@ -5587,6 +5606,13 @@ export type CredentialConnectCredentialConnectInput = {
 }
 
 export type CredentialConnectCredentialConnectOutput = WriteResultRedirect | CredentialInfo
+
+export type CredentialConnectCredentialRequirementsInput = {
+  readonly spaceId: { readonly spaceId: string; readonly appId: string }["spaceId"]
+  readonly appId: { readonly spaceId: string; readonly appId: string }["appId"]
+}
+
+export type CredentialConnectCredentialRequirementsOutput = CredentialRequirements
 
 export type OauthSessionGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
 

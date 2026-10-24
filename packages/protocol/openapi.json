@@ -6949,6 +6949,82 @@
         }
       }
     },
+    "/credential-requirements": {
+      "get": {
+        "tags": ["credential-connect"],
+        "operationId": "credential.requirements",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Space.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "appId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/App.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credential.Requirements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Credential.Requirements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the items of an app’s connect dialog in a space: one per MCP that needs a credential and one per env key, then the items of the apps it depends on, with the status of each.",
+        "summary": "List what an app needs connected"
+      }
+    },
     "/oauth-sessions/{idOrSlug}": {
       "get": {
         "tags": ["oauth-session"],
@@ -7755,6 +7831,11 @@
       "App.ID": {
         "type": "string",
         "pattern": "^app_"
+      },
+      "App.ID_1": {
+        "type": "string",
+        "pattern": "^app_",
+        "description": "The app that the dialog shows this item under."
       },
       "App.Info": {
         "type": "object",
@@ -8987,6 +9068,79 @@
             "$ref": "#/components/schemas/Credential.Select"
           }
         ]
+      },
+      "Credential.RequirementItem": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "group": {
+            "$ref": "#/components/schemas/App.ID_1"
+          },
+          "app": {
+            "$ref": "#/components/schemas/App.ID"
+          },
+          "mcp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.Slug"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "$ref": "#/components/schemas/Credential.EnvName"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Credential.RequirementKind"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ok", "missing", "reconnect"]
+          },
+          "credentialId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Credential.ID"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.OwnerKind"
+            }
+          }
+        },
+        "required": ["key", "group", "app", "mcp", "label", "name", "kind", "status", "credentialId", "destinations"],
+        "additionalProperties": false
+      },
+      "Credential.RequirementKind": {
+        "type": "string",
+        "enum": ["oauth", "provider", "fields", "env"],
+        "description": "How the item connects: a sign-in, a managed provider, an MCP’s pasted fields, or a pasted env key."
+      },
+      "Credential.Requirements": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential.RequirementItem"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
       },
       "Credential.RotateInput": {
         "type": "object",
