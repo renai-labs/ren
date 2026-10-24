@@ -1,6 +1,8 @@
 export * as BrainTest from "./brain.js"
 
 import { OpenCode } from "@opencode/client/effect"
+import { SdkPlugins } from "@opencode/core/plugin/sdk"
+import type { Plugin } from "@opencode/plugin/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/host-api/brain-api"
 import { ChatApi } from "@ren/protocol/chat"
@@ -36,6 +38,7 @@ export const make = Effect.fnUntraced(function* (
     readonly database?: string
     readonly id?: Session.ID
     readonly vars?: Readonly<Record<string, string>>
+    readonly plugin?: Plugin.Plugin
   } = {},
 ) {
   const vars = Schema.decodeUnknownSync(Env.Vars)({ ...Shared.vars(Shared.stub().url), ...options.vars })
@@ -96,7 +99,13 @@ export const make = Effect.fnUntraced(function* (
           fs: { filewatcher: false, fff: false },
         },
         replacements,
-      ).pipe(Layer.provide(HttpServer.layerServices)),
+      ).pipe(
+        Layer.provide(HttpServer.layerServices),
+        Layer.tap((services) => {
+          const plugins = Context.get(services, SdkPlugins.Service)
+          return options.plugin ? plugins.register(options.plugin) : Effect.void
+        }),
+      ),
     [],
     Context.get(services, ModelRefresh.Service),
     Option.none(),
