@@ -1,6 +1,8 @@
 # @ren/egress
 
-- This package is a fork of iron-proxy (Go). Ren's changes live in `internal/ren/` and in small, marked edits to `internal/proxy/`, `internal/config/` and `cmd/iron-proxy/`. Keep upstream files otherwise unchanged, so upstream changes merge.
+- This package is a squashed git subtree of [iron-proxy](https://github.com/ironsh/iron-proxy) (Go), with Ren's changes on top. Ren's changes live in `internal/ren/` and in small, marked edits to `internal/proxy/`, `internal/config/` and `cmd/iron-proxy/`. Keep upstream files otherwise unchanged, so upstream changes merge.
+- Take upstream changes with `git subtree pull --prefix=packages/egress https://github.com/ironsh/iron-proxy <tag-or-commit> --squash` from the repo root. Resolve conflicts in Ren's marked edits, run `bun run test:go`, and update the upstream commit in `README.md`.
+- Never edit, move or reword the subtree's own commits (`Squashed 'packages/egress/' content from …` and its merge): `git subtree pull` finds the last upstream version through them.
 - `README.md` lists each fork change and where it is. Update it with each change.
 - Build and test with `bun run build` and `bun run test:go`. Never change the machine's Go.
 - The upstream guidance below applies to Go code here.

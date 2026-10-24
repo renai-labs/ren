@@ -28,6 +28,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 - The default branch is `main`.
 - Commits and PR titles use `type(scope): summary` with one of `feat`, `fix`, `docs`, `chore`, `refactor`, `test`. The scope is optional.
 - Branch names are at most three hyphenated words, with no prefix such as `feat/`.
+- A branch that adds or pulls a git subtree (`repos/effect`, `packages/egress`) lands on `main` with its history: a fast-forward or a merge commit. Rebase-merge and squash-merge drop the subtree commits; GitHub's rebase also refuses, because a subtree squash commit has no parent and its files sit at the root.
 
 ## Layering
 
@@ -41,7 +42,7 @@ This file has only the rules for all of Ren. Load the other instructions when yo
 - `util` is browser-safe and imports nothing from Ren: generic helpers with a second user go there, Ren concepts go in `schema`.
 - `client`, `chat`, `sdk`, `cli`, `app` and `ui` never import `core`, `db`, `server`, `host-api` or `environment-api`.
 - `httpapi-codegen` stays independent of every Ren package.
-- `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them.
+- `repos/` holds read-only copies of external repositories. Prefer their patterns over memory or web search. Do not edit or import them. `packages/egress` is different: a subtree of iron-proxy that Ren builds on and edits (`packages/egress/AGENTS.md`).
 
 ## Style
 
