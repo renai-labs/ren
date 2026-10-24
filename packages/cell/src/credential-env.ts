@@ -17,7 +17,7 @@ interface State {
   readonly hash: Option.Option<string>
 }
 
-// oxlint-disable-next-line ren/no-comments -- C47: a placeholder holds no secret and never changes for a label, so an addition applies at once, also in a running turn (after ren_connect, a script in that turn sees it). A removal waits for the turn end.
+// oxlint-disable-next-line ren/no-comments -- C47: a placeholder holds no secret and never changes for a label, so an addition applies at once, also in a running turn (after the person connects a key, a script in that turn sees it). A removal waits for the turn end.
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {

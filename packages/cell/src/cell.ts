@@ -51,6 +51,7 @@ export class Activity extends Context.Service<
     readonly waitingSince: Ref.Ref<Option.Option<DateTime.Utc>>
     readonly configuring: Semaphore.Semaphore
     readonly closedIdle: Ref.Ref<boolean>
+    readonly pulledAt: Ref.Ref<Option.Option<DateTime.Utc>>
   }
 >()("@ren/cell/Cell/Activity") {}
 
@@ -89,6 +90,7 @@ export const state = Effect.gen(function* () {
     isOpen: opened.isOpen,
     holders: opened.holders,
     waitingSince: Option.getOrNull(yield* Ref.get(activity.waitingSince)),
+    pulledAt: Option.getOrNull(yield* Ref.get(activity.pulledAt)),
     nextReconcileAt: alarm ? DateTime.makeUnsafe(alarm) : null,
   } satisfies BrainApiState
 })
@@ -199,6 +201,7 @@ export const activityLayer = Layer.effect(
     waitingSince: Ref.make(Option.none<DateTime.Utc>()),
     configuring: Semaphore.make(1),
     closedIdle: Ref.make(false),
+    pulledAt: Ref.make(Option.none<DateTime.Utc>()),
   }),
 )
 

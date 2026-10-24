@@ -78,6 +78,7 @@ export const make = Effect.fnUntraced(function* (
           waitingSince: Ref.make(Option.none<DateTime.Utc>()),
           configuring: Semaphore.make(1),
           closedIdle: Ref.make(false),
+          pulledAt: Ref.make(Option.none<DateTime.Utc>()),
         }),
       ),
       Layer.effect(Sync.Service, Sync.make(Option.none())),

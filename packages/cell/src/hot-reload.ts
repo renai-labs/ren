@@ -3,7 +3,7 @@ export * as HotReload from "./hot-reload.js"
 import { BrainSettings } from "@ren/brain/settings"
 import type { PullSession } from "@ren/host-api/ren-host-api"
 import { Session } from "@ren/schema/session"
-import { Clock, Context, Duration, Effect, Layer, Option, Schema, Semaphore } from "effect"
+import { Clock, Context, DateTime, Duration, Effect, Layer, Option, Ref, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { BrainKeys } from "./brain-keys.js"
 import { BrainStorage } from "./brain-storage.js"
@@ -32,6 +32,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const info = yield* Cell.Info
+    const activity = yield* Cell.Activity
     const hostToken = yield* HostToken.Service
     const store = yield* ModelStore.Service
     const settings = yield* ChatSettings.Service
@@ -84,6 +85,7 @@ export const layer = Layer.effect(
           },
         })
         .pipe(HostToken.withToken(token.value), Effect.timeout(HostToken.renAnswersWithin))
+      yield* Ref.set(activity.pulledAt, Option.some(yield* DateTime.now))
       yield* keys.save(reply.publicKeys)
       if (reply.env?.variables) yield* credentialEnv.apply(reply.env.hash, reply.env.variables)
       const access = reply.models.access

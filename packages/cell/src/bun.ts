@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite"
 import { Global } from "@opencode/util/global"
 import type { OpenCodeSync } from "@ren/brain/opencode-sync"
-import { Deferred, Duration, Effect, Exit, Layer, ManagedRuntime, Option, Schema, Scope, Stream } from "effect"
+import { Deferred, Duration, Effect, Exit, Layer, ManagedRuntime, Option, Ref, Schema, Scope, Stream } from "effect"
 import { mkdirSync } from "node:fs"
 import { rm } from "node:fs/promises"
 import { join } from "node:path"
@@ -140,7 +140,17 @@ const boot = Effect.gen(function* () {
       ),
     )
     .pipe(Scope.provide(scope))
-  yield* scheduler.job("pull", hotReload.pull.pipe(Effect.as(interval))).pipe(Scope.provide(scope))
+  const activity = yield* Cell.Activity
+  // oxlint-disable-next-line ren/no-comments -- Until the first pull reaches Ren, the brain tries every second: Ren makes it ready only after one (M1).
+  yield* scheduler
+    .job(
+      "pull",
+      hotReload.pull.pipe(
+        Effect.andThen(Ref.get(activity.pulledAt)),
+        Effect.map((pulled) => (Option.isSome(pulled) ? interval : Duration.seconds(1))),
+      ),
+    )
+    .pipe(Scope.provide(scope))
   yield* scheduler
     .job(
       "reconcile",

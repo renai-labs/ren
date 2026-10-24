@@ -44,6 +44,7 @@ const setup = Effect.gen(function* () {
     waitingSince: yield* Ref.make(Option.none<DateTime.Utc>()),
     configuring: yield* Semaphore.make(1),
     closedIdle: yield* Ref.make(false),
+    pulledAt: yield* Ref.make(Option.none<DateTime.Utc>()),
   })
   const sync = yield* Sync.make(
     Option.some({

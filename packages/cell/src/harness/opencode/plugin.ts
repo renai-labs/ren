@@ -30,7 +30,6 @@ import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { basename } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
-import { RenConnect } from "./ren-connect.js"
 
 const environmentTools = ["read", "write", "edit", "patch", "glob", "grep", "shell"]
 
@@ -188,12 +187,6 @@ export const make = (
           yield* tool.transform((editor) => {
             for (const id of environmentTools) editor.remove(id)
           })
-        yield* tool.transform((editor) => editor.add(RenConnect.tool))
-        yield* context.session.hook("context", (event) =>
-          Effect.sync(() => {
-            event.system.push({ type: "text", text: RenConnect.instruction })
-          }),
-        )
         if (Option.isSome(connections))
           yield* tool.hook("execute.after", (event) =>
             Effect.sync(() => {
