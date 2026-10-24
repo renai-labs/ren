@@ -144,6 +144,18 @@ export type TaskEventLinksChanged = { _tag: "link"; added: Array<string>; remove
 
 export type TaskEventArchived = { _tag: "archived" }
 
+export type CredentialID = string
+
+export type CredentialEnvName = string
+
+export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
+
+export type CredentialLocation = "header" | "query" | "path" | "body"
+
+export type CredentialDelivery = "egress" | "delivered"
+
+export type CredentialStatus = "ok" | "reconnect"
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -154,6 +166,8 @@ export type AuthUser = {
   image?: string | null | undefined
 }
 
+export type CredentialAccount = { userId: AuthUserID; name: string }
+
 export type AuthOrganization = { id: AuthOrganizationID; name: string; slug: string; logo?: string | null | undefined }
 
 export type InvitationPreview = {
@@ -161,6 +175,9 @@ export type InvitationPreview = {
   organization: { id: AuthOrganizationID; name: string; logo: string | null } | null
   inviter: { name: string | null; email: string } | null
 }
+
+export type CredentialOwner =
+  { kind: "org" } | { kind: "space"; spaceId: SpaceID } | { kind: "person"; userId: AuthUserID }
 
 export type SpaceInfo = {
   id: SpaceID
@@ -418,6 +435,11 @@ export type TaskEventReviewed = { _tag: "reviewed"; decision: TaskDecision; comm
 
 export type TaskEventFieldChanged = { _tag: "field"; field: TaskEventField; from: string | null; to: string | null }
 
+export type CredentialInject =
+  | { op: "replace"; in: [CredentialLocation, ...Array<CredentialLocation>] }
+  | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
+  | { op: "route" }
+
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
 export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
@@ -532,6 +554,27 @@ export type TaskEventData =
   | TaskEventParentChanged
   | TaskEventArchived
 
+export type CredentialInfo = {
+  id: CredentialID
+  organizationId: AuthOrganizationID
+  owner: CredentialOwner
+  label: CredentialEnvName
+  name: string | null
+  type: CredentialType
+  keyPreview: string | null
+  fieldNames: Array<string>
+  hosts: Array<string>
+  inject: CredentialInject
+  delivery: CredentialDelivery
+  account: CredentialAccount | null
+  scopes: Array<string>
+  status: CredentialStatus
+  expiresAt: string | null
+  createdBy: AuthUserID | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
 export type SettingsInfo = {
@@ -553,6 +596,8 @@ export type TaskEventInfo = {
   actor: TaskActor
   createdAt: string
 }
+
+export type CredentialPage = { items: Array<CredentialInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceSettingsInfo = { id: SpaceID; settings: SettingsInfo; canUpdate: boolean; updatedAt: string | null }
 
@@ -1850,3 +1895,343 @@ export type LabelUpdateOutput = LabelInfo
 export type LabelArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type LabelArchiveOutput = LabelInfo
+
+export type CredentialListInput = {
+  readonly owner?: {
+    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly spaceId?: string | undefined
+    readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["owner"]
+  readonly spaceId?: {
+    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly spaceId?: string | undefined
+    readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly type?: {
+    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly spaceId?: string | undefined
+    readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["type"]
+  readonly search?: {
+    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly spaceId?: string | undefined
+    readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["search"]
+  readonly page: {
+    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly spaceId?: string | undefined
+    readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly owner?: ("org" | "space" | "person") | undefined
+    readonly spaceId?: string | undefined
+    readonly type?: ("key" | "basic" | "oauth" | "fields" | "route" | "client_credentials") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type CredentialListOutput = CredentialPage
+
+export type CredentialGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type CredentialGetOutput = CredentialInfo
+
+export type CredentialCreateInput = {
+  readonly owner: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly label: string
+    readonly name?: string | null
+    readonly hosts: ReadonlyArray<string>
+    readonly inject?:
+      | (
+          | {
+              readonly op: "replace"
+              readonly in: readonly [
+                "header" | "query" | "path" | "body",
+                ...Array<"header" | "query" | "path" | "body">,
+              ]
+            }
+          | {
+              readonly op: "setHeader"
+              readonly name: string
+              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
+            }
+          | { readonly op: "route" }
+        )
+      | null
+    readonly delivery?: ("egress" | "delivered") | null
+    readonly value:
+      | { readonly type: "key"; readonly value: string }
+      | { readonly type: "basic"; readonly username: string; readonly password: string }
+      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+  }["owner"]
+  readonly label: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly label: string
+    readonly name?: string | null
+    readonly hosts: ReadonlyArray<string>
+    readonly inject?:
+      | (
+          | {
+              readonly op: "replace"
+              readonly in: readonly [
+                "header" | "query" | "path" | "body",
+                ...Array<"header" | "query" | "path" | "body">,
+              ]
+            }
+          | {
+              readonly op: "setHeader"
+              readonly name: string
+              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
+            }
+          | { readonly op: "route" }
+        )
+      | null
+    readonly delivery?: ("egress" | "delivered") | null
+    readonly value:
+      | { readonly type: "key"; readonly value: string }
+      | { readonly type: "basic"; readonly username: string; readonly password: string }
+      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+  }["label"]
+  readonly name?: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly label: string
+    readonly name?: string | null
+    readonly hosts: ReadonlyArray<string>
+    readonly inject?:
+      | (
+          | {
+              readonly op: "replace"
+              readonly in: readonly [
+                "header" | "query" | "path" | "body",
+                ...Array<"header" | "query" | "path" | "body">,
+              ]
+            }
+          | {
+              readonly op: "setHeader"
+              readonly name: string
+              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
+            }
+          | { readonly op: "route" }
+        )
+      | null
+    readonly delivery?: ("egress" | "delivered") | null
+    readonly value:
+      | { readonly type: "key"; readonly value: string }
+      | { readonly type: "basic"; readonly username: string; readonly password: string }
+      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+  }["name"]
+  readonly hosts: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly label: string
+    readonly name?: string | null
+    readonly hosts: ReadonlyArray<string>
+    readonly inject?:
+      | (
+          | {
+              readonly op: "replace"
+              readonly in: readonly [
+                "header" | "query" | "path" | "body",
+                ...Array<"header" | "query" | "path" | "body">,
+              ]
+            }
+          | {
+              readonly op: "setHeader"
+              readonly name: string
+              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
+            }
+          | { readonly op: "route" }
+        )
+      | null
+    readonly delivery?: ("egress" | "delivered") | null
+    readonly value:
+      | { readonly type: "key"; readonly value: string }
+      | { readonly type: "basic"; readonly username: string; readonly password: string }
+      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+  }["hosts"]
+  readonly inject?: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly label: string
+    readonly name?: string | null
+    readonly hosts: ReadonlyArray<string>
+    readonly inject?:
+      | (
+          | {
+              readonly op: "replace"
+              readonly in: readonly [
+                "header" | "query" | "path" | "body",
+                ...Array<"header" | "query" | "path" | "body">,
+              ]
+            }
+          | {
+              readonly op: "setHeader"
+              readonly name: string
+              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
+            }
+          | { readonly op: "route" }
+        )
+      | null
+    readonly delivery?: ("egress" | "delivered") | null
+    readonly value:
+      | { readonly type: "key"; readonly value: string }
+      | { readonly type: "basic"; readonly username: string; readonly password: string }
+      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+  }["inject"]
+  readonly delivery?: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly label: string
+    readonly name?: string | null
+    readonly hosts: ReadonlyArray<string>
+    readonly inject?:
+      | (
+          | {
+              readonly op: "replace"
+              readonly in: readonly [
+                "header" | "query" | "path" | "body",
+                ...Array<"header" | "query" | "path" | "body">,
+              ]
+            }
+          | {
+              readonly op: "setHeader"
+              readonly name: string
+              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
+            }
+          | { readonly op: "route" }
+        )
+      | null
+    readonly delivery?: ("egress" | "delivered") | null
+    readonly value:
+      | { readonly type: "key"; readonly value: string }
+      | { readonly type: "basic"; readonly username: string; readonly password: string }
+      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+  }["delivery"]
+  readonly value: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+    readonly label: string
+    readonly name?: string | null
+    readonly hosts: ReadonlyArray<string>
+    readonly inject?:
+      | (
+          | {
+              readonly op: "replace"
+              readonly in: readonly [
+                "header" | "query" | "path" | "body",
+                ...Array<"header" | "query" | "path" | "body">,
+              ]
+            }
+          | {
+              readonly op: "setHeader"
+              readonly name: string
+              readonly format: "Bearer {value}" | "Basic {basic}" | "{value}"
+            }
+          | { readonly op: "route" }
+        )
+      | null
+    readonly delivery?: ("egress" | "delivered") | null
+    readonly value:
+      | { readonly type: "key"; readonly value: string }
+      | { readonly type: "basic"; readonly username: string; readonly password: string }
+      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+  }["value"]
+}
+
+export type CredentialCreateOutput = CredentialInfo
+
+export type CredentialUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: {
+    readonly name?: string | null | null
+    readonly hosts?: ReadonlyArray<string> | null
+    readonly delivery?: ("egress" | "delivered") | null
+  }["name"]
+  readonly hosts?: {
+    readonly name?: string | null | null
+    readonly hosts?: ReadonlyArray<string> | null
+    readonly delivery?: ("egress" | "delivered") | null
+  }["hosts"]
+  readonly delivery?: {
+    readonly name?: string | null | null
+    readonly hosts?: ReadonlyArray<string> | null
+    readonly delivery?: ("egress" | "delivered") | null
+  }["delivery"]
+}
+
+export type CredentialUpdateOutput = CredentialInfo
+
+export type CredentialRotateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly value: {
+    readonly value:
+      | { readonly type: "key"; readonly value: string }
+      | { readonly type: "basic"; readonly username: string; readonly password: string }
+      | { readonly type: "fields"; readonly fields: { readonly [x: string]: string } }
+  }["value"]
+}
+
+export type CredentialRotateOutput = CredentialInfo
+
+export type CredentialMoveInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly owner: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+  }["owner"]
+}
+
+export type CredentialMoveOutput = CredentialInfo
+
+export type CredentialCopyInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly owner: {
+    readonly owner:
+      | { readonly kind: "org" }
+      | { readonly kind: "space"; readonly spaceId: string }
+      | { readonly kind: "person"; readonly userId: string }
+  }["owner"]
+}
+
+export type CredentialCopyOutput = CredentialInfo
+
+export type CredentialRemoveInput = { readonly id: { readonly id: string }["id"] }
+
+export type CredentialRemoveOutput = CredentialInfo

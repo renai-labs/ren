@@ -728,6 +728,114 @@ const adaptGroupLabel = (raw: RawClient["label"]) => ({
   archive: EndpointLabelArchive(raw),
 })
 
+type CredentialListRequest = Parameters<RawClient["credential"]["credential.list"]>[0]
+type CredentialListInput = {
+  readonly owner?: CredentialListRequest["query"]["owner"]
+  readonly spaceId?: CredentialListRequest["query"]["spaceId"]
+  readonly type?: CredentialListRequest["query"]["type"]
+  readonly search?: CredentialListRequest["query"]["search"]
+  readonly page: CredentialListRequest["query"]["page"]
+  readonly pageSize: CredentialListRequest["query"]["pageSize"]
+}
+const EndpointCredentialList = (raw: RawClient["credential"]) => (input: CredentialListInput) =>
+  raw["credential.list"]({
+    query: {
+      owner: input["owner"],
+      spaceId: input["spaceId"],
+      type: input["type"],
+      search: input["search"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type CredentialGetRequest = Parameters<RawClient["credential"]["credential.get"]>[0]
+type CredentialGetInput = { readonly idOrSlug: CredentialGetRequest["params"]["idOrSlug"] }
+const EndpointCredentialGet = (raw: RawClient["credential"]) => (input: CredentialGetInput) =>
+  raw["credential.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type CredentialCreateRequest = Parameters<RawClient["credential"]["credential.create"]>[0]
+type CredentialCreateInput = {
+  readonly owner: CredentialCreateRequest["payload"]["owner"]
+  readonly label: CredentialCreateRequest["payload"]["label"]
+  readonly name?: CredentialCreateRequest["payload"]["name"]
+  readonly hosts: CredentialCreateRequest["payload"]["hosts"]
+  readonly inject?: CredentialCreateRequest["payload"]["inject"]
+  readonly delivery?: CredentialCreateRequest["payload"]["delivery"]
+  readonly value: CredentialCreateRequest["payload"]["value"]
+}
+const EndpointCredentialCreate = (raw: RawClient["credential"]) => (input: CredentialCreateInput) =>
+  raw["credential.create"]({
+    payload: {
+      owner: input["owner"],
+      label: input["label"],
+      name: input["name"],
+      hosts: input["hosts"],
+      inject: input["inject"],
+      delivery: input["delivery"],
+      value: input["value"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type CredentialUpdateRequest = Parameters<RawClient["credential"]["credential.update"]>[0]
+type CredentialUpdateInput = {
+  readonly id: CredentialUpdateRequest["params"]["id"]
+  readonly name?: CredentialUpdateRequest["payload"]["name"]
+  readonly hosts?: CredentialUpdateRequest["payload"]["hosts"]
+  readonly delivery?: CredentialUpdateRequest["payload"]["delivery"]
+}
+const EndpointCredentialUpdate = (raw: RawClient["credential"]) => (input: CredentialUpdateInput) =>
+  raw["credential.update"]({
+    params: { id: input["id"] },
+    payload: { name: input["name"], hosts: input["hosts"], delivery: input["delivery"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type CredentialRotateRequest = Parameters<RawClient["credential"]["credential.rotate"]>[0]
+type CredentialRotateInput = {
+  readonly id: CredentialRotateRequest["params"]["id"]
+  readonly value: CredentialRotateRequest["payload"]["value"]
+}
+const EndpointCredentialRotate = (raw: RawClient["credential"]) => (input: CredentialRotateInput) =>
+  raw["credential.rotate"]({ params: { id: input["id"] }, payload: { value: input["value"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type CredentialMoveRequest = Parameters<RawClient["credential"]["credential.move"]>[0]
+type CredentialMoveInput = {
+  readonly id: CredentialMoveRequest["params"]["id"]
+  readonly owner: CredentialMoveRequest["payload"]["owner"]
+}
+const EndpointCredentialMove = (raw: RawClient["credential"]) => (input: CredentialMoveInput) =>
+  raw["credential.move"]({ params: { id: input["id"] }, payload: { owner: input["owner"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type CredentialCopyRequest = Parameters<RawClient["credential"]["credential.copy"]>[0]
+type CredentialCopyInput = {
+  readonly id: CredentialCopyRequest["params"]["id"]
+  readonly owner: CredentialCopyRequest["payload"]["owner"]
+}
+const EndpointCredentialCopy = (raw: RawClient["credential"]) => (input: CredentialCopyInput) =>
+  raw["credential.copy"]({ params: { id: input["id"] }, payload: { owner: input["owner"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type CredentialRemoveRequest = Parameters<RawClient["credential"]["credential.remove"]>[0]
+type CredentialRemoveInput = { readonly id: CredentialRemoveRequest["params"]["id"] }
+const EndpointCredentialRemove = (raw: RawClient["credential"]) => (input: CredentialRemoveInput) =>
+  raw["credential.remove"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupCredential = (raw: RawClient["credential"]) => ({
+  list: EndpointCredentialList(raw),
+  get: EndpointCredentialGet(raw),
+  create: EndpointCredentialCreate(raw),
+  update: EndpointCredentialUpdate(raw),
+  rotate: EndpointCredentialRotate(raw),
+  move: EndpointCredentialMove(raw),
+  copy: EndpointCredentialCopy(raw),
+  remove: EndpointCredentialRemove(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -747,6 +855,7 @@ const adaptClient = (raw: RawClient) => ({
   "task-comment": adaptGroupTaskComment(raw["task-comment"]),
   "task-activity": adaptGroupTaskActivity(raw["task-activity"]),
   label: adaptGroupLabel(raw["label"]),
+  credential: adaptGroupCredential(raw["credential"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

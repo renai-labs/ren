@@ -289,7 +289,7 @@ export const Info = Schema.Struct({
   keyPreview: Schema.NullOr(Schema.String).annotate({
     description: "The last 4 characters of a key, or the username of a basic credential.",
   }),
-  fieldNames: Schema.Array(FieldName),
+  fieldNames: Schema.Array(Schema.String),
   hosts: Schema.Array(Schema.String),
   inject: Inject,
   delivery: Delivery,

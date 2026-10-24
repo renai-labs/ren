@@ -112,6 +112,22 @@ import type {
   LabelUpdateOutput,
   LabelArchiveInput,
   LabelArchiveOutput,
+  CredentialListInput,
+  CredentialListOutput,
+  CredentialGetInput,
+  CredentialGetOutput,
+  CredentialCreateInput,
+  CredentialCreateOutput,
+  CredentialUpdateInput,
+  CredentialUpdateOutput,
+  CredentialRotateInput,
+  CredentialRotateOutput,
+  CredentialMoveInput,
+  CredentialMoveOutput,
+  CredentialCopyInput,
+  CredentialCopyOutput,
+  CredentialRemoveInput,
+  CredentialRemoveOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -969,6 +985,118 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/labels/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    credential: {
+      list: (input: CredentialListInput, requestOptions?: RequestOptions) =>
+        request<CredentialListOutput>(
+          {
+            method: "GET",
+            path: `/credentials`,
+            query: {
+              owner: input["owner"],
+              spaceId: input["spaceId"],
+              type: input["type"],
+              search: input["search"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: CredentialGetInput, requestOptions?: RequestOptions) =>
+        request<CredentialGetOutput>(
+          {
+            method: "GET",
+            path: `/credentials/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: CredentialCreateInput, requestOptions?: RequestOptions) =>
+        request<CredentialCreateOutput>(
+          {
+            method: "POST",
+            path: `/credentials`,
+            body: {
+              owner: input["owner"],
+              label: input["label"],
+              name: input["name"],
+              hosts: input["hosts"],
+              inject: input["inject"],
+              delivery: input["delivery"],
+              value: input["value"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: CredentialUpdateInput, requestOptions?: RequestOptions) =>
+        request<CredentialUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/credentials/${encodeURIComponent(input.id)}`,
+            body: { name: input["name"], hosts: input["hosts"], delivery: input["delivery"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      rotate: (input: CredentialRotateInput, requestOptions?: RequestOptions) =>
+        request<CredentialRotateOutput>(
+          {
+            method: "POST",
+            path: `/credentials/${encodeURIComponent(input.id)}/rotate`,
+            body: { value: input["value"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      move: (input: CredentialMoveInput, requestOptions?: RequestOptions) =>
+        request<CredentialMoveOutput>(
+          {
+            method: "POST",
+            path: `/credentials/${encodeURIComponent(input.id)}/move`,
+            body: { owner: input["owner"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      copy: (input: CredentialCopyInput, requestOptions?: RequestOptions) =>
+        request<CredentialCopyOutput>(
+          {
+            method: "POST",
+            path: `/credentials/${encodeURIComponent(input.id)}/copy`,
+            body: { owner: input["owner"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      remove: (input: CredentialRemoveInput, requestOptions?: RequestOptions) =>
+        request<CredentialRemoveOutput>(
+          {
+            method: "POST",
+            path: `/credentials/${encodeURIComponent(input.id)}/remove`,
+            body: {},
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
             empty: false,

@@ -31,6 +31,7 @@ import { Auth } from "./auth.js"
 import { AgentHandler } from "./handlers/api/agent.js"
 import { AgentMembershipHandler } from "./handlers/api/agent-membership.js"
 import { ChatHandler } from "./handlers/api/chat.js"
+import { CredentialHandler } from "./handlers/api/credential.js"
 import { HealthHandler } from "./handlers/api/health.js"
 import { InvitationHandler } from "./handlers/api/invitation.js"
 import { LabelHandler } from "./handlers/api/label.js"
@@ -96,6 +97,7 @@ export const layer = Layer.mergeAll(
         TaskActivityHandler,
         TaskCommentHandler,
         LabelHandler,
+        CredentialHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
       Layer.provide([

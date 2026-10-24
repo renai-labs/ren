@@ -56,6 +56,14 @@ import type {
   LabelCreateInput,
   LabelUpdateInput,
   LabelArchiveInput,
+  CredentialListInput,
+  CredentialGetInput,
+  CredentialCreateInput,
+  CredentialUpdateInput,
+  CredentialRotateInput,
+  CredentialMoveInput,
+  CredentialCopyInput,
+  CredentialRemoveInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -589,6 +597,74 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["label", "archive"] as const,
             mutationFn: (input: LabelArchiveInput) => client["label"]["archive"](input),
+          }),
+      },
+    },
+    credential: {
+      list: {
+        queryKey: (input?: CredentialListInput) =>
+          input === undefined ? (["credential", "list"] as const) : (["credential", "list", input] as const),
+        queryOptions: (input: CredentialListInput) =>
+          queryOptions({
+            queryKey: ["credential", "list", input] as const,
+            queryFn: (context) => client["credential"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: CredentialGetInput) =>
+          input === undefined ? (["credential", "get"] as const) : (["credential", "get", input] as const),
+        queryOptions: (input: CredentialGetInput) =>
+          queryOptions({
+            queryKey: ["credential", "get", input] as const,
+            queryFn: (context) => client["credential"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["credential", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["credential", "create"] as const,
+            mutationFn: (input: CredentialCreateInput) => client["credential"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["credential", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["credential", "update"] as const,
+            mutationFn: (input: CredentialUpdateInput) => client["credential"]["update"](input),
+          }),
+      },
+      rotate: {
+        mutationKey: () => ["credential", "rotate"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["credential", "rotate"] as const,
+            mutationFn: (input: CredentialRotateInput) => client["credential"]["rotate"](input),
+          }),
+      },
+      move: {
+        mutationKey: () => ["credential", "move"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["credential", "move"] as const,
+            mutationFn: (input: CredentialMoveInput) => client["credential"]["move"](input),
+          }),
+      },
+      copy: {
+        mutationKey: () => ["credential", "copy"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["credential", "copy"] as const,
+            mutationFn: (input: CredentialCopyInput) => client["credential"]["copy"](input),
+          }),
+      },
+      remove: {
+        mutationKey: () => ["credential", "remove"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["credential", "remove"] as const,
+            mutationFn: (input: CredentialRemoveInput) => client["credential"]["remove"](input),
           }),
       },
     },

@@ -2,6 +2,7 @@ import { HttpApi, OpenApi } from "effect/http-api"
 import { AgentGroup } from "./groups/agent.js"
 import { AgentMembershipGroup } from "./groups/agent-membership.js"
 import { ChatGroup } from "./groups/chat.js"
+import { CredentialGroup } from "./groups/credential.js"
 import { EnvironmentTemplateGroup } from "./groups/environment-template.js"
 import { EnvironmentProviderGroup } from "./groups/environment-provider.js"
 import { HealthGroup } from "./groups/health.js"
@@ -37,6 +38,7 @@ export const Api = HttpApi.make("server")
   .add(TaskCommentGroup)
   .add(TaskActivityGroup)
   .add(LabelGroup)
+  .add(CredentialGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren API",
