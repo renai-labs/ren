@@ -3,7 +3,7 @@ export * as EgressApi from "./egress-api.js"
 import { Credential } from "@ren/schema/credential"
 import { Injection } from "@ren/schema/injection"
 import { Schema } from "effect"
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 
 export const Proof = Schema.Union([
   Schema.Struct({
@@ -56,8 +56,14 @@ const WireOp = Schema.Union([
     name: Schema.String,
     value: Schema.RedactedFromValue(Schema.String),
   }),
-  Schema.Struct({ op: Schema.Literal("route"), upstream: Schema.RedactedFromValue(Schema.String) }),
+  Schema.Struct({
+    op: Schema.Literal("route"),
+    upstream: Schema.RedactedFromValue(Schema.String),
+    placeholder: Schema.optional(Schema.String),
+  }),
 ]).annotate({ identifier: "Egress.Op" })
+
+const Refreshable = Schema.Struct({ label: Schema.String, revision: Schema.Int })
 
 export const ResolveReply = Schema.Union([
   Schema.Struct({
@@ -67,6 +73,9 @@ export const ResolveReply = Schema.Union([
     expiresAt: Schema.optional(Schema.Int),
     labels: Schema.Array(Schema.String),
     inject: Schema.Array(WireOp),
+    refreshable: Schema.Array(Refreshable).annotate({
+      description: "Labels that Ren can renew, with the revision it injected. The egress reports them after a 401.",
+    }),
   }),
   Schema.Struct({
     allow: Schema.Literal(false),
@@ -74,6 +83,17 @@ export const ResolveReply = Schema.Union([
     label: Schema.optional(Schema.String),
   }),
 ]).annotate({ identifier: "Egress.ResolveReply" })
+
+export interface UnauthorizedRequest extends Schema.Schema.Type<typeof UnauthorizedRequest> {}
+export const UnauthorizedRequest = Schema.Struct({
+  login: Schema.String.annotate({ description: "The proxy login of the connection that sent the request." }),
+  host: Schema.String,
+  status: Schema.Literals([401, 403]),
+  scope: Schema.optionalKey(Schema.String).annotate({
+    description: "The `scope` of a 403 `insufficient_scope` challenge.",
+  }),
+  labels: Schema.Array(Refreshable),
+}).annotate({ identifier: "Egress.UnauthorizedRequest" })
 
 const EgressGroup = HttpApiGroup.make("egress")
   .add(
@@ -98,6 +118,19 @@ const EgressGroup = HttpApiGroup.make("egress")
         summary: "Say what a request gets",
         description:
           "Ren answers with the ops that put credentials into the request, or with a denial that names the reason and the label. Values in the answer are secrets.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("unauthorized", "/egress/v1/unauthorized", {
+      payload: UnauthorizedRequest,
+      success: HttpApiSchema.NoContent,
+    }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "egress.unauthorized",
+        summary: "Report an upstream 401",
+        description:
+          "The egress calls this after an upstream answered 401, or 403 with insufficient_scope, to a request with refreshable labels. Ren answers 204 at once and renews in the background; the egress never waits for it.",
       }),
     ),
   )

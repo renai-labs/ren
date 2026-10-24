@@ -1,17 +1,22 @@
 import { afterAll, describe, expect } from "bun:test"
+import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { Credential } from "@ren/schema/credential"
 import { Injection } from "@ren/schema/injection"
 import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, Effect, Layer, Redacted, Schema } from "effect"
+import { eq } from "drizzle-orm"
+import { ConfigProvider, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
 import { BrainClient } from "../src/brain-client.js"
 import { CredentialCallers } from "../src/credential-callers.js"
+import { CredentialRefresh } from "../src/credential-refresh.js"
 import { CredentialSource } from "../src/credential-source.js"
 import { Credentials } from "../src/credentials.js"
+import { DurableRunner } from "../src/durable-runner.js"
 import { Egress } from "../src/egress.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
@@ -35,8 +40,32 @@ afterAll(() => egress.stop(true))
 
 const brainKey = await Effect.runPromise(Signature.generate("brain"))
 
+const refreshed = Ref.makeUnsafe<ReadonlyArray<Credential.ID>>([])
+
+const refreshers = Layer.succeed(
+  CredentialRefresh.Refreshers,
+  new Map([
+    [
+      "oauth" as const,
+      {
+        refresh: (current: CredentialRefresh.Current) =>
+          Ref.update(refreshed, (all) => [...all, current.id]).pipe(
+            Effect.as(
+              Option.some({
+                value: { type: "oauth" as const, accessToken: Redacted.make("renewed") },
+                expiresAt: Option.none(),
+              }),
+            ),
+          ),
+      },
+    ],
+  ]),
+)
+
 const it = testEffect(
   Layer.mergeAll(Egress.layer, Space.layer, SpaceMember.layer, SpaceProvisioning.layer).pipe(
+    Layer.provideMerge(CredentialRefresh.layer),
+    Layer.provideMerge(Layer.mergeAll(refreshers, DurableRunner.layerMemory)),
     Layer.provideMerge(CredentialSource.layer),
     Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
     Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone)),
@@ -89,7 +118,46 @@ const setup = Effect.fnUntraced(function* () {
     username: placement.username,
     password: placement.password,
   }
-  return { organizationId, ada, space, brainId, proof }
+  return { organizationId, ada, space, brainId, proof, login: placement.username }
+})
+
+const encodeSealed = Schema.encodeSync(Schema.fromJsonString(Credentials.Sealed))
+
+const signIn = Effect.fnUntraced(function* (
+  organizationId: Auth.OrganizationID,
+  options: { readonly label?: string; readonly status?: Credential.Status } = {},
+) {
+  const database = yield* Database.Service
+  const envelope = yield* Envelope.Service
+  const id = Credential.ID.create()
+  const value = yield* envelope.seal(
+    Redacted.make(encodeSealed({ type: "oauth", accessToken: Redacted.make("tok") })),
+    {
+      organizationId,
+      kind: "credential",
+      id,
+    },
+  )
+  yield* database.db.insert(Database.Schema.credential).values({
+    id,
+    organization_id: organizationId,
+    owner: "org",
+    label: options.label ?? "MCP_LINEAR",
+    type: "oauth",
+    value,
+    hosts: ["mcp.linear.app"],
+    inject: { op: "setHeader", name: "Authorization", format: "Bearer {value}" },
+    status: options.status ?? "ok",
+    scopes: ["read"],
+  })
+  return id
+})
+
+const row = Effect.fnUntraced(function* (id: Credential.ID) {
+  const database = yield* Database.Service
+  return (yield* database.db.select().from(Database.Schema.credential).where(eq(Database.Schema.credential.id, id))).at(
+    0,
+  )
 })
 
 const request = (
@@ -271,6 +339,126 @@ describe("Egress.resolve", () => {
           request({ kind: "ProxyLogin", username: "nobody", password: Redacted.make("x") }, "api.stripe.com", []),
         ),
       ).toEqual({ allow: false, reason: "unknown_workload" })
+    }),
+  )
+
+  it.live(
+    "the allow reply lists sign-in labels as refreshable with their revision and no key; reconnect is denied",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const credentials = yield* Credentials.Service
+        const found = yield* setup()
+        yield* signIn(found.organizationId)
+        yield* credentials.create(found.ada, {
+          owner: { kind: "org" },
+          label: "LINEAR_API_KEY",
+          hosts: ["mcp.linear.app"],
+          value: { type: "key", value: Redacted.make("lin_1") },
+        })
+        const reply = yield* resolver.resolve(
+          all,
+          request(found.proof, "mcp.linear.app", ["ren:MCP_LINEAR", "ren:LINEAR_API_KEY"]),
+        )
+        if (!reply.allow) return yield* Effect.die(new Error("expected an allow"))
+        expect(reply.refreshable).toEqual([{ label: "MCP_LINEAR", revision: 1 }])
+        yield* signIn(found.organizationId, { label: "MCP_GMAIL", status: "reconnect" })
+        expect(yield* resolver.resolve(all, request(found.proof, "mcp.linear.app", ["ren:MCP_GMAIL"]))).toEqual({
+          allow: false,
+          reason: "credential_reconnect",
+          label: "MCP_GMAIL",
+        })
+      }),
+  )
+})
+
+describe("Egress.unauthorized", () => {
+  it.live(
+    "an older revision only clears caches; the same one refreshes once; a second report within 5 minutes does nothing; the status stays",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const found = yield* setup()
+        const id = yield* signIn(found.organizationId)
+        yield* Ref.set(refreshed, [])
+        invalidations.length = 0
+        const report = (revision: number) => ({
+          login: found.login,
+          host: "mcp.linear.app",
+          status: 401 as const,
+          labels: [{ label: "MCP_LINEAR", revision }],
+        })
+        yield* resolver.unauthorized(all, report(0))
+        expect(yield* Ref.get(refreshed)).toEqual([])
+        expect(invalidations).toEqual([{ label: "MCP_LINEAR" }])
+        yield* resolver.unauthorized(all, report(1))
+        expect(yield* Ref.get(refreshed)).toEqual([id])
+        expect((yield* row(id))?.revision).toBe(2)
+        yield* resolver.unauthorized(all, report(2))
+        expect(yield* Ref.get(refreshed)).toEqual([id])
+        expect((yield* row(id))?.status).toBe("ok")
+      }),
+  )
+
+  it.live("a report from a retired login is ignored", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const callers = yield* CredentialCallers.Service
+      const found = yield* setup()
+      yield* signIn(found.organizationId)
+      yield* Ref.set(refreshed, [])
+      yield* callers.revoke({ kind: "brain", id: found.brainId })
+      invalidations.length = 0
+      yield* resolver.unauthorized(all, {
+        login: found.login,
+        host: "mcp.linear.app",
+        status: 401,
+        labels: [{ label: "MCP_LINEAR", revision: 1 }],
+      })
+      expect(yield* Ref.get(refreshed)).toEqual([])
+      expect(invalidations).toEqual([])
+    }),
+  )
+
+  it.live("a report on REN or MODELS clears caches only", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const found = yield* setup()
+      const first = yield* resolver.resolve(all, request(found.proof, "api.ren.test", ["ren:REN"]))
+      if (!first.allow) return yield* Effect.die(new Error("expected an allow"))
+      expect(first.refreshable).toEqual([{ label: "REN", revision: 0 }])
+      yield* Ref.set(refreshed, [])
+      invalidations.length = 0
+      yield* resolver.unauthorized(all, {
+        login: found.login,
+        host: "api.ren.test",
+        status: 401,
+        labels: [{ label: "REN", revision: 0 }],
+      })
+      expect(yield* Ref.get(refreshed)).toEqual([])
+      expect(invalidations).toEqual([{ label: "REN" }])
+    }),
+  )
+
+  it.live("a 403 insufficient_scope adds the challenged scopes to wanted_scopes and changes nothing else (K47)", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const found = yield* setup()
+      const id = yield* signIn(found.organizationId)
+      yield* Ref.set(refreshed, [])
+      const report = {
+        login: found.login,
+        host: "mcp.linear.app",
+        status: 403 as const,
+        scope: "read write admin",
+        labels: [{ label: "MCP_LINEAR", revision: 1 }],
+      }
+      yield* resolver.unauthorized(all, report)
+      yield* resolver.unauthorized(all, { ...report, scope: "write issues" })
+      const saved = yield* row(id)
+      expect(saved).toMatchObject({ status: "ok", revision: 1, scopes: ["read"] })
+      expect(saved?.wanted_scopes.toSorted()).toEqual(["admin", "issues", "write"])
+      expect(yield* Ref.get(refreshed)).toEqual([])
     }),
   )
 })

@@ -49,6 +49,7 @@ export interface Source {
     candidate: Credentials.Candidate,
     scope: Credentials.Scope,
   ) => Effect.Effect<Option.Option<Sourced>, Unavailable>
+  readonly forget: (candidate: Credentials.Candidate, scope: Credentials.Scope) => Effect.Effect<void>
 }
 
 export class Static extends Context.Service<Static, Source>()("@ren/core/CredentialSource/Static") {}
@@ -82,6 +83,7 @@ export const layerStatic = Layer.effect(
           })),
         )
       }),
+      forget: () => Effect.void,
     })
   }),
 )
@@ -177,6 +179,7 @@ export const layerMinted = Layer.effect(
             owner: "workload",
             hosts: [renHost],
             inject: { op: "replace", in: ["header"] },
+            revision: 0,
           },
           ...endpoints.flatMap((endpoint): ReadonlyArray<Credentials.Candidate> => {
             const url = URL.parse(endpoint.baseUrl)
@@ -189,6 +192,7 @@ export const layerMinted = Layer.effect(
                 owner: "workload",
                 hosts: [url.hostname],
                 inject: { op: "replace", in: ["header"] },
+                revision: 0,
               },
             ]
           }),
@@ -219,6 +223,14 @@ export const layerMinted = Layer.effect(
           ...(found.apiKey.expiresAt && { expiresAt: found.apiKey.expiresAt }),
         }))
       }),
+      // oxlint-disable-next-line ren/no-comments -- After an upstream 401 on REN or MODELS, the next request mints again (§9 rule 7).
+      forget: Effect.fn("CredentialSource.minted.forget")(function* (
+        candidate: Credentials.Candidate,
+        scope: Credentials.Scope,
+      ) {
+        if (candidate.label === ren) return yield* Cache.invalidate(hostTokens, keyOf(scope))
+        yield* Cache.invalidate(modelGrants, keyOf(scope, yield* grants.revision))
+      }),
     })
   }),
 )
@@ -233,6 +245,10 @@ export const layer = Layer.effect(
       }),
       value: (candidate, scope) =>
         candidate.source === "minted" ? sources.minted.value(candidate, scope) : sources.static.value(candidate, scope),
+      forget: (candidate, scope) =>
+        candidate.source === "minted"
+          ? sources.minted.forget(candidate, scope)
+          : sources.static.forget(candidate, scope),
     })
   }),
 )

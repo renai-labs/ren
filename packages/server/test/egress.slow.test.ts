@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout } from "bun:te
 import { Access } from "@ren/core/access"
 import { BrainClient } from "@ren/core/brain-client"
 import { CredentialCallers } from "@ren/core/credential-callers"
+import { CredentialRefresh } from "@ren/core/credential-refresh"
 import { CredentialSource } from "@ren/core/credential-source"
 import { Credentials } from "@ren/core/credentials"
+import { DurableRunner } from "@ren/core/durable-runner"
 import { Egress } from "@ren/core/egress"
 import { EgressControl } from "@ren/core/egress-control"
 import { Envelope } from "@ren/core/envelope"
@@ -87,6 +89,8 @@ const ren = () => {
   const certs = certificates()
   return EgressRoutes.serve.pipe(
     Layer.provideMerge(Egress.layer),
+    Layer.provideMerge(CredentialRefresh.layer),
+    Layer.provideMerge(Layer.mergeAll(CredentialRefresh.layerNoRefreshers, DurableRunner.layerMemory)),
     Layer.provideMerge(CredentialSource.layer),
     Layer.provideMerge(Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted)),
     Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone)),
