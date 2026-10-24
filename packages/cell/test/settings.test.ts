@@ -7,7 +7,10 @@ import { testEffect } from "@ren/executor/testing"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
-import { Context, Effect, Layer, Option, Predicate, Queue, Redacted, Schedule, Stream, Struct } from "effect"
+import { App } from "@ren/schema/app"
+import { AppCatalog } from "@ren/schema/app-catalog"
+import { AppRelease } from "@ren/schema/app-release"
+import { Context, Effect, Layer, Option, Predicate, Queue, Redacted, Schedule, Schema, Stream, Struct } from "effect"
 import { FetchHttpClient, HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -215,6 +218,49 @@ describe("settings in the cell", () => {
         (yield* opened.harness.configuration).find((location) => location.directory.endsWith(opened.sessionId))
           ?.appFingerprint,
       ).toEqual(Option.some("apps-after-update"))
+    }),
+  )
+  it.live("a catalog that takes a name OpenCode already uses keeps the applied catalog and names both sources", () =>
+    Effect.gen(function* () {
+      const opened = yield* open(TestSettings.layers())
+      const catalog = (fingerprint: string, slug: string) =>
+        Option.some(
+          Schema.decodeUnknownSync(AppCatalog.Info)({
+            fingerprint,
+            catalog: {
+              apps: [],
+              skills: [],
+              credentials: [],
+              mcps: [
+                {
+                  appId: App.ID.create(),
+                  releaseId: AppRelease.ID.create(),
+                  appSlug: "tools",
+                  version: "1.0.0",
+                  slug,
+                  declaration: {
+                    name: "Tools",
+                    description: "Tools",
+                    transport: { type: "remote", url: "https://tools.example.com/mcp" },
+                    auth: { type: "none" },
+                  },
+                },
+              ],
+            },
+          }),
+        )
+      const location = Effect.map(opened.harness.configuration, (all) =>
+        all.find((each) => each.directory.endsWith(opened.sessionId)),
+      )
+      yield* opened.pull(TestSettings.layers(), { apps: catalog("first", "search") })
+      expect((yield* location)?.appFingerprint).toEqual(Option.some("first"))
+      yield* opened.pull(TestSettings.layers(), { apps: catalog("second", "browser") })
+      const observed = yield* location
+      expect(observed?.appFingerprint).toEqual(Option.some("first"))
+      expect(observed?.appConflicts.join("\n")).toContain("tools@1.0.0")
+      expect(observed?.appConflicts.join("\n")).toContain("OpenCode")
+      yield* opened.pull(TestSettings.layers(), { apps: catalog("third", "search") })
+      expect(yield* location).toMatchObject({ appFingerprint: Option.some("third"), appConflicts: [] })
     }),
   )
   it.live("clearing a variant switches the existing session back to the default", () =>
