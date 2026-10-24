@@ -23,17 +23,25 @@ setDefaultTimeout(120_000)
 
 const brainKey = await Effect.runPromise(Signature.generate("brain"))
 
-const seen: Array<{ readonly host: string; readonly path: string; readonly authorization: string | null }> = []
+const seen: Array<{
+  readonly host: string
+  readonly path: string
+  readonly query: string
+  readonly authorization: string | null
+  readonly body: string
+}> = []
 
 const upstream = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
-  fetch: (request) => {
+  fetch: async (request) => {
     const url = new URL(request.url)
     seen.push({
       host: request.headers.get("host") ?? "",
       path: url.pathname,
+      query: url.search,
       authorization: request.headers.get("authorization"),
+      body: await request.text(),
     })
     if (url.pathname === "/redirect") return Response.redirect(`http://other.test:${url.port}/landing`, 302)
     if (url.pathname === "/events")
@@ -97,7 +105,7 @@ const ren = () => {
               key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(brainKey.privateKey.key),
             },
           ]),
-          REN_EGRESS_UPSTREAM: `http://127.0.0.1:${upstream.port}/ren`,
+          REN_URL: `http://ren.test:${upstream.port}`,
           EGRESS_PORT: String(state.renPort),
           EGRESS_TLS_CERT: certs.serverCert,
           EGRESS_TLS_KEY: certs.serverKey,
@@ -139,6 +147,7 @@ const setup = Effect.fnUntraced(function* () {
     label: "STRIPE_API_KEY",
     hosts: ["api.stripe.test"],
     value: { type: "key", value: Redacted.make("sk_live_real") },
+    inject: { op: "replace", in: ["header", "query"] },
   })
   const placement = yield* callers.issue(
     { workload: { kind: "brain", id: brainId, generation: 1 }, organizationId },
@@ -170,7 +179,8 @@ describe("egress (iron-proxy fork) with Ren", () => {
           ),
         )
         expect(viaSocks.status).toBe(200)
-        expect(JSON.parse(viaSocks.body)).toMatchObject({ authorization: "Bearer sk_live_real" })
+        expect(seen.findLast((request) => request.path === "/v1/charges")?.authorization).toBe("Bearer sk_live_real")
+        expect(JSON.parse(viaSocks.body)).toMatchObject({ authorization: "Bearer ren:STRIPE_API_KEY" })
         const viaHttp = yield* Effect.promise(() =>
           EgressHarness.curl(
             [
@@ -180,8 +190,39 @@ describe("egress (iron-proxy fork) with Ren", () => {
             env,
           ),
         )
-        expect(JSON.parse(viaHttp.body)).toMatchObject({ query: "?key=sk_live_real" })
+        expect(seen.findLast((request) => request.path === "/v1/charges")?.query).toBe("?key=sk_live_real")
+        expect(viaHttp.body).not.toContain("sk_live_real")
       }),
+  )
+
+  it.live("a JSON request body passes through the egress to the upstream unchanged", () =>
+    Effect.gen(function* () {
+      const found = yield* setup()
+      const sent = yield* Effect.promise(() =>
+        EgressHarness.curl([
+          socks(found.login, found.password),
+          "-H",
+          "'Authorization: Bearer ren:STRIPE_API_KEY'",
+          "-H",
+          "'Content-Type: application/json'",
+          "-d",
+          `'{"amount":42}'`,
+          at("/v1/json"),
+        ]),
+      )
+      expect(sent.status).toBe(200)
+      expect(seen.findLast((request) => request.path === "/v1/json")?.body).toBe('{"amount":42}')
+    }),
+  )
+
+  it.live("a POST with no body reaches the upstream with Content-Length 0, which Bun requires", () =>
+    Effect.gen(function* () {
+      const found = yield* setup()
+      const sent = yield* Effect.promise(() =>
+        EgressHarness.curl([socks(found.login, found.password), "-X", "POST", at("/v1/empty")]),
+      )
+      expect(sent.status).toBe(200)
+    }),
   )
 
   it.live("a request with a label Ren does not have is not forwarded: 403 with the reason and the label", () =>
@@ -196,7 +237,6 @@ describe("egress (iron-proxy fork) with Ren", () => {
       expect(JSON.parse(denied.body)).toEqual({
         error: "ren_credential_missing",
         label: "MISSING",
-        hint: "call ren_connect",
       })
       expect(seen.length).toBe(before)
     }),
@@ -277,14 +317,20 @@ describe("egress (iron-proxy fork) with Ren", () => {
     }),
   )
 
-  it.live("ren.internal reaches Ren with the brain's host token, which the brain never holds", () =>
+  it.live("a call to Ren's host reaches Ren with the brain's host token, which the brain never holds", () =>
     Effect.gen(function* () {
       const found = yield* setup()
       const reply = yield* Effect.promise(() =>
-        EgressHarness.curl([socks(found.login, found.password), "'http://ren.internal/host/pull'"]),
+        EgressHarness.curl([
+          socks(found.login, found.password),
+          "-H",
+          "'Authorization: Bearer ren:REN'",
+          at("/host/pull", "ren.test"),
+        ]),
       )
       expect(reply.status).toBe(200)
-      const authorization = seen.findLast((request) => request.path === "/ren/host/pull")?.authorization ?? ""
+      expect(reply.body).not.toContain("Bearer ey")
+      const authorization = seen.findLast((request) => request.path === "/host/pull")?.authorization ?? ""
       const token = authorization.replace(/^Bearer /u, "")
       const claims = yield* BrainToken.verify([brainKey.publicKey], token)
       expect(Option.map(claims, (found) => [found.scope, found.brain])).toEqual(Option.some(["host", found.brainId]))
