@@ -12,7 +12,9 @@ export const Client = Schema.Struct({
 })
 export type Client = typeof Client.Type
 
-const decodeClaims = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Struct({ sub: Schema.optional(Schema.String) })))
+const decodeClaims = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Struct({ sub: Schema.optional(Schema.String) })),
+)
 
 export const sha256 = (text: string, encoding: "hex" | "base64url") =>
   new Bun.CryptoHasher("sha256").update(text).digest(encoding)
@@ -109,7 +111,9 @@ export const post = (
 ) =>
   Effect.tryPromise({
     try: async () => {
-      const body = new URLSearchParams(Object.entries(form).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]])))
+      const body = new URLSearchParams(
+        Object.entries(form).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]])),
+      )
       body.set("client_id", client.clientId)
       const secret = client.clientSecret && Redacted.value(client.clientSecret)
       const headers = new Headers({ "content-type": "application/x-www-form-urlencoded", accept: "application/json" })
@@ -125,7 +129,6 @@ export const post = (
     },
     catch: (cause) => new Error(`The token endpoint did not answer: ${String(cause)}`),
   })
-
 
 // oxlint-disable-next-line ren/no-comments -- §10c (RFC 6749 §4.4): an exchange of the stored client id and secret, at the stored token endpoint only.
 export const exchangeClientCredentials = (

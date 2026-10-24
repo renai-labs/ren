@@ -20,6 +20,7 @@ import {
 } from "effect"
 import { BrainClient } from "./brain-client.js"
 import { Credentials } from "./credentials.js"
+import { McpProvider } from "./mcp-provider.js"
 import { Models } from "./models.js"
 
 export type Value =
@@ -54,6 +55,8 @@ export interface Source {
 
 export class Static extends Context.Service<Static, Source>()("@ren/core/CredentialSource/Static") {}
 
+export class Provider extends Context.Service<Provider, Source>()("@ren/core/CredentialSource/Provider") {}
+
 export class Minted extends Context.Service<Minted, Source>()("@ren/core/CredentialSource/Minted") {}
 
 export class Service extends Context.Service<Service, Source>()("@ren/core/CredentialSource") {}
@@ -82,6 +85,30 @@ export const layerStatic = Layer.effect(
             ...(found.expiresAt && { expiresAt: found.expiresAt }),
           })),
         )
+      }),
+      forget: () => Effect.void,
+    })
+  }),
+)
+
+// oxlint-disable-next-line ren/no-comments -- §5 and §10 rule 7 (K25): a `route` value is the provider session URL, with the provider's project headers. Neither reaches the workload.
+export const layerProvider = Layer.effect(
+  Provider,
+  Effect.gen(function* () {
+    const credentials = yield* Credentials.Service
+    const providers = yield* McpProvider.Service
+    return Provider.of({
+      candidates: () => Effect.succeed([]),
+      value: Effect.fn("CredentialSource.provider")(function* (candidate: Credentials.Candidate) {
+        if (!Schema.is(Credential.ID)(candidate.id)) return Option.none()
+        const opened = yield* credentials.open(candidate.id)
+        if (Option.isNone(opened) || opened.value.value.type !== "route") return Option.none()
+        const provider = yield* providers
+          .get("composio")
+          .pipe(Effect.mapError((error) => new Unavailable({ label: candidate.label, message: error.message })))
+        return Option.some({
+          value: { type: "route", upstream: opened.value.value.upstream, headers: provider.headers },
+        } satisfies Sourced)
       }),
       forget: () => Effect.void,
     })
@@ -238,17 +265,15 @@ export const layerMinted = Layer.effect(
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const sources = { static: yield* Static, minted: yield* Minted }
+    const sources = { static: yield* Static, minted: yield* Minted, provider: yield* Provider }
+    const bySource: Readonly<Record<string, Source>> = sources
+    const of = (candidate: Credentials.Candidate) => bySource[candidate.source] ?? sources.static
     return Service.of({
       candidates: Effect.fn("CredentialSource.candidates")(function* (scope: Credentials.Scope) {
         return [...(yield* sources.minted.candidates(scope)), ...(yield* sources.static.candidates(scope))]
       }),
-      value: (candidate, scope) =>
-        candidate.source === "minted" ? sources.minted.value(candidate, scope) : sources.static.value(candidate, scope),
-      forget: (candidate, scope) =>
-        candidate.source === "minted"
-          ? sources.minted.forget(candidate, scope)
-          : sources.static.forget(candidate, scope),
+      value: (candidate, scope) => of(candidate).value(candidate, scope),
+      forget: (candidate, scope) => of(candidate).forget(candidate, scope),
     })
   }),
 )

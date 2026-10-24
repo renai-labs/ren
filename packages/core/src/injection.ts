@@ -30,7 +30,11 @@ export const plan = (
     if (value.type !== "route") return Result.fail("invalid_value")
     if (value.headers.some((header) => breaksHeader(Redacted.value(header.value)))) return Result.fail("invalid_value")
     return Result.succeed([
-      { op: "route", upstream: value.upstream },
+      {
+        op: "route",
+        upstream: value.upstream,
+        ...Option.match(placeholder, { onNone: () => ({}), onSome: (found) => ({ placeholder: found.text }) }),
+      },
       ...value.headers.map((header): Op => ({ op: "setHeader", name: header.name, value: header.value })),
     ])
   }

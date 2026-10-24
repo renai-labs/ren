@@ -11,6 +11,7 @@ import { Access } from "../src/access.js"
 import { CredentialRefresh } from "../src/credential-refresh.js"
 import { Credentials } from "../src/credentials.js"
 import { DurableRunner } from "../src/durable-runner.js"
+import { McpProvider } from "../src/mcp-provider.js"
 import { OAuth } from "../src/oauth.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
 import { EgressControl } from "../src/egress-control.js"
@@ -48,7 +49,14 @@ const it = testEffect(
     Layer.provideMerge(OAuth.layerRefresher),
     Layer.provideMerge(Credentials.layer),
     Layer.provideMerge(
-      Layer.mergeAll(Access.layer, Envelope.layerLocal, EgressControl.layerHttp, OAuthFetch.layerUnchecked, DurableRunner.layerMemory),
+      Layer.mergeAll(
+        Access.layer,
+        Envelope.layerLocal,
+        EgressControl.layerHttp,
+        OAuthFetch.layerUnchecked,
+        DurableRunner.layerMemory,
+        McpProvider.layerNone,
+      ),
     ),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
@@ -301,12 +309,20 @@ describe("Credentials: client credentials (§10c, test 30)", () => {
           inject: { op: "setHeader", name: "X-Shopify-Access-Token", format: "{value}" },
           value: value("s1"),
         })
-        expect(exchanges.map((form) => [form.get("grant_type"), form.get("client_id"), form.get("client_secret")])).toEqual([
-          ["client_credentials", "shop-client", "s1"],
-        ])
+        expect(
+          exchanges.map((form) => [form.get("grant_type"), form.get("client_id"), form.get("client_secret")]),
+        ).toEqual([["client_credentials", "shop-client", "s1"]])
         expect(made.expiresAt).not.toBeNull()
         const opened = yield* credentials.open(made.id)
-        expect(Option.map(opened, (found) => found.value.type === "client_credentials" && found.value.accessToken && Redacted.value(found.value.accessToken))).toEqual(Option.some("shpat_1"))
+        expect(
+          Option.map(
+            opened,
+            (found) =>
+              found.value.type === "client_credentials" &&
+              found.value.accessToken &&
+              Redacted.value(found.value.accessToken),
+          ),
+        ).toEqual(Option.some("shpat_1"))
         tokenAnswer.body = { access_token: "shpat_2", expires_in: 3600 }
         yield* database.db
           .update(Database.Schema.credential)
@@ -326,7 +342,12 @@ describe("Credentials: client credentials (§10c, test 30)", () => {
         tokenAnswer.status = 400
         tokenAnswer.body = { error: "invalid_client", error_description: "Bad secret" }
         const refused = yield* Effect.exit(
-          credentials.create(setup.ada, { owner: { kind: "org" }, label: "SHOPIFY_TWO", hosts: ["b.myshopify.com"], value: value("x") }),
+          credentials.create(setup.ada, {
+            owner: { kind: "org" },
+            label: "SHOPIFY_TWO",
+            hosts: ["b.myshopify.com"],
+            value: value("x"),
+          }),
         )
         expect(failure(refused)).toContain("invalid_client")
       }),
