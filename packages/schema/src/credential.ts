@@ -47,10 +47,22 @@ export const When = Schema.Struct({
   value: Schema.String,
 }).annotate({ identifier: "Credential.When" })
 
+export const profileSeparator = "__"
+
+export const maximumAppEnvNameLength = 94
+
+export const AppEnvName = EnvName.check(
+  Schema.isMaxLength(maximumAppEnvNameLength, { message: `Use ${maximumAppEnvNameLength} characters or fewer.` }),
+  Schema.isPattern(/^(?!.*__)/u, { message: "__ is kept for profile labels; use one underscore." }),
+).annotate({
+  identifier: "Credential.AppEnvName",
+  description: "An env key of an app. Each profile gets it with its own suffix: `<KEY>__<PROFILE>`.",
+})
+
 export interface Env extends Schema.Schema.Type<typeof Env> {}
 export const Env = Schema.Struct({
   kind: Schema.Literal("env"),
-  name: EnvName,
+  name: AppEnvName,
   description: Schema.optionalKey(Schema.String),
   optional,
 }).annotate({ identifier: "Credential.Env" })
@@ -216,14 +228,24 @@ export const HostsText = Schema.String.check(
   description: "Hosts as a person types them: separated by commas, spaces or new lines.",
 })
 
-export const Owner = Schema.Union([
+export const LooseOwner = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("org") }),
   Schema.Struct({ kind: Schema.Literal("space"), spaceId: Space.ID }),
   Schema.Struct({ kind: Schema.Literal("person"), userId: Auth.UserID }),
-]).annotate({ identifier: "Credential.Owner" })
+]).annotate({ identifier: "Credential.LooseOwner", description: "The owner of a key that belongs to no profile." })
+export type LooseOwner = typeof LooseOwner.Type
+
+export const ProfileOwner = Schema.Struct({
+  kind: Schema.Literal("profile"),
+  profileId: AppIdentity.ProfileID,
+}).annotate({ identifier: "Credential.ProfileOwner" })
+
+export const Owner = Schema.Union([...LooseOwner.members, ProfileOwner]).annotate({ identifier: "Credential.Owner" })
 export type Owner = typeof Owner.Type
 
-export const OwnerKind = Schema.Literals(["org", "space", "person"]).annotate({ identifier: "Credential.OwnerKind" })
+export const OwnerKind = Schema.Literals(["org", "space", "person", "profile"]).annotate({
+  identifier: "Credential.OwnerKind",
+})
 export type OwnerKind = typeof OwnerKind.Type
 
 export const Type = Schema.Literals(["key", "basic", "oauth", "fields", "route", "client_credentials"]).annotate({
@@ -316,16 +338,7 @@ export const Value = Schema.Union([
 ]).annotate({ identifier: "Credential.Value", description: "A value a person gives. Ren never returns it." })
 export type Value = typeof Value.Type
 
-export const maximumConnectionLength = 58
-
-export const Connection = Primitive.Slug.check(
-  Schema.isMaxLength(maximumConnectionLength, { message: `Use ${maximumConnectionLength} characters or fewer.` }),
-).annotate({
-  identifier: "Credential.Connection",
-  description: "A second or later account for one MCP. Its label is `MCP_<MCP>__<CONNECTION>`.",
-})
-
-export const Provider = Schema.Literals(["composio"]).annotate({
+export const Provider = Primitive.Slug.annotate({
   identifier: "Credential.Provider",
   description: "The managed MCP provider that holds the account of a `route` credential.",
 })
@@ -354,9 +367,7 @@ export const Info = Schema.Struct({
   account: Schema.NullOr(Account).annotate({ description: "Whose account a sign-in reaches. A pasted key has none." }),
   scopes: Schema.Array(Schema.String),
   status: Status,
-  app: Schema.NullOr(AppIdentity.ID).annotate({ description: "The app whose MCP this connection serves." }),
-  mcp: Schema.NullOr(Primitive.Slug).annotate({ description: "The MCP of the app that this connection serves." }),
-  connection: Schema.NullOr(Connection).annotate({ description: "Null for the default connection of an MCP." }),
+  profileId: Schema.NullOr(AppIdentity.ProfileID).annotate({ description: "The profile that holds this credential." }),
   provider: Schema.NullOr(Provider),
   expiresAt: Schema.NullOr(Schema.DateTimeUtc),
   createdBy: Schema.NullOr(Auth.UserID),
@@ -377,14 +388,22 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Credential.Page" })
 
 export const connectedPrefix = "MCP_"
 
-export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
-export const CreateInput = Schema.Struct({
-  owner: Owner,
+export const Item = Schema.Union([Schema.Struct({ mcp: Primitive.Slug }), Schema.Struct({ env: AppEnvName })]).annotate(
+  { identifier: "Credential.Item", description: "One MCP or one env key of a profile’s app." },
+)
+export type Item = typeof Item.Type
+
+const LooseCreateInput = Schema.Struct({
+  owner: LooseOwner,
   label: Label.check(
     Schema.makeFilter(
       (label) =>
         !label.startsWith(connectedPrefix) ||
         `Labels that start with ${connectedPrefix} belong to connected MCP servers; use another label.`,
+    ),
+    Schema.makeFilter(
+      (label) =>
+        !label.includes(profileSeparator) || `${profileSeparator} is kept for profile labels; use one underscore.`,
     ),
   ),
   name: Schema.optional(Primitive.Name),
@@ -392,7 +411,22 @@ export const CreateInput = Schema.Struct({
   inject: Schema.optional(Inject),
   delivery: Schema.optional(Delivery),
   value: Value,
-}).annotate({ identifier: "Credential.CreateInput" })
+}).annotate({ identifier: "Credential.LooseCreateInput" })
+
+const ProfileCreateInput = Schema.Struct({
+  owner: ProfileOwner,
+  item: Item,
+  hosts: Hosts,
+  value: Value,
+}).annotate({
+  identifier: "Credential.ProfileCreateInput",
+  description: "A pasted value for one item of a profile. Ren computes its label.",
+})
+
+export const CreateInput = Schema.Union([LooseCreateInput, ProfileCreateInput]).annotate({
+  identifier: "Credential.CreateInput",
+})
+export type CreateInput = typeof CreateInput.Type
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
@@ -405,18 +439,12 @@ export interface RotateInput extends Schema.Schema.Type<typeof RotateInput> {}
 export const RotateInput = Schema.Struct({ value: Value }).annotate({ identifier: "Credential.RotateInput" })
 
 export interface MoveInput extends Schema.Schema.Type<typeof MoveInput> {}
-export const MoveInput = Schema.Struct({ owner: Owner }).annotate({ identifier: "Credential.MoveInput" })
+export const MoveInput = Schema.Struct({ owner: LooseOwner }).annotate({ identifier: "Credential.MoveInput" })
 
 export interface ConnectInput extends Schema.Schema.Type<typeof ConnectInput> {}
 export const ConnectInput = Schema.Struct({
-  owner: Owner,
-  target: Schema.Struct({
-    kind: Schema.Literal("mcp"),
-    app: AppIdentity.ID,
-    mcp: Primitive.Slug,
-    connection: Schema.optional(Connection),
-    connectionName: Schema.optional(Primitive.Name),
-  }),
+  profileId: AppIdentity.ProfileID,
+  item: Schema.Struct({ mcp: Primitive.Slug }),
   reconnect: Schema.optional(Schema.Boolean),
 }).annotate({ identifier: "Credential.ConnectInput" })
 
@@ -425,30 +453,6 @@ export const RequirementKind = Schema.Literals(["oauth", "provider", "fields", "
   description: "How the item connects: a sign-in, a managed provider, an MCP’s pasted fields, or a pasted env key.",
 })
 export type RequirementKind = typeof RequirementKind.Type
-
-export interface RequirementItem extends Schema.Schema.Type<typeof RequirementItem> {}
-export const RequirementItem = Schema.Struct({
-  key: Schema.String,
-  group: AppIdentity.ID.annotate({ description: "The app that the dialog shows this item under." }),
-  app: AppIdentity.ID,
-  mcp: Schema.NullOr(Primitive.Slug),
-  label: EnvName,
-  name: Schema.String,
-  kind: RequirementKind,
-  status: Schema.Literals(["ok", "missing", "reconnect"]),
-  credentialId: Schema.NullOr(ID),
-  destinations: Schema.Array(OwnerKind),
-}).annotate({ identifier: "Credential.RequirementItem" })
-
-export interface Requirements extends Schema.Schema.Type<typeof Requirements> {}
-export const Requirements = Schema.Struct({ items: Schema.Array(RequirementItem) }).annotate({
-  identifier: "Credential.Requirements",
-})
-
-export interface RequirementsInput extends Schema.Schema.Type<typeof RequirementsInput> {}
-export const RequirementsInput = Schema.Struct({ spaceId: Space.ID, appId: AppIdentity.ID }).annotate({
-  identifier: "Credential.RequirementsInput",
-})
 
 export interface RemoveInput extends Schema.Schema.Type<typeof RemoveInput> {}
 export const RemoveInput = Schema.Struct({}).annotate({ identifier: "Credential.RemoveInput" })

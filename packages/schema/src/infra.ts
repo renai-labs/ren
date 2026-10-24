@@ -3,6 +3,7 @@ export * as Infra from "./infra.js"
 import { Effect, Schema } from "effect"
 import { Agent } from "./agent.js"
 import { App } from "./app.js"
+import { AppProfile } from "./app-profile.js"
 import { Channel } from "./channel.js"
 import { Credential } from "./credential.js"
 import { Cron } from "./cron.js"
@@ -195,11 +196,9 @@ export interface SpaceBindings extends Schema.Schema.Type<typeof SpaceBindings> 
 export const SpaceBindings = Schema.Struct({
   timezone: Schema.optionalKey(Schema.TimeZoneNamedFromString),
   channels: Schema.Record(Primitive.Slug, Channel.Target).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
-  credentials: Schema.Record(Primitive.Slug, Schema.Record(Schema.String, Credential.Ref))
+  profiles: Schema.Record(Primitive.Slug, Schema.Array(AppProfile.Slug))
     .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({})))
-    .annotate({
-      description: "For each app, the connected credential for each of its required credentials.",
-    }),
+    .annotate({ description: "For each app, the slugs of its shared profiles that list this space." }),
   webhooks: Schema.Record(Primitive.Slug, Schema.Struct({ secret: Credential.Ref })).pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({})),
   ),

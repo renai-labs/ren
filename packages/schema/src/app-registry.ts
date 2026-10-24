@@ -3,8 +3,6 @@ export * as AppRegistry from "./app-registry.js"
 import { Schema } from "effect"
 import { App } from "./app.js"
 import { AppListing } from "./app-listing.js"
-import { AppRelease } from "./app-release.js"
-import { Auth } from "./auth.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
 
@@ -12,16 +10,8 @@ export interface Publication extends Schema.Schema.Type<typeof Publication> {}
 export const Publication = Schema.Struct({
   ...App.Declaration.fields,
   slug: Primitive.Slug,
-  organizationId: Schema.optionalKey(
-    Auth.OrganizationID.annotate({
-      description:
-        "The organization that owns the app. Required to list an organization’s app, and absent for a registry app. Publication never changes the owner.",
-    }),
-  ),
-  version: Schema.optionalKey(AppRelease.Version),
-  bump: Schema.optionalKey(Schema.Literals(["patch", "minor", "major"])),
-  expectedCurrentReleaseId: Schema.optionalKey(
-    AppRelease.ID.annotate({ description: "Publish only while this release is still the app’s latest." }),
+  expectedRevision: Schema.optionalKey(
+    Schema.Int.annotate({ description: "Publish only while the app’s definition is still at this revision." }),
   ),
   listing: Schema.optionalKey(
     AppListing.Input.annotate({ description: "Omit to leave the app’s listing, or its absence, unchanged." }),
@@ -41,8 +31,7 @@ export interface Result extends Schema.Schema.Type<typeof Result> {}
 export const Result = Schema.Struct({
   appId: App.ID,
   slug: Primitive.Slug,
-  releaseId: AppRelease.ID,
-  version: AppRelease.Version,
+  revision: Schema.Int,
   changed: Schema.Struct({ execution: Schema.Boolean, metadata: Schema.Boolean, listing: Schema.Boolean }),
 }).annotate({ identifier: "AppRegistry.Result" })
 
@@ -59,7 +48,12 @@ export const Info = Schema.Struct({
   description: Schema.NonEmptyString,
   icon: Schema.NullOr(Schema.String),
   listing: AppListing.Info,
-  release: AppRelease.Info,
+  requiredCredentials: App.Info.fields.requiredCredentials,
+  environment: App.Info.fields.environment,
+  mcps: App.Info.fields.mcps,
+  skills: App.Info.fields.skills,
+  dependsOn: App.Info.fields.dependsOn,
+  revision: Schema.Int,
 }).annotate({ identifier: "AppRegistry.Info" })
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}

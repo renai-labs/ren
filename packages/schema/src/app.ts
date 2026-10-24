@@ -1,15 +1,44 @@
 export * as App from "./app.js"
 
-import { Schema } from "effect"
-import { AppRelease } from "./app-release.js"
+import { Effect, Schema } from "effect"
 import { Auth } from "./auth.js"
 import { AppIdentity } from "./app/identity.js"
+import { Credential } from "./credential.js"
+import { Mcp } from "./mcp.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { Skill } from "./skill.js"
 import { Space } from "./space.js"
 
 export const ID = AppIdentity.ID
 export type ID = typeof ID.Type
+
+const PackageList = Schema.optionalKey(Schema.Array(Schema.NonEmptyString))
+
+export interface Packages extends Schema.Schema.Type<typeof Packages> {}
+export const Packages = Schema.Struct({
+  apt: PackageList,
+  npm: PackageList,
+  pip: PackageList,
+  go: PackageList,
+}).annotate({ identifier: "App.Packages" })
+
+export interface Environment extends Schema.Schema.Type<typeof Environment> {}
+export const Environment = Schema.Struct({
+  packages: Packages.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
+  buildCommands: Schema.Array(Schema.NonEmptyString.check(Schema.isMaxLength(4096)))
+    .check(Schema.isMaxLength(50))
+    .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
+}).annotate({ identifier: "App.Environment" })
+
+export interface Definition extends Schema.Schema.Type<typeof Definition> {}
+export const Definition = Schema.Struct({
+  requiredCredentials: Schema.Array(Credential.Requirement).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
+  environment: Schema.optionalKey(Environment),
+  skills: Schema.Record(Primitive.Slug, Skill.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
+  mcps: Schema.Record(Primitive.Slug, Mcp.Declaration).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed({}))),
+  dependsOn: Schema.Array(Primitive.Slug).pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed([]))),
+}).annotate({ identifier: "App.Definition", description: "The app’s content. One per app; an edit replaces it." })
 
 export interface Metadata extends Schema.Schema.Type<typeof Metadata> {}
 export const Metadata = Schema.Struct({
@@ -27,7 +56,10 @@ export const Info = Schema.Struct({
   name: Primitive.Name,
   description: Schema.NonEmptyString,
   icon: Schema.NullOr(Schema.String),
-  latestReleaseId: AppRelease.ID,
+  ...Definition.fields,
+  mcps: Schema.Record(Primitive.Slug, Mcp.Info),
+  skills: Schema.Record(Primitive.Slug, Skill.Info),
+  revision: Schema.Int.annotate({ description: "Counts the edits of the definition." }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),
@@ -36,29 +68,34 @@ export const Info = Schema.Struct({
 export interface Declaration extends Schema.Schema.Type<typeof Declaration> {}
 export const Declaration = Schema.Struct({
   ...Metadata.fields,
-  ...AppRelease.Configuration.fields,
+  ...Definition.fields,
 }).annotate({ identifier: "App.Declaration" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
   ...Declaration.fields,
   icon: Schema.optional(Primitive.HttpsUrl),
-  environment: Schema.optional(AppRelease.Environment),
+  environment: Schema.optional(Environment),
   slug: Primitive.Slug,
   ownerSpaceId: Space.ID,
 }).annotate({ identifier: "App.CreateInput" })
 
 export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
 export const UpdateInput = Schema.Struct({
+  ...Definition.fields,
+  environment: Schema.optional(Environment),
   name: Schema.optional(Primitive.Name),
   description: Schema.optional(Schema.NonEmptyString),
   icon: Schema.optional(Schema.NullOr(Primitive.HttpsUrl)),
-}).annotate({ identifier: "App.UpdateInput" })
+  expectedRevision: Schema.Int.annotate({ description: "The revision the edit starts from. Another edit gives 409." }),
+}).annotate({
+  identifier: "App.UpdateInput",
+  description: "The whole definition: it replaces the current one.",
+})
 
 export interface TransferOwnershipInput extends Schema.Schema.Type<typeof TransferOwnershipInput> {}
 export const TransferOwnershipInput = Schema.Struct({
   spaceId: Space.ID,
-  retainUse: Schema.optional(Schema.Boolean),
 }).annotate({ identifier: "App.TransferOwnershipInput" })
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
