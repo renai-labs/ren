@@ -83,6 +83,7 @@ export const stack = <E, R>(options: StackOptions<E, R>) =>
           entry,
           executor,
           root: options.root,
+          owner: process.pid,
           ...(options.lostEvery && { lostEvery: options.lostEvery }),
           ...(options.maxRunning && { maxRunning: options.maxRunning }),
           ...(options.template && { template: options.template }),

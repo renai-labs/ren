@@ -124,6 +124,7 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     SIGNUP_MX_CHECK: "false",
     SANDBOX_PROVIDER: "local",
     LOCAL_BRAIN_ROOT: path.join(os.tmpdir(), `${name}-brains`),
+    LOCAL_BRAIN_OWNER: String(process.pid),
     REN_URL: serverURL,
     // oxlint-disable-next-line ren/no-comments -- A brain's start signs its environment's executor variables, also when it has no environment.
     ENVIRONMENT_KEYS: JSON.stringify([
