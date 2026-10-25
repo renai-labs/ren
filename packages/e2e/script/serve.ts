@@ -4,6 +4,7 @@ import { Access } from "@ren/core/access"
 import { AppRegistry } from "@ren/core/app/registry"
 import { Seed } from "@ren/core/testing"
 import { Database } from "@ren/db/database"
+import { TestEnvironment } from "@ren/executor/testing"
 import { Signature } from "@ren/schema/signature"
 import { Effect, Layer, Redacted, Schema } from "effect"
 import os from "os"
@@ -20,12 +21,22 @@ const serverURL = `http://127.0.0.1:${ports.server}`
 const admin = new Bun.SQL(databaseURL.href)
 await admin.unsafe(`CREATE DATABASE "${name}"`)
 
+const ModelEntry = Schema.Struct({
+  model_name: Schema.String,
+  model_info: Schema.Record(Schema.String, Schema.Unknown),
+})
+
 let log = ""
 const children: Bun.Subprocess[] = []
 const mailbox = Bun.serve({
   port: ports.mailbox,
   hostname: "127.0.0.1",
-  fetch: (request) => {
+  fetch: async (request) => {
+    // oxlint-disable-next-line ren/no-comments -- A journey changes the model list that the stub LiteLLM serves at /model/info (U3).
+    if (request.method === "POST" && new URL(request.url).pathname === "/models") {
+      Shared.stub().modelInfo.set(Schema.decodeUnknownSync(Schema.Array(ModelEntry))(await request.json()))
+      return new Response(null, { status: 204 })
+    }
     const to = new URL(request.url).searchParams.get("to") ?? ""
     const start = log.lastIndexOf(`Email to ${to}:`)
     if (to === "" || start === -1) return new Response(null, { status: 404 })
@@ -114,6 +125,13 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     SANDBOX_PROVIDER: "local",
     LOCAL_BRAIN_ROOT: path.join(os.tmpdir(), `${name}-brains`),
     REN_URL: serverURL,
+    // oxlint-disable-next-line ren/no-comments -- A brain's start signs its environment's executor variables, also when it has no environment.
+    ENVIRONMENT_KEYS: JSON.stringify([
+      {
+        id: TestEnvironment.keys.privateKey.id,
+        key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(TestEnvironment.keys.privateKey.key),
+      },
+    ]),
     REN_LITELLM_URL: Shared.stub().root,
     REN_LITELLM_KEY: "stub-key",
     BRAIN_KEYS: JSON.stringify([
