@@ -373,7 +373,7 @@ export const start = async (options: {
       ),
     )
     const access = await Wait.until(`the brain of ${sessionId} to be ready`, 120_000, async () => {
-      const found = await core(Brains.Service.use((brain) => brain.access(sessionId, { userId: owner.createdBy })))
+      const found = await core(Brains.Service.use((brain) => brain.access(sessionId, { userId: owner.createdBy, memberId: owner.memberId })))
       if (found.status === "failed") throw new Error(`the brain of ${sessionId} failed: ${found.reason}`)
       return found.status === "ready" ? found : undefined
     })
@@ -395,7 +395,7 @@ export const start = async (options: {
             messageId: sendOptions.messageId ?? Session.MessageID.create(),
             prompt: { text },
             delivery: "steer",
-            sender: { userId: sendOptions.sender ?? owner.createdBy },
+            sender: sendOptions.sender ? { userId: sendOptions.sender } : { userId: owner.createdBy, memberId: owner.memberId },
           }),
         ),
       )
