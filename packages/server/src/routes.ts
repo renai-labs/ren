@@ -81,7 +81,7 @@ const Cors = HttpRouter.middleware(
     const auth = yield* Auth.Service
     return HttpMiddleware.cors({
       allowedOrigins: (origin) => auth.trustedOrigins.includes(origin),
-      allowedHeaders: ["authorization", "content-type"],
+      allowedHeaders: ["authorization", "content-type", Auth.consentOrganizationHeader],
       credentials: true,
     })
   }),

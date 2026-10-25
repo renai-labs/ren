@@ -1,7 +1,7 @@
 import { Layer, Schema } from "effect"
 import { Auth } from "../../src/auth.js"
 import { Routes } from "../../src/routes.js"
-import { makeApp, origin, sessionCookie, signUp } from "./app.js"
+import { authRequest, makeApp, origin, sessionCookie, signUp } from "./app.js"
 
 export const base = "http://localhost:4000"
 export const resource = `${base}/mcp`
@@ -51,13 +51,16 @@ export const makeMcpApp = () =>
 const challenge = async (verifier: string) =>
   Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).toString("base64url")
 
-export const startAuthorization = async (app: App, options: { cookie?: string; prompt?: string } = {}) => {
+export const startAuthorization = async (
+  app: App,
+  options: { cookie?: string; prompt?: string; scope?: string } = {},
+) => {
   const verifier = crypto.randomUUID() + crypto.randomUUID()
   const query = new URLSearchParams({
     response_type: "code",
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: "openid offline_access ren",
+    scope: options.scope ?? "openid offline_access ren",
     state: "state-1",
     code_challenge: await challenge(verifier),
     code_challenge_method: "S256",
@@ -70,11 +73,23 @@ export const startAuthorization = async (app: App, options: { cookie?: string; p
   return { page: new URL(authorized.headers.get("location") ?? ""), verifier }
 }
 
-export const finishAuthorization = async (app: App, cookie: string, consentPage: URL, verifier: string) => {
+export const finishAuthorization = async (
+  app: App,
+  cookie: string,
+  consentPage: URL,
+  verifier: string,
+  organizationId: string,
+  tokenHeaders: Record<string, string> = {},
+) => {
   const consent = await app.handler(
     new Request(`${base}/auth/oauth2/consent`, {
       method: "POST",
-      headers: { cookie, origin, "content-type": "application/json" },
+      headers: {
+        cookie,
+        origin,
+        "content-type": "application/json",
+        [Auth.consentOrganizationHeader]: organizationId,
+      },
       body: JSON.stringify({ accept: true, oauth_query: consentPage.search.slice(1) }),
     }),
   )
@@ -82,7 +97,7 @@ export const finishAuthorization = async (app: App, cookie: string, consentPage:
   const token = await app.handler(
     new Request(`${base}/auth/oauth2/token`, {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
+      headers: { "content-type": "application/x-www-form-urlencoded", ...tokenHeaders },
       body: new URLSearchParams({
         grant_type: "authorization_code",
         code: callback.searchParams.get("code") ?? "",
@@ -96,16 +111,35 @@ export const finishAuthorization = async (app: App, cookie: string, consentPage:
   return { callback, token }
 }
 
-export const authorize = async (app: App, cookie: string) => {
+export const authorize = async (app: App, cookie: string, organizationId: string) => {
   const started = await startAuthorization(app, { cookie })
-  return { consentPage: started.page, ...(await finishAuthorization(app, cookie, started.page, started.verifier)) }
+  return {
+    consentPage: started.page,
+    ...(await finishAuthorization(app, cookie, started.page, started.verifier, organizationId)),
+  }
 }
+
+export const tokenFor = async (app: App, cookie: string, organizationId: string) =>
+  (await Token((await authorize(app, cookie, organizationId)).token)).access_token
+
+export const organizationOf = async (app: App, cookie: string) =>
+  (await Me(await app.handler(new Request(`${base}/me`, { headers: { cookie } })))).organization.id
 
 export const accessToken = async (app: App, email: string) => {
   const cookie = sessionCookie(await signUp(app, email))
-  const me = await Me(await app.handler(new Request(`${base}/me`, { headers: { cookie } })))
-  const token = (await Token((await authorize(app, cookie)).token)).access_token
-  return { cookie, organizationId: me.organization.id, token }
+  const organizationId = await organizationOf(app, cookie)
+  return { cookie, organizationId, token: await tokenFor(app, cookie, organizationId) }
+}
+
+const Invitation = json(Schema.Struct({ id: Schema.String }))
+
+export const joinOrganization = async (app: App, ownerCookie: string, email: string) => {
+  const cookie = sessionCookie(await signUp(app, email))
+  const invitation = await Invitation(
+    await app.handler(authRequest("/organization/invite-member", { email, role: "member" }, ownerCookie)),
+  )
+  await app.handler(authRequest("/organization/accept-invitation", { invitationId: invitation.id }, cookie))
+  return cookie
 }
 
 export const mcp = (app: App, body: unknown, headers: Record<string, string> = {}) =>

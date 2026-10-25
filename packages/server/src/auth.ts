@@ -41,6 +41,8 @@ export const ClientMetadataFetch = Context.Reference<ClientMetadataResourceFetch
 
 export const mcpPath = "/mcp"
 
+export const consentOrganizationHeader = Auth.consentOrganizationHeader
+
 const AccessToken = Schema.Struct({
   sub: Auth.UserID,
   [BetterAuth.organizationClaim]: Auth.OrganizationID,

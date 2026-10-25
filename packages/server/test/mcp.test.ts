@@ -1,11 +1,27 @@
-import { afterAll, describe, expect, test } from "bun:test"
+import { afterAll, afterEach, describe, expect, setSystemTime, test } from "bun:test"
 import { Schema } from "effect"
-import { signUp } from "./lib/app.js"
-import { accessToken, base, makeMcpApp, mcp, modern, result } from "./lib/mcp.js"
+import { SignJWT, exportJWK, generateKeyPair } from "jose"
+import { authRequest, call, signUp } from "./lib/app.js"
+import {
+  accessToken,
+  base,
+  finishAuthorization,
+  joinOrganization,
+  makeMcpApp,
+  mcp,
+  modern,
+  result,
+  startAuthorization,
+  tokenFor,
+} from "./lib/mcp.js"
 
 const app = makeMcpApp()
 
 afterAll(() => app.dispose())
+
+afterEach(() => setSystemTime())
+
+const Space = Schema.Struct({ id: Schema.String })
 
 const initialize = {
   jsonrpc: "2.0",
@@ -50,6 +66,39 @@ describe("POST /mcp", () => {
     }
   })
 
+  test("refuses an access token that has expired, lacks the ren scope or is bound to a DPoP key", async () => {
+    const caller = await accessToken(app, "token-rules@example.com")
+    const status = async (token: string) => (await mcp(app, initialize, { authorization: `Bearer ${token}` })).status
+    const issue = async (scope?: string, tokenHeaders?: Record<string, string>) => {
+      const started = await startAuthorization(app, {
+        cookie: caller.cookie,
+        prompt: "consent",
+        ...(scope && { scope }),
+      })
+      const flow = await finishAuthorization(
+        app,
+        caller.cookie,
+        started.page,
+        started.verifier,
+        caller.organizationId,
+        tokenHeaders,
+      )
+      expect(flow.token.status).toBe(200)
+      return Schema.decodeUnknownSync(Schema.Struct({ access_token: Schema.String }))(await flow.token.json())
+        .access_token
+    }
+    const key = await generateKeyPair("ES256")
+    const proof = await new SignJWT({ htm: "POST", htu: `${base}/auth/oauth2/token`, jti: crypto.randomUUID() })
+      .setProtectedHeader({ alg: "ES256", typ: "dpop+jwt", jwk: await exportJWK(key.publicKey) })
+      .setIssuedAt()
+      .sign(key.privateKey)
+    expect(await status(await issue("openid offline_access"))).toBe(401)
+    expect(await status(await issue(undefined, { dpop: proof }))).toBe(401)
+    expect(await status(caller.token)).toBe(200)
+    setSystemTime(new Date(Date.now() + 61 * 60 * 1000))
+    expect(await status(caller.token)).toBe(401)
+  })
+
   test("serves initialize and server/discover to a caller with an access token", async () => {
     const caller = await accessToken(app, "discover@example.com")
     const authorization = `Bearer ${caller.token}`
@@ -71,6 +120,23 @@ describe("Ren API with an MCP access token", () => {
       user: { email: "api@example.com" },
       organization: { id: caller.organizationId },
     })
+  })
+
+  test("refuses a token once the person leaves its organization, without falling back to their other one", async () => {
+    const owner = await accessToken(app, "team-owner@example.com")
+    const member = await joinOrganization(app, owner.cookie, "leaver@example.com")
+    const authorization = `Bearer ${await tokenFor(app, member, owner.organizationId)}`
+    const me = () => app.handler(new Request(`${base}/me`, { headers: { authorization } }))
+    expect(await (await me()).json()).toMatchObject({ organization: { id: owner.organizationId } })
+    await app.handler(
+      authRequest(
+        "/organization/remove-member",
+        { memberIdOrEmail: "leaver@example.com", organizationId: owner.organizationId },
+        owner.cookie,
+      ),
+    )
+    expect((await me()).status).toBe(401)
+    expect((await mcp(app, initialize, { authorization })).status).toBe(401)
   })
 })
 
@@ -121,6 +187,20 @@ describe("Ren MCP tools", () => {
     expect(created).toMatchObject({ isError: false, structuredContent: { name: "Launch" } })
     expect(await call("space_update", { id, name: "Launch week" })).toMatchObject({ isError: false })
     expect(await call("space_get", { idOrSlug: id })).toMatchObject({ structuredContent: { name: "Launch week" } })
+  })
+
+  test("runs a tool with the organization and the role of its token", async () => {
+    const owner = await accessToken(app, "space-owner@example.com")
+    const space = Schema.decodeUnknownSync(Space)(
+      await (await call(app, owner.cookie, "POST", "/spaces", { name: "Private" })).json(),
+    )
+    const member = await joinOrganization(app, owner.cookie, "space-reader@example.com")
+    const get = async (token: string) =>
+      result(await modern(app, token, "tools/call", { name: "space_get", arguments: { idOrSlug: space.id } }))
+    const notFound = { isError: true, content: [{ type: "text", text: expect.stringMatching(/^NotFoundError: /) }] }
+    expect(await get(owner.token)).toMatchObject({ isError: false, structuredContent: { id: space.id } })
+    expect(await get(await tokenFor(app, member, owner.organizationId))).toMatchObject(notFound)
+    expect(await get((await accessToken(app, "other-org@example.com")).token)).toMatchObject(notFound)
   })
 
   test("returns a Ren API error or an argument that the endpoint refuses as a tool error", async () => {

@@ -12,7 +12,7 @@ import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { BASE_ERROR_CODES, betterAuth } from "better-auth"
 import type { BetterAuthPlugin } from "better-auth"
-import { APIError, createAuthMiddleware } from "better-auth/api"
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
 import { bearer, emailOTP, jwt, organization } from "better-auth/plugins"
 import { Effect, Option, Schema } from "effect"
 import { AuthEmail } from "./auth-email.js"
@@ -78,6 +78,8 @@ const signUpPath = "/sign-up/email"
 const SignUp = Schema.Struct({ email: Schema.String })
 
 const CreateOrganization = Schema.Struct({ slug: Schema.String })
+
+const AcceptedConsent = Schema.Struct({ accept: Schema.Literal(true) })
 
 const SlugConflict = Schema.Struct({
   cause: Schema.Struct({
@@ -157,6 +159,35 @@ const guardRequests = (input: Input) =>
         return
     }
   })
+
+const consentOrganization = (input: Input) =>
+  ({
+    id: "ren-consent-organization",
+    hooks: {
+      before: [
+        {
+          matcher: (ctx) => ctx.path === "/oauth2/consent" && Schema.is(AcceptedConsent)(ctx.body),
+          handler: createAuthMiddleware(async (ctx) => {
+            const session = await getSessionFromCtx(ctx)
+            if (!session) return
+            const organizationId = ctx.headers?.get(Auth.consentOrganizationHeader) ?? ""
+            const member = await input.database.query.member.findFirst({
+              columns: { id: true },
+              where: { userId: session.user.id, organizationId },
+            })
+            if (!member) throw new APIError("FORBIDDEN", { message: "Choose an organization that you belong to." })
+            return {
+              context: {
+                context: {
+                  session: { ...session, session: { ...session.session, activeOrganizationId: organizationId } },
+                },
+              },
+            }
+          }),
+        },
+      ],
+    },
+  }) satisfies BetterAuthPlugin
 
 const guardAccountCreation =
   (input: Input) =>
@@ -282,6 +313,7 @@ export const make = (input: Input) => {
           metadataProfile: "mcp-2026-07-28",
         }),
       ),
+      consentOrganization(input),
       indexes,
     ],
     advanced: {

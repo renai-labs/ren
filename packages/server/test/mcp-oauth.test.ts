@@ -1,7 +1,17 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { Auth } from "@ren/schema/auth"
 import { decodeJwt } from "jose"
-import { origin, sessionCookie, signUp } from "./lib/app.js"
-import { Redirect, authorize, base, finishAuthorization, makeMcpApp, resource, startAuthorization } from "./lib/mcp.js"
+import { authRequest, origin, sessionCookie, signUp } from "./lib/app.js"
+import {
+  Redirect,
+  authorize,
+  base,
+  finishAuthorization,
+  makeMcpApp,
+  organizationOf,
+  resource,
+  startAuthorization,
+} from "./lib/mcp.js"
 
 const app = makeMcpApp()
 
@@ -10,6 +20,35 @@ afterAll(() => app.dispose())
 const get = (path: string, headers: HeadersInit = {}) => app.handler(new Request(`${base}${path}`, { headers }))
 
 describe("Ren MCP OAuth", () => {
+  test("binds consent to the organization the person chose, even after another tab switches the session", async () => {
+    const cookie = sessionCookie(await signUp(app, "consent-race@example.com"))
+    const chosen = await organizationOf(app, cookie)
+    const started = await startAuthorization(app, { cookie })
+    const other = await (
+      await app.handler(authRequest("/organization/create", { name: "Other", slug: "consent-other" }, cookie))
+    ).json()
+    await app.handler(authRequest("/organization/set-active", { organizationId: other.id }, cookie))
+    const flow = await finishAuthorization(app, cookie, started.page, started.verifier, chosen)
+    expect(decodeJwt((await flow.token.json()).access_token)).toMatchObject({ ren_org: chosen })
+    expect(await organizationOf(app, cookie)).toBe(other.id)
+  })
+
+  test("refuses consent without an organization or for an organization the person does not belong to", async () => {
+    const cookie = sessionCookie(await signUp(app, "consent-member@example.com"))
+    const stranger = await organizationOf(app, sessionCookie(await signUp(app, "consent-stranger@example.com")))
+    const started = await startAuthorization(app, { cookie })
+    const consent = (headers: Record<string, string>) =>
+      app.handler(
+        new Request(`${base}/auth/oauth2/consent`, {
+          method: "POST",
+          headers: { cookie, origin, "content-type": "application/json", ...headers },
+          body: JSON.stringify({ accept: true, oauth_query: started.page.search.slice(1) }),
+        }),
+      )
+    expect((await consent({})).status).toBe(403)
+    expect((await consent({ [Auth.consentOrganizationHeader]: stranger })).status).toBe(403)
+  })
+
   test("sends a client that asks to create an account to sign-up, and gives the new account a token for its new organization", async () => {
     const started = await startAuthorization(app, { prompt: "create" })
     expect(started.page.pathname).toBe("/app/signup")
@@ -30,8 +69,8 @@ describe("Ren MCP OAuth", () => {
     )
     const consentPage = new URL((await Redirect(continued)).url)
     expect(consentPage.pathname).toBe("/app/consent")
-    const organizationId: string = (await (await get("/me", { cookie })).json()).organization.id
-    const flow = await finishAuthorization(app, cookie, consentPage, started.verifier)
+    const organizationId = await organizationOf(app, cookie)
+    const flow = await finishAuthorization(app, cookie, consentPage, started.verifier, organizationId)
     expect(decodeJwt((await flow.token.json()).access_token)).toMatchObject({ ren_org: organizationId })
   })
 
@@ -63,8 +102,8 @@ describe("Ren MCP OAuth", () => {
 
   test("gives a CIMD client an access token for /mcp in the organization the person consented with", async () => {
     const cookie = sessionCookie(await signUp(app, "mcp@example.com", "Ada"))
-    const organizationId: string = (await (await get("/me", { cookie })).json()).organization.id
-    const flow = await authorize(app, cookie)
+    const organizationId = await organizationOf(app, cookie)
+    const flow = await authorize(app, cookie, organizationId)
     expect(flow.consentPage.pathname).toBe("/app/consent")
     expect(flow.callback.searchParams.get("iss")).toBe(`${base}/auth`)
     expect(flow.token.status).toBe(200)

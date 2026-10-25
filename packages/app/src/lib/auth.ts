@@ -122,6 +122,8 @@ export const isAdminRole = Auth.isAdministrator
 
 export const organizationSlug = Auth.organizationSlug
 
+export const consentOrganizationHeader = Auth.consentOrganizationHeader
+
 const organizationKey = (organizationId: string) => ["auth", "organization", organizationId] as const
 
 export function organizationOptions(client: Client, organizationId: string) {
