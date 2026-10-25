@@ -20,11 +20,10 @@ export function Consent(props: {
   const organization = props.organizations.find((candidate) => candidate.id === organizationId)
   const answer = useMutation({
     mutationFn: async (accept: boolean) => {
-      if (accept && organizationId !== undefined && organizationId !== props.activeOrganizationId) {
-        const switched = await auth.organization.setActive({ organizationId })
-        if (switched.error !== null) throw new Error(switched.error.message ?? "Couldn’t choose the organization.")
-      }
-      const result = await auth.oauth2.consent({ accept })
+      const result = await auth.oauth2.consent({
+        accept,
+        fetchOptions: { headers: { [Auth.consentOrganizationHeader]: organizationId ?? "" } },
+      })
       if (result.error !== null) throw new Error(result.error.message ?? "Couldn’t send your answer. Try again.")
     },
   })

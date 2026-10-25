@@ -7,6 +7,7 @@ import { createRouter } from "@tanstack/react-router"
 import { routeTree } from "../route-tree.gen.js"
 import type { Platform } from "../platform/platform.js"
 import { Auth } from "./auth.js"
+import { OAuthSearch } from "./oauth-search.js"
 
 export interface Context {
   readonly platform: Platform.Info
@@ -34,6 +35,8 @@ export function make(platform: Platform.Info) {
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
     basepath: "/app",
+    parseSearch: OAuthSearch.parse,
+    stringifySearch: OAuthSearch.stringify,
   })
   return { context, router }
 }

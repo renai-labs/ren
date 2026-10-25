@@ -35,6 +35,8 @@ export const OAuthConsentID = Identifier.make("ocn", "Auth.OAuthConsentID")
 
 export const OAuthClientAssertionID = Identifier.make("oca", "Auth.OAuthClientAssertionID")
 
+export const consentOrganizationHeader = "x-ren-consent-organization"
+
 export const Role = Schema.Literals(["owner", "admin", "member"]).annotate({ identifier: "Auth.Role" })
 export type Role = typeof Role.Type
 
