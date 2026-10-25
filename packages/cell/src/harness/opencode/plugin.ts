@@ -11,6 +11,7 @@ import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentSession } from "@ren/brain/environment/session"
 import { BrainSettings } from "@ren/brain/settings"
 import { AppCatalog } from "@ren/schema/app-catalog"
+import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import {
   Clock,
@@ -193,6 +194,10 @@ export const make = (
   directoryOf: (sessionId: string) => string,
   skillSources: OpenCodeSkills.Sources,
   ren: Option.Option<OpenCodeMcp.Ren>,
+  members: {
+    readonly egress: boolean
+    readonly lastSpeaker: (sessionId: string) => Effect.Effect<Option.Option<OpenCodeChat.Speaker>>
+  },
 ) =>
   Plugin.define({
     id: "ren",
@@ -424,6 +429,27 @@ export const make = (
             Ref.update(shared.instances, (all) => new Map([...all].filter((entry) => entry.at(1) !== instance))),
           )
         }
+        // oxlint-disable-next-line ren/no-comments -- A request to a Ren model names the sender of the root chat's newest user message, so a subagent or compaction step names the sender of its root turn. A title names nobody. Behind the egress it is a placeholder that Ren checks against the brain's space.
+        const rootOf = (sessionID: SessionID): Effect.Effect<SessionID> =>
+          context.session.get({ sessionID }).pipe(
+            Effect.flatMap((info) => (info.parentID ? rootOf(info.parentID) : Effect.succeed(sessionID))),
+            Effect.orElseSucceed(() => sessionID),
+          )
+        yield* context.session.hook("model.request", (event) =>
+          Effect.gen(function* () {
+            delete event.headers[Models.personHeader]
+            if (event.kind === "title") return
+            if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
+            const memberId = Option.flatMap(
+              yield* members.lastSpeaker(yield* rootOf(event.sessionID)),
+              (speaker) => Option.fromUndefinedOr(speaker.memberID),
+            )
+            if (Option.isNone(memberId)) return
+            event.headers[Models.personHeader] = members.egress
+              ? Models.personPlaceholder(memberId.value)
+              : memberId.value
+          }),
+        )
         yield* context.session.hook("retry", (event) =>
           Effect.gen(function* () {
             if (event.error.status !== 401 || event.attempt !== 2) return

@@ -26,6 +26,7 @@ export interface Call {
   readonly tools: ReadonlyArray<string>
   readonly authorization: string | null
   readonly apiKey: string | null
+  readonly member: string | null
   readonly body: ChatRequest
 }
 
@@ -200,6 +201,7 @@ const toCall = (body: ChatRequest, request: Request): Call => {
     tools: body.tools?.map((tool) => tool.function.name) ?? [],
     authorization: request.headers.get("authorization"),
     apiKey: request.headers.get("x-api-key"),
+    member: request.headers.get("ren-member"),
     body,
   }
 }

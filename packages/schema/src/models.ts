@@ -76,6 +76,14 @@ export const catalog = (access: Access): Catalog => ({
 // oxlint-disable-next-line ren/no-comments -- Behind an egress a brain holds no model key: it sends ren:MODELS, and the egress puts in the real key that Ren mints (CredentialSource.layerMinted).
 export const placeholderKey = "ren:MODELS"
 
+// oxlint-disable-next-line ren/no-comments -- A model request names the member who sent the message in Ren's own header; the service maps it to the gateway's person.
+export const personHeader = "ren-member"
+
+export const personLabel = "PERSON"
+
+// oxlint-disable-next-line ren/no-comments -- Behind the egress a brain names the member by placeholder; Ren puts the member id in only when that member is in the brain's space.
+export const personPlaceholder = (memberId: string) => `ren:${personLabel}.${memberId}`
+
 export interface LiteLLMModelInfo extends Schema.Schema.Type<typeof LiteLLMModelInfo> {}
 export const LiteLLMModelInfo = Schema.Struct({
   data: Schema.Array(
