@@ -10,15 +10,12 @@ import {
   DateTime,
   Duration,
   Effect,
-  FileSystem,
   Layer,
   Option,
-  Path,
   Schedule,
   Redacted,
   Ref,
   Schema,
-  Stream,
   Struct,
 } from "effect"
 
@@ -52,61 +49,6 @@ export const layerNone = Layer.succeed(
       return Models.Access.make({ endpoints: [] })
     }),
     inference: Effect.succeedNone,
-  }),
-)
-
-const decodeFile = Schema.decodeUnknownEffect(Schema.fromJsonString(Models.Access))
-
-export const layerConfig = Layer.effect(
-  Service,
-  Effect.gen(function* () {
-    const file = yield* Config.String("REN_MODELS_FILE")
-    const fs = yield* FileSystem.FileSystem
-    const path = yield* Path.Path
-    const read = fs
-      .readFileString(file)
-      .pipe(
-        Effect.flatMap((text) =>
-          Effect.map(decodeFile(text), (access) => ({ access, revision: Bun.hash(text).toString(16) })),
-        ),
-      )
-    const current = yield* Ref.make(
-      yield* read.pipe(
-        Effect.mapError((cause) => new Error(`REN_MODELS_FILE ${file} is not a valid model list`, { cause })),
-        Effect.orDie,
-      ),
-    )
-    yield* fs.watch(path.dirname(file)).pipe(
-      Stream.filter((event) => path.basename(event.path) === path.basename(file)),
-      Stream.debounce("200 millis"),
-      Stream.runForEach(() =>
-        read.pipe(
-          Effect.matchEffect({
-            onFailure: (error) =>
-              Effect.logError("REN_MODELS_FILE changed to an invalid model list; Ren keeps the last valid one", error),
-            onSuccess: (loaded) =>
-              Ref.set(current, loaded).pipe(Effect.andThen(Effect.logInfo("Reloaded REN_MODELS_FILE"))),
-          }),
-        ),
-      ),
-      Effect.forkScoped,
-    )
-    return Service.of({
-      catalog: Effect.fn("Models.catalog")(function* () {
-        return Models.catalog((yield* Ref.get(current)).access)
-      }),
-      revision: Effect.map(Ref.get(current), (loaded) => loaded.revision),
-      grant: Effect.fn("Models.grant")(function* () {
-        const access = (yield* Ref.get(current)).access
-        const expiresAt = DateTime.addDuration(yield* DateTime.now, keyLifetime)
-        return Models.Access.make({
-          endpoints: access.endpoints.map((endpoint) =>
-            Struct.evolve(endpoint, { apiKey: (apiKey) => ({ key: apiKey.key, expiresAt }) }),
-          ),
-        })
-      }),
-      inference: Effect.succeedNone,
-    })
   }),
 )
 

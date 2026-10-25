@@ -73,13 +73,11 @@ const host = Layer.unwrap(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- HR28: with REN_LITELLM_URL, the picker and the brains read LiteLLM; REN_MODELS_FILE stays for a local run without it.
-const models = Layer.unwrap(
-  Effect.gen(function* () {
-    const url = yield* Config.option(Config.String("REN_LITELLM_URL"))
-    return Option.isSome(url) ? Models.layerLiteLLM.pipe(Layer.provide(FetchHttpClient.layer)) : Models.layerConfig
-  }),
-)
+// oxlint-disable-next-line ren/no-comments -- HR28, F2: the picker and the brains read the model list from LiteLLM (REN_LITELLM_URL); a local run uses LiteLLM or its stub.
+const models = Models.layerLiteLLM.pipe(Layer.provide(FetchHttpClient.layer))
+
+// oxlint-disable-next-line ren/no-comments -- Every stored credential is sealed with ENVELOPE_KEYS; without a key the server would start and then refuse each credential save, so it does not start.
+const envelope = Layer.unwrap(Effect.as(Config.Redacted("ENVELOPE_KEYS"), Envelope.layerLocal))
 
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(ProviderConnect.layer),
@@ -94,7 +92,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
   Layer.provideMerge(McpProvider.layerCleanup),
   Layer.provideMerge(McpProvider.layer([McpProvider.composio])),
-  Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerPublic)),
+  Layer.provideMerge(Layer.mergeAll(envelope, Access.layer, OAuthFetch.layerPublic)),
 )
 
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
