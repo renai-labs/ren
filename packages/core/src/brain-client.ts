@@ -34,7 +34,12 @@ export interface Interface {
   readonly hostToken: (host: Host) => Effect.Effect<string>
   readonly clientToken: (
     target: Target,
-    claims: { readonly sid: Session.ID; readonly sub: Auth.UserID; readonly name?: string },
+    claims: {
+      readonly sid: Session.ID
+      readonly sub: Auth.UserID
+      readonly member: typeof Auth.MemberID.Type
+      readonly name?: string
+    },
   ) => Effect.Effect<{ readonly token: string; readonly exp: number }>
   readonly verify: (token: string) => Effect.Effect<Option.Option<BrainToken.Claims>>
 }
@@ -114,6 +119,7 @@ export const layer = Layer.effect(
                 gen: target.generation,
                 sid: claims.sid,
                 sub: claims.sub,
+                member: claims.member,
                 ...(claims.name && { name: claims.name }),
                 exp,
               },

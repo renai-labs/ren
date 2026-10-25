@@ -32,6 +32,25 @@ export interface SessionRef {
   readonly userId?: Auth.UserID | undefined
 }
 
+// oxlint-disable-next-line ren/no-comments -- The actor's membership in its organization: a model request names its sender by member id.
+export const memberOf = Effect.fn("Actor.memberOf")(function* (
+  db: Database.Interface["db"],
+  actor: Pick<Info, "userId" | "organizationId">,
+) {
+  const found = (yield* db
+    .select({ id: Database.Schema.member.id })
+    .from(Database.Schema.member)
+    .where(
+      and(
+        eq(Database.Schema.member.organizationId, actor.organizationId),
+        eq(Database.Schema.member.userId, actor.userId),
+      ),
+    )
+    .pipe(Effect.orDie)).at(0)
+  if (!found) return yield* new Primitive.Forbidden({ message: "You are not a member of this organization." })
+  return Auth.MemberID.make(found.id)
+})
+
 export interface Interface {
   readonly fromSession: (session: SessionRef) => Effect.Effect<AgentInfo, Primitive.Forbidden>
 }

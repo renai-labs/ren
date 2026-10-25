@@ -50,6 +50,7 @@ interface Prompt extends Mentions {
 }
 
 export interface Sender extends SessionMessage.Sender {
+  readonly memberId?: string
   readonly name?: string
 }
 

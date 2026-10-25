@@ -65,9 +65,9 @@ export const member = Effect.fnUntraced(function* (
   role: string,
 ) {
   const database = yield* Database.Service
-  yield* database.db
-    .insert(Database.Schema.member)
-    .values({ id: Auth.MemberID.create(), organizationId, userId, role, createdAt: new Date() })
+  const id = Auth.MemberID.create()
+  yield* database.db.insert(Database.Schema.member).values({ id, organizationId, userId, role, createdAt: new Date() })
+  return id
 })
 
 export const actor = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, role: string) {

@@ -55,9 +55,9 @@ const page = { page: 1, pageSize: 50 }
 const member = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, role = "member") {
   const provisioning = yield* SpaceProvisioning.Service
   const seeded = yield* Seed.user()
-  yield* Seed.member(organizationId, seeded.id, role)
+  const memberId = yield* Seed.member(organizationId, seeded.id, role)
   yield* provisioning.createInitialMemberships(organizationId, seeded)
-  return { userId: seeded.id, organizationId, roles: [role] }
+  return { userId: seeded.id, organizationId, roles: [role], memberId }
 })
 
 const saved = Effect.fnUntraced(function* (texts: ReadonlyArray<string>) {
@@ -84,7 +84,7 @@ const claims = (token: string) =>
 
 describe("Session", () => {
   it.live(
-    "a member starts a chat with its first message in a space; members of the space see it, others do not, and its access carries the member",
+    "a member starts a chat with its first message in a space; members of the space see it, others do not, and its first message and access carry the member",
     () =>
       Effect.gen(function* () {
         const sessions = yield* Session.Service
@@ -102,6 +102,12 @@ describe("Session", () => {
         })
         expect(created).toMatchObject({ id, spaceId: team.id, createdBy: ada.userId, archivedAt: null })
         expect((yield* Effect.promise(() => script.called())).text).toContain(script.marker)
+        const database = yield* Database.Service
+        const row = (yield* database.db
+          .select({ start: Database.Schema.agent_session.start_input })
+          .from(Database.Schema.agent_session)
+          .where(eq(Database.Schema.agent_session.id, id))).at(0)
+        expect(row?.start).toMatchObject({ initialMessage: { sender: { userId: ada.userId, memberId: ada.memberId } } })
         expect((yield* sessions.list(ada, { spaceId: team.id, ...page })).items.map((item) => item.id)).toEqual([id])
         expect(yield* sessions.list(grace, { spaceId: team.id, ...page })).toMatchObject({ items: [], total: 0 })
         expect((yield* sessions.list(ada, page)).items.map((item) => item.id)).toEqual([id])
@@ -116,6 +122,7 @@ describe("Session", () => {
           sid: id,
           scope: "client",
           sub: ada.userId,
+          member: ada.memberId,
           name: `Ada (${ada.userId.toLowerCase()}@example.com)`,
         })
         const read = yield* Effect.promise(() =>

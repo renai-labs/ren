@@ -24,6 +24,7 @@ export const ClientClaims = Schema.Struct({
   gen: Schema.Int,
   sid: Session.ID,
   sub: Schema.String,
+  member: Schema.optionalKey(Auth.MemberID),
   name: Schema.optionalKey(Schema.String),
   exp: Schema.Int,
 }).annotate({ identifier: "BrainToken.ClientClaims" })

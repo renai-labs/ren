@@ -5,6 +5,7 @@ import { Shared, type StubModel, TestToken } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
+import { Auth } from "@ren/schema/auth"
 import { SessionMessage } from "@ren/schema/session/message"
 import { eq } from "drizzle-orm"
 import { Effect, Fiber, Layer, Schedule, Schema } from "effect"
@@ -77,7 +78,7 @@ const opened = Effect.fnUntraced(function* (text: string) {
     .from(Database.Schema.agent_session)
     .where(eq(Database.Schema.agent_session.id, sessionId))).at(0)?.brainId
   if (!brainId) return yield* Effect.die(new Error("The chat has no brain"))
-  const access = yield* Host.ready(brains.access(sessionId, { userId: owner.createdBy }))
+  const access = yield* Host.ready(brains.access(sessionId, { userId: owner.createdBy, memberId: Auth.MemberID.create() }))
   const chat = (path: string, init: RequestInit = {}) =>
     Effect.tryPromise(() =>
       fetch(`${access.url}/chat/session/${sessionId}${path}`, {

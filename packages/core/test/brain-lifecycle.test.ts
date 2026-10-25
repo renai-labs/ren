@@ -3,6 +3,7 @@ import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { SqlClient } from "effect/sql"
+import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
@@ -459,7 +460,7 @@ describe("brain runs", () => {
     const answers = await runtime.runPromise(
       Brains.Service.use((brains) =>
         Effect.forEach([gone, paused, running], (chat) =>
-          brains.access(chat.sessionId, { userId: chat.creatorId }, { unreachable: true }),
+          brains.access(chat.sessionId, { userId: chat.creatorId, memberId: Auth.MemberID.create() }, { unreachable: true }),
         ),
       ),
     )

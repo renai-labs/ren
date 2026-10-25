@@ -10,7 +10,7 @@ import { and, asc, count, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { Array, Context, DateTime, Effect, Layer, Option, Predicate, Schema } from "effect"
 import { Access } from "./access.js"
-import type { Actor } from "./actor.js"
+import { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
 import { Primitive } from "./primitive.js"
 import { SessionRunner } from "./session/runner.js"
@@ -220,7 +220,7 @@ export const layer = Layer.effect(
       const message = {
         messageId: Session.MessageID.create(),
         prompt: { text: planned.plan.text },
-        sender: { userId: actor.userId },
+        sender: { userId: actor.userId, memberId: yield* Actor.memberOf(database.db, actor) },
       }
       const sessionId = planned.plan.sessionId ?? Session.ID.create()
       yield* planned.plan.sessionId
