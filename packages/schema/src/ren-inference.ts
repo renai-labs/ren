@@ -22,6 +22,10 @@ export const Connection = Schema.Struct({
   status: Schema.Struct({ label: Schema.String, tone: Tone }),
   plan: Schema.optionalKey(Schema.String),
   canReconnect: Schema.Boolean,
+  canManage: Schema.Boolean.annotate({
+    description:
+      "True when the viewer connected it, or is an admin or owner: they can rename, reconnect and remove it.",
+  }),
   meters: Schema.Array(Meter),
 }).annotate({
   identifier: "RenInference.Connection",
@@ -48,6 +52,3 @@ export const RenameInput = Schema.Struct({
     Schema.isMaxLength(64, { message: "Use 64 characters or fewer." }),
   ),
 }).annotate({ identifier: "RenInference.RenameInput" })
-
-export const Attribution = Schema.Literals(["member", "org"]).annotate({ identifier: "RenInference.Attribution" })
-export type Attribution = typeof Attribution.Type

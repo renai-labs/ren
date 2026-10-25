@@ -9,7 +9,6 @@ import { RenInference } from "./ren-inference.js"
 export interface Interface {
   readonly forgetMember: (input: {
     readonly organizationId: Auth.OrganizationID
-    readonly userId: Auth.UserID
     readonly memberId: typeof Auth.MemberID.Type
   }) => Effect.Effect<void>
 }
@@ -18,7 +17,7 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Re
 
 // oxlint-disable-next-line ren/no-comments -- One durable run per removed membership, so the Ren Inference Service forgets the member even when it is down at removal time. The member id is unique per membership, so a person who rejoins and leaves again runs again.
 const ForgetMemberRun = DurableRunner.make("RenInferenceForgetMember", {
-  payload: { organizationId: Auth.OrganizationID, userId: Auth.UserID, memberId: Auth.MemberID },
+  payload: { organizationId: Auth.OrganizationID, memberId: Auth.MemberID },
   idempotencyKey: (payload) => `ren-inference-forget-member:${payload.memberId}`,
 })
 
@@ -30,7 +29,7 @@ export const layer = Layer.effect(
     yield* DurableRunner.register(ForgetMemberRun, (payload) =>
       DurableRunner.supervise(
         `ren-inference-forget-member:${payload.memberId}`,
-        inference.removeMember(payload.organizationId, payload.userId),
+        inference.removeMember(payload.organizationId, payload.memberId),
       ),
     )
     return Service.of({

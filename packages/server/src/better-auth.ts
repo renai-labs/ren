@@ -39,7 +39,7 @@ export interface Input {
     readonly createInitialMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
     readonly activatePendingMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
     readonly archiveMemberships: (organizationId: string, userId: string) => Promise<void>
-    readonly forgetInferenceMember: (organizationId: string, userId: string, memberId: string) => Promise<void>
+    readonly forgetInferenceMember: (organizationId: string, memberId: string) => Promise<void>
   }
 }
 
@@ -222,7 +222,7 @@ export const make = (input: Input) => {
       },
       afterRemoveMember: async (data) => {
         await input.provisioning.archiveMemberships(data.organization.id, data.user.id)
-        await input.provisioning.forgetInferenceMember(data.organization.id, data.user.id, data.member.id)
+        await input.provisioning.forgetInferenceMember(data.organization.id, data.member.id)
       },
     },
     sendInvitationEmail: async (data) => {

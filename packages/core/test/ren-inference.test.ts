@@ -1,10 +1,8 @@
 import { describe, expect } from "bun:test"
-import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
-import { and, eq } from "drizzle-orm"
-import { ConfigProvider, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { ConfigProvider, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Models } from "../src/models.js"
 import { RenInference } from "../src/ren-inference.js"
@@ -67,14 +65,12 @@ const it = testEffect(
 
 describe("Models.layerRenInference", () => {
   it.live(
-    "builds the grant from the service's /model/info and key, and attributes a session brain's key to the member who started it",
+    "builds the grant from the service's /model/info and key; the key names the brain and the organization only",
     () =>
       Effect.gen(function* () {
         const models = yield* Models.Service
-        const database = yield* Database.Service
         const owner = yield* Seed.owner()
-        const sessionId = yield* Seed.session(owner)
-        const brainId = Brain.ofSession(sessionId)
+        const brainId = Brain.ofSession(yield* Seed.session(owner))
         const expiresAt = new Date(Date.now() + 6 * 3600_000).toISOString()
         replies.set("/v1/keys", () => Response.json({ key: "key-brain", expiresAt }))
         seen.length = 0
@@ -87,44 +83,11 @@ describe("Models.layerRenInference", () => {
         expect(granted.endpoints[0]?.models.map((model) => model.id)).toEqual(["stub-model"])
         expect(granted.endpoints.map((endpoint) => Redacted.value(endpoint.apiKey.key))).toEqual(["key-brain"])
         expect(granted.endpoints[0]?.apiKey.expiresAt?.epochMilliseconds).toBe(Date.parse(expiresAt))
-        const member = (yield* database.db
-          .select({ id: Database.Schema.member.id })
-          .from(Database.Schema.member)
-          .where(
-            and(
-              eq(Database.Schema.member.organizationId, owner.organizationId),
-              eq(Database.Schema.member.userId, owner.createdBy),
-            ),
-          )).at(0)
-        expect(seen).toEqual([
-          { path: "/model/info", body: null, claims: expect.objectContaining({ org: owner.organizationId }) },
-          {
-            path: "/v1/keys",
-            body: { brainId, attribution: "member" },
-            claims: expect.objectContaining({ org: owner.organizationId, sub: owner.createdBy, member: member?.id }),
-          },
+        expect(seen.map((each) => [each.path, each.body, Struct.omit(each.claims, ["kid", "exp"])])).toEqual([
+          ["/model/info", null, { org: owner.organizationId }],
+          ["/v1/keys", { brainId }, { org: owner.organizationId }],
         ])
       }),
-  )
-
-  it.live("attributes a space brain's key to the organization only, with no person in the token", () =>
-    Effect.gen(function* () {
-      const models = yield* Models.Service
-      const owner = yield* Seed.owner()
-      const brainId = Brain.ID.make(`brn_space_${crypto.randomUUID()}`)
-      yield* Seed.session({ ...owner, brainId })
-      replies.set("/v1/keys", () =>
-        Response.json({ key: "key-brain", expiresAt: new Date(Date.now() + 3600_000).toISOString() }),
-      )
-      seen.length = 0
-
-      yield* models.grant(brainId, owner.organizationId)
-
-      const keys = seen.find((each) => each.path === "/v1/keys")
-      expect(keys?.body).toEqual({ brainId, attribution: "org" })
-      expect(keys?.claims.sub).toBeUndefined()
-      expect(keys?.claims.member).toBeUndefined()
-    }),
   )
 
   it.live("fails with Models.Unavailable on a key reply with no key, and on a 503", () =>
