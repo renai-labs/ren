@@ -103,7 +103,12 @@ const namespace = (name: string) => name.replaceAll(/[^A-Za-z0-9_-]/gu, "_")
 const namespaces = (apps: Option.Option<AppCatalog.Info>, options: { readonly local: boolean }) =>
   entries(apps).flatMap((entry) =>
     entry.profile && (options.local || entry.declaration.transport.type !== "local")
-      ? [{ name: namespace(entry.server), description: `${entry.declaration.name} for the profile “${entry.profile.name}”` }]
+      ? [
+          {
+            name: namespace(entry.server),
+            description: `${entry.declaration.name} for the profile “${entry.profile.name}”`,
+          },
+        ]
       : [],
   )
 
@@ -206,8 +211,8 @@ export const make = Effect.fnUntraced(function* (input: {
   )
 
   // oxlint-disable-next-line ren/no-comments -- Until the catalog's servers connect or time out and OpenCode's tool list has their tools and not the removed ones. HR19: only the first turn waits for it; after a change it runs in the background.
-  const ready = Effect.fnUntraced(function* (before: ReadonlyArray<Server>) {
-    const after = Ref.getUnsafe(applied)
+  const ready = Effect.fnUntraced(function* (before: ReadonlyArray<Server>, only?: ReadonlyArray<string>) {
+    const after = Ref.getUnsafe(applied).filter((server) => !only || only.includes(server.name))
     const connecting = yield* statuses.pipe(
       Effect.map((all) => after.filter((server) => (all.get(server.name) ?? "pending") === "pending")),
       Effect.repeat({ schedule: checks, until: (pending) => pending.length === 0 }),
@@ -221,8 +226,10 @@ export const make = Effect.fnUntraced(function* (input: {
     const connected = after
       .filter((server) => all.get(server.name) === "connected")
       .map((server) => namespace(server.name))
-    const names = new Set(after.map((server) => server.name))
-    const removed = before.filter((server) => !names.has(server.name)).map((server) => namespace(server.name))
+    const names = new Set(Ref.getUnsafe(applied).map((server) => server.name))
+    const removed = before
+      .filter((server) => !names.has(server.name) && (!only || only.includes(server.name)))
+      .map((server) => namespace(server.name))
     yield* input.context.tool.list().pipe(
       Effect.map(
         (tools) => new Set(tools.flatMap((tool) => (tool.options?.namespace ? [tool.options.namespace] : []))),
@@ -248,9 +255,13 @@ export const make = Effect.fnUntraced(function* (input: {
   )
 
   // oxlint-disable-next-line ren/no-comments -- One timed retry runs at a time; a reconnect from a prompt meanwhile waits for it, then finds nothing down.
-  const watch = FiberHandle.run(retries, retrying({ down: Effect.map(down, (failed) => failed.length > 0), retry: reconnect }), {
-    onlyIfMissing: true,
-  }).pipe(Effect.asVoid)
+  const watch = FiberHandle.run(
+    retries,
+    retrying({ down: Effect.map(down, (failed) => failed.length > 0), retry: reconnect }),
+    {
+      onlyIfMissing: true,
+    },
+  ).pipe(Effect.asVoid)
 
   const watchIfDown = Effect.flatMap(down, (failed) => (failed.length ? watch : Effect.void))
 
@@ -265,13 +276,15 @@ export const make = Effect.fnUntraced(function* (input: {
     return JSON.stringify(before) === JSON.stringify(next) ? Option.none<ReadonlyArray<Server>>() : Option.some(before)
   })
 
-  const reload = (before: ReadonlyArray<Server>) =>
-    reloads.withPermit(input.context.mcp.reload().pipe(Effect.andThen(ready(before))))
+  const reload = (before: ReadonlyArray<Server>, only?: ReadonlyArray<string>) =>
+    reloads.withPermit(input.context.mcp.reload()).pipe(Effect.andThen(ready(before, only)))
 
   if ((yield* Ref.get(applied)).length) {
     yield* Ref.update(pending, (count) => count + 1)
     yield* input.boundary
-      .holdUntil(ready([]).pipe(Effect.andThen(watchIfDown), Effect.ensuring(Ref.update(pending, (count) => count - 1))))
+      .holdUntil(
+        ready([]).pipe(Effect.andThen(watchIfDown), Effect.ensuring(Ref.update(pending, (count) => count - 1))),
+      )
       .pipe(Effect.forkScoped({ startImmediately: true }))
   }
   // oxlint-disable-next-line ren/no-comments -- A turn calls Ren MCP as its sender: when the sender changes, the prompt waits for the ren server's new headers, so no step runs as the previous sender. Other changes reload in the background (HR19).
@@ -283,7 +296,7 @@ export const make = Effect.fnUntraced(function* (input: {
         else if (Option.isNone(yield* Ref.get(sender)))
           yield* Ref.set(sender, yield* input.ren.value.lastSender(input.sessionId))
         const before = yield* changed
-        if (Option.isSome(before)) yield* reload(before.value).pipe(Effect.andThen(watchIfDown))
+        if (Option.isSome(before)) yield* reload(before.value, [renServer]).pipe(Effect.andThen(watchIfDown))
       }
       if ((yield* down).length) yield* retry
     }),
