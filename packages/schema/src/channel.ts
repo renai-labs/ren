@@ -7,11 +7,10 @@ import { Identifier } from "./identifier.js"
 export const Provider = Schema.Literals(["slack", "linear", "github"]).annotate({ identifier: "Channel.Provider" })
 export type Provider = typeof Provider.Type
 
+export const titles: Readonly<Record<Provider, string>> = { slack: "Slack", linear: "Linear", github: "GitHub" }
+
 export const ThreadID = Identifier.make("cth", "Channel.ThreadID")
 export type ThreadID = typeof ThreadID.Type
-
-export const InstallID = Identifier.make("chi", "Channel.InstallID")
-export type InstallID = typeof InstallID.Type
 
 export interface FileRef extends Schema.Schema.Type<typeof FileRef> {}
 export const FileRef = Schema.Struct({
@@ -47,6 +46,7 @@ export const Parsed = Schema.Union([
   Schema.TaggedStruct("Handshake", { body: Schema.Json }),
   Schema.TaggedStruct("Ignore", { reason: Schema.String }),
   Schema.TaggedStruct("Event", { event: Event }),
+  Schema.TaggedStruct("Uninstalled", { install: Schema.NonEmptyString }),
 ]).annotate({ identifier: "Channel.Parsed" })
 export type Parsed = typeof Parsed.Type
 
