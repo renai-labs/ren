@@ -25,6 +25,7 @@ import { Route as AuthedShellSettingsAdminRouteImport } from "./routes/_authed/_
 import { Route as AuthedShellSettingsAppsRouteImport } from "./routes/_authed/_shell/settings/apps"
 import { Route as AuthedShellSettingsCredentialsRouteImport } from "./routes/_authed/_shell/settings/credentials"
 import { Route as AuthedShellSettingsPreferencesRouteImport } from "./routes/_authed/_shell/settings/preferences"
+import { Route as AuthedShellSettingsProvidersRouteImport } from "./routes/_authed/_shell/settings/providers"
 import { Route as AuthedShellSpacesIndexRouteImport } from "./routes/_authed/_shell/spaces/index"
 import { Route as AuthedShellSpacesSpaceIdRouteRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/route"
 import { Route as AuthedShellTasksIndexRouteImport } from "./routes/_authed/_shell/tasks/index"
@@ -119,6 +120,12 @@ const AuthedShellSettingsPreferencesRoute =
     path: "/settings/preferences",
     getParentRoute: () => AuthedShellRoute,
   } as any)
+const AuthedShellSettingsProvidersRoute =
+  AuthedShellSettingsProvidersRouteImport.update({
+    id: "/settings/providers",
+    path: "/settings/providers",
+    getParentRoute: () => AuthedShellRoute,
+  } as any)
 const AuthedShellSpacesIndexRoute = AuthedShellSpacesIndexRouteImport.update({
   id: "/spaces/",
   path: "/spaces/",
@@ -203,6 +210,7 @@ export interface FileRoutesByFullPath {
   "/settings/apps": typeof AuthedShellSettingsAppsRoute
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
+  "/settings/providers": typeof AuthedShellSettingsProvidersRoute
   "/settings/": typeof AuthedShellSettingsIndexRoute
   "/spaces/": typeof AuthedShellSpacesIndexRoute
   "/tasks/": typeof AuthedShellTasksIndexRoute
@@ -229,6 +237,7 @@ export interface FileRoutesByTo {
   "/settings/apps": typeof AuthedShellSettingsAppsRoute
   "/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
+  "/settings/providers": typeof AuthedShellSettingsProvidersRoute
   "/spaces": typeof AuthedShellSpacesIndexRoute
   "/tasks": typeof AuthedShellTasksIndexRoute
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
@@ -258,6 +267,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/apps": typeof AuthedShellSettingsAppsRoute
   "/_authed/_shell/settings/credentials": typeof AuthedShellSettingsCredentialsRoute
   "/_authed/_shell/settings/preferences": typeof AuthedShellSettingsPreferencesRoute
+  "/_authed/_shell/settings/providers": typeof AuthedShellSettingsProvidersRoute
   "/_authed/_shell/settings/": typeof AuthedShellSettingsIndexRoute
   "/_authed/_shell/spaces/": typeof AuthedShellSpacesIndexRoute
   "/_authed/_shell/tasks/": typeof AuthedShellTasksIndexRoute
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | "/settings/apps"
     | "/settings/credentials"
     | "/settings/preferences"
+    | "/settings/providers"
     | "/settings/"
     | "/spaces/"
     | "/tasks/"
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | "/settings/apps"
     | "/settings/credentials"
     | "/settings/preferences"
+    | "/settings/providers"
     | "/spaces"
     | "/tasks"
     | "/settings/general"
@@ -341,6 +353,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/apps"
     | "/_authed/_shell/settings/credentials"
     | "/_authed/_shell/settings/preferences"
+    | "/_authed/_shell/settings/providers"
     | "/_authed/_shell/settings/"
     | "/_authed/_shell/spaces/"
     | "/_authed/_shell/tasks/"
@@ -479,6 +492,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSettingsPreferencesRouteImport
       parentRoute: typeof AuthedShellRoute
     }
+    "/_authed/_shell/settings/providers": {
+      id: "/_authed/_shell/settings/providers"
+      path: "/settings/providers"
+      fullPath: "/settings/providers"
+      preLoaderRoute: typeof AuthedShellSettingsProvidersRouteImport
+      parentRoute: typeof AuthedShellRoute
+    }
     "/_authed/_shell/spaces/": {
       id: "/_authed/_shell/spaces/"
       path: "/spaces"
@@ -605,6 +625,7 @@ interface AuthedShellRouteChildren {
   AuthedShellSettingsAppsRoute: typeof AuthedShellSettingsAppsRoute
   AuthedShellSettingsCredentialsRoute: typeof AuthedShellSettingsCredentialsRoute
   AuthedShellSettingsPreferencesRoute: typeof AuthedShellSettingsPreferencesRoute
+  AuthedShellSettingsProvidersRoute: typeof AuthedShellSettingsProvidersRoute
   AuthedShellSettingsIndexRoute: typeof AuthedShellSettingsIndexRoute
   AuthedShellSpacesIndexRoute: typeof AuthedShellSpacesIndexRoute
   AuthedShellTasksIndexRoute: typeof AuthedShellTasksIndexRoute
@@ -621,6 +642,7 @@ const AuthedShellRouteChildren: AuthedShellRouteChildren = {
   AuthedShellSettingsAppsRoute: AuthedShellSettingsAppsRoute,
   AuthedShellSettingsCredentialsRoute: AuthedShellSettingsCredentialsRoute,
   AuthedShellSettingsPreferencesRoute: AuthedShellSettingsPreferencesRoute,
+  AuthedShellSettingsProvidersRoute: AuthedShellSettingsProvidersRoute,
   AuthedShellSettingsIndexRoute: AuthedShellSettingsIndexRoute,
   AuthedShellSpacesIndexRoute: AuthedShellSpacesIndexRoute,
   AuthedShellTasksIndexRoute: AuthedShellTasksIndexRoute,

@@ -39,6 +39,7 @@ export interface Input {
     readonly createInitialMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
     readonly activatePendingMemberships: (organizationId: string, user: ProvisioningUser) => Promise<void>
     readonly archiveMemberships: (organizationId: string, userId: string) => Promise<void>
+    readonly forgetInferenceMember: (organizationId: string, userId: string, memberId: string) => Promise<void>
   }
 }
 
@@ -219,7 +220,10 @@ export const make = (input: Input) => {
         await input.provisioning.createInitialMemberships(data.organization.id, data.user)
         await input.provisioning.activatePendingMemberships(data.organization.id, data.user)
       },
-      afterRemoveMember: (data) => input.provisioning.archiveMemberships(data.organization.id, data.user.id),
+      afterRemoveMember: async (data) => {
+        await input.provisioning.archiveMemberships(data.organization.id, data.user.id)
+        await input.provisioning.forgetInferenceMember(data.organization.id, data.user.id, data.member.id)
+      },
     },
     sendInvitationEmail: async (data) => {
       const url = new URL("signup", appURL)

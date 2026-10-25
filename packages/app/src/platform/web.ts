@@ -52,6 +52,10 @@ export function createWebPlatform(large?: DraftStore.Large): Platform.Info {
       if (!externalProtocols.has(new URL(url).protocol)) return
       window.open(url, "_blank", "noopener,noreferrer")
     },
+    redirect: (url) => {
+      if (!externalProtocols.has(new URL(url).protocol)) return
+      window.location.assign(url)
+    },
     notify: async (title, body) => {
       if (!("Notification" in window) || Notification.permission !== "granted") return
       if (document.visibilityState === "visible" && document.hasFocus()) return

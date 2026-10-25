@@ -23,6 +23,8 @@ import { Docker } from "@ren/core/environment-provider/docker"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
+import { RenInference } from "@ren/core/ren-inference"
+import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Retention } from "@ren/core/retention"
 import { SandboxEgress } from "@ren/core/sandbox-egress"
 import { E2BSandbox } from "@ren/core/sandbox-provider/e2b"
@@ -73,8 +75,12 @@ const host = Layer.unwrap(
   }),
 )
 
-// oxlint-disable-next-line ren/no-comments -- HR28, F2: the picker and the brains read the model list from LiteLLM (REN_LITELLM_URL); a local run uses LiteLLM or its stub.
-const models = Models.layerLiteLLM.pipe(Layer.provide(FetchHttpClient.layer))
+// oxlint-disable-next-line ren/no-comments -- HR28, F2: the picker and the brains read the model list from LiteLLM: through the Ren Inference Service when REN_INFERENCE_URL is set, else REN_LITELLM_URL; a local run uses LiteLLM or its stub.
+const models = Layer.unwrap(
+  Effect.map(Config.option(Config.String("REN_INFERENCE_URL")), (url) =>
+    Option.isSome(url) ? Models.layerRenInference : Models.layerLiteLLM.pipe(Layer.provide(FetchHttpClient.layer)),
+  ),
+).pipe(Layer.provideMerge(RenInference.layerConfig))
 
 // oxlint-disable-next-line ren/no-comments -- Every stored credential is sealed with ENVELOPE_KEYS; without a key the server would start and then refuse each credential save, so it does not start.
 const envelope = Layer.unwrap(Effect.as(Config.Redacted("ENVELOPE_KEYS"), Envelope.layerLocal))
@@ -100,6 +106,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
     Layer.mergeAll(
       Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provide(host), Layer.provide(CredentialEnv.layer)),
       Retention.layer,
+      RenInferenceRemoval.layer,
     ),
     Mailer.layer,
     SignupGuard.layer,

@@ -1,5 +1,8 @@
 import { describe, expect, spyOn } from "bun:test"
+import { DurableRunner } from "@ren/core/durable-runner"
 import { Mailer } from "@ren/core/mailer"
+import { RenInference } from "@ren/core/ren-inference"
+import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { Postmark, testEffect } from "@ren/core/testing"
 import { AuthDatabase } from "@ren/db/auth-database"
@@ -34,6 +37,9 @@ const layer = (overrides: Record<string, string>, mail: ReturnType<typeof Postma
   Auth.layer.pipe(
     Layer.provideMerge(Layer.effect(SignupGuard.Service, SignupGuard.make(dns))),
     Layer.provideMerge(EgressControl.layerNone),
+    Layer.provideMerge(
+      RenInferenceRemoval.layer.pipe(Layer.provide([RenInference.layerNone, DurableRunner.layerMemory])),
+    ),
     Layer.provideMerge(Testing.layer),
     Layer.provideMerge(Mailer.layer),
     Layer.provideMerge(mail),
@@ -382,6 +388,7 @@ describe("Auth", () => {
             createInitialMemberships: () => Promise.resolve(),
             activatePendingMemberships: () => Promise.resolve(),
             archiveMemberships: () => Promise.resolve(),
+            forgetInferenceMember: () => Promise.resolve(),
           },
         })
         const context = yield* Effect.promise(() => instance.$context)

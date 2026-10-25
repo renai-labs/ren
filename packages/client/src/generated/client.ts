@@ -178,6 +178,13 @@ import type {
   OauthAppUpdateOutput,
   OauthAppArchiveInput,
   OauthAppArchiveOutput,
+  RenInferenceConnectInput,
+  RenInferenceConnectOutput,
+  RenInferenceConnectionListOutput,
+  RenInferenceConnectionRenameInput,
+  RenInferenceConnectionRenameOutput,
+  RenInferenceConnectionRemoveInput,
+  RenInferenceConnectionRemoveOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -1518,6 +1525,56 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+    },
+    "ren-inference": {
+      connect: (input: RenInferenceConnectInput, requestOptions?: RequestOptions) =>
+        request<RenInferenceConnectOutput>(
+          {
+            method: "POST",
+            path: `/ren-inference/connect`,
+            body: { returnUrl: input["returnUrl"], connectionId: input["connectionId"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      connection: {
+        list: (requestOptions?: RequestOptions) =>
+          request<RenInferenceConnectionListOutput>(
+            {
+              method: "GET",
+              path: `/ren-inference/connections`,
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        rename: (input: RenInferenceConnectionRenameInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceConnectionRenameOutput>(
+            {
+              method: "PATCH",
+              path: `/ren-inference/connections/${encodeURIComponent(input.id)}`,
+              body: { label: input["label"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 503],
+              empty: false,
+            },
+            requestOptions,
+          ),
+        remove: (input: RenInferenceConnectionRemoveInput, requestOptions?: RequestOptions) =>
+          request<RenInferenceConnectionRemoveOutput>(
+            {
+              method: "DELETE",
+              path: `/ren-inference/connections/${encodeURIComponent(input.id)}`,
+              successStatus: 204,
+              declaredStatuses: [400, 401, 403, 404, 503],
+              empty: true,
+            },
+            requestOptions,
+          ),
+      },
     },
   }
 }

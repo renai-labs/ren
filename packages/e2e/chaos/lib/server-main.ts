@@ -7,6 +7,8 @@ import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
+import { RenInference } from "@ren/core/ren-inference"
+import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Settings } from "@ren/core/settings"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { TranscriptCodec } from "@ren/core/transcript-codec"
@@ -53,6 +55,7 @@ HttpRouter.serve(Routes.layer).pipe(
       Layer.provide(DurableRunner.layerEffect),
       Layer.provide(CredentialEnv.layerNone),
     ),
+    RenInferenceRemoval.layer,
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
@@ -60,7 +63,11 @@ HttpRouter.serve(Routes.layer).pipe(
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provide([BrainClient.layer, Settings.layer]),
-  Layer.provide([ChaosModels.layer, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
+  Layer.provide([
+    ChaosModels.layer,
+    RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal)),
+    Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
+  ]),
   Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),

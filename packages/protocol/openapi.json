@@ -7594,6 +7594,354 @@
         "description": "Archive one oauth-app and return it. Archiving an archived oauth-app returns it unchanged.",
         "summary": "Archive oauth-app"
       }
+    },
+    "/ren-inference/connect": {
+      "post": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.connect",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "RenInference.ConnectResult",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenInference.ConnectResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the address of the Ren Inference Service sign-in page. Send the browser there; it comes back to `returnUrl`. Only owners and admins connect.",
+        "summary": "Start a provider sign-in",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenInference.ConnectInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/ren-inference/connections": {
+      "get": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.connection.list",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RenInference.Connection"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "List the organization’s provider connections, with display data and usage meters.",
+        "summary": "List provider connections"
+      }
+    },
+    "/ren-inference/connections/{id}": {
+      "patch": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.connection.rename",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A model provider the organization connected, with display data from the Ren Inference Service.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenInference.Connection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change the label of one connection. Only owners and admins rename.",
+        "summary": "Rename a provider connection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenInference.RenameInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["ren-inference"],
+        "operationId": "ren-inference.connection.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Remove one connection. New requests stop using it at once. Only owners and admins remove.",
+        "summary": "Remove a provider connection"
+      }
     }
   },
   "components": {
@@ -11450,6 +11798,142 @@
         "type": "string",
         "minLength": 1
       },
+      "RenInference.ConnectInput": {
+        "type": "object",
+        "properties": {
+          "returnUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "The Ren app page the browser comes back to after the sign-in."
+          },
+          "connectionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "Set to reconnect this connection."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["returnUrl"],
+        "additionalProperties": false
+      },
+      "RenInference.ConnectResult": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The sign-in page. Send the browser here."
+          }
+        },
+        "required": ["url"],
+        "additionalProperties": false
+      },
+      "RenInference.Connection": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "providerName": {
+            "type": "string"
+          },
+          "iconUrl": {
+            "type": "string"
+          },
+          "status": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "tone": {
+                "$ref": "#/components/schemas/RenInference.Tone"
+              }
+            },
+            "required": ["label", "tone"],
+            "additionalProperties": false
+          },
+          "plan": {
+            "type": "string"
+          },
+          "canReconnect": {
+            "type": "boolean"
+          },
+          "meters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RenInference.Meter"
+            }
+          }
+        },
+        "required": ["id", "label", "providerName", "iconUrl", "status", "canReconnect", "meters"],
+        "additionalProperties": false,
+        "description": "A model provider the organization connected, with display data from the Ren Inference Service."
+      },
+      "RenInference.Meter": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "percent": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["key", "title", "percent"],
+        "additionalProperties": false
+      },
+      "RenInference.RenameInput": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": ["label"],
+        "additionalProperties": false
+      },
+      "RenInference.Tone": {
+        "type": "string",
+        "enum": ["ok", "warn", "error"]
+      },
       "Session.ClientAccess": {
         "anyOf": [
           {
@@ -14854,6 +15338,9 @@
     },
     {
       "name": "oauth-app"
+    },
+    {
+      "name": "ren-inference"
     }
   ]
 }

@@ -89,6 +89,9 @@ import type {
   OauthAppCreateInput,
   OauthAppUpdateInput,
   OauthAppArchiveInput,
+  RenInferenceConnectInput,
+  RenInferenceConnectionRenameInput,
+  RenInferenceConnectionRemoveInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -931,6 +934,44 @@ export function make(client: ReturnType<typeof Ren.make>) {
             mutationKey: ["oauth-app", "archive"] as const,
             mutationFn: (input: OauthAppArchiveInput) => client["oauth-app"]["archive"](input),
           }),
+      },
+    },
+    "ren-inference": {
+      connect: {
+        mutationKey: () => ["ren-inference", "connect"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["ren-inference", "connect"] as const,
+            mutationFn: (input: RenInferenceConnectInput) => client["ren-inference"]["connect"](input),
+          }),
+      },
+      connection: {
+        list: {
+          queryKey: () => ["ren-inference", "connection", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["ren-inference", "connection", "list"] as const,
+              queryFn: (context) => client["ren-inference"]["connection"]["list"]({ signal: context.signal }),
+            }),
+        },
+        rename: {
+          mutationKey: () => ["ren-inference", "connection", "rename"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["ren-inference", "connection", "rename"] as const,
+              mutationFn: (input: RenInferenceConnectionRenameInput) =>
+                client["ren-inference"]["connection"]["rename"](input),
+            }),
+        },
+        remove: {
+          mutationKey: () => ["ren-inference", "connection", "remove"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["ren-inference", "connection", "remove"] as const,
+              mutationFn: (input: RenInferenceConnectionRemoveInput) =>
+                client["ren-inference"]["connection"]["remove"](input),
+            }),
+        },
       },
     },
   }

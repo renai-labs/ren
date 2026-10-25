@@ -1165,6 +1165,45 @@ const adaptGroupOauthApp = (raw: RawClient["oauth-app"]) => ({
   archive: EndpointOauthAppArchive(raw),
 })
 
+type RenInferenceConnectRequest = Parameters<RawClient["ren-inference"]["ren-inference.connect"]>[0]
+type RenInferenceConnectInput = {
+  readonly returnUrl: RenInferenceConnectRequest["payload"]["returnUrl"]
+  readonly connectionId?: RenInferenceConnectRequest["payload"]["connectionId"]
+}
+const EndpointRenInferenceConnect = (raw: RawClient["ren-inference"]) => (input: RenInferenceConnectInput) =>
+  raw["ren-inference.connect"]({
+    payload: { returnUrl: input["returnUrl"], connectionId: input["connectionId"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const EndpointRenInferenceConnectionList = (raw: RawClient["ren-inference"]) => () =>
+  raw["ren-inference.connection.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type RenInferenceConnectionRenameRequest = Parameters<RawClient["ren-inference"]["ren-inference.connection.rename"]>[0]
+type RenInferenceConnectionRenameInput = {
+  readonly id: RenInferenceConnectionRenameRequest["params"]["id"]
+  readonly label: RenInferenceConnectionRenameRequest["payload"]["label"]
+}
+const EndpointRenInferenceConnectionRename =
+  (raw: RawClient["ren-inference"]) => (input: RenInferenceConnectionRenameInput) =>
+    raw["ren-inference.connection.rename"]({ params: { id: input["id"] }, payload: { label: input["label"] } }).pipe(
+      Effect.mapError(mapClientError),
+    )
+
+type RenInferenceConnectionRemoveRequest = Parameters<RawClient["ren-inference"]["ren-inference.connection.remove"]>[0]
+type RenInferenceConnectionRemoveInput = { readonly id: RenInferenceConnectionRemoveRequest["params"]["id"] }
+const EndpointRenInferenceConnectionRemove =
+  (raw: RawClient["ren-inference"]) => (input: RenInferenceConnectionRemoveInput) =>
+    raw["ren-inference.connection.remove"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
+  connect: EndpointRenInferenceConnect(raw),
+  connection: {
+    list: EndpointRenInferenceConnectionList(raw),
+    rename: EndpointRenInferenceConnectionRename(raw),
+    remove: EndpointRenInferenceConnectionRemove(raw),
+  },
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -1192,6 +1231,7 @@ const adaptClient = (raw: RawClient) => ({
   "credential-connect": adaptGroupCredentialConnect(raw["credential-connect"]),
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),
   "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
+  "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

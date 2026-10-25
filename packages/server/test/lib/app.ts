@@ -8,6 +8,8 @@ import { Docker } from "@ren/core/environment-provider/docker"
 import { Environments } from "@ren/core/environments"
 import { Mailer } from "@ren/core/mailer"
 import { Models } from "@ren/core/models"
+import { RenInference } from "@ren/core/ren-inference"
+import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { Settings } from "@ren/core/settings"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { TranscriptCodec } from "@ren/core/transcript-codec"
@@ -91,11 +93,13 @@ export const services = Layer.mergeAll(
   SignupGuard.layer,
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   OAuth.layer,
+  RenInferenceRemoval.layer.pipe(Layer.provide(DurableRunner.layerMemory)),
 ).pipe(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),
   Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
+  Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
   Layer.provideMerge(Credentials.layer),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
