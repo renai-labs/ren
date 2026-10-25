@@ -60,7 +60,12 @@ const host = Layer.unwrap(
     )
     const owner = yield* Config.option(Config.Int("LOCAL_BRAIN_OWNER"))
     return BrainHost.layerSandbox.pipe(
-      Layer.provide(BrainLifecycle.layer.pipe(Layer.provide(SandboxEgress.layerConfig))),
+      Layer.provide(
+        BrainLifecycle.layer.pipe(
+          // oxlint-disable-next-line ren/no-comments -- An E2B brain without the egress would fetch the real model key, and in e2b-space the agent's code runs in the same sandbox, so the server does not start without EGRESS_PROXY_ADDRESS.
+          Layer.provide(provider === "e2b" ? SandboxEgress.layer : SandboxEgress.layerConfig),
+        ),
+      ),
       Layer.provide(
         provider === "e2b"
           ? E2BSandbox.layer

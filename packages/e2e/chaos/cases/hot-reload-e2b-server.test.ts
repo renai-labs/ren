@@ -51,7 +51,8 @@ const egressPublic = process.env.CHAOS_EGRESS_PUBLIC ?? ""
 const unmet =
   Platform.e2b ??
   Platform.litellm ??
-  (renTunnel && litellmTunnel && template ? undefined : "needs CHAOS_REN_TUNNEL_URL and CHAOS_LITELLM_TUNNEL_URL")
+  (renTunnel && litellmTunnel && template ? undefined : "needs CHAOS_REN_TUNNEL_URL and CHAOS_LITELLM_TUNNEL_URL") ??
+  (egressPublic ? undefined : "needs CHAOS_EGRESS_PUBLIC: an E2B brain always runs behind the egress")
 
 const encoded = (key: Signature.PrivateKey) =>
   JSON.stringify([{ id: key.id, key: Schema.encodeSync(Schema.Uint8ArrayFromBase64Url)(key.key) }])
@@ -280,11 +281,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
     return { answered: answered.at(0)?.count ?? 0 }
   }
 
-  test("a settings write reaches a running E2B brain by push: the trigger, BrainPush, notify and the brain's pull from the real server", async () => {
-    await pushReaches(undefined)
-  }, 900_000)
-
-  test.skipIf(!egressPublic)(
+  test(
     "behind the egress, the E2B brain answers with the key the egress puts in, and a settings write still reaches it by push",
     async () => {
       expect((await pushReaches(await behindEgress())).answered).toBeGreaterThan(0)
