@@ -129,6 +129,8 @@ export const layer = Layer.effect(
     }).pipe(
       Effect.catchTag("GenerationRetiredError", (error) => fence.retire(error.message)),
       Effect.catch((error) => Effect.logWarning("The pull failed; the brain keeps its last settings", error)),
+      // oxlint-disable-next-line ren/no-comments -- A storage write that fails is a defect; the pull must still end, or the push loop stays marked running and no later push or timed pull runs.
+      Effect.catchDefect((defect) => Effect.logError("The pull failed; the brain keeps its last settings", defect)),
       Effect.withSpan("HotReload.pull"),
     )
 

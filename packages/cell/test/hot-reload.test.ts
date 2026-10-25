@@ -125,12 +125,14 @@ const open = Effect.fnUntraced(function* (
     (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
   )
   const writes: Array<string> = []
+  const failing = new Set<string>()
   const storage = Layer.succeed(BrainStorage.Service, {
     get: async (key) => {
       const file = Bun.file(join(directory, key))
       return (await file.exists()) ? file.text() : undefined
     },
     put: async (key, value) => {
+      if (failing.delete(key)) throw new Error(`storage refused ${key}`)
       writes.push(key)
       await Bun.write(join(directory, key), value)
     },
@@ -161,7 +163,9 @@ const open = Effect.fnUntraced(function* (
           requests.push(Schema.decodeUnknownSync(PullRequest)(await request.json()))
           if (state.retired)
             return Response.json(
-              Schema.encodeSync(GenerationRetiredError)(new GenerationRetiredError({ message: "generation 1 is retired" })),
+              Schema.encodeSync(GenerationRetiredError)(
+                new GenerationRetiredError({ message: "generation 1 is retired" }),
+              ),
               { status: 403 },
             )
           const hold = state.hold
@@ -265,6 +269,7 @@ const open = Effect.fnUntraced(function* (
     },
     env: Context.get(services, CredentialEnv.Service),
     fence: Context.get(services, Fence.Service),
+    failNextWrite: (key: string) => void failing.add(key),
     retire: () => {
       state.retired = true
     },
@@ -306,6 +311,24 @@ it.live("a failed catalog save still applies the rest of the pull and is retried
     yield* Effect.promise(() => rm(opened.path, { recursive: true }))
     yield* opened.reload.pull
     expect(yield* opened.saved).toEqual(catalog)
+  }),
+)
+
+it.live("a pull that dies on a storage write does not stop later pushes from pulling", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    opened.failNextWrite("ren:settings-layers")
+    opened.answer(undefined, { layers: TestSettings.layers({ ren: { instructions: "First." } }) })
+    yield* opened.reload.push
+    yield* Effect.sync(() => opened.requests.length).pipe(
+      Effect.repeat({ until: (count) => count >= 1, schedule: Schedule.spaced("10 millis") }),
+    )
+    opened.answer(undefined, { layers: TestSettings.layers({ ren: { instructions: "Second." } }) })
+    yield* opened.reload.push
+    yield* Effect.sync(() => opened.requests.length).pipe(
+      Effect.repeat({ until: (count) => count >= 2, schedule: Schedule.spaced("10 millis") }),
+      Effect.timeout("3 seconds"),
+    )
   }),
 )
 
