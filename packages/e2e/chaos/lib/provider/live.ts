@@ -1,7 +1,7 @@
 export * as LiveModel from "./live.js"
 
-import type { Models } from "@ren/schema/models"
-import { Redacted, Result, Schema } from "effect"
+import { Models } from "@ren/schema/models"
+import { Redacted, Result, Schema, Struct } from "effect"
 
 const ProviderConfig = Schema.Struct({
   package: Schema.optional(Schema.String),
@@ -138,4 +138,30 @@ export const access = (selected: Selected): Models.Access => ({
 export const select = async (selection: string | undefined) => {
   const sources = await load()
   return Result.isFailure(sources) ? Result.fail(sources.failure) : resolve(sources.success, selection)
+}
+
+// oxlint-disable-next-line ren/no-comments -- HR15: a brain names a LiteLLM model by its provider and model key, read from /model/info, not by the name in an OpenCode config. A provider without /model/info keeps the selected names.
+export const named = async (selected: Selected) => {
+  const own = { access: access(selected), model: { endpointId: selected.providerId, modelId: selected.modelId } }
+  const response = await fetch(`${selected.baseUrl.replace(/\/v1\/?$/u, "")}/model/info`, {
+    headers: { authorization: `Bearer ${Redacted.value(selected.apiKey)}` },
+  }).catch(() => undefined)
+  if (!response?.ok) return own
+  const catalog = Models.fromLiteLLM(Schema.decodeUnknownSync(Models.LiteLLMModelInfo)(await response.json()))
+  const model = catalog.endpoints
+    .flatMap((endpoint) =>
+      endpoint.models.flatMap((entry) =>
+        (entry.upstreamId ?? entry.id) === selected.modelId ? [{ endpointId: endpoint.id, modelId: entry.id }] : [],
+      ),
+    )
+    .at(0)
+  if (!model) throw new Error(`${selected.baseUrl} lists no ${selected.modelId} for the live key`)
+  return {
+    access: {
+      endpoints: catalog.endpoints.map((endpoint) =>
+        Struct.assign(endpoint, { baseUrl: selected.baseUrl, apiKey: { key: selected.apiKey } }),
+      ),
+    },
+    model,
+  }
 }
