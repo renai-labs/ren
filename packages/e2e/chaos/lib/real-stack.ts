@@ -99,6 +99,7 @@ export interface SessionOptions {
 export const start = async (options: {
   readonly environments: ReadonlyArray<EnvironmentOptions>
   readonly tokenLifetime?: string
+  readonly cellVars?: Readonly<Record<string, string>>
 }) => {
   const name = `ren_e2e_${crypto.randomUUID().replaceAll("-", "")}`
   const admin = new Bun.SQL(adminUrl)
@@ -204,8 +205,11 @@ export const start = async (options: {
     ...Shared.vars(baseUrl),
     BRAIN_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([brainKey.publicKey]),
     REN_URL: renProxy.url,
+    ...options.cellVars,
   })
   const forgetCell = Process.onInterrupt(cell.crash)
+  // oxlint-disable-next-line ren/no-comments -- Ren's server reaches the cell through this proxy, so a case can drop or count its pushes (POST /ren/pull).
+  const cellProxy = await FaultProxy.make(cell.url)
 
   const keys = {
     BRAIN_KEYS: JSON.stringify([encodedKey(brainKey.privateKey)]),
@@ -231,7 +235,7 @@ export const start = async (options: {
         GOOGLE_CLIENT_ID: "e2e-google-client-id",
         GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
         SIGNUP_MX_CHECK: "false",
-        CELL_URL: cell.url,
+        CELL_URL: cellProxy.url,
         [ChaosEnvironments.fileVariable]: environmentsFile,
         [ChaosModels.fileVariable]: modelsFile,
       },
@@ -448,7 +452,9 @@ export const start = async (options: {
     },
     provider,
     cell,
+    cellProxy,
     renProxy,
+    sql: direct,
     session,
     issued: () => renProxy.count(/^POST \/host\/sessions\/[^/]+\/environment\/access$/),
     serverLog: () => server.log,
@@ -484,7 +490,7 @@ export const start = async (options: {
           ]),
         ),
       )
-      await Promise.all([renProxy.stop(), provider.stop()])
+      await Promise.all([renProxy.stop(), cellProxy.stop(), provider.stop()])
       await coreRuntime.dispose()
       await databaseRuntime.dispose()
       await direct.close()

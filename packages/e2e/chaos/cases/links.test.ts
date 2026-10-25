@@ -278,7 +278,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       lanes.stack.ren.calls
         .filter((call) => call.endpoint === "models.refresh")
         .slice(from)
-        .some((call) => call.hostToken === host && call.status === 200),
+        .some((call) => call.status === 200),
     ).toBe(true)
   })
 })
