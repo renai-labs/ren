@@ -68,7 +68,12 @@ export const Prompt = Schema.Struct({
 }).annotate({ identifier: "Session.Prompt" })
 
 export interface Sender extends Schema.Schema.Type<typeof Sender> {}
-export const Sender = Schema.Struct({ userId: Schema.NonEmptyString }).annotate({ identifier: "Session.Sender" })
+export const Sender = Schema.Struct({
+  userId: Schema.NonEmptyString,
+  memberId: Schema.optionalKey(Auth.MemberID).annotate({
+    description: "The sender's membership in the organization. Ren sets it on every send; older stored messages lack it.",
+  }),
+}).annotate({ identifier: "Session.Sender" })
 
 export interface SendInput extends Schema.Schema.Type<typeof SendInput> {}
 export const SendInput = Schema.Struct({

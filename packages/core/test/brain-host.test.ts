@@ -440,7 +440,7 @@ describe("BrainHost host tokens", () => {
               keyIds,
               egress: false,
             },
-            { sid: Session.ID.create(), sub: Auth.UserID.create() },
+            { sid: Session.ID.create(), sub: Auth.UserID.create(), member: Auth.MemberID.create() },
           ),
         ).pipe(
           Effect.map((signed) => BrainToken.keyIdOf(signed.token)),

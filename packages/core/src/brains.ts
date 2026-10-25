@@ -81,7 +81,7 @@ export interface Interface {
   ) => Effect.Effect<Session.Accepted, BrainHost.BrainUnavailable | BrainRejectedError | SessionNotStartedError>
   readonly access: (
     sessionId: Session.ID,
-    member: { readonly userId: Auth.UserID; readonly name?: string },
+    member: { readonly userId: Auth.UserID; readonly memberId: typeof Auth.MemberID.Type; readonly name?: string },
     options?: { readonly unreachable?: boolean },
   ) => Effect.Effect<Session.ClientAccess>
   readonly prepare: (spaceId: Space.ID) => Effect.Effect<void>
@@ -381,7 +381,7 @@ export const layer = Layer.effect(
       }),
       access: Effect.fn("Brains.access")(function* (
         sessionId: Session.ID,
-        member: { readonly userId: Auth.UserID; readonly name?: string },
+        member: { readonly userId: Auth.UserID; readonly memberId: typeof Auth.MemberID.Type; readonly name?: string },
         options: { readonly unreachable?: boolean } = {},
       ) {
         const session = yield* brainOf(sessionId)
@@ -394,6 +394,7 @@ export const layer = Layer.effect(
         const signed = yield* client.clientToken(state.target, {
           sid: sessionId,
           sub: member.userId,
+          member: member.memberId,
           ...(member.name && { name: member.name }),
         })
         return {

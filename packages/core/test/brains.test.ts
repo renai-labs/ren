@@ -197,7 +197,7 @@ for (const host of hosts)
       Effect.gen(function* () {
         const brain = yield* Brains.Service
         const chat = yield* created(`open ${stub.script().marker}`)
-        const access = yield* Host.ready(brain.access(chat.sessionId, { userId: chat.owner.createdBy }))
+        const access = yield* Host.ready(brain.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }))
         const read = yield* Effect.promise(() =>
           fetch(`${access.url}/chat/session/${chat.sessionId}`, {
             headers: { authorization: TestToken.basic(access.token) },
@@ -214,7 +214,9 @@ for (const host of hosts)
         const chat = yield* created(`open ${opened.marker}`)
         yield* Effect.promise(() => opened.called())
         const say = Effect.fnUntraced(function* (member: { readonly userId: Auth.UserID; readonly name: string }) {
-          const access = yield* Host.ready(brain.access(chat.sessionId, member))
+          const access = yield* Host.ready(
+            brain.access(chat.sessionId, { ...member, memberId: Auth.MemberID.create() }),
+          )
           const script = stub.script()
           const response = yield* Effect.promise(() =>
             fetch(`${access.url}/chat/session/${chat.sessionId}/prompt`, {
@@ -226,7 +228,7 @@ for (const host of hosts)
           expect(response.status).toBe(200)
           return (yield* Effect.promise(() => script.called())).text
         })
-        const access = yield* Host.ready(brain.access(chat.sessionId, { userId: chat.owner.createdBy }))
+        const access = yield* Host.ready(brain.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }))
         const read = yield* Effect.promise(() =>
           fetch(`${access.url}/chat/session/${chat.sessionId}`, {
             headers: { authorization: TestToken.basic(access.token) },
@@ -250,7 +252,7 @@ for (const host of hosts)
         Effect.gen(function* () {
           const brains = yield* Brains.Service
           const chat = yield* created(`open ${stub.script().marker}`)
-          yield* Host.ready(brains.access(chat.sessionId, { userId: chat.owner.createdBy }))
+          yield* Host.ready(brains.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }))
           const found = yield* brains
             .accessEnvironment(
               {

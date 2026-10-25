@@ -27,22 +27,32 @@ const userHeader = "ren-user"
 
 const userNameHeader = "ren-user-name"
 
+const memberHeader = "ren-user-member"
+
 const sessionHeader = "ren-session"
 
 const expiresHeader = "ren-token-expires"
 
 export const setMember = (
   headers: Headers,
-  member: { readonly sub?: string; readonly name?: string; readonly sid?: string; readonly exp?: number },
+  member: {
+    readonly sub?: string
+    readonly member?: string
+    readonly name?: string
+    readonly sid?: string
+    readonly exp?: number
+  },
 ) => {
   headers.delete(userHeader)
   headers.delete(userNameHeader)
+  headers.delete(memberHeader)
   headers.delete(sessionHeader)
   headers.delete(expiresHeader)
   if (member.sid) headers.set(sessionHeader, member.sid)
   if (member.exp) headers.set(expiresHeader, String(member.exp))
   if (!member.sub) return
   headers.set(userHeader, member.sub)
+  if (member.member) headers.set(memberHeader, member.member)
   if (member.name) headers.set(userNameHeader, Base64Url.encode(member.name))
 }
 
@@ -193,7 +203,8 @@ const sender = Effect.map(HttpServerRequest.HttpServerRequest, (request) =>
       Option.flatMap((encoded) => Result.getSuccess(Base64Url.decodeString(encoded))),
       Option.filter((decoded) => decoded.trim().length > 0),
     )
-    return { userId, ...(Option.isSome(name) && { name: name.value }) }
+    const memberId = request.headers[memberHeader]
+    return { userId, ...(memberId && { memberId }), ...(Option.isSome(name) && { name: name.value }) }
   }),
 )
 

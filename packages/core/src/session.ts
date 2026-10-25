@@ -10,7 +10,7 @@ import { and, count, desc, eq, isNull, sql, type SQL } from "drizzle-orm"
 import type { NonEmptyReadonlyArray } from "effect/Array"
 import { Array, Context, DateTime, Duration, Effect, Layer, Option, Schema, Semaphore, Struct } from "effect"
 import { Access } from "./access.js"
-import type { Actor } from "./actor.js"
+import { Actor } from "./actor.js"
 import { Brains } from "./brains.js"
 import { Models } from "./models.js"
 import { Primitive } from "./primitive.js"
@@ -144,6 +144,8 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
+    const memberOf = (actor: Actor.Info) =>
+      Actor.memberOf(database.db, actor).pipe(Effect.catchTag("Primitive.Forbidden", () => Effect.fail(notFound)))
     const access = yield* Access.Service
     const sessions = yield* SessionRunner.Service
     const brain = yield* Brains.Service
@@ -315,7 +317,7 @@ export const layer = Layer.effect(
             initialMessage: {
               messageId: Session.MessageID.make(input.message.id),
               prompt: { text: input.message.text },
-              sender: { userId: actor.userId },
+              sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
             },
           }),
         }
@@ -391,7 +393,7 @@ export const layer = Layer.effect(
               initialMessage: {
                 messageId: Session.MessageID.make(message.id),
                 prompt: { text: message.text },
-                sender: { userId: actor.userId },
+                sender: { userId: actor.userId, memberId: yield* memberOf(actor) },
               },
             },
             { organizationId: actor.organizationId, spaceId: row.session.space_id, brainId: row.session.brain_id },
@@ -414,6 +416,7 @@ export const layer = Layer.effect(
           id,
           {
             userId: actor.userId,
+            memberId: yield* memberOf(actor),
             ...(user && { name: user.name.trim() ? `${user.name.trim()} (${user.email})` : user.email }),
           },
           options,

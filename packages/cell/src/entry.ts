@@ -87,7 +87,13 @@ export const check = Effect.fn("Entry.check")(function* (
   Chat.setMember(
     headers,
     claims.scope === "client"
-      ? { sub: claims.sub, sid: claims.sid, exp: claims.exp, ...(claims.name && { name: claims.name }) }
+      ? {
+          sub: claims.sub,
+          sid: claims.sid,
+          exp: claims.exp,
+          ...(claims.member && { member: claims.member }),
+          ...(claims.name && { name: claims.name }),
+        }
       : {},
   )
   const body = yield* bounded(request.body, Number(headers.get("content-length")))
