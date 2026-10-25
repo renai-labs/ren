@@ -2,6 +2,64 @@ export * as Channel from "./channel.js"
 
 import { Effect, Schema } from "effect"
 import { Agent } from "./agent.js"
+import { Identifier } from "./identifier.js"
+
+export const Provider = Schema.Literals(["slack", "linear", "github"]).annotate({ identifier: "Channel.Provider" })
+export type Provider = typeof Provider.Type
+
+export const ThreadID = Identifier.make("cth", "Channel.ThreadID")
+export type ThreadID = typeof ThreadID.Type
+
+export const InstallID = Identifier.make("chi", "Channel.InstallID")
+export type InstallID = typeof InstallID.Type
+
+export interface FileRef extends Schema.Schema.Type<typeof FileRef> {}
+export const FileRef = Schema.Struct({
+  url: Schema.String,
+  name: Schema.String,
+  mime: Schema.String,
+  size: Schema.optionalKey(Schema.Int),
+}).annotate({ identifier: "Channel.FileRef" })
+
+export interface Event extends Schema.Schema.Type<typeof Event> {}
+export const Event = Schema.Struct({
+  provider: Provider,
+  eventId: Schema.NonEmptyString.annotate({ description: "The provider’s id of this delivery." }),
+  install: Schema.NonEmptyString.annotate({
+    description: "The provider’s workspace id: Slack team, Linear organization, GitHub installation.",
+  }),
+  place: Schema.Struct({
+    id: Schema.NonEmptyString,
+    kind: Schema.Literals(["channel", "dm", "project", "repository"]),
+    name: Schema.optionalKey(Schema.String),
+  }),
+  thread: Schema.Struct({ id: Schema.NonEmptyString, url: Schema.optionalKey(Schema.String) }),
+  sender: Schema.Struct({
+    accountId: Schema.NonEmptyString,
+    name: Schema.optionalKey(Schema.String),
+    handle: Schema.optionalKey(Schema.String),
+  }),
+  text: Schema.String,
+  files: Schema.Array(FileRef),
+}).annotate({ identifier: "Channel.Event" })
+
+export const Parsed = Schema.Union([
+  Schema.TaggedStruct("Handshake", { body: Schema.Json }),
+  Schema.TaggedStruct("Ignore", { reason: Schema.String }),
+  Schema.TaggedStruct("Event", { event: Event }),
+]).annotate({ identifier: "Channel.Parsed" })
+export type Parsed = typeof Parsed.Type
+
+export const FailureReason = Schema.Literals([
+  "unlinked",
+  "not_member",
+  "fallback_gone",
+  "brain_failed",
+  "model_busy",
+  "context_too_long",
+  "unknown",
+]).annotate({ identifier: "Channel.FailureReason" })
+export type FailureReason = typeof FailureReason.Type
 
 const fields = {
   purpose: Schema.NonEmptyString,
