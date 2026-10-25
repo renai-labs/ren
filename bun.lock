@@ -169,6 +169,7 @@
       "name": "@ren/core",
       "version": "0.0.0",
       "dependencies": {
+        "@effect/sql-pg": "catalog:",
         "@modelcontextprotocol/client": "catalog:",
         "@ren/db": "workspace:*",
         "@ren/environment-api": "workspace:*",

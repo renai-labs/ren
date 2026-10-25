@@ -16,7 +16,6 @@ import { AppProfiles } from "./profiles.js"
 import { AppValidation } from "./validation.js"
 
 export interface Interface {
-  readonly revision: (scope: Credentials.Scope) => Effect.Effect<string, Primitive.NotFound>
   readonly forScope: (scope: Credentials.Scope) => Effect.Effect<AppCatalog.Info, Primitive.NotFound>
 }
 export class Service extends Context.Service<Service, Interface>()("@ren/core/AppResolve") {}
@@ -244,9 +243,6 @@ export const layer = Layer.effect(
     }
 
     return Service.of({
-      revision: Effect.fn("AppResolve.revision")(function* (scope) {
-        return fingerprintOf(yield* inputs(scope).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)))
-      }),
       forScope: Effect.fn("AppResolve.forScope")(function* (scope) {
         const found = yield* inputs(scope).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die))
         return { fingerprint: fingerprintOf(found), catalog: build(found) }

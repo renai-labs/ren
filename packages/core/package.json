@@ -20,6 +20,7 @@
   "dependencies": {
     "@ren/host-api": "workspace:*",
     "@ren/environment-api": "workspace:*",
+    "@effect/sql-pg": "catalog:",
     "@ren/db": "workspace:*",
     "@ren/schema": "workspace:*",
     "@ren/util": "workspace:*",

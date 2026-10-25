@@ -37,9 +37,43 @@ export interface Script {
   readonly called: (count?: number) => Promise<Call>
 }
 
+export interface ModelInfoEntry {
+  readonly model_name: string
+  readonly model_info: Readonly<Record<string, unknown>>
+}
+
+export const modelEntry = (
+  providerKey: string,
+  modelKey: string,
+  options: { readonly name?: string; readonly variants?: ReadonlyArray<string> } = {},
+): ModelInfoEntry => ({
+  model_name: modelKey,
+  model_info: {
+    model_key: modelKey,
+    provider_key: providerKey,
+    ...(options.name && { display_name: options.name }),
+    max_input_tokens: 100_000,
+    max_output_tokens: 4000,
+    ...(options.variants && { variants: options.variants.map((id) => ({ id, name: id })) }),
+  },
+})
+
+export const defaultModels: ReadonlyArray<ModelInfoEntry> = [
+  modelEntry("stub", "stub-model", { name: "Stub" }),
+  modelEntry("stub", "stub-other", { name: "Stub Other" }),
+  modelEntry("anthropic", "stub-claude", { name: "Stub Claude" }),
+]
+
 export interface Server {
   readonly url: string
   readonly cellUrl: string
+  readonly root: string
+  readonly cellRoot: string
+  readonly modelInfo: {
+    readonly set: (models: ReadonlyArray<ModelInfoEntry>) => void
+    readonly down: (isDown: boolean) => void
+    readonly reads: ReadonlyArray<string | null>
+  }
   readonly calls: ReadonlyArray<Call>
   readonly script: (behaviour?: Behaviour) => Script
   readonly waitFor: (predicate: (call: Call) => boolean) => Promise<Call>
@@ -280,41 +314,62 @@ export const start = (): Server => {
     return entry
   }
 
+  const info: { models: ReadonlyArray<ModelInfoEntry>; isDown: boolean; reads: Array<string | null> } = {
+    models: defaultModels,
+    isDown: false,
+    reads: [],
+  }
+  const modelInfo = (request: Request) => {
+    info.reads.push(request.headers.get("authorization"))
+    return info.isDown ? new Response("down", { status: 503 }) : Response.json({ data: info.models })
+  }
+  const chat = async (request: Request) => {
+    const endpoint = Object.entries(endpoints).find((entry) => new URL(request.url).pathname.endsWith(entry[0]))?.[1]
+    if (!endpoint) return new Response("not found", { status: 404 })
+    const decoded = endpoint.decode(await request.json().catch(() => undefined))
+    if (Option.isNone(decoded)) return new Response("not a chat completion or messages request", { status: 400 })
+    const call = toCall(decoded.value, request)
+    const entry = record(call)
+    const summary = entry?.behaviour.summary
+    const behaviour: Behaviour = {
+      title: { reply: "Stub title" },
+      compaction: summary === undefined ? {} : { reply: summary },
+      turn: entry?.behaviour ?? {},
+    }[call.kind]
+    const status = statusOf(behaviour, call)
+    if (status)
+      return Response.json({ error: { message: `stub model status ${status}`, type: "stub_error" } }, { status })
+    const chunks = endpoint.stream(call.body, behaviour, entry?.gate.promise ?? Promise.resolve())
+    const body = new ReadableStream<Uint8Array>({
+      pull: async (controller) => {
+        const next = await chunks.next()
+        if (next.done) controller.close()
+        else controller.enqueue(next.value)
+      },
+    })
+    return new Response(body, { headers: { "content-type": "text/event-stream" } })
+  }
   const server = Bun.serve({
     hostname: "0.0.0.0",
     port: 0,
     idleTimeout: 0,
-    async fetch(request) {
-      const endpoint = Object.entries(endpoints).find((entry) => new URL(request.url).pathname.endsWith(entry[0]))?.[1]
-      if (!endpoint) return new Response("not found", { status: 404 })
-      const decoded = endpoint.decode(await request.json().catch(() => undefined))
-      if (Option.isNone(decoded)) return new Response("not a chat completion or messages request", { status: 400 })
-      const call = toCall(decoded.value, request)
-      const entry = record(call)
-      const summary = entry?.behaviour.summary
-      const behaviour: Behaviour = {
-        title: { reply: "Stub title" },
-        compaction: summary === undefined ? {} : { reply: summary },
-        turn: entry?.behaviour ?? {},
-      }[call.kind]
-      const status = statusOf(behaviour, call)
-      if (status)
-        return Response.json({ error: { message: `stub model status ${status}`, type: "stub_error" } }, { status })
-      const chunks = endpoint.stream(call.body, behaviour, entry?.gate.promise ?? Promise.resolve())
-      const body = new ReadableStream<Uint8Array>({
-        pull: async (controller) => {
-          const next = await chunks.next()
-          if (next.done) controller.close()
-          else controller.enqueue(next.value)
-        },
-      })
-      return new Response(body, { headers: { "content-type": "text/event-stream" } })
-    },
+    fetch: (request) => (new URL(request.url).pathname.endsWith("/model/info") ? modelInfo(request) : chat(request)),
   })
 
   return {
     url: `http://127.0.0.1:${server.port}/v1`,
     cellUrl: `http://host.docker.internal:${server.port}/v1`,
+    root: `http://127.0.0.1:${server.port}`,
+    cellRoot: `http://host.docker.internal:${server.port}`,
+    modelInfo: {
+      set: (models) => {
+        info.models = models
+      },
+      down: (isDown) => {
+        info.isDown = isDown
+      },
+      reads: info.reads,
+    },
     calls,
     waitFor,
     script: (behaviour = {}) => {

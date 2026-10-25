@@ -20,6 +20,7 @@ import {
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Environment } from "@ren/schema/environment"
+import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Models } from "@ren/schema/models"
 import type { Session } from "@ren/schema/session"
 import type { SessionSettings } from "@ren/schema/session/settings"
@@ -81,9 +82,10 @@ export const start = (options: { readonly hostname?: string } = {}) => {
     refreshGate: undefined as (() => Promise<void>) | undefined,
     settings: TestSettings.layers(),
     chats: [] as ReadonlyArray<PullChat>,
-    models: new Map<Brain.ID | "all", { readonly access: Models.Access; readonly hash: string }>(),
-    modelsCount: 0,
-    refresh: (): Refresh => ({ type: "unavailable" }),
+    models: new Map<Brain.ID | "all", Models.Access>(),
+    refresh: undefined as (() => Refresh) | undefined,
+    env: {} as Readonly<Record<string, string>>,
+    apps: undefined as AppCatalog.Info | undefined,
     rotate: false,
     revoked: new Set<string>(),
     deleted: new Set<Session.ID>(),
@@ -154,10 +156,13 @@ export const start = (options: { readonly hostname?: string } = {}) => {
             const host = yield* CurrentHost
             pulls.push(request.payload)
             record("pull", host.brainId, undefined, 200)
-            const granted = modelsOf(host.brainId) ?? { hash: "models-0" }
+            const baseUrl = modelsOf(host.brainId)?.endpoints.at(0)?.baseUrl.replace(/\/v1$/u, "")
             return {
               publicKeys: [...TestToken.publicKeys],
-              models: "access" in granted && request.payload.models !== granted.hash ? granted : { hash: granted.hash },
+              models: { hash: "" },
+              ...(baseUrl && { inference: { baseUrl } }),
+              ...(state.apps && { apps: state.apps }),
+              env: { hash: "", variables: state.env },
               layers: state.settings,
               chats: state.chats,
               deleted: (request.payload.roots ?? []).filter((id) => state.deleted.has(id)),
@@ -171,7 +176,10 @@ export const start = (options: { readonly hostname?: string } = {}) => {
         group.handle("models.refresh", () =>
           Effect.gen(function* () {
             const host = yield* CurrentHost
-            const reply = state.refresh()
+            const granted = modelsOf(host.brainId)
+            const fallback: Refresh =
+              granted && granted.endpoints.length > 0 ? { type: "grant", access: granted } : { type: "unavailable" }
+            const reply = state.refresh ? state.refresh() : fallback
             if (reply.type === "unavailable") {
               record("models.refresh", host.brainId, undefined, 503)
               return yield* new ModelsUnavailableError({ message: "The fake Ren grants no models" })
@@ -315,8 +323,13 @@ export const start = (options: { readonly hostname?: string } = {}) => {
       state.chats = chats
     },
     models: (access: Models.Access, brainId?: Brain.ID) => {
-      state.modelsCount += 1
-      state.models.set(brainId ?? "all", { access, hash: `models-${state.modelsCount}` })
+      state.models.set(brainId ?? "all", access)
+    },
+    env: (variables: Readonly<Record<string, string>>) => {
+      state.env = variables
+    },
+    apps: (apps: AppCatalog.Info | undefined) => {
+      state.apps = apps
     },
     refresh: (reply: () => Refresh) => {
       state.refresh = reply

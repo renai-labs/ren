@@ -2,7 +2,6 @@ import { AppCatalog } from "@ren/schema/app-catalog"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
-import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
 import { Signature } from "@ren/schema/signature"
@@ -54,40 +53,53 @@ export interface PullRequest extends Schema.Schema.Type<typeof PullRequest> {}
 export const PullRequest = Schema.Struct({
   version: Schema.String.annotate({ description: "The brain’s version." }),
   keyIds: Schema.Array(Schema.String).annotate({ description: "The ids of the public keys the brain holds." }),
-  models: Schema.NullOr(Schema.String).annotate({ description: "The models hash the brain has." }),
-  apps: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
-    description: "The app catalog fingerprint the brain has; null requests the catalog. Absent for legacy brains.",
+  models: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
+    description: "Ignored. A brain from before HR9 sends the models hash it has.",
   }),
-  layers: SessionSettings.Known,
+  apps: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
+    description: "Ignored. A brain from before HR9 sends the app catalog fingerprint it has.",
+  }),
+  layers: Schema.optionalKey(SessionSettings.Known).annotate({
+    description: "Ignored. A brain from before HR9 sends the settings layer hashes it has.",
+  }),
   sessions: Schema.Array(PullSession),
   roots: Schema.optionalKey(Schema.Array(Session.ID)).annotate({
     description: "The root chats the brain’s harness holds. Ren names the ones it deleted in `deleted`.",
   }),
   env: Schema.optionalKey(Schema.String).annotate({
-    description: "The hash of the credential env vars the brain has.",
+    description: "Ignored. A brain from before HR9 sends the hash of the credential env vars it has.",
   }),
 }).annotate({ identifier: "Host.PullRequest" })
 
 export interface PullEnv extends Schema.Schema.Type<typeof PullEnv> {}
 export const PullEnv = Schema.Struct({
-  hash: Schema.String,
-  variables: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
+  hash: Schema.String.annotate({ description: "Always empty. A brain from before HR9 reads it." }),
+  variables: Schema.Record(Schema.String, Schema.String),
 }).annotate({
   identifier: "Host.PullEnv",
   description:
-    "The credential env vars of the brain: `LABEL=ren:LABEL` for each key that reaches it (A35), and the value of a delivered secret (C9). A body comes only when the hash changed.",
+    "The credential env vars of the brain: `LABEL=ren:LABEL` for each key that reaches it (A35), and the value of a delivered secret (C9).",
 })
 
 export interface PullModels extends Schema.Schema.Type<typeof PullModels> {}
 export const PullModels = Schema.Struct({
   hash: Schema.String,
-  access: Schema.optionalKey(Models.Access),
-}).annotate({ identifier: "Host.PullModels" })
+}).annotate({
+  identifier: "Host.PullModels",
+  description: "Always an empty hash. A brain from before HR3 reads it; models come from the inference service.",
+})
+
+export interface PullInference extends Schema.Schema.Type<typeof PullInference> {}
+export const PullInference = Schema.Struct({
+  baseUrl: Schema.String.annotate({
+    description: "The root URL of the inference service (LiteLLM). The brain reads `/model/info` from it.",
+  }),
+}).annotate({ identifier: "Host.PullInference" })
 
 export interface PullApps extends Schema.Schema.Type<typeof PullApps> {}
 export const PullApps = Schema.Struct({
   fingerprint: Schema.String,
-  catalog: Schema.optionalKey(AppCatalog.Catalog),
+  catalog: AppCatalog.Catalog,
 }).annotate({ identifier: "Host.PullApps" })
 
 export interface PullChat extends Schema.Schema.Type<typeof PullChat> {}
@@ -101,15 +113,18 @@ export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}
 export const PullReply = Schema.Struct({
   publicKeys: Schema.Array(Signature.PublicKey),
   models: PullModels,
+  inference: Schema.optionalKey(PullInference).annotate({
+    description: "Omitted when Ren has no inference service; the brain then has no models.",
+  }),
   apps: Schema.optionalKey(PullApps).annotate({
-    description: "The resolved app catalog, with a body only when changed. Omitted when unsupported or unavailable.",
+    description: "The resolved app catalog. Omitted when unsupported or unavailable.",
   }),
   layers: SessionSettings.Layers,
   chats: Schema.Array(PullChat),
   deleted: Schema.Array(Session.ID).annotate({
-    description: "Root chats of the request that Ren no longer has. The brain drops them (E109).",
+    description: "Root chats of the request that Ren no longer has. The brain drops them (E109, HR22).",
   }),
-  env: Schema.optionalKey(PullEnv),
+  env: PullEnv,
 }).annotate({ identifier: "Host.PullReply" })
 
 const SessionParams = { id: Session.ID }
@@ -119,9 +134,9 @@ const PullGroup = HttpApiGroup.make("pull")
     HttpApiEndpoint.post("pull", "/host/pull", { payload: PullRequest, success: PullReply }).annotateMerge(
       OpenApi.annotations({
         identifier: "pull",
-        summary: "Pull a brain's settings, models and app catalog",
+        summary: "Pull a brain’s settings, env vars and app catalog",
         description:
-          "Send the hashes the brain has and the state of its chats. The reply sends each settings layer, the models and the supported app catalog; a body comes only when its hash changed. It lists the brain’s chats with their primary agent.",
+          "Send the state of the brain’s chats. The reply sends the full state: each settings layer, the env vars, the supported app catalog and the inference URL. The brain compares it with what it has and applies only what changed (HR9). It lists the brain’s chats with their primary agent.",
       }),
     ),
   )

@@ -27,6 +27,7 @@ import {
   Stream,
   Struct,
 } from "effect"
+import { FetchHttpClient } from "effect/http"
 import { mkdir, rm, stat } from "node:fs/promises"
 // oxlint-disable-next-line ren/no-node-modules-import -- @opencode/core exports no package.json and no version, and the harness version must be the installed one.
 import opencode from "../../../node_modules/@opencode/core/package.json"
@@ -37,7 +38,7 @@ import { ChatSettings } from "../../chat-settings.js"
 import { HarnessStorage } from "../../harness-storage.js"
 import { HostToken } from "../../host-token.js"
 import { ModelRefresh } from "../../model-refresh.js"
-import { ModelStore } from "../../model-store.js"
+import { Inference } from "../../inference.js"
 import { RenAddress } from "../../ren-address.js"
 import { Harness } from "../harness.js"
 import { OpenCodeChat } from "./chat.js"
@@ -46,6 +47,7 @@ import type { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
 import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
+import { OpenCodeModels } from "./models.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { SessionSettings } from "./session-settings.js"
 import type { HarnessConfig } from "../config.js"
@@ -355,7 +357,7 @@ const layerWith = (opener: Opener) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const cell = yield* Cell.Info
-      const store = yield* ModelStore.Service
+      const inference = yield* Inference.Service
       const refreshKey = yield* ModelRefresh.Service
       const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
       const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
@@ -372,8 +374,14 @@ const layerWith = (opener: Opener) =>
       )
       return Harness.layer(
         prepare.pipe(
-          Effect.andThen(store.read),
-          Effect.map(Option.match({ onNone: () => [], onSome: (access) => access.endpoints })),
+          Effect.andThen(
+            Effect.gen(function* () {
+              const catalog = yield* inference.catalog
+              const baseUrl = yield* inference.baseUrl
+              if (Option.isNone(catalog) || Option.isNone(baseUrl)) return []
+              return yield* OpenCodeModels.endpoints(catalog.value, baseUrl.value, refreshKey)
+            }),
+          ),
           Effect.flatMap((endpoints) =>
             Effect.gen(function* () {
               const server = yield* opener(
@@ -385,7 +393,7 @@ const layerWith = (opener: Opener) =>
                 Option.isSome(apps) ? yield* apps.value.current : Option.none(),
                 ren,
               )
-              return yield* make(server, endpoints, settings)
+              return yield* make(server, endpoints, settings, Option.some({ inference, refreshKey }))
             }),
           ),
         ),
@@ -419,6 +427,10 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
   server: OpenCodeServer.Instance,
   endpoints: ReadonlyArray<Models.Endpoint>,
   settings: Option.Option<ChatSettings.Interface> = Option.none(),
+  models: Option.Option<{
+    readonly inference: Inference.Interface
+    readonly refreshKey: Harness.Refresh
+  }> = Option.none(),
 ) {
   const client = server.client
   const state = { firstAskedAt: new Map<string, number>(), models: endpoints }
@@ -480,18 +492,31 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     })
   })
   yield* configure({ models: endpoints })
+  const reader = Option.isSome(models)
+    ? Option.some(
+        yield* OpenCodeModels.make({
+          inference: models.value.inference,
+          keyFor: models.value.refreshKey,
+          apply: (next) => mutations.withPermit(configure({ models: next })),
+        }).pipe(Effect.provide(FetchHttpClient.layer)),
+      )
+    : Option.none()
+  const refreshModels = Option.match(reader, { onNone: () => Effect.void, onSome: (found) => found.refresh })
+  // oxlint-disable-next-line ren/no-comments -- HR14: a model that the brain does not know yet may be new in LiteLLM, so the brain reads the list once before it refuses the model.
+  const knowing = Effect.fnUntraced(function* (model: Model | null | undefined) {
+    if (!model) return
+    if (Option.isSome((yield* lookupOf(client))(model))) return
+    yield* refreshModels
+  })
 
   return {
     fetch: server.fetch,
     chat: OpenCodeChat.make(server),
     configure: (update: HarnessConfig.Update) => mutations.withPermit(configure(update)),
     configuration: server.configuration,
+    refreshModels,
     start: (input: StartBody) =>
-      mutations.withPermit(
-        Effect.gen(function* () {
-          return yield* start(client, server, settings, input)
-        }),
-      ),
+      knowing(input.model).pipe(Effect.andThen(mutations.withPermit(start(client, server, settings, input)))),
     send: (input: SendInput) => mutations.withPermit(send(client, input)),
     transcript: {
       drop: (chat) =>
@@ -576,25 +601,29 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         ),
     },
     setModel: (sessionId: string, model: Option.Option<Model>) =>
-      mutations.withPermit(
-        Effect.gen(function* () {
-          const sessionID = Session.ID.make(sessionId)
-          const session = yield* findSession(client, sessionID)
-          if (Option.isNone(session))
-            return yield* new SessionNotStartedError({ message: `Session ${sessionId} has not been started` })
-          const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
-          yield* pick(client, server, settings, sessionID, model, { interactive: saved?.interactive ?? true })
-          yield* client.session
-            .update({
-              sessionID,
-              metadata: SessionSettings.metadata(session, {
-                start: saved?.start ?? null,
-                model: Option.getOrNull(model),
-                interactive: saved?.interactive ?? true,
-              }),
-            })
-            .pipe(Effect.orDie)
-        }),
+      knowing(Option.getOrUndefined(model)).pipe(
+        Effect.andThen(
+          mutations.withPermit(
+            Effect.gen(function* () {
+              const sessionID = Session.ID.make(sessionId)
+              const session = yield* findSession(client, sessionID)
+              if (Option.isNone(session))
+                return yield* new SessionNotStartedError({ message: `Session ${sessionId} has not been started` })
+              const saved = Option.getOrUndefined(SessionSettings.savedOf(session.value))
+              yield* pick(client, server, settings, sessionID, model, { interactive: saved?.interactive ?? true })
+              yield* client.session
+                .update({
+                  sessionID,
+                  metadata: SessionSettings.metadata(session, {
+                    start: saved?.start ?? null,
+                    model: Option.getOrNull(model),
+                    interactive: saved?.interactive ?? true,
+                  }),
+                })
+                .pipe(Effect.orDie)
+            }),
+          ),
+        ),
       ),
     onTurn: (hooks) =>
       Option.match(server.chats, {

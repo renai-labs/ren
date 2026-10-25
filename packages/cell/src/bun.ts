@@ -11,7 +11,6 @@ import { BrainKeys } from "./brain-keys.js"
 import { BrainStorage } from "./brain-storage.js"
 import { Cell } from "./cell.js"
 import { Chat } from "./chat.js"
-import { CredentialEnv } from "./credential-env.js"
 import { ChatSettings } from "./chat-settings.js"
 import { Restore } from "./restore.js"
 import { Entry } from "./entry.js"
@@ -121,13 +120,11 @@ const boot = Effect.gen(function* () {
   const hotReload = yield* HotReload.Service
   const sync = yield* Sync.Service
   const fence = yield* Fence.Service
-  const credentialEnv = yield* CredentialEnv.Service
   const scope = yield* Scope.make()
   const opened = yield* harness.get.pipe(Scope.provide(scope))
   yield* opened.onTurn({
     started: () => scheduler.trigger("pull"),
-    ended: () =>
-      Effect.all([credentialEnv.turnEnded, scheduler.trigger("pull"), scheduler.trigger("sync")], { discard: true }),
+    ended: () => Effect.all([scheduler.trigger("pull"), scheduler.trigger("sync")], { discard: true }),
   })
   gate.open = true
   yield* Effect.logInfo(`Brain ${brainId} generation ${vars.REN_BRAIN_GENERATION} is ready on port ${port}`)

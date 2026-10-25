@@ -1,5 +1,6 @@
 export * as ModelProvider from "./model.js"
 
+import { StubModel } from "@ren/cell/testing"
 import { Option, Schema } from "effect"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { Wait } from "../wait.js"
@@ -70,6 +71,10 @@ interface Script {
 
 export interface Instance {
   readonly url: string
+  readonly modelInfo: {
+    readonly set: (models: ReadonlyArray<StubModel.ModelInfoEntry>) => void
+    readonly down: (isDown: boolean) => void
+  }
   readonly calls: ReadonlyArray<Call>
   readonly script: (steps?: ReadonlyArray<Step>) => Script
   readonly stop: () => Promise<void>
@@ -212,7 +217,12 @@ export const start = async (): Promise<Instance> => {
   const calls: Array<Call> = []
   const scripts = new Map<string, Entry>()
 
-  const reply = async (request: IncomingMessage, response: ServerResponse) => {
+  const info = { models: StubModel.defaultModels, isDown: false }
+  const modelInfo = (response: ServerResponse) => {
+    response.writeHead(info.isDown ? 503 : 200, { "content-type": "application/json" })
+    response.end(info.isDown ? "{}" : JSON.stringify({ data: info.models }))
+  }
+  const chat = async (request: IncomingMessage, response: ServerResponse) => {
     const decoded = decodeRequest(await readBody(request))
     if (!request.url?.endsWith("/chat/completions") || Option.isNone(decoded)) {
       response.writeHead(404)
@@ -233,13 +243,24 @@ export const start = async (): Promise<Instance> => {
   }
 
   const server = createServer(
-    (request, response) => void reply(request, response).catch(() => response.socket?.destroy()),
+    (request, response) =>
+      request.url === "/model/info"
+        ? modelInfo(response)
+        : void chat(request, response).catch(() => response.socket?.destroy()),
   )
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
   const address = server.address()
 
   return {
     url: `http://127.0.0.1:${typeof address === "object" && address !== null ? address.port : 0}/v1`,
+    modelInfo: {
+      set: (models) => {
+        info.models = models
+      },
+      down: (isDown) => {
+        info.isDown = isDown
+      },
+    },
     calls,
     script: (steps = [text("done")]) => {
       const marker = `chaos_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`

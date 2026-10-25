@@ -26,6 +26,7 @@ const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, Share
 const fixed = Layer.succeed(
   Models.Service,
   Models.Service.of({
+    inference: Shared.inference(),
     revision: Effect.succeed("test"),
     catalog: () => Effect.succeed(Models.catalog(configured)),
     grant: () => Effect.succeed(configured),

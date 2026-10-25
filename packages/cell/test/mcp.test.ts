@@ -74,8 +74,8 @@ it.live("two profiles of one app are two servers, each with its own placeholder;
     const system = script.calls.at(0)?.system ?? ""
     for (const tool of ["gmail__acme.marker", "gmail__globex.marker", "docs.marker"])
       expect(system).toContain(`tools.${tool}()`)
-    expect(system).toContain("The MCP server gmail__acme is Docs for the profile “Acme client”.")
-    expect(system).toContain("sheets (Acme client) is unavailable: the provider is not set up on this Ren.")
+    expect(system).toContain("Docs for the profile “Acme client”")
+    expect(system).not.toContain("unavailable")
     expect(acme.headers.at(0)?.get("authorization")).toBe("Bearer ren:MCP_GMAIL__ACME")
     expect(globex.headers.at(0)?.get("authorization")).toBe("Bearer ren:MCP_GMAIL__GLOBEX")
     expect(docs.headers.at(0)?.get("authorization")).toBeNull()
@@ -146,11 +146,11 @@ it.effect("the env note: one line per app with connected env items, in catalog o
         },
       ],
     })
-    const notes = OpenCodeMcp.notes(Option.some(catalog), { local: true })
+    const notes = OpenCodeMcp.notes(Option.some(catalog))
     expect(notes).toEqual([
       "google profiles: Acme client → keys end in `__ACME` (`GOOGLE_PROJECT_ID__ACME`); Globex client → `__GLOBEX`. Env keys exist only with the suffix.",
     ])
-    expect(OpenCodeMcp.notes(Option.some(catalog), { local: true }).join("\n")).toBe(notes.join("\n"))
+    expect(OpenCodeMcp.notes(Option.some(catalog)).join("\n")).toBe(notes.join("\n"))
   }),
 )
 
@@ -273,11 +273,11 @@ it.live("two app MCPs at one URL stay distinct, list every tool page and follow 
 )
 
 it.live(
-  "a replacement waits for an actual MCP call and the next call uses the new connection in the same session",
+  "a server that changes during a call to it ends that call with a tool error, and the turn goes on with the new server",
   () =>
     Effect.gen(function* () {
       const first = yield* McpPeer.make({ hold: true })
-      const second = yield* McpPeer.make({ holdInitialization: true })
+      const second = yield* McpPeer.make()
       yield* second.change("replacement")
       const contexts = yield* Queue.unbounded<Plugin.Context>()
       const state = { url: first.url }
@@ -317,17 +317,75 @@ it.live(
       yield* brain.send(`${held.marker} read the marker`)
       yield* Queue.take(first.requests).pipe(Effect.repeat({ until: (request) => request.method === "tools/call" }))
       state.url = second.url
-      yield* brain.atBoundary(context.mcp.reload().pipe(Effect.orDie))
-      expect(Queue.sizeUnsafe(second.requests)).toBe(0)
-      first.release()
-      yield* Queue.take(second.requests).pipe(Effect.repeat({ until: (request) => request.method === "initialize" }))
+      yield* context.mcp.reload().pipe(Effect.orDie)
+      yield* brain.opencode.session.wait({ sessionID })
+      const messages = JSON.stringify((yield* brain.opencode.message.list({ sessionID })).data)
+      expect(messages).toContain("failed: Connection closed")
+      expect(yield* brain.opencode.session.get({ sessionID })).toMatchObject({ outcome: "succeeded" })
       const next = Shared.stub().script({ tools: [{ name: "docs_marker", input: {} }] })
       yield* brain.send(`${next.marker} read again`)
-      expect(next.calls).toHaveLength(0)
-      second.release()
       yield* brain.opencode.session.wait({ sessionID })
-      expect(JSON.stringify(held.calls.at(-1)?.body.messages)).toContain("first")
       expect(JSON.stringify(next.calls.at(-1)?.body.messages)).toContain("replacement")
-      expect(JSON.stringify(next.calls.at(0)?.body.messages)).toContain(held.marker)
     }),
+)
+
+it.live("a slow server added by a pull does not hold the pull: settings that come with it apply before it connects (HR19)", () =>
+  Effect.gen(function* () {
+    const slow = yield* McpPeer.make({ holdInitialization: true })
+    const test = yield* observed()
+    const booted = Shared.stub().script()
+    yield* test.prompt(`${booted.marker} boot the chat`)
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+    yield* test.brain
+      .configure({ apps: Option.some(McpPeer.catalog("slow", [{ slug: "slow", url: slow.url }])) })
+      .pipe(Effect.timeout("1 second"))
+    yield* Queue.take(slow.requests).pipe(Effect.repeat({ until: (request) => request.method === "initialize" }))
+    expect((yield* test.brain.configuration).some((location) => location.appsReloading)).toBe(true)
+    slow.release()
+    yield* Shared.appsSettled({ configuration: test.brain.configuration })
+    const script = McpPeer.execute("slow.marker")
+    yield* test.prompt(`${script.marker} read the marker`)
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+    expect(McpPeer.result(script)).toBe("first")
+  }),
+)
+
+it.live("a server added or removed while a call to it or to another server runs: the other call ends normally, the removed one ends (HR1)", () =>
+  Effect.gen(function* () {
+    const held = yield* McpPeer.make({ hold: true })
+    const added = yield* McpPeer.make()
+    yield* added.change("added")
+    const test = yield* observed()
+    yield* test.brain.configureApps(McpPeer.catalog("first", [{ slug: "held", url: held.url }]))
+    const call = McpPeer.execute("held.marker")
+    yield* test.prompt(`${call.marker} read the held marker`)
+    yield* Queue.take(held.requests).pipe(Effect.repeat({ until: (request) => request.method === "tools/call" }))
+    yield* test.brain.configureApps(
+      McpPeer.catalog("second", [
+        { slug: "held", url: held.url },
+        { slug: "added", url: added.url },
+      ]),
+    )
+    held.release()
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+    const ended = JSON.stringify((yield* test.brain.opencode.message.list({ sessionID: test.sessionID })).data)
+    expect(ended).toContain('"toolCalls":[{"tool":"held.marker","status":"completed"}]')
+    expect(ended).toContain("tools.added.marker()")
+    expect(call.calls).toHaveLength(1)
+    const next = McpPeer.execute("added.marker")
+    yield* test.prompt(`${next.marker} read the added marker`)
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+    expect(McpPeer.result(next)).toBe("added")
+    const stuck = yield* McpPeer.make({ hold: true })
+    yield* test.brain.configureApps(McpPeer.catalog("third", [{ slug: "stuck", url: stuck.url }]))
+    const removed = McpPeer.execute("stuck.marker")
+    yield* test.prompt(`${removed.marker} read the stuck marker`)
+    yield* Queue.take(stuck.requests).pipe(Effect.repeat({ until: (request) => request.method === "tools/call" }))
+    yield* test.brain.configureApps(McpPeer.catalog("fourth", []))
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID }).pipe(Effect.timeout("10 seconds"))
+    const gone = McpPeer.execute("stuck.marker")
+    yield* test.prompt(`${gone.marker} read the stuck marker again`)
+    yield* test.brain.opencode.session.wait({ sessionID: test.sessionID })
+    expect(McpPeer.result(gone)).toContain("Unknown tool 'stuck.marker'")
+  }),
 )

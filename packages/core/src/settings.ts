@@ -23,17 +23,15 @@ export interface Pulled {
 }
 
 export interface Interface {
-  readonly pull: (brainId: Brain.ID, known: SessionSettings.Known) => Effect.Effect<Pulled, NotFound>
+  readonly pull: (brainId: Brain.ID) => Effect.Effect<Pulled, NotFound>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Settings") {}
 
 const decode = (settings: unknown) => Schema.decodeUnknownEffect(Settings.Info)(settings).pipe(Effect.orDie)
 
-const changed = <A extends { readonly hash: string }>(layer: A, settings: unknown, known: string | undefined) =>
-  layer.hash === known
-    ? Effect.succeed(layer)
-    : Effect.map(decode(settings), (decoded) => ({ ...layer, settings: decoded }))
+const withSettings = <A extends { readonly hash: string }>(layer: A, settings: unknown) =>
+  Effect.map(decode(settings), (decoded) => ({ ...layer, settings: decoded }))
 
 export const layer = Layer.effect(
   Service,
@@ -41,7 +39,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
 
     return Service.of({
-      pull: Effect.fn("Settings.pull")(function* (brainId: Brain.ID, known: SessionSettings.Known) {
+      pull: Effect.fn("Settings.pull")(function* (brainId: Brain.ID) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const brain = (yield* transaction
@@ -119,19 +117,19 @@ export const layer = Layer.effect(
               archived: Boolean(session.archivedAt),
             }))
             const used = new Set(chats.flatMap((chat) => (chat.agent ? [chat.agent] : [])))
-            const layer = (ownerId: string, knownHash: string | undefined) => {
+            const layer = (ownerId: string) => {
               const row = rows.find((each) => each.ownerId === ownerId)
-              return row ? changed({ hash: row.hash }, row.settings, knownHash) : Effect.succeed({ hash: null })
+              return row ? withSettings({ hash: row.hash }, row.settings) : Effect.succeed({ hash: null })
             }
             return {
               layers: {
-                ren: yield* layer(Database.Schema.renOwner, known.ren),
-                organization: yield* layer(brain.organizationId, known.organization),
-                space: yield* layer(brain.spaceId, known.space),
+                ren: yield* layer(Database.Schema.renOwner),
+                organization: yield* layer(brain.organizationId),
+                space: yield* layer(brain.spaceId),
                 agents: yield* Effect.forEach(
                   agents.filter((agent) => agent.isSubagent || used.has(agent.name)),
                   (agent) =>
-                    changed(
+                    withSettings(
                       {
                         name: agent.name,
                         description: agent.description,
@@ -139,7 +137,6 @@ export const layer = Layer.effect(
                         hash: agent.hash,
                       },
                       agent.settings ?? {},
-                      known.agents?.[agent.name],
                     ),
                 ),
               } satisfies SessionSettings.Layers,

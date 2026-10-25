@@ -307,28 +307,25 @@ it.live("a configuration replaces the brain's credentials", () =>
   }),
 )
 
-it.live(
-  "without models, start and send are refused before acquiring the harness, and removing models deletes the brain's credentials",
-  () =>
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.Service
-      const refused = Effect.gen(function* () {
-        expect(yield* brain.start().pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
-        expect(yield* brain.send("refused").pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
-      })
-      yield* brain.removeModels
-      yield* refused
-      expect(yield* brain.state).toMatchObject({ isOpen: false, nextReconcileAt: null })
-      yield* brain.configureModels()
-      yield* brain.start()
-      yield* brain.configureModels({ stub: Shared.apiKey("removed") })
-      expect(yield* brain.credentials.all()).toHaveLength(1)
-      yield* brain.removeModels
-      expect(yield* brain.credentials.all()).toEqual([])
-      yield* refused
-      yield* brain.configureModels()
-      expect(yield* brain.start()).toEqual({ sessionId: brain.id, harness: "opencode" })
-    }),
+it.live("without a model list, start and send are refused, and removing models deletes the brain's credentials", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    const refused = Effect.gen(function* () {
+      expect(yield* brain.start().pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
+      expect(yield* brain.send("refused").pipe(Effect.flip)).toBeInstanceOf(ModelsNotConfiguredError)
+    })
+    yield* brain.removeModels
+    yield* refused
+    yield* brain.configureModels()
+    yield* brain.start()
+    yield* brain.configureModels({ stub: Shared.apiKey("removed") })
+    expect(yield* brain.credentials.all()).toHaveLength(1)
+    yield* brain.removeModels
+    expect(yield* brain.credentials.all()).toEqual([])
+    yield* refused
+    yield* brain.configureModels()
+    expect(yield* brain.start()).toEqual({ sessionId: brain.id, harness: "opencode" })
+  }),
 )
 
 it.live("an expiring key configured during a turn reaches its next model call", () =>

@@ -7,14 +7,10 @@ import { KeyValueStore } from "effect/persistence"
 import { BrainStorage } from "./brain-storage.js"
 
 const accessKey = "ren:models"
-const hashKey = "ren:models-hash"
 const hostTokenKey = "ren:host-token"
 
 export interface Interface {
   readonly read: Effect.Effect<Option.Option<Models.Access>>
-  readonly hash: Effect.Effect<Option.Option<string>>
-  readonly install: (access: Models.Access, hash: string) => Effect.Effect<void>
-  readonly forget: Effect.Effect<void>
   readonly readHostToken: Effect.Effect<Option.Option<string>>
   readonly write: (access: Models.Access, hostToken: string | undefined) => Effect.Effect<void>
   readonly writeIfUnchanged: (
@@ -36,7 +32,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const storage = yield* BrainStorage.Service
-    const keys = [accessKey, hashKey, hostTokenKey]
+    const keys = [accessKey, hostTokenKey]
     const get = (key: string) => Effect.promise(() => storage.get(key))
     const remove = (key: string) => Effect.promise(() => storage.delete(key)).pipe(Effect.asVoid)
     const store = KeyValueStore.makeStringOnly({
@@ -60,11 +56,6 @@ export const layer = Layer.effect(
         )
     return Service.of({
       read: access.get(accessKey).pipe(Effect.orDie, Effect.withSpan("ModelStore.read")),
-      hash: store.get(hashKey).pipe(Effect.map(Option.fromNullishOr), Effect.orDie),
-      install: Effect.fn("ModelStore.install")(function* (next: Models.Access, hash: string) {
-        yield* access.set(accessKey, next).pipe(Effect.andThen(store.set(hashKey, hash)), Effect.orDie)
-      }),
-      forget: store.remove(hashKey).pipe(Effect.orDie),
       readHostToken: SynchronizedRef.get(storedHostToken).pipe(Effect.withSpan("ModelStore.readHostToken")),
       write: Effect.fn("ModelStore.write")(function* (next: Models.Access, hostToken: string | undefined) {
         yield* SynchronizedRef.updateEffect(storedHostToken, () => put(next, hostToken))

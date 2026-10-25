@@ -43,6 +43,7 @@ const source: { available: boolean } = { available: true }
 const fixed = Layer.succeed(
   Models.Service,
   Models.Service.of({
+    inference: Shared.inference(),
     revision: Effect.succeed("test"),
     catalog: () => Effect.succeed(Models.catalog(configured)),
     grant: () =>
@@ -216,7 +217,7 @@ describe("BrainHost calls to a brain", () => {
 })
 
 describe("BrainHost pull", () => {
-  it.live("app-aware pulls get a body only for a new fingerprint, and a removal is a new body", () =>
+  it.live("every pull sends the full catalog, also to a brain that sends the fingerprint it has (HR9)", () =>
     Effect.gen(function* () {
       const subject = yield* seeded
       const actor = { userId: subject.owner.createdBy, organizationId: subject.owner.organizationId, roles: ["owner"] }
@@ -243,19 +244,16 @@ describe("BrainHost pull", () => {
         spaceIds: [subject.owner.spaceId],
       })
       const brain = yield* Brains.Service
-      const request = { version: "test", keyIds: [], models: null, layers: { agents: {} }, sessions: [] }
-      expect(yield* brain.pull(host, request)).not.toHaveProperty("apps")
-      const first = (yield* brain.pull(host, { ...request, apps: null })).apps
+      const request = { version: "test", keyIds: [], sessions: [] }
+      const first = (yield* brain.pull(host, request)).apps
       if (!first) return yield* Effect.die(new Error("The first pull has no catalog"))
-      expect(first.catalog?.apps.map((entry) => entry.appId)).toEqual([app.id])
-      expect((yield* brain.pull(host, { ...request, apps: first.fingerprint })).apps).toEqual({
-        fingerprint: first.fingerprint,
-      })
-      expect((yield* brain.pull(host, { ...request, apps: "stale" })).apps).toEqual(first)
+      expect(first.catalog.apps.map((entry) => entry.appId)).toEqual([app.id])
+      const legacy = { ...request, models: "models-1", layers: { agents: {} }, apps: first.fingerprint, env: "env-1" }
+      expect((yield* brain.pull(host, legacy)).apps).toEqual(first)
       yield* profiles.delete(actor, use.id)
-      const removed = yield* brain.pull(host, { ...request, apps: first.fingerprint })
+      const removed = yield* brain.pull(host, legacy)
       expect(removed.apps?.fingerprint).not.toBe(first.fingerprint)
-      expect(removed.apps?.catalog?.apps).toEqual([])
+      expect(removed.apps?.catalog.apps).toEqual([])
     }).pipe(
       Effect.provide(
         Layer.mergeAll(App.layer, AppProfiles.layer, cell("http://127.0.0.1:9")).pipe(
@@ -307,43 +305,16 @@ describe("BrainHost pull", () => {
         database.db.execute(sql`alter table app_profile rename to app_profile_unreadable`),
         () => database.db.execute(sql`alter table app_profile_unreadable rename to app_profile`).pipe(Effect.orDie),
       )
-      const reply = yield* brain.pull(host, {
-        version: "test",
-        keyIds: [],
-        models: null,
-        layers: { agents: {} },
-        sessions: [],
-        apps: null,
-      })
+      const reply = yield* brain.pull(host, { version: "test", keyIds: [], sessions: [] })
       expect(reply).not.toHaveProperty("apps")
       expect(reply.chats.map((chat) => chat.id)).toContain(subject.sessionId)
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
-  it.live("a model source that fails during a pull sends no models, so the brain keeps the ones it has", () =>
-    Effect.gen(function* () {
-      const subject = yield* seeded
-      const database = yield* Database.Service
-      const brainId = (yield* database.db
-        .select({ brainId: Database.Schema.agent_session.brain_id })
-        .from(Database.Schema.agent_session)
-        .where(eq(Database.Schema.agent_session.id, subject.sessionId))).at(0)?.brainId
-      if (!brainId) return yield* Effect.die(new Error("the session has no brain"))
-      source.available = false
-      const reply = yield* Brains.Service.use((brain) =>
-        brain.pull(
-          { brainId, organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, generation: 1 },
-          { version: "test", keyIds: [], models: "models-1", layers: { agents: {} }, sessions: [] },
-        ),
-      ).pipe(Effect.provide(cell("http://127.0.0.1:9")), Effect.ensuring(Effect.sync(() => (source.available = true))))
-      expect(reply.models).toEqual({ hash: "models-1" })
-    }),
-  )
-
-  it.live("a brain created behind the egress pulls ren:MODELS; a brain created without it pulls the real key", () =>
+  it.live("a pull sends the inference URL and no model keys, behind the egress or not (HR3, HR16)", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
-      const keyOf = Effect.fnUntraced(function* (egress: boolean) {
+      const replyOf = Effect.fnUntraced(function* (egress: boolean) {
         const subject = yield* seeded
         const brainId = (yield* database.db
           .select({ brainId: Database.Schema.agent_session.brain_id })
@@ -354,12 +325,13 @@ describe("BrainHost pull", () => {
         const reply = yield* Brains.Service.use((brain) =>
           brain.pull(
             { brainId, organizationId: subject.owner.organizationId, spaceId: subject.owner.spaceId, generation: 1 },
-            { version: "test", keyIds: [], models: null, layers: { agents: {} }, sessions: [] },
+            { version: "test", keyIds: [], sessions: [] },
           ),
         ).pipe(Effect.provide(cell("http://127.0.0.1:9")))
-        return reply.models.access?.endpoints.map((endpoint) => Redacted.value(endpoint.apiKey.key))
+        return { models: reply.models, inference: reply.inference }
       })
-      expect([yield* keyOf(true), yield* keyOf(false)]).toEqual([["ren:MODELS"], ["sk-configured"]])
+      const expected = { models: { hash: "" }, inference: { baseUrl: Shared.stub().root } }
+      expect([yield* replyOf(true), yield* replyOf(false)]).toEqual([expected, expected])
     }),
   )
 

@@ -5,7 +5,7 @@ import { Mcp } from "@opencode/schema/mcp"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Credential } from "@ren/schema/credential"
-import { Duration, Effect, Fiber, Option, Ref, Schedule } from "effect"
+import { Duration, Effect, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 
@@ -99,17 +99,20 @@ export const servers = (
 
 const namespace = (name: string) => name.replaceAll(/[^A-Za-z0-9_-]/gu, "_")
 
-// oxlint-disable-next-line ren/no-comments -- §6.4 rules 6, 8 and 9 (P26, P47): what the agent reads about the catalog, from the catalog only and in its order, so one catalog gives the same bytes (INV-34).
-export const notes = (apps: Option.Option<AppCatalog.Info>, options: { readonly local: boolean }) =>
+// oxlint-disable-next-line ren/no-comments -- HR20: the profile of a server goes into the description of its tool namespace; OpenCode sends a change of the tool catalog as a short message, so the system prompt and its cache stay.
+const namespaces = (apps: Option.Option<AppCatalog.Info>, options: { readonly local: boolean }) =>
+  entries(apps).flatMap((entry) =>
+    entry.profile && (options.local || entry.declaration.transport.type !== "local")
+      ? [{ name: namespace(entry.server), description: `${entry.declaration.name} for the profile “${entry.profile.name}”` }]
+      : [],
+  )
+
+// oxlint-disable-next-line ren/no-comments -- §6.4 rule 9 (P47): the env keys of each app's profiles, from the catalog only and in its order, so one catalog gives the same bytes (INV-34).
+export const notes = (apps: Option.Option<AppCatalog.Info>) =>
   Option.match(catalogOf(apps), {
     onNone: () => [],
-    onSome: (catalog) => [
-      ...catalog.mcps.flatMap((entry) =>
-        entry.profile && (options.local || entry.declaration.transport.type !== "local")
-          ? [`The MCP server ${entry.server} is ${entry.declaration.name} for the profile “${entry.profile.name}”.`]
-          : [],
-      ),
-      ...catalog.apps.flatMap((app) => {
+    onSome: (catalog) =>
+      catalog.apps.flatMap((app) => {
         const profiles = app.profiles.flatMap((profile) => {
           const first = Object.keys(profile.env).at(0)
           const example = first && profile.env[first]
@@ -128,15 +131,6 @@ export const notes = (apps: Option.Option<AppCatalog.Info>, options: { readonly 
             ]
           : []
       }),
-      ...catalog.unavailable.map(
-        (entry) =>
-          `${entry.mcp}${entry.profile ? ` (${entry.profile})` : ""} is unavailable: ${
-            entry.reason === "provider"
-              ? "the provider is not set up on this Ren"
-              : "this chat cannot reach credentials"
-          }.`,
-      ),
-    ],
   })
 
 const isDown = (status: string) => status === "failed" || status === "needs_auth"
@@ -162,7 +156,7 @@ export const make = Effect.fnUntraced(function* (input: {
   readonly sessionId: string
   readonly ren: Option.Option<Ren>
 }) {
-  if (!input.isSession) return { apply: () => Effect.void }
+  if (!input.isSession) return { apply: () => Effect.void, reloading: Effect.succeed(false) }
   const local = { local: input.hasEnvironment }
   const latest = yield* Ref.make(input.apps)
   const sender = yield* Ref.make(Option.none<string>())
@@ -190,11 +184,16 @@ export const make = Effect.fnUntraced(function* (input: {
     Effect.map(renServers, (ren): ReadonlyArray<Server> => [...servers(apps, local), ...ren])
   const applied = yield* Ref.make(yield* desired(input.apps))
   const skipped = yield* Ref.make<ReadonlySet<string>>(new Set())
-  const retries = yield* Ref.make(Option.none<Fiber.Fiber<void>>())
+  const retries = yield* FiberHandle.make<void>()
+  const pending = yield* Ref.make(0)
+  const reloads = yield* Semaphore.make(1)
   const scope = yield* Effect.scope
   yield* input.context.mcp.transform((editor) => {
     const skip = Ref.getUnsafe(skipped)
     for (const server of Ref.getUnsafe(applied)) if (!skip.has(server.name)) editor.set(server.name, server.config)
+  })
+  yield* input.context.tool.transform((editor) => {
+    for (const each of namespaces(Ref.getUnsafe(latest), local)) editor.namespace(each)
   })
   const statuses = input.context.mcp.list().pipe(
     Effect.orDie,
@@ -206,6 +205,7 @@ export const make = Effect.fnUntraced(function* (input: {
       .filter((name) => isDown(all.get(name) ?? "pending")),
   )
 
+  // oxlint-disable-next-line ren/no-comments -- Until the catalog's servers connect or time out and OpenCode's tool list has their tools and not the removed ones. HR19: only the first turn waits for it; after a change it runs in the background.
   const ready = Effect.fnUntraced(function* (before: ReadonlyArray<Server>) {
     const after = Ref.getUnsafe(applied)
     const connecting = yield* statuses.pipe(
@@ -233,40 +233,48 @@ export const make = Effect.fnUntraced(function* (input: {
       }),
       Effect.timeoutOption(published),
     )
-    if ((yield* down).length) yield* watch
   })
 
-  // oxlint-disable-next-line ren/no-comments -- OpenCode reconnects a server only when its config changes (2.0.27 `reconcile`), so a retry takes the down servers out and puts them back; servers that work are not touched.
-  const retry = Effect.gen(function* () {
-    const failed = yield* down
-    if (!failed.length) return
-    yield* Ref.set(skipped, new Set(failed))
-    yield* input.context.mcp.reload()
-    yield* Ref.set(skipped, new Set())
-    yield* input.context.mcp.reload()
-    yield* ready(Ref.getUnsafe(applied))
-  })
+  // oxlint-disable-next-line ren/no-comments -- OpenCode reconnects a server only when its config changes (2.0.27 `reconcile`), so a reconnect takes the down servers out and puts them back; servers that work are not touched. A reload returns after its servers connect or fail.
+  const reconnect = reloads.withPermit(
+    Effect.gen(function* () {
+      const failed = yield* down
+      if (!failed.length) return
+      yield* Ref.set(skipped, new Set(failed))
+      yield* input.context.mcp.reload()
+      yield* Ref.set(skipped, new Set())
+      yield* input.context.mcp.reload()
+    }),
+  )
 
-  const watch: Effect.Effect<void> = Effect.gen(function* () {
-    const previous = yield* Ref.get(retries)
-    if (Option.isSome(previous)) yield* Fiber.interrupt(previous.value)
-    const fiber = yield* retrying({
-      down: Effect.map(down, (failed) => failed.length > 0),
-      retry: input.boundary.idle(retry),
-    }).pipe(Effect.forkIn(scope))
-    yield* Ref.set(retries, Option.some(fiber))
-  })
+  // oxlint-disable-next-line ren/no-comments -- One timed retry runs at a time; a reconnect from a prompt meanwhile waits for it, then finds nothing down.
+  const watch = FiberHandle.run(retries, retrying({ down: Effect.map(down, (failed) => failed.length > 0), retry: reconnect }), {
+    onlyIfMissing: true,
+  }).pipe(Effect.asVoid)
 
-  const sync = Effect.gen(function* () {
+  const watchIfDown = Effect.flatMap(down, (failed) => (failed.length ? watch : Effect.void))
+
+  const retry = reconnect.pipe(
+    Effect.andThen(Effect.suspend(() => ready(Ref.getUnsafe(applied)))),
+    Effect.andThen(watchIfDown),
+  )
+
+  const changed = Effect.gen(function* () {
     const next = yield* desired(Ref.getUnsafe(latest))
     const before = yield* Ref.getAndSet(applied, next)
-    if (JSON.stringify(before) === JSON.stringify(next)) return
-    yield* input.context.mcp.reload()
-    yield* ready(before)
+    return JSON.stringify(before) === JSON.stringify(next) ? Option.none<ReadonlyArray<Server>>() : Option.some(before)
   })
 
-  const opening = yield* Ref.get(applied)
-  if (opening.length) yield* input.boundary.offer(ready([])).pipe(Effect.forkScoped({ startImmediately: true }))
+  const reload = (before: ReadonlyArray<Server>) =>
+    reloads.withPermit(input.context.mcp.reload().pipe(Effect.andThen(ready(before))))
+
+  if ((yield* Ref.get(applied)).length) {
+    yield* Ref.update(pending, (count) => count + 1)
+    yield* input.boundary
+      .holdUntil(ready([]).pipe(Effect.andThen(watchIfDown), Effect.ensuring(Ref.update(pending, (count) => count - 1))))
+      .pipe(Effect.forkScoped({ startImmediately: true }))
+  }
+  // oxlint-disable-next-line ren/no-comments -- A turn calls Ren MCP as its sender: when the sender changes, the prompt waits for the ren server's new headers, so no step runs as the previous sender. Other changes reload in the background (HR19).
   yield* input.context.session.hook("prompt", (event) =>
     Effect.gen(function* () {
       if (Option.isSome(input.ren)) {
@@ -274,30 +282,30 @@ export const make = Effect.fnUntraced(function* (input: {
         if (Option.isSome(named)) yield* Ref.set(sender, named)
         else if (Option.isNone(yield* Ref.get(sender)))
           yield* Ref.set(sender, yield* input.ren.value.lastSender(input.sessionId))
-        yield* input.boundary.idle(sync)
+        const before = yield* changed
+        if (Option.isSome(before)) yield* reload(before.value).pipe(Effect.andThen(watchIfDown))
       }
-      if ((yield* down).length) yield* input.boundary.idle(retry)
+      if ((yield* down).length) yield* retry
     }),
   )
   yield* input.context.session.hook("context", (event) =>
     Effect.sync(() => {
-      const apps = Ref.getUnsafe(latest)
-      const missing = input.hasEnvironment
-        ? []
-        : [
-            ...new Set(
-              entries(apps)
-                .filter((entry) => entry.declaration.transport.type === "local")
-                .map((entry) => entry.appSlug),
-            ),
-          ].map(
-            (app) =>
-              `The app ${app} needs an execution environment, and this chat has none, so its local tools are not available here.`,
-          )
-      for (const text of [...missing, ...notes(apps, local)]) event.system.push({ type: "text", text })
+      for (const text of notes(Ref.getUnsafe(latest))) event.system.push({ type: "text", text })
     }),
   )
   return {
-    apply: (apps: Option.Option<AppCatalog.Info>) => Ref.set(latest, apps).pipe(Effect.andThen(sync)),
+    // oxlint-disable-next-line ren/no-comments -- HR1, HR19: a catalog change reloads OpenCode's servers in the background, so the caller (a pull) never waits for a server. A running call on a changed or removed server ends.
+    apply: Effect.fnUntraced(function* (apps: Option.Option<AppCatalog.Info>) {
+      yield* Ref.set(latest, apps)
+      const before = yield* changed
+      if (Option.isNone(before)) return
+      yield* Ref.update(pending, (count) => count + 1)
+      yield* reload(before.value).pipe(
+        Effect.andThen(watchIfDown),
+        Effect.ensuring(Ref.update(pending, (count) => count - 1)),
+        Effect.forkIn(scope),
+      )
+    }),
+    reloading: Effect.map(Ref.get(pending), (count) => count > 0),
   }
 })

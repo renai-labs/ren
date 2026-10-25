@@ -144,7 +144,6 @@ const localHarness = Effect.fnUntraced(function* (directory: string) {
       directoryOf: () => directory,
       makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
       activate: () => Effect.void,
-      atBoundary: () => Effect.die(new Error("The tool parity host has no runtime catalog")),
       chats: Option.none(),
       configure: () => Effect.void,
       configuration: Effect.succeed([]),

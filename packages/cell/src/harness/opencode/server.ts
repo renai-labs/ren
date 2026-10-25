@@ -163,7 +163,6 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   const updates = yield* Semaphore.make(1)
   const locations = yield* Ref.make<ReadonlyArray<HarnessConfig.Location>>([])
   const credentials = Context.get(services, Credential.Service)
-  // oxlint-disable-next-line ren/no-comments -- A credential stays while any Location still has its endpoint installed (E64).
   // oxlint-disable-next-line ren/no-comments -- A 401 renews the endpoint's key at once (E58); the caller retries the request one time.
   const renew = Effect.fnUntraced(function* (endpointId: string) {
     const endpoint = (yield* Ref.get(desired)).models.find((each) => each.id === endpointId)
@@ -178,11 +177,11 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     return true
   })
   const synced = Effect.gen(function* () {
-    const latest = (yield* Ref.get(desired)).models
-    const installed = yield* Effect.forEach(yield* Ref.get(locations), (location) => location.models)
-    const byId = new Map([...installed.flat(), ...latest].map((endpoint) => [endpoint.id, endpoint]))
-    const inUse = [...byId.values()]
-    yield* Credentials.sync(credentials, ModelCredentials.owner, ModelCredentials.entries(inUse))
+    yield* Credentials.sync(
+      credentials,
+      ModelCredentials.owner,
+      ModelCredentials.entries((yield* Ref.get(desired)).models),
+    )
   })
   const loaded = yield* Deferred.make<void>()
   const fetch = HttpEffect.toWebHandler(Context.get(services, HttpRouter.HttpRouter).asHttpEffect())
@@ -264,8 +263,6 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     directoryOf: options.directoryOf,
     makeDirectory: options.makeDirectory ?? (() => Effect.void),
     activate: (sessionId) => located(sessionId, Effect.void),
-    atBoundary: (sessionId, work) =>
-      located(sessionId, Location.Service).pipe(Effect.flatMap((location) => executions.get(location).offer(work))),
     chats,
     configuration: Ref.get(locations).pipe(
       Effect.flatMap((all) => Effect.forEach(all, (location) => location.observation)),
@@ -312,7 +309,6 @@ export interface Instance {
   readonly directoryOf: (sessionId: string) => string
   readonly makeDirectory: (directory: string) => Effect.Effect<void>
   readonly activate: (sessionId: string) => Effect.Effect<void, Harness.NotFound>
-  readonly atBoundary: (sessionId: string, work: Effect.Effect<void>) => Effect.Effect<void, Harness.NotFound>
   readonly chats: Option.Option<RenPlugin.Chats>
   readonly configure: (update: Partial<Omit<HarnessConfig.Snapshot, "revision">>) => Effect.Effect<void>
   readonly configuration: Effect.Effect<ReadonlyArray<HarnessConfig.Observation>>

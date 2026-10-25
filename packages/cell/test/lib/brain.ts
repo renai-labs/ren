@@ -7,7 +7,7 @@ import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/host-api/brain-api"
 import { ChatApi } from "@ren/protocol/chat"
 import type { AppCatalog } from "@ren/schema/app-catalog"
-import type { Models } from "@ren/schema/models"
+import { Models } from "@ren/schema/models"
 import { Session } from "@ren/schema/session"
 import { Context, DateTime, Effect, FiberHandle, Layer, Option, Queue, Ref, Schema, Semaphore } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
@@ -21,11 +21,13 @@ import { Chat } from "../../src/chat.js"
 import { ChatSettings } from "../../src/chat-settings.js"
 import { Env } from "../../src/env.js"
 import { Harness } from "../../src/harness/harness.js"
+import type { HarnessConfig } from "../../src/harness/config.js"
 import { OpenCodeHarness } from "../../src/harness/opencode/harness.js"
 import { OpenCodeServer } from "../../src/harness/opencode/server.js"
 import { Fence } from "../../src/fence.js"
 import { HostToken } from "../../src/host-token.js"
 import { HotReload } from "../../src/hot-reload.js"
+import { Inference } from "../../src/inference.js"
 import { ModelRefresh } from "../../src/model-refresh.js"
 import { ModelStore } from "../../src/model-store.js"
 import { Restore } from "../../src/restore.js"
@@ -59,7 +61,14 @@ export const make = Effect.fnUntraced(function* (
         Layer.provideMerge(Fence.layer),
         Layer.provide(FetchHttpClient.layer),
       ),
-      Layer.succeed(HotReload.Service, HotReload.Service.of({ pull: Ref.update(pulls, (count) => count + 1) })),
+      Layer.succeed(
+        HotReload.Service,
+        HotReload.Service.of({
+          pull: Ref.update(pulls, (count) => count + 1),
+          push: Ref.update(pulls, (count) => count + 1),
+          tick: Effect.void,
+        }),
+      ),
       Layer.succeed(
         Cell.Info,
         Cell.Info.of({
@@ -89,9 +98,16 @@ export const make = Effect.fnUntraced(function* (
       ),
       Layer.effect(Sync.Service, Sync.make(Option.none())),
       ChatSettings.layer,
+      Inference.layer,
     ).pipe(Layer.provideMerge(ModelsTest.storage())),
   )
-  yield* Context.get(services, ModelStore.Service).install(Shared.access(undefined, Shared.stub().url), "test")
+  const record = Effect.fnUntraced(function* (access: Models.Access, hostToken?: string) {
+    yield* Context.get(services, ModelStore.Service).write(access, hostToken)
+    const inference = Context.get(services, Inference.Service)
+    yield* inference.saveCatalog(Models.catalog(access))
+    yield* inference.saveBaseUrl(Option.some(Shared.stub().root))
+  })
+  yield* record(Shared.access(undefined, Shared.stub().url))
   const host = yield* OpenCodeServer.make(
     (replacements) =>
       createEmbeddedRoutes(
@@ -185,9 +201,7 @@ export const make = Effect.fnUntraced(function* (
   )
   const install = (access: Models.Access, hostToken?: string) =>
     Effect.gen(function* () {
-      const store = Context.get(services, ModelStore.Service)
-      yield* store.write(access, hostToken)
-      yield* store.install(access, `test-${Date.now()}`)
+      yield* record(access, hostToken)
       const opened = Context.get(cell, Harness.Service)
       if ((yield* opened.state).isOpen)
         yield* Effect.scoped(Effect.flatMap(opened.get, (instance) => instance.configure({ models: access.endpoints })))
@@ -200,10 +214,13 @@ export const make = Effect.fnUntraced(function* (
       install(Shared.access(apiKeys, Shared.stub().url), hostToken),
     install,
     removeModels: install({ endpoints: [] }),
+    configure: (update: HarnessConfig.Update) =>
+      Effect.scoped(Effect.flatMap(Context.get(cell, Harness.Service).get, (instance) => instance.configure(update))),
+    configuration: Effect.scoped(Effect.flatMap(Context.get(cell, Harness.Service).get, (instance) => instance.configuration)),
     configureApps: (apps: AppCatalog.Info) =>
       Effect.scoped(
         Effect.flatMap(Context.get(cell, Harness.Service).get, (instance) =>
-          instance.configure({ apps: Option.some(apps) }),
+          instance.configure({ apps: Option.some(apps) }).pipe(Effect.andThen(Shared.appsSettled(instance))),
         ),
       ),
     state: client.brain["brain.state"](),
@@ -222,7 +239,6 @@ export const make = Effect.fnUntraced(function* (
     chatAs,
     chatFetch,
     credentials: host.credentials,
-    atBoundary: (work: Effect.Effect<void>) => host.atBoundary(id, work),
     start: (input: Partial<Session.StartInput> = {}) =>
       client.brain["brain.start"]({
         payload: {

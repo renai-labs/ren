@@ -177,6 +177,7 @@ it.live("an installed text skill is listed and loads once by tool and by mention
     const session = yield* opened.begin()
     const body = `notes-${crypto.randomUUID()}`
     yield* opened.harness.configure({ apps: Option.some(catalog({ notes: content(body) })) })
+    yield* Shared.appsSettled(opened.harness)
     expect(yield* opened.harness.chat.skills(session.sessionId)).toContainEqual(
       expect.objectContaining({ id: "notes", description: "Use it to test skills" }),
     )
@@ -255,6 +256,7 @@ it.live("parallel environment calls wait for a loaded skill's files", () =>
     const opened = yield* open(github)
     const session = yield* opened.begin()
     yield* opened.harness.configure({ apps: Option.some(catalog({ pdf: upstream(github.url) })) })
+    yield* Shared.appsSettled(opened.harness)
     const base = /Base directory for this skill: ([^\\]+)\\n/u.exec(result(yield* session.load("pdf")))?.[1] ?? ""
     const script = stub.script({
       parallelTools: [
@@ -280,6 +282,7 @@ it.live("a failed skill copy stays pending for the next environment call", () =>
     const opened = yield* open(github)
     const session = yield* opened.begin()
     yield* opened.harness.configure({ apps: Option.some(catalog({ pdf: upstream(github.url) })) })
+    yield* Shared.appsSettled(opened.harness)
     const base = /Base directory for this skill: ([^\\]+)\\n/u.exec(result(yield* session.load("pdf")))?.[1] ?? ""
     yield* github.fail(true)
     expect(result(yield* session.shell(`cat ${base}/reference.md`))).toContain("The archive answered 503")
@@ -306,8 +309,10 @@ it.live("an app's removal takes its skills away in the same session", () =>
     const opened = yield* open()
     const session = yield* opened.begin()
     yield* opened.harness.configure({ apps: Option.some(catalog({ notes: content("notes") })) })
+    yield* Shared.appsSettled(opened.harness)
     yield* session.load("notes")
     yield* opened.harness.configure({ apps: Option.some(catalog({})) })
+    yield* Shared.appsSettled(opened.harness)
     expect(result(yield* session.load("notes"))).toContain("Unable to load skill notes")
     expect(yield* opened.harness.chat.skills(session.sessionId)).not.toContainEqual(
       expect.objectContaining({ id: "notes" }),

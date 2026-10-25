@@ -97,22 +97,6 @@ await Effect.runPromise(
 ).catch(failed)
 
 const brainKey = await Effect.runPromise(Signature.generate("e2e"))
-const modelsFile = path.join(os.tmpdir(), `${name}-models.json`)
-await Bun.write(
-  modelsFile,
-  JSON.stringify({
-    endpoints: [
-      {
-        id: "stub",
-        protocol: "openai-chat",
-        baseUrl: Shared.stub().url,
-        apiKey: { key: "stub-key" },
-        models: [{ id: "stub-model", name: "Stub", limit: { context: 100_000, output: 4000 } }],
-      },
-    ],
-  }),
-)
-
 const server = Bun.spawn(["bun", "run", "src/main.ts"], {
   cwd: path.join(root, "server"),
   env: {
@@ -130,7 +114,8 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     SANDBOX_PROVIDER: "local",
     LOCAL_BRAIN_ROOT: path.join(os.tmpdir(), `${name}-brains`),
     REN_URL: serverURL,
-    REN_MODELS_FILE: modelsFile,
+    REN_LITELLM_URL: Shared.stub().root,
+    REN_LITELLM_KEY: "stub-key",
     BRAIN_KEYS: JSON.stringify([
       {
         id: brainKey.privateKey.id,

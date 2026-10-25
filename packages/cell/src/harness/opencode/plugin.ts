@@ -440,8 +440,9 @@ export const make = (
           }),
           Effect.forkScoped,
         )
+        const applying = yield* Semaphore.make(1)
         const offer = (snapshot: HarnessConfig.Snapshot, prepared: ReadonlyArray<OpenCodeSkills.Registration>) =>
-          boundaryOf(context.location).offer(
+          applying.withPermit(
             Effect.gen(function* () {
               if (snapshot.revision !== (yield* Ref.get(desired)).revision) return
               const modelChanged = JSON.stringify(snapshot.models) !== JSON.stringify((yield* Ref.get(applied)).models)
@@ -464,7 +465,6 @@ export const make = (
             }),
           )
         const location: HarnessConfig.Location = {
-          models: Ref.get(models),
           observation: Effect.gen(function* () {
             const snapshot = yield* Ref.get(applied)
             return {
@@ -474,6 +474,7 @@ export const make = (
               appliedRevision: snapshot.revision,
               appFingerprint: Option.map(snapshot.apps, (info) => info.fingerprint),
               appConflicts: yield* Ref.get(appConflicts),
+              appsReloading: yield* mcp.reloading,
             }
           }),
           offer: (snapshot) =>
