@@ -218,6 +218,33 @@ it.live("a start and a send for a new session at the same time: the send is refu
   }),
 )
 
+it.live("a synthetic send starts a turn, shows as a notice in the transcript and is delivered once", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    const script = Shared.stub().script()
+    const input = {
+      messageId: Session.MessageID.create(),
+      synthetic: { description: "Reminder: reply in the thread", source: "channel" },
+    }
+    yield* brain.send(`Reply with channel_reply. ${script.marker}`, input)
+    yield* brain.send(`Reply with channel_reply. ${script.marker}`, input)
+    expect((yield* Effect.promise(() => script.called())).text).toBe(`Reply with channel_reply. ${script.marker}`)
+    const sessionID = SessionID.make(brain.id)
+    yield* brain.opencode.session.wait({ sessionID })
+    const page = yield* brain.chat.session["session.messages"]({ params: { sessionID: brain.id }, query: {} })
+    expect(page.items.filter((message) => message.type === "synthetic" || message.type === "user")).toMatchObject([
+      {
+        id: input.messageId,
+        type: "synthetic",
+        description: "Reminder: reply in the thread",
+        metadata: { source: "channel" },
+      },
+    ])
+    expect(script.calls).toHaveLength(1)
+  }),
+)
+
 it.live(
   "send returns Accepted before completion, preserves sender metadata and deduplicates concurrent and completed sends",
   () =>

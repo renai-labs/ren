@@ -328,6 +328,19 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
     Effect.orDie,
   )
   if (isSent) return { messageId: input.messageId }
+  if (input.synthetic) {
+    yield* client.session
+      .synthetic({
+        sessionID,
+        id: messageID,
+        text: input.prompt.text,
+        description: input.synthetic.description,
+        metadata: { source: input.synthetic.source },
+        delivery: input.delivery,
+      })
+      .pipe(Effect.orDie)
+    return { messageId: input.messageId }
+  }
   yield* client.session
     .prompt({
       sessionID,
