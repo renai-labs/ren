@@ -116,7 +116,7 @@ const empty: AppCatalog.Info = {
   catalog: { apps: [], skills: [], mcps: [], unavailable: [] },
 }
 
-const open = Effect.fnUntraced(function* (options: { readonly active?: boolean } = {}) {
+const open = Effect.fnUntraced(function* (options: { readonly active?: boolean; readonly pullIntervalMs?: number } = {}) {
   const directory = yield* Effect.acquireRelease(
     Effect.promise(() => mkdtemp(join(tmpdir(), "ren-hot-reload-"))),
     (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
@@ -172,7 +172,11 @@ const open = Effect.fnUntraced(function* (options: { readonly active?: boolean }
     brainId: TestToken.brain,
     generation: 1,
     version: "test",
-    vars: Schema.decodeUnknownSync(Env.Vars)({ REN_URL: server.url.origin, ...TestToken.vars }),
+    vars: Schema.decodeUnknownSync(Env.Vars)({
+      REN_URL: server.url.origin,
+      ...TestToken.vars,
+      ...(options.pullIntervalMs !== undefined && { PULL_INTERVAL_MS: String(options.pullIntervalMs) }),
+    }),
     storage: { getAlarm: () => Promise.resolve(null), setAlarm: () => Promise.resolve() },
   })
   const services = yield* Layer.build(
@@ -425,5 +429,32 @@ it.live("a pull while the harness is closed reaches the chat when the harness op
     yield* client.session.prompt({ sessionID, text: `${turn.marker} go` }).pipe(Effect.orDie)
     yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
     expect(turn.calls[0]?.system).toContain("While closed.")
+  }),
+)
+
+it.live("the alarm's pull runs only while the harness is open, never waits, and never stacks behind a slow Ren (HR17)", () =>
+  Effect.gen(function* () {
+    const opened = yield* open({ active: true, pullIntervalMs: 1 })
+    yield* opened.reload.tick
+    expect(opened.requests).toHaveLength(0)
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        yield* opened.harness.get
+        const hold = opened.holdNextPull()
+        yield* Effect.addFinalizer(() => Effect.sync(hold.release))
+        yield* opened.reload.tick.pipe(Effect.timeout("1 second"))
+        yield* hold.entered
+        yield* Effect.forEach(Array.from({ length: 5 }), () => opened.reload.tick.pipe(Effect.timeout("1 second")), {
+          discard: true,
+        })
+        expect(opened.requests).toHaveLength(1)
+        hold.release()
+        yield* Effect.sync(() => opened.requests.length).pipe(
+          Effect.repeat({ until: (count) => count >= 2, schedule: Schedule.spaced("10 millis") }),
+        )
+        yield* opened.reload.pull
+        expect(opened.requests).toHaveLength(3)
+      }),
+    )
   }),
 )
