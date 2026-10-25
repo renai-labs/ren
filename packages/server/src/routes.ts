@@ -11,6 +11,7 @@ import { AgentMembership } from "@ren/core/agent/membership"
 import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { ChannelInstalls } from "@ren/core/channel-installs"
+import { ChannelReply } from "@ren/core/channel-reply"
 import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
@@ -42,6 +43,7 @@ import { CredentialHandler } from "./handlers/api/credential.js"
 import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
 import { OAuthAppHandler } from "./handlers/api/oauth-app.js"
 import { ChannelConnectHandler, ChannelInstallHandler } from "./handlers/api/channel-install.js"
+import { ChannelReplyHandler } from "./handlers/api/channel-reply.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
@@ -126,6 +128,7 @@ export const layer = Layer.mergeAll(
         RenInferenceHandler,
         ChannelInstallHandler,
         ChannelConnectHandler,
+        ChannelReplyHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
       Layer.provide([
@@ -148,6 +151,7 @@ export const layer = Layer.mergeAll(
         Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
         OAuthApps.layer,
         ChannelInstalls.layer,
+        ChannelReply.layer,
         CredentialRequirements.layer,
       ]),
     ),

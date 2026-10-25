@@ -192,6 +192,8 @@ import type {
   ChannelConnectChannelProviderListOutput,
   ChannelConnectChannelInstallStartInput,
   ChannelConnectChannelInstallStartOutput,
+  ChannelReplyChannelReplyInput,
+  ChannelReplyChannelReplyOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -1632,6 +1634,22 @@ export function make(options: ClientOptions) {
               body: { provider: input["provider"] },
               successStatus: 200,
               declaredStatuses: [400, 401, 403, 404, 409],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+    },
+    "channel-reply": {
+      channel: {
+        reply: (input: ChannelReplyChannelReplyInput, requestOptions?: RequestOptions) =>
+          request<ChannelReplyChannelReplyOutput>(
+            {
+              method: "POST",
+              path: `/channel-replies`,
+              body: { text: input["text"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403],
               empty: false,
             },
             requestOptions,

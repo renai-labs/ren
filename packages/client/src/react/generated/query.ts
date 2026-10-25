@@ -95,6 +95,7 @@ import type {
   ChannelInstallListInput,
   ChannelInstallRemoveInput,
   ChannelConnectChannelInstallStartInput,
+  ChannelReplyChannelReplyInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -1015,6 +1016,18 @@ export function make(client: ReturnType<typeof Ren.make>) {
               mutationKey: ["channel-connect", "channel-install", "start"] as const,
               mutationFn: (input: ChannelConnectChannelInstallStartInput) =>
                 client["channel-connect"]["channel-install"]["start"](input),
+            }),
+        },
+      },
+    },
+    "channel-reply": {
+      channel: {
+        reply: {
+          mutationKey: () => ["channel-reply", "channel", "reply"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["channel-reply", "channel", "reply"] as const,
+              mutationFn: (input: ChannelReplyChannelReplyInput) => client["channel-reply"]["channel"]["reply"](input),
             }),
         },
       },
