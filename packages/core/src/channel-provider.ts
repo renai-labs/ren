@@ -39,6 +39,7 @@ export interface Provider {
   readonly verify: (request: Request) => Effect.Effect<void, Unauthorized>
   readonly parse: (request: Request) => Effect.Effect<Channel.Parsed, Malformed>
   readonly fetchFile: (install: string, file: Channel.FileRef) => Effect.Effect<Uint8Array, FileUnavailable>
+  readonly context: (event: Channel.Event) => Effect.Effect<Option.Option<string>, Unavailable>
   readonly installUrl: (state: string) => string
   readonly completeInstall: (query: Readonly<Record<string, string>>) => Effect.Effect<Installed, InstallFailed>
   readonly changedOnProvider: (query: Readonly<Record<string, string>>) => boolean

@@ -1,6 +1,6 @@
 export * as GitHubApp from "./github-app.js"
 
-import { Clock, Config, Effect, Option, Redacted, Schema } from "effect"
+import { Cache, Clock, Config, Duration, Effect, Exit, Option, Redacted, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { createPrivateKey, type KeyObject, sign } from "node:crypto"
 
@@ -86,7 +86,6 @@ export const settings = Effect.gen(function* () {
 
 export const make = Effect.fnUntraced(function* (app: Settings) {
   const http = yield* HttpClient.HttpClient
-  const tokens = new Map<string, { readonly token: Redacted.Redacted; readonly expiresAt: number }>()
 
   const jwt = Effect.gen(function* () {
     const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)
@@ -129,10 +128,36 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
       request.pipe(HttpClientRequest.setHeaders(apiHeaders), HttpClientRequest.bearerToken(token)),
     )
 
-  const asUser = (request: HttpClientRequest.HttpClientRequest, userToken: Redacted.Redacted) =>
-    request.pipe(HttpClientRequest.setHeaders(apiHeaders), HttpClientRequest.bearerToken(Redacted.value(userToken)))
+  const withToken = (request: HttpClientRequest.HttpClientRequest, bearer: Redacted.Redacted) =>
+    request.pipe(HttpClientRequest.setHeaders(apiHeaders), HttpClientRequest.bearerToken(Redacted.value(bearer)))
 
   const installationPath = (id: string) => `${app.api}/app/installations/${encodeURIComponent(id)}`
+
+  const tokens = yield* Cache.makeWith(
+    (installationId: string) =>
+      Effect.gen(function* () {
+        const minted = yield* json(
+          AccessToken,
+          yield* asApp(HttpClientRequest.post(`${installationPath(installationId)}/access_tokens`)),
+        )
+        return {
+          token: Redacted.make(minted.token),
+          expiresAt: Date.parse(minted.expires_at),
+          mintedAt: yield* Clock.currentTimeMillis,
+        }
+      }),
+    {
+      capacity: 1000,
+      timeToLive: (exit) =>
+        Exit.isSuccess(exit)
+          ? Duration.millis(Math.max(0, exit.value.expiresAt - tokenKeptUntilBeforeExpiry - exit.value.mintedAt))
+          : Duration.zero,
+    },
+  )
+
+  const token = Effect.fn("GitHubApp.token")(function* (installationId: string) {
+    return (yield* Cache.get(tokens, installationId)).token
+  })
 
   const userInstallationsFrom = (
     userToken: Redacted.Redacted,
@@ -141,7 +166,7 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
   ): Effect.Effect<ReadonlyArray<string>, Failed> =>
     json(
       UserInstallations,
-      asUser(
+      withToken(
         HttpClientRequest.get(`${app.api}/user/installations`).pipe(
           HttpClientRequest.setUrlParams({ per_page: "100", page: String(page) }),
         ),
@@ -192,18 +217,14 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
         Effect.mapError(failed(request)),
       )
     }),
-    token: Effect.fn("GitHubApp.token")(function* (installationId: string) {
-      const now = yield* Clock.currentTimeMillis
-      const kept = tokens.get(installationId)
-      if (kept && kept.expiresAt - now > tokenKeptUntilBeforeExpiry) return kept.token
-      const minted = yield* json(
-        AccessToken,
-        yield* asApp(HttpClientRequest.post(`${installationPath(installationId)}/access_tokens`)),
-      )
-      const token = Redacted.make(minted.token)
-      tokens.set(installationId, { token, expiresAt: Date.parse(minted.expires_at) })
-      return token
-    }),
+    token,
+    read: <S extends Schema.Top>(installationId: string, path: string, schema: S) =>
+      token(installationId).pipe(
+        Effect.flatMap((installationToken) =>
+          json(schema, withToken(HttpClientRequest.get(`${app.api}${path}`), installationToken)),
+        ),
+        Effect.withSpan("GitHubApp.read"),
+      ),
   }
 })
 
