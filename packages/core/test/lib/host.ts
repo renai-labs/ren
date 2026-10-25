@@ -8,6 +8,7 @@ import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
 import { ConfigProvider, Context, type Duration, Effect, Layer, Schedule, Schema } from "effect"
 import { FetchHttpClient, type HttpClient, HttpRouter, HttpServer } from "effect/http"
+import type { WorkflowEngine } from "effect/workflow"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -264,26 +265,30 @@ export const layerSynced = (config: Record<string, string>, models: Layer.Layer<
   layerWith(config, models, noTemplates, undefined, { synced: true })
 
 // oxlint-disable-next-line ren/no-comments -- BrainHost.layerCell reaches every brain at CELL_URL, so a test can put a server that fails on purpose there.
-export const cellLayer = <E, R>(
-  config: Record<string, string>,
-  models: Layer.Layer<Models.Service>,
-  environments: Layer.Layer<Environments.Service, E, R>,
-) =>
-  Layer.fresh(Brains.layer).pipe(
-    Layer.provide(CredentialEnv.layerNone),
-    Layer.provideMerge(BrainHost.layerCell),
-    Layer.provideMerge(DurableRunner.layerMemory),
-    Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
-    Layer.provide(Settings.layer),
-    Layer.provide(models),
-    Layer.provide(environments),
-    Layer.provide(FetchHttpClient.layer),
-    Layer.provide(
-      ConfigProvider.layer(
-        ConfigProvider.fromUnknown({ BRAIN_KEYS: brainKeys, ENVIRONMENT_KEYS: environmentKeys, ...config }),
+export const cellLayerWith =
+  <RE, RR>(runner: Layer.Layer<WorkflowEngine.WorkflowEngine, RE, RR>) =>
+  <E, R>(
+    config: Record<string, string>,
+    models: Layer.Layer<Models.Service>,
+    environments: Layer.Layer<Environments.Service, E, R>,
+  ) =>
+    Layer.fresh(Brains.layer).pipe(
+      Layer.provide(CredentialEnv.layerNone),
+      Layer.provideMerge(BrainHost.layerCell),
+      Layer.provideMerge(runner),
+      Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
+      Layer.provide(Settings.layer),
+      Layer.provide(models),
+      Layer.provide(environments),
+      Layer.provide(FetchHttpClient.layer),
+      Layer.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromUnknown({ BRAIN_KEYS: brainKeys, ENVIRONMENT_KEYS: environmentKeys, ...config }),
+        ),
       ),
-    ),
-  )
+    )
+
+export const cellLayer = cellLayerWith(DurableRunner.layerMemory)
 
 // oxlint-disable-next-line ren/no-comments -- The workerd cell (wrangler dev), started once per file. It reaches Ren on port, and trusts the cell test keys.
 export const wrangler = async () => {
