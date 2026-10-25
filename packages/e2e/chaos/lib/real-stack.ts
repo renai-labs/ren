@@ -427,8 +427,8 @@ export const start = async (options: {
         const id = Session.MessageID.create()
         await send(text, { messageId: id })
         return Wait.until(`an answer to ${id} in session ${sessionId}`, ms, async () => {
-          if ((await chat.session.status())[sessionId]?.type === "busy") return undefined
-          const read = await messages()
+          const busy = (await chat.session.status())[sessionId]?.type === "busy"
+          const read = busy ? [] : await messages()
           const at = read.findIndex((message) => message.id === id)
           return at >= 0 && read.slice(at + 1).some((message) => message.type === "assistant") ? read : undefined
         })
