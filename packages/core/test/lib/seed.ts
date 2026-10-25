@@ -35,9 +35,8 @@ export const skill = (description: string): Skill.Declaration => ({
   requiredCredentials: [],
 })
 
-export const organization = Effect.fnUntraced(function* () {
+export const organization = Effect.fnUntraced(function* (id: Auth.OrganizationID = Auth.OrganizationID.create()) {
   const database = yield* Database.Service
-  const id = Auth.OrganizationID.create()
   yield* database.db
     .insert(Database.Schema.organization)
     .values({ id, name: "Northstar", slug: id.toLowerCase(), createdAt: new Date() })
