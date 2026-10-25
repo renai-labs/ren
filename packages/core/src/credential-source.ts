@@ -6,7 +6,6 @@ import type { AppProfile } from "@ren/schema/app-profile"
 import { Credential } from "@ren/schema/credential"
 import { Workload } from "@ren/schema/workload"
 import { Auth } from "@ren/schema/auth"
-import { Models as ModelsSchema } from "@ren/schema/models"
 import { and, eq, isNull, sql } from "drizzle-orm"
 import {
   Cache,
@@ -136,7 +135,7 @@ const ttlUntil = (expiresAtMillis: number, now: number) =>
 
 const ren = "REN"
 const models = "MODELS"
-const person = ModelsSchema.personLabel
+const person = Models.personLabel
 
 // oxlint-disable-next-line ren/no-comments -- Ren mints REN (the brain's host token, for Ren's own host: the host of REN_URL) and MODELS (the model keys). PERSON is the member id of each member who can chat in the brain's space, on the model hosts: its space members and the organization's admins and owners, as Actor.fromSession allows. One mint at a time per workload; a 5xx is retried; a value is kept until 20 minutes before its expiry, so the old one stays in use until then (C29, C37; ren-v1 INV-24, INV-25, INV-26, OI-11).
 export const layerMinted = Layer.effect(
@@ -276,7 +275,7 @@ export const layerMinted = Layer.effect(
             )
             .where(eq(Database.Schema.member.organizationId, scope.organizationId))
             .pipe(Effect.orDie)
-          const allowed = rows.filter((row) => row.inSpace !== null || Auth.isAdministrator(row.role))
+          const allowed = rows.filter((row) => Boolean(row.inSpace) || Auth.isAdministrator(row.role))
           return Option.some({
             value: { type: "fields", fields: Object.fromEntries(allowed.map((row) => [row.id, Redacted.make(row.id)])) },
           } satisfies Sourced)
