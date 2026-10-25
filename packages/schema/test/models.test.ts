@@ -7,7 +7,7 @@ const decode = Schema.decodeUnknownSync(Models.LiteLLMModelInfo)
 const entry = (model_name: string, model_info: Record<string, unknown>) => ({ model_name, model_info })
 
 describe("Models.fromLiteLLM", () => {
-  test("groups models by provider, keeps Ren's ids and drops fallback copies", () => {
+  test("groups models by provider, keeps Ren's ids, gives a model its own protocol when it differs and drops fallback copies", () => {
     const catalog = Models.fromLiteLLM(
       decode({
         data: [
@@ -32,6 +32,7 @@ describe("Models.fromLiteLLM", () => {
             routing: "openrouter-fallback",
           }),
           entry("openai/gpt-6.1-sol", { model_key: "gpt-6.1-sol", provider_key: "openai", mode: "responses" }),
+          entry("openai/gpt-5.4-nano", { model_key: "gpt-5.4-nano", provider_key: "openai", routing: "openrouter" }),
           entry("z-ai/glm-5.1", {
             model_key: "glm-5.1",
             provider_key: "zhipu",
@@ -62,7 +63,10 @@ describe("Models.fromLiteLLM", () => {
         {
           id: "openai",
           protocol: "openai-responses",
-          models: [{ id: "gpt-6.1-sol", upstreamId: "openai/gpt-6.1-sol", input: ["text"] }],
+          models: [
+            { id: "gpt-5.4-nano", upstreamId: "openai/gpt-5.4-nano", input: ["text"], protocol: "openai-chat" },
+            { id: "gpt-6.1-sol", upstreamId: "openai/gpt-6.1-sol", input: ["text"] },
+          ],
         },
         {
           id: "zhipu",

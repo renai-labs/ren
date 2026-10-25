@@ -455,6 +455,40 @@ it.live("an anthropic endpoint becomes a provider with its efforts as variants, 
   }),
 )
 
+it.live("a model with its own protocol is called with it, not with its endpoint's", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    yield* brain.start()
+    yield* brain.install({
+      endpoints: [
+        {
+          id: "gateway",
+          protocol: "openai-chat",
+          baseUrl: Shared.stub().url,
+          apiKey: Shared.apiKey("gateway-key", Date.now() + 3_600_000),
+          models: [
+            { id: "stub-model", limit },
+            { id: "stub-claude", limit, protocol: "anthropic-messages" },
+          ],
+        },
+      ],
+    })
+    const sessionID = SessionID.make(brain.id)
+    yield* brain.start({ model: { endpointId: "gateway", modelId: "stub-claude" } })
+    const own = Shared.stub().script()
+    yield* brain.send(`own ${own.marker}`)
+    yield* brain.opencode.session.wait({ sessionID })
+    yield* brain.start({ model: { endpointId: "gateway", modelId: "stub-model" } })
+    const inherited = Shared.stub().script()
+    yield* brain.send(`inherited ${inherited.marker}`)
+    yield* brain.opencode.session.wait({ sessionID })
+    expect([...own.calls, ...inherited.calls].map((call) => call.path)).toEqual([
+      "/v1/messages",
+      "/v1/chat/completions",
+    ])
+  }),
+)
+
 it.live("a model removed from the catalog while the harness is open is no longer listed or selectable", () =>
   Effect.gen(function* () {
     const brain = yield* BrainTest.Service
@@ -563,6 +597,20 @@ it.live(
       yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
       expect(brain.issuer.requests).toEqual([`Bearer ${later}`])
     }),
+)
+
+it.live("a push to a cell whose host token expired gives it Ren's new token and starts its pull (HR17)", () =>
+  Effect.gen(function* () {
+    const brain = yield* BrainTest.Service
+    const expired = yield* Effect.promise(() => FakeRen.hostToken(TestToken.brain, -60))
+    const fresh = yield* Effect.promise(() => FakeRen.hostToken(TestToken.brain))
+    yield* brain.configureModels({ stub: Shared.apiKey("key", Date.now() + 3_600_000) }, expired)
+    const before = yield* brain.pulls
+    const pushed = yield* brain.fetch("/ren/pull", { method: "POST", headers: { [hostTokenHeader]: fresh } })
+    expect(pushed.status).toBe(202)
+    expect(yield* brain.store.readHostToken).toEqual(Option.some(fresh))
+    expect(yield* brain.pulls).toBe(before + 1)
+  }),
 )
 
 it.live("a key with 1 hour left is in the 3 hour refresh window, so the brain renews it before the model call", () =>

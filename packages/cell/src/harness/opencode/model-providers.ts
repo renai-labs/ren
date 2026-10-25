@@ -28,16 +28,21 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
     const listed = new Set(endpoint.models.map((model) => model.id))
     for (const id of editor.get(endpoint.id)?.models.keys() ?? [])
       if (!listed.has(id)) editor.models.remove(endpoint.id, id)
-    for (const model of endpoint.models)
+    for (const model of endpoint.models) {
+      // oxlint-disable-next-line ren/no-comments -- OpenCode calls a model with its own package before its provider's (core/src/model.ts:142).
+      const own: { readonly canonical?: Provider.ID; readonly package: string } =
+        protocols[model.protocol ?? endpoint.protocol]
       editor.models.update(endpoint.id, Model.ID.make(model.id), (info) => {
         info.modelID = Model.ID.make(model.upstreamId ?? model.id)
+        info.package = model.protocol && own.package
+        info.canonical = model.protocol && own.canonical
         if (model.name) info.name = model.name
         if (model.limit) info.limit = { ...info.limit, ...model.limit }
         info.variants = [
           ...Variant.resolve(
             {
               ...Model.Info.default(Provider.ID.make(endpoint.id), Model.ID.make(model.id)),
-              package: protocol.package,
+              package: own.package,
               ...(model.limit && { limit: model.limit }),
             },
             // oxlint-disable-next-line ren/no-comments -- Ren's catalog is the only source of efforts, the same for every harness; OpenCode adds none of its own.
@@ -45,5 +50,6 @@ export const apply = (editor: ProviderEditor, endpoints: ReadonlyArray<Models.En
           ),
         ]
       })
+    }
   }
 }
