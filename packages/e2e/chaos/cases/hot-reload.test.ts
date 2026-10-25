@@ -107,7 +107,9 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       const session = await started()
       await current().sql`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query LIKE 'LISTEN %'`
       await Wait.until("the server to listen again", 30_000, async () =>
-        (await current().sql`SELECT pid FROM pg_stat_activity WHERE query LIKE 'LISTEN %'`).length > 0 ? true : undefined,
+        (await current().sql`SELECT pid FROM pg_stat_activity WHERE query LIKE 'LISTEN %'`).length > 0
+          ? true
+          : undefined,
       )
       const written = rule()
       const next = await midTurn(session, () => instruct(written))
@@ -116,7 +118,10 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
 
     test("C7: archiving a busy chat stops its turn within 2 s, and the model gets no more requests for it", async () => {
       const session = await started()
-      const script = await session.turn([ModelProvider.tool("shell", { command: "sleep 20" }), ModelProvider.text("late")])
+      const script = await session.turn([
+        ModelProvider.tool("shell", { command: "sleep 20" }),
+        ModelProvider.text("late"),
+      ])
       await script.called(1, 60_000)
       const at = Date.now()
       await current().sql`UPDATE agent_session SET archived_at = now() WHERE id = ${session.sessionId}`
@@ -139,10 +144,14 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       await session.idle(60_000)
     }, 300_000)
 
+    // oxlint-disable-next-line ren/no-comments -- The first model step is held, so the turn stays open while Ren is down and after it returns; the next step is built only after the test sees a timed pull reach Ren.
     test("C11: with Ren down an open brain keeps its state; after Ren returns its timed pull brings the change (I1)", async () => {
       const session = await started()
       const written = rule()
-      const script = await session.turn([ModelProvider.tool("shell", { command: "sleep 15" }), ModelProvider.text("ok")])
+      const script = await session.turn([
+        ModelProvider.tool("shell", { command: "echo held" }, { hold: true }),
+        ModelProvider.text("ok"),
+      ])
       await script.called(1, 60_000)
       current().renProxy.partition(true)
       try {
@@ -152,6 +161,11 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       } finally {
         current().renProxy.partition(false)
       }
+      const back = current().renProxy.count("POST /host/pull")
+      await Wait.until("a timed pull after Ren is back", 30_000, async () =>
+        current().renProxy.count("POST /host/pull") > back ? true : undefined,
+      )
+      script.release()
       expect((await script.called(2, 60_000)).system).toContain(written)
       await session.idle(60_000)
     }, 300_000)
@@ -180,7 +194,11 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
             await script.called(1, 60_000).catch(() => undefined)
           },
           "drop-pushes": async () => {
-            const dropping = stack.cellProxy.inject({ operation: "POST /ren/pull" }, { type: "refuse" }, random.integer(1, 5))
+            const dropping = stack.cellProxy.inject(
+              { operation: "POST /ren/pull" },
+              { type: "refuse" },
+              random.integer(1, 5),
+            )
             // ast-grep-ignore: no-test-sleep -- the seeded length of the fault is part of the sequence
             healing.push(Bun.sleep(random.integer(1000, 6000)).then(() => dropping.cancel()))
           },
