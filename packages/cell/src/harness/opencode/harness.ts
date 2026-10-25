@@ -351,7 +351,7 @@ type Opener = (
   settings: Option.Option<ChatSettings.Interface>,
   apps: Option.Option<AppCatalog.Info>,
   ren: Option.Option<OpenCodeMcp.RenAccess>,
-  egress: boolean,
+  host: { readonly egress: boolean },
 ) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
 
 const layerWith = (opener: Opener) =>
@@ -393,7 +393,7 @@ const layerWith = (opener: Opener) =>
                 settings,
                 Option.isSome(apps) ? yield* apps.value.current : Option.none(),
                 ren,
-                cell.vars.REN_EGRESS === "1",
+                { egress: cell.vars.REN_EGRESS === "1" },
               )
               return yield* make(server, endpoints, settings, Option.some({ inference, refreshKey }))
             }),
@@ -404,23 +404,23 @@ const layerWith = (opener: Opener) =>
   )
 
 export const layer = (storage: DurableObjectStorage) =>
-  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren, egress) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren, host) =>
     OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
       apps,
       ren,
-      egress,
+      egress: host.egress,
       directoryOf: (sessionId) => `/workspace/${sessionId}`,
     }),
   )
 
 export const layerProcess = (database: string, confinement: RenPlugin.Confinement) =>
-  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren, egress) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren, host) =>
     OpenCodeServer.openProcess(database, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
       apps,
       ren,
-      egress,
+      egress: host.egress,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
       confinement,
       makeDirectory: (directory) => Effect.promise(() => mkdir(directory, { recursive: true })),

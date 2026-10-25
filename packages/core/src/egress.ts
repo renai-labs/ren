@@ -52,6 +52,10 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Eg
 
 export const ttlSeconds = 30
 
+// oxlint-disable-next-line ren/no-comments -- A model request that names someone who cannot chat in the brain's space is refused and audited; a strip would hide a stamping bug or an injection.
+const isOutsider = (label: string, value: CredentialSource.Value, field: Option.Option<string>) =>
+  label === Models.personLabel && value.type === "fields" && !Option.exists(field, (name) => name in value.fields)
+
 const deny = (reason: Injection.DenyReason, label?: string): Injection.Reply =>
   label ? { allow: false, reason, label } : { allow: false, reason }
 
@@ -110,6 +114,38 @@ export const layer = Layer.effect(
       yield* refresh.refresh(candidate.id, { revision: reported.revision })
     })
 
+    // oxlint-disable-next-line ren/no-comments -- One matched credential: its value and the ops that put it in the request, or the deny reply.
+    const planMatch = Effect.fnUntraced(function* (
+      match: Credentials.Matched,
+      scope: Credentials.Scope,
+      workload: string,
+      request: Request,
+    ) {
+      const label = match.candidate.label
+      if (match.candidate.status === "reconnect") return Result.fail(deny("credential_reconnect", label))
+      const value = yield* sources.value(match.candidate, scope).pipe(Effect.option, Effect.map(Option.flatten))
+      if (Option.isNone(value)) return Result.fail(deny("credential_missing", label))
+      const named = Option.flatMap(match.placeholder, (found) => found.field)
+      if (isOutsider(label, value.value.value, named)) {
+        yield* Effect.logWarning("Egress refused a model request for a person outside the brain's space").pipe(
+          Effect.annotateLogs({ workload, label, member: Option.getOrElse(named, () => ""), host: request.host }),
+        )
+        return Result.fail(deny("principal_scope", label))
+      }
+      const ops = Injection.plan(match.candidate, value.value.value, match.placeholder)
+      if (Result.isFailure(ops)) {
+        yield* Effect.logWarning(`Credential ${label} holds a value that cannot go into a header`).pipe(
+          Effect.annotateLogs({ workload, host: request.host, label }),
+        )
+        return Result.fail(deny("credential_missing", label))
+      }
+      if (ops.success.some((op) => !request.ops.includes(op.op))) return Result.fail(deny("egress_outdated", label))
+      return Result.succeed({
+        ops: ops.success,
+        expiries: value.value.expiresAt ? [Math.floor(DateTime.toEpochMillis(value.value.expiresAt) / 1000)] : [],
+      })
+    })
+
     return Service.of({
       authenticate: Effect.fn("Egress.authenticate")(function* (principal: Principal, proof: CredentialCallers.Proof) {
         const found = yield* caller(principal, proof)
@@ -133,30 +169,10 @@ export const layer = Layer.effect(
         const planned: Array<Injection.Op> = []
         const expiries: Array<number> = []
         for (const match of matched.matches) {
-          const label = match.candidate.label
-          if (match.candidate.status === "reconnect") return deny("credential_reconnect", label)
-          const value = yield* sources
-            .value(match.candidate, scope.value)
-            .pipe(Effect.option, Effect.map(Option.flatten))
-          if (Option.isNone(value)) return deny("credential_missing", label)
-          // oxlint-disable-next-line ren/no-comments -- A model request that names someone who cannot chat in the brain's space is refused and audited; a strip would hide a stamping bug or an injection.
-          const named = Option.getOrUndefined(Option.flatMap(match.placeholder, (found) => found.field))
-          if (label === Models.personLabel && value.value.value.type === "fields" && !(named && named in value.value.value.fields)) {
-            yield* Effect.logWarning("Egress refused a model request for a person outside the brain's space").pipe(
-              Effect.annotateLogs({ workload, label, member: named ?? "", host: request.host }),
-            )
-            return deny("principal_scope", label)
-          }
-          if (value.value.expiresAt) expiries.push(Math.floor(DateTime.toEpochMillis(value.value.expiresAt) / 1000))
-          const ops = Injection.plan(match.candidate, value.value.value, match.placeholder)
-          if (Result.isFailure(ops)) {
-            yield* Effect.logWarning(`Credential ${label} holds a value that cannot go into a header`).pipe(
-              Effect.annotateLogs({ workload, host: request.host, label }),
-            )
-            return deny("credential_missing", label)
-          }
-          if (ops.success.some((op) => !request.ops.includes(op.op))) return deny("egress_outdated", label)
-          planned.push(...ops.success)
+          const one = yield* planMatch(match, scope.value, workload, request)
+          if (Result.isFailure(one)) return one.failure
+          planned.push(...one.success.ops)
+          expiries.push(...one.success.expiries)
         }
         yield* Effect.logInfo("Egress injected credentials").pipe(
           Effect.annotateLogs({
