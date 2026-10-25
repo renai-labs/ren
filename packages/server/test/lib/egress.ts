@@ -76,9 +76,11 @@ export const start = async (input: {
   readonly certificates: Certificates
   readonly hook: string
   readonly drain?: string
+  readonly tunnelPort?: number
+  readonly upstreamResolver?: string
 }): Promise<Instance> => {
   const ports = {
-    tunnel: freePort(),
+    tunnel: input.tunnelPort ?? freePort(),
     control: freePort(),
     dns: freePort(),
     http: freePort(),
@@ -92,7 +94,7 @@ export const start = async (input: {
       "dns:",
       `  listen: "127.0.0.1:${ports.dns}"`,
       `  proxy_ip: "127.0.0.1"`,
-      `  upstream_resolver: "127.0.0.1:${ports.dns}"`,
+      `  upstream_resolver: "${input.upstreamResolver ?? `127.0.0.1:${ports.dns}`}"`,
       "proxy:",
       `  http_listen: "127.0.0.1:${ports.http}"`,
       `  https_listen: "127.0.0.1:${ports.https}"`,
