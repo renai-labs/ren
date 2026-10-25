@@ -34,6 +34,9 @@ export const Event = Schema.Struct({
     name: Schema.optionalKey(Schema.String),
   }),
   thread: Schema.Struct({ id: Schema.NonEmptyString, url: Schema.optionalKey(Schema.String) }),
+  message: Schema.NonEmptyString.annotate({
+    description: "The provider’s id of the message: a Slack ts, a Linear activity, a GitHub comment.",
+  }),
   sender: Schema.Struct({
     accountId: Schema.NonEmptyString,
     name: Schema.optionalKey(Schema.String),

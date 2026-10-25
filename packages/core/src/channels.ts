@@ -156,10 +156,22 @@ export const layer = Layer.effect(
       const found = registry.get(event.provider)
       if (Option.isNone(found)) return yield* Effect.logError(`No channel provider ${event.provider} runs this event`)
       const route = yield* routes.resolve(event)
+      const context = yield* found.value.context(event).pipe(
+        Effect.tapError((error) => Effect.logWarning(`The ${event.provider} thread context could not be read`, error)),
+        Effect.orElseSucceed(Option.none<string>),
+      )
       const message = {
         messageId: payload.messageId,
         prompt: yield* prompt(found.value, event),
         sender: { userId: route.senderUserId },
+        channel: {
+          provider: event.provider,
+          place: event.place.name ?? event.place.id,
+          ...(event.thread.url && { threadUrl: event.thread.url }),
+          sender: event.sender.name ?? event.sender.handle ?? event.sender.accountId,
+          ...(event.sender.handle && { handle: event.sender.handle }),
+          ...(Option.isSome(context) && { context: context.value }),
+        },
       }
       const claimed = yield* claim(route, event, payload.sessionId)
       const sendToThread = send({ ...message, sessionId: claimed.sessionId, delivery: "steer" })

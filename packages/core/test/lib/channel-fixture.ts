@@ -5,6 +5,7 @@ import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
+import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Session } from "@ren/schema/session"
 import { BunCrypto } from "@effect/platform-bun"
 import { Clock, Context, Deferred, Duration, Effect, Layer, Option, Queue, Schedule, Schema } from "effect"
@@ -78,6 +79,10 @@ const provider = Effect.gen(function* () {
         ? Effect.succeed(new Uint8Array(Number(file.url.slice("bytes:".length))).fill(97))
         : Effect.fail(new ChannelProvider.FileUnavailable({ message: `${file.name} is gone` }))
     },
+    context: (found) =>
+      found.message === "unreadable"
+        ? Effect.fail(new ChannelProvider.Unavailable({ message: "Slack is down" }))
+        : Effect.succeedSome("[Bob] the deploy failed at 10:02"),
     installUrl: (state) => `https://slack.test/install?state=${state}`,
     completeInstall: (query) =>
       query.team
@@ -99,6 +104,7 @@ export const event = (install: string, overrides: Partial<Channel.Event> = {}): 
   install,
   place: { id: "C07", kind: "channel", name: "eng" },
   thread: { id: `C07:${crypto.randomUUID()}`, url: "https://acme.slack.com/archives/C07/p1712" },
+  message: "1712.33",
   sender: { accountId: "U01", name: "Ana", handle: "ana" },
   text: "the deploy failed",
   files: [],
@@ -140,11 +146,21 @@ const notices = Layer.effect(
 const Start = Schema.Struct({
   sessionId: Session.ID,
   initialMessage: Schema.optionalKey(
-    Schema.Struct({ messageId: Session.MessageID, prompt: Session.Prompt, sender: Session.Sender }),
+    Schema.Struct({
+      messageId: Session.MessageID,
+      prompt: Session.Prompt,
+      sender: Session.Sender,
+      channel: Schema.optionalKey(ChannelOrigin.Info),
+    }),
   ),
 })
 
-const Send = Schema.Struct({ messageId: Session.MessageID, prompt: Session.Prompt, delivery: Session.Delivery })
+const Send = Schema.Struct({
+  messageId: Session.MessageID,
+  prompt: Session.Prompt,
+  delivery: Session.Delivery,
+  channel: Schema.optionalKey(ChannelOrigin.Info),
+})
 
 export interface Delivered {
   readonly kind: "start" | "send"
@@ -152,6 +168,7 @@ export interface Delivered {
   readonly messageId: Session.MessageID
   readonly prompt: Session.Prompt
   readonly delivery?: Session.Delivery
+  readonly channel?: ChannelOrigin.Info
 }
 
 export class Cell extends Context.Service<

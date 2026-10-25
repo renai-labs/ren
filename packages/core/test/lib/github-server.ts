@@ -51,6 +51,7 @@ export interface Instance {
   readonly users: Map<string, ReadonlyArray<string>>
   readonly deleted: Array<string>
   readonly minted: Array<string>
+  readonly resources: Map<string, unknown>
   readonly options: { failDelete: boolean; tokenExpiresAt: string }
   readonly stop: () => void
 }
@@ -99,12 +100,19 @@ const appInstallation = (state: State, request: Request, id: string, options: { 
   return new Response(null, { status: 204 })
 }
 
+const resource = (state: State, request: Request, url: URL) => {
+  if (!request.headers.get("authorization")?.startsWith("Bearer ghs_")) return new Response(null, { status: 401 })
+  const found = state.resources.get(url.pathname)
+  return found === undefined ? new Response(null, { status: 404 }) : Response.json(found)
+}
+
 export const start = (): Instance => {
   const state: State = {
     installations: new Map(),
     users: new Map(),
     deleted: [],
     minted: [],
+    resources: new Map(),
     options: { failDelete: false, tokenExpiresAt: "2027-01-15T08:00:00Z" },
   }
   const server = Bun.serve({
@@ -115,6 +123,7 @@ export const start = (): Instance => {
       if (request.method === "POST" && url.pathname === "/login/oauth/access_token") return exchange(state, request)
       if (request.method === "GET" && url.pathname === "/user/installations")
         return userInstallations(state, request, url)
+      if (request.method === "GET" && url.pathname.startsWith("/repos/")) return resource(state, request, url)
       const match = /^\/app\/installations\/(\d+)(\/access_tokens)?$/u.exec(url.pathname)
       if (!match?.[1]) return new Response(null, { status: 404 })
       return appInstallation(state, request, match[1], { tokens: request.method === "POST" && Boolean(match[2]) })

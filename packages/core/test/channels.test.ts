@@ -150,6 +150,31 @@ describe("Channels", () => {
     }),
   )
 
+  it.live(
+    "a message carries where it came from and the thread context, and goes on without a context it cannot read",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* routed
+        const first = ChannelFixture.event(subject.install)
+        const second = ChannelFixture.event(subject.install, { thread: first.thread, message: "unreadable" })
+        yield* ChannelFixture.receive(ChannelFixture.delivery(first))
+        yield* ChannelFixture.settled(first)
+        yield* ChannelFixture.receive(ChannelFixture.delivery(second))
+        const origin = {
+          provider: "slack",
+          place: "eng",
+          threadUrl: "https://acme.slack.com/archives/C07/p1712",
+          sender: "Ana",
+          handle: "ana",
+        }
+        expect(yield* ChannelFixture.accepted(2)).toMatchObject([
+          { kind: "start", channel: { ...origin, context: "[Bob] the deploy failed at 10:02" } },
+          { kind: "send", channel: origin },
+        ])
+        expect((yield* ChannelFixture.accepted(2))[1]?.channel).not.toHaveProperty("context")
+      }),
+  )
+
   it.live("a brain that is unavailable gets the message again with the same id until it accepts it once", () =>
     Effect.gen(function* () {
       const subject = yield* routed

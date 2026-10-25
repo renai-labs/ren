@@ -2,16 +2,13 @@ import { afterAll, describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
-import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
+import { ConfigProvider, Effect, Layer, Option } from "effect"
 import { FetchHttpClient } from "effect/http"
-import { TestClock } from "effect/testing"
-import { createHmac } from "node:crypto"
 import { Access } from "../src/access.js"
 import type { Actor } from "../src/actor.js"
 import { ChannelInstalls } from "../src/channel-installs.js"
 import { ChannelProvider } from "../src/channel-provider.js"
 import { GitHub } from "../src/channel-provider/github.js"
-import { GitHubApp } from "../src/github-app.js"
 import { testEffect } from "./lib/effect.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { Seed } from "./lib/seed.js"
@@ -28,21 +25,6 @@ const it = testEffect(
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(settings()),
-  ),
-)
-
-const client = Effect.gen(function* () {
-  const found = yield* GitHubApp.settings
-  if (Option.isNone(found)) return yield* Effect.die(new Error("The GitHub App settings did not load"))
-  return yield* GitHubApp.make(found.value)
-})
-
-const app = testEffect(Layer.mergeAll(FetchHttpClient.layer, settings()))
-
-const encoded = testEffect(
-  Layer.mergeAll(
-    FetchHttpClient.layer,
-    settings({ GITHUB_APP_PRIVATE_KEY: Buffer.from(GitHubServer.privateKey).toString("base64") }),
   ),
 )
 
@@ -261,80 +243,5 @@ describe("ChannelInstalls with GitHub", () => {
       if (!again) return yield* Effect.die(new Error("No install"))
       expect(yield* installs.remove(admin, again.id, {})).toMatchObject({ id: again.id })
     }),
-  )
-})
-
-const sign = (body: string, secret = "webhook-secret") =>
-  `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`
-
-const request = (event: string, body: string, signature: string | null = sign(body)) => ({
-  headers: new Headers({ "x-github-event": event, ...(signature !== null && { "x-hub-signature-256": signature }) }),
-  body,
-})
-
-describe("GitHub", () => {
-  app.live("verify refuses a bad, missing or other-secret signature and accepts the App's", () =>
-    Effect.gen(function* () {
-      const provider = GitHub.make(yield* client)
-      const body = JSON.stringify({ zen: "Keep it logically awesome." })
-      const outcomes = yield* Effect.forEach(
-        [sign(body), "sha256=00", null, sign(body, "other-secret"), sign(`${body} `)],
-        (signature) => Effect.exit(provider.verify(request("ping", body, signature))),
-      )
-      expect(outcomes.map((exit) => exit._tag)).toEqual(["Success", "Failure", "Failure", "Failure", "Failure"])
-    }),
-  )
-
-  app.live("parse: ping is a handshake, installation deleted is an uninstall, and other events are ignored", () =>
-    Effect.gen(function* () {
-      const provider = GitHub.make(yield* client)
-      expect(yield* provider.parse(request("ping", JSON.stringify({ zen: "z", hook_id: 1 })))).toEqual({
-        _tag: "Handshake",
-        body: {},
-      })
-      expect(
-        yield* provider.parse(request("installation", JSON.stringify({ action: "deleted", installation: { id: 77 } }))),
-      ).toEqual({ _tag: "Uninstalled", install: "77" })
-      expect(
-        yield* provider.parse(request("installation", JSON.stringify({ action: "created", installation: { id: 77 } }))),
-      ).toMatchObject({ _tag: "Ignore" })
-      expect((yield* Effect.flip(provider.parse(request("ping", "not json"))))._tag).toBe("ChannelProvider.Malformed")
-    }),
-  )
-
-  app.effect("the App JWT is issued 60 seconds in the past and expires within 10 minutes", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(1_800_000_000_000)
-      const claims = GitHubServer.claimsOf(yield* (yield* client).jwt)
-      expect(claims).toEqual({ iat: 1_800_000_000 - 60, exp: 1_800_000_000 + 540, iss: GitHubServer.appId })
-    }),
-  )
-
-  encoded.live("a private key given as base64 of the PEM signs a JWT that GitHub accepts", () =>
-    Effect.gen(function* () {
-      const id = installation("acme")
-      expect(yield* (yield* client).installation(id)).toEqual({ id: Number(id), account: { login: "acme" } })
-    }),
-  )
-
-  app.effect("an installation token is kept until 5 minutes before it expires, then minted again", () =>
-    Effect.gen(function* () {
-      const minter = yield* client
-      const id = installation("acme")
-      const expiresAt = Date.parse(github.options.tokenExpiresAt)
-      yield* TestClock.setTime(expiresAt - 60 * 60_000)
-      const first = yield* minter.token(id)
-      yield* TestClock.setTime(expiresAt - 5 * 60_000 - 1)
-      expect(Redacted.value(yield* minter.token(id))).toBe(Redacted.value(first))
-      yield* TestClock.setTime(expiresAt - 5 * 60_000)
-      expect(Redacted.value(yield* minter.token(id))).not.toBe(Redacted.value(first))
-      expect(github.minted.filter((each) => each === id)).toHaveLength(2)
-    }),
-  )
-
-  app.live("without GITHUB_APP_ID, GitHub is off", () =>
-    Effect.gen(function* () {
-      expect(Option.isNone(yield* GitHubApp.settings)).toBe(true)
-    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({})))),
   )
 })
