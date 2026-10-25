@@ -88,6 +88,7 @@ export interface Local {
 
 export interface Sending {
   readonly sender?: Auth.UserID
+  readonly messageId?: Session.MessageID
 }
 
 export interface SessionOptions {
@@ -391,7 +392,7 @@ export const start = async (options: {
         SessionRunner.Service.use((sessions) =>
           sessions.send({
             sessionId,
-            messageId: Session.MessageID.create(),
+            messageId: sendOptions.messageId ?? Session.MessageID.create(),
             prompt: { text },
             delivery: "steer",
             sender: { userId: sendOptions.sender ?? owner.createdBy },
@@ -420,6 +421,17 @@ export const start = async (options: {
       settled: async (ms = 60_000) => {
         await idle(ms)
         return messages()
+      },
+      // oxlint-disable-next-line ren/no-comments -- Right after a send the chat can still be idle, so a wait for idle alone can return before the turn starts; this waits for an answer after the message.
+      ask: async (text: string, ms = 180_000) => {
+        const id = Session.MessageID.create()
+        await send(text, { messageId: id })
+        return Wait.until(`an answer to ${id} in session ${sessionId}`, ms, async () => {
+          if ((await chat.session.status())[sessionId]?.type === "busy") return undefined
+          const read = await messages()
+          const at = read.findIndex((message) => message.id === id)
+          return at >= 0 && read.slice(at + 1).some((message) => message.type === "assistant") ? read : undefined
+        })
       },
       idle,
       turn: async (steps: ReadonlyArray<ModelProvider.Step>, text = "work", sendOptions: Sending = {}) => {

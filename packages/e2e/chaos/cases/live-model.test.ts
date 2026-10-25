@@ -16,32 +16,32 @@ const select = async (selection: string | undefined) => {
 describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined || Platform.live !== undefined)(
   "a live model on the real Ren server, a Wrangler cell and a Docker sandbox",
   () => {
-    const lane: { stack?: RealStack.Instance; selected?: Awaited<ReturnType<typeof select>> } = {}
+    const lane: { stack?: RealStack.Instance; live?: Awaited<ReturnType<typeof LiveModel.named>> } = {}
 
     const current = () => {
-      if (!lane.stack || !lane.selected) throw new Error("the stack did not start")
-      return { stack: lane.stack, sandbox: lane.stack.sandbox("live"), selected: lane.selected }
+      if (!lane.stack || !lane.live) throw new Error("the stack did not start")
+      return { stack: lane.stack, sandbox: lane.stack.sandbox("live"), live: lane.live }
     }
 
     beforeAll(async () => {
-      lane.selected = await select(process.env.CHAOS_LIVE_MODEL)
-      lane.stack = await RealStack.start({ environments: [{ label: "live" }] })
+      lane.live = await LiveModel.named(await select(process.env.CHAOS_LIVE_MODEL))
+      // oxlint-disable-next-line ren/no-comments -- Ren's inference URL comes from this grant (HR16), so brains read the live model list; no test providers in the cell's OpenCode config shadow it.
+      lane.stack = await RealStack.start({
+        environments: [{ label: "live" }],
+        models: lane.live.access,
+        cellVars: { OPENCODE_CONFIG: "{}" },
+      })
     }, 600_000)
 
     afterAll(() => lane.stack?.dispose(), 120_000)
 
     const session = () =>
       current().stack.session({
-        models: LiveModel.access(current().selected),
-        start: {
-          model: { endpointId: current().selected.providerId, modelId: current().selected.modelId },
-        },
+        models: current().live.access,
+        start: { model: current().live.model },
       })
 
-    const ask = async (opened: RealStack.Driver, text: string) => {
-      await opened.send(text)
-      return opened.settled(180_000)
-    }
+    const ask = (opened: RealStack.Driver, text: string) => opened.ask(text)
 
     const lastAnswer = (read: Awaited<ReturnType<typeof ask>>) => SessionDriver.assistantTexts(read).at(-1) ?? ""
 
@@ -80,8 +80,8 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
     test("interrupting while the model streams ends that turn and the next turn works", async () => {
       // oxlint-disable-next-line ren/no-comments -- No word limit here: the turn must still stream when the interrupt arrives.
       const opened = await current().stack.session({
-        models: LiveModel.access(current().selected),
-        start: { model: { endpointId: current().selected.providerId, modelId: current().selected.modelId } },
+        models: current().live.access,
+        start: { model: current().live.model },
       })
       const events = SessionDriver.subscribe(opened.opencode)
       await events.connected
@@ -99,11 +99,8 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
     test.skipIf(!process.env.CHAOS_LIVE_MODEL_ALT)(
       "the alternate model changes a file on the sandbox with the patch tool",
       async () => {
-        const alternate = await select(process.env.CHAOS_LIVE_MODEL_ALT)
-        const opened = await current().stack.session({
-          models: LiveModel.access(alternate),
-          start: { model: { endpointId: alternate.providerId, modelId: alternate.modelId } },
-        })
+        const alternate = await LiveModel.named(await select(process.env.CHAOS_LIVE_MODEL_ALT))
+        const opened = await current().stack.session({ models: alternate.access, start: { model: alternate.model } })
         const name = `patched-${crypto.randomUUID().slice(0, 6)}.txt`
         const before = `before-${crypto.randomUUID().slice(0, 6)}`
         const after = `after-${crypto.randomUUID().slice(0, 6)}`
@@ -127,9 +124,9 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
     test.skipIf(!process.env.CHAOS_LIVE_MODEL_ALT)(
       "switching between two small models in one session changes the model that answers",
       async () => {
-        const selected = current().selected
-        const alternate = await select(process.env.CHAOS_LIVE_MODEL_ALT)
-        const endpoints = [...LiveModel.access(selected).endpoints, ...LiveModel.access(alternate).endpoints]
+        const selected = current().live
+        const alternate = await LiveModel.named(await select(process.env.CHAOS_LIVE_MODEL_ALT))
+        const endpoints = [...selected.access.endpoints, ...alternate.access.endpoints]
         const merged: Models.Access = {
           endpoints: [...Map.groupBy(endpoints, (endpoint) => endpoint.id).values()].flatMap((group) => {
             const first = group[0]
@@ -139,16 +136,15 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
         const opened = await current().stack.session({
           environment: false,
           models: merged,
-          start: { model: { endpointId: selected.providerId, modelId: selected.modelId } },
+          start: { model: selected.model },
         })
         await ask(opened, "Reply with ONE.")
-        const model = { endpointId: alternate.providerId, modelId: alternate.modelId }
-        await opened.start({ model })
+        await opened.start({ model: alternate.model })
         const models = (await ask(opened, "Reply with TWO.")).flatMap((message) =>
           message.type === "assistant" ? [message.model.id] : [],
         )
-        expect(models.at(-1)).toBe(alternate.modelId)
-        expect(models).toContain(selected.modelId)
+        expect(models.at(-1)).toBe(alternate.model.modelId)
+        expect(models).toContain(selected.model.modelId)
       },
       300_000,
     )
