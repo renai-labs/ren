@@ -135,6 +135,9 @@ const server = Bun.spawn(["bun", "run", "src/main.ts"], {
     ]),
     REN_LITELLM_URL: Shared.stub().root,
     REN_LITELLM_KEY: "stub-key",
+    ENVELOPE_KEYS: JSON.stringify([
+      { id: "local:e2e", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
+    ]),
     BRAIN_KEYS: JSON.stringify([
       {
         id: brainKey.privateKey.id,

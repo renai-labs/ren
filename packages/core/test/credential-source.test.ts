@@ -129,7 +129,7 @@ describe("CredentialSource.layerMinted", () => {
   )
 
   it.effect(
-    "a changed model list (a new key or host in REN_MODELS_FILE) reaches the next request, not after the old key's lifetime",
+    "a changed model list (a new key or host in the grant) reaches the next request, not after the old key's lifetime",
     () =>
       Effect.gen(function* () {
         yield* Ref.set(grants, 0)

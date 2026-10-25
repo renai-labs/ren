@@ -130,6 +130,9 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
       REN_LITELLM_URL: LiteLLM.url,
       REN_LITELLM_BRAIN_URL: litellmTunnel,
       REN_LITELLM_KEY: key,
+      ENVELOPE_KEYS: JSON.stringify([
+        { id: "local:e2b", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
+      ]),
       ...egress,
     }
 
