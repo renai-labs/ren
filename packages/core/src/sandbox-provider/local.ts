@@ -51,6 +51,7 @@ export const layer = (options: {
   readonly lostEvery?: Duration.Input
   readonly maxRunning?: number
   readonly template?: string
+  readonly owner?: number
 }) =>
   Layer.effect(
     SandboxProvider.Service,
@@ -136,6 +137,16 @@ export const layer = (options: {
           )
           child.unref()
           if (!child.pid) return yield* new SandboxProvider.Failed({ message: "The brain process did not start" })
+          // oxlint-disable-next-line ren/no-comments -- A brain outlives Ren's process on purpose, but not its owner's (a test run): when the owner is gone, a watcher in its own process group kills the brain's group. SIGKILL also ends a paused (stopped) brain.
+          if (options.owner)
+            spawn(
+              "sh",
+              [
+                "-c",
+                `while kill -0 ${options.owner} 2>/dev/null && kill -0 -- -${child.pid} 2>/dev/null; do sleep 1; done; kill -KILL -- -${child.pid} 2>/dev/null`,
+              ],
+              { detached: true, stdio: "ignore" },
+            ).unref()
           const binding: Binding = {
             pid: child.pid,
             port,

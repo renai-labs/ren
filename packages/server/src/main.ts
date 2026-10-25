@@ -56,9 +56,19 @@ const host = Layer.unwrap(
     const executor = yield* Config.String("LOCAL_EXECUTOR_ENTRY").pipe(
       Config.withDefault(join(import.meta.dir, "../../executor/src/main.ts")),
     )
+    const owner = yield* Config.option(Config.Int("LOCAL_BRAIN_OWNER"))
     return BrainHost.layerSandbox.pipe(
       Layer.provide(BrainLifecycle.layer.pipe(Layer.provide(SandboxEgress.layerConfig))),
-      Layer.provide(provider === "e2b" ? E2BSandbox.layer : LocalSandbox.layer({ entry, executor, root })),
+      Layer.provide(
+        provider === "e2b"
+          ? E2BSandbox.layer
+          : LocalSandbox.layer({
+              entry,
+              executor,
+              root,
+              ...Option.match(owner, { onNone: () => ({}), onSome: (pid) => ({ owner: pid }) }),
+            }),
+      ),
     )
   }),
 )
