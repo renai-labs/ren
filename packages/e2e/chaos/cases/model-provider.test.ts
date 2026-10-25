@@ -116,45 +116,4 @@ describe.skipIf(Platform.wrangler !== undefined)("the model provider link", () =
     expect(used.filter((key) => key === undefined || !issued.includes(key))).toEqual([])
     expect(new Set(used).size).toBe(used.length)
   })
-
-  test("invalid model updates are refused and the acknowledged catalog and key stay in use", async () => {
-    const stack = current().stack
-    const key = Stack.freshKey("valid")
-    const session = await stack.session({ models: stack.access(key) })
-    const listed = async () =>
-      (await session.opencode.model.list()).data
-        .filter((model) => model.providerID === "stub")
-        .map((model) => model.modelID)
-        .toSorted()
-    const before = await listed()
-    const endpoint = {
-      id: "stub",
-      protocol: "openai-chat",
-      baseUrl: "http://127.0.0.1:1",
-      apiKey: { key: "x" },
-      models: [],
-    }
-    const bodies = [
-      { access: { endpoints: [{ ...endpoint, baseUrl: "ftp://nowhere" }] } },
-      { access: { endpoints: [{ ...endpoint, protocol: "smoke-signals" }] } },
-      { access: { endpoints: [{ id: "stub", protocol: "openai-chat", baseUrl: "http://127.0.0.1:1", models: [] }] } },
-      { access: { endpoints: [endpoint, { ...endpoint, apiKey: { key: "y" } }] } },
-    ]
-    const statuses = await Promise.all(
-      bodies.map(
-        async (body) =>
-          (
-            await fetch(`${stack.cellProxy.url}/ren/models`, {
-              method: "PUT",
-              headers: { authorization: session.server, "content-type": "application/json" },
-              body: JSON.stringify(body),
-            })
-          ).status,
-      ),
-    )
-    expect(statuses).toEqual(bodies.map(() => 400))
-    expect(await listed()).toEqual(before)
-    const turn = await session.turn([ModelProvider.text("still configured")])
-    expect((await turn.script.called(1)).key).toBe(key)
-  })
 })

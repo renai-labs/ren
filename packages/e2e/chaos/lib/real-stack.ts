@@ -3,6 +3,7 @@ export * as RealStack from "./real-stack.js"
 import { PgClient } from "@effect/sql-pg"
 import { OpenCode } from "@opencode/client"
 import { Ren } from "@ren/client/chat"
+import { BrainToken } from "@ren/host-api/brain-token"
 import { Signature } from "@ren/schema/signature"
 import { Shared, TestToken, Wrangler } from "@ren/cell/testing"
 import { BrainClient } from "@ren/core/brain-client"
@@ -30,7 +31,7 @@ import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import type { Session as SessionSchema } from "@ren/schema/session"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
-import { ConfigProvider, Effect, Layer, ManagedRuntime, Redacted, Schema } from "effect"
+import { ConfigProvider, Effect, Layer, ManagedRuntime, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { SqlClient } from "effect/sql"
 import os from "node:os"
@@ -375,7 +376,15 @@ export const start = async (options: {
       if (found.status === "failed") throw new Error(`the brain of ${sessionId} failed: ${found.reason}`)
       return found.status === "ready" ? found : undefined
     })
-    const opencode = OpenCode.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
+    // oxlint-disable-next-line ren/no-comments -- A client token reaches only the Chat API (cell/src/entry.ts:49), so the test reads OpenCode as Ren does: with a server token for the same brain and generation.
+    const claims = Option.getOrThrow(await Effect.runPromise(BrainToken.verify([brainKey.publicKey], access.token)))
+    const serverToken = await Effect.runPromise(
+      BrainToken.sign(brainKey.privateKey, { scope: "server", brain: brainId, gen: claims.gen, exp: claims.exp }),
+    )
+    const opencode = OpenCode.make({
+      baseUrl: access.url,
+      headers: { authorization: TestToken.basic(serverToken, "ren") },
+    })
     const chat = Ren.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
     const send = (text: string, sendOptions: Sending = {}) =>
       core(

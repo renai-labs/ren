@@ -219,6 +219,7 @@
         "@ren/db": "workspace:*",
         "@ren/environment-api": "workspace:*",
         "@ren/executor": "workspace:*",
+        "@ren/host-api": "workspace:*",
         "@ren/opencode-transcript": "workspace:*",
         "@ren/schema": "workspace:*",
         "@ren/server": "workspace:*",

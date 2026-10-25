@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
 import { Brain } from "@ren/schema/brain"
 import { Effect, Stream } from "effect"
 import os from "node:os"
@@ -47,13 +48,13 @@ describe.skipIf(Platform.docker !== undefined)("an executor in a container", () 
     expect(output.stdout).not.toContain("status=0")
     const driver = current().driver
     await driver.ok(driver.client["files.write"]({ path: "after.txt", bytes: new TextEncoder().encode("ok") }))
-    expect((await serves()).protocol).toBe(1)
+    expect((await serves()).protocol).toBe(EnvironmentApi.protocol)
   })
 
   test("a process that exhausts memory is stopped and the executor keeps serving", async () => {
     const output = await run("bun -e 'const kept=[];for(;;)kept.push(new Uint8Array(1<<24).fill(1))'")
     expect(output.exit).not.toEqual({ type: "exit", exitCode: 0, signal: null })
-    expect((await serves()).protocol).toBe(1)
+    expect((await serves()).protocol).toBe(EnvironmentApi.protocol)
   })
 
   test("hitting the process limit fails new forks visibly and the executor keeps serving", async () => {
@@ -61,7 +62,7 @@ describe.skipIf(Platform.docker !== undefined)("an executor in a container", () 
       `trap "echo stopped" TERM; (i=0; while [ $i -lt 400 ]; do sleep 30 >/dev/null 2>&1 & i=$((i+1)); done) 2>/dev/null; echo status=$?; kill -TERM 0; wait`,
     )
     expect(output.stdout).toMatch(/status=[1-9]/)
-    expect((await serves()).protocol).toBe(1)
+    expect((await serves()).protocol).toBe(EnvironmentApi.protocol)
     expect((await current().container.observe(["pgrep", "-c", "-f", "sleep 30"])).stdout.trim()).toBe("0")
   })
 

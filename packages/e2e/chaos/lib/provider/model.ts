@@ -7,7 +7,7 @@ import { Wait } from "../wait.js"
 
 export type Step =
   | { readonly type: "text"; readonly text: string; readonly dripMs?: number; readonly hold?: boolean }
-  | { readonly type: "tool"; readonly name: string; readonly input: unknown }
+  | { readonly type: "tool"; readonly name: string; readonly input: unknown; readonly hold?: boolean }
   | { readonly type: "status"; readonly status: number; readonly headers?: Readonly<Record<string, string>> }
   | { readonly type: "cut"; readonly after: "headers" | "text" }
   | { readonly type: "malformed-frame" }
@@ -20,7 +20,12 @@ export const text = (value: string, options: { readonly dripMs?: number; readonl
   ...options,
 })
 
-export const tool = (name: string, input: unknown): Step => ({ type: "tool", name, input })
+export const tool = (name: string, input: unknown, options: { readonly hold?: boolean } = {}): Step => ({
+  type: "tool",
+  name,
+  input,
+  ...options,
+})
 
 export const status = (code: number, headers?: Readonly<Record<string, string>>): Step => ({
   type: "status",
@@ -145,6 +150,7 @@ async function* respond(step: Step, gate: Promise<void>): AsyncGenerator<Uint8Ar
   if (step.type !== "text" && step.type !== "tool" && step.type !== "malformed-arguments") return undefined
   if (step.type === "text") yield* words(step, gate)
   else {
+    if (step.type === "tool" && step.hold) await gate
     yield toolCall(step.name, step.type === "tool" ? JSON.stringify(step.input) : "{nope")
     yield chunk({}, "tool_calls")
   }
@@ -242,11 +248,10 @@ export const start = async (): Promise<Instance> => {
     response.end(JSON.stringify({ error: { message: `chaos provider status ${step.status}`, type: "chaos_error" } }))
   }
 
-  const server = createServer(
-    (request, response) =>
-      request.url === "/model/info"
-        ? modelInfo(response)
-        : void chat(request, response).catch(() => response.socket?.destroy()),
+  const server = createServer((request, response) =>
+    request.url === "/model/info"
+      ? modelInfo(response)
+      : void chat(request, response).catch(() => response.socket?.destroy()),
   )
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
   const address = server.address()
