@@ -193,8 +193,10 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       stack.ren.refresh(() => ({ type: "grant", access: stack.access(Stack.freshKey("rotated"), inWindow()) }))
       const key = Stack.freshKey("current")
       const session = await stack.session({ models: stack.access(key, inWindow()) })
+      const renewals = () =>
+        stack.ren.calls.filter((call) => call.endpoint === "models.refresh" && call.brainId === session.brainId).length
       const lost = stack.renProxy.inject({ operation: "POST /host/models/refresh" }, { type: "drop-response" })
-      const from = stack.ren.calls.filter((call) => call.endpoint === "models.refresh").length
+      const from = renewals()
       const keyOfTurn = async (text: string) => {
         const turn = await session.turn([ModelProvider.text(text)])
         const call = await turn.script.called(1)
@@ -211,9 +213,7 @@ describe.skipIf(Platform.wrangler !== undefined)("a fault on one link", () => {
       const keys = [await keyOfTurn("after the repair"), await keyOfTurn("again")]
       expect([first, ...keys].every((each) => each !== undefined)).toBe(true)
       // oxlint-disable-next-line ren/no-comments -- One renewal per action (3 turns and the refused send), and one retry of the lost reply: no loop.
-      expect(stack.ren.calls.filter((call) => call.endpoint === "models.refresh").length - from).toBeLessThanOrEqual(
-        4 + 1,
-      )
+      expect(renewals() - from).toBeLessThanOrEqual(4 + 1)
     }, 240_000)
   })
 
