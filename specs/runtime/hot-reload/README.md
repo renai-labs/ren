@@ -27,7 +27,7 @@ Use the loop of [`../e2b-brain/README.md` §2](../e2b-brain/README.md#2-how-to-w
 | Contracts      | Agreed ([`spec.md` §5](spec.md#5-contracts))          |
 | Test list      | Agreed ([`references/tests.md`](references/tests.md)) |
 | Spec           | Written                                               |
-| Implementation | In progress on `brain-hot-reload` (see §6)            |
+| Implementation | Done on `brain-hot-reload`, PR #57; open items in §6  |
 
 ## 4. Words
 
@@ -89,3 +89,5 @@ Use the loop of [`../e2b-brain/README.md` §2](../e2b-brain/README.md#2-how-to-w
 3. **U1 and U2 are deferred (user decision).** U2 needs a way to edit an agent in the app; the app has no agent UI and Ren's API has no agent endpoint. U1 needs a Linear sign-in, which a local run cannot do. C1 covers the behaviour of U2 on the real chain.
 4. **A model key per brain:** Ren mints one `MODELS` key per brain (`../credentials/README.md` C29). Then the grant holds one LiteLLM key, and `ModelRefresh.anyEndpoint` and the first-key fallback go (HR33, HR37).
 5. **The 3 `openai` models without `mode` (HR31)** are not run on LiteLLM: the local LiteLLM has no OpenRouter key. Run one turn on each once it has one.
+6. **Tests not written yet (user decision: follow-up):** package tests 7, 15, 16, 28, 30, 33, 36 (brain side), 38–40, 44, 45 of [`references/tests.md`](references/tests.md), and chaos cases C2, C3, C8, C9 of [`spec.md` §9.1](spec.md#91-chaos-cases).
+7. **Runs not repeated on the final commit (user decision):** the full `bun run chaos` (its 18 failures from `main` were each fixed and run alone), the seeded sequences, Playwright, `REN_SLOW=1` and the live lane (each live file passed alone on the final code).
