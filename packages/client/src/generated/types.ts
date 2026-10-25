@@ -430,6 +430,8 @@ export type ChannelOriginInfo = {
 
 export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string }
 
+export type ChannelSent = { provider: ChannelProvider; place: string }
+
 export type SessionMessageSynthetic = {
   id: SessionMessageID
   time: { created: number }
@@ -5832,3 +5834,7 @@ export type ChannelConnectChannelInstallStartInput = {
 }
 
 export type ChannelConnectChannelInstallStartOutput = WriteResultRedirect
+
+export type ChannelReplyChannelReplyInput = { readonly text: { readonly text: string }["text"] }
+
+export type ChannelReplyChannelReplyOutput = ChannelSent

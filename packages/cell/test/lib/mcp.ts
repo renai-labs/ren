@@ -70,6 +70,7 @@ export const make = Effect.fnUntraced(function* (
   options: {
     readonly hold?: boolean
     readonly holdInitialization?: boolean
+    readonly tools?: ReadonlyArray<string>
   } = {},
 ) {
   const requests = yield* Queue.unbounded<typeof RequestBody.Type>()
@@ -78,6 +79,7 @@ export const make = Effect.fnUntraced(function* (
   const encoder = new TextEncoder()
   const state = { label: "first", status: 200 }
   const headers: Array<Headers> = []
+  const calls: Array<string> = []
   const release = Promise.withResolvers<void>()
   const initialized = options.holdInitialization ? release.promise : Promise.resolve()
   const called = options.hold ? release.promise : Promise.resolve()
@@ -108,17 +110,16 @@ export const make = Effect.fnUntraced(function* (
     }
     if (body.method === "tools/list")
       return reply({
-        tools: [
-          {
-            name: body.params?.cursor ? "second" : "marker",
-            description: state.label,
-            inputSchema: { type: "object", properties: {} },
-            annotations: { readOnlyHint: true },
-          },
-        ],
+        tools: (body.params?.cursor ? ["second", ...(options.tools ?? [])] : ["marker"]).map((name) => ({
+          name,
+          description: state.label,
+          inputSchema: { type: "object", properties: {} },
+          annotations: { readOnlyHint: true },
+        })),
         ...(body.params?.cursor ? {} : { nextCursor: "page-two" }),
       })
     if (body.method === "tools/call") {
+      calls.push(body.params?.name ?? "")
       await called
       return reply({ content: [{ type: "text", text: state.label }] })
     }
@@ -162,6 +163,7 @@ export const make = Effect.fnUntraced(function* (
     listening: Deferred.await(listening),
     release: () => release.resolve(),
     headers,
+    calls,
     refuse: (status: number) =>
       Effect.sync(() => {
         state.status = status

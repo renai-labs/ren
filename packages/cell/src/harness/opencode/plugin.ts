@@ -324,6 +324,21 @@ export const make = (
             event.messages = event.messages.map(withOrigin)
           }),
         )
+        if (isSession) {
+          yield* tool.transform((editor) =>
+            editor.update(OpenCodeMcp.channelReply, (found) => {
+              found.options = {
+                ...Struct.omit(found.options ?? {}, ["codemode", "pinned"]),
+                codemode: false,
+              }
+            }),
+          )
+          yield* tool.hook("execute.before", (event) =>
+            event.tool === OpenCodeMcp.channelReply && event.sessionID !== sessionId
+              ? Effect.fail(new Tool.Error({ message: "Only the main agent replies in the thread." }))
+              : Effect.void,
+          )
+        }
         const initial = yield* Ref.get(desired)
         const appConflicts = yield* Ref.make(conflictsOf(initial.apps))
         const applied = yield* Ref.make(

@@ -1,10 +1,12 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
+import { Agent } from "@ren/schema/agent"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { eq } from "drizzle-orm"
-import { Deferred, Effect, Layer, Queue } from "effect"
+import { Deferred, Effect, Layer, Queue, Struct } from "effect"
+import type { Actor } from "../src/actor.js"
 import { ChannelReply } from "../src/channel-reply.js"
 import { Channels } from "../src/channels.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
@@ -304,6 +306,13 @@ describe("Channels", () => {
   )
 })
 
+const asAgent = (subject: Effect.Success<typeof routed>, sessionId: Session.ID): Actor.Info => ({
+  userId: subject.owner.createdBy,
+  organizationId: subject.owner.organizationId,
+  roles: ["owner"],
+  agent: { agentId: Agent.ID.create(), sessionId, spaceId: subject.owner.spaceId },
+})
+
 describe("ChannelReply", () => {
   it.live("a reply goes to the thread of the session's latest channel message, at its place and message", () =>
     Effect.gen(function* () {
@@ -323,7 +332,10 @@ describe("ChannelReply", () => {
           Effect.andThen(ChannelFixture.settled(each)),
         ),
       )
-      expect(yield* replies.reply(sessionId, "Rolled back.")).toEqual({ provider: "slack", place: "sales" })
+      expect(yield* replies.reply(asAgent(subject, sessionId), { text: "Rolled back." })).toEqual({
+        provider: "slack",
+        place: "sales",
+      })
       expect(outbox.sent).toEqual([
         {
           target: { install: subject.install, place: "sales", thread: "C09:1713.90", message: "1713.95" },
@@ -333,7 +345,7 @@ describe("ChannelReply", () => {
     }),
   )
 
-  it.live("a child session, or a session with no thread, cannot reply", () =>
+  it.live("only a main agent in the session's organization with a channel thread can reply", () =>
     Effect.gen(function* () {
       const subject = yield* routed
       const database = yield* Database.Service
@@ -348,12 +360,21 @@ describe("ChannelReply", () => {
         .update(Database.Schema.agent_session)
         .set({ parent_id: parent, root_id: parent })
         .where(eq(Database.Schema.agent_session.id, child))
-      expect((yield* Effect.flip(replies.reply(child, "hi"))).message).toBe(
+      expect(
+        (yield* Effect.flip(replies.reply(Struct.omit(asAgent(subject, parent), ["agent"]), { text: "hi" }))).message,
+      ).toBe("Only the agent of a chat that came from a channel replies in its thread.")
+      expect(
+        (yield* Effect.flip(
+          replies.reply({ ...asAgent(subject, parent), organizationId: yield* Seed.organization() }, { text: "hi" }),
+        )).message,
+      ).toBe("This chat has no thread to reply to.")
+      expect((yield* Effect.flip(replies.reply(asAgent(subject, child), { text: "hi" }))).message).toBe(
         "Only the main agent replies in the thread.",
       )
-      expect((yield* Effect.flip(replies.reply(yield* started(subject.owner), "hi"))).message).toBe(
-        "This chat has no thread to reply to.",
-      )
+      expect(
+        (yield* Effect.flip(replies.reply(asAgent(subject, yield* started(subject.owner)), { text: "hi" }))).message,
+      ).toBe("This chat has no thread to reply to.")
+      expect((yield* ChannelFixture.Outbox).sent).toEqual([])
     }),
   )
 
@@ -368,7 +389,7 @@ describe("ChannelReply", () => {
       yield* ChannelFixture.receive(ChannelFixture.delivery(found))
       yield* ChannelFixture.settled(found)
       const failed = yield* Effect.forEach(["gone", "refused", "down"], (text) =>
-        ChannelFixture.quickly(Effect.flip(replies.reply(sessionId, text))),
+        ChannelFixture.quickly(Effect.flip(replies.reply(asAgent(subject, sessionId), { text }))),
       )
       expect(failed.map((error) => error.message)).toEqual([
         "The Slack thread is gone, so the reply was not sent.",

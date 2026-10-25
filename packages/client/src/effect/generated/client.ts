@@ -1240,6 +1240,15 @@ const adaptGroupChannelConnect = (raw: RawClient["channel-connect"]) => ({
   "channel-install": { start: EndpointChannelConnectChannelInstallStart(raw) },
 })
 
+type ChannelReplyChannelReplyRequest = Parameters<RawClient["channel-reply"]["channel.reply"]>[0]
+type ChannelReplyChannelReplyInput = { readonly text: ChannelReplyChannelReplyRequest["payload"]["text"] }
+const EndpointChannelReplyChannelReply = (raw: RawClient["channel-reply"]) => (input: ChannelReplyChannelReplyInput) =>
+  raw["channel.reply"]({ payload: { text: input["text"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupChannelReply = (raw: RawClient["channel-reply"]) => ({
+  channel: { reply: EndpointChannelReplyChannelReply(raw) },
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -1270,6 +1279,7 @@ const adaptClient = (raw: RawClient) => ({
   "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
+  "channel-reply": adaptGroupChannelReply(raw["channel-reply"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

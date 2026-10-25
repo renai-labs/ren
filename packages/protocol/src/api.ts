@@ -5,6 +5,7 @@ import { AppRegistryGroup } from "./groups/app-registry.js"
 import { AppProfileGroup, AppProfileReachGroup } from "./groups/app-profile.js"
 import { AgentMembershipGroup } from "./groups/agent-membership.js"
 import { ChannelConnectGroup, ChannelInstallGroup } from "./groups/channel-install.js"
+import { ChannelReplyGroup } from "./groups/channel-reply.js"
 import { ChatGroup } from "./groups/chat.js"
 import { CredentialGroup } from "./groups/credential.js"
 import { CredentialConnectGroup } from "./groups/credential-connect.js"
@@ -57,6 +58,7 @@ export const Api = HttpApi.make("server")
   .add(RenInferenceGroup)
   .add(ChannelInstallGroup)
   .add(ChannelConnectGroup)
+  .add(ChannelReplyGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren API",
