@@ -1,5 +1,6 @@
 import type { Auth } from "@ren/schema/auth"
 import type { Channel } from "@ren/schema/channel"
+import type { ChannelInstall } from "@ren/schema/channel-install"
 import type { Credential } from "@ren/schema/credential"
 import type { Session } from "@ren/schema/session"
 import { index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
@@ -9,7 +10,7 @@ import { credential } from "./credential.sql.js"
 export const channel_install = pgTable(
   "channel_install",
   {
-    id: text().$type<Channel.InstallID>().primaryKey(),
+    id: text().$type<ChannelInstall.ID>().primaryKey(),
     organization_id: text()
       .$type<Auth.OrganizationID>()
       .notNull()
@@ -31,6 +32,22 @@ export const channel_install = pgTable(
     uniqueIndex("channel_install_organization_id_provider_uidx").on(table.organization_id, table.provider),
   ],
 )
+
+export const channel_install_state = pgTable("channel_install_state", {
+  state: text().primaryKey(),
+  organization_id: text()
+    .$type<Auth.OrganizationID>()
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  provider: text().$type<Channel.Provider>().notNull(),
+  initiator_user_id: text()
+    .$type<Auth.UserID>()
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  created_at: timestamp().defaultNow().notNull(),
+  expires_at: timestamp().notNull(),
+  consumed_at: timestamp(),
+})
 
 export const channel_thread = pgTable(
   "channel_thread",
