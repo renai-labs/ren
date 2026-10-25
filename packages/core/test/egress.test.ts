@@ -8,7 +8,7 @@ import { Credential } from "@ren/schema/credential"
 import { Injection } from "@ren/schema/injection"
 import { Signature } from "@ren/schema/signature"
 import { eq } from "drizzle-orm"
-import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
+import { ConfigProvider, DateTime, Effect, Layer, Logger, Option, Redacted, Ref, References, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
 import { App } from "../src/app.js"
@@ -87,6 +87,43 @@ const timed = Effect.succeed(
   }),
 )
 
+const models = Layer.succeed(
+  Models.Service,
+  Models.Service.of({
+    catalog: () => Effect.succeed({ endpoints: [] }),
+    revision: Effect.succeed("test"),
+    grant: () =>
+      Effect.succeed(
+        Models.Access.make({
+          endpoints: [
+            {
+              id: "gateway",
+              protocol: "openai-chat",
+              baseUrl: "https://models.ren.test/v1",
+              apiKey: { key: Redacted.make("sk-model") },
+              models: [],
+            },
+          ],
+        }),
+      ),
+    inference: Effect.succeedNone,
+  }),
+)
+
+const audits: Array<{ readonly message: string; readonly annotations: Readonly<Record<string, unknown>> }> = []
+
+const audited = Logger.layer(
+  [
+    Logger.make((options) => {
+      audits.push({
+        message: String(options.message),
+        annotations: options.fiber.getRef(References.CurrentLogAnnotations),
+      })
+    }),
+  ],
+  { mergeWithExisting: true },
+)
+
 const it = testEffect(
   Layer.mergeAll(Egress.layer, Space.layer, SpaceMember.layer, SpaceProvisioning.layer, App.layer).pipe(
     Layer.provideMerge(AppProfiles.layer),
@@ -96,7 +133,7 @@ const it = testEffect(
     Layer.provideMerge(
       Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
     ),
-    Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone)),
+    Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, models)),
     Layer.provideMerge(
       Layer.mergeAll(
         Access.layer,
@@ -108,6 +145,7 @@ const it = testEffect(
       ),
     ),
     Layer.provideMerge(Testing.layer),
+    Layer.provideMerge(audited),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(
       ConfigProvider.layer(
@@ -140,7 +178,7 @@ const setup = Effect.fnUntraced(function* () {
   const provisioning = yield* SpaceProvisioning.Service
   const organizationId = yield* Seed.organization()
   const seeded = yield* Seed.user()
-  yield* Seed.member(organizationId, seeded.id, "member")
+  const memberId = yield* Seed.member(organizationId, seeded.id, "member")
   yield* provisioning.createInitialMemberships(organizationId, seeded)
   const ada = { userId: seeded.id, organizationId, roles: ["member"] }
   const space = yield* spaces.create(ada, { name: "Team" })
@@ -156,7 +194,7 @@ const setup = Effect.fnUntraced(function* () {
     username: placement.username,
     password: placement.password,
   }
-  return { organizationId, ada, space, brainId, proof, login: placement.username }
+  return { organizationId, ada, memberId, space, brainId, proof, login: placement.username }
 })
 
 const encodeSealed = Schema.encodeSync(Schema.fromJsonString(Credentials.Sealed))
@@ -667,6 +705,67 @@ describe("Egress.unauthorized", () => {
         { op: "route", upstream: "https://remote.timed.test/v3" },
         { op: "setHeader", name: "authorization", value: "Bearer short" },
       ])
+    }),
+  )
+
+})
+
+describe("Egress.resolve, the person of a model request", () => {
+  it.live("ren:PERSON of a member who can chat in the brain's space becomes that member's id", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const found = yield* setup()
+      const admin = yield* Seed.user()
+      const adminId = yield* Seed.member(found.organizationId, admin.id, "admin")
+      const model = (memberId: string) =>
+        resolver.resolve(all, request(found.proof, "models.ren.test", ["ren:MODELS", `ren:PERSON.${memberId}`]))
+
+      expect(values(yield* model(found.memberId))).toEqual([
+        { op: "replace", placeholder: "ren:MODELS", value: "sk-model", in: ["header"] },
+        { op: "replace", placeholder: `ren:PERSON.${found.memberId}`, value: found.memberId, in: ["header"] },
+      ])
+      expect((yield* model(adminId)).allow).toBe(true)
+    }),
+  )
+
+  it.live("ren:PERSON of someone outside the brain's space is refused with principal_scope and audited", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const found = yield* setup()
+      const grace = yield* Seed.user()
+      const outsideSpace = yield* Seed.member(found.organizationId, grace.id, "member")
+      const otherOrganization = yield* Seed.member(yield* Seed.organization(), grace.id, "member")
+      audits.length = 0
+
+      const refused = yield* Effect.forEach([outsideSpace, otherOrganization, "mem_unknown"], (memberId) =>
+        resolver.resolve(all, request(found.proof, "models.ren.test", ["ren:MODELS", `ren:PERSON.${memberId}`])),
+      )
+
+      expect(refused).toEqual(Array(3).fill({ allow: false, reason: "principal_scope", label: "PERSON" }))
+      expect(audits.filter((each) => each.message === "Egress refused a model request for a person outside the brain's space")).toMatchObject(
+        [outsideSpace, otherOrganization, "mem_unknown"].map((memberId) => ({
+          annotations: { workload: `brain:${found.brainId}:1`, label: "PERSON", member: memberId, host: "models.ren.test" },
+        })),
+      )
+    }),
+  )
+
+  it.live("removing a member from the space clears the egress answers, and the next request with their id is refused", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const members = yield* SpaceMember.Service
+      const found = yield* setup()
+      const grace = yield* Seed.user()
+      const graceId = yield* Seed.member(found.organizationId, grace.id, "member")
+      const added = yield* members.create(found.ada, { spaceId: found.space.id, userId: grace.id })
+      const model = resolver.resolve(all, request(found.proof, "models.ren.test", ["ren:MODELS", `ren:PERSON.${graceId}`]))
+      expect((yield* model).allow).toBe(true)
+      invalidations.length = 0
+
+      yield* members.archive(found.ada, added.id)
+
+      expect(invalidations).toContainEqual({ label: "PERSON" })
+      expect(yield* model).toEqual({ allow: false, reason: "principal_scope", label: "PERSON" })
     }),
   )
 })

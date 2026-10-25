@@ -1,10 +1,13 @@
 export * as CredentialSource from "./credential-source.js"
 
+import { Database } from "@ren/db/database"
 import { BrainToken } from "@ren/host-api/brain-token"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Credential } from "@ren/schema/credential"
 import { Workload } from "@ren/schema/workload"
 import { Auth } from "@ren/schema/auth"
+import { Models as ModelsSchema } from "@ren/schema/models"
+import { and, eq, isNull, sql } from "drizzle-orm"
 import {
   Cache,
   Clock,
@@ -133,13 +136,15 @@ const ttlUntil = (expiresAtMillis: number, now: number) =>
 
 const ren = "REN"
 const models = "MODELS"
+const person = ModelsSchema.personLabel
 
-// oxlint-disable-next-line ren/no-comments -- Ren mints REN (the brain's host token, for Ren's own host: the host of REN_URL) and MODELS (the model keys). One mint at a time per workload; a 5xx is retried; a value is kept until 20 minutes before its expiry, so the old one stays in use until then (C29, C37; ren-v1 INV-24, INV-25, INV-26, OI-11).
+// oxlint-disable-next-line ren/no-comments -- Ren mints REN (the brain's host token, for Ren's own host: the host of REN_URL) and MODELS (the model keys). PERSON is the member id of each member who can chat in the brain's space, on the model hosts: its space members and the organization's admins and owners, as Actor.fromSession allows. One mint at a time per workload; a 5xx is retried; a value is kept until 20 minutes before its expiry, so the old one stays in use until then (C29, C37; ren-v1 INV-24, INV-25, INV-26, OI-11).
 export const layerMinted = Layer.effect(
   Minted,
   Effect.gen(function* () {
     const brains = yield* BrainClient.Service
     const grants = yield* Models.Service
+    const database = yield* Database.Service
     const renHost = new URL(brains.renUrl).hostname
 
     const Key = Schema.fromJsonString(
@@ -208,6 +213,9 @@ export const layerMinted = Layer.effect(
         if (scope.workload.kind !== "brain") return []
         const granted = yield* cachedGrant(scope).pipe(Effect.option)
         const endpoints = Option.match(granted, { onNone: () => [], onSome: (found) => found.access.endpoints })
+        const modelHosts = [
+          ...new Set(endpoints.flatMap((endpoint) => Option.toArray(Option.fromNullishOr(URL.parse(endpoint.baseUrl)?.hostname)))),
+        ]
         return [
           {
             id: `minted:${ren}`,
@@ -233,12 +241,46 @@ export const layerMinted = Layer.effect(
               },
             ]
           }),
+          ...(modelHosts.length === 0
+            ? []
+            : [
+                {
+                  id: `minted:${person}`,
+                  source: "minted",
+                  label: person,
+                  owner: "workload",
+                  hosts: modelHosts,
+                  inject: { op: "replace", in: ["header"] },
+                } satisfies Credentials.Candidate,
+              ]),
         ] satisfies ReadonlyArray<Credentials.Candidate>
       }),
       value: Effect.fn("CredentialSource.minted.value")(function* (
         candidate: Credentials.Candidate,
         scope: Credentials.Scope,
       ) {
+        if (candidate.label === person) {
+          const rows = yield* database.db
+            .select({ id: Database.Schema.member.id, role: Database.Schema.member.role, inSpace: Database.Schema.space_member.id })
+            .from(Database.Schema.member)
+            .leftJoin(
+              Database.Schema.space_member,
+              and(
+                eq(Database.Schema.space_member.user_id, Database.Schema.member.userId),
+                Option.match(scope.spaceId, {
+                  onNone: () => sql`false`,
+                  onSome: (spaceId) => eq(Database.Schema.space_member.space_id, spaceId),
+                }),
+                isNull(Database.Schema.space_member.archived_at),
+              ),
+            )
+            .where(eq(Database.Schema.member.organizationId, scope.organizationId))
+            .pipe(Effect.orDie)
+          const allowed = rows.filter((row) => row.inSpace !== null || Auth.isAdministrator(row.role))
+          return Option.some({
+            value: { type: "fields", fields: Object.fromEntries(allowed.map((row) => [row.id, Redacted.make(row.id)])) },
+          } satisfies Sourced)
+        }
         if (candidate.label === ren) {
           const token = yield* cachedHostToken(scope)
           return Option.some({
@@ -265,6 +307,7 @@ export const layerMinted = Layer.effect(
         candidate: Credentials.Candidate,
         scope: Credentials.Scope,
       ) {
+        if (candidate.label === person) return
         if (candidate.label === ren) return yield* Cache.invalidate(hostTokens, keyOf(scope))
         yield* Cache.invalidate(modelGrants, keyOf(scope, yield* grants.revision))
       }),

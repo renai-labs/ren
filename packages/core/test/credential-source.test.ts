@@ -1,5 +1,6 @@
 import { Shared } from "@ren/cell/testing"
 import { describe, expect } from "bun:test"
+import { Testing } from "@ren/db/testing"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
@@ -67,6 +68,7 @@ const it = testEffect(
   CredentialSource.layerMinted.pipe(
     Layer.provideMerge(models),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal), Layer.provide(FetchHttpClient.layer))),
+    Layer.provideMerge(Testing.layer),
     Layer.provide(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({

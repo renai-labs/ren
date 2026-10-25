@@ -2,6 +2,7 @@ export * as Egress from "./egress.js"
 
 import type { Auth } from "@ren/schema/auth"
 import { Credential } from "@ren/schema/credential"
+import { Models } from "@ren/schema/models"
 import { Workload } from "@ren/schema/workload"
 import { Context, DateTime, Effect, Layer, Option, Result, Schema } from "effect"
 import { AppProfiles } from "./app/profiles.js"
@@ -138,6 +139,14 @@ export const layer = Layer.effect(
             .value(match.candidate, scope.value)
             .pipe(Effect.option, Effect.map(Option.flatten))
           if (Option.isNone(value)) return deny("credential_missing", label)
+          // oxlint-disable-next-line ren/no-comments -- A model request that names someone who cannot chat in the brain's space is refused and audited; a strip would hide a stamping bug or an injection.
+          const named = Option.getOrUndefined(Option.flatMap(match.placeholder, (found) => found.field))
+          if (label === Models.personLabel && value.value.value.type === "fields" && !(named && named in value.value.value.fields)) {
+            yield* Effect.logWarning("Egress refused a model request for a person outside the brain's space").pipe(
+              Effect.annotateLogs({ workload, label, member: named ?? "", host: request.host }),
+            )
+            return deny("principal_scope", label)
+          }
           if (value.value.expiresAt) expiries.push(Math.floor(DateTime.toEpochMillis(value.value.expiresAt) / 1000))
           const ops = Injection.plan(match.candidate, value.value.value, match.placeholder)
           if (Result.isFailure(ops)) {
