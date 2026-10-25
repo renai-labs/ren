@@ -27,7 +27,7 @@ Use the loop of [`../e2b-brain/README.md` §2](../e2b-brain/README.md#2-how-to-w
 | Contracts      | Agreed ([`spec.md` §5](spec.md#5-contracts))          |
 | Test list      | Agreed ([`references/tests.md`](references/tests.md)) |
 | Spec           | Written                                               |
-| Implementation | Not started                                           |
+| Implementation | In progress on `brain-hot-reload` (see §6)            |
 
 ## 4. Words
 
@@ -78,3 +78,4 @@ Use the loop of [`../e2b-brain/README.md` §2](../e2b-brain/README.md#2-how-to-w
 
 1. **Missing tests (found in review):** the brain side of key rotation (`specs/runtime/e2b-brain/c-tokens.md` test 8) and the 1 h host token renewal point (`cell/src/host-token.ts:11`; the test at `cell/test/host-access.test.ts:172` uses 120 s and says "five minutes").
 2. **A chat's own model pick when its model leaves LiteLLM**: covered by test 33; confirm the fallback message in the app.
+3. **U1 and U2 are deferred (user decision).** U2 needs a way to edit an agent in the app; the app has no agent UI and Ren's API has no agent endpoint. U1 needs a Linear sign-in, which a local run cannot do. C1 covers the behaviour of U2 on the real chain.
