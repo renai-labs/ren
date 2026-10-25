@@ -42,7 +42,9 @@ const pushTo = (
       }),
     ),
     Effect.timeout(notifyWithin),
-    Effect.catchCause((cause) => Effect.logDebug(`A push to brain ${brainId} failed`, cause)),
+    Effect.catchCause((cause) =>
+      Effect.logWarning(`A push to brain ${brainId} failed; it gets the change at its next timed pull`, cause),
+    ),
     Effect.asVoid,
   )
 
