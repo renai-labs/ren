@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { Models } from "@ren/schema/models"
-import { Redacted, Schema } from "effect"
+import { Redacted, Schema, Struct } from "effect"
 import { Platform } from "../lib/platform.js"
 import { LiteLLM } from "../lib/provider/litellm.js"
 import { RealStack } from "../lib/real-stack.js"
@@ -19,7 +19,7 @@ const accessFor = async (key: string): Promise<Models.Access> => {
   const catalog = Models.fromLiteLLM(Schema.decodeUnknownSync(Models.LiteLLMModelInfo)(await response.json()))
   return {
     endpoints: catalog.endpoints.map((endpoint) =>
-      Object.assign({}, endpoint, { baseUrl: `${LiteLLM.url}/v1`, apiKey: { key: Redacted.make(key) } }),
+      Struct.assign(endpoint, { baseUrl: `${LiteLLM.url}/v1`, apiKey: { key: Redacted.make(key) } }),
     ),
   }
 }
