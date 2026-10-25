@@ -10,6 +10,7 @@ export type Page = {
     | "/settings/general"
     | "/settings/members"
     | "/settings/providers"
+    | "/settings/channels"
   glyph: Glyph
 }
 
@@ -22,4 +23,5 @@ export const organization: ReadonlyArray<Page> = [
   { label: "General", to: "/settings/general", glyph: "Building" },
   { label: "Members", to: "/settings/members", glyph: "Users" },
   { label: "Providers", to: "/settings/providers", glyph: "Server" },
+  { label: "Channels", to: "/settings/channels", glyph: "MessageSquare" },
 ]
