@@ -10,14 +10,11 @@ export class Service extends Context.Service<Service, Harness.Refresh>()("@ren/c
 
 export const window = Duration.hours(3)
 
-// oxlint-disable-next-line ren/no-comments -- One LiteLLM key reads the model list and serves every endpoint (HR29): anyEndpoint asks for that key: the grant's first one.
+// oxlint-disable-next-line ren/no-comments -- One LiteLLM key reads the model list and serves every endpoint (HR29), so an endpoint that the grant does not name, such as anyEndpoint or a provider LiteLLM added after the grant, uses the grant's first key.
 export const anyEndpoint = "*"
 
 const keyOf = (access: Models.Access | undefined, endpointId: string) =>
-  (endpointId === anyEndpoint
-    ? access?.endpoints.at(0)
-    : access?.endpoints.find((endpoint) => endpoint.id === endpointId)
-  )?.apiKey
+  (access?.endpoints.find((endpoint) => endpoint.id === endpointId) ?? access?.endpoints.at(0))?.apiKey
 
 // oxlint-disable-next-line ren/no-comments -- Behind an egress the brain holds no model key: it sends the placeholder, and the egress puts the real key in (C8). The placeholder never expires, so it is never renewed.
 export const layerEgress = Layer.succeed(

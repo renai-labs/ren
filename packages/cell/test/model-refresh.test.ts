@@ -223,7 +223,7 @@ it.effect(
     }),
 )
 
-it.effect("a renewal that omits the requested endpoint removes it and returns no key", () =>
+it.effect("an endpoint that the renewed grant does not name gets the grant's key: one LiteLLM key serves every endpoint (HR29)", () =>
   Effect.gen(function* () {
     const subject = yield* make
     yield* subject.store.write(
@@ -236,7 +236,9 @@ it.effect("a renewal that omits the requested endpoint removes it and returns no
       yield* subject.next,
       ModelsTest.granted({ access: remaining, hostToken: Redacted.make(hosts.new) }),
     )
-    expect(yield* Fiber.join(pending)).toEqual(Option.none())
+    expect(Option.map(yield* Fiber.join(pending), (found) => Redacted.value(found.key))).toEqual(
+      Option.some("anthropic-new"),
+    )
     expect(keys(yield* subject.store.read)).toEqual(keys(Option.some(remaining)))
     expect(yield* subject.store.readHostToken).toEqual(Option.some(hosts.new))
   }),

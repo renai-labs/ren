@@ -77,7 +77,9 @@ bun typecheck
 | `CHAOS_SOAK_MS`                                         | How long the soak cycles run.                                                                                             |
 | `CHAOS_LIVE_MODEL`, `CHAOS_LIVE_MODEL_ALT`              | One or two small models from the effective OpenCode config, such as `ren/anthropic/claude-haiku-5-5`.                     |
 | `CHAOS_LIVE_BASE_URL`                                   | The bridge host the test process may call in live mode.                                                                   |
+| `CHAOS_LIVE_CONFIG_DIR`                                 | A folder whose `opencode.json` defines the live model's provider, such as a local LiteLLM.                                  |
 | `CHAOS_LIVE_API_KEY`                                    | The live model's key, when the OpenCode config holds it as a literal that `opencode debug config` masks.                  |
 | `CHAOS_LITELLM_ADMIN_URL`, `CHAOS_LITELLM_ADMIN_KEY`    | An isolated LiteLLM key-management credential.                                                                            |
+| `CHAOS_LITELLM_TEAM`                                    | The LiteLLM team of the keys the lane makes, when LiteLLM's budget gate needs one.                                         |
 | `E2B_API_KEY`, `CHAOS_E2B_TEMPLATE`, `CHAOS_E2B_DOMAIN` | Deployed environments.                                                                                                    |
 | `CHAOS_CLOUDFLARE_URL`                                  | The deployed Worker URL, with `{name}` for the per-run Worker name.                                                       |

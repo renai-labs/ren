@@ -17,7 +17,8 @@ const call = (method: string, route: string, body?: unknown) =>
   })
 
 export const generate = async (options: { readonly duration: string; readonly models: ReadonlyArray<string> }) => {
-  const response = await call("POST", "/key/generate", options)
+  const team = process.env.CHAOS_LITELLM_TEAM
+  const response = await call("POST", "/key/generate", { ...options, ...(team && { team_id: team }) })
   if (!response.ok) throw new Error(`LiteLLM key generation answered ${response.status}`)
   return Schema.decodeUnknownSync(Schema.fromJsonString(Generated))(await response.text()).key
 }
@@ -25,3 +26,8 @@ export const generate = async (options: { readonly duration: string; readonly mo
 export const remove = async (key: string) => (await call("POST", "/key/delete", { keys: [key] })).status
 
 export const exists = async (key: string) => (await call("GET", `/key/info?key=${encodeURIComponent(key)}`)).ok
+
+export const allow = async (key: string, models: ReadonlyArray<string>) => {
+  const response = await call("POST", "/key/update", { key, models })
+  if (!response.ok) throw new Error(`LiteLLM key update answered ${response.status}`)
+}

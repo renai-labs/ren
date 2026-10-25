@@ -100,6 +100,7 @@ export const start = async (options: {
   readonly environments: ReadonlyArray<EnvironmentOptions>
   readonly tokenLifetime?: string
   readonly cellVars?: Readonly<Record<string, string>>
+  readonly models?: Models.Access
 }) => {
   const name = `ren_e2e_${crypto.randomUUID().replaceAll("-", "")}`
   const admin = new Bun.SQL(adminUrl)
@@ -133,7 +134,7 @@ export const start = async (options: {
   const provider = await ModelProvider.start()
   const baseUrl = `${new URL(provider.url).origin}/v1`
   const grants: { -readonly [K in keyof ChaosModels.Grants]: ChaosModels.Grants[K] } = {
-    fallback: Shared.access({ stub: Shared.apiKey(`real-${crypto.randomUUID()}`) }, baseUrl),
+    fallback: options.models ?? Shared.access({ stub: Shared.apiKey(`real-${crypto.randomUUID()}`) }, baseUrl),
     brains: {},
   }
   const modelsFile = path.join(os.tmpdir(), `${name}-models.json`)

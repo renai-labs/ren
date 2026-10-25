@@ -110,7 +110,11 @@ const resolve = (
 }
 
 const load = async (): Promise<Result.Result<Sources, string>> => {
-  const child = Bun.spawn(["opencode", "debug", "config"], { stdout: "pipe", stderr: "ignore" })
+  const child = Bun.spawn(["opencode", "debug", "config"], {
+    stdout: "pipe",
+    stderr: "ignore",
+    ...(process.env.CHAOS_LIVE_CONFIG_DIR && { cwd: process.env.CHAOS_LIVE_CONFIG_DIR }),
+  })
   const output = await new Response(child.stdout).text()
   if ((await child.exited) !== 0) return Result.fail("opencode debug config failed")
   const decoded = Schema.decodeUnknownOption(Schema.fromJsonString(Sources))(output)
