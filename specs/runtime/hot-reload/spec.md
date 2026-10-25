@@ -68,13 +68,13 @@ The design is the same for every host (cell, Docker, E2B) and every harness (Ope
 
 ### 5.1 Shared
 
-| Package                  | Change                                                                                                                                  | Decision       |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| `host-api` `BrainApi`    | Add `POST /ren/pull`: server token, no body, `202`. It uses the same handler wrapper as the other Ren calls (`cell/src/brain.ts:65-71`) | HR13, HR17     |
-| `host-api` `PullRequest` | Ren ignores `models`, `apps`, `layers` (known hashes) and `env`. Remove them after old brains are replaced                              | HR9            |
-| `host-api` `PullReply`   | Always send `apps.catalog`, `layers`, `env.variables`, `chats`, `deleted`, `publicKeys`. Replace `models` with `inference: { baseUrl }` | HR3, HR9, HR16 |
-| `schema` `Models`        | Add `Models.fromLiteLLM(modelInfo): Models.Catalog`                                                                                     | HR15           |
-| `db` migration           | Add `ren_notify_brains()` and its triggers (HR10, HR23, HR25)                                                                           | HR10           |
+| Package                  | Change                                                                                                                                                | Decision             |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `host-api` `BrainApi`    | Add `POST /ren/pull`: server token, no body, `202`. It uses the same handler wrapper as the other Ren calls (`cell/src/brain.ts:65-71`)               | HR13, HR17           |
+| `host-api` `PullRequest` | Remove `models`, `apps`, `layers` (known hashes) and `env`                                                                                            | HR9, HR30            |
+| `host-api` `PullReply`   | Always send `apps.catalog`, `layers`, `env.variables`, `chats`, `deleted`, `publicKeys`. Remove `models` and `env.hash`. Add `inference: { baseUrl }` | HR3, HR9, HR16, HR30 |
+| `schema` `Models`        | Add `Models.fromLiteLLM(modelInfo): Models.Catalog`                                                                                                   | HR15                 |
+| `db` migration           | Add `ren_notify_brains()` and its triggers (HR10, HR23, HR25)                                                                                         | HR10                 |
 
 After the `host-api` change, run `bun run generate`.
 
