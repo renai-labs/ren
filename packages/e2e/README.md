@@ -70,16 +70,19 @@ bun run chaos:template     # bundle the executor and build the E2B template
 bun typecheck
 ```
 
-| Variable                                                | Use                                                                                                                       |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `CHAOS_SEED`, `CHAOS_SEQUENCES`, `CHAOS_ACTIONS`        | The first seed of the seeded sequences (default 20261016), how many sequences run (3) and how many actions each has (20). |
-| `CHAOS_SLOW`                                            | Runs the cases that wait out OpenCode's retry schedule.                                                                   |
-| `CHAOS_SOAK_MS`                                         | How long the soak cycles run.                                                                                             |
-| `CHAOS_LIVE_MODEL`, `CHAOS_LIVE_MODEL_ALT`              | One or two small models from the effective OpenCode config, such as `ren/anthropic/claude-haiku-5-5`.                     |
-| `CHAOS_LIVE_BASE_URL`                                   | The bridge host the test process may call in live mode.                                                                   |
-| `CHAOS_LIVE_CONFIG_DIR`                                 | A folder whose `opencode.json` defines the live model's provider, such as a local LiteLLM.                                  |
-| `CHAOS_LIVE_API_KEY`                                    | The live model's key, when the OpenCode config holds it as a literal that `opencode debug config` masks.                  |
-| `CHAOS_LITELLM_ADMIN_URL`, `CHAOS_LITELLM_ADMIN_KEY`    | An isolated LiteLLM key-management credential.                                                                            |
-| `CHAOS_LITELLM_TEAM`                                    | The LiteLLM team of the keys the lane makes, when LiteLLM's budget gate needs one.                                         |
-| `E2B_API_KEY`, `CHAOS_E2B_TEMPLATE`, `CHAOS_E2B_DOMAIN` | Deployed environments.                                                                                                    |
-| `CHAOS_CLOUDFLARE_URL`                                  | The deployed Worker URL, with `{name}` for the per-run Worker name.                                                       |
+| Variable                                                | Use                                                                                                                                               |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CHAOS_SEED`, `CHAOS_SEQUENCES`, `CHAOS_ACTIONS`        | The first seed of the seeded sequences (default 20261016), how many sequences run (3) and how many actions each has (20).                         |
+| `CHAOS_SLOW`                                            | Runs the cases that wait out OpenCode's retry schedule.                                                                                           |
+| `CHAOS_SOAK_MS`                                         | How long the soak cycles run.                                                                                                                     |
+| `CHAOS_LIVE_MODEL`, `CHAOS_LIVE_MODEL_ALT`              | One or two small models from the effective OpenCode config, such as `ren/anthropic/claude-haiku-5-5`.                                             |
+| `CHAOS_LIVE_BASE_URL`                                   | The bridge host the test process may call in live mode.                                                                                           |
+| `CHAOS_LIVE_CONFIG_DIR`                                 | A folder whose `opencode.json` defines the live model's provider, such as a local LiteLLM.                                                        |
+| `CHAOS_LIVE_API_KEY`                                    | The live model's key, when the OpenCode config holds it as a literal that `opencode debug config` masks.                                          |
+| `CHAOS_LITELLM_ADMIN_URL`, `CHAOS_LITELLM_ADMIN_KEY`    | An isolated LiteLLM key-management credential.                                                                                                    |
+| `CHAOS_LITELLM_TEAM`                                    | The LiteLLM team of the keys the lane makes, when LiteLLM's budget gate needs one.                                                                |
+| `E2B_API_KEY`, `CHAOS_E2B_TEMPLATE`, `CHAOS_E2B_DOMAIN` | Deployed environments.                                                                                                                            |
+| `CHAOS_REN_TUNNEL_URL`, `CHAOS_REN_TUNNEL_PORT`         | A public URL that reaches this machine's port (default 4111), where the E2B hot reload cases serve Ren.                                           |
+| `CHAOS_LITELLM_TUNNEL_URL`                              | A public URL that reaches the local LiteLLM, for E2B brains.                                                                                      |
+| `CHAOS_EGRESS_PUBLIC`, `CHAOS_EGRESS_PORT`              | A public TCP address (for example an ngrok TCP tunnel) that reaches the egress's tunnel port (default 4222); runs the E2B case behind the egress. |
+| `CHAOS_CLOUDFLARE_URL`                                  | The deployed Worker URL, with `{name}` for the per-run Worker name.                                                                               |
