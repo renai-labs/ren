@@ -7942,6 +7942,300 @@
         "description": "Remove one connection. New requests stop using it at once. Only the member who connected it, admins and owners remove (`canManage`).",
         "summary": "Remove a provider connection"
       }
+    },
+    "/channel-installs": {
+      "get": {
+        "tags": ["channel-install"],
+        "operationId": "channel-install.list",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ChannelInstall.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelInstall.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the channel-installs that the caller can see.",
+        "summary": "List channel-installs"
+      }
+    },
+    "/channel-installs/{id}/remove": {
+      "post": {
+        "tags": ["channel-install"],
+        "operationId": "channel-install.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelInstall.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The link between the organization and one provider workspace. Ren never returns its secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelInstall.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the remove action on one channel-install.",
+        "summary": "remove channel-install",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelInstall.RemoveInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/channel-providers": {
+      "get": {
+        "tags": ["channel-connect"],
+        "operationId": "channel-provider.list",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ChannelInstall.ProviderInfos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelInstall.ProviderInfos"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the providers that this Ren server can install: Slack, Linear or GitHub.",
+        "summary": "List channel providers"
+      }
+    },
+    "/channel-installs/start": {
+      "post": {
+        "tags": ["channel-connect"],
+        "operationId": "channel-install.start",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WriteResult.Redirect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteResult.Redirect"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the address of the provider’s install page. The provider sends the person back to Ren, which stores the install. An organization has at most one install per provider.",
+        "summary": "Start a channel install",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelInstall.StartInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
     }
   },
   "components": {
@@ -9300,6 +9594,123 @@
       "Brain.Scope": {
         "type": "string",
         "enum": ["session", "space"]
+      },
+      "Channel.Provider": {
+        "type": "string",
+        "enum": ["slack", "linear", "github"]
+      },
+      "ChannelInstall.ID": {
+        "type": "string",
+        "pattern": "^chi_"
+      },
+      "ChannelInstall.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ChannelInstall.ID"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          },
+          "workspace": {
+            "type": "string",
+            "description": "The provider’s workspace id: Slack team, Linear organization, GitHub installation."
+          },
+          "name": {
+            "type": "string",
+            "description": "The workspace name, or the GitHub account login."
+          },
+          "installedBy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Auth.UserID"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "provider", "workspace", "name", "installedBy", "createdAt"],
+        "additionalProperties": false,
+        "description": "The link between the organization and one provider workspace. Ren never returns its secret."
+      },
+      "ChannelInstall.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelInstall.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "ChannelInstall.ProviderInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "title"],
+        "additionalProperties": false,
+        "description": "A provider that this Ren server can install."
+      },
+      "ChannelInstall.ProviderInfos": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelInstall.ProviderInfo"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
+      },
+      "ChannelInstall.RemoveInput": {
+        "not": {
+          "type": "null"
+        }
+      },
+      "ChannelInstall.StartInput": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          }
+        },
+        "required": ["provider"],
+        "additionalProperties": false
       },
       "ConflictErrorEncoded": {
         "type": "object",
@@ -15364,6 +15775,12 @@
     },
     {
       "name": "ren-inference"
+    },
+    {
+      "name": "channel-install"
+    },
+    {
+      "name": "channel-connect"
     }
   ]
 }

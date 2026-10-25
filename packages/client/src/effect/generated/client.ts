@@ -1204,6 +1204,42 @@ const adaptGroupRenInference = (raw: RawClient["ren-inference"]) => ({
   },
 })
 
+type ChannelInstallListRequest = Parameters<RawClient["channel-install"]["channel-install.list"]>[0]
+type ChannelInstallListInput = {
+  readonly page: ChannelInstallListRequest["query"]["page"]
+  readonly pageSize: ChannelInstallListRequest["query"]["pageSize"]
+}
+const EndpointChannelInstallList = (raw: RawClient["channel-install"]) => (input: ChannelInstallListInput) =>
+  raw["channel-install.list"]({ query: { page: input["page"], pageSize: input["pageSize"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type ChannelInstallRemoveRequest = Parameters<RawClient["channel-install"]["channel-install.remove"]>[0]
+type ChannelInstallRemoveInput = { readonly id: ChannelInstallRemoveRequest["params"]["id"] }
+const EndpointChannelInstallRemove = (raw: RawClient["channel-install"]) => (input: ChannelInstallRemoveInput) =>
+  raw["channel-install.remove"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupChannelInstall = (raw: RawClient["channel-install"]) => ({
+  list: EndpointChannelInstallList(raw),
+  remove: EndpointChannelInstallRemove(raw),
+})
+
+const EndpointChannelConnectChannelProviderList = (raw: RawClient["channel-connect"]) => () =>
+  raw["channel-provider.list"]({}).pipe(Effect.mapError(mapClientError))
+
+type ChannelConnectChannelInstallStartRequest = Parameters<RawClient["channel-connect"]["channel-install.start"]>[0]
+type ChannelConnectChannelInstallStartInput = {
+  readonly provider: ChannelConnectChannelInstallStartRequest["payload"]["provider"]
+}
+const EndpointChannelConnectChannelInstallStart =
+  (raw: RawClient["channel-connect"]) => (input: ChannelConnectChannelInstallStartInput) =>
+    raw["channel-install.start"]({ payload: { provider: input["provider"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupChannelConnect = (raw: RawClient["channel-connect"]) => ({
+  "channel-provider": { list: EndpointChannelConnectChannelProviderList(raw) },
+  "channel-install": { start: EndpointChannelConnectChannelInstallStart(raw) },
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -1232,6 +1268,8 @@ const adaptClient = (raw: RawClient) => ({
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),
   "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
   "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
+  "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
+  "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>
