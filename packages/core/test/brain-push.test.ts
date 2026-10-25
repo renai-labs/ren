@@ -140,12 +140,16 @@ describe("BrainPush (HR10, HR12)", () => {
         return [...seen].toSorted()
       })
       const pg = yield* PgClient.PgClient
-      const listeners = pg`select pid from pg_stat_activity where query like 'LISTEN %'`.pipe(Effect.orDie)
+      // oxlint-disable-next-line ren/no-comments -- pg_stat_activity lists every database on the server; other test runs and servers listen there too, so the test sees and ends only its own database's listener.
+      const listeners =
+        pg`select pid from pg_stat_activity where query like 'LISTEN %' and datname = current_database()`.pipe(
+          Effect.orDie,
+        )
       yield* listeners.pipe(Effect.repeat({ until: (rows) => rows.length > 0, schedule: Schedule.spaced("20 millis") }))
       yield* write("first")
       expect(yield* pushedAll).toEqual(brains.toSorted())
       const terminated = yield* Ref.make(0)
-      yield* pg`select pg_terminate_backend(pid) from pg_stat_activity where query like 'LISTEN %'`.pipe(
+      yield* pg`select pg_terminate_backend(pid) from pg_stat_activity where query like 'LISTEN %' and datname = current_database()`.pipe(
         Effect.orDie,
         Effect.tap((rows) => Ref.set(terminated, rows.length)),
       )
