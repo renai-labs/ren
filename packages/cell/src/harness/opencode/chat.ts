@@ -18,9 +18,15 @@ import { Translate } from "@ren/opencode-transcript/translate"
 
 const capabilities = SessionCapabilities.of("opencode")
 
-export const speakerOf = Schema.decodeUnknownOption(
-  Schema.Struct({ userID: Schema.String, userName: Schema.optionalKey(Schema.String) }),
-)
+const Speaker = Schema.Struct({
+  userID: Schema.String,
+  memberID: Schema.optionalKey(Schema.String),
+  userName: Schema.optionalKey(Schema.String),
+})
+
+export type Speaker = typeof Speaker.Type
+
+export const speakerOf = Schema.decodeUnknownOption(Speaker)
 
 const missing = (error: { readonly message: string }) => Effect.fail(new Harness.NotFound({ message: error.message }))
 const conflict = (error: { readonly message: string }) => Effect.fail(new Harness.Conflict({ message: error.message }))
@@ -168,7 +174,11 @@ export const make = (
           ...Option.match(prompt.sender, {
             onNone: () => ({}),
             onSome: (sender) => ({
-              metadata: { userID: sender.userId, ...(sender.name && { userName: sender.name }) },
+              metadata: {
+                userID: sender.userId,
+                ...(sender.memberId && { memberID: sender.memberId }),
+                ...(sender.name && { userName: sender.name }),
+              },
             }),
           }),
         })

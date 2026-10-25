@@ -62,6 +62,7 @@ export interface Options {
   readonly apps?: Option.Option<AppCatalog.Info>
   readonly skills?: { readonly hosts?: SkillSource.Hosts; readonly refresh?: Duration.Input }
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
+  readonly egress?: boolean
 }
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
@@ -203,6 +204,18 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     located(sessionId, Location.Service).pipe(
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
     )
+  const lastSpeaker = (sessionId: string) =>
+    Stream.paginate(undefined, (cursor: string | undefined) =>
+      api.message
+        .list({ sessionID: SessionID.make(sessionId), limit: 50, ...(cursor ? { cursor } : { order: "desc" }) })
+        .pipe(Effect.map((page) => [page.data, Option.fromNullishOr(page.cursor.next)] as const)),
+    ).pipe(
+      Stream.map((message) => (message.type === "user" ? OpenCodeChat.speakerOf(message.metadata) : Option.none())),
+      Stream.filter(Option.isSome),
+      Stream.runHead,
+      Effect.map(Option.flatten),
+      Effect.orElseSucceed(() => Option.none<OpenCodeChat.Speaker>()),
+    )
   yield* plugins.register(
     RenPlugin.make(
       desired,
@@ -221,22 +234,9 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       Option.map(options.ren ?? Option.none(), (access) => ({
         ...access,
         lastSender: (sessionId: string) =>
-          Stream.paginate(undefined, (cursor: string | undefined) =>
-            api.message
-              .list({ sessionID: SessionID.make(sessionId), limit: 50, ...(cursor ? { cursor } : { order: "desc" }) })
-              .pipe(Effect.map((page) => [page.data, Option.fromNullishOr(page.cursor.next)] as const)),
-          ).pipe(
-            Stream.map((message) =>
-              message.type === "user"
-                ? Option.map(OpenCodeChat.speakerOf(message.metadata), (speaker) => speaker.userID)
-                : Option.none(),
-            ),
-            Stream.filter(Option.isSome),
-            Stream.runHead,
-            Effect.map(Option.flatten),
-            Effect.orElseSucceed(() => Option.none<string>()),
-          ),
+          lastSpeaker(sessionId).pipe(Effect.map(Option.map((speaker) => speaker.userID))),
       })),
+      { egress: options.egress ?? false, lastSpeaker },
     ),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.
