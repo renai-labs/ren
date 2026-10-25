@@ -3,6 +3,7 @@ export * as Auth from "./auth.js"
 import { fetchClientMetadataResource } from "@better-auth/cimd/node"
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
 import { Mailer } from "@ren/core/mailer"
+import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { SignupGuard } from "@ren/core/signup-guard"
 import { SpaceProvisioning } from "@ren/core/space/provisioning"
 import { AuthDatabase } from "@ren/db/auth-database"
@@ -62,6 +63,7 @@ export const layer = Layer.effect(
     const mailer = yield* Mailer.Service
     const signupGuard = yield* SignupGuard.Service
     const provisioning = yield* SpaceProvisioning.Service
+    const inferenceRemoval = yield* RenInferenceRemoval.Service
     const toProvisioningUser = (user: BetterAuth.ProvisioningUser) => ({ ...user, id: Auth.UserID.make(user.id) })
     const clientMetadataFetch = yield* ClientMetadataFetch
     const run = yield* FiberSet.makeRuntime()
@@ -110,6 +112,14 @@ export const layer = Layer.effect(
         archiveMemberships: (organizationId, userId) =>
           runPromise(
             provisioning.archiveMemberships(Auth.OrganizationID.make(organizationId), Auth.UserID.make(userId)),
+          ),
+        forgetInferenceMember: (organizationId, userId, memberId) =>
+          runPromise(
+            inferenceRemoval.forgetMember({
+              organizationId: Auth.OrganizationID.make(organizationId),
+              userId: Auth.UserID.make(userId),
+              memberId: Auth.MemberID.make(memberId),
+            }),
           ),
       },
     })

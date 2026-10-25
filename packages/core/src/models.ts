@@ -1,8 +1,10 @@
 export * as Models from "./models.js"
 
+import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import { Models } from "@ren/schema/models"
+import { and, eq } from "drizzle-orm"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import {
   Config,
@@ -18,6 +20,7 @@ import {
   Schema,
   Struct,
 } from "effect"
+import { RenInference } from "./ren-inference.js"
 
 export { Access, Catalog, Endpoint, LiteLLMModelInfo, catalog, fromLiteLLM, placeholderKey } from "@ren/schema/models"
 
@@ -100,6 +103,67 @@ export const layerLiteLLM = Layer.effect(
           endpoints: found.endpoints.map((endpoint) =>
             Struct.assign(endpoint, { baseUrl: apiUrl(brainRoot), apiKey: { key, expiresAt } }),
           ),
+        })
+      }),
+      inference: Effect.succeed(Option.some({ baseUrl: brainRoot })),
+    })
+  }),
+)
+
+const encodeCatalog = Schema.encodeSync(Models.Catalog)
+
+// oxlint-disable-next-line ren/no-comments -- The Ren Inference Service holds the keys and serves LiteLLM's /model/info, so the picker and every brain read the model list as with layerLiteLLM. A session brain's key is attributed to the member who started the session; a space brain's key to the organization only.
+export const layerRenInference = Layer.effect(
+  Service,
+  Effect.gen(function* () {
+    const inference = yield* RenInference.Service
+    const database = yield* Database.Service
+    const brainRoot = (yield* Config.String("REN_INFERENCE_BRAIN_URL").pipe(
+      Config.orElse(() => Config.String("REN_INFERENCE_URL")),
+    )).replace(/\/+$/u, "")
+    const revision = yield* Ref.make("ren-inference")
+    const remember = (catalog: Models.Catalog) =>
+      Ref.set(revision, Bun.hash(JSON.stringify(encodeCatalog(catalog))).toString(16))
+    const memberOf = Effect.fn("Models.memberOf")(function* (brainId: Brain.ID, organizationId: Auth.OrganizationID) {
+      const found = (yield* database.db
+        .select({ userId: Database.Schema.member.userId, memberId: Database.Schema.member.id })
+        .from(Database.Schema.brain)
+        .innerJoin(Database.Schema.agent_session, eq(Database.Schema.agent_session.brain_id, Database.Schema.brain.id))
+        .innerJoin(
+          Database.Schema.member,
+          and(
+            eq(Database.Schema.member.organizationId, Database.Schema.brain.organization_id),
+            eq(Database.Schema.member.userId, Database.Schema.agent_session.created_by),
+          ),
+        )
+        .where(
+          and(
+            eq(Database.Schema.brain.id, brainId),
+            eq(Database.Schema.brain.organization_id, organizationId),
+            eq(Database.Schema.brain.scope, "session"),
+          ),
+        )
+        .limit(1)
+        .pipe(Effect.orDie)).at(0)
+      return found
+    })
+    const catalog = Effect.fn("Models.catalog")(function* (organizationId: Auth.OrganizationID) {
+      const found = yield* inference
+        .catalog(organizationId)
+        .pipe(Effect.mapError((cause) => new Unavailable({ cause })))
+      yield* remember(found)
+      return found
+    })
+    return Service.of({
+      catalog,
+      revision: Ref.get(revision),
+      grant: Effect.fn("Models.grant")(function* (brainId, organizationId) {
+        const found = yield* catalog(organizationId)
+        const apiKey = yield* inference
+          .grant(brainId, organizationId, yield* memberOf(brainId, organizationId))
+          .pipe(Effect.mapError((cause) => new Unavailable({ cause })))
+        return Models.Access.make({
+          endpoints: found.endpoints.map((endpoint) => Struct.assign(endpoint, { baseUrl: apiUrl(brainRoot), apiKey })),
         })
       }),
       inference: Effect.succeed(Option.some({ baseUrl: brainRoot })),

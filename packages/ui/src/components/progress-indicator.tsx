@@ -9,12 +9,47 @@ const spinnerVariants = cva("shrink-0 animate-rotation", {
   },
 })
 
-export function ProgressIndicator(props: {
+const barFillVariants = cva("block h-full rounded-full transition-extended", {
+  variants: {
+    tone: { primary: "bg-fill-inverse", accent: "bg-accent-primary", danger: "bg-status-danger" },
+  },
+})
+
+type SpinnerProps = {
+  presentation?: "spinner"
   size?: "extra-small" | "small" | "medium" | "large"
   tone?: "secondary" | "inherit"
   label?: string
   announcement?: "status" | "none"
-}) {
+}
+
+type BarProps = {
+  presentation: "bar"
+  value: number
+  tone: "primary" | "accent" | "danger"
+  label: string
+}
+
+export function ProgressIndicator(props: SpinnerProps | BarProps) {
+  if (props.presentation === "bar") {
+    return (
+      <span
+        data-slot="progress-indicator"
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a native <meter> draws its own bar per browser and cannot take the fill tokens
+        role="meter"
+        aria-label={props.label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(props.value)}
+        className="block h-1 w-full overflow-hidden rounded-full bg-fill-secondary"
+      >
+        <span
+          className={composeClasses(barFillVariants({ tone: props.tone }))}
+          style={{ width: `${Math.min(100, Math.max(0, props.value))}%` }}
+        />
+      </span>
+    )
+  }
   const announced = props.announcement !== "none"
   return (
     <IconLoader2

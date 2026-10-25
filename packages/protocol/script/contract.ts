@@ -19,6 +19,10 @@ const exceptions = new Map([
     "Deletes a profile, and lists the profiles a chat or a new chat reaches with their gaps: a hard delete and two computed reads, which no primitive operation is.",
   ],
   [
+    "ren-inference",
+    "Proxies the Ren Inference Service, which stores the provider connections: a sign-in redirect, and reads and writes of records Ren does not hold, which no primitive operation is.",
+  ],
+  [
     "chat",
     "Short-lived access to a session's brain for the Chat API, the session's saved messages while the brain is not ready, and the models a new session may use.",
   ],

@@ -49,6 +49,7 @@ import { LabelHandler } from "./handlers/api/label.js"
 import { MeHandler } from "./handlers/api/me.js"
 import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
+import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
 import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
@@ -118,6 +119,7 @@ export const layer = Layer.mergeAll(
         CredentialConnectHandler,
         OAuthSessionHandler,
         OAuthAppHandler,
+        RenInferenceHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
       Layer.provide([

@@ -14,3 +14,5 @@ export const ExtraSmall: Story = { args: { size: "extra-small" } }
 export const Medium: Story = { args: { size: "medium" } }
 export const Large: Story = { args: { size: "large" } }
 export const Inherit: Story = { args: { tone: "inherit" } }
+export const Bar: Story = { args: { presentation: "bar", value: 42, tone: "accent", label: "5-hour usage" } }
+export const BarFull: Story = { args: { presentation: "bar", value: 100, tone: "danger", label: "Weekly usage" } }

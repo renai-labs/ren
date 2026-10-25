@@ -198,6 +198,12 @@ export type OAuthAppDiscovery = "live" | "static"
 
 export type OAuthAppTokenEndpointAuth = "none" | "client_secret_basic" | "client_secret_post"
 
+export type RenInferenceConnectResult = { url: string }
+
+export type RenInferenceTone = "ok" | "warn" | "error"
+
+export type RenInferenceMeter = { key: string; title: string; percent: number | null; resetsAt?: string | null }
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -528,6 +534,17 @@ export type OAuthAppInfo = {
   createdAt: string
   updatedAt: string
   archivedAt: string | null
+}
+
+export type RenInferenceConnection = {
+  id: string
+  label: string
+  providerName: string
+  iconUrl: string
+  status: { label: string; tone: RenInferenceTone }
+  plan?: string
+  canReconnect: boolean
+  meters: Array<RenInferenceMeter>
 }
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
@@ -5744,3 +5761,23 @@ export type OauthAppUpdateOutput = OAuthAppInfo
 export type OauthAppArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type OauthAppArchiveOutput = OAuthAppInfo
+
+export type RenInferenceConnectInput = {
+  readonly returnUrl: { readonly returnUrl: string; readonly connectionId?: string | undefined }["returnUrl"]
+  readonly connectionId?: { readonly returnUrl: string; readonly connectionId?: string | undefined }["connectionId"]
+}
+
+export type RenInferenceConnectOutput = RenInferenceConnectResult
+
+export type RenInferenceConnectionListOutput = Array<RenInferenceConnection>
+
+export type RenInferenceConnectionRenameInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly label: { readonly label: string }["label"]
+}
+
+export type RenInferenceConnectionRenameOutput = RenInferenceConnection
+
+export type RenInferenceConnectionRemoveInput = { readonly id: { readonly id: string }["id"] }
+
+export type RenInferenceConnectionRemoveOutput = void

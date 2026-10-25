@@ -16,6 +16,7 @@ import { InvitationGroup } from "./groups/invitation.js"
 import { LabelGroup } from "./groups/label.js"
 import { MeGroup } from "./groups/me.js"
 import { OrganizationSettingsGroup } from "./groups/organization-settings.js"
+import { RenInferenceGroup } from "./groups/ren-inference.js"
 import { SessionGroup } from "./groups/session.js"
 import { SpaceGroup } from "./groups/space.js"
 import { SpaceEnvironmentTemplateGroup } from "./groups/space-environment-template.js"
@@ -52,6 +53,7 @@ export const Api = HttpApi.make("server")
   .add(CredentialConnectGroup)
   .add(OAuthSessionGroup)
   .add(OAuthAppGroup)
+  .add(RenInferenceGroup)
   .annotateMerge(
     OpenApi.annotations({
       title: "Ren API",

@@ -20,6 +20,7 @@ interface Base {
   readonly storage: Storage
   readonly drafts?: Drafts
   readonly openExternal: (url: string) => void
+  readonly redirect?: (url: string) => void
   readonly notify: (title: string, body?: string) => Promise<void>
   readonly requestNotifications?: () => Promise<boolean>
   readonly fetch?: typeof globalThis.fetch

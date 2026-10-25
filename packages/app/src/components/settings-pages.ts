@@ -4,7 +4,13 @@ import type { Glyph } from "@ren/ui/icon"
 
 export type Page = {
   label: string
-  to: "/settings/preferences" | "/settings/credentials" | "/settings/apps" | "/settings/general" | "/settings/members"
+  to:
+    | "/settings/preferences"
+    | "/settings/credentials"
+    | "/settings/apps"
+    | "/settings/general"
+    | "/settings/members"
+    | "/settings/providers"
   glyph: Glyph
 }
 
@@ -17,4 +23,5 @@ export const personal: ReadonlyArray<Page> = [
 export const organization: ReadonlyArray<Page> = [
   { label: "General", to: "/settings/general", glyph: "Building" },
   { label: "Members", to: "/settings/members", glyph: "Users" },
+  { label: "Providers", to: "/settings/providers", glyph: "Server" },
 ]
