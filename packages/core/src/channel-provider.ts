@@ -15,9 +15,23 @@ export class FileUnavailable extends Schema.TaggedError<FileUnavailable>()("Chan
   message: Schema.String,
 }) {}
 
+export class InstallFailed extends Schema.TaggedError<InstallFailed>()("ChannelProvider.InstallFailed", {
+  message: Schema.String,
+}) {}
+
+export class Unavailable extends Schema.TaggedError<Unavailable>()("ChannelProvider.Unavailable", {
+  message: Schema.String,
+}) {}
+
 export interface Request {
   readonly headers: Headers
   readonly body: string
+}
+
+export interface Installed {
+  readonly workspace: string
+  readonly name: string
+  readonly botUser?: string
 }
 
 export interface Provider {
@@ -25,6 +39,10 @@ export interface Provider {
   readonly verify: (request: Request) => Effect.Effect<void, Unauthorized>
   readonly parse: (request: Request) => Effect.Effect<Channel.Parsed, Malformed>
   readonly fetchFile: (install: string, file: Channel.FileRef) => Effect.Effect<Uint8Array, FileUnavailable>
+  readonly installUrl: (state: string) => string
+  readonly completeInstall: (query: Readonly<Record<string, string>>) => Effect.Effect<Installed, InstallFailed>
+  readonly changedOnProvider: (query: Readonly<Record<string, string>>) => boolean
+  readonly revoke: (workspace: string) => Effect.Effect<void, Unavailable>
 }
 
 export class Registry extends Context.Service<
@@ -32,11 +50,11 @@ export class Registry extends Context.Service<
   { readonly providers: ReadonlyArray<Provider>; readonly get: (id: string) => Option.Option<Provider> }
 >()("@ren/core/ChannelProvider/Registry") {}
 
-export const layer = <E, R>(providers: ReadonlyArray<Effect.Effect<Provider, E, R>>) =>
+export const layer = <E, R>(providers: ReadonlyArray<Effect.Effect<Option.Option<Provider>, E, R>>) =>
   Layer.effect(
     Registry,
     Effect.gen(function* () {
-      const all = yield* Effect.all(providers)
+      const all = (yield* Effect.all(providers)).flatMap(Option.toArray)
       const ids = all.map((provider) => provider.id)
       if (new Set(ids).size !== ids.length)
         return yield* Effect.die(new Error(`Two channel providers share an id: ${ids.join(", ")}`))

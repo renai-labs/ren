@@ -185,6 +185,13 @@ import type {
   RenInferenceConnectionRenameOutput,
   RenInferenceConnectionRemoveInput,
   RenInferenceConnectionRemoveOutput,
+  ChannelInstallListInput,
+  ChannelInstallListOutput,
+  ChannelInstallRemoveInput,
+  ChannelInstallRemoveOutput,
+  ChannelConnectChannelProviderListOutput,
+  ChannelConnectChannelInstallStartInput,
+  ChannelConnectChannelInstallStartOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -1571,6 +1578,61 @@ export function make(options: ClientOptions) {
               successStatus: 204,
               declaredStatuses: [400, 401, 403, 404, 503],
               empty: true,
+            },
+            requestOptions,
+          ),
+      },
+    },
+    "channel-install": {
+      list: (input: ChannelInstallListInput, requestOptions?: RequestOptions) =>
+        request<ChannelInstallListOutput>(
+          {
+            method: "GET",
+            path: `/channel-installs`,
+            query: { page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      remove: (input: ChannelInstallRemoveInput, requestOptions?: RequestOptions) =>
+        request<ChannelInstallRemoveOutput>(
+          {
+            method: "POST",
+            path: `/channel-installs/${encodeURIComponent(input.id)}/remove`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "channel-connect": {
+      "channel-provider": {
+        list: (requestOptions?: RequestOptions) =>
+          request<ChannelConnectChannelProviderListOutput>(
+            {
+              method: "GET",
+              path: `/channel-providers`,
+              successStatus: 200,
+              declaredStatuses: [401, 403],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      "channel-install": {
+        start: (input: ChannelConnectChannelInstallStartInput, requestOptions?: RequestOptions) =>
+          request<ChannelConnectChannelInstallStartOutput>(
+            {
+              method: "POST",
+              path: `/channel-installs/start`,
+              body: { provider: input["provider"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404, 409],
+              empty: false,
             },
             requestOptions,
           ),

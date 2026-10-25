@@ -11,6 +11,10 @@ const exceptions = new Map([
     "The environment providers of the deployment and the config schema of each, for the environment template form.",
   ],
   [
+    "channel-connect",
+    "Lists the providers this server can install, and starts an install: a write that returns a redirect, which no primitive operation is.",
+  ],
+  [
     "credential-connect",
     "Starts a sign-in for one MCP of a profile: a write that returns a redirect, which no primitive operation is.",
   ],

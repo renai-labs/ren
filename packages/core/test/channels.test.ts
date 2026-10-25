@@ -225,6 +225,20 @@ describe("Channels", () => {
     }),
   )
 
+  it.live("an uninstall event removes the install of its workspace and keeps the threads", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const found = ChannelFixture.event(subject.install)
+      yield* ChannelFixture.thread(subject.owner.organizationId, found, Session.ID.create())
+      expect(yield* ChannelFixture.receive(JSON.stringify({ type: "uninstalled", install: subject.install }))).toEqual({
+        status: 200,
+      })
+      const database = yield* Database.Service
+      expect(yield* database.db.select().from(Database.Schema.channel_install)).toEqual([])
+      expect(yield* ChannelFixture.threads).toHaveLength(1)
+    }),
+  )
+
   it.live("a file that cannot be read is dropped with a note, and the message goes on", () =>
     Effect.gen(function* () {
       const found = ChannelFixture.event((yield* routed).install, {

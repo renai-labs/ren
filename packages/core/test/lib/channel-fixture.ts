@@ -4,12 +4,15 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import type { Auth } from "@ren/schema/auth"
 import { Channel } from "@ren/schema/channel"
+import { ChannelInstall } from "@ren/schema/channel-install"
 import { Session } from "@ren/schema/session"
 import { BunCrypto } from "@effect/platform-bun"
 import { Clock, Context, Deferred, Duration, Effect, Layer, Option, Queue, Schedule, Schema } from "effect"
 import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainRegistry } from "../../src/brain-registry.js"
+import { Access } from "../../src/access.js"
+import { ChannelInstalls } from "../../src/channel-installs.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
 import { ChannelRoute } from "../../src/channel-route.js"
@@ -27,6 +30,7 @@ const Body = Schema.fromJsonString(
   Schema.Union([
     Schema.Struct({ type: Schema.Literal("handshake"), challenge: Schema.String }),
     Schema.Struct({ type: Schema.Literal("ignore") }),
+    Schema.Struct({ type: Schema.Literal("uninstalled"), install: Schema.NonEmptyString }),
     Schema.Struct({ type: Schema.Literal("event"), event: Channel.Event }),
   ]),
 )
@@ -60,6 +64,7 @@ const provider = Effect.gen(function* () {
         Effect.map((body): Channel.Parsed => {
           if (body.type === "handshake") return { _tag: "Handshake", body: { challenge: body.challenge } }
           if (body.type === "ignore") return { _tag: "Ignore", reason: "a bot’s own message" }
+          if (body.type === "uninstalled") return { _tag: "Uninstalled", install: body.install }
           return { _tag: "Event", event: body.event }
         }),
       ),
@@ -73,8 +78,15 @@ const provider = Effect.gen(function* () {
         ? Effect.succeed(new Uint8Array(Number(file.url.slice("bytes:".length))).fill(97))
         : Effect.fail(new ChannelProvider.FileUnavailable({ message: `${file.name} is gone` }))
     },
+    installUrl: (state) => `https://slack.test/install?state=${state}`,
+    completeInstall: (query) =>
+      query.team
+        ? Effect.succeed({ workspace: query.team, name: "Acme" })
+        : Effect.fail(new ChannelProvider.InstallFailed({ message: "Slack sent no team." })),
+    changedOnProvider: () => false,
+    revoke: () => Effect.void,
   } satisfies ChannelProvider.Provider
-})
+}).pipe(Effect.map(Option.some))
 
 export const request = (body: string, signature = sign(body)): ChannelProvider.Request => ({
   headers: new Headers({ "x-signature": signature }),
@@ -102,7 +114,7 @@ export const install = Effect.fnUntraced(function* (owner: {
   const database = yield* Database.Service
   const workspace = `T${crypto.randomUUID()}`
   yield* database.db.insert(Database.Schema.channel_install).values({
-    id: Channel.InstallID.create(),
+    id: ChannelInstall.ID.create(),
     organization_id: owner.organizationId,
     provider: "slack",
     workspace,
@@ -205,8 +217,8 @@ const cell = Layer.effect(
 const models = Models.layerNone
 
 const core = (held: boolean) =>
-  Layer.mergeAll(SessionRunner.layer, ChannelProvider.layer([provider]), ChannelRoute.layer, notices).pipe(
-    Layer.provideMerge(BrainRegistry.layer),
+  Layer.mergeAll(SessionRunner.layer, ChannelInstalls.layer, ChannelRoute.layer, notices).pipe(
+    Layer.provideMerge(Layer.mergeAll(BrainRegistry.layer, ChannelProvider.layer([provider]), Access.layer)),
     Layer.provideMerge(hold(held)),
   )
 

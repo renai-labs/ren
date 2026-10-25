@@ -8,6 +8,7 @@ import { and, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Result, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainHost } from "./brain-host.js"
+import { ChannelInstalls } from "./channel-installs.js"
 import { ChannelNotice } from "./channel-notice.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { ChannelRoute } from "./channel-route.js"
@@ -47,6 +48,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const registry = yield* ChannelProvider.Registry
     const routes = yield* ChannelRoute.Service
+    const installs = yield* ChannelInstalls.Service
     const notices = yield* ChannelNotice.Service
     const runner = yield* SessionRunner.Service
     const brainHost = yield* BrainHost.Service
@@ -220,6 +222,10 @@ export const layer = Layer.effect(
         }
         const value = parsed.success
         if (value._tag === "Handshake") return { status: 200, body: value.body } satisfies Reply
+        if (value._tag === "Uninstalled") {
+          yield* installs.removeByWorkspace(found.value.id, value.install)
+          return { status: 200 } satisfies Reply
+        }
         if (value._tag === "Ignore") {
           yield* Effect.logDebug(`A ${id} delivery is ignored: ${value.reason}`)
           return { status: 200 } satisfies Reply

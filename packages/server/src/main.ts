@@ -19,6 +19,7 @@ import { BrainLifecycle } from "@ren/core/brain-lifecycle"
 import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelProvider } from "@ren/core/channel-provider"
+import { GitHub } from "@ren/core/channel-provider/github"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
@@ -116,7 +117,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       Retention.layer,
       RenInferenceRemoval.layer,
     ),
-    ChannelProvider.layer<never, never>([]),
+    ChannelProvider.layer([GitHub.provider]),
     ChannelRoute.layer,
     ChannelNotice.layerLog,
     Mailer.layer,

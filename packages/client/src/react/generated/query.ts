@@ -92,6 +92,9 @@ import type {
   RenInferenceConnectInput,
   RenInferenceConnectionRenameInput,
   RenInferenceConnectionRemoveInput,
+  ChannelInstallListInput,
+  ChannelInstallRemoveInput,
+  ChannelConnectChannelInstallStartInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -970,6 +973,48 @@ export function make(client: ReturnType<typeof Ren.make>) {
               mutationKey: ["ren-inference", "connection", "remove"] as const,
               mutationFn: (input: RenInferenceConnectionRemoveInput) =>
                 client["ren-inference"]["connection"]["remove"](input),
+            }),
+        },
+      },
+    },
+    "channel-install": {
+      list: {
+        queryKey: (input?: ChannelInstallListInput) =>
+          input === undefined ? (["channel-install", "list"] as const) : (["channel-install", "list", input] as const),
+        queryOptions: (input: ChannelInstallListInput) =>
+          queryOptions({
+            queryKey: ["channel-install", "list", input] as const,
+            queryFn: (context) => client["channel-install"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      remove: {
+        mutationKey: () => ["channel-install", "remove"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["channel-install", "remove"] as const,
+            mutationFn: (input: ChannelInstallRemoveInput) => client["channel-install"]["remove"](input),
+          }),
+      },
+    },
+    "channel-connect": {
+      "channel-provider": {
+        list: {
+          queryKey: () => ["channel-connect", "channel-provider", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["channel-connect", "channel-provider", "list"] as const,
+              queryFn: (context) => client["channel-connect"]["channel-provider"]["list"]({ signal: context.signal }),
+            }),
+        },
+      },
+      "channel-install": {
+        start: {
+          mutationKey: () => ["channel-connect", "channel-install", "start"] as const,
+          mutationOptions: () =>
+            mutationOptions({
+              mutationKey: ["channel-connect", "channel-install", "start"] as const,
+              mutationFn: (input: ChannelConnectChannelInstallStartInput) =>
+                client["channel-connect"]["channel-install"]["start"](input),
             }),
         },
       },

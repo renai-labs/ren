@@ -204,6 +204,10 @@ export type RenInferenceTone = "ok" | "warn" | "error"
 
 export type RenInferenceMeter = { key: string; title: string; percent: number | null; resetsAt?: string | null }
 
+export type ChannelInstallID = string
+
+export type ChannelProvider = "slack" | "linear" | "github"
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -548,6 +552,17 @@ export type RenInferenceConnection = {
   meters: Array<RenInferenceMeter>
 }
 
+export type ChannelInstallInfo = {
+  id: ChannelInstallID
+  provider: ChannelProvider
+  workspace: string
+  name: string
+  installedBy: { id: AuthUserID; name: string } | null
+  createdAt: string
+}
+
+export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string }
+
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
 export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
@@ -712,6 +727,10 @@ export type TaskEventData =
   | TaskEventArchived
 
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
+
+export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
+
+export type ChannelInstallProviderInfos = { items: Array<ChannelInstallProviderInfo> }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
@@ -5784,3 +5803,22 @@ export type RenInferenceConnectionRenameOutput = RenInferenceConnection
 export type RenInferenceConnectionRemoveInput = { readonly id: { readonly id: string }["id"] }
 
 export type RenInferenceConnectionRemoveOutput = void
+
+export type ChannelInstallListInput = {
+  readonly page: { readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: { readonly page: number; readonly pageSize: number }["pageSize"]
+}
+
+export type ChannelInstallListOutput = ChannelInstallPage
+
+export type ChannelInstallRemoveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ChannelInstallRemoveOutput = ChannelInstallInfo
+
+export type ChannelConnectChannelProviderListOutput = ChannelInstallProviderInfos
+
+export type ChannelConnectChannelInstallStartInput = {
+  readonly provider: { readonly provider: "slack" | "linear" | "github" }["provider"]
+}
+
+export type ChannelConnectChannelInstallStartOutput = WriteResultRedirect

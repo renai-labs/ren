@@ -10,6 +10,7 @@ import { AppRegistry } from "@ren/core/app/registry"
 import { AgentMembership } from "@ren/core/agent/membership"
 import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
+import { ChannelInstalls } from "@ren/core/channel-installs"
 import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
@@ -40,6 +41,7 @@ import { ChatHandler } from "./handlers/api/chat.js"
 import { CredentialHandler } from "./handlers/api/credential.js"
 import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
 import { OAuthAppHandler } from "./handlers/api/oauth-app.js"
+import { ChannelConnectHandler, ChannelInstallHandler } from "./handlers/api/channel-install.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
@@ -122,6 +124,8 @@ export const layer = Layer.mergeAll(
         OAuthSessionHandler,
         OAuthAppHandler,
         RenInferenceHandler,
+        ChannelInstallHandler,
+        ChannelConnectHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
       Layer.provide([
@@ -143,6 +147,7 @@ export const layer = Layer.mergeAll(
         AgentMembership.layer,
         Session.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
         OAuthApps.layer,
+        ChannelInstalls.layer,
         CredentialRequirements.layer,
       ]),
     ),
@@ -155,7 +160,7 @@ export const layer = Layer.mergeAll(
     OAuthRoutes.layer,
     ChannelRoutes.layer.pipe(
       Layer.provide(Channels.layer),
-      Layer.provide(SessionRunner.layer),
+      Layer.provide([SessionRunner.layer, ChannelInstalls.layer]),
       Layer.provide(BrainRegistry.layer),
     ),
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
