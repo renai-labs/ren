@@ -23,7 +23,7 @@ export const AgentLayer = Schema.Struct({
   description: Schema.NullOr(Schema.String),
   isSubagent: Schema.Boolean,
   hash: Schema.String,
-  settings: Schema.optionalKey(Settings.Info),
+  settings: Settings.Info,
 }).annotate({ identifier: "SessionSettings.AgentLayer" })
 
 export interface Layers extends Schema.Schema.Type<typeof Layers> {}

@@ -2,7 +2,7 @@ import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { Schema, Struct } from "effect"
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import {
   BrainRejectedError,
   ForbiddenError,
@@ -108,6 +108,16 @@ const BrainGroup = HttpApiGroup.make("brain")
         summary: "Wake the brain",
         description:
           "Ren calls this first after it resumes a paused brain. The brain drops its cached model keys, pulls and syncs, then answers, also when the pull or the sync failed.",
+      }),
+    ),
+  )
+  .add(
+    HttpApiEndpoint.post("brain.pull", "/ren/pull", { success: HttpApiSchema.Accepted }).annotateMerge(
+      OpenApi.annotations({
+        identifier: "brain.pull",
+        summary: "Ask the brain to pull",
+        description:
+          "Ren calls this after a change that a brain must see at once. The call carries no data: the brain answers at once and pulls. A call during a pull makes one more pull after it.",
       }),
     ),
   )

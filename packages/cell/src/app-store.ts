@@ -13,7 +13,7 @@ class StorageError extends Schema.TaggedError<StorageError>()("AppStore.StorageE
 
 export interface Interface {
   readonly current: Effect.Effect<Option.Option<AppCatalog.Info>>
-  readonly save: (info: AppCatalog.Info) => Effect.Effect<void, StorageError>
+  readonly save: (info: AppCatalog.Info) => Effect.Effect<boolean, StorageError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/cell/AppStore") {}
@@ -32,11 +32,14 @@ export const layer = Layer.effect(
       save: Effect.fn("AppStore.save")((info) =>
         writes.withPermit(
           Effect.gen(function* () {
+            const encoded = Schema.encodeSync(Stored)(info)
+            if (Option.contains(Option.map(yield* Ref.get(current), Schema.encodeSync(Stored)), encoded)) return false
             yield* Effect.tryPromise({
-              try: () => storage.put(key, Schema.encodeSync(Stored)(info)),
+              try: () => storage.put(key, encoded),
               catch: () => new StorageError({ message: "The app catalog could not be saved." }),
             })
             yield* Ref.set(current, Option.some(info))
+            return true
           }),
         ),
       ),

@@ -29,10 +29,10 @@ export interface Observation {
   readonly appliedRevision: number
   readonly appFingerprint: Option.Option<string>
   readonly appConflicts: ReadonlyArray<string>
+  readonly appsReloading: boolean
 }
 
 export interface Location {
-  readonly models: Effect.Effect<ReadonlyArray<Models.Endpoint>>
   readonly offer: (snapshot: Snapshot) => Effect.Effect<void>
   readonly observation: Effect.Effect<Observation>
 }

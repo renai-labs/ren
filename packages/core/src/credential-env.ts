@@ -31,13 +31,3 @@ export const layer = Layer.effect(
     })
   }),
 )
-
-export const hash = Effect.fn("CredentialEnv.hash")(function* (variables: Readonly<Record<string, string>>) {
-  const content = JSON.stringify(
-    Object.keys(variables)
-      .toSorted()
-      .map((name) => [name, variables[name]]),
-  )
-  const digest = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", new TextEncoder().encode(content)))
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")
-})

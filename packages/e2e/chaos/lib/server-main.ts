@@ -2,6 +2,7 @@ import { BunHttpServer, BunRuntime, BunServices } from "@effect/platform-bun"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
+import { BrainPush } from "@ren/core/brain-push"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
@@ -47,7 +48,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
 
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
-    Brains.layer.pipe(
+    Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(
       Layer.provide(BrainHost.layerCell),
       Layer.provide(DurableRunner.layerEffect),
       Layer.provide(CredentialEnv.layerNone),

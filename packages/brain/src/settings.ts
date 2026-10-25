@@ -42,12 +42,7 @@ export interface Decision {
   readonly message?: string
 }
 
-export interface Layers {
-  readonly ren: SessionSettings.Layer
-  readonly organization: SessionSettings.Layer
-  readonly space: SessionSettings.Layer
-  readonly agents: ReadonlyArray<SessionSettings.AgentLayer & { readonly settings: Settings.Info }>
-}
+export type Layers = SessionSettings.Layers
 
 export interface Placement {
   readonly agent: string | null
@@ -57,29 +52,6 @@ export interface Placement {
 export type Lookup = (model: Session.Model) => Option.Option<{ readonly variants: ReadonlyArray<string> }>
 
 export const empty: Layers = { ren: { hash: null }, organization: { hash: null }, space: { hash: null }, agents: [] }
-
-export const known = (layers: Layers): SessionSettings.Known => ({
-  ...(layers.ren.hash && { ren: layers.ren.hash }),
-  ...(layers.organization.hash && { organization: layers.organization.hash }),
-  ...(layers.space.hash && { space: layers.space.hash }),
-  agents: Object.fromEntries(layers.agents.map((agent) => [agent.name, agent.hash])),
-})
-
-const kept = <A extends SessionSettings.Layer>(next: A, previous: A | undefined) =>
-  next.settings || !next.hash || !previous ? next : previous
-
-export const merge = (before: Layers, read: SessionSettings.Layers): Layers => {
-  const previous = new Map(before.agents.map((agent) => [agent.name, agent.settings]))
-  return {
-    ren: kept(read.ren, before.ren),
-    organization: kept(read.organization, before.organization),
-    space: kept(read.space, before.space),
-    agents: read.agents.flatMap((agent) => {
-      const settings = agent.settings ?? previous.get(agent.name)
-      return settings ? [{ ...agent, settings }] : []
-    }),
-  }
-}
 
 const matches = (input: string, pattern: string) => {
   const escaped = pattern

@@ -31,21 +31,20 @@ interface Stored {
 
 const hashOf = (value: unknown) => Bun.hash(JSON.stringify(value)).toString()
 
-const read = (stored: Stored, known: SessionSettings.Known = {}): SessionSettings.Layers => {
-  const owned = (settings: Settings.Info | undefined, hash: string | undefined) => {
-    if (!settings) return { hash: null }
-    const current = hashOf(settings)
-    return current === hash ? { hash: current } : { hash: current, settings }
-  }
+const read = (stored: Stored): SessionSettings.Layers => {
+  const owned = (settings: Settings.Info | undefined) =>
+    settings ? { hash: hashOf(settings), settings } : { hash: null }
   return {
-    ren: owned(stored.ren, known.ren),
-    organization: owned(stored.organization, known.organization),
-    space: owned(stored.space, known.space),
-    agents: stored.agents.map((agent) => {
-      const hash = hashOf(agent)
-      const base = { name: agent.name, description: null, isSubagent: agent.isSubagent, hash }
-      return hash === known.agents?.[agent.name] ? base : { ...base, settings: agent.settings }
-    }),
+    ren: owned(stored.ren),
+    organization: owned(stored.organization),
+    space: owned(stored.space),
+    agents: stored.agents.map((agent) => ({
+      name: agent.name,
+      description: null,
+      isSubagent: agent.isSubagent,
+      hash: hashOf(agent),
+      settings: agent.settings,
+    })),
   }
 }
 
@@ -61,7 +60,7 @@ const resolve = (
 ): BrainSettings.Resolved =>
   Result.getOrThrow(
     BrainSettings.resolve(
-      BrainSettings.merge(BrainSettings.empty, read(stored)),
+      read(stored),
       { agent: chat.agent ?? null, model: Option.fromUndefinedOr(chat.model) },
       lookup,
     ),
@@ -119,10 +118,7 @@ describe("BrainSettings.resolve", () => {
         .primary.model,
     ).toEqual(stub)
     const failed = BrainSettings.resolve(
-      BrainSettings.merge(
-        BrainSettings.empty,
-        read({ ren: layer({ model: { endpointId: "gone", modelId: "x" } }), agents: [primary()] }),
-      ),
+      read({ ren: layer({ model: { endpointId: "gone", modelId: "x" } }), agents: [primary()] }),
       { agent: null, model: Option.none() },
       lookup,
     )
@@ -139,27 +135,6 @@ describe("BrainSettings.resolve", () => {
   test("the same layers resolve to byte-identical settings", () => {
     const stored = { ren: layer({ model: stub, instructions: "House rules." }), agents: [primary()] }
     expect(JSON.stringify(resolve(stored))).toBe(JSON.stringify(resolve(stored)))
-  })
-})
-
-describe("BrainSettings.merge", () => {
-  test("a pull sends the hashes it has, keeps the layers that did not change and drops an agent that is gone", () => {
-    const first: Stored = {
-      ren: layer({ instructions: "House rules.", model: stub }),
-      space: layer({ instructions: "We use Bun." }),
-      agents: [primary(), { name: "explore", isSubagent: true, settings: layer({ instructions: "You search." }) }],
-    }
-    const merged = BrainSettings.merge(BrainSettings.empty, read(first))
-    const known = BrainSettings.known(merged)
-    const second: Stored = { ...first, space: layer({ instructions: "We use Bun 1.3." }), agents: [primary()] }
-    const reply = read(second, known)
-    expect(reply.ren.settings).toBeUndefined()
-    const next = Result.getOrThrow(
-      BrainSettings.resolve(BrainSettings.merge(merged, reply), { agent: null, model: Option.none() }, lookup),
-    )
-    expect(Object.keys(known)).toEqual(["ren", "space", "agents"])
-    expect(next.primary.instructions).toEqual(["House rules.", "We use Bun 1.3."])
-    expect(next.subagents).toEqual([])
   })
 })
 

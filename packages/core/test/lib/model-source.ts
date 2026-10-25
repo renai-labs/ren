@@ -3,7 +3,7 @@ export * as ModelSource from "./model-source.js"
 import { Shared } from "@ren/cell/testing"
 import { Testing } from "@ren/db/testing"
 import { Session } from "@ren/schema/session"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { Brains } from "../../src/brains.js"
 import { BrainRegistry } from "../../src/brain-registry.js"
 import { Models } from "../../src/models.js"
@@ -23,6 +23,11 @@ export const source: { access: Models.Access } = { access: access({ stub: lastin
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
+    inference: Effect.sync(() =>
+      Option.fromNullishOr(source.access.endpoints.at(0)?.baseUrl.replace(/\/v1$/u, "")).pipe(
+        Option.map((baseUrl) => ({ baseUrl })),
+      ),
+    ),
     revision: Effect.succeed("test"),
     catalog: () => Effect.sync(() => Models.catalog(source.access)),
     grant: () => Effect.sync(() => source.access),

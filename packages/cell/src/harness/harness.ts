@@ -152,6 +152,7 @@ export interface Instance {
   readonly fetch: (request: Request) => Promise<Response>
   readonly configure: (update: HarnessConfig.Update) => Effect.Effect<void>
   readonly configuration: Effect.Effect<ReadonlyArray<HarnessConfig.Observation>>
+  readonly refreshModels: Effect.Effect<void>
   readonly start: (input: StartBody) => Effect.Effect<Session.Started, BrainRejectedError | SyncUnavailableError>
   readonly send: (
     input: Session.SendInput,

@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers"
-import { Layer, ManagedRuntime } from "effect"
+import { Effect, Layer, ManagedRuntime } from "effect"
 import { Brain } from "./brain.js"
 import { BrainKeys } from "./brain-keys.js"
 import { Cell } from "./cell.js"
@@ -31,6 +31,8 @@ export class SessionCell extends DurableObject {
   }
 
   override alarm() {
-    return this.runtime.runPromise(Cell.alarm())
+    return this.runtime.runPromise(
+      HotReload.Service.use((hotReload) => hotReload.tick).pipe(Effect.andThen(Cell.alarm())),
+    )
   }
 }

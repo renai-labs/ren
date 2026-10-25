@@ -1,4 +1,5 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
+import { StubModel } from "@ren/cell/testing"
 import { Effect } from "effect"
 import { testEffect } from "./lib/effect.js"
 import { ModelSource } from "./lib/model-source.js"
@@ -7,10 +8,12 @@ setDefaultTimeout(60_000)
 
 const it = testEffect(ModelSource.layer)
 
-describe("models on a brain, through the pull", () => {
-  it.live("an endpoint added on Ren can be chosen by the next start, whose pull brings it", () =>
+describe("models on a brain, from the inference service (HR14, HR16)", () => {
+  it.live("a model added in LiteLLM can be chosen by the next start: the brain reads the list again first", () =>
     Effect.gen(function* () {
       const opened = yield* ModelSource.chat(ModelSource.access({ stub: ModelSource.lasting("sk-stub") }))
+      ModelSource.stub.modelInfo.set([...StubModel.defaultModels, StubModel.modelEntry("later", "stub-model")])
+      yield* Effect.addFinalizer(() => Effect.sync(() => ModelSource.stub.modelInfo.set(StubModel.defaultModels)))
       ModelSource.source.access = ModelSource.access({
         stub: ModelSource.lasting("sk-stub"),
         later: ModelSource.lasting("sk-later"),
@@ -21,7 +24,7 @@ describe("models on a brain, through the pull", () => {
     }),
   )
 
-  it.live("a base URL moved on Ren reaches the next turn together with its key", () =>
+  it.live("an inference URL moved on Ren reaches the next turn, with the key Ren grants", () =>
     Effect.gen(function* () {
       const opened = yield* ModelSource.chat(ModelSource.access({ stub: ModelSource.lasting("sk-stub") }))
       ModelSource.source.access = ModelSource.access(

@@ -14,6 +14,7 @@ import { AppProfiles } from "@ren/core/app/profiles"
 import { Envelope } from "@ren/core/envelope"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
+import { BrainPush } from "@ren/core/brain-push"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
 import { Brains } from "@ren/core/brains"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -33,7 +34,7 @@ import { AuthDatabase } from "@ren/db/auth-database"
 import { Database } from "@ren/db/database"
 import { Postgres } from "@ren/db/postgres"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
-import { Config, Effect, Layer } from "effect"
+import { Config, Effect, Layer, Option } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -62,6 +63,14 @@ const host = Layer.unwrap(
   }),
 )
 
+// oxlint-disable-next-line ren/no-comments -- HR28: with REN_LITELLM_URL, the picker and the brains read LiteLLM; REN_MODELS_FILE stays for a local run without it.
+const models = Layer.unwrap(
+  Effect.gen(function* () {
+    const url = yield* Config.option(Config.String("REN_LITELLM_URL"))
+    return Option.isSome(url) ? Models.layerLiteLLM.pipe(Layer.provide(FetchHttpClient.layer)) : Models.layerConfig
+  }),
+)
+
 const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(
@@ -80,7 +89,10 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
 
 Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provide([
-    Layer.mergeAll(Brains.layer.pipe(Layer.provide(host), Layer.provide(CredentialEnv.layer)), Retention.layer),
+    Layer.mergeAll(
+      Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(Layer.provide(host), Layer.provide(CredentialEnv.layer)),
+      Retention.layer,
+    ),
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
@@ -88,7 +100,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
   Layer.provideMerge(credentials),
   Layer.provideMerge(DurableRunner.layerEffect),
   Layer.provide([BrainClient.layer, Settings.layer]),
-  Layer.provide([Models.layerConfig, Environments.layer]),
+  Layer.provide([models, Environments.layer]),
   Layer.provide(Layer.mergeAll(EgressControl.layerConfig, Signer.layerLocal)),
   Layer.provide(EnvironmentProvider.layer([Docker.provider])),
   Layer.provide([AuthDatabase.layer, Database.layer]),

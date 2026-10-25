@@ -9,6 +9,8 @@ import { Cell } from "./cell.js"
 import { Harness } from "./harness/harness.js"
 import { HostToken } from "./host-token.js"
 import { HotReload } from "./hot-reload.js"
+import { Inference } from "./inference.js"
+import { ModelRefresh } from "./model-refresh.js"
 import { ModelStore } from "./model-store.js"
 import { Restore } from "./restore.js"
 import { Sync } from "./sync.js"
@@ -18,6 +20,8 @@ type Services =
   | Cell.Activity
   | Harness.Service
   | ModelStore.Service
+  | Inference.Service
+  | ModelRefresh.Service
   | HostToken.Service
   | Sync.Service
   | HotReload.Service
@@ -27,17 +31,21 @@ const prefix = "/ren"
 
 export const owns = (pathname: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
 
+// oxlint-disable-next-line ren/no-comments -- E60, HR14: a brain without a valid host token or without a model list pulls and reads the models at once, then answers.
 const check = Effect.gen(function* () {
-  const store = yield* ModelStore.Service
+  const inference = yield* Inference.Service
   const info = yield* Cell.Info
   const hostToken = yield* HostToken.Service
-  const stored = yield* store.read
-  if (Option.isNone(stored) || stored.value.endpoints.length === 0)
-    return Option.some(new ModelsNotConfiguredError({ message: "The brain has no model configuration" }))
   if (info.vars.REN_URL && !(yield* hostToken.isValid))
     return Option.some(new ModelsNotConfiguredError({ message: "The brain’s host token is missing or expired" }))
+  const catalog = yield* inference.catalog
+  if (Option.isNone(catalog) || catalog.value.endpoints.length === 0)
+    return Option.some(
+      new ModelsNotConfiguredError({ message: "The brain has no model list: the inference service did not answer" }),
+    )
+  const store = yield* ModelStore.Service
   const now = yield* DateTime.now
-  const expired = stored.value.endpoints.find((endpoint) =>
+  const expired = Option.getOrUndefined(yield* store.read)?.endpoints.find((endpoint) =>
     Option.fromNullishOr(endpoint.apiKey.expiresAt).pipe(
       Option.exists((expiresAt) => DateTime.isLessThanOrEqualTo(expiresAt, now)),
     ),
@@ -54,9 +62,11 @@ const check = Effect.gen(function* () {
 const configured = Effect.gen(function* () {
   if (Option.isNone(yield* check)) return
   const hotReload = yield* HotReload.Service
-  const store = yield* ModelStore.Service
-  yield* store.forget
+  const refreshKey = yield* ModelRefresh.Service
   yield* hotReload.pull
+  yield* refreshKey(ModelRefresh.anyEndpoint)
+  const harness = yield* Cell.acquire
+  yield* harness.refreshModels
   const again = yield* check
   if (Option.isSome(again)) return yield* again.value
 })
@@ -139,12 +149,22 @@ export const handlers = HttpApiBuilder.group(BrainApi, "brain", (group) =>
       .handle("brain.wake", () =>
         handle(
           Effect.gen(function* () {
-            const store = yield* ModelStore.Service
             const hotReload = yield* HotReload.Service
+            const harness = yield* Harness.Service
             const sync = yield* Sync.Service
-            yield* store.forget
             yield* hotReload.pull
+            // oxlint-disable-next-line ren/no-comments -- HR26: a resumed sandbox keeps its memory, so its model list is from before the pause.
+            const opened = yield* harness.getIfOpen
+            if (Option.isSome(opened)) yield* opened.value.refreshModels
             yield* sync.flush
+          }),
+        ),
+      )
+      .handle("brain.pull", () =>
+        handle(
+          Effect.gen(function* () {
+            const hotReload = yield* HotReload.Service
+            yield* hotReload.push
           }),
         ),
       )

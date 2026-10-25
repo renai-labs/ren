@@ -8,7 +8,8 @@ import { TestToken } from "./token.js"
 import { Wrangler } from "./wrangler.js"
 import { Brain } from "@ren/schema/brain"
 import type { Models } from "@ren/schema/models"
-import { Context, DateTime, Effect, Layer, Redacted } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Redacted, Schedule } from "effect"
+import type { Harness } from "../../src/harness/harness.js"
 
 export interface Runtime extends Celld.Instance {
   readonly kind: "bun" | "celld" | "wrangler"
@@ -130,6 +131,20 @@ export const access = (
     models: endpoints[entry[0]]?.models ?? [{ id: "stub-model", name: "Stub", limit }],
   })),
 })
+
+// oxlint-disable-next-line ren/no-comments -- Ren's inference URL for a test brain: the stub model serves /model/info with the models of `access`.
+export const inference = (root = kind() === "celld" ? stub().cellRoot : stub().root) =>
+  Effect.succeed(Option.some({ baseUrl: root }))
+
+// oxlint-disable-next-line ren/no-comments -- A catalog change reloads OpenCode's servers in the background (HR19); a test that needs the new tools waits for that reload.
+export const appsSettled = (instance: Pick<Harness.Instance, "configuration">) =>
+  instance.configuration.pipe(
+    Effect.repeat({
+      until: (all) => all.every((location) => !location.appsReloading),
+      schedule: Schedule.spaced("10 millis"),
+    }),
+    Effect.asVoid,
+  )
 
 export const dispose = async () => {
   await state.stub?.stop()

@@ -7,12 +7,14 @@ import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { eq, inArray } from "drizzle-orm"
-import { Duration, Effect, Layer, ManagedRuntime, Option, Schedule, Schema } from "effect"
+import { DateTime, Duration, Effect, Layer, ManagedRuntime, Option, Schedule, Schema } from "effect"
 import type { HttpClient } from "effect/http"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Brains } from "../src/brains.js"
+import { BrainClient } from "../src/brain-client.js"
+import { BrainHost } from "../src/brain-host.js"
 import { BrainLifecycle } from "../src/brain-lifecycle.js"
 import { Models } from "../src/models.js"
 import { SandboxProvider } from "../src/sandbox-provider.js"
@@ -27,6 +29,7 @@ const stub = Shared.stub()
 const models = Layer.succeed(
   Models.Service,
   Models.Service.of({
+    inference: Shared.inference(),
     revision: Effect.succeed("test"),
     catalog: () => Effect.succeed({ endpoints: [] }),
     grant: () => Effect.sync(() => Shared.access({ stub: Shared.apiKey("sk-lifecycle") }, stub.url)),
@@ -88,6 +91,17 @@ const reaches = (brainId: Brain.ID, phase: Brain.Phase) =>
         orElse: () => Effect.die(new Error(`Brain ${brainId} did not reach ${phase}`)),
       }),
     ),
+  )
+
+const setKeepAlive = (brainId: Brain.ID, at: Date) =>
+  database.runPromise(
+    Effect.gen(function* () {
+      const db = yield* Database.Service
+      yield* db.db
+        .update(Database.Schema.brain)
+        .set({ keep_alive_until: at })
+        .where(eq(Database.Schema.brain.id, brainId))
+    }),
   )
 
 const setPhase = (brainId: Brain.ID, phase: Brain.Phase) =>
@@ -456,6 +470,77 @@ describe("brain runs", () => {
     ])
     const woke = await reaches(paused.brainId, "ready")
     expect([woke.generation, (await row(running.brainId)).generation]).toEqual([1, 1])
+    await runtime.dispose()
+  })
+
+  test("a push makes an awake brain pull without extending its keep-alive, leaves a paused one paused, and a down one costs at most 2 s (HR12)", async () => {
+    const chats = await Promise.all([seeded(), seeded(), seeded()])
+    const runtime = await ren({ lostEvery: "1 hour" })
+    await runtime.runPromise(
+      BrainLifecycle.Service.use((lifecycle) => Effect.forEach(chats, (chat) => lifecycle.ensure(chat.brainId))),
+    )
+    await Promise.all(chats.map((chat) => reaches(chat.brainId, "ready")))
+    const awake = chats[0]
+    const paused = chats[1]
+    const down = chats[2]
+    const pausedBinding = (await row(paused.brainId)).binding
+    await runtime.runPromise(
+      SandboxProvider.Service.use((provider) =>
+        provider
+          .keepAlive(pausedBinding, Duration.millis(1))
+          .pipe(
+            Effect.orDie,
+            Effect.andThen(
+              provider
+                .status(pausedBinding)
+                .pipe(
+                  Effect.orDie,
+                  Effect.repeat({ until: (status) => status === "paused", schedule: Schedule.spaced("20 millis") }),
+                ),
+            ),
+          ),
+      ),
+    )
+    await setKeepAlive(paused.brainId, new Date(Date.now() - 1000))
+    process.kill(-pidOf((await row(down.brainId)).binding), "SIGSTOP")
+    const pulledAt = (brainId: Brain.ID) =>
+      Effect.promise(() => row(brainId)).pipe(
+        Effect.flatMap((found) =>
+          BrainClient.Service.use((client) =>
+            client.brain({
+              brainId,
+              generation: found.generation,
+              organizationId: found.organization_id,
+              url: found.url ?? "",
+              keyIds: found.key_ids,
+              egress: found.egress,
+            }),
+          ),
+        ),
+        Effect.flatMap((client) => client.brain["brain.state"]()),
+        Effect.map((state) => (state.pulledAt ? DateTime.toEpochMillis(state.pulledAt) : 0)),
+        Effect.orDie,
+      )
+    const first = await runtime.runPromise(pulledAt(awake.brainId))
+    const before = await row(awake.brainId)
+    const started = Date.now()
+    await runtime.runPromise(
+      BrainHost.Service.use((host) =>
+        Effect.forEach([awake, paused, down], (chat) => host.notify(chat.brainId), { concurrency: "unbounded" }),
+      ),
+    )
+    expect(Date.now() - started).toBeLessThan(2500)
+    await runtime.runPromise(
+      pulledAt(awake.brainId).pipe(
+        Effect.repeat({ until: (at) => at > first, schedule: Schedule.spaced("50 millis") }),
+        Effect.timeout("5 seconds"),
+      ),
+    )
+    expect((await row(awake.brainId)).keep_alive_until).toEqual(before.keep_alive_until)
+    expect(
+      await runtime.runPromise(SandboxProvider.Service.use((provider) => Effect.orDie(provider.status(pausedBinding)))),
+    ).toBe("paused")
+    process.kill(-pidOf((await row(down.brainId)).binding), "SIGCONT")
     await runtime.dispose()
   })
 

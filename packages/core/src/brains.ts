@@ -38,7 +38,6 @@ import {
   Effect,
   Layer,
   Option,
-  Predicate,
   Redacted,
   Schedule,
   Schema,
@@ -458,44 +457,28 @@ export const layer = Layer.effect(
           id: host.brainId,
           generation: host.generation,
         }).pipe(Effect.orDie)
-        const apps =
-          Predicate.isUndefined(request.apps) || Option.isNone(scope)
-            ? Option.none<PullApps>()
-            : yield* appResolve.revision(scope.value).pipe(
-                Effect.flatMap((revision) =>
-                  revision === request.apps
-                    ? Effect.succeed<PullApps>({ fingerprint: revision })
-                    : appResolve.forScope(scope.value),
+        const apps = Option.isNone(scope)
+          ? Option.none<PullApps>()
+          : yield* appResolve.forScope(scope.value).pipe(
+              Effect.map(Option.some),
+              Effect.catchCause((cause) =>
+                Effect.logWarning("App catalog is unavailable for a pull; the brain keeps its catalog", cause).pipe(
+                  Effect.as(Option.none<PullApps>()),
                 ),
-                Effect.map(Option.some),
-                Effect.catchCause((cause) =>
-                  Effect.logWarning("App catalog is unavailable for a pull; the brain keeps its catalog", cause).pipe(
-                    Effect.as(Option.none<PullApps>()),
-                  ),
-                ),
-              )
+              ),
+            )
         const pulled = yield* settings
-          .pull(host.brainId, request.layers)
+          .pull(host.brainId)
           .pipe(
             Effect.catchTag("Settings.NotFound", (error) =>
               Effect.fail(new ForbiddenError({ message: error.message })),
             ),
           )
-        const updated = yield* database.db
+        yield* database.db
           .update(Database.Schema.brain)
           .set({ key_ids: [...request.keyIds] })
           .where(eq(Database.Schema.brain.id, host.brainId))
-          .returning({ egress: Database.Schema.brain.egress })
           .pipe(Effect.orDie)
-        const behindEgress = updated.at(0)?.egress ?? false
-        const access = yield* models.grant(host.brainId, host.organizationId).pipe(
-          Effect.map((granted) => Option.some(behindEgress ? Models.placeholders(granted) : granted)),
-          Effect.catch((error) =>
-            Effect.logWarning("Model access is unavailable for a pull; the brain keeps its models", error).pipe(
-              Effect.as(Option.none<Models.Access>()),
-            ),
-          ),
-        )
         yield* brainHost.observe(host.brainId, request.sessions)
         const roots = request.roots ?? []
         const kept =
@@ -506,17 +489,19 @@ export const layer = Layer.effect(
                 .from(Database.Schema.agent_session)
                 .where(inArray(Database.Schema.agent_session.id, [...roots]))
                 .pipe(Effect.orDie)
-        const hash = Option.isSome(access) ? yield* Models.hash(access.value) : (request.models ?? "")
-        const variables = yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation })
-        const envHash = yield* CredentialEnv.hash(variables)
+        const inference = yield* models.inference
         return {
           publicKeys: client.publicKeys,
-          models: Option.isNone(access) || hash === request.models ? { hash } : { hash, access: access.value },
+          models: { hash: "" },
+          ...Option.match(inference, { onNone: () => ({}), onSome: (found) => ({ inference: found }) }),
           ...Option.match(apps, { onNone: () => ({}), onSome: (catalog) => ({ apps: catalog }) }),
           layers: pulled.layers,
           chats: pulled.chats,
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
-          env: envHash === request.env ? { hash: envHash } : { hash: envHash, variables },
+          env: {
+            hash: "",
+            variables: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),
+          },
         } satisfies PullReply
       }),
       refreshModels: Effect.fn("Brains.refreshModels")(function* (host: CurrentHost["Service"]) {

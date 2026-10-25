@@ -2,7 +2,7 @@ export * as ChaosModels from "./models.js"
 
 import { Models } from "@ren/core/models"
 import { Brain } from "@ren/schema/brain"
-import { Config, Effect, Layer, Schema } from "effect"
+import { Config, Effect, Layer, Option, Schema } from "effect"
 
 const File = Schema.toCodecJson(
   Schema.Struct({ fallback: Models.Access, brains: Schema.Record(Brain.ID, Models.Access) }),
@@ -23,6 +23,11 @@ export const layer = Layer.effect(
       Effect.orDie,
     )
     return Models.Service.of({
+      inference: Effect.map(read, (grants) =>
+        Option.fromNullishOr(grants.fallback.endpoints.at(0)?.baseUrl.replace(/\/v1$/u, "")).pipe(
+          Option.map((baseUrl) => ({ baseUrl })),
+        ),
+      ),
       revision: Effect.succeed("test"),
       catalog: () => Effect.map(read, (grants) => Models.catalog(grants.fallback)),
       grant: (brainId) => Effect.map(read, (grants) => grants.brains[brainId] ?? grants.fallback),

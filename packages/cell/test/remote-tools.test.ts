@@ -869,6 +869,7 @@ it.live(
       const value = crypto.randomUUID()
       yield* Effect.promise(() => Bun.write(join(folder(session.sessionId), "marker.txt"), value))
       yield* opened.harness.configure({ apps: whereServer(value) })
+      yield* Shared.appsSettled(opened.harness)
       expect(yield* opened.opens).toBe(1)
       expect(yield* Effect.promise(() => Bun.file(join(folder(session.sessionId), "started")).exists())).toBe(true)
       const result = toolOutput(
@@ -883,13 +884,14 @@ it.live(
     }),
 )
 
-it.live("a chat with no environment is told that an app needs one, and the app's server does not start", () =>
+it.live("a chat with no environment does not start an app's local server, and gets no note about it (HR20)", () =>
   Effect.gen(function* () {
     const opened = yield* open()
     const session = yield* begin(opened, { onEnvironment: false })
     yield* opened.harness.configure({ apps: whereServer(crypto.randomUUID()) })
+    yield* Shared.appsSettled(opened.harness)
     const call = yield* session.turn(stub.script(), 1)
-    expect(call.system).toContain("needs an execution environment")
+    expect(call.system).not.toContain("needs an execution environment")
     expect(call.system).not.toContain("tools.where.where")
     expect(yield* opened.opens).toBe(0)
     expect(yield* Effect.promise(() => Bun.file(join(local, "started")).exists())).toBe(false)

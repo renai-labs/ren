@@ -132,12 +132,12 @@ it.live("each mutation of §11 changes the fingerprint, and clears the egress ca
       watched: Credentials.Scope = scope,
     ) =>
       Effect.gen(function* () {
-        const before = yield* resolve.revision(watched)
+        const before = (yield* resolve.forScope(watched)).fingerprint
         ProfilesFixture.invalidated.length = 0
         yield* Effect.orDie(mutation)
         steps.push({
           step,
-          changed: (yield* resolve.revision(watched)) !== before,
+          changed: (yield* resolve.forScope(watched)).fingerprint !== before,
           cleared: ProfilesFixture.invalidated.length > 0,
         })
       })

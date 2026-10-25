@@ -28,6 +28,7 @@ export interface Interface {
   readonly ensure: (brainId: Brain.ID) => Effect.Effect<void>
   readonly access: (brainId: Brain.ID) => Effect.Effect<Access>
   readonly ready: (brainId: Brain.ID) => Effect.Effect<BrainClient.Target, Unavailable>
+  readonly awake: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainClient.Target>>
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: ReadonlyArray<PullSession>) => Effect.Effect<void>
   readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<SandboxProvider.Hand>>
@@ -229,7 +230,9 @@ export const layer = Layer.effect(
       }
       // oxlint-disable-next-line ren/no-comments -- A brain built for the other egress mode would get the wrong keys; it moves to the current one by a replace, as for a build (E120).
       if (row.egress !== behindEgress) {
-        yield* Effect.logInfo(`Brain ${row.id} was created ${row.egress ? "behind" : "without"} the egress; Ren replaces it`)
+        yield* Effect.logInfo(
+          `Brain ${row.id} was created ${row.egress ? "behind" : "without"} the egress; Ren replaces it`,
+        )
         return yield* update(row.id, { phase: "replacing" }).pipe(Effect.as(false))
       }
       const proxy = behindEgress
@@ -559,6 +562,14 @@ export const layer = Layer.effect(
     return Service.of({
       ensure,
       access,
+      // oxlint-disable-next-line ren/no-comments -- HR12: reads the row only. It never calls ensure or touch, so it never resumes a paused sandbox or extends a keep-alive. A brain past its keep-alive may be paused, so it has no target.
+      awake: Effect.fn("BrainLifecycle.awake")(function* (brainId: Brain.ID) {
+        const row = yield* read(brainId)
+        const at = yield* now
+        return row.phase === "ready" && row.keep_alive_until && row.keep_alive_until.getTime() > at.getTime()
+          ? targetOf(row)
+          : Option.none()
+      }),
       ready: Effect.fn("BrainLifecycle.ready")(function* (brainId: Brain.ID) {
         const wait = Effect.gen(function* () {
           const result = yield* access(brainId)

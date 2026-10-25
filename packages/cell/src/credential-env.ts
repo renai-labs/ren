@@ -1,37 +1,19 @@
 export * as CredentialEnv from "./credential-env.js"
 
-import { Context, Effect, Layer, Option, Ref } from "effect"
+import { Context, Effect, Layer, Ref } from "effect"
 
 export interface Interface {
   readonly current: Effect.Effect<Readonly<Record<string, string>>>
-  readonly hash: Effect.Effect<Option.Option<string>>
-  readonly apply: (hash: string, variables: Readonly<Record<string, string>>) => Effect.Effect<void>
-  readonly turnEnded: Effect.Effect<void>
+  readonly apply: (variables: Readonly<Record<string, string>>) => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/cell/CredentialEnv") {}
 
-interface State {
-  readonly applied: Readonly<Record<string, string>>
-  readonly wanted: Readonly<Record<string, string>>
-  readonly hash: Option.Option<string>
-}
-
-// oxlint-disable-next-line ren/no-comments -- C47: a placeholder holds no secret and never changes for a label, so an addition applies at once, also in a running turn (after the person connects a key, a script in that turn sees it). A removal waits for the turn end.
+// oxlint-disable-next-line ren/no-comments -- HR18: the env vars of each pull apply at once, a removal too. A process reads them when it starts, so a running one keeps its copy.
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const state = yield* Ref.make<State>({ applied: {}, wanted: {}, hash: Option.none() })
-    return Service.of({
-      current: Effect.map(Ref.get(state), (found) => found.applied),
-      hash: Effect.map(Ref.get(state), (found) => found.hash),
-      apply: (hash, variables) =>
-        Ref.update(state, (found) => ({
-          applied: { ...found.applied, ...variables },
-          wanted: variables,
-          hash: Option.some(hash),
-        })),
-      turnEnded: Ref.update(state, (found) => ({ ...found, applied: found.wanted })),
-    })
+    const state = yield* Ref.make<Readonly<Record<string, string>>>({})
+    return Service.of({ current: Ref.get(state), apply: (variables) => Ref.set(state, variables) })
   }),
 )
