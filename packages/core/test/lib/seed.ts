@@ -86,8 +86,8 @@ export const space = Effect.fnUntraced(function* (organizationId: Auth.Organizat
 export const owner = Effect.fnUntraced(function* () {
   const organizationId = yield* organization()
   const creator = yield* user()
-  yield* member(organizationId, creator.id, "owner")
-  return { organizationId, spaceId: yield* space(organizationId), createdBy: creator.id }
+  const memberId = yield* member(organizationId, creator.id, "owner")
+  return { organizationId, spaceId: yield* space(organizationId), createdBy: creator.id, memberId }
 })
 
 export const ren = Effect.fnUntraced(function* (input: { readonly instructions?: string } = {}) {

@@ -250,7 +250,7 @@ describe.skipIf(unmet !== undefined)("hot reload through the real Ren server to 
     })
     await Wait.until(`the E2B brain of ${sessionId} to be ready`, 300_000, async () => {
       const found = await core.runPromise(
-        Brains.Service.use((brains) => brains.access(sessionId, { userId: owner.createdBy })),
+        Brains.Service.use((brains) => brains.access(sessionId, { userId: owner.createdBy, memberId: owner.memberId })),
       )
       if (found.status === "failed") throw new Error(`the brain failed: ${found.reason}`)
       return found.status === "ready" ? true : undefined
