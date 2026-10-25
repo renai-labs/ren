@@ -49,11 +49,11 @@ Every test checks the invariants that apply to it.
 
 ### 3.2 Pull content
 
-| #   | Interaction                                              | Must hold                                                                                        | Origin                                     | Where               |
-| --- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------------- |
-| 11  | Two pulls with the same full state                       | No storage write; no agent, provider, MCP or skill reload; the same system prompt bytes (I3, I8) | ren-v1 OI-10, INV-34; HR9                  | `cell`              |
-| 12  | An old brain sends hashes; the new Ren sends full bodies | The old brain applies all of it                                                                  | ren-v1 `6e8cd3694`; HR9                    | `server` and `cell` |
-| 13  | A pull fails after the catalog is saved                  | Nothing is half applied; the next pull completes it                                              | exists: `cell/test/hot-reload.test.ts:275` | keep                |
+| #   | Interaction                             | Must hold                                                                                        | Origin                                     | Where  |
+| --- | --------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------ |
+| 11  | Two pulls with the same full state      | No storage write; no agent, provider, MCP or skill reload; the same system prompt bytes (I3, I8) | ren-v1 OI-10, INV-34; HR9                  | `cell` |
+| 12  | Dropped: no brain from before HR9 runs  |                                                                                                  | HR30                                       |        |
+| 13  | A pull fails after the catalog is saved | Nothing is half applied; the next pull completes it                                              | exists: `cell/test/hot-reload.test.ts:275` | keep   |
 
 ### 3.3 Brain lifecycle
 
