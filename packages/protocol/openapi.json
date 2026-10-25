@@ -7670,7 +7670,7 @@
             }
           }
         },
-        "description": "Return the address of the Ren Inference Service sign-in page. Send the browser there; it comes back to `returnUrl`. Only owners and admins connect.",
+        "description": "Return the address of the Ren Inference Service sign-in page. Send the browser there; it comes back to `returnUrl`. Any member connects; the connection serves the whole organization.",
         "summary": "Start a provider sign-in",
         "requestBody": {
           "content": {
@@ -7850,7 +7850,7 @@
             }
           }
         },
-        "description": "Change the label of one connection. Only owners and admins rename.",
+        "description": "Change the label of one connection. Only the member who connected it, admins and owners rename (`canManage`).",
         "summary": "Rename a provider connection",
         "requestBody": {
           "content": {
@@ -7939,7 +7939,7 @@
             }
           }
         },
-        "description": "Remove one connection. New requests stop using it at once. Only owners and admins remove.",
+        "description": "Remove one connection. New requests stop using it at once. Only the member who connected it, admins and owners remove (`canManage`).",
         "summary": "Remove a provider connection"
       }
     }
@@ -11866,6 +11866,10 @@
           "canReconnect": {
             "type": "boolean"
           },
+          "canManage": {
+            "type": "boolean",
+            "description": "True when the viewer connected it, or is an admin or owner: they can rename, reconnect and remove it."
+          },
           "meters": {
             "type": "array",
             "items": {
@@ -11873,7 +11877,7 @@
             }
           }
         },
-        "required": ["id", "label", "providerName", "iconUrl", "status", "canReconnect", "meters"],
+        "required": ["id", "label", "providerName", "iconUrl", "status", "canReconnect", "canManage", "meters"],
         "additionalProperties": false,
         "description": "A model provider the organization connected, with display data from the Ren Inference Service."
       },

@@ -113,11 +113,10 @@ export const layer = Layer.effect(
           runPromise(
             provisioning.archiveMemberships(Auth.OrganizationID.make(organizationId), Auth.UserID.make(userId)),
           ),
-        forgetInferenceMember: (organizationId, userId, memberId) =>
+        forgetInferenceMember: (organizationId, memberId) =>
           runPromise(
             inferenceRemoval.forgetMember({
               organizationId: Auth.OrganizationID.make(organizationId),
-              userId: Auth.UserID.make(userId),
               memberId: Auth.MemberID.make(memberId),
             }),
           ),

@@ -19,11 +19,6 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("RenInference
 
 export type Failure = Primitive.NotFound | Primitive.Forbidden | Primitive.Invalid | Unavailable
 
-export interface Member {
-  readonly userId: string
-  readonly memberId: string
-}
-
 export interface Interface {
   readonly connect: (
     actor: Actor.Info,
@@ -37,12 +32,11 @@ export interface Interface {
   ) => Effect.Effect<RenInference.Connection, Failure>
   readonly remove: (actor: Actor.Info, id: string) => Effect.Effect<void, Failure>
   readonly catalog: (organizationId: Auth.OrganizationID) => Effect.Effect<Models.Catalog, Unavailable>
-  readonly grant: (
-    brainId: Brain.ID,
+  readonly grant: (brainId: Brain.ID, organizationId: Auth.OrganizationID) => Effect.Effect<Models.ApiKey, Unavailable>
+  readonly removeMember: (
     organizationId: Auth.OrganizationID,
-    member: Member | undefined,
-  ) => Effect.Effect<Models.ApiKey, Unavailable>
-  readonly removeMember: (organizationId: Auth.OrganizationID, userId: Auth.UserID) => Effect.Effect<void, Unavailable>
+    memberId: typeof Auth.MemberID.Type,
+  ) => Effect.Effect<void, Unavailable>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/RenInference") {}
@@ -142,9 +136,9 @@ export const layer = Layer.effect(
 
     const removeMember = Effect.fn("RenInference.removeMember")(function* (
       organizationId: Auth.OrganizationID,
-      userId: Auth.UserID,
+      memberId: typeof Auth.MemberID.Type,
     ) {
-      yield* onlyUnavailable(send({ org: organizationId }, "DELETE", `/v1/members/${encodeURIComponent(userId)}`))
+      yield* onlyUnavailable(send({ org: organizationId }, "DELETE", `/v1/members/${encodeURIComponent(memberId)}`))
     })
 
     return Service.of({
@@ -173,17 +167,8 @@ export const layer = Layer.effect(
           ),
         )
       }),
-      grant: Effect.fn("RenInference.grant")(function* (brainId, organizationId, member) {
-        const attribution: RenInference.Attribution = member ? "member" : "org"
-        return yield* onlyUnavailable(
-          call(
-            { org: organizationId, ...(member && { sub: member.userId, member: member.memberId }) },
-            "POST",
-            "/v1/keys",
-            Models.ApiKey,
-            { brainId, attribution },
-          ),
-        )
+      grant: Effect.fn("RenInference.grant")(function* (brainId, organizationId) {
+        return yield* onlyUnavailable(call({ org: organizationId }, "POST", "/v1/keys", Models.ApiKey, { brainId }))
       }),
       removeMember,
     })

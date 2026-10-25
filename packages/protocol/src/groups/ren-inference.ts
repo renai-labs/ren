@@ -19,7 +19,7 @@ export const RenInferenceGroup = HttpApiGroup.make("ren-inference")
         identifier: "ren-inference.connect",
         summary: "Start a provider sign-in",
         description:
-          "Return the address of the Ren Inference Service sign-in page. Send the browser there; it comes back to `returnUrl`. Only owners and admins connect.",
+          "Return the address of the Ren Inference Service sign-in page. Send the browser there; it comes back to `returnUrl`. Any member connects; the connection serves the whole organization.",
       }),
     ),
   )
@@ -45,7 +45,8 @@ export const RenInferenceGroup = HttpApiGroup.make("ren-inference")
       OpenApi.annotations({
         identifier: "ren-inference.connection.rename",
         summary: "Rename a provider connection",
-        description: "Change the label of one connection. Only owners and admins rename.",
+        description:
+          "Change the label of one connection. Only the member who connected it, admins and owners rename (`canManage`).",
       }),
     ),
   )
@@ -58,7 +59,8 @@ export const RenInferenceGroup = HttpApiGroup.make("ren-inference")
       OpenApi.annotations({
         identifier: "ren-inference.connection.remove",
         summary: "Remove a provider connection",
-        description: "Remove one connection. New requests stop using it at once. Only owners and admins remove.",
+        description:
+          "Remove one connection. New requests stop using it at once. Only the member who connected it, admins and owners remove (`canManage`).",
       }),
     ),
   )

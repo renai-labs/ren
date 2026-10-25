@@ -82,7 +82,6 @@ describe("ren-inference", () => {
   test("removing a member asks the service to forget them, and a 503 does not block the removal", async () => {
     const owner = sessionCookie(await signUp(app, "lead@gmail.com", "Lead"))
     const joiner = sessionCookie(await signUp(app, "leaver@gmail.com", "Leaver"))
-    const joinerId = (await (await call(app, joiner, "GET", "/me")).json()).user.id
     const team = await (
       await app.handler(authRequest("/organization/create", { name: "Crew", slug: "crew" }, owner))
     ).json()
@@ -109,10 +108,12 @@ describe("ren-inference", () => {
     )
 
     expect(removal.status).toBe(200)
+    const memberId = (await removal.json()).member.id
+    expect(memberId).toMatch(/^mem_/)
     await removed.promise
     expect(seen.map((entry) => [entry.method, entry.path, entry.claims.org])).toEqual([
-      ["DELETE", `/v1/members/${joinerId}`, team.id],
-      ["DELETE", `/v1/members/${joinerId}`, team.id],
+      ["DELETE", `/v1/members/${memberId}`, team.id],
+      ["DELETE", `/v1/members/${memberId}`, team.id],
     ])
   })
 })

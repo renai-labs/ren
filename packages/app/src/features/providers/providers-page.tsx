@@ -14,7 +14,7 @@ import { ConnectionCard } from "./connection-card.js"
 
 const REFRESH_MS = 60_000
 
-export function ProvidersPage(props: { manage?: { returnUrl: string } }) {
+export function ProvidersPage(props: { returnUrl: string }) {
   const context = RouterContext.useRouterContext()
   const platform = usePlatform()
   const queryClient = useQueryClient()
@@ -30,9 +30,8 @@ export function ProvidersPage(props: { manage?: { returnUrl: string } }) {
     onError: (cause) =>
       Toast.manager.add({ type: "error", title: "Couldn’t start the sign-in", description: cause.message }),
   })
-  const manage = props.manage
-  const startConnect = (returnUrl: string, connectionId?: string) =>
-    connect.mutate({ returnUrl, ...(connectionId && { connectionId }) })
+  const startConnect = (connectionId?: string) =>
+    connect.mutate({ returnUrl: props.returnUrl, ...(connectionId && { connectionId }) })
 
   return (
     <PageShell.Root
@@ -40,16 +39,14 @@ export function ProvidersPage(props: { manage?: { returnUrl: string } }) {
       title="Providers"
       subtitle="Model providers your agents run on."
       actions={
-        manage ? (
-          <Button
-            appearance="primary"
-            leadingIcon={<Icon glyph="Plus" />}
-            pending={connect.isPending}
-            onClick={() => startConnect(manage.returnUrl)}
-          >
-            Connect
-          </Button>
-        ) : null
+        <Button
+          appearance="primary"
+          leadingIcon={<Icon glyph="Plus" />}
+          pending={connect.isPending}
+          onClick={() => startConnect()}
+        >
+          Connect
+        </Button>
       }
     >
       {list.isPending ? <LoadingMessage placement="section" /> : null}
@@ -68,18 +65,11 @@ export function ProvidersPage(props: { manage?: { returnUrl: string } }) {
           placement="section"
           icon={<Icon glyph="Server" size="medium" tone="secondary" />}
           title="No providers connected yet"
-          description={manage ? "Connect one to see its limits here." : "An admin can connect one."}
+          description="Your organization uses Ren’s default models. Connect a model provider to use it instead."
           action={
-            manage ? (
-              <Button
-                appearance="primary"
-                size="small"
-                pending={connect.isPending}
-                onClick={() => startConnect(manage.returnUrl)}
-              >
-                Connect a provider
-              </Button>
-            ) : null
+            <Button appearance="primary" size="small" pending={connect.isPending} onClick={() => startConnect()}>
+              Connect a provider
+            </Button>
           }
         />
       ) : null}
@@ -91,7 +81,7 @@ export function ProvidersPage(props: { manage?: { returnUrl: string } }) {
               connection={connection}
               index={index}
               now={list.dataUpdatedAt}
-              {...(manage && {
+              {...(connection.canManage && {
                 manage: {
                   onRename: async (label: string) => {
                     if (label === connection.label) return
@@ -105,7 +95,7 @@ export function ProvidersPage(props: { manage?: { returnUrl: string } }) {
                     })
                   },
                   onRemove: () => setRemoving(connection),
-                  onReconnect: () => startConnect(manage.returnUrl, connection.id),
+                  onReconnect: () => startConnect(connection.id),
                 },
               })}
             />

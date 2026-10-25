@@ -544,6 +544,7 @@ export type RenInferenceConnection = {
   status: { label: string; tone: RenInferenceTone }
   plan?: string
   canReconnect: boolean
+  canManage: boolean
   meters: Array<RenInferenceMeter>
 }
 
