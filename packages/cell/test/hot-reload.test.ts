@@ -2,6 +2,7 @@ import { expect } from "bun:test"
 import { testEffect } from "@ren/executor/testing"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { SessionID } from "@opencode/schema/session-id"
+import { GenerationRetiredError } from "@ren/host-api/errors"
 import { PullReply, PullRequest, type PullApps } from "@ren/host-api/ren-host-api"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { App } from "@ren/schema/app"
@@ -116,7 +117,9 @@ const empty: AppCatalog.Info = {
   catalog: { apps: [], skills: [], mcps: [], unavailable: [] },
 }
 
-const open = Effect.fnUntraced(function* (options: { readonly active?: boolean; readonly pullIntervalMs?: number } = {}) {
+const open = Effect.fnUntraced(function* (
+  options: { readonly active?: boolean; readonly pullIntervalMs?: number } = {},
+) {
   const directory = yield* Effect.acquireRelease(
     Effect.promise(() => mkdtemp(join(tmpdir(), "ren-hot-reload-"))),
     (path) => Effect.promise(() => rm(path, { recursive: true, force: true })),
@@ -136,15 +139,15 @@ const open = Effect.fnUntraced(function* (options: { readonly active?: boolean; 
   const requests: Array<PullRequest> = []
   const reply = {
     publicKeys: TestToken.publicKeys,
-    models: { hash: "" },
     layers: TestSettings.layers(),
     chats: [],
     deleted: [],
-    env: { hash: "", variables: {} },
+    env: { variables: {} },
   } satisfies PullReply
   const state: {
     reply: PullReply
     hold?: { readonly entered: PromiseWithResolvers<void>; readonly release: PromiseWithResolvers<void> }
+    retired?: boolean
   } = { reply }
   const token = yield* Effect.promise(() => FakeRen.hostToken())
   const server = yield* Effect.acquireRelease(
@@ -156,6 +159,11 @@ const open = Effect.fnUntraced(function* (options: { readonly active?: boolean; 
           if (new URL(request.url).pathname !== "/host/pull") return new Response(null, { status: 404 })
           if (request.headers.get("authorization") !== `Bearer ${token}`) return new Response(null, { status: 401 })
           requests.push(Schema.decodeUnknownSync(PullRequest)(await request.json()))
+          if (state.retired)
+            return Response.json(
+              Schema.encodeSync(GenerationRetiredError)(new GenerationRetiredError({ message: "generation 1 is retired" })),
+              { status: 403 },
+            )
           const hold = state.hold
           delete state.hold
           if (hold) {
@@ -256,6 +264,10 @@ const open = Effect.fnUntraced(function* (options: { readonly active?: boolean; 
       return { entered: Effect.promise(() => hold.entered.promise), release: () => hold.release.resolve() }
     },
     env: Context.get(services, CredentialEnv.Service),
+    fence: Context.get(services, Fence.Service),
+    retire: () => {
+      state.retired = true
+    },
     answer: (apps?: PullApps, update: Partial<Omit<PullReply, "apps">> = {}) => {
       state.reply = { ...reply, ...update, ...(apps && { apps }) }
     },
@@ -268,7 +280,7 @@ const open = Effect.fnUntraced(function* (options: { readonly active?: boolean; 
 it.live("a pull with the same full state writes nothing and keeps the harness closed (HR9)", () =>
   Effect.gen(function* () {
     const opened = yield* open()
-    opened.answer(catalog, { env: { hash: "", variables: { NOTES_KEY: "ren:NOTES_KEY" } } })
+    opened.answer(catalog, { env: { variables: { NOTES_KEY: "ren:NOTES_KEY" } } })
     yield* opened.reload.pull
     expect(yield* opened.saved).toEqual(catalog)
     expect(yield* opened.env.current).toEqual({ NOTES_KEY: "ren:NOTES_KEY" })
@@ -288,11 +300,26 @@ it.live("a failed catalog save still applies the rest of the pull and is retried
   Effect.gen(function* () {
     const opened = yield* open()
     yield* Effect.promise(() => mkdir(opened.path))
-    opened.answer(catalog, { env: { hash: "", variables: { NOTES_KEY: "ren:NOTES_KEY" } } })
+    opened.answer(catalog, { env: { variables: { NOTES_KEY: "ren:NOTES_KEY" } } })
     yield* opened.reload.pull
     expect(yield* opened.env.current).toEqual({ NOTES_KEY: "ren:NOTES_KEY" })
     yield* Effect.promise(() => rm(opened.path, { recursive: true }))
     yield* opened.reload.pull
+    expect(yield* opened.saved).toEqual(catalog)
+  }),
+)
+
+it.live("a retired generation fences itself on its pull and applies nothing after that", () =>
+  Effect.gen(function* () {
+    const opened = yield* open()
+    opened.answer(catalog)
+    yield* opened.reload.pull
+    opened.retire()
+    opened.answer(empty)
+    yield* opened.reload.pull
+    expect(yield* opened.fence.isRetired).toBe(true)
+    yield* opened.reload.pull
+    expect(opened.requests).toHaveLength(2)
     expect(yield* opened.saved).toEqual(catalog)
   }),
 )
@@ -417,7 +444,9 @@ it.live("a pull while the harness is closed reaches the chat when the harness op
     opened.answer(undefined, { layers: TestSettings.layers({ ren: { instructions: "Before close." } }), chats })
     yield* opened.reload.pull
     yield* Effect.scoped(
-      Effect.flatMap(opened.harness.get, (harness) => harness.start({ sessionId, harness: "opencode", interactive: true })),
+      Effect.flatMap(opened.harness.get, (harness) =>
+        harness.start({ sessionId, harness: "opencode", interactive: true }),
+      ),
     )
     yield* opened.harness.close
     opened.answer(undefined, { layers: TestSettings.layers({ ren: { instructions: "While closed." } }), chats })
@@ -432,29 +461,31 @@ it.live("a pull while the harness is closed reaches the chat when the harness op
   }),
 )
 
-it.live("the alarm's pull runs only while the harness is open, never waits, and never stacks behind a slow Ren (HR17)", () =>
-  Effect.gen(function* () {
-    const opened = yield* open({ active: true, pullIntervalMs: 1 })
-    yield* opened.reload.tick
-    expect(opened.requests).toHaveLength(0)
-    yield* Effect.scoped(
-      Effect.gen(function* () {
-        yield* opened.harness.get
-        const hold = opened.holdNextPull()
-        yield* Effect.addFinalizer(() => Effect.sync(hold.release))
-        yield* opened.reload.tick.pipe(Effect.timeout("1 second"))
-        yield* hold.entered
-        yield* Effect.forEach(Array.from({ length: 5 }), () => opened.reload.tick.pipe(Effect.timeout("1 second")), {
-          discard: true,
-        })
-        expect(opened.requests).toHaveLength(1)
-        hold.release()
-        yield* Effect.sync(() => opened.requests.length).pipe(
-          Effect.repeat({ until: (count) => count >= 2, schedule: Schedule.spaced("10 millis") }),
-        )
-        yield* opened.reload.pull
-        expect(opened.requests).toHaveLength(3)
-      }),
-    )
-  }),
+it.live(
+  "the alarm's pull runs only while the harness is open, never waits, and never stacks behind a slow Ren (HR17)",
+  () =>
+    Effect.gen(function* () {
+      const opened = yield* open({ active: true, pullIntervalMs: 1 })
+      yield* opened.reload.tick
+      expect(opened.requests).toHaveLength(0)
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* opened.harness.get
+          const hold = opened.holdNextPull()
+          yield* Effect.addFinalizer(() => Effect.sync(hold.release))
+          yield* opened.reload.tick.pipe(Effect.timeout("1 second"))
+          yield* hold.entered
+          yield* Effect.forEach(Array.from({ length: 5 }), () => opened.reload.tick.pipe(Effect.timeout("1 second")), {
+            discard: true,
+          })
+          expect(opened.requests).toHaveLength(1)
+          hold.release()
+          yield* Effect.sync(() => opened.requests.length).pipe(
+            Effect.repeat({ until: (count) => count >= 2, schedule: Schedule.spaced("10 millis") }),
+          )
+          yield* opened.reload.pull
+          expect(opened.requests).toHaveLength(3)
+        }),
+      )
+    }),
 )

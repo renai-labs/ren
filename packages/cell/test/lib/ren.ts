@@ -159,10 +159,9 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
             const baseUrl = modelsOf(host.brainId)?.endpoints.at(0)?.baseUrl.replace(/\/v1$/u, "")
             return {
               publicKeys: [...TestToken.publicKeys],
-              models: { hash: "" },
               ...(baseUrl && { inference: { baseUrl } }),
               ...(state.apps && { apps: state.apps }),
-              env: { hash: "", variables: state.env },
+              env: { variables: state.env },
               layers: state.settings,
               chats: state.chats,
               deleted: (request.payload.roots ?? []).filter((id) => state.deleted.has(id)),
