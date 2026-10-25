@@ -1,0 +1,334 @@
+export * as ChannelFixture from "./channel-fixture.js"
+
+import { Database } from "@ren/db/database"
+import { Testing } from "@ren/db/testing"
+import type { Auth } from "@ren/schema/auth"
+import { Channel } from "@ren/schema/channel"
+import { Session } from "@ren/schema/session"
+import { BunCrypto } from "@effect/platform-bun"
+import { Clock, Context, Deferred, Duration, Effect, Layer, Option, Queue, Schedule, Schema } from "effect"
+import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
+import { WorkflowEngine } from "effect/workflow"
+import { BrainRegistry } from "../../src/brain-registry.js"
+import { ChannelNotice } from "../../src/channel-notice.js"
+import { ChannelProvider } from "../../src/channel-provider.js"
+import { ChannelRoute } from "../../src/channel-route.js"
+import { Channels } from "../../src/channels.js"
+import { DurableRunner } from "../../src/durable-runner.js"
+import { Models } from "../../src/models.js"
+import { SessionRunner } from "../../src/session/runner.js"
+import { Host } from "./host.js"
+
+const secret = "channel-test-secret"
+
+const sign = (body: string) => new Bun.CryptoHasher("sha256", secret).update(body).digest("hex")
+
+const Body = Schema.fromJsonString(
+  Schema.Union([
+    Schema.Struct({ type: Schema.Literal("handshake"), challenge: Schema.String }),
+    Schema.Struct({ type: Schema.Literal("ignore") }),
+    Schema.Struct({ type: Schema.Literal("event"), event: Channel.Event }),
+  ]),
+)
+
+export class Hold extends Context.Service<
+  Hold,
+  { readonly entered: Deferred.Deferred<void>; readonly release: Deferred.Deferred<void> }
+>()("@ren/core/test/ChannelFixture/Hold") {}
+
+const hold = (held: boolean) =>
+  Layer.effect(
+    Hold,
+    Effect.gen(function* () {
+      const release = yield* Deferred.make<void>()
+      if (!held) yield* Deferred.succeed(release, undefined)
+      return { entered: yield* Deferred.make<void>(), release }
+    }),
+  )
+
+const provider = Effect.gen(function* () {
+  const gate = yield* Hold
+  return {
+    id: "slack",
+    verify: (request) =>
+      request.headers.get("x-signature") === sign(request.body)
+        ? Effect.void
+        : Effect.fail(new ChannelProvider.Unauthorized({ message: "The signature does not match the body" })),
+    parse: (request) =>
+      Schema.decodeUnknownEffect(Body)(request.body).pipe(
+        Effect.mapError((error) => new ChannelProvider.Malformed({ message: error.message })),
+        Effect.map((body): Channel.Parsed => {
+          if (body.type === "handshake") return { _tag: "Handshake", body: { challenge: body.challenge } }
+          if (body.type === "ignore") return { _tag: "Ignore", reason: "a bot’s own message" }
+          return { _tag: "Event", event: body.event }
+        }),
+      ),
+    fetchFile: (_install, file) => {
+      if (file.url === "held")
+        return Deferred.succeed(gate.entered, undefined).pipe(
+          Effect.andThen(Deferred.await(gate.release)),
+          Effect.as(new Uint8Array(1)),
+        )
+      return file.url.startsWith("bytes:")
+        ? Effect.succeed(new Uint8Array(Number(file.url.slice("bytes:".length))).fill(97))
+        : Effect.fail(new ChannelProvider.FileUnavailable({ message: `${file.name} is gone` }))
+    },
+  } satisfies ChannelProvider.Provider
+})
+
+export const request = (body: string, signature = sign(body)): ChannelProvider.Request => ({
+  headers: new Headers({ "x-signature": signature }),
+  body,
+})
+
+export const event = (install: string, overrides: Partial<Channel.Event> = {}): Channel.Event => ({
+  provider: "slack",
+  eventId: `Ev${crypto.randomUUID()}`,
+  install,
+  place: { id: "C07", kind: "channel", name: "eng" },
+  thread: { id: `C07:${crypto.randomUUID()}`, url: "https://acme.slack.com/archives/C07/p1712" },
+  sender: { accountId: "U01", name: "Ana", handle: "ana" },
+  text: "the deploy failed",
+  files: [],
+  ...overrides,
+})
+
+export const delivery = (found: Channel.Event) => JSON.stringify({ type: "event", event: found })
+
+export const install = Effect.fnUntraced(function* (owner: {
+  readonly organizationId: Auth.OrganizationID
+  readonly createdBy: Auth.UserID
+}) {
+  const database = yield* Database.Service
+  const workspace = `T${crypto.randomUUID()}`
+  yield* database.db.insert(Database.Schema.channel_install).values({
+    id: Channel.InstallID.create(),
+    organization_id: owner.organizationId,
+    provider: "slack",
+    workspace,
+    name: "Acme",
+    installed_by: owner.createdBy,
+  })
+  return workspace
+})
+
+export class Notices extends Context.Service<
+  Notices,
+  Queue.Queue<{ readonly event: Channel.Event; readonly reason: Channel.FailureReason }>
+>()("@ren/core/test/ChannelFixture/Notices") {}
+
+const notices = Layer.effect(
+  ChannelNotice.Service,
+  Effect.gen(function* () {
+    const queue = yield* Notices
+    return ChannelNotice.Service.of({ notice: (found, reason) => Queue.offer(queue, { event: found, reason }) })
+  }),
+).pipe(Layer.provideMerge(Layer.effect(Notices, Queue.unbounded())))
+
+const Start = Schema.Struct({
+  sessionId: Session.ID,
+  initialMessage: Schema.optionalKey(
+    Schema.Struct({ messageId: Session.MessageID, prompt: Session.Prompt, sender: Session.Sender }),
+  ),
+})
+
+const Send = Schema.Struct({ messageId: Session.MessageID, prompt: Session.Prompt, delivery: Session.Delivery })
+
+export interface Delivered {
+  readonly kind: "start" | "send"
+  readonly sessionId: Session.ID
+  readonly messageId: Session.MessageID
+  readonly prompt: Session.Prompt
+  readonly delivery?: Session.Delivery
+}
+
+export class Cell extends Context.Service<
+  Cell,
+  {
+    readonly url: string
+    readonly accepted: ReadonlyArray<Delivered>
+    readonly sends: ReadonlyArray<Session.MessageID>
+    readonly start: (sessionId: Session.ID) => void
+    readonly failSends: (count: number) => void
+  }
+>()("@ren/core/test/ChannelFixture/Cell") {}
+
+const cell = Layer.effect(
+  Cell,
+  Effect.gen(function* () {
+    const accepted: Array<Delivered> = []
+    const sends: Array<Session.MessageID> = []
+    const started = new Set<string>()
+    const failures = { left: 0 }
+    const server = yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        Bun.serve({
+          hostname: "127.0.0.1",
+          port: 0,
+          fetch: async (incoming) => {
+            const path = new URL(incoming.url).pathname
+            if (path === "/ren/sessions") {
+              const body = Schema.decodeUnknownSync(Start)(await incoming.json())
+              started.add(body.sessionId)
+              if (body.initialMessage)
+                accepted.push({ kind: "start", sessionId: body.sessionId, ...body.initialMessage })
+              return Response.json({ sessionId: body.sessionId, harness: "opencode" })
+            }
+            const sessionId = Session.ID.make(path.split("/")[3] ?? "")
+            const body = Schema.decodeUnknownSync(Send)(await incoming.json())
+            sends.push(body.messageId)
+            if (failures.left > 0) {
+              failures.left -= 1
+              return new Response("waking", { status: 503 })
+            }
+            if (!started.has(sessionId))
+              return Response.json({ _tag: "SessionNotStartedError", message: "not started" }, { status: 409 })
+            accepted.push({ kind: "send", sessionId, ...body })
+            return Response.json({ messageId: body.messageId })
+          },
+        }),
+      ),
+      (running) => Effect.promise(() => running.stop(true)),
+    )
+    return Cell.of({
+      url: server.url.origin,
+      accepted,
+      sends,
+      start: (sessionId) => void started.add(sessionId),
+      failSends: (count) => {
+        failures.left = count
+      },
+    })
+  }),
+)
+
+const models = Models.layerNone
+
+const core = (held: boolean) =>
+  Layer.mergeAll(SessionRunner.layer, ChannelProvider.layer([provider]), ChannelRoute.layer, notices).pipe(
+    Layer.provideMerge(BrainRegistry.layer),
+    Layer.provideMerge(hold(held)),
+  )
+
+const onCell = <E, R, RE, RR>(
+  channels: Layer.Layer<Channels.Service, E, R>,
+  runner: Layer.Layer<WorkflowEngine.WorkflowEngine, RE, RR>,
+  options: { readonly held: boolean } = { held: false },
+) =>
+  channels.pipe(
+    Layer.provideMerge(core(options.held)),
+    Layer.provideMerge(
+      Layer.unwrap(
+        Effect.gen(function* () {
+          const found = yield* Cell
+          return Host.cellLayerWith(runner)({ CELL_URL: found.url }, models, Host.noTemplates)
+        }),
+      ),
+    ),
+    Layer.provideMerge(cell),
+  )
+
+export const cellLayer = onCell(Channels.layer, DurableRunner.layerMemory).pipe(Layer.provideMerge(Testing.layer))
+
+export const unstoredLayer = onCell(
+  Channels.layer.pipe(
+    Layer.provide(
+      Layer.effect(
+        WorkflowEngine.WorkflowEngine,
+        Effect.gen(function* () {
+          const engine = yield* WorkflowEngine.WorkflowEngine
+          return WorkflowEngine.WorkflowEngine.of({
+            ...engine,
+            execute: () => Effect.die(new Error("The run store is down")),
+          })
+        }),
+      ),
+    ),
+  ),
+  DurableRunner.layerMemory,
+).pipe(Layer.provideMerge(Testing.layer))
+
+export const durableLayer = (options: { readonly held: boolean }) =>
+  onCell(
+    Channels.layer,
+    ClusterWorkflowEngine.layer.pipe(
+      Layer.provideMerge(SingleRunner.layer({ shardingConfig: { entityTerminationTimeout: "100 millis" } })),
+      Layer.provide(BunCrypto.layer),
+    ),
+    options,
+  )
+
+export const sandboxLayer = Channels.layer.pipe(
+  Layer.provideMerge(core(false)),
+  Layer.provideMerge(Host.layer({}, models)),
+  Layer.provideMerge(Testing.layer),
+)
+
+const quick = (live: Clock.Clock): Clock.Clock => ({
+  currentTimeMillisUnsafe: () => live.currentTimeMillisUnsafe(),
+  currentTimeMillis: live.currentTimeMillis,
+  currentTimeNanosUnsafe: () => live.currentTimeNanosUnsafe(),
+  currentTimeNanos: live.currentTimeNanos,
+  monotonicTimeNanosUnsafe: () => live.monotonicTimeNanosUnsafe(),
+  monotonicTimeNanos: live.monotonicTimeNanos,
+  sleep: (duration) => (Duration.isLessThan(duration, Duration.seconds(30)) ? Effect.yieldNow : live.sleep(duration)),
+})
+
+export const receive = (body: string, signature?: string) =>
+  Effect.gen(function* () {
+    const channels = yield* Channels.Service
+    const live = yield* Clock.Clock
+    return yield* channels
+      .receive("slack", request(body, signature))
+      .pipe(Effect.provideService(Clock.Clock, quick(live)))
+  })
+
+export const settled = (found: Channel.Event) =>
+  Effect.gen(function* () {
+    const executionId = yield* Channels.EventRun.executionId({
+      event: found,
+      messageId: Session.MessageID.create(),
+      sessionId: Session.ID.create(),
+    })
+    yield* Channels.EventRun.poll(executionId).pipe(
+      Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("20 millis") }),
+      Effect.timeoutOrElse({
+        duration: "20 seconds",
+        orElse: () => Effect.die(new Error(`The run of ${found.eventId} did not finish`)),
+      }),
+    )
+  })
+
+export const accepted = (count: number) =>
+  Effect.gen(function* () {
+    const found = yield* Cell
+    yield* Effect.sync(() => found.accepted.length).pipe(
+      Effect.repeat({ until: (length) => length >= count, schedule: Schedule.spaced("20 millis") }),
+      Effect.timeoutOrElse({
+        duration: "20 seconds",
+        orElse: () => Effect.die(new Error(`The cell accepted ${found.accepted.length} of ${count} messages`)),
+      }),
+    )
+    return found.accepted
+  })
+
+export const thread = Effect.fnUntraced(function* (
+  organizationId: Auth.OrganizationID,
+  found: Channel.Event,
+  sessionId: Session.ID,
+) {
+  const database = yield* Database.Service
+  yield* database.db.insert(Database.Schema.channel_thread).values({
+    id: Channel.ThreadID.create(),
+    organization_id: organizationId,
+    provider: found.provider,
+    install: found.install,
+    thread: found.thread.id,
+    session_id: sessionId,
+  })
+})
+
+export const threads = Effect.gen(function* () {
+  const database = yield* Database.Service
+  return yield* database.db.select().from(Database.Schema.channel_thread)
+})
