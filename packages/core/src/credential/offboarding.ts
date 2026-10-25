@@ -1,5 +1,6 @@
 export * as CredentialOffboarding from "./offboarding.js"
 
+import { Models } from "@ren/schema/models"
 import { Database } from "@ren/db/database"
 import type { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
@@ -105,9 +106,10 @@ export const forMember = Effect.fnUntraced(function* (
     userId,
     spaces: eq(brains.organization_id, organizationId),
   })
-  return { ...removed, workloads } satisfies Removed
+  return { ...removed, labels: [...removed.labels, Models.personLabel], workloads } satisfies Removed
 })
 
+// oxlint-disable-next-line ren/no-comments -- A member who leaves a space can no longer be the person of a model request there; every egress answer for PERSON clears, so the next request with their id is refused at once.
 export const forSpaceMember = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   spaceId: Space.ID,
@@ -119,6 +121,7 @@ export const forSpaceMember = Effect.fnUntraced(function* (
   )
   return {
     ...removed,
+    labels: [...removed.labels, Models.personLabel],
     workloads: [
       ...(yield* sessionBrains(transaction, { userId, spaces: eq(brains.space_id, spaceId) })),
       ...(yield* reachBrains(transaction, spaceId, userId)),
