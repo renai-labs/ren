@@ -71,7 +71,7 @@ export const hostToken = (
     }),
   )
 
-export const start = (options: { readonly hostname?: string } = {}) => {
+export const start = (options: { readonly hostname?: string; readonly port?: number } = {}) => {
   const answers = new Map<Session.ID, () => Answer | Promise<Answer>>()
   const calls: Array<Call> = []
   const pulls: Array<PullRequest> = []
@@ -304,7 +304,7 @@ export const start = (options: { readonly hostname?: string } = {}) => {
   )
   const server = Bun.serve({
     hostname: options.hostname ?? "127.0.0.1",
-    port: 0,
+    port: options.port ?? 0,
     idleTimeout: 0,
     fetch: (request) => api.handler(request),
   })
