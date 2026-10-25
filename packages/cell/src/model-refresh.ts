@@ -10,11 +10,16 @@ export class Service extends Context.Service<Service, Harness.Refresh>()("@ren/c
 
 export const window = Duration.hours(3)
 
-// oxlint-disable-next-line ren/no-comments -- One LiteLLM key reads the model list and serves every endpoint (HR29), so an endpoint that the grant does not name, such as anyEndpoint or a provider LiteLLM added after the grant, uses the grant's first key.
+// oxlint-disable-next-line ren/no-comments -- One LiteLLM key reads the model list and serves every endpoint (HR29, HR37): anyEndpoint takes the grant's first key, and so does a provider that a fresh grant from Ren does not name. A provider that only the stored grant does not name asks Ren first, as Ren can name it with its own key.
 export const anyEndpoint = "*"
 
 const keyOf = (access: Models.Access | undefined, endpointId: string) =>
-  (access?.endpoints.find((endpoint) => endpoint.id === endpointId) ?? access?.endpoints.at(0))?.apiKey
+  (
+    access?.endpoints.find((endpoint) => endpoint.id === endpointId) ??
+    (endpointId === anyEndpoint ? access?.endpoints.at(0) : undefined)
+  )?.apiKey
+
+const firstKey = (access: Models.Access | undefined) => access?.endpoints.at(0)?.apiKey
 
 // oxlint-disable-next-line ren/no-comments -- Behind an egress the brain holds no model key: it sends the placeholder, and the egress puts the real key in (C8). The placeholder never expires, so it is never renewed.
 export const layerEgress = Layer.succeed(
@@ -45,12 +50,13 @@ const make = Effect.fn("ModelRefresh.make")(function* (url: string | undefined) 
     refreshing.withPermit(
       Effect.gen(function* () {
         const now = yield* DateTime.now
-        const stored = yield* store.read
-        const current = keyOf(Option.getOrUndefined(stored), endpointId)
+        const stored = Option.getOrUndefined(yield* store.read)
+        const current = keyOf(stored, endpointId)
         if (current && fresh(current, now)) return Option.some(current)
-        if (Option.isNone(client)) return usable(current, now)
+        const kept = current ?? firstKey(stored)
+        if (Option.isNone(client)) return usable(kept, now)
         const token = yield* hostToken.current
-        if (Option.isNone(token)) return usable(current, now)
+        if (Option.isNone(token)) return usable(kept, now)
         const body = yield* client.value.models["models.refresh"]().pipe(
           HostToken.withToken(token.value),
           Effect.timeout(HostToken.renAnswersWithin),
@@ -60,14 +66,14 @@ const make = Effect.fn("ModelRefresh.make")(function* (url: string | undefined) 
           !(yield* store.writeIfUnchanged(token.value, body.access, body.hostToken && Redacted.value(body.hostToken)))
         )
           return Option.none()
-        return Option.fromNullishOr(keyOf(body.access, endpointId))
+        return Option.fromNullishOr(keyOf(body.access, endpointId) ?? firstKey(body.access))
       }).pipe(
         Effect.catch((error) =>
           Effect.logWarning("Model access refresh failed; the brain keeps its key until it expires", error).pipe(
             Effect.andThen(
               Effect.gen(function* () {
                 const stored = Option.getOrUndefined(yield* store.read)
-                return usable(keyOf(stored, endpointId), yield* DateTime.now)
+                return usable(keyOf(stored, endpointId) ?? firstKey(stored), yield* DateTime.now)
               }),
             ),
           ),

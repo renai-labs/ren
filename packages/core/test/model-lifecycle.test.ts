@@ -24,17 +24,16 @@ describe("models on a brain, from the inference service (HR14, HR16)", () => {
     }),
   )
 
-  it.live("an inference URL moved on Ren reaches the next turn, with the key Ren grants", () =>
+  // oxlint-disable-next-line ren/no-comments -- HR33: LiteLLM moves with the same key, so the brain keeps its key and only the URL changes.
+  it.live("an inference URL moved on Ren reaches the next turn, with the brain's key", () =>
     Effect.gen(function* () {
-      const opened = yield* ModelSource.chat(ModelSource.access({ stub: ModelSource.lasting("sk-stub") }))
-      ModelSource.source.access = ModelSource.access(
-        { stub: ModelSource.lasting("sk-moved") },
-        ModelSource.stub.url.replace(/\/v1$/u, "/moved/v1"),
-      )
+      const key = ModelSource.lasting("sk-stub")
+      const opened = yield* ModelSource.chat(ModelSource.access({ stub: key }))
+      ModelSource.source.access = ModelSource.access({ stub: key }, ModelSource.stub.url.replace(/\/v1$/u, "/moved/v1"))
       const script = ModelSource.stub.script()
       yield* opened.restart({}, `moved ${script.marker}`)
       const call = yield* Effect.promise(() => script.called())
-      expect([call.path, call.authorization]).toEqual(["/moved/v1/chat/completions", "Bearer sk-moved"])
+      expect([call.path, call.authorization]).toEqual(["/moved/v1/chat/completions", "Bearer sk-stub"])
     }),
   )
 })

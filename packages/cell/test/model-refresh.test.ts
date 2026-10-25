@@ -244,6 +244,23 @@ it.effect("an endpoint that the renewed grant does not name gets the grant's key
   }),
 )
 
+it.effect("an endpoint that only the stored grant does not name asks Ren, and gets Ren's key for it (HR37)", () =>
+  Effect.gen(function* () {
+    const subject = yield* make
+    yield* subject.store.write(grant({ stub: Shared.apiKey("stub-key", renewed) }), hosts.old)
+    const pending = yield* subject.refresh("later").pipe(Effect.forkChild)
+    yield* subject.reply(
+      yield* subject.next,
+      ModelsTest.granted({
+        access: grant({ stub: Shared.apiKey("stub-key", renewed), later: Shared.apiKey("later-key", renewed) }),
+        hostToken: Redacted.make(hosts.new),
+      }),
+    )
+    expect(key(yield* Fiber.join(pending))).toEqual(Option.some("later-key"))
+    expect(key(yield* subject.refresh(ModelRefresh.anyEndpoint))).toEqual(Option.some("stub-key"))
+  }),
+)
+
 it.effect("a renewed key that expires earlier is the issuer's answer: it is stored and returned", () =>
   Effect.gen(function* () {
     const subject = yield* make
