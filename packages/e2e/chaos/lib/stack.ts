@@ -24,13 +24,13 @@ const expectStatus = async (response: Response, status: number, label: string) =
     throw new Error(`${label} answered ${response.status}, not ${status}: ${await response.text()}`)
 }
 
-export const start = async () => {
+export const start = async (options: { readonly cellVars?: Readonly<Record<string, string>> } = {}) => {
   const provider = await ModelProvider.start()
   const providerProxy = await FaultProxy.make(new URL(provider.url).origin)
   const ren = FakeRen.start()
   const renProxy = await FaultProxy.make(ren.url)
   const baseUrl = `${providerProxy.url}/v1`
-  const cell = await Wrangler.make({ ...Shared.vars(baseUrl), REN_URL: renProxy.url })
+  const cell = await Wrangler.make({ ...Shared.vars(baseUrl), REN_URL: renProxy.url, ...options.cellVars })
   const forgetCell = Process.onInterrupt(cell.crash)
   const cellProxy = await FaultProxy.make(cell.url)
   const brain = Brain.ID.create()
