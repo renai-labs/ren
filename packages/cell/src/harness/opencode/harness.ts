@@ -491,7 +491,13 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
       ...(Option.isSome(server.chats) && { chats: yield* Ref.get(server.chats.value.latest) }),
     })
   })
-  yield* configure({ models: endpoints })
+  // oxlint-disable-next-line ren/no-comments -- A pull while the harness was closed saved new layers; an opening resolves each chat from them, not from what the chat had before.
+  yield* configure({
+    models: endpoints,
+    ...(Option.isSome(settings) && {
+      settings: { layers: yield* settings.value.layers, chats: yield* settings.value.chats },
+    }),
+  })
   const reader = Option.isSome(models)
     ? Option.some(
         yield* OpenCodeModels.make({

@@ -193,7 +193,7 @@ const open = Effect.fnUntraced(function* (options: { readonly active?: boolean }
                         (replacements) =>
                           createEmbeddedRoutes(
                             {
-                              database: { path: ":memory:" },
+                              database: { path: join(directory, "opencode.db") },
                               config: {
                                 directory,
                                 project: false,
@@ -402,5 +402,28 @@ it.live("a pull that finishes after the harness closes does not reopen it to off
     hold.release()
     yield* Fiber.join(pulling)
     expect((yield* opened.harness.state).isOpen).toBe(false)
+  }),
+)
+
+it.live("a pull while the harness is closed reaches the chat when the harness opens again", () =>
+  Effect.gen(function* () {
+    const opened = yield* open({ active: true })
+    const sessionId = Session.ID.create()
+    const chats = [{ id: sessionId, agent: null, archived: false }]
+    opened.answer(undefined, { layers: TestSettings.layers({ ren: { instructions: "Before close." } }), chats })
+    yield* opened.reload.pull
+    yield* Effect.scoped(
+      Effect.flatMap(opened.harness.get, (harness) => harness.start({ sessionId, harness: "opencode", interactive: true })),
+    )
+    yield* opened.harness.close
+    opened.answer(undefined, { layers: TestSettings.layers({ ren: { instructions: "While closed." } }), chats })
+    yield* opened.reload.pull
+    const harness = yield* opened.harness.get
+    const client = yield* OpenCodeServer.client(harness.fetch)
+    const sessionID = SessionID.make(sessionId)
+    const turn = Shared.stub().script()
+    yield* client.session.prompt({ sessionID, text: `${turn.marker} go` }).pipe(Effect.orDie)
+    yield* client.session.wait({ sessionID }).pipe(Effect.orDie)
+    expect(turn.calls[0]?.system).toContain("While closed.")
   }),
 )
