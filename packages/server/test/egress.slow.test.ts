@@ -258,9 +258,7 @@ const profiles = Effect.fnUntraced(function* (found: Effect.Success<ReturnType<t
         kind: "shared",
       })
       if (entry.listed)
-        yield* database.db
-          .insert(Database.Schema.app_profile_space)
-          .values({ profile_id: profileId, space_id: spaceId })
+        yield* database.db.insert(Database.Schema.app_profile_space).values({ profile_id: profileId, space_id: spaceId })
       const id = Credential.ID.create()
       const value = yield* envelope.seal(
         Redacted.make(JSON.stringify({ type: "oauth", accessToken: `tok_${entry.slug}` })),

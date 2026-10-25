@@ -78,6 +78,7 @@ const toTool = (endpoint: HttpApiEndpoint.Top, router: HttpRouter.HttpRouter) =>
       Effect.mapError(() => new McpSchema.InvalidParams({ message: `The arguments of ${name} must be an object.` })),
     )
     const caller = yield* Effect.serviceOption(McpCaller)
+    if (Option.isNone(caller)) return yield* Effect.die(new Error(`Ren MCP ran ${name} without a caller`))
     const url = new URL(
       endpoint.path.replaceAll(/:(\w+)/gu, (_, key: string) => encodeURIComponent(parameter(args[key] ?? ""))),
       "http://localhost",
@@ -99,14 +100,10 @@ const toTool = (endpoint: HttpApiEndpoint.Top, router: HttpRouter.HttpRouter) =>
       headers: { "content-type": "application/json" },
       ...(body && { body: JSON.stringify(content ?? {}) }),
     })
-    const dispatch = router
-      .asHttpEffect()
-      .pipe(Effect.provideService(HttpServerRequest.HttpServerRequest, HttpServerRequest.fromWeb(request)))
     const response = HttpServerResponse.toWeb(
-      yield* Option.match(caller, {
-        onNone: () => dispatch,
-        onSome: (session) => dispatch.pipe(Effect.provideService(McpCaller, session)),
-      }).pipe(
+      yield* router.asHttpEffect().pipe(
+        Effect.provideService(HttpServerRequest.HttpServerRequest, HttpServerRequest.fromWeb(request)),
+        Effect.provideService(McpCaller, caller.value),
         Effect.scoped,
         Effect.catchCause((cause) => Effect.map(HttpServerError.causeResponse(cause), ([response]) => response)),
       ),
@@ -181,14 +178,15 @@ const authentication = HttpRouter.middleware(
         .fromSession({ ...chat.value, organizationId: host.value.organizationId, brainId: host.value.brainId })
         .pipe(Effect.option)
       if (Option.isNone(actor)) return Option.none()
-      return yield* auth.actAs(actor.value)
+      const agent = actor.value.agent
+      return Option.map(yield* auth.actAs(actor.value), (session) => ({ session, agent }))
     })
     return (httpEffect) =>
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest
         const headers = new Headers(request.headers)
         const person = yield* auth.getAccessToken(headers)
-        const caller = Option.isSome(person) ? person : yield* brainCaller(headers)
+        const caller = Option.isSome(person) ? Option.some({ session: person.value }) : yield* brainCaller(headers)
         if (Option.isNone(caller)) {
           return HttpServerResponse.empty({ status: 401, headers: { "www-authenticate": auth.mcpChallenge } })
         }

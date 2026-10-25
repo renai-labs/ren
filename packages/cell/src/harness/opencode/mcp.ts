@@ -5,7 +5,8 @@ import { Mcp } from "@opencode/schema/mcp"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Credential } from "@ren/schema/credential"
-import { Duration, Effect, Fiber, Option, Ref, Schedule, Schema } from "effect"
+import { Duration, Effect, Fiber, Option, Ref, Schedule } from "effect"
+import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 
 export const renServer = "ren"
@@ -18,8 +19,6 @@ export interface RenAccess {
 export interface Ren extends RenAccess {
   readonly lastSender: (sessionId: string) => Effect.Effect<Option.Option<string>>
 }
-
-const decodeSender = Schema.decodeUnknownOption(Schema.Struct({ userID: Schema.String }))
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 waits 30 seconds for each of startup and tools/list when a server declares no timeout.
 const openCodeTimeout = 30_000
@@ -216,7 +215,7 @@ export const make = Effect.fnUntraced(function* (input: {
     )
     if (Option.isNone(connecting))
       yield* Effect.logWarning(
-        `App MCP servers did not finish connecting in time: ${after.map((server) => server.name).join(", ")}`,
+        `MCP servers did not finish connecting in time: ${after.map((server) => server.name).join(", ")}`,
       )
     const all = yield* statuses
     const connected = after
@@ -271,7 +270,7 @@ export const make = Effect.fnUntraced(function* (input: {
   yield* input.context.session.hook("prompt", (event) =>
     Effect.gen(function* () {
       if (Option.isSome(input.ren)) {
-        const named = Option.map(decodeSender(event.metadata), (metadata) => metadata.userID)
+        const named = Option.map(OpenCodeChat.speakerOf(event.metadata), (speaker) => speaker.userID)
         if (Option.isSome(named)) yield* Ref.set(sender, named)
         else if (Option.isNone(yield* Ref.get(sender)))
           yield* Ref.set(sender, yield* input.ren.value.lastSender(input.sessionId))

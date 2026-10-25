@@ -1,7 +1,4 @@
-import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
-import type { Session } from "@ren/schema/session"
-import type { Space } from "@ren/schema/space"
 import { Context } from "effect"
 import { HttpApiMiddleware, HttpApiSecurity, OpenApi } from "effect/http-api"
 import { UnauthorizedError } from "../errors.js"
@@ -10,11 +7,7 @@ export class CurrentUser extends Context.Service<CurrentUser, Auth.User>()("@ren
 
 export interface AuthenticatedSession {
   readonly user: Auth.User
-  readonly session: {
-    readonly activeOrganizationId?: string | null
-    readonly fixedOrganization?: boolean
-    readonly agent?: { readonly agentId: Agent.ID; readonly sessionId: Session.ID; readonly spaceId: Space.ID }
-  }
+  readonly session: { readonly activeOrganizationId?: string | null; readonly fixedOrganization?: boolean }
 }
 
 export class CurrentSession extends Context.Service<CurrentSession, AuthenticatedSession>()(

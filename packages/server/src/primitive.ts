@@ -4,19 +4,19 @@ import { Actor } from "@ren/core/actor"
 import { Primitive } from "@ren/core/primitive"
 import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
 import { CurrentOrganization } from "@ren/protocol/middleware/active-organization"
-import { CurrentSession, CurrentUser } from "@ren/protocol/middleware/authentication"
-import { Effect } from "effect"
+import { CurrentUser } from "@ren/protocol/middleware/authentication"
+import { Effect, Option } from "effect"
+import { McpCaller } from "./middleware/authentication.js"
 
 export const currentActor = Effect.gen(function* () {
   const user = yield* CurrentUser
   const organization = yield* CurrentOrganization
-  const session = yield* CurrentSession
-  const agent = session.session.agent
+  const agent = Option.flatMap(yield* Effect.serviceOption(McpCaller), (caller) => Option.fromUndefinedOr(caller.agent))
   return {
     userId: user.id,
     organizationId: organization.id,
     roles: organization.roles,
-    ...(agent && { agent }),
+    ...(Option.isSome(agent) && { agent: agent.value }),
   } satisfies Actor.Info
 })
 

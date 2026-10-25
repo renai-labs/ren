@@ -147,8 +147,8 @@ export const layer = Layer.mergeAll(
       Layer.provide(Brains.hostAuthentication),
     ),
     AuthRoute,
-    OAuthRoutes.layer,
     RenMcp.layer,
+    OAuthRoutes.layer,
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
