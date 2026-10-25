@@ -35,6 +35,9 @@ export const Info = Schema.Struct({
   input: Schema.optionalKey(
     Schema.Array(Modality).annotate({ description: "What the model reads. Absent means text only." }),
   ),
+  protocol: Schema.optionalKey(Protocol).annotate({
+    description: "The protocol of this model, when it differs from its endpoint’s.",
+  }),
 }).annotate({ identifier: "Models.Info" })
 
 export interface Endpoint extends Schema.Schema.Type<typeof Endpoint> {}
@@ -83,6 +86,7 @@ export const LiteLLMModelInfo = Schema.Struct({
         provider_key: Schema.optionalKey(Schema.NullOr(Schema.String)),
         display_name: Schema.optionalKey(Schema.NullOr(Schema.String)),
         routing: Schema.optionalKey(Schema.NullOr(Schema.String)),
+        mode: Schema.optionalKey(Schema.NullOr(Schema.String)),
         hidden: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
         max_input_tokens: Schema.optionalKey(Schema.NullOr(Schema.Number)),
         max_output_tokens: Schema.optionalKey(Schema.NullOr(Schema.Number)),
@@ -108,6 +112,15 @@ type LiteLLMEntry = LiteLLMModelInfo["data"][number]
 
 const protocols: Readonly<Record<string, Protocol>> = { anthropic: "anthropic-messages", openai: "openai-responses" }
 
+const endpointProtocol = (endpointId: string) => protocols[endpointId] ?? "openai-chat"
+
+// oxlint-disable-next-line ren/no-comments -- As ren-v1 (api/src/model/index.ts:321): Anthropic's models use its Messages API, a model whose LiteLLM mode is "responses" uses OpenAI's Responses API, and every other model uses chat completions.
+const protocolOf = (found: LiteLLMEntry["model_info"]): Protocol => {
+  if (found.provider_key === "anthropic") return "anthropic-messages"
+  if (found.mode === "responses") return "openai-responses"
+  return "openai-chat"
+}
+
 // oxlint-disable-next-line ren/no-comments -- The default variant comes first: E62 uses the first effort when a stored one is gone.
 const effortsOf = (found: LiteLLMEntry["model_info"]) => {
   const efforts = (found.variants ?? []).map((variant) => variant.id)
@@ -116,8 +129,9 @@ const effortsOf = (found: LiteLLMEntry["model_info"]) => {
   return [preferred, ...efforts.filter((effort) => effort !== preferred)]
 }
 
-const infoOf = (entry: LiteLLMEntry, id: string): Info => {
+const infoOf = (entry: LiteLLMEntry, id: string, inherited: Protocol): Info => {
   const found = entry.model_info
+  const protocol = protocolOf(found)
   const context = positive(found.max_input_tokens)
   const efforts = effortsOf(found)
   const input = (found.modalities?.input ?? []).filter(isModality)
@@ -128,21 +142,27 @@ const infoOf = (entry: LiteLLMEntry, id: string): Info => {
     ...(context && { limit: { context, output: positive(found.max_output_tokens) ?? defaultOutputLimit } }),
     input: input.length > 0 ? input : ["text"],
     ...(efforts.length > 0 && { efforts }),
+    ...(protocol !== inherited && { protocol }),
   }
 }
 
-// oxlint-disable-next-line ren/no-comments -- HR15: an endpoint is a provider group (E56). LiteLLM serves every protocol for every model, so the protocol follows the provider; a fallback copy (routing openrouter-fallback) and a hidden model are not offered. LiteLLM filters the list by the key that reads it. The output is sorted, so one list gives the same bytes (INV-34).
+// oxlint-disable-next-line ren/no-comments -- HR15: an endpoint is a provider group (E56). An endpoint's protocol follows the provider, and a model whose protocol differs names its own; a fallback copy (routing openrouter-fallback) and a hidden model are not offered. LiteLLM filters the list by the key that reads it. The output is sorted, so one list gives the same bytes (INV-34).
 export const fromLiteLLM = (info: LiteLLMModelInfo): Catalog => {
   const models = info.data.flatMap((entry) => {
     const found = entry.model_info
     if (!found.model_key || !found.provider_key || found.routing === "openrouter-fallback" || found.hidden) return []
-    return [{ endpointId: found.provider_key, model: infoOf(entry, found.model_key) }]
+    return [
+      {
+        endpointId: found.provider_key,
+        model: infoOf(entry, found.model_key, endpointProtocol(found.provider_key)),
+      },
+    ]
   })
   const ids = [...new Set(models.map((each) => each.endpointId))].toSorted()
   return {
     endpoints: ids.map((id) => ({
       id,
-      protocol: protocols[id] ?? "openai-chat",
+      protocol: endpointProtocol(id),
       models: [
         ...new Map(
           models.filter((each) => each.endpointId === id).map((each) => [each.model.id, each.model] as const),
