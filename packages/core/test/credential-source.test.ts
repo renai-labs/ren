@@ -22,6 +22,7 @@ import { TestClock } from "effect/testing"
 import { Access } from "../src/access.js"
 import { BrainClient } from "../src/brain-client.js"
 import { CredentialSource } from "../src/credential-source.js"
+import { GitHubApp } from "../src/github-app.js"
 import type { Credentials } from "../src/credentials.js"
 import { Models } from "../src/models.js"
 import { Signer } from "../src/signer.js"
@@ -68,7 +69,7 @@ const models = Layer.succeed(
 const it = testEffect(
   CredentialSource.layerMinted.pipe(
     Layer.provide(Access.layer),
-    Layer.provideMerge(models),
+    Layer.provideMerge(Layer.mergeAll(models, GitHubApp.layerNone)),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal), Layer.provide(FetchHttpClient.layer))),
     Layer.provideMerge(Testing.layer),
     Layer.provide(

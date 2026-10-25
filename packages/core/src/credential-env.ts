@@ -4,6 +4,7 @@ import type { Workload } from "@ren/schema/workload"
 import { Context, Effect, Layer, Option } from "effect"
 import { AppProfiles } from "./app/profiles.js"
 import { Credentials } from "./credentials.js"
+import { GitHubApp } from "./github-app.js"
 
 export interface Interface {
   readonly of: (workload: Workload.Info) => Effect.Effect<Readonly<Record<string, string>>>
@@ -18,15 +19,23 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const credentials = yield* Credentials.Service
     const profiles = yield* AppProfiles.Service
+    const github = yield* GitHubApp.Service
     return Service.of({
       of: Effect.fn("CredentialEnv.of")(function* (workload: Workload.Info) {
         const scope = yield* credentials.scopeOf(workload)
         if (Option.isNone(scope)) return {}
         const reached = yield* profiles.reachable(scope.value)
-        return yield* credentials.environment(
-          scope.value,
-          reached.map((profile) => profile.id),
-        )
+        const installation = yield* github.installationOf(scope.value.organizationId)
+        return {
+          ...Option.match(installation, {
+            onNone: () => ({}),
+            onSome: (found) => GitHubApp.variables(found.client.settings),
+          }),
+          ...(yield* credentials.environment(
+            scope.value,
+            reached.map((profile) => profile.id),
+          )),
+        }
       }),
     })
   }),

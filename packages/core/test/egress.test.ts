@@ -4,7 +4,9 @@ import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { ChannelInstall } from "@ren/schema/channel-install"
 import { Credential } from "@ren/schema/credential"
+import { Environment } from "@ren/schema/environment"
 import { Injection } from "@ren/schema/injection"
 import { Signature } from "@ren/schema/signature"
 import { eq } from "drizzle-orm"
@@ -15,6 +17,7 @@ import { App } from "../src/app.js"
 import { AppProfiles } from "../src/app/profiles.js"
 import { BrainClient } from "../src/brain-client.js"
 import { CredentialCallers } from "../src/credential-callers.js"
+import { CredentialEnv } from "../src/credential-env.js"
 import { CredentialRefresh } from "../src/credential-refresh.js"
 import { CredentialSource } from "../src/credential-source.js"
 import { Credentials } from "../src/credentials.js"
@@ -22,6 +25,7 @@ import { DurableRunner } from "../src/durable-runner.js"
 import { Egress } from "../src/egress.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
+import { GitHubApp } from "../src/github-app.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
 import { McpProvider } from "../src/mcp-provider.js"
 import { Models } from "../src/models.js"
@@ -30,6 +34,7 @@ import { Space } from "../src/space.js"
 import { SpaceMember } from "../src/space/member.js"
 import { SpaceProvisioning } from "../src/space/provisioning.js"
 import { testEffect } from "./lib/effect.js"
+import { GitHubServer } from "./lib/github-server.js"
 import { ProfilesFixture } from "./lib/profiles.js"
 import { Seed } from "./lib/seed.js"
 
@@ -42,6 +47,9 @@ const egress = Bun.serve({
   },
 })
 afterAll(() => egress.stop(true))
+
+const github = GitHubServer.start()
+afterAll(() => github.stop())
 
 const brainKey = await Effect.runPromise(Signature.generate("brain"))
 
@@ -125,7 +133,14 @@ const audited = Logger.layer(
 )
 
 const it = testEffect(
-  Layer.mergeAll(Egress.layer, Space.layer, SpaceMember.layer, SpaceProvisioning.layer, App.layer).pipe(
+  Layer.mergeAll(
+    Egress.layer,
+    CredentialEnv.layer,
+    Space.layer,
+    SpaceMember.layer,
+    SpaceProvisioning.layer,
+    App.layer,
+  ).pipe(
     Layer.provideMerge(AppProfiles.layer),
     Layer.provideMerge(CredentialRefresh.layer),
     Layer.provideMerge(Layer.mergeAll(refreshers, DurableRunner.layerMemory)),
@@ -142,6 +157,7 @@ const it = testEffect(
         Signer.layerLocal,
         OAuthFetch.layerUnchecked,
         McpProvider.layer([McpProvider.composio, timed]),
+        GitHubApp.layer,
       ),
     ),
     Layer.provideMerge(Testing.layer),
@@ -162,6 +178,7 @@ const it = testEffect(
           EGRESS_CONTROL_URLS: `http://127.0.0.1:${egress.port}`,
           REN_URL: "https://api.ren.test",
           COMPOSIO_API_KEY: "composio-project-key",
+          ...GitHubServer.config(github.url, { GITHUB_URL: "https://github.com" }),
         }),
       ),
     ),
@@ -766,6 +783,110 @@ describe("Egress.resolve, the person of a model request", () => {
 
       expect(invalidations).toContainEqual({ label: "PERSON" })
       expect(yield* model).toEqual({ allow: false, reason: "principal_scope", label: "PERSON" })
+    }),
+  )
+})
+
+const installGitHub = Effect.fnUntraced(function* (
+  organizationId: Auth.OrganizationID,
+  options: { readonly known: boolean } = { known: true },
+) {
+  const database = yield* Database.Service
+  const workspace = String(Math.floor(Math.random() * 1e9))
+  if (options.known) github.installations.set(workspace, "acme")
+  yield* database.db.insert(Database.Schema.channel_install).values({
+    id: ChannelInstall.ID.create(),
+    organization_id: organizationId,
+    provider: "github",
+    workspace,
+    name: "acme",
+  })
+  return workspace
+})
+
+describe("GitHub through the egress", () => {
+  it.live(
+    "a brain or a hand of an org with the GitHub App gets an installation token on GitHub's hosts, minted again after a 401",
+    () =>
+      Effect.gen(function* () {
+        const resolver = yield* Egress.Service
+        const callers = yield* CredentialCallers.Service
+        const found = yield* setup()
+        const workspace = yield* installGitHub(found.organizationId)
+        const reply = yield* resolver.resolve(all, request(found.proof, "api.github.com", ["ren:GITHUB"]))
+        expect(values(reply)).toEqual([
+          {
+            op: "replace",
+            placeholder: "ren:GITHUB",
+            value: `ghs_${workspace}_${github.minted.length}`,
+            in: ["header"],
+          },
+        ])
+        expect(reply).toMatchObject({ expiresAt: Date.parse(github.options.tokenExpiresAt) / 1000 })
+        const hand = yield* callers.issue(
+          {
+            workload: { kind: "hand", id: Environment.ID.make(`env_${found.brainId.slice(4)}`), generation: 1 },
+            organizationId: found.organizationId,
+          },
+          "ProxyLogin",
+        )
+        if (hand.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
+        const fromHand = yield* resolver.resolve(
+          all,
+          request({ kind: "ProxyLogin", username: hand.username, password: hand.password }, "github.com", [
+            "ren:GITHUB",
+          ]),
+        )
+        expect(values(fromHand)).toEqual(values(reply))
+        expect(github.minted.filter((each) => each === workspace)).toHaveLength(1)
+        expect(yield* resolver.resolve(all, request(found.proof, "evil.example.com", ["ren:GITHUB"]))).toEqual({
+          allow: false,
+          reason: "host_not_allowed",
+          label: "GITHUB",
+        })
+        yield* resolver.unauthorized(all, {
+          login: found.login,
+          host: "api.github.com",
+          status: 401,
+          labels: [{ label: "GITHUB", revision: 0 }],
+        })
+        yield* resolver.resolve(all, request(found.proof, "api.github.com", ["ren:GITHUB"]))
+        expect(github.minted.filter((each) => each === workspace)).toHaveLength(2)
+      }),
+  )
+
+  it.live("without the GitHub App, or when GitHub refuses the mint, GITHUB is credential_missing", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const found = yield* setup()
+      const missing = { allow: false, reason: "credential_missing", label: "GITHUB" } as const
+      expect(yield* resolver.resolve(all, request(found.proof, "api.github.com", ["ren:GITHUB"]))).toEqual(missing)
+      yield* installGitHub(found.organizationId, { known: false })
+      expect(yield* resolver.resolve(all, request(found.proof, "api.github.com", ["ren:GITHUB"]))).toEqual(missing)
+    }),
+  )
+
+  it.live("a workload of an org with the GitHub App holds placeholders for GitHub and the bot's git identity", () =>
+    Effect.gen(function* () {
+      const env = yield* CredentialEnv.Service
+      const found = yield* setup()
+      const workload = { kind: "brain", id: found.brainId, generation: 1 } as const
+      expect(yield* env.of(workload)).not.toHaveProperty("GITHUB_TOKEN")
+      yield* installGitHub(found.organizationId)
+      const variables = yield* env.of(workload)
+      expect(variables).toMatchObject({
+        GITHUB_TOKEN: "ren:GITHUB",
+        GH_TOKEN: "ren:GITHUB",
+        GIT_AUTHOR_NAME: "ren-test[bot]",
+        GIT_AUTHOR_EMAIL: "9001+ren-test[bot]@users.noreply.github.com",
+        GIT_COMMITTER_NAME: "ren-test[bot]",
+        GIT_COMMITTER_EMAIL: "9001+ren-test[bot]@users.noreply.github.com",
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "http.https://github.com/.extraHeader",
+      })
+      expect(variables.GIT_CONFIG_VALUE_0).toBe(
+        `Authorization: Basic ${Buffer.from("x-access-token:ren:GITHUB").toString("base64")}`,
+      )
     }),
   )
 })

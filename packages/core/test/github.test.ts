@@ -215,10 +215,11 @@ describe("GitHub", () => {
       const expiresAt = Date.parse(github.options.tokenExpiresAt)
       yield* TestClock.setTime(expiresAt - 60 * 60_000)
       const first = yield* minter.token(id)
+      expect(first.expiresAt).toBe(expiresAt)
       yield* TestClock.setTime(expiresAt - 5 * 60_000 - 1)
-      expect(Redacted.value(yield* minter.token(id))).toBe(Redacted.value(first))
+      expect(Redacted.value((yield* minter.token(id)).token)).toBe(Redacted.value(first.token))
       yield* TestClock.setTime(expiresAt - 5 * 60_000)
-      expect(Redacted.value(yield* minter.token(id))).not.toBe(Redacted.value(first))
+      expect(Redacted.value((yield* minter.token(id)).token)).not.toBe(Redacted.value(first.token))
       expect(github.minted.filter((each) => each === id)).toHaveLength(2)
     }),
   )

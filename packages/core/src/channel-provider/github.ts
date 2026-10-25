@@ -201,8 +201,4 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
   }
 }
 
-export const provider = Effect.gen(function* () {
-  const settings = yield* GitHubApp.settings
-  if (Option.isNone(settings)) return Option.none<ChannelProvider.Provider>()
-  return Option.some(make(yield* GitHubApp.make(settings.value)))
-})
+export const provider = Effect.map(GitHubApp.Service, (app) => Option.map(app.client, make))

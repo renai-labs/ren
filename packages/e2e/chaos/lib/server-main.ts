@@ -26,6 +26,7 @@ import { ChaosEnvironments } from "./provider/environments.js"
 import { ChaosModels } from "./provider/models.js"
 import { Signer } from "@ren/core/signer"
 import { EgressControl } from "@ren/core/egress-control"
+import { GitHubApp } from "@ren/core/github-app"
 import { CredentialEnv } from "@ren/core/credential-env"
 import { Access } from "@ren/core/access"
 import { CredentialCallers } from "@ren/core/credential-callers"
@@ -74,7 +75,7 @@ HttpRouter.serve(Routes.layer).pipe(
     RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),
     Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
   ]),
-  Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal)),
+  Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal, GitHubApp.layerNone)),
   Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),

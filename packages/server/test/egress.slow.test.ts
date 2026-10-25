@@ -9,6 +9,7 @@ import { DurableRunner } from "@ren/core/durable-runner"
 import { Egress } from "@ren/core/egress"
 import { EgressControl } from "@ren/core/egress-control"
 import { Envelope } from "@ren/core/envelope"
+import { GitHubApp } from "@ren/core/github-app"
 import { OAuthFetch } from "@ren/core/oauth-fetch"
 import { AppProfiles } from "@ren/core/app/profiles"
 import { Models } from "@ren/core/models"
@@ -130,7 +131,15 @@ const ren = () => {
     Layer.provideMerge(
       Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
     ),
-    Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone)),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        Credentials.layer,
+        CredentialCallers.layer,
+        BrainClient.layer,
+        Models.layerNone,
+        GitHubApp.layerNone,
+      ),
+    ),
     Layer.provideMerge(
       Layer.mergeAll(
         Access.layer,
@@ -258,7 +267,9 @@ const profiles = Effect.fnUntraced(function* (found: Effect.Success<ReturnType<t
         kind: "shared",
       })
       if (entry.listed)
-        yield* database.db.insert(Database.Schema.app_profile_space).values({ profile_id: profileId, space_id: spaceId })
+        yield* database.db
+          .insert(Database.Schema.app_profile_space)
+          .values({ profile_id: profileId, space_id: spaceId })
       const id = Credential.ID.create()
       const value = yield* envelope.seal(
         Redacted.make(JSON.stringify({ type: "oauth", accessToken: `tok_${entry.slug}` })),

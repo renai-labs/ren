@@ -1,6 +1,10 @@
 export * as GitHubApp from "./github-app.js"
 
-import { Cache, Clock, Config, Duration, Effect, Exit, Option, Redacted, Schema } from "effect"
+import { Database } from "@ren/db/database"
+import type { Auth } from "@ren/schema/auth"
+import { Credential } from "@ren/schema/credential"
+import { and, eq } from "drizzle-orm"
+import { Cache, Clock, Config, Context, Duration, Effect, Exit, Layer, Option, Redacted, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { createPrivateKey, type KeyObject, sign } from "node:crypto"
 
@@ -22,6 +26,8 @@ export interface Settings {
 }
 
 export const apiVersion = "2022-11-28"
+
+export const label = "GITHUB"
 
 const tokenKeptUntilBeforeExpiry = 5 * 60_000
 
@@ -156,7 +162,8 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
   )
 
   const token = Effect.fn("GitHubApp.token")(function* (installationId: string) {
-    return (yield* Cache.get(tokens, installationId)).token
+    const minted = yield* Cache.get(tokens, installationId)
+    return { token: minted.token, expiresAt: minted.expiresAt }
   })
 
   const userInstallationsFrom = (
@@ -218,14 +225,74 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
       )
     }),
     token,
+    forget: (installationId: string) => Cache.invalidate(tokens, installationId),
     read: <S extends Schema.Top>(installationId: string, path: string, schema: S) =>
       token(installationId).pipe(
-        Effect.flatMap((installationToken) =>
-          json(schema, withToken(HttpClientRequest.get(`${app.api}${path}`), installationToken)),
-        ),
+        Effect.flatMap((minted) => json(schema, withToken(HttpClientRequest.get(`${app.api}${path}`), minted.token))),
         Effect.withSpan("GitHubApp.read"),
       ),
   }
 })
 
 export type Client = Effect.Success<ReturnType<typeof make>>
+
+export const hosts = (app: Settings) => {
+  const web = new URL(app.web).hostname
+  return [`api.${web}`, web, `codeload.${web}`, `uploads.${web}`]
+}
+
+export const variables = (app: Settings): Readonly<Record<string, string>> => {
+  const placeholder = Credential.placeholder(label)
+  const name = `${app.slug}[bot]`
+  const email = `${app.botUserId}+${name}@users.noreply.github.com`
+  return {
+    GITHUB_TOKEN: placeholder,
+    GH_TOKEN: placeholder,
+    GIT_AUTHOR_NAME: name,
+    GIT_AUTHOR_EMAIL: email,
+    GIT_COMMITTER_NAME: name,
+    GIT_COMMITTER_EMAIL: email,
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: `http.${app.web}/.extraHeader`,
+    GIT_CONFIG_VALUE_0: `Authorization: Basic ${Buffer.from(`x-access-token:${placeholder}`).toString("base64")}`,
+  }
+}
+
+export interface Interface {
+  readonly client: Option.Option<Client>
+  readonly installationOf: (
+    organizationId: Auth.OrganizationID,
+  ) => Effect.Effect<Option.Option<{ readonly installation: string; readonly client: Client }>>
+}
+
+export class Service extends Context.Service<Service, Interface>()("@ren/core/GitHubApp") {}
+
+export const layerNone = Layer.succeed(
+  Service,
+  Service.of({ client: Option.none(), installationOf: () => Effect.succeedNone }),
+)
+
+export const layer = Layer.effect(
+  Service,
+  Effect.gen(function* () {
+    const database = yield* Database.Service
+    const found = yield* settings.pipe(Effect.orDie)
+    const client = Option.isSome(found) ? Option.some(yield* make(found.value)) : Option.none<Client>()
+    const install = Database.Schema.channel_install
+    return Service.of({
+      client,
+      installationOf: Effect.fn("GitHubApp.installationOf")(function* (organizationId: Auth.OrganizationID) {
+        if (Option.isNone(client)) return Option.none()
+        const rows = yield* database.db
+          .select({ workspace: install.workspace })
+          .from(install)
+          .where(and(eq(install.organization_id, organizationId), eq(install.provider, "github")))
+          .pipe(Effect.orDie)
+        return Option.map(Option.fromNullishOr(rows.at(0)), (row) => ({
+          installation: row.workspace,
+          client: client.value,
+        }))
+      }),
+    })
+  }),
+)
