@@ -5,11 +5,15 @@ import {
   CurrentSession,
   CurrentUser,
 } from "@ren/protocol/middleware/authentication"
-import { Effect, Layer, Option, Redacted } from "effect"
+import { Context, Effect, Layer, Option, Redacted } from "effect"
 import { HttpServerRequest } from "effect/http"
 import { Auth } from "../auth.js"
 
+export class McpCaller extends Context.Service<McpCaller, AuthenticatedSession>()("@ren/server/McpCaller") {}
+
 const unauthorized = new UnauthorizedError({ message: "Sign in to continue." })
+
+const dispatched = Effect.serviceOption(McpCaller)
 
 export const AuthenticationLayer = Layer.effect(
   Authentication,
@@ -28,11 +32,15 @@ export const AuthenticationLayer = Layer.effect(
       httpEffect.pipe(Effect.provideService(CurrentUser, session.user), Effect.provideService(CurrentSession, session))
     return Authentication.of({
       bearer: Effect.fn("Authentication.bearer")(function* (httpEffect, options) {
+        const caller = yield* dispatched
+        if (Option.isSome(caller)) return yield* provideSession(httpEffect, caller.value)
         if (Redacted.value(options.credential) === "") return yield* unauthorized
         const session = yield* authenticate
         return yield* provideSession(httpEffect, session)
       }),
       cookie: Effect.fn("Authentication.cookie")(function* (httpEffect) {
+        const caller = yield* dispatched
+        if (Option.isSome(caller)) return yield* provideSession(httpEffect, caller.value)
         const request = yield* HttpServerRequest.HttpServerRequest
         if (!request.headers.cookie) return yield* unauthorized
         const session = yield* authenticate

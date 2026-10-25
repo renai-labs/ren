@@ -18,11 +18,18 @@ interface Interface {
   readonly trustedOrigins: ReadonlyArray<string>
   readonly getSession: (headers: Headers) => Effect.Effect<Option.Option<AuthenticatedSession>>
   readonly getAccessToken: (headers: Headers) => Effect.Effect<Option.Option<AuthenticatedSession>>
+  readonly actAs: (caller: Caller) => Effect.Effect<Option.Option<AuthenticatedSession>>
   readonly mcpChallenge: string
   readonly getActiveMembership: (
     session: AuthenticatedSession,
     headers: Headers,
   ) => Effect.Effect<Option.Option<Membership>>
+}
+
+interface Caller {
+  readonly userId: string
+  readonly organizationId: string
+  readonly agent?: AuthenticatedSession["session"]["agent"]
 }
 
 interface Membership {
@@ -109,6 +116,25 @@ export const layer = Layer.effect(
     })
     const context = yield* Effect.promise(() => auth.$context)
     const jwksCache = {}
+    const actAs = Effect.fn("Auth.actAs")(function* (caller: Caller) {
+      const member = yield* Effect.promise(() =>
+        database.db.query.member.findFirst({
+          columns: {},
+          with: { user: { columns: { id: true, name: true, email: true, emailVerified: true, image: true } } },
+          where: { userId: caller.userId, organizationId: caller.organizationId },
+        }),
+      )
+      if (!member?.user) return Option.none<AuthenticatedSession>()
+      const user: typeof Auth.User.Encoded = member.user
+      return Option.some<AuthenticatedSession>({
+        user: yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie),
+        session: {
+          activeOrganizationId: caller.organizationId,
+          fixedOrganization: true,
+          ...(caller.agent && { agent: caller.agent }),
+        },
+      })
+    })
     return Service.of({
       handler: auth.handler,
       trustedOrigins: config.trustedOrigins,
@@ -134,21 +160,9 @@ export const layer = Layer.effect(
         if (Option.isNone(payload) || "cnf" in payload.value) return Option.none()
         const claims = Schema.decodeUnknownOption(AccessToken)(payload.value)
         if (Option.isNone(claims) || !claims.value.scope.split(" ").includes(BetterAuth.mcpScope)) return Option.none()
-        const organizationId = claims.value[BetterAuth.organizationClaim]
-        const member = yield* Effect.promise(() =>
-          database.db.query.member.findFirst({
-            columns: {},
-            with: { user: { columns: { id: true, name: true, email: true, emailVerified: true, image: true } } },
-            where: { userId: claims.value.sub, organizationId },
-          }),
-        )
-        if (!member?.user) return Option.none()
-        const user: typeof Auth.User.Encoded = member.user
-        return Option.some({
-          user: yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie),
-          session: { activeOrganizationId: organizationId, fixedOrganization: true },
-        })
+        return yield* actAs({ userId: claims.value.sub, organizationId: claims.value[BetterAuth.organizationClaim] })
       }),
+      actAs,
       mcpChallenge: `Bearer resource_metadata="${new URL(`/.well-known/oauth-protected-resource${mcpPath}`, config.baseURL).href}", scope="${BetterAuth.mcpScope}"`,
       getActiveMembership: Effect.fn("Auth.getActiveMembership")(function* (
         session: AuthenticatedSession,

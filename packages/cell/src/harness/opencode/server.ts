@@ -34,8 +34,10 @@ import {
   ManagedRuntime,
   Option,
   Ref,
+  Schema,
   type Scope,
   Semaphore,
+  Stream,
   Struct,
 } from "effect"
 import { FetchHttpClient, HttpEffect, HttpRouter, HttpServer } from "effect/http"
@@ -45,6 +47,7 @@ import { SessionID } from "@opencode/schema/session-id"
 import { Harness } from "../harness.js"
 import { Credentials } from "./credentials.js"
 import { ModelCredentials } from "./model-credentials.js"
+import { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeExecution } from "./execution.js"
@@ -58,7 +61,10 @@ export interface Options {
   readonly makeDirectory?: (directory: string) => Effect.Effect<void>
   readonly apps?: Option.Option<AppCatalog.Info>
   readonly skills?: { readonly hosts?: SkillSource.Hosts; readonly refresh?: Duration.Input }
+  readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
 }
+
+const decodeSender = Schema.decodeUnknownOption(Schema.Struct({ metadata: Schema.Struct({ userID: Schema.String }) }))
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
   storage: DurableObjectStorage,
@@ -215,6 +221,22 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       executions.get,
       options.directoryOf,
       { source: skillSource, cache: skillCache },
+      Option.map(options.ren ?? Option.none(), (access) => ({
+        ...access,
+        lastSender: (sessionId: string) =>
+          Stream.paginate(undefined, (cursor: string | undefined) =>
+            api.message
+              .list({ sessionID: SessionID.make(sessionId), limit: 50, ...(cursor ? { cursor } : { order: "desc" }) })
+              .pipe(Effect.map((page) => [page.data, Option.fromNullishOr(page.cursor.next)] as const)),
+          ).pipe(
+            Stream.filter((message) => message.type === "user"),
+            Stream.map((message) => Option.map(decodeSender(message), (decoded) => decoded.metadata.userID)),
+            Stream.filter(Option.isSome),
+            Stream.runHead,
+            Effect.map(Option.flatten),
+            Effect.orElseSucceed(() => Option.none<string>()),
+          ),
+      })),
     ),
   )
   // oxlint-disable-next-line ren/no-comments -- The first request boots OpenCode's location, and the Ren plugin loads after it; a start before that sees an incomplete agent list.

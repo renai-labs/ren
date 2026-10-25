@@ -1,12 +1,16 @@
 export * as RenMcp from "./ren-mcp.js"
 
+import { Actor } from "@ren/core/actor"
+import { Brains } from "@ren/core/brains"
+import { HostMcp } from "@ren/host-api/host-mcp"
 import { Mcp } from "@ren/protocol/mcp"
-import { Context, Effect, Layer, Option, Schema } from "effect"
+import { Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { McpProtocol, McpSchema, McpServer } from "effect/ai"
 import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { HttpApi, type HttpApiEndpoint, OpenApi } from "effect/http-api"
 import { Api } from "./api.js"
 import { Auth } from "./auth.js"
+import { McpCaller } from "./middleware/authentication.js"
 
 const instructions = [
   "Ren runs teams of AI agents in spaces.",
@@ -73,8 +77,7 @@ const toTool = (endpoint: HttpApiEndpoint.Top, router: HttpRouter.HttpRouter) =>
     const args = yield* Schema.decodeUnknownEffect(Arguments)(payload ?? {}).pipe(
       Effect.mapError(() => new McpSchema.InvalidParams({ message: `The arguments of ${name} must be an object.` })),
     )
-    const caller = yield* Effect.serviceOption(HttpServerRequest.HttpServerRequest)
-    const authorization = Option.getOrUndefined(Option.map(caller, (request) => request.headers.authorization))
+    const caller = yield* Effect.serviceOption(McpCaller)
     const url = new URL(
       endpoint.path.replaceAll(/:(\w+)/gu, (_, key: string) => encodeURIComponent(parameter(args[key] ?? ""))),
       "http://localhost",
@@ -93,12 +96,17 @@ const toTool = (endpoint: HttpApiEndpoint.Top, router: HttpRouter.HttpRouter) =>
       : args.body
     const request = new Request(url.href, {
       method: endpoint.method,
-      headers: { "content-type": "application/json", ...(authorization && { authorization }) },
+      headers: { "content-type": "application/json" },
       ...(body && { body: JSON.stringify(content ?? {}) }),
     })
+    const dispatch = router
+      .asHttpEffect()
+      .pipe(Effect.provideService(HttpServerRequest.HttpServerRequest, HttpServerRequest.fromWeb(request)))
     const response = HttpServerResponse.toWeb(
-      yield* router.asHttpEffect().pipe(
-        Effect.provideService(HttpServerRequest.HttpServerRequest, HttpServerRequest.fromWeb(request)),
+      yield* Option.match(caller, {
+        onNone: () => dispatch,
+        onSome: (session) => dispatch.pipe(Effect.provideService(McpCaller, session)),
+      }).pipe(
         Effect.scoped,
         Effect.catchCause((cause) => Effect.map(HttpServerError.causeResponse(cause), ([response]) => response)),
       ),
@@ -161,14 +169,30 @@ const tools = Layer.effectDiscard(
 const authentication = HttpRouter.middleware(
   Effect.gen(function* () {
     const auth = yield* Auth.Service
+    const brains = yield* Brains.Service
+    const actors = yield* Actor.Service
+    const brainCaller = Effect.fnUntraced(function* (headers: Headers) {
+      const token = /^Bearer\s+(\S+)$/iu.exec(headers.get("authorization") ?? "")?.at(1)
+      const chat = HostMcp.chatOf(headers)
+      if (!token || Option.isNone(chat)) return Option.none()
+      const host = yield* brains.authenticateHost(Redacted.make(token)).pipe(Effect.option)
+      if (Option.isNone(host)) return Option.none()
+      const actor = yield* actors
+        .fromSession({ ...chat.value, organizationId: host.value.organizationId, brainId: host.value.brainId })
+        .pipe(Effect.option)
+      if (Option.isNone(actor)) return Option.none()
+      return yield* auth.actAs(actor.value)
+    })
     return (httpEffect) =>
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest
-        const caller = yield* auth.getAccessToken(new Headers(request.headers))
+        const headers = new Headers(request.headers)
+        const person = yield* auth.getAccessToken(headers)
+        const caller = Option.isSome(person) ? person : yield* brainCaller(headers)
         if (Option.isNone(caller)) {
           return HttpServerResponse.empty({ status: 401, headers: { "www-authenticate": auth.mcpChallenge } })
         }
-        return yield* httpEffect
+        return yield* httpEffect.pipe(Effect.provideService(McpCaller, caller.value))
       })
   }),
 ).layer
@@ -184,4 +208,5 @@ export const layer = tools.pipe(
     }),
   ),
   Layer.provide(authentication),
+  Layer.provide(Actor.layer),
 )

@@ -26,6 +26,7 @@ import { Database } from "@ren/db/database"
 import { TestEnvironment } from "@ren/executor/testing"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import type { Agent as AgentSchema } from "@ren/schema/agent"
+import type { Auth } from "@ren/schema/auth"
 import { Environment } from "@ren/schema/environment"
 import type { Session as SessionSchema } from "@ren/schema/session"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
@@ -82,6 +83,10 @@ export interface StartOptions extends Omit<SessionDriver.StartOptions, "environm
 export interface Local {
   readonly title: string | null
   readonly messages: ReadonlyArray<string>
+}
+
+export interface Sending {
+  readonly sender?: Auth.UserID
 }
 
 export interface SessionOptions {
@@ -367,7 +372,7 @@ export const start = async (options: {
     })
     const opencode = OpenCode.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
     const chat = Ren.make({ baseUrl: access.url, headers: { authorization: TestToken.basic(access.token) } })
-    const send = (text: string) =>
+    const send = (text: string, sendOptions: Sending = {}) =>
       core(
         SessionRunner.Service.use((sessions) =>
           sessions.send({
@@ -375,7 +380,7 @@ export const start = async (options: {
             messageId: Session.MessageID.create(),
             prompt: { text },
             delivery: "steer",
-            sender: { userId: owner.createdBy },
+            sender: { userId: sendOptions.sender ?? owner.createdBy },
           }),
         ),
       )
@@ -403,9 +408,9 @@ export const start = async (options: {
         return messages()
       },
       idle,
-      turn: async (steps: ReadonlyArray<ModelProvider.Step>, text = "work") => {
+      turn: async (steps: ReadonlyArray<ModelProvider.Step>, text = "work", sendOptions: Sending = {}) => {
         const script = provider.script(steps)
-        await send(`${text} ${script.marker}`)
+        await send(`${text} ${script.marker}`, sendOptions)
         return script
       },
       tool: async (name: string, input: unknown, ms = 120_000) => {

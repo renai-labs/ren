@@ -3,6 +3,7 @@ export * as Actor from "./actor.js"
 import { Database } from "@ren/db/database"
 import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
+import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { and, eq, isNull } from "drizzle-orm"
@@ -27,6 +28,8 @@ export interface AgentInfo extends Info {
 export interface SessionRef {
   readonly sessionId: Session.ID
   readonly organizationId: Auth.OrganizationID
+  readonly brainId: Brain.ID
+  readonly userId?: Auth.UserID | undefined
 }
 
 export interface Interface {
@@ -41,27 +44,43 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     return Service.of({
       fromSession: Effect.fn("Actor.fromSession")(function* (session: SessionRef) {
+        const userId = session.userId ?? Database.Schema.agent_session.created_by
         const row = (yield* database.db
-          .select({ session: Database.Schema.agent_session, role: Database.Schema.member.role })
+          .select({
+            session: Database.Schema.agent_session,
+            role: Database.Schema.member.role,
+            spaceMember: Database.Schema.space_member.id,
+          })
           .from(Database.Schema.agent_session)
           .innerJoin(
             Database.Schema.member,
             and(
               eq(Database.Schema.member.organizationId, Database.Schema.agent_session.organization_id),
-              eq(Database.Schema.member.userId, Database.Schema.agent_session.created_by),
+              eq(Database.Schema.member.userId, userId),
             ),
           )
           .innerJoin(Database.Schema.space, eq(Database.Schema.space.id, Database.Schema.agent_session.space_id))
+          .leftJoin(
+            Database.Schema.space_member,
+            and(
+              eq(Database.Schema.space_member.space_id, Database.Schema.agent_session.space_id),
+              eq(Database.Schema.space_member.user_id, Database.Schema.member.userId),
+              isNull(Database.Schema.space_member.archived_at),
+            ),
+          )
           .where(
             and(
               eq(Database.Schema.agent_session.id, session.sessionId),
               eq(Database.Schema.agent_session.organization_id, session.organizationId),
+              eq(Database.Schema.agent_session.brain_id, session.brainId),
               isNull(Database.Schema.agent_session.archived_at),
               isNull(Database.Schema.space.archived_at),
             ),
           )
           .pipe(Effect.orDie)).at(0)
         if (!row) return yield* new Primitive.Forbidden({ message: "The session is not available." })
+        if (!row.spaceMember && !Auth.isAdministrator(row.role))
+          return yield* new Primitive.Forbidden({ message: "The sender cannot see the session’s space." })
         const agentId =
           row.session.agent_id ??
           (yield* database.db
@@ -77,7 +96,7 @@ export const layer = Layer.effect(
             .pipe(Effect.orDie)).at(0)?.id
         if (!agentId) return yield* new Primitive.Forbidden({ message: "The session’s agent is not available." })
         return {
-          userId: row.session.created_by,
+          userId: session.userId ?? row.session.created_by,
           organizationId: session.organizationId,
           roles: row.role.split(","),
           agent: { agentId, sessionId: session.sessionId, spaceId: row.session.space_id },

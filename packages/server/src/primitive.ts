@@ -4,13 +4,20 @@ import { Actor } from "@ren/core/actor"
 import { Primitive } from "@ren/core/primitive"
 import { ConflictError, ForbiddenError, InvalidRequestError, NotFoundError } from "@ren/protocol/errors"
 import { CurrentOrganization } from "@ren/protocol/middleware/active-organization"
-import { CurrentUser } from "@ren/protocol/middleware/authentication"
+import { CurrentSession, CurrentUser } from "@ren/protocol/middleware/authentication"
 import { Effect } from "effect"
 
 export const currentActor = Effect.gen(function* () {
   const user = yield* CurrentUser
   const organization = yield* CurrentOrganization
-  return { userId: user.id, organizationId: organization.id, roles: organization.roles } satisfies Actor.Info
+  const session = yield* CurrentSession
+  const agent = session.session.agent
+  return {
+    userId: user.id,
+    organizationId: organization.id,
+    roles: organization.roles,
+    ...(agent && { agent }),
+  } satisfies Actor.Info
 })
 
 const notFound = (error: Primitive.NotFound) => Effect.fail(new NotFoundError({ message: error.message }))

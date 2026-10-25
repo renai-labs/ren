@@ -35,11 +35,14 @@ import { AppStore } from "../../app-store.js"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
 import { HarnessStorage } from "../../harness-storage.js"
+import { HostToken } from "../../host-token.js"
 import { ModelRefresh } from "../../model-refresh.js"
 import { ModelStore } from "../../model-store.js"
+import { RenAddress } from "../../ren-address.js"
 import { Harness } from "../harness.js"
 import { OpenCodeChat } from "./chat.js"
 import { OpenCodeRows } from "@ren/opencode-transcript/opencode-rows"
+import type { OpenCodeMcp } from "./mcp.js"
 import { RenPlugin } from "./plugin.js"
 import { OpenCodeServer } from "./server.js"
 import { InstructionEntries } from "./instruction-entries.js"
@@ -345,6 +348,7 @@ type Opener = (
   config: string,
   settings: Option.Option<ChatSettings.Interface>,
   apps: Option.Option<AppCatalog.Info>,
+  ren: Option.Option<OpenCodeMcp.RenAccess>,
 ) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
 
 const layerWith = (opener: Opener) =>
@@ -356,6 +360,12 @@ const layerWith = (opener: Opener) =>
       const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
       const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
       const apps = yield* Effect.serviceOption(AppStore.Service)
+      const address = yield* Effect.serviceOption(RenAddress.Service)
+      const hostToken = yield* Effect.serviceOption(HostToken.Service)
+      const ren =
+        cell.vars.REN_URL && Option.isSome(address) && Option.isSome(hostToken)
+          ? Option.some({ address: address.value.current, token: hostToken.value.current })
+          : Option.none()
       const prepare = HarnessStorage.prepare(version).pipe(
         Effect.provideService(BrainStorage.Service, yield* BrainStorage.Service),
         Effect.provideService(HarnessStorage.Service, yield* HarnessStorage.Service),
@@ -373,6 +383,7 @@ const layerWith = (opener: Opener) =>
                 cell.vars.OPENCODE_CONFIG,
                 settings,
                 Option.isSome(apps) ? yield* apps.value.current : Option.none(),
+                ren,
               )
               return yield* make(server, endpoints, settings)
             }),
@@ -383,19 +394,21 @@ const layerWith = (opener: Opener) =>
   )
 
 export const layer = (storage: DurableObjectStorage) =>
-  layerWith((endpoints, refreshKey, connections, config, settings, apps) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren) =>
     OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
       apps,
+      ren,
       directoryOf: (sessionId) => `/workspace/${sessionId}`,
     }),
   )
 
 export const layerProcess = (database: string, confinement: RenPlugin.Confinement) =>
-  layerWith((endpoints, refreshKey, connections, config, settings, apps) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren) =>
     OpenCodeServer.openProcess(database, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
       apps,
+      ren,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
       confinement,
       makeDirectory: (directory) => Effect.promise(() => mkdir(directory, { recursive: true })),
