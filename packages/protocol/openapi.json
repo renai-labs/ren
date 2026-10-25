@@ -9712,6 +9712,32 @@
         "required": ["provider"],
         "additionalProperties": false
       },
+      "ChannelOrigin.Info": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          },
+          "place": {
+            "type": "string"
+          },
+          "threadUrl": {
+            "type": "string"
+          },
+          "sender": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          }
+        },
+        "required": ["provider", "place", "sender"],
+        "additionalProperties": false,
+        "description": "Where a message from Slack, Linear or GitHub came from, and what its thread holds."
+      },
       "ConflictErrorEncoded": {
         "type": "object",
         "properties": {
@@ -13691,6 +13717,9 @@
           },
           "sender": {
             "$ref": "#/components/schemas/SessionMessage.Sender"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/ChannelOrigin.Info"
           }
         },
         "required": ["id", "time", "text", "type"],

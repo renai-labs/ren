@@ -2,6 +2,7 @@ export * as Session from "./session.js"
 
 import { Effect, Schema, Struct } from "effect"
 import { Auth } from "./auth.js"
+import { ChannelOrigin } from "./channel-origin.js"
 import { EnvironmentTemplate } from "./environment-template.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
@@ -82,6 +83,7 @@ export const SendInput = Schema.Struct({
   prompt: Prompt,
   delivery: Delivery.pipe(Schema.withDecodingDefaultKey(Effect.succeed("steer" as const))),
   sender: Sender,
+  channel: Schema.optionalKey(ChannelOrigin.Info),
 }).annotate({ identifier: "Session.SendInput" })
 
 export interface StartInput extends Schema.Schema.Type<typeof StartInput> {}

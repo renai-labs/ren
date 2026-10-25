@@ -2,10 +2,11 @@ export * as Channel from "./channel.js"
 
 import { Effect, Schema } from "effect"
 import { Agent } from "./agent.js"
+import { ChannelOrigin } from "./channel-origin.js"
 import { Identifier } from "./identifier.js"
 
-export const Provider = Schema.Literals(["slack", "linear", "github"]).annotate({ identifier: "Channel.Provider" })
-export type Provider = typeof Provider.Type
+export const Provider = ChannelOrigin.Provider
+export type Provider = ChannelOrigin.Provider
 
 export const titles: Readonly<Record<Provider, string>> = { slack: "Slack", linear: "Linear", github: "GitHub" }
 

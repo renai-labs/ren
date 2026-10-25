@@ -142,6 +142,42 @@ test("the model learns who speaks when another member sends a message, and the t
     }),
   ))
 
+test("the model sees where a channel message came from above its text on every call, and the transcript keeps the typed text", () =>
+  live(
+    Effect.gen(function* () {
+      const brain = yield* BrainTest.make()
+      yield* brain.start()
+      const channel = {
+        provider: "github" as const,
+        place: "acme/api",
+        threadUrl: "https://github.com/acme/api/issues/12",
+        sender: "octocat",
+        handle: "octocat",
+        context: "Issue #12 “The deploy fails”, open",
+      }
+      const first = stub.script()
+      const text = `@ren-test look ${first.marker}`
+      yield* brain.send(text, { channel })
+      const header =
+        "GitHub acme/api · @octocat · https://github.com/acme/api/issues/12\nIssue #12 “The deploy fails”, open\n---\n\n"
+      expect((yield* Effect.promise(() => first.called())).text).toBe(`${header}${text}`)
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      const second = stub.script()
+      yield* brain.send(`and then ${second.marker}`)
+      const call = yield* Effect.promise(() => second.called())
+      expect(call.text).toBe(`and then ${second.marker}`)
+      expect(JSON.stringify(call.body.messages)).toContain(JSON.stringify(`${header}${text}`))
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      const page = yield* brain.chat.session["session.messages"]({ params: { sessionID: brain.id }, query: {} })
+      expect(
+        page.items.flatMap((message) => (message.type === "user" ? [[message.text, message.channel]] : [])),
+      ).toEqual([
+        [`and then ${second.marker}`, undefined],
+        [text, channel],
+      ])
+    }),
+  ))
+
 test("a prompt sent with resume false waits in the inbox of an idle session until another prompt starts the turn", () =>
   live(
     Effect.gen(function* () {
@@ -344,22 +380,24 @@ test("a client answers a permission request, a rejection tells the session what 
     }),
   ))
 
-test("a client compacts the session through the Chat API and reads the summary", () =>
+test("a client compacts the session through the Chat API and reads the summary; the summarizer sees where a channel message came from", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const params = { sessionID: brain.id }
       const summarized = { summary: "## Objective\n- the summary" }
-      yield* Effect.forEach(
-        [stub.script(summarized), stub.script(summarized)],
-        (script) =>
-          brain.chat.session["session.prompt"]({
-            params,
-            payload: { id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" },
-          }).pipe(Effect.andThen(brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) }))),
-        { discard: true },
-      )
+      const fromGitHub = stub.script(summarized)
+      yield* brain.send(fromGitHub.marker, {
+        channel: { provider: "github", place: "acme/api", sender: "octocat", handle: "octocat" },
+      })
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
+      const script = stub.script(summarized)
+      yield* brain.chat.session["session.prompt"]({
+        params,
+        payload: { id: SessionMessage.ID.create(), text: script.marker, delivery: "steer" },
+      })
+      yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
       const events = yield* follow(brain)
       yield* events.until("server.connected")
       const id = SessionMessage.ID.create()
@@ -375,6 +413,10 @@ test("a client compacts the session through the Chat API and reads the summary",
         status: "completed",
         summary: expect.stringContaining("the summary"),
       })
+      const summarizer = stub.calls.find((call) => call.kind === "compaction" && call.marker === fromGitHub.marker)
+      expect(JSON.stringify(summarizer?.body.messages)).toContain(
+        JSON.stringify(`GitHub acme/api · @octocat\n---\n\n${fromGitHub.marker}`),
+      )
     }),
   ))
 
