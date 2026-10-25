@@ -10,13 +10,17 @@ import type { Session } from "@ren/schema/session"
 import { SessionCapabilities } from "@ren/schema/session/capabilities"
 import type { SessionStatus } from "@ren/schema/session/status"
 import type { Shell } from "@ren/schema/shell"
-import { Clock, Effect, Option, Predicate, Stream } from "effect"
+import { Clock, Effect, Option, Predicate, Schema, Stream } from "effect"
 import { Harness } from "../harness.js"
 import type { OpenCodeServer } from "./server.js"
 import { OpenCodeEvents } from "./events.js"
 import { Translate } from "@ren/opencode-transcript/translate"
 
 const capabilities = SessionCapabilities.of("opencode")
+
+export const speakerOf = Schema.decodeUnknownOption(
+  Schema.Struct({ userID: Schema.String, userName: Schema.optionalKey(Schema.String) }),
+)
 
 const missing = (error: { readonly message: string }) => Effect.fail(new Harness.NotFound({ message: error.message }))
 const conflict = (error: { readonly message: string }) => Effect.fail(new Harness.Conflict({ message: error.message }))

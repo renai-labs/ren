@@ -34,7 +34,6 @@ import {
   ManagedRuntime,
   Option,
   Ref,
-  Schema,
   type Scope,
   Semaphore,
   Stream,
@@ -45,6 +44,7 @@ import manifest from "../../../package.json"
 import type { FileSystem } from "@opencode/schema/filesystem"
 import { SessionID } from "@opencode/schema/session-id"
 import { Harness } from "../harness.js"
+import { OpenCodeChat } from "./chat.js"
 import { Credentials } from "./credentials.js"
 import { ModelCredentials } from "./model-credentials.js"
 import { OpenCodeMcp } from "./mcp.js"
@@ -63,8 +63,6 @@ export interface Options {
   readonly skills?: { readonly hosts?: SkillSource.Hosts; readonly refresh?: Duration.Input }
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
 }
-
-const decodeSender = Schema.decodeUnknownOption(Schema.Struct({ metadata: Schema.Struct({ userID: Schema.String }) }))
 
 export const open = Effect.fn("OpenCodeServer.open")(function* (
   storage: DurableObjectStorage,
@@ -229,8 +227,11 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
               .list({ sessionID: SessionID.make(sessionId), limit: 50, ...(cursor ? { cursor } : { order: "desc" }) })
               .pipe(Effect.map((page) => [page.data, Option.fromNullishOr(page.cursor.next)] as const)),
           ).pipe(
-            Stream.filter((message) => message.type === "user"),
-            Stream.map((message) => Option.map(decodeSender(message), (decoded) => decoded.metadata.userID)),
+            Stream.map((message) =>
+              message.type === "user"
+                ? Option.map(OpenCodeChat.speakerOf(message.metadata), (speaker) => speaker.userID)
+                : Option.none(),
+            ),
             Stream.filter(Option.isSome),
             Stream.runHead,
             Effect.map(Option.flatten),

@@ -31,6 +31,7 @@ import { ModelCredentials } from "./model-credentials.js"
 import { ModelProviders } from "./model-providers.js"
 import { basename } from "node:path"
 import { RenWorkspaceDriver } from "./workspace-driver.js"
+import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 import { OpenCodeMcp } from "./mcp.js"
 import { OpenCodeSkills } from "./skills.js"
@@ -108,10 +109,6 @@ export const modelRef = (model: Session.Model) => ({
   id: Model.ID.make(model.modelId),
   ...(model.variant && { variant: Model.VariantID.make(model.variant) }),
 })
-
-const decodeSpeaker = Schema.decodeUnknownOption(
-  Schema.Struct({ userID: Schema.String, userName: Schema.optionalKey(Schema.String) }),
-)
 
 const withoutModel = (value: unknown) =>
   Predicate.isObject(value) ? Record.filter(value, (_, key) => key !== "model") : value
@@ -268,7 +265,7 @@ export const make = (
         yield* context.session.hook("context", (event) =>
           Effect.sync(() => {
             const speakers = event.messages.map((message) =>
-              message.role === "user" ? Option.getOrUndefined(decodeSpeaker(message.metadata)) : undefined,
+              message.role === "user" ? Option.getOrUndefined(OpenCodeChat.speakerOf(message.metadata)) : undefined,
             )
             event.messages = event.messages.map((message, index) => {
               const speaker = speakers[index]

@@ -29,7 +29,6 @@ interface Interface {
 interface Caller {
   readonly userId: string
   readonly organizationId: string
-  readonly agent?: AuthenticatedSession["session"]["agent"]
 }
 
 interface Membership {
@@ -128,11 +127,7 @@ export const layer = Layer.effect(
       const user: typeof Auth.User.Encoded = member.user
       return Option.some<AuthenticatedSession>({
         user: yield* Schema.decodeEffect(Auth.User)(user).pipe(Effect.orDie),
-        session: {
-          activeOrganizationId: caller.organizationId,
-          fixedOrganization: true,
-          ...(caller.agent && { agent: caller.agent }),
-        },
+        session: { activeOrganizationId: caller.organizationId, fixedOrganization: true },
       })
     })
     return Service.of({
