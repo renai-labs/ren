@@ -10,6 +10,7 @@ import { AppRegistry } from "@ren/core/app/registry"
 import { AgentMembership } from "@ren/core/agent/membership"
 import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
+import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
@@ -41,6 +42,7 @@ import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
 import { OAuthAppHandler } from "./handlers/api/oauth-app.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
+import { ChannelRoutes } from "./channel-routes.js"
 import { OAuthApps } from "@ren/core/oauth-apps"
 import { CredentialRequirements } from "@ren/core/credential-requirements"
 import { HealthHandler } from "./handlers/api/health.js"
@@ -151,6 +153,11 @@ export const layer = Layer.mergeAll(
     AuthRoute,
     RenMcp.layer,
     OAuthRoutes.layer,
+    ChannelRoutes.layer.pipe(
+      Layer.provide(Channels.layer),
+      Layer.provide(SessionRunner.layer),
+      Layer.provide(BrainRegistry.layer),
+    ),
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),

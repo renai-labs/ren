@@ -3,6 +3,9 @@ import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
 import { BrainPush } from "@ren/core/brain-push"
+import { ChannelNotice } from "@ren/core/channel-notice"
+import { ChannelProvider } from "@ren/core/channel-provider"
+import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
@@ -51,11 +54,14 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
 HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([
     Layer.mergeAll(Brains.layer, BrainPush.layer).pipe(
-      Layer.provide(BrainHost.layerCell),
+      Layer.provideMerge(BrainHost.layerCell),
       Layer.provide(DurableRunner.layerEffect),
       Layer.provide(CredentialEnv.layerNone),
     ),
     RenInferenceRemoval.layer,
+    ChannelProvider.layer<never, never>([]),
+    ChannelRoute.layer,
+    ChannelNotice.layerLog,
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),

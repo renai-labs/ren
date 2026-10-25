@@ -2,6 +2,9 @@ import { BunHttpServer, BunServices } from "@effect/platform-bun"
 import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
+import { ChannelNotice } from "@ren/core/channel-notice"
+import { ChannelProvider } from "@ren/core/channel-provider"
+import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Docker } from "@ren/core/environment-provider/docker"
@@ -86,9 +89,12 @@ export const environment = (baseURL = config.BETTER_AUTH_URL, overrides?: Readon
 export const services = Layer.mergeAll(
   Brains.layer.pipe(
     Layer.provideMerge(BrainHost.layerCell),
-    Layer.provide(DurableRunner.layerMemory),
+    Layer.provideMerge(DurableRunner.layerMemory),
     Layer.provide(CredentialEnv.layerNone),
   ),
+  ChannelProvider.layer<never, never>([]),
+  ChannelRoute.layer,
+  ChannelNotice.layerLog,
   Mailer.layer,
   SignupGuard.layer,
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
