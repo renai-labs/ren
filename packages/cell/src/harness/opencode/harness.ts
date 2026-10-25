@@ -570,6 +570,11 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
               data: { info, messages },
               location: Location.Ref.make({ directory: info.location.directory, workspaceID }),
             })
+            // oxlint-disable-next-line ren/no-comments -- An opening resolves only the chats OpenCode holds; a chat imported later gets its agent, model and rules here, before any of its turns.
+            if (Option.isSome(settings)) {
+              const chats = (yield* settings.value.chats).filter((chat) => chat.id === data.chat.id)
+              if (chats.length) yield* configure({ settings: { layers: yield* settings.value.layers, chats } })
+            }
             // oxlint-disable-next-line ren/no-comments -- Queued messages go back in the chat's inbox with their ids and order, and start no turn (E110).
             yield* Effect.forEach(
               data.chat.inbox.filter((row) => row.type === "user"),

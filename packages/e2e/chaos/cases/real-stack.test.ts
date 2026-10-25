@@ -173,16 +173,24 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       expect(await session.tool("shell", { command: "echo thawed" })).toBe("thawed\n")
     }, 600_000)
 
-    test("a command works while the server is down, fails after the token expires, and works 30 seconds after the failure when the server is back", async () => {
+    // oxlint-disable-next-line ren/no-comments -- A turn's end gives its environment seat back to Ren (cell/src/harness/opencode/plugin.ts), so the cached token serves the rest of the turn, not the next turn.
+    test("a command works while the server is down for the rest of its turn, fails after the token expires, and works 30 seconds after the failure when the server is back", async () => {
       const session = await stack().session()
-      expect(await session.tool("shell", { command: "echo up" })).toBe("up\n")
+      const turn = await session.turn([
+        ModelProvider.tool("shell", { command: "echo up" }),
+        ModelProvider.tool("shell", { command: "echo cached" }, { hold: true }),
+        ModelProvider.text("done"),
+      ])
+      await turn.called(2)
       await stack().stopServer()
-      const down = await session.tool("shell", { command: "echo cached" })
+      turn.release()
+      const down = (await turn.called(3)).toolResults
+      await session.idle(60_000)
       // ast-grep-ignore: no-test-sleep -- the server's 20 second token must expire in real time
       await Bun.sleep(25_000)
       const expired = await session.tool("shell", { command: "echo expired" })
       await stack().startServer()
-      expect([down, expired.includes("Ren does not answer")]).toEqual(["cached\n", true])
+      expect([down.endsWith("cached\n"), expired.includes("Ren does not answer")]).toEqual([true, true])
       // ast-grep-ignore: no-test-sleep -- the brain asks Ren again 30 seconds after a failure, in real time
       await Bun.sleep(Duration.toMillis(EnvironmentConnections.retryRenAfter) + 1_000)
       expect(await session.tool("shell", { command: "echo back" })).toBe("back\n")
@@ -234,7 +242,7 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
     test("a refused token request names the cause, the brain does not ask again for 30 seconds, and then the call works", async () => {
       const session = await stack().session()
       const rule = stack().renProxy.inject(
-        { operation: "POST /host/environment/access" },
+        { operation: `POST /host/sessions/${session.sessionId}/environment/access` },
         { type: "status", status: 403 },
         1,
       )
@@ -274,7 +282,8 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
       await session.settled()
       const before = await session.synced()
       await stack().loseCellStorage()
-      await session.turn([ModelProvider.text("second")], "next")
+      const second = await session.turn([ModelProvider.text("second")], "next")
+      await second.called(1)
       const after = await session.settled()
       expect(before.messages.every((row) => after.some((message) => row.startsWith(`${message.id} `)))).toBe(true)
       expect(SessionDriver.assistantTexts(after).join("")).toBe("firstsecond")
