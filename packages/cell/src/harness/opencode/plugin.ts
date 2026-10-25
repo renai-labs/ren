@@ -50,6 +50,7 @@ const naming: AppCatalog.Naming = {
       slug,
       source: `OpenCode’s built-in ${slug} tools`,
     })),
+    { kind: "mcps" as const, slug: OpenCodeMcp.renServer, source: "Ren’s own tools" },
   ],
 }
 
@@ -194,6 +195,7 @@ export const make = (
   boundaryOf: (location: Plugin.Context["location"]) => OpenCodeExecution.Boundary,
   directoryOf: (sessionId: string) => string,
   skillSources: OpenCodeSkills.Sources,
+  ren: Option.Option<OpenCodeMcp.Ren>,
 ) =>
   Plugin.define({
     id: "ren",
@@ -294,6 +296,8 @@ export const make = (
           isSession,
           hasEnvironment: Boolean(workspaceID),
           apps: (yield* Ref.get(applied)).apps,
+          sessionId,
+          ren,
         })
         const refreshSkills = yield* Ref.make<Effect.Effect<void>>(Effect.void)
         const skills = yield* OpenCodeSkills.make({

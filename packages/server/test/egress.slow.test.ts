@@ -16,6 +16,7 @@ import { Signer } from "@ren/core/signer"
 import { Seed, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
+import { HostMcp } from "@ren/host-api/host-mcp"
 import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
@@ -37,6 +38,7 @@ const seen: Array<{
   readonly path: string
   readonly query: string
   readonly authorization: string | null
+  readonly chat: ReadonlyArray<string | null>
   readonly body: string
 }> = []
 
@@ -50,6 +52,7 @@ const upstream = Bun.serve({
       path: url.pathname,
       query: url.search,
       authorization: request.headers.get("authorization"),
+      chat: [request.headers.get(HostMcp.sessionHeader), request.headers.get(HostMcp.userHeader)],
       body: await request.text(),
     })
     if (url.pathname === "/mcp" && request.headers.get("authorization") === "Bearer tok_old")
@@ -255,7 +258,9 @@ const profiles = Effect.fnUntraced(function* (found: Effect.Success<ReturnType<t
         kind: "shared",
       })
       if (entry.listed)
-        yield* database.db.insert(Database.Schema.app_profile_space).values({ profile_id: profileId, space_id: spaceId })
+        yield* database.db
+          .insert(Database.Schema.app_profile_space)
+          .values({ profile_id: profileId, space_id: spaceId })
       const id = Credential.ID.create()
       const value = yield* envelope.seal(
         Redacted.make(JSON.stringify({ type: "oauth", accessToken: `tok_${entry.slug}` })),
@@ -509,6 +514,33 @@ describe("egress (iron-proxy fork) with Ren", () => {
       const token = authorization.replace(/^Bearer /u, "")
       const claims = yield* BrainToken.verify([brainKey.publicKey], token)
       expect(Option.map(claims, (found) => [found.scope, found.brain])).toEqual(Option.some(["host", found.brainId]))
+    }),
+  )
+
+  it.live("a Ren MCP call reaches Ren with the brain's host token and keeps the chat headers", () =>
+    Effect.gen(function* () {
+      const found = yield* setup()
+      yield* Effect.promise(() =>
+        EgressHarness.curl([
+          socks(found.login, found.password),
+          "-X",
+          "POST",
+          "-H",
+          "'Authorization: Bearer ren:REN'",
+          "-H",
+          `'${HostMcp.sessionHeader}: ses_chat'`,
+          "-H",
+          `'${HostMcp.userHeader}: usr_sender'`,
+          at("/mcp", "ren.test"),
+        ]),
+      )
+      const request = seen.findLast((each) => each.host.startsWith("ren.test") && each.path === "/mcp")
+      expect(request?.chat).toEqual(["ses_chat", "usr_sender"])
+      const claims = yield* BrainToken.verify(
+        [brainKey.publicKey],
+        request?.authorization?.replace(/^Bearer /u, "") ?? "",
+      )
+      expect(Option.map(claims, (each) => [each.scope, each.brain])).toEqual(Option.some(["host", found.brainId]))
     }),
   )
 

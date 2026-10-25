@@ -2,10 +2,24 @@ export * as OpenCodeMcp from "./mcp.js"
 
 import type { Plugin } from "@opencode/plugin/effect"
 import { Mcp } from "@opencode/schema/mcp"
+import { HostMcp } from "@ren/host-api/host-mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import { Credential } from "@ren/schema/credential"
-import { Duration, Effect, Fiber, Option, Ref, Schedule } from "effect"
+import { Duration, Effect, Fiber, Option, Ref, Schedule, Schema } from "effect"
 import type { OpenCodeExecution } from "./execution.js"
+
+export const renServer = "ren"
+
+export interface RenAccess {
+  readonly address: Effect.Effect<Option.Option<string>>
+  readonly token: Effect.Effect<Option.Option<string>>
+}
+
+export interface Ren extends RenAccess {
+  readonly lastSender: (sessionId: string) => Effect.Effect<Option.Option<string>>
+}
+
+const decodeSender = Schema.decodeUnknownOption(Schema.Struct({ userID: Schema.String }))
 
 // oxlint-disable-next-line ren/no-comments -- OpenCode 2.0.27 waits 30 seconds for each of startup and tools/list when a server declares no timeout.
 const openCodeTimeout = 30_000
@@ -146,11 +160,36 @@ export const make = Effect.fnUntraced(function* (input: {
   readonly isSession: boolean
   readonly hasEnvironment: boolean
   readonly apps: Option.Option<AppCatalog.Info>
+  readonly sessionId: string
+  readonly ren: Option.Option<Ren>
 }) {
   if (!input.isSession) return { apply: () => Effect.void }
   const local = { local: input.hasEnvironment }
   const latest = yield* Ref.make(input.apps)
-  const applied = yield* Ref.make(servers(input.apps, local))
+  const sender = yield* Ref.make(Option.none<string>())
+  const renServers = Effect.gen(function* () {
+    if (Option.isNone(input.ren)) return []
+    const address = yield* input.ren.value.address
+    const token = yield* input.ren.value.token
+    if (Option.isNone(address) || Option.isNone(token)) return []
+    const user = yield* Ref.get(sender)
+    const headers = {
+      Authorization: `Bearer ${token.value}`,
+      [HostMcp.sessionHeader]: input.sessionId,
+      ...(Option.isSome(user) && { [HostMcp.userHeader]: user.value }),
+    }
+    const url = `${address.value.replace(/\/$/u, "")}${HostMcp.path}`
+    return [
+      {
+        name: renServer,
+        config: new Mcp.RemoteConfig({ type: "remote", url, oauth: false, headers }),
+        within: 2 * openCodeTimeout,
+      },
+    ]
+  })
+  const desired = (apps: Option.Option<AppCatalog.Info>) =>
+    Effect.map(renServers, (ren): ReadonlyArray<Server> => [...servers(apps, local), ...ren])
+  const applied = yield* Ref.make(yield* desired(input.apps))
   const skipped = yield* Ref.make<ReadonlySet<string>>(new Set())
   const retries = yield* Ref.make(Option.none<Fiber.Fiber<void>>())
   const scope = yield* Effect.scope
@@ -219,10 +258,27 @@ export const make = Effect.fnUntraced(function* (input: {
     yield* Ref.set(retries, Option.some(fiber))
   })
 
+  const sync = Effect.gen(function* () {
+    const next = yield* desired(Ref.getUnsafe(latest))
+    const before = yield* Ref.getAndSet(applied, next)
+    if (JSON.stringify(before) === JSON.stringify(next)) return
+    yield* input.context.mcp.reload()
+    yield* ready(before)
+  })
+
   const opening = yield* Ref.get(applied)
   if (opening.length) yield* input.boundary.offer(ready([])).pipe(Effect.forkScoped({ startImmediately: true }))
-  yield* input.context.session.hook("prompt", () =>
-    Effect.flatMap(down, (failed) => (failed.length ? input.boundary.idle(retry) : Effect.void)),
+  yield* input.context.session.hook("prompt", (event) =>
+    Effect.gen(function* () {
+      if (Option.isSome(input.ren)) {
+        const named = Option.map(decodeSender(event.metadata), (metadata) => metadata.userID)
+        if (Option.isSome(named)) yield* Ref.set(sender, named)
+        else if (Option.isNone(yield* Ref.get(sender)))
+          yield* Ref.set(sender, yield* input.ren.value.lastSender(input.sessionId))
+        yield* input.boundary.idle(sync)
+      }
+      if ((yield* down).length) yield* input.boundary.idle(retry)
+    }),
   )
   yield* input.context.session.hook("context", (event) =>
     Effect.sync(() => {
@@ -243,13 +299,6 @@ export const make = Effect.fnUntraced(function* (input: {
     }),
   )
   return {
-    apply: Effect.fnUntraced(function* (apps: Option.Option<AppCatalog.Info>) {
-      yield* Ref.set(latest, apps)
-      const next = servers(apps, local)
-      const before = yield* Ref.getAndSet(applied, next)
-      if (JSON.stringify(before) === JSON.stringify(next)) return
-      yield* input.context.mcp.reload()
-      yield* ready(before)
-    }),
+    apply: (apps: Option.Option<AppCatalog.Info>) => Ref.set(latest, apps).pipe(Effect.andThen(sync)),
   }
 })
