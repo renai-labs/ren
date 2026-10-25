@@ -155,6 +155,35 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       },
       Effect.mapError((error) => new ChannelProvider.Unavailable({ message: error.message })),
     ),
+    send: Effect.fn("GitHub.send")(function* (target, text) {
+      const repository = target.place.split("/").map(encodeURIComponent).join("/")
+      const number = target.thread.split(":").at(1) ?? ""
+      const review = target.message.startsWith("review:")
+      const path = review
+        ? `/repos/${repository}/pulls/${number}/comments/${target.message.slice("review:".length)}/replies`
+        : `/repos/${repository}/issues/${number}/comments`
+      yield* app.post(target.install, path, { body: text }).pipe(
+        Effect.catchTag(
+          "GitHubApp.Failed",
+          (
+            error,
+          ): Effect.Effect<
+            never,
+            ChannelProvider.PlaceGone | ChannelProvider.Unavailable | ChannelProvider.Rejected
+          > => {
+            if (error.status === 404 || error.status === 410)
+              return Effect.fail(new ChannelProvider.PlaceGone({ message: error.message }))
+            if (error.status === 401)
+              return app
+                .forget(target.install)
+                .pipe(Effect.andThen(Effect.fail(new ChannelProvider.Unavailable({ message: error.message }))))
+            if (!error.status || error.status >= 500)
+              return Effect.fail(new ChannelProvider.Unavailable({ message: error.message }))
+            return Effect.fail(new ChannelProvider.Rejected({ message: error.message }))
+          },
+        ),
+      )
+    }),
     installUrl: app.installUrl,
     completeInstall: Effect.fnUntraced(function* (query) {
       if (query.setup_action === "request")

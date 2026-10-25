@@ -52,7 +52,8 @@ export interface Instance {
   readonly deleted: Array<string>
   readonly minted: Array<string>
   readonly resources: Map<string, unknown>
-  readonly options: { failDelete: boolean; tokenExpiresAt: string }
+  readonly posted: Array<{ readonly path: string; readonly body: unknown; readonly authorization: string | null }>
+  readonly options: { failDelete: boolean; tokenExpiresAt: string; postStatus: number }
   readonly stop: () => void
 }
 
@@ -106,6 +107,14 @@ const resource = (state: State, request: Request, url: URL) => {
   return found === undefined ? new Response(null, { status: 404 }) : Response.json(found)
 }
 
+const post = async (state: State, request: Request, url: URL) => {
+  const authorization = request.headers.get("authorization")
+  state.posted.push({ path: url.pathname, body: await request.json(), authorization })
+  return state.options.postStatus < 300
+    ? Response.json({ id: state.posted.length }, { status: state.options.postStatus })
+    : Response.json({ message: "Not Found" }, { status: state.options.postStatus })
+}
+
 export const start = (): Instance => {
   const state: State = {
     installations: new Map(),
@@ -113,7 +122,8 @@ export const start = (): Instance => {
     deleted: [],
     minted: [],
     resources: new Map(),
-    options: { failDelete: false, tokenExpiresAt: "2027-01-15T08:00:00Z" },
+    posted: [],
+    options: { failDelete: false, tokenExpiresAt: "2027-01-15T08:00:00Z", postStatus: 201 },
   }
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -123,7 +133,8 @@ export const start = (): Instance => {
       if (request.method === "POST" && url.pathname === "/login/oauth/access_token") return exchange(state, request)
       if (request.method === "GET" && url.pathname === "/user/installations")
         return userInstallations(state, request, url)
-      if (request.method === "GET" && url.pathname.startsWith("/repos/")) return resource(state, request, url)
+      if (url.pathname.startsWith("/repos/"))
+        return request.method === "POST" ? post(state, request, url) : resource(state, request, url)
       const match = /^\/app\/installations\/(\d+)(\/access_tokens)?$/u.exec(url.pathname)
       if (!match?.[1]) return new Response(null, { status: 404 })
       return appInstallation(state, request, match[1], { tokens: request.method === "POST" && Boolean(match[2]) })

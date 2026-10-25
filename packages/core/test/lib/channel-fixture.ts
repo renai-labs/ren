@@ -16,6 +16,7 @@ import { Access } from "../../src/access.js"
 import { ChannelInstalls } from "../../src/channel-installs.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
+import { ChannelReply } from "../../src/channel-reply.js"
 import { ChannelRoute } from "../../src/channel-route.js"
 import { Channels } from "../../src/channels.js"
 import { DurableRunner } from "../../src/durable-runner.js"
@@ -51,8 +52,17 @@ const hold = (held: boolean) =>
     }),
   )
 
+export class Outbox extends Context.Service<
+  Outbox,
+  {
+    readonly sent: Array<{ readonly target: ChannelProvider.Target; readonly text: string }>
+    readonly attempts: Array<string>
+  }
+>()("@ren/core/test/ChannelFixture/Outbox") {}
+
 const provider = Effect.gen(function* () {
   const gate = yield* Hold
+  const outbox = yield* Outbox
   return {
     id: "slack",
     verify: (request) =>
@@ -83,6 +93,17 @@ const provider = Effect.gen(function* () {
       found.message === "unreadable"
         ? Effect.fail(new ChannelProvider.Unavailable({ message: "Slack is down" }))
         : Effect.succeedSome("[Bob] the deploy failed at 10:02"),
+    send: (target, text) =>
+      Effect.suspend(
+        (): Effect.Effect<void, ChannelProvider.PlaceGone | ChannelProvider.Unavailable | ChannelProvider.Rejected> => {
+          outbox.attempts.push(text)
+          if (text === "gone") return Effect.fail(new ChannelProvider.PlaceGone({ message: "channel_not_found" }))
+          if (text === "down") return Effect.fail(new ChannelProvider.Unavailable({ message: "Slack is down" }))
+          if (text === "refused") return Effect.fail(new ChannelProvider.Rejected({ message: "msg_too_long" }))
+          outbox.sent.push({ target, text })
+          return Effect.void
+        },
+      ),
     installUrl: (state) => `https://slack.test/install?state=${state}`,
     completeInstall: (query) =>
       query.team
@@ -234,9 +255,14 @@ const cell = Layer.effect(
 const models = Models.layerNone
 
 const core = (held: boolean) =>
-  Layer.mergeAll(SessionRunner.layer, ChannelInstalls.layer, ChannelRoute.layer, notices).pipe(
+  Layer.mergeAll(SessionRunner.layer, ChannelInstalls.layer, ChannelRoute.layer, ChannelReply.layer, notices).pipe(
     Layer.provideMerge(Layer.mergeAll(BrainRegistry.layer, ChannelProvider.layer([provider]), Access.layer)),
-    Layer.provideMerge(hold(held)),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        hold(held),
+        Layer.sync(Outbox, () => ({ sent: [], attempts: [] })),
+      ),
+    ),
   )
 
 const onCell = <E, R, RE, RR>(
@@ -302,6 +328,9 @@ const quick = (live: Clock.Clock): Clock.Clock => ({
   monotonicTimeNanos: live.monotonicTimeNanos,
   sleep: (duration) => (Duration.isLessThan(duration, Duration.seconds(30)) ? Effect.yieldNow : live.sleep(duration)),
 })
+
+export const quickly = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.flatMap(Clock.Clock, (live) => effect.pipe(Effect.provideService(Clock.Clock, quick(live))))
 
 export const receive = (body: string, signature?: string) =>
   Effect.gen(function* () {

@@ -174,6 +174,16 @@ export const layer = Layer.effect(
         },
       }
       const claimed = yield* claim(route, event, payload.sessionId)
+      yield* database.db
+        .update(thread)
+        .set({
+          place_name: event.place.name ?? event.place.id,
+          last_message: event.message,
+          last_message_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where(eq(thread.id, claimed.id))
+        .pipe(Effect.orDie)
       const sendToThread = send({ ...message, sessionId: claimed.sessionId, delivery: "steer" })
       if (claimed.created) return yield* sendToThread
       const create = (options: { readonly agentId?: Agent.ID }) =>
