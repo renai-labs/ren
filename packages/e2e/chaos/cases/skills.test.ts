@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { AppRegistry } from "@ren/core/app/registry"
 import { Database } from "@ren/db/database"
 import { AppProfile } from "@ren/schema/app-profile"
+import { Space } from "@ren/schema/space"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Effect, Schema } from "effect"
 import { Platform } from "../lib/platform.js"
@@ -81,6 +82,10 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
           yield* database.db
             .insert(Database.Schema.app_profile_space)
             .values({ profile_id: profileId, space_id: owner.spaceId })
+          // oxlint-disable-next-line ren/no-comments -- A session brain reaches its space's apps only through its creator's space membership (Credentials.scopeOf); a chat's creator is always a member.
+          yield* database.db
+            .insert(Database.Schema.space_member)
+            .values({ id: Space.MembershipID.create(), space_id: owner.spaceId, user_id: owner.createdBy })
         }),
       )
       const session = await stack().session()

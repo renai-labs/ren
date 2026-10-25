@@ -19,6 +19,7 @@
     "@playwright/test": "catalog:",
     "@ren/brain": "workspace:*",
     "@ren/environment-api": "workspace:*",
+    "@ren/host-api": "workspace:*",
     "@ren/cell": "workspace:*",
     "@ren/client": "workspace:*",
     "@ren/core": "workspace:*",

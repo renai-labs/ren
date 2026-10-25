@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { OpenCode } from "@opencode/client"
+import { Ren } from "@ren/client/chat"
 import { TestToken } from "@ren/cell/testing"
 import { Session } from "@ren/schema/session"
 import { SessionDriver } from "../lib/drivers/session.js"
@@ -28,8 +28,9 @@ describe.skipIf(Platform.wrangler !== undefined)("clients on the user link", () 
 
   afterAll(() => lane.stack?.dispose())
 
+  // oxlint-disable-next-line ren/no-comments -- A second person reaches the brain as every client does: through the Chat API with a client token (cell/src/entry.ts:49).
   const second = (session: SessionDriver.Driver) =>
-    OpenCode.make({ baseUrl: stack().cellProxy.url, headers: { authorization: TestToken.basic(session.client) } })
+    Ren.make({ baseUrl: stack().cellProxy.url, headers: { authorization: TestToken.basic(session.client) } })
 
   test("two clients prompt, queue and interrupt, and both read the same transcript", async () => {
     const session = await stack().session()
@@ -38,17 +39,14 @@ describe.skipIf(Platform.wrangler !== undefined)("clients on the user link", () 
     const queued = stack().provider.script([ModelProvider.text("queued answer")])
     await session.opencode.session.prompt({ sessionID: session.id, text: `first ${first.marker}` })
     await first.called(1)
-    const sent = await other.session.prompt({
-      sessionID: session.id,
-      text: `second ${queued.marker}`,
-      delivery: "queue",
-    })
+    const sent = Session.MessageID.create()
+    await other.session.prompt({ sessionID: session.id, id: sent, text: `second ${queued.marker}`, delivery: "queue" })
     expect((await session.opencode.session.interrupt({ sessionID: session.id })).interrupted).toBe(true)
-    await session.settled()
-    const views = await Promise.all([session.messages(), SessionDriver.messages(other, session.id)])
-    expect(views[0]).toEqual(views[1])
+    const own = await session.settled()
+    const seen = (await other.session.messages({ sessionID: session.id, limit: 200 })).items
+    expect(seen.map((message) => message.id).toSorted()).toEqual(own.map((message) => message.id).toSorted())
     const inbox = await other.session.inbox.list({ sessionID: session.id })
-    expect(SessionDriver.occurrences(views[0], sent.id) + inbox.filter((item) => item.id === sent.id).length).toBe(1)
+    expect(SessionDriver.occurrences(own, sent) + inbox.filter((item) => item.id === sent).length).toBe(1)
   })
 
   test("two clients submitting the same message ID create one user message and one turn", async () => {
@@ -57,7 +55,7 @@ describe.skipIf(Platform.wrangler !== undefined)("clients on the user link", () 
     const id = Session.MessageID.create()
     const results = await Promise.all(
       [session.opencode, second(session)].map((client) =>
-        settled(client.session.prompt({ sessionID: session.id, id, text: `same ${script.marker}` })),
+        settled(client.session.prompt({ sessionID: session.id, id, text: `same ${script.marker}`, delivery: "steer" })),
       ),
     )
     expect(results).toContain("ok")
