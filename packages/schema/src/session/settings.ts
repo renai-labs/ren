@@ -3,14 +3,6 @@ export * as SessionSettings from "./settings.js"
 import { Schema } from "effect"
 import { Settings } from "../settings.js"
 
-export interface Known extends Schema.Schema.Type<typeof Known> {}
-export const Known = Schema.Struct({
-  ren: Schema.optionalKey(Schema.String),
-  organization: Schema.optionalKey(Schema.String),
-  space: Schema.optionalKey(Schema.String),
-  agents: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
-}).annotate({ identifier: "SessionSettings.Known" })
-
 export interface Layer extends Schema.Schema.Type<typeof Layer> {}
 export const Layer = Schema.Struct({
   hash: Schema.NullOr(Schema.String),

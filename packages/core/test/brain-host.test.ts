@@ -277,14 +277,14 @@ describe("BrainHost pull", () => {
         spaceId: subject.owner.spaceId,
         generation: 1,
       }
-      const request = { version: "test", keyIds: [], models: null, layers: { agents: {} }, sessions: [] }
-      const initial = yield* brain.pull(host, { ...request, apps: null })
+      const request = { version: "test", keyIds: [], sessions: [] }
+      const initial = yield* brain.pull(host, request)
       if (!initial.apps) return yield* Effect.die(new Error("The first pull has no catalog"))
       yield* database.db
         .update(Database.Schema.space)
         .set({ archived_at: new Date() })
         .where(eq(Database.Schema.space.id, subject.owner.spaceId))
-      const reply = yield* brain.pull(host, { ...request, apps: initial.apps.fingerprint })
+      const reply = yield* brain.pull(host, request)
       expect(reply).not.toHaveProperty("apps")
       expect(reply.chats.map((chat) => chat.id)).toContain(subject.sessionId)
     }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
@@ -328,9 +328,9 @@ describe("BrainHost pull", () => {
             { version: "test", keyIds: [], sessions: [] },
           ),
         ).pipe(Effect.provide(cell("http://127.0.0.1:9")))
-        return { models: reply.models, inference: reply.inference }
+        return reply.inference
       })
-      const expected = { models: { hash: "" }, inference: { baseUrl: Shared.stub().root } }
+      const expected = { baseUrl: Shared.stub().root }
       expect([yield* replyOf(true), yield* replyOf(false)]).toEqual([expected, expected])
     }),
   )
@@ -351,8 +351,6 @@ describe("BrainHost pull", () => {
           {
             version: "test",
             keyIds: [],
-            models: null,
-            layers: { agents: {} },
             sessions: [],
             roots: [subject.sessionId, gone],
           },

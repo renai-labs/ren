@@ -53,40 +53,19 @@ export interface PullRequest extends Schema.Schema.Type<typeof PullRequest> {}
 export const PullRequest = Schema.Struct({
   version: Schema.String.annotate({ description: "The brain’s version." }),
   keyIds: Schema.Array(Schema.String).annotate({ description: "The ids of the public keys the brain holds." }),
-  models: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
-    description: "Ignored. A brain from before HR9 sends the models hash it has.",
-  }),
-  apps: Schema.optionalKey(Schema.NullOr(Schema.String)).annotate({
-    description: "Ignored. A brain from before HR9 sends the app catalog fingerprint it has.",
-  }),
-  layers: Schema.optionalKey(SessionSettings.Known).annotate({
-    description: "Ignored. A brain from before HR9 sends the settings layer hashes it has.",
-  }),
   sessions: Schema.Array(PullSession),
   roots: Schema.optionalKey(Schema.Array(Session.ID)).annotate({
     description: "The root chats the brain’s harness holds. Ren names the ones it deleted in `deleted`.",
-  }),
-  env: Schema.optionalKey(Schema.String).annotate({
-    description: "Ignored. A brain from before HR9 sends the hash of the credential env vars it has.",
   }),
 }).annotate({ identifier: "Host.PullRequest" })
 
 export interface PullEnv extends Schema.Schema.Type<typeof PullEnv> {}
 export const PullEnv = Schema.Struct({
-  hash: Schema.String.annotate({ description: "Always empty. A brain from before HR9 reads it." }),
   variables: Schema.Record(Schema.String, Schema.String),
 }).annotate({
   identifier: "Host.PullEnv",
   description:
     "The credential env vars of the brain: `LABEL=ren:LABEL` for each key that reaches it (A35), and the value of a delivered secret (C9).",
-})
-
-export interface PullModels extends Schema.Schema.Type<typeof PullModels> {}
-export const PullModels = Schema.Struct({
-  hash: Schema.String,
-}).annotate({
-  identifier: "Host.PullModels",
-  description: "Always an empty hash. A brain from before HR3 reads it; models come from the inference service.",
 })
 
 export interface PullInference extends Schema.Schema.Type<typeof PullInference> {}
@@ -112,7 +91,6 @@ export const PullChat = Schema.Struct({
 export interface PullReply extends Schema.Schema.Type<typeof PullReply> {}
 export const PullReply = Schema.Struct({
   publicKeys: Schema.Array(Signature.PublicKey),
-  models: PullModels,
   inference: Schema.optionalKey(PullInference).annotate({
     description: "Omitted when Ren has no inference service; the brain then has no models.",
   }),

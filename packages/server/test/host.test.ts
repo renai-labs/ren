@@ -116,8 +116,6 @@ describe("Ren Host API: host token checks", () => {
             JSON.stringify({
               version: "test",
               keyIds: ["k1", "k2"],
-              models: null,
-              layers: { agents: {} },
               sessions: [],
             }),
             "application/json",

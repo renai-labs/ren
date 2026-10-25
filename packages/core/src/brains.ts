@@ -492,14 +492,12 @@ export const layer = Layer.effect(
         const inference = yield* models.inference
         return {
           publicKeys: client.publicKeys,
-          models: { hash: "" },
           ...Option.match(inference, { onNone: () => ({}), onSome: (found) => ({ inference: found }) }),
           ...Option.match(apps, { onNone: () => ({}), onSome: (catalog) => ({ apps: catalog }) }),
           layers: pulled.layers,
           chats: pulled.chats,
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
           env: {
-            hash: "",
             variables: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),
           },
         } satisfies PullReply
