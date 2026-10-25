@@ -193,6 +193,40 @@ describe("GitHub", () => {
     }),
   )
 
+  app.live(
+    "a reply is an issue comment, or a reply in the review thread of a diff-line comment, posted as the App",
+    () =>
+      Effect.gen(function* () {
+        const provider = GitHub.make(yield* client)
+        const install = installation("acme")
+        const target = { install, place: "acme/api", thread: "8812:41" }
+        yield* provider.send({ ...target, message: "issue:456" }, "Rolled back.")
+        yield* provider.send({ ...target, message: "review:789" }, "Fixed on this line.")
+        expect(github.posted.slice(-2)).toEqual([
+          {
+            path: "/repos/acme/api/issues/41/comments",
+            body: { body: "Rolled back." },
+            authorization: expect.stringMatching(/^Bearer ghs_/u),
+          },
+          {
+            path: "/repos/acme/api/pulls/41/comments/789/replies",
+            body: { body: "Fixed on this line." },
+            authorization: expect.stringMatching(/^Bearer ghs_/u),
+          },
+        ])
+        const failures = yield* Effect.forEach([404, 422, 502], (status) =>
+          Effect.sync(() => (github.options.postStatus = status)).pipe(
+            Effect.andThen(Effect.flip(provider.send({ ...target, message: "issue:456" }, "again"))),
+          ),
+        ).pipe(Effect.ensuring(Effect.sync(() => (github.options.postStatus = 201))))
+        expect(failures.map((error) => error._tag)).toEqual([
+          "ChannelProvider.PlaceGone",
+          "ChannelProvider.Rejected",
+          "ChannelProvider.Unavailable",
+        ])
+      }),
+  )
+
   app.effect("the App JWT is issued 60 seconds in the past and expires within 10 minutes", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(1_800_000_000_000)

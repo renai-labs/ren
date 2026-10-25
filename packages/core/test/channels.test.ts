@@ -5,6 +5,7 @@ import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { eq } from "drizzle-orm"
 import { Deferred, Effect, Layer, Queue } from "effect"
+import { ChannelReply } from "../src/channel-reply.js"
 import { Channels } from "../src/channels.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
 import { testEffect } from "./lib/effect.js"
@@ -299,6 +300,82 @@ describe("Channels", () => {
         `${found.text}\n(second.bin is not attached: a message’s files total at most 10 MB.)`,
       )
       expect(accepted[0]?.prompt.files?.map((file) => file.name)).toEqual(["first.bin", "third.txt"])
+    }),
+  )
+})
+
+describe("ChannelReply", () => {
+  it.live("a reply goes to the thread of the session's latest channel message, at its place and message", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const sessionId = yield* started(subject.owner)
+      const replies = yield* ChannelReply.Service
+      const outbox = yield* ChannelFixture.Outbox
+      const first = ChannelFixture.event(subject.install)
+      const second = ChannelFixture.event(subject.install, {
+        place: { id: "C09", kind: "channel", name: "sales" },
+        thread: { id: "C09:1713.90" },
+        message: "1713.95",
+      })
+      yield* Effect.forEach([first, second], (each) =>
+        ChannelFixture.thread(subject.owner.organizationId, each, sessionId).pipe(
+          Effect.andThen(ChannelFixture.receive(ChannelFixture.delivery(each))),
+          Effect.andThen(ChannelFixture.settled(each)),
+        ),
+      )
+      expect(yield* replies.reply(sessionId, "Rolled back.")).toEqual({ provider: "slack", place: "sales" })
+      expect(outbox.sent).toEqual([
+        {
+          target: { install: subject.install, place: "sales", thread: "C09:1713.90", message: "1713.95" },
+          text: "Rolled back.",
+        },
+      ])
+    }),
+  )
+
+  it.live("a child session, or a session with no thread, cannot reply", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const database = yield* Database.Service
+      const replies = yield* ChannelReply.Service
+      const parent = yield* started(subject.owner)
+      const child = yield* started(subject.owner)
+      const found = ChannelFixture.event(subject.install)
+      yield* ChannelFixture.thread(subject.owner.organizationId, found, parent)
+      yield* ChannelFixture.receive(ChannelFixture.delivery(found))
+      yield* ChannelFixture.settled(found)
+      yield* database.db
+        .update(Database.Schema.agent_session)
+        .set({ parent_id: parent, root_id: parent })
+        .where(eq(Database.Schema.agent_session.id, child))
+      expect((yield* Effect.flip(replies.reply(child, "hi"))).message).toBe(
+        "Only the main agent replies in the thread.",
+      )
+      expect((yield* Effect.flip(replies.reply(yield* started(subject.owner), "hi"))).message).toBe(
+        "This chat has no thread to reply to.",
+      )
+    }),
+  )
+
+  it.live("a gone thread or a refusal returns an error at once; a provider that does not answer is tried 4 times", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const sessionId = yield* started(subject.owner)
+      const replies = yield* ChannelReply.Service
+      const outbox = yield* ChannelFixture.Outbox
+      const found = ChannelFixture.event(subject.install)
+      yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
+      yield* ChannelFixture.receive(ChannelFixture.delivery(found))
+      yield* ChannelFixture.settled(found)
+      const failed = yield* Effect.forEach(["gone", "refused", "down"], (text) =>
+        ChannelFixture.quickly(Effect.flip(replies.reply(sessionId, text))),
+      )
+      expect(failed.map((error) => error.message)).toEqual([
+        "The Slack thread is gone, so the reply was not sent.",
+        "Slack refused the reply: msg_too_long",
+        "Slack did not answer, so the reply was not sent. Try again later.",
+      ])
+      expect(outbox.attempts).toEqual(["gone", "refused", "down", "down", "down", "down"])
     }),
   )
 })

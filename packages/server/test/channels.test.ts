@@ -13,6 +13,7 @@ const echo = Effect.succeedSome<ChannelProvider.Provider>({
   parse: (request) => Effect.succeed({ _tag: "Handshake", body: { raw: request.body } }),
   fetchFile: () => Effect.fail(new ChannelProvider.FileUnavailable({ message: "no files" })),
   context: () => Effect.succeedNone,
+  send: () => Effect.void,
   installUrl: (state) => `https://slack.test/install?state=${state}`,
   completeInstall: (query) =>
     query.team

@@ -23,6 +23,21 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("ChannelProvi
   message: Schema.String,
 }) {}
 
+export class PlaceGone extends Schema.TaggedError<PlaceGone>()("ChannelProvider.PlaceGone", {
+  message: Schema.String,
+}) {}
+
+export class Rejected extends Schema.TaggedError<Rejected>()("ChannelProvider.Rejected", {
+  message: Schema.String,
+}) {}
+
+export interface Target {
+  readonly install: string
+  readonly place: string
+  readonly thread: string
+  readonly message: string
+}
+
 export interface Request {
   readonly headers: Headers
   readonly body: string
@@ -40,6 +55,7 @@ export interface Provider {
   readonly parse: (request: Request) => Effect.Effect<Channel.Parsed, Malformed>
   readonly fetchFile: (install: string, file: Channel.FileRef) => Effect.Effect<Uint8Array, FileUnavailable>
   readonly context: (event: Channel.Event) => Effect.Effect<Option.Option<string>, Unavailable>
+  readonly send: (target: Target, text: string) => Effect.Effect<void, PlaceGone | Unavailable | Rejected>
   readonly installUrl: (state: string) => string
   readonly completeInstall: (query: Readonly<Record<string, string>>) => Effect.Effect<Installed, InstallFailed>
   readonly changedOnProvider: (query: Readonly<Record<string, string>>) => boolean
