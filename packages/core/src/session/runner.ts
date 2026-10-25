@@ -7,7 +7,7 @@ import type { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { and, eq, isNull } from "drizzle-orm"
-import { Context, DateTime, Effect, Layer, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Schema, Struct } from "effect"
 import { AgentQueries } from "../agent/queries.js"
 import { BrainHost } from "../brain-host.js"
 import { Brains } from "../brains.js"
@@ -138,7 +138,7 @@ export const layer = Layer.effect(
               yield* brain.start(
                 {
                   ...start,
-                  initialMessage: { messageId: input.messageId, prompt: input.prompt, sender: input.sender },
+                  initialMessage: Struct.omit(input, ["sessionId", "delivery"]),
                 },
                 row,
               )

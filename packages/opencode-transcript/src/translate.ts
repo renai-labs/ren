@@ -11,6 +11,7 @@ import type { SessionMessage as OpenCodeMessage } from "@opencode/schema/session
 import type { Revert } from "@opencode/schema/session-revert"
 import type { Shell as OpenCodeShell } from "@opencode/schema/shell"
 import type { Skill } from "@opencode/schema/skill"
+import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
 import { SessionEvent } from "@ren/schema/session/event"
@@ -25,12 +26,18 @@ import { Option, Predicate, pipe, Schema, Struct } from "effect"
 const UserID = Schema.Struct({ metadata: Schema.Struct({ userID: Schema.String }) })
 const decodeUserID = Schema.decodeUnknownOption(UserID)
 
-const withSender = (value: unknown): unknown => {
+const FromChannel = Schema.Struct({ metadata: Schema.Struct({ channel: ChannelOrigin.Info }) })
+const decodeChannel = Schema.decodeUnknownOption(FromChannel)
+
+const withMetadata = (value: unknown): unknown => {
   if (!Predicate.isObject(value)) return value
-  return Option.match(decodeUserID(value), {
-    onNone: () => value,
-    onSome: (found) => ({ ...value, sender: { userId: found.metadata.userID } }),
-  })
+  const sender = decodeUserID(value)
+  const channel = decodeChannel(value)
+  return {
+    ...value,
+    ...(Option.isSome(sender) && { sender: { userId: sender.value.metadata.userID } }),
+    ...(Option.isSome(channel) && { channel: channel.value.metadata.channel }),
+  }
 }
 
 const Kind = Schema.Struct({ metadata: Schema.Struct({ kind: Schema.String }) })
@@ -97,7 +104,7 @@ export const event = (raw: unknown): Option.Option<SessionEvent.Event> => {
     nested(raw, "data", (data) =>
       pipe(
         data,
-        (value) => nested(value, "item", (item) => nested(item, "payload", withSender)),
+        (value) => nested(value, "item", (item) => nested(item, "payload", withMetadata)),
         (value) => nested(value, "form", withKind),
         (value) => nested(value, "info", withOwner),
       ),
@@ -105,9 +112,9 @@ export const event = (raw: unknown): Option.Option<SessionEvent.Event> => {
   )
 }
 
-export const message = (info: OpenCodeMessage.Info) => readMessage(withSender(info))
+export const message = (info: OpenCodeMessage.Info) => readMessage(withMetadata(info))
 
-export const inbox = (info: OpenCodeInbox.Info) => readInbox(nested(info, "payload", withSender))
+export const inbox = (info: OpenCodeInbox.Info) => readInbox(nested(info, "payload", withMetadata))
 
 export const compaction = (info: OpenCodeInbox.Compaction) => readCompaction(info)
 

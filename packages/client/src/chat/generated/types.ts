@@ -95,6 +95,8 @@ export type SessionCapabilitiesInfo = {
   files: boolean
 }
 
+export type ChannelProvider = "slack" | "linear" | "github"
+
 export type SessionMessageText = { type: "text"; text: string }
 
 export type SessionMessageReasoning = {
@@ -729,6 +731,15 @@ export type SessionModelInfo = {
   limit: { context: number; output: number }
 }
 
+export type ChannelOriginInfo = {
+  provider: ChannelProvider
+  place: string
+  threadUrl?: string
+  sender: string
+  handle?: string
+  context?: string
+}
+
 export type SessionStatusInfo = SessionStatusIdle | SessionStatusBusy
 
 export type SessionCatalogFile = { path: string; type: SessionCatalogFileType }
@@ -738,17 +749,6 @@ export type SessionInboxUserPayload = {
   files?: Array<SessionMessageFileAttachment>
   agents?: Array<SessionMessageAgentAttachment>
   skills?: Array<SessionMessageSkillAttachment>
-  sender?: SessionMessageSender
-}
-
-export type SessionMessageUser = {
-  id: SessionMessageID
-  time: { created: number }
-  text: string
-  files?: Array<SessionMessageFileAttachment>
-  agents?: Array<SessionMessageAgentAttachment>
-  skills?: Array<SessionMessageSkillAttachment>
-  type: "user"
   sender?: SessionMessageSender
 }
 
@@ -840,6 +840,18 @@ export type SessionEventFormReplied = {
 }
 
 export type SessionEventShellCreated = { id: string; created: number; type: "shell.created"; data: { info: ShellInfo } }
+
+export type SessionMessageUser = {
+  id: SessionMessageID
+  time: { created: number }
+  text: string
+  files?: Array<SessionMessageFileAttachment>
+  agents?: Array<SessionMessageAgentAttachment>
+  skills?: Array<SessionMessageSkillAttachment>
+  type: "user"
+  sender?: SessionMessageSender
+  channel?: ChannelOriginInfo
+}
 
 export type SessionStatusFamily = { [x: string]: SessionStatusInfo }
 

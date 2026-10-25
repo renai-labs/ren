@@ -107,6 +107,8 @@ export type SessionMessageMention = { start: number; end: number; text: string }
 
 export type SessionMessageSender = { userId: string }
 
+export type ChannelProvider = "slack" | "linear" | "github"
+
 export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
 
 export type SessionMessageShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
@@ -205,8 +207,6 @@ export type RenInferenceTone = "ok" | "warn" | "error"
 export type RenInferenceMeter = { key: string; title: string; percent: number | null; resetsAt?: string | null }
 
 export type ChannelInstallID = string
-
-export type ChannelProvider = "slack" | "linear" | "github"
 
 export type HealthInfo = { status: HealthStatus; version: string }
 
@@ -419,6 +419,17 @@ export type SessionMessageAgentAttachment = { name: string; mention?: SessionMes
 
 export type SessionMessageSkillAttachment = { id: string; name: string; text?: string; mention?: SessionMessageMention }
 
+export type ChannelOriginInfo = {
+  provider: ChannelProvider
+  place: string
+  threadUrl?: string
+  sender: string
+  handle?: string
+  context?: string
+}
+
+export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string }
+
 export type SessionMessageSynthetic = {
   id: SessionMessageID
   time: { created: number }
@@ -561,8 +572,6 @@ export type ChannelInstallInfo = {
   createdAt: string
 }
 
-export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string }
-
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
 export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
@@ -663,7 +672,10 @@ export type SessionMessageUser = {
   skills?: Array<SessionMessageSkillAttachment>
   type: "user"
   sender?: SessionMessageSender
+  channel?: ChannelOriginInfo
 }
+
+export type ChannelInstallProviderInfos = { items: Array<ChannelInstallProviderInfo> }
 
 export type SessionMessageToolCompleted = {
   status: "completed"
@@ -729,8 +741,6 @@ export type TaskEventData =
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
 export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
-
-export type ChannelInstallProviderInfos = { items: Array<ChannelInstallProviderInfo> }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 

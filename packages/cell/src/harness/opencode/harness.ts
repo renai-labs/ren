@@ -335,7 +335,11 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
       text: input.prompt.text,
       files: input.prompt.files?.map((file) => ({ uri: file.url, name: file.name })),
       delivery: input.delivery,
-      metadata: { userID: input.sender.userId, ...(input.sender.memberId && { memberID: input.sender.memberId }) },
+      metadata: {
+        userID: input.sender.userId,
+        ...(input.sender.memberId && { memberID: input.sender.memberId }),
+        ...(input.channel && { channel: input.channel }),
+      },
     })
     .pipe(Effect.orDie)
   return { messageId: input.messageId }

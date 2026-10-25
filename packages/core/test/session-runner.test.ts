@@ -181,7 +181,7 @@ describe("SessionRunner", () => {
       }),
   )
 
-  it.live("send to a session that the host lost starts it again from its start input, then delivers", () =>
+  it.live("send to a session that the host lost starts it again from its start input, then delivers it whole", () =>
     Effect.gen(function* () {
       const sessions = yield* SessionRunner.Service
       const owner = yield* Seed.owner()
@@ -195,12 +195,14 @@ describe("SessionRunner", () => {
           prompt: { text: `again ${script.marker}` },
           delivery: "steer",
           sender: { userId: owner.createdBy },
+          channel: { provider: "github", place: "acme/api", sender: "octocat" },
         }),
       ).toEqual({ messageId })
       const turn = yield* Effect.promise(() => script.called())
       expect(
         turn.body.messages.filter((message) => JSON.stringify(message.content ?? "").includes(script.marker)),
       ).toHaveLength(1)
+      expect(turn.text).toStartWith("GitHub acme/api · octocat\n---")
     }),
   )
 })

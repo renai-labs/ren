@@ -12,6 +12,8 @@ import { EnvironmentSession } from "@ren/brain/environment/session"
 import { BrainSettings } from "@ren/brain/settings"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { Models } from "@ren/schema/models"
+import { Channel } from "@ren/schema/channel"
+import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Session } from "@ren/schema/session"
 import {
   Clock,
@@ -110,6 +112,35 @@ export const modelRef = (model: Session.Model) => ({
   id: Model.ID.make(model.modelId),
   ...(model.variant && { variant: Model.VariantID.make(model.variant) }),
 })
+
+const decodeOrigin = Schema.decodeUnknownOption(Schema.Struct({ channel: ChannelOrigin.Info }))
+
+const senderOf = (origin: ChannelOrigin.Info) => {
+  if (!origin.handle) return origin.sender
+  if (origin.handle === origin.sender) return `@${origin.handle}`
+  return `${origin.sender} (@${origin.handle})`
+}
+
+const channelHeader = (origin: ChannelOrigin.Info) =>
+  [
+    [`${Channel.titles[origin.provider]} ${origin.place}`, senderOf(origin), origin.threadUrl]
+      .filter(Predicate.isNotUndefined)
+      .join(" · "),
+    origin.context,
+    "---\n\n",
+  ]
+    .filter(Predicate.isNotUndefined)
+    .join("\n")
+
+const withOrigin = (message: Message) =>
+  Option.match(message.role === "user" ? decodeOrigin(message.metadata) : Option.none(), {
+    onNone: () => message,
+    onSome: (found) =>
+      Message.make({
+        ...Struct.omit(message, ["content"]),
+        content: [Message.text(channelHeader(found.channel)), ...message.content],
+      }),
+  })
 
 const withoutModel = (value: unknown) =>
   Predicate.isObject(value) ? Record.filter(value, (_, key) => key !== "model") : value
@@ -285,6 +316,12 @@ export const make = (
                 ],
               })
             })
+            event.messages = event.messages.map(withOrigin)
+          }),
+        )
+        yield* context.session.hook("compaction", (event) =>
+          Effect.sync(() => {
+            event.messages = event.messages.map(withOrigin)
           }),
         )
         const initial = yield* Ref.get(desired)
