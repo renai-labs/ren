@@ -76,6 +76,15 @@ export const Sender = Schema.Struct({
   }),
 }).annotate({ identifier: "Session.Sender" })
 
+export interface Synthetic extends Schema.Schema.Type<typeof Synthetic> {}
+export const Synthetic = Schema.Struct({
+  description: Schema.NonEmptyString.annotate({ description: "The notice that the transcript shows for it." }),
+  source: Schema.NonEmptyString.annotate({ description: "What sent it, such as channel." }),
+}).annotate({
+  identifier: "Session.Synthetic",
+  description: "A message from Ren, not from a person: the model reads its text, and the transcript shows a notice.",
+})
+
 export interface SendInput extends Schema.Schema.Type<typeof SendInput> {}
 export const SendInput = Schema.Struct({
   sessionId: ID,
@@ -84,6 +93,7 @@ export const SendInput = Schema.Struct({
   delivery: Delivery.pipe(Schema.withDecodingDefaultKey(Effect.succeed("steer" as const))),
   sender: Sender,
   channel: Schema.optionalKey(ChannelOrigin.Info),
+  synthetic: Schema.optionalKey(Synthetic),
 }).annotate({ identifier: "Session.SendInput" })
 
 export interface StartInput extends Schema.Schema.Type<typeof StartInput> {}
