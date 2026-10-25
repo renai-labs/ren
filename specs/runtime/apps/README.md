@@ -77,7 +77,7 @@ Each arrow is one contract (section 7). A step knows the contract on each side o
 | 2    | `App`, `AppRelease`        | `core`                                    | Stores apps and releases.                                                             | Postgres          | —                         | —                    |
 | 3    | `SpaceApp`                 | `core`                                    | Installs, pins and uninstalls an app in a space.                                      | Postgres          | —                         | —                    |
 | 4    | `AppResolve`               | `core`                                    | Gives the catalog of a space, and its revision.                                       | Postgres          | a cache keyed by revision | —                    |
-| 5    | `HotReload.Source` `apps`  | `core` (source), `cell` (one hash)        | Sends the catalog to brains when the revision changes (`specs/hot-reload.md`).        | pull              | push (poke)               | `server/src/main.ts` |
+| 5    | `HotReload.Source` `apps`  | `core` (source), `cell` (one hash)        | Sends the catalog on each pull ([`../hot-reload/spec.md`](../hot-reload/spec.md)).    | pull              | push (poke)               | `server/src/main.ts` |
 | 6    | `AppRender`                | one package per harness, `schema` only    | Turns a catalog into the harness's config. Reports names that clash for that harness. | OpenCode          | each new harness          | the brain's runtime  |
 | —    | `EnvironmentProvider`      | `core` (exists)                           | Builds the machine with the environment part.                                         | as today          | Daytona, Modal            | `server/src/main.ts` |
 | —    | `Credentials` requirements | `core` (`../credentials/owner-access.md`) | Compares the requirements part with what resolves.                                    | as specified      | —                         | —                    |
@@ -86,9 +86,9 @@ Each arrow is one contract (section 7). A step knows the contract on each side o
 Rules:
 
 1. `core` never imports a render package. A render package depends only on `schema`, as `opencode-transcript` does.
-2. The cell and OpenCode never see the word "app". They see one hash and one config (`specs/hot-reload.md` §3 rule 5).
-3. `AppResolve.revision` reads no release content. `AppResolve.catalog` runs only when the revision changes (`specs/hot-reload.md` §3 rule 4).
-4. A catalog holds no secret, and its revision covers no secret (`specs/hot-reload.md` §3 rule 3).
+2. The cell and OpenCode never see the word "app". They see one config.
+3. `AppResolve.catalog` runs on each pull: the pull has no hashes (HR9 in [`../hot-reload/README.md`](../hot-reload/README.md)).
+4. A catalog holds no secret.
 
 ## 7. Contracts
 
@@ -103,4 +103,4 @@ Rules:
 
 ## 8. Open points
 
-1. Where Render runs. With `specs/hot-reload.md` §4.4, OpenCode fetches its config from Ren, so Render runs in `server`. With the pull path, it runs in `cell`. The contract is the same in both cases. Decide in topic 6.
+1. Where Render runs. The brain pulls the catalog ([`../hot-reload/spec.md`](../hot-reload/spec.md)), so Render runs in `cell`.
