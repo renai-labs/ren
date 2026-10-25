@@ -26,6 +26,7 @@ import {
 import { Access } from "./access.js"
 import { BrainClient } from "./brain-client.js"
 import { Credentials } from "./credentials.js"
+import { GitHubApp } from "./github-app.js"
 import { McpProvider } from "./mcp-provider.js"
 import { Models } from "./models.js"
 import { SpacePolicy } from "./space/policy.js"
@@ -150,6 +151,7 @@ export const layerMinted = Layer.effect(
     const grants = yield* Models.Service
     const database = yield* Database.Service
     const access = yield* Access.Service
+    const github = yield* GitHubApp.Service
     const renHost = new URL(brains.renUrl).hostname
 
     const Key = Schema.fromJsonString(
@@ -215,7 +217,22 @@ export const layerMinted = Layer.effect(
 
     return Minted.of({
       candidates: Effect.fn("CredentialSource.minted.candidates")(function* (scope: Credentials.Scope) {
-        if (scope.workload.kind !== "brain") return []
+        const installation = yield* github.installationOf(scope.organizationId)
+        const gitHub = Option.match(installation, {
+          onNone: (): ReadonlyArray<Credentials.Candidate> => [],
+          onSome: (found): ReadonlyArray<Credentials.Candidate> => [
+            {
+              id: `minted:${GitHubApp.label}:${found.installation}`,
+              source: "minted",
+              label: GitHubApp.label,
+              owner: "org",
+              hosts: GitHubApp.hosts(found.client.settings),
+              inject: { op: "replace", in: ["header"] },
+              revision: 0,
+            },
+          ],
+        })
+        if (scope.workload.kind !== "brain") return gitHub
         const granted = yield* cachedGrant(scope).pipe(Effect.option)
         const endpoints = Option.match(granted, { onNone: () => [], onSome: (found) => found.access.endpoints })
         const modelHosts = [
@@ -262,6 +279,7 @@ export const layerMinted = Layer.effect(
                   inject: { op: "replace", in: ["header"] },
                 } satisfies Credentials.Candidate,
               ]),
+          ...gitHub,
         ] satisfies ReadonlyArray<Credentials.Candidate>
       }),
       value: Effect.fn("CredentialSource.minted.value")(function* (
@@ -311,6 +329,24 @@ export const layerMinted = Layer.effect(
             },
           } satisfies Sourced)
         }
+        if (candidate.label === GitHubApp.label) {
+          const installation = yield* github.installationOf(scope.organizationId)
+          if (
+            Option.isNone(installation) ||
+            candidate.id !== `minted:${GitHubApp.label}:${installation.value.installation}`
+          )
+            return Option.none()
+          const minted = yield* installation.value.client.token(installation.value.installation).pipe(
+            Effect.tapError((error) => Effect.logWarning("Ren could not mint a GitHub installation token", error)),
+            Effect.mapError(
+              () => new Unavailable({ label: candidate.label, message: "Ren could not mint the GitHub token." }),
+            ),
+          )
+          return Option.some({
+            value: { type: "key", value: minted.token },
+            expiresAt: DateTime.makeUnsafe(minted.expiresAt),
+          } satisfies Sourced)
+        }
         if (candidate.label === ren) {
           const token = yield* cachedHostToken(scope)
           return Option.some({
@@ -338,6 +374,11 @@ export const layerMinted = Layer.effect(
         scope: Credentials.Scope,
       ) {
         if (candidate.label === person) return
+        if (candidate.label === GitHubApp.label) {
+          const installation = yield* github.installationOf(scope.organizationId)
+          if (Option.isSome(installation)) yield* installation.value.client.forget(installation.value.installation)
+          return
+        }
         if (candidate.label === ren) return yield* Cache.invalidate(hostTokens, keyOf(scope))
         yield* Cache.invalidate(modelGrants, keyOf(scope, yield* grants.revision))
       }),

@@ -9,6 +9,7 @@ import type { Actor } from "../src/actor.js"
 import { ChannelInstalls } from "../src/channel-installs.js"
 import { ChannelProvider } from "../src/channel-provider.js"
 import { GitHub } from "../src/channel-provider/github.js"
+import { GitHubApp } from "../src/github-app.js"
 import { testEffect } from "./lib/effect.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { Seed } from "./lib/seed.js"
@@ -22,6 +23,7 @@ const settings = (overrides: Record<string, string> = {}) =>
 const it = testEffect(
   ChannelInstalls.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(ChannelProvider.layer([GitHub.provider]), Access.layer)),
+    Layer.provideMerge(GitHubApp.layer),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(settings()),
