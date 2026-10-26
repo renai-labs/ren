@@ -8,7 +8,6 @@ import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
-import { Space } from "@ren/schema/space"
 import { Signature } from "@ren/schema/signature"
 import { eq, sql } from "drizzle-orm"
 import { Clock, ConfigProvider, Context, Duration, Effect, Fiber, Layer, Option, Queue, Redacted, Schema } from "effect"
@@ -229,13 +228,9 @@ describe("BrainHost pull", () => {
       }
       const apps = yield* App.Service
       const profiles = yield* AppProfiles.Service
-      const database = yield* Database.Service
-      yield* database.db.insert(Database.Schema.space_member).values({
-        id: Space.MembershipID.create(),
-        space_id: subject.owner.spaceId,
-        user_id: actor.userId,
-      })
-      const app = yield* apps.create(actor, Seed.appInput(yield* Seed.space(actor.organizationId), "notes"))
+      const appSpace = yield* Seed.space(actor.organizationId)
+      yield* Seed.join(appSpace, actor.userId)
+      const app = yield* apps.create(actor, Seed.appInput(appSpace, "notes"))
       const use = yield* profiles.create(actor, {
         appId: app.id,
         name: "Listed",

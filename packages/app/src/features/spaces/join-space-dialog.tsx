@@ -16,7 +16,7 @@ export function JoinSpaceDialog(props: { spaces: ReadonlyArray<SpaceInfo>; userI
   const navigate = useNavigate()
   const join = useMutation(context.api["space-member"].create.mutationOptions())
   const [selected, setSelected] = useState<string | null>(null)
-  const joinable = props.spaces.filter((space) => !space.membershipId)
+  const joinable = props.spaces.filter((space) => space.canJoin)
   const space = joinable.find((each) => each.id === selected)
   const submit = () => {
     if (!space) return

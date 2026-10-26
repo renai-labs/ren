@@ -2,14 +2,14 @@ export * as AppQueries from "./queries.js"
 
 import { Database } from "@ren/db/database"
 import { App } from "@ren/schema/app"
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm"
+import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm"
 import { DateTime, Effect } from "effect"
 import type { Access } from "../access.js"
-import type { Actor } from "../actor.js"
+import { Actor } from "../actor.js"
 import { AgentQueries } from "../agent/queries.js"
+import { AppProfilePolicy } from "./profile-policy.js"
 import { Primitive } from "../primitive.js"
 import { AppPolicy } from "./policy.js"
-import { AppProfilePolicy } from "./profile-policy.js"
 
 export const notFound = new Primitive.NotFound({ message: "App not found." })
 
@@ -92,13 +92,34 @@ export const info = Effect.fnUntraced(function* (client: Pick<Database.Transacti
 })
 
 export const isOwnerMember = (actor: Actor.Info) =>
-  sql<boolean>`exists (select 1 from space_member where space_id = ${Database.Schema.app}.owner_space_id and user_id = ${actor.userId} and archived_at is null)`
+  sql<boolean>`exists (select 1 from space_member where space_id = ${Database.Schema.app}.owner_space_id and user_id = ${actor.userId} and archived_at is null and ${Actor.fenced(actor, sql`space_member.space_id`) ?? sql`true`})`
 
 // oxlint-disable-next-line ren/no-comments -- profiles.md §7 rule 8: members of the owner space, the person of a private profile, and members of a space that a shared profile lists or that every space reaches.
-export const isSpaceMember = (actor: Actor.Info) => {
-  const reaches = AppProfilePolicy.conditions(actor)
+export const isSpaceMember = (actor: Actor.Info) =>
+  sql<boolean>`(${isOwnerMember(actor)} or exists (select 1 from app_profile where app_profile.app_id = ${Database.Schema.app}.id and app_profile.organization_id = ${actor.organizationId} and ((app_profile.kind = 'private' and app_profile.user_id = ${actor.userId} and ${!Actor.isFenced(actor)}) or (app_profile.kind = 'shared' and (app_profile.all_spaces or exists (select 1 from app_profile_space inner join space_member on space_member.space_id = app_profile_space.space_id where app_profile_space.profile_id = app_profile.id and space_member.user_id = ${actor.userId} and space_member.archived_at is null and ${Actor.fenced(actor, sql`space_member.space_id`) ?? sql`true`}))))))`
+
+// oxlint-disable-next-line ren/no-comments -- The SQL of the profile facts, on app_profile, for a query plan. A fenced agent is neither listed through its sender's private space nor the person of a private profile (access AC18).
+export const profileWhere = (actor: Actor.Info): ReadonlyMap<string, SQL> => {
   const profiles = Database.Schema.app_profile
-  return sql<boolean>`(${isOwnerMember(actor)} or exists (select 1 from ${profiles} where ${profiles.app_id} = ${Database.Schema.app.id} and ${profiles.organization_id} = ${actor.organizationId} and ${or(reaches.get(AppProfilePolicy.relationships.self), reaches.get(AppProfilePolicy.relationships.allSpaces), reaches.get(AppProfilePolicy.relationships.listedMember))}))`
+  const shared = eq(profiles.kind, "shared")
+  const isPrivate = eq(profiles.kind, "private")
+  return new Map([
+    [AppProfilePolicy.facts.shared, shared],
+    [AppProfilePolicy.facts.creator, and(shared, eq(profiles.created_by_user_id, actor.userId)) ?? sql`false`],
+    [
+      AppProfilePolicy.facts.listedMember,
+      and(
+        shared,
+        sql`exists (select 1 from app_profile_space inner join space_member on space_member.space_id = app_profile_space.space_id where app_profile_space.profile_id = ${profiles.id} and space_member.user_id = ${actor.userId} and space_member.archived_at is null and ${Actor.fenced(actor, sql`space_member.space_id`) ?? sql`true`})`,
+      ) ?? sql`false`,
+    ],
+    [AppProfilePolicy.facts.allSpaces, and(shared, eq(profiles.all_spaces, true)) ?? sql`false`],
+    [AppProfilePolicy.facts.private, isPrivate],
+    [
+      AppProfilePolicy.facts.self,
+      Actor.isFenced(actor) ? sql`false` : (and(isPrivate, eq(profiles.user_id, actor.userId)) ?? sql`false`),
+    ],
+  ])
 }
 
 export const find = Effect.fnUntraced(function* (
@@ -111,7 +132,6 @@ export const find = Effect.fnUntraced(function* (
   const row = (yield* transaction
     .select({
       app: Database.Schema.app,
-      organizationId: Database.Schema.app.organization_id,
       isOwnerMember: isOwnerMember(actor),
       isSpaceMember: isSpaceMember(actor),
       isListed,

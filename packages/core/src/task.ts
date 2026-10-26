@@ -3,6 +3,7 @@ export * as Task from "./task.js"
 import { Database } from "@ren/db/database"
 import type { Auth } from "@ren/schema/auth"
 import { Label } from "@ren/schema/label"
+import type { Space } from "@ren/schema/space"
 import { Session } from "@ren/schema/session"
 import { Task } from "@ren/schema/task"
 import type { TaskEvent } from "@ren/schema/task-event"
@@ -59,20 +60,22 @@ const identifier = /^(?<prefix>.+)-(?<number>\d+)$/u
 
 const iso = (date: Date | null) => date && DateTime.formatIso(DateTime.fromDateUnsafe(date))
 
+// oxlint-disable-next-line ren/no-comments -- access AC8: a task carries system labels, org labels and the labels of its own space. A new name becomes a label of the task's space; when an org label and a space label share a name, the space label wins.
 const setLabels = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
-  task: TaskTrail.Target,
+  task: TaskTrail.Target & { readonly spaceId: Space.ID },
   names: ReadonlyArray<string>,
   options: { readonly canCreate: boolean },
 ): Effect.fn.Return<ReadonlyArray<TaskEvent.Data>, Primitive.Invalid | EffectDrizzleQueryError> {
   const unique = Array.dedupeWith(names, (a, b) => a.toLowerCase() === b.toLowerCase())
-  const find = transaction
+  const query = transaction
     .select({ id: Database.Schema.label.id, name: Database.Schema.label.name })
     .from(Database.Schema.label)
     .where(
       and(
         or(
-          eq(Database.Schema.label.organization_id, task.organizationId),
+          and(eq(Database.Schema.label.organization_id, task.organizationId), isNull(Database.Schema.label.space_id)),
+          eq(Database.Schema.label.space_id, task.spaceId),
           isNull(Database.Schema.label.organization_id),
         ),
         isNull(Database.Schema.label.archived_at),
@@ -82,9 +85,12 @@ const setLabels = Effect.fnUntraced(function* (
         ),
       ),
     )
-    .orderBy(sql`lower(${Database.Schema.label.name})`)
+    .orderBy(sql`lower(${Database.Schema.label.name})`, sql`${Database.Schema.label.space_id} is null`)
     // oxlint-disable-next-line ren/no-comments -- The lock holds Label.archive off until this commits, so its cleanup also removes the task_label rows written here.
     .for("share")
+  const find = query.pipe(
+    Effect.map((rows) => Array.dedupeWith(rows, (a, b) => a.name.toLowerCase() === b.name.toLowerCase())),
+  )
   const existing = yield* find
   const found = new Set(existing.map((label) => label.name.toLowerCase()))
   const missing = unique.filter((name) => !found.has(name.toLowerCase()))
@@ -93,7 +99,14 @@ const setLabels = Effect.fnUntraced(function* (
   if (missing.length > 0)
     yield* transaction
       .insert(Database.Schema.label)
-      .values(missing.map((name) => ({ id: Label.ID.create(), organization_id: task.organizationId, name })))
+      .values(
+        missing.map((name) => ({
+          id: Label.ID.create(),
+          organization_id: task.organizationId,
+          space_id: task.spaceId,
+          name,
+        })),
+      )
       .onConflictDoNothing()
   const resolved = missing.length > 0 ? yield* find : existing
   const before = yield* transaction
@@ -311,6 +324,17 @@ export const layer = Layer.effect(
       return { decision: input.decision, comment, descriptionChanged: edits.length > 0 }
     })
 
+    const canCreateLabel = (actor: Actor.Info, space: { readonly id: Space.ID; readonly isMember: boolean }) =>
+      access.isAllowed({
+        actor,
+        action: Primitive.action(Label.definition, "create"),
+        resource: TaskPolicy.label({
+          organizationId: actor.organizationId,
+          spaceId: space.id,
+          isMember: space.isMember,
+        }),
+      })
+
     const nextAssignment = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       actor: Actor.Info,
@@ -332,18 +356,6 @@ export const layer = Layer.effect(
       })
       return { spaceId, agentId, ownerId: Predicate.isUndefined(input.ownerId) ? keptOwner : input.ownerId }
     })
-
-    const refuseClosing = (actor: Actor.Info, resource: Access.Resource, status: Task.Status | undefined) =>
-      status && closed.has(status) && !access.isAllowed({ actor, action: TaskPolicy.actions.close, resource })
-        ? Effect.fail(new Primitive.Forbidden({ message: "You cannot mark this task done or dismissed." }))
-        : Effect.void
-
-    const canCreateLabels = (actor: Actor.Info) =>
-      access.isAllowed({
-        actor,
-        action: Primitive.action(Label.definition, "create"),
-        resource: Access.organization,
-      })
 
     const handOff = Effect.fn("Task.handOff")(function* (
       actor: Actor.Info,
@@ -389,6 +401,25 @@ export const layer = Layer.effect(
             ])
           }
           if (next.spaceId !== row.task.space_id) {
+            // oxlint-disable-next-line ren/no-comments -- access AC8: a space label stays in its space, so a moved task and its subtasks drop the labels of the space they leave.
+            yield* transaction.delete(Database.Schema.task_label).where(
+              and(
+                inArray(
+                  Database.Schema.task_label.task_id,
+                  transaction
+                    .select({ id: Database.Schema.task.id })
+                    .from(Database.Schema.task)
+                    .where(or(eq(Database.Schema.task.id, id), eq(Database.Schema.task.parent_id, id))),
+                ),
+                inArray(
+                  Database.Schema.task_label.label_id,
+                  transaction
+                    .select({ id: Database.Schema.label.id })
+                    .from(Database.Schema.label)
+                    .where(eq(Database.Schema.label.space_id, row.task.space_id)),
+                ),
+              ),
+            )
             const subtasks = yield* transaction
               .select({
                 id: Database.Schema.task.id,
@@ -494,7 +525,7 @@ export const layer = Layer.effect(
         )
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            if (!access.isAllowed({ actor, action: actions.list, resource: Access.organization }))
+            if (!access.isAllowed({ actor, action: actions.list, resource: TaskPolicy.organization }))
               return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
             const rows = yield* TaskQueries.select(transaction, actor)
               .where(where)
@@ -514,6 +545,45 @@ export const layer = Layer.effect(
             }
           }),
         )
+      }),
+      completeMerged: Effect.fn("Task.completeMerged")(function* (
+        organizationId: Auth.OrganizationID,
+        link: TaskLink.Ref,
+        url: string,
+      ) {
+        return yield* database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              const open = yield* transaction
+                .select({ id: Database.Schema.task.id, status: Database.Schema.task.status })
+                .from(Database.Schema.task)
+                .where(TaskQueries.linking(organizationId, link))
+                .orderBy(asc(Database.Schema.task.id))
+                .for("update")
+              if (open.length === 0) return []
+              yield* transaction
+                .update(Database.Schema.task)
+                .set({ status: "done", human_review: false, human_review_reason: null, updated_at: sql`now()` })
+                .where(
+                  inArray(
+                    Database.Schema.task.id,
+                    open.map((task) => task.id),
+                  ),
+                )
+              yield* Effect.forEach(open, (task) =>
+                TaskTrail.record(transaction, { id: task.id, organizationId }, null, [
+                  {
+                    _tag: "status",
+                    from: task.status,
+                    to: "done",
+                    automation: { provider: "github", cause: "pull_request_merged", url },
+                  },
+                ]),
+              )
+              return open.map((task) => task.id)
+            }),
+          )
+          .pipe(Effect.orDie)
       }),
       get: Effect.fn("Task.get")(function* (actor: Actor.Info, idOrSlug: string) {
         const parts = identifier.exec(idOrSlug)?.groups
@@ -540,8 +610,7 @@ export const layer = Layer.effect(
       create: Effect.fn("Task.create")(function* (actor: Actor.Info, input: Task.CreateInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const space = yield* TaskQueries.writableSpace(transaction, access, actor, input.spaceId, actions.create)
-            yield* refuseClosing(actor, space, input.status)
+            yield* TaskQueries.writableSpace(transaction, access, actor, input.spaceId, actions.create)
             yield* TaskQueries.checkAssignment(transaction, actor.organizationId, input.spaceId, input)
             const parent = yield* TaskQueries.lockParent(transaction, access, actor, input.parentId)
             if (parent && parent.task.space_id !== input.spaceId)
@@ -584,7 +653,9 @@ export const layer = Layer.effect(
                 .insert(Database.Schema.task_session)
                 .values({ task_id: task.id, session_id: actor.agent.sessionId, agent_id: actor.agent.agentId })
             const labels = input.labels
-              ? yield* setLabels(transaction, task, input.labels, { canCreate: canCreateLabels(actor) })
+              ? yield* setLabels(transaction, { ...task, spaceId: input.spaceId }, input.labels, {
+                  canCreate: canCreateLabel(actor, { id: input.spaceId, isMember: true }),
+                })
               : []
             const links = yield* editLinks(transaction, task, input.links ?? [], [])
             yield* TaskTrail.record(transaction, task, actor, [{ _tag: "created" }, ...labels, ...links])
@@ -610,7 +681,6 @@ export const layer = Layer.effect(
               eq(Database.Schema.task.id, id),
               actions.update,
             )
-            yield* refuseClosing(actor, TaskPolicy.resource(row.membershipId, row.task.space_id), input.status)
             const task = { id, organizationId: row.task.organization_id }
             const status = input.status !== row.task.status ? input.status : undefined
             const dueAt = input.dueAt && DateTime.toDateUtc(input.dueAt)
@@ -630,7 +700,9 @@ export const layer = Layer.effect(
               ),
             ]
             const labels = input.labels
-              ? yield* setLabels(transaction, task, input.labels, { canCreate: canCreateLabels(actor) })
+              ? yield* setLabels(transaction, { ...task, spaceId: row.task.space_id }, input.labels, {
+                  canCreate: canCreateLabel(actor, { id: row.task.space_id, isMember: Boolean(row.membershipId) }),
+                })
               : []
             const links = yield* editLinks(transaction, task, input.addLinks ?? [], input.removeLinks ?? [])
             const reparented = yield* editParent(transaction, row, parent, input.parentId)
@@ -701,7 +773,7 @@ export const layer = Layer.effect(
               access,
               actor,
               eq(Database.Schema.task.id, id),
-              input.humanReview ? actions.review : TaskPolicy.actions.decide,
+              actions.review,
             )
             if (!input.humanReview) {
               const review = yield* decide(transaction, row, actor, input)
@@ -723,45 +795,6 @@ export const layer = Layer.effect(
         const start = input.humanReview ? "none" : (input.start ?? reviewStart)
         if (Option.isNone(decided) || start === "none") return yield* read(actor, id)
         return yield* launchAfterCommit(actor, id, "continue", decided.value)
-      }),
-      completeMerged: Effect.fn("Task.completeMerged")(function* (
-        organizationId: Auth.OrganizationID,
-        link: TaskLink.Ref,
-        url: string,
-      ) {
-        return yield* database
-          .transaction((transaction) =>
-            Effect.gen(function* () {
-              const open = yield* transaction
-                .select({ id: Database.Schema.task.id, status: Database.Schema.task.status })
-                .from(Database.Schema.task)
-                .where(TaskQueries.linking(organizationId, link))
-                .orderBy(asc(Database.Schema.task.id))
-                .for("update")
-              if (open.length === 0) return []
-              yield* transaction
-                .update(Database.Schema.task)
-                .set({ status: "done", human_review: false, human_review_reason: null, updated_at: sql`now()` })
-                .where(
-                  inArray(
-                    Database.Schema.task.id,
-                    open.map((task) => task.id),
-                  ),
-                )
-              yield* Effect.forEach(open, (task) =>
-                TaskTrail.record(transaction, { id: task.id, organizationId }, null, [
-                  {
-                    _tag: "status",
-                    from: task.status,
-                    to: "done",
-                    automation: { provider: "github", cause: "pull_request_merged", url },
-                  },
-                ]),
-              )
-              return open.map((task) => task.id)
-            }),
-          )
-          .pipe(Effect.orDie)
       }),
     })
   }),

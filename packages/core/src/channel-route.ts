@@ -13,7 +13,7 @@ import { Access } from "./access.js"
 import { ChannelIdentity } from "./channel-identity.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { AgentQueries } from "./agent/queries.js"
-import { SpacePolicy } from "./space/policy.js"
+import { SpaceQueries } from "./space/queries.js"
 import { TaskQueries } from "./task/queries.js"
 
 export class Refused extends Schema.TaggedError<Refused>()("ChannelRoute.Refused", {
@@ -65,7 +65,7 @@ export const layer = Layer.effect(
     const agent = Database.Schema.agent
 
     const actsIn = (organizationId: Auth.OrganizationID, spaceId: Space.ID, userId: Auth.UserID) =>
-      database.transaction((transaction) => SpacePolicy.actsIn(transaction, access, organizationId, spaceId, userId))
+      database.transaction((transaction) => SpaceQueries.actsIn(transaction, access, organizationId, spaceId, userId))
 
     const runAs = Effect.fnUntraced(function* (
       organizationId: Auth.OrganizationID,

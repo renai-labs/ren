@@ -130,27 +130,29 @@ describe("profile items (§9 rule 4, §12)", () => {
 })
 
 describe("the composer pill (P15)", () => {
-  it.live("a space lists the profiles it reaches with their gaps to its members and admins; a connect clears one", () =>
-    Effect.gen(function* () {
-      const requirements = yield* CredentialRequirements.Service
-      const found = yield* single({ mcps: { calendar: calendar("https://cal.example.com/mcp") } })
-      const gaps = Effect.map(requirements.forSpace(found.ana, found.ana.personal), (reach) =>
-        reach.profiles.flatMap((profile) =>
-          profile.items.filter((item) => item.status !== "ok").map((item) => item.label),
-        ),
-      )
-      const slug = found.profile.slug.toUpperCase().replaceAll("-", "_")
-      expect(yield* gaps).toEqual([`MCP_CALENDAR__${slug}`])
-      yield* ProfilesFixture.connect(found.organizationId, found.profile.id, `MCP_CALENDAR__${slug}`, {
-        madeFor: ProfileItems.madeFor(calendar("https://cal.example.com/mcp")),
-      })
-      expect(yield* gaps).toEqual([])
-      const stranger = yield* ProfilesFixture.user(found.organizationId, "Bob")
-      expect((yield* Effect.flip(requirements.forSpace(stranger, found.ana.personal)))._tag).toBe("Primitive.NotFound")
-      const admin = yield* ProfilesFixture.user(found.organizationId, "Cy", "admin")
-      expect((yield* requirements.forSpace(admin, found.ana.personal)).profiles.map((profile) => profile.id)).toEqual([
-        found.profile.id,
-      ])
-    }),
+  it.live(
+    "a space lists the profiles it reaches with their gaps to its members; a private space's reach is its owner's only (AC14); a connect clears one",
+    () =>
+      Effect.gen(function* () {
+        const requirements = yield* CredentialRequirements.Service
+        const found = yield* single({ mcps: { calendar: calendar("https://cal.example.com/mcp") } })
+        const gaps = Effect.map(requirements.forSpace(found.ana, found.ana.personal), (reach) =>
+          reach.profiles.flatMap((profile) =>
+            profile.items.filter((item) => item.status !== "ok").map((item) => item.label),
+          ),
+        )
+        const slug = found.profile.slug.toUpperCase().replaceAll("-", "_")
+        expect(yield* gaps).toEqual([`MCP_CALENDAR__${slug}`])
+        yield* ProfilesFixture.connect(found.organizationId, found.profile.id, `MCP_CALENDAR__${slug}`, {
+          madeFor: ProfileItems.madeFor(calendar("https://cal.example.com/mcp")),
+        })
+        expect(yield* gaps).toEqual([])
+        const stranger = yield* ProfilesFixture.user(found.organizationId, "Bob")
+        expect((yield* Effect.flip(requirements.forSpace(stranger, found.ana.personal)))._tag).toBe(
+          "Primitive.NotFound",
+        )
+        const admin = yield* ProfilesFixture.user(found.organizationId, "Cy", "admin")
+        expect((yield* Effect.flip(requirements.forSpace(admin, found.ana.personal)))._tag).toBe("Primitive.NotFound")
+      }),
   )
 })

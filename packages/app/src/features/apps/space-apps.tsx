@@ -99,7 +99,7 @@ export function SpaceApps(props: {
         <ProfileDialog
           appId={dialog.appId}
           {...(dialog.profileId && { profileId: dialog.profileId })}
-          {...(space.data && { from: { spaceId: props.spaceId, members: space.data.memberCount } })}
+          {...(space.data && { from: { spaceId: props.spaceId, kind: space.data.kind } })}
           onClose={() => {
             setDialog(undefined)
             void refresh()

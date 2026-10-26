@@ -2,44 +2,76 @@ export * as AgentPolicy from "./policy.js"
 
 import { Agent } from "@ren/schema/agent"
 import { AgentMembership } from "@ren/schema/agent-membership"
-import { Auth } from "@ren/schema/auth"
-import { Policy } from "@ren/schema/policy"
+import type { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import type { Access } from "../access.js"
+import { SpacePolicy } from "../space/policy.js"
 
-const ownerMember = "agent.ownerMember"
+export const facts = {
+  ownerMember: "agent.ownerMember",
+  spaceMember: "agent.spaceMember",
+  targetMember: "target.spaceMember",
+} as const
 
-const spaceMember = "agent.spaceMember"
+const every = SpacePolicy.organizationRoles
 
-const targetMember = "target.spaceMember"
-
-const ownerAndTargetMember = "agent.ownerAndTargetMember"
-
-const statements = (actions: ReadonlyArray<string>, relationship: string) => [
-  { actions, roles: Auth.administratorRoles, on: Policy.everywhere },
-  { actions, roles: Auth.Role.literals, on: relationship },
-]
-
+// oxlint-disable-next-line ren/no-comments -- access §7 (AC4, AC11): an agent is seen in its owner space and the spaces it is added to, and changed in its owner space. An admin has no rights beyond a member's.
 export const documents = [
   {
-    primitive: Agent.definition.name,
-    statements: [
-      ...statements(Primitive.actions(Agent.definition, ["list", "get"]), spaceMember),
-      ...statements(Primitive.actions(Agent.definition, ["create"]), targetMember),
-      ...statements(Primitive.actions(Agent.definition, ["update", "archive"]), ownerMember),
-      ...statements(Primitive.actions(Agent.definition, ["transferOwnership"]), ownerAndTargetMember),
+    resource: Agent.definition.name,
+    rules: [
+      {
+        actions: Primitive.actions(Agent.definition, ["list", "get"]),
+        effect: "allow",
+        roles: every,
+        when: [facts.spaceMember],
+      },
+      {
+        actions: Primitive.actions(Agent.definition, ["create"]),
+        effect: "allow",
+        roles: every,
+        when: [facts.targetMember],
+      },
+      {
+        actions: Primitive.actions(Agent.definition, ["update", "archive"]),
+        effect: "allow",
+        roles: every,
+        when: [facts.ownerMember],
+      },
+      {
+        actions: Primitive.actions(Agent.definition, ["transferOwnership"]),
+        effect: "allow",
+        roles: every,
+        when: [facts.ownerMember, facts.targetMember],
+      },
     ],
   },
   {
-    primitive: AgentMembership.definition.name,
-    statements: [
-      ...statements(Primitive.actions(AgentMembership.definition, ["list"]), spaceMember),
-      ...statements(Primitive.actions(AgentMembership.definition, ["create"]), ownerAndTargetMember),
-      ...statements(Primitive.actions(AgentMembership.definition, ["archive"]), targetMember),
+    resource: AgentMembership.definition.name,
+    rules: [
+      {
+        actions: Primitive.actions(AgentMembership.definition, ["list"]),
+        effect: "allow",
+        roles: every,
+        when: [facts.spaceMember],
+      },
+      {
+        actions: Primitive.actions(AgentMembership.definition, ["create"]),
+        effect: "allow",
+        roles: every,
+        when: [facts.ownerMember, facts.targetMember],
+      },
       {
         actions: Primitive.actions(AgentMembership.definition, ["archive"]),
-        roles: Auth.Role.literals,
-        on: ownerMember,
+        effect: "allow",
+        roles: every,
+        when: [facts.targetMember],
+      },
+      {
+        actions: Primitive.actions(AgentMembership.definition, ["archive"]),
+        effect: "allow",
+        roles: every,
+        when: [facts.ownerMember],
       },
     ],
   },
@@ -52,10 +84,9 @@ export interface Holds {
 }
 
 export const resource = (holds: Holds): Access.Resource => ({
-  relationships: [
-    ...(holds.isOwnerMember ? [ownerMember] : []),
-    ...(holds.isSpaceMember ? [spaceMember] : []),
-    ...(holds.isTargetMember ? [targetMember] : []),
-    ...(holds.isOwnerMember && holds.isTargetMember ? [ownerAndTargetMember] : []),
+  facts: [
+    ...(holds.isOwnerMember ? [facts.ownerMember] : []),
+    ...(holds.isSpaceMember ? [facts.spaceMember] : []),
+    ...(holds.isTargetMember ? [facts.targetMember] : []),
   ],
 })

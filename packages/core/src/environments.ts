@@ -188,7 +188,12 @@ export const layer = Layer.effect(
                   .select({ id: environments.id })
                   .from(environments)
                   .leftJoin(sessions, and(eq(sessions.environment_id, environments.id), isNull(sessions.idle_at)))
-                  .where(eq(environments.environment_template_id, template.id))
+                  .where(
+                    and(
+                      eq(environments.environment_template_id, template.id),
+                      eq(environments.space_id, session.spaceId),
+                    ),
+                  )
                   .groupBy(environments.id, environments.created_at)
                   .having(sql`${count(sessions.session_id)} < ${template.sessions_per_environment}`)
                   .orderBy(asc(environments.created_at))
@@ -200,7 +205,7 @@ export const layer = Layer.effect(
               const id = Environment.ID.create()
               return transaction
                 .insert(environments)
-                .values({ id, environment_template_id: template.id })
+                .values({ id, environment_template_id: template.id, space_id: session.spaceId })
                 .pipe(Effect.as(id))
             },
           })

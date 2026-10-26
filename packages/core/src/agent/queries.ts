@@ -4,13 +4,12 @@ import { Database } from "@ren/db/database"
 import type { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import { Space } from "@ren/schema/space"
-import { and, eq, isNull, or, sql } from "drizzle-orm"
+import { and, eq, isNull, or, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { Effect } from "effect"
-import type { Access } from "../access.js"
-import type { Actor } from "../actor.js"
+import { Actor } from "../actor.js"
+import { AgentPolicy } from "./policy.js"
 import { Primitive } from "../primitive.js"
-import { SpacePolicy } from "../space/policy.js"
 import { SpaceQueries } from "../space/queries.js"
 
 export const isOwnerMember = (actor: Actor.Info) =>
@@ -19,6 +18,7 @@ export const isOwnerMember = (actor: Actor.Info) =>
     where ${Database.Schema.space_member.space_id} = ${Database.Schema.agent.owner_space_id}
       and ${Database.Schema.space_member.user_id} = ${actor.userId}
       and ${Database.Schema.space_member.archived_at} is null
+      and ${Actor.fenced(actor, Database.Schema.space_member.space_id) ?? sql`true`}
   )`
 
 export const isSpaceMember = (actor: Actor.Info) =>
@@ -29,7 +29,15 @@ export const isSpaceMember = (actor: Actor.Info) =>
     where ${Database.Schema.agent_membership.agent_id} = ${Database.Schema.agent.id}
       and ${Database.Schema.space_member.user_id} = ${actor.userId}
       and ${Database.Schema.space_member.archived_at} is null
+      and ${Actor.fenced(actor, Database.Schema.space_member.space_id) ?? sql`true`}
   ))`
+
+// oxlint-disable-next-line ren/no-comments -- The SQL of the agent facts that a list can use.
+export const where = (actor: Actor.Info): ReadonlyMap<string, SQL> =>
+  new Map([
+    [AgentPolicy.facts.spaceMember, isSpaceMember(actor)],
+    [AgentPolicy.facts.ownerMember, isOwnerMember(actor)],
+  ])
 
 export const isInSpace = (spaceId: Space.ID | typeof Database.Schema.space.id) =>
   or(
@@ -102,11 +110,8 @@ export const isMember = Effect.fnUntraced(function* (
   return rows.length > 0
 })
 
-const getSpace = Primitive.action(Space.definition, "get")
-
 export const visibleSpace = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
-  access: Access.Interface,
   actor: Actor.Info,
   spaceId: Space.ID,
 ) {
@@ -122,7 +127,7 @@ export const visibleSpace = Effect.fnUntraced(function* (
       ),
     )
     .for("share", { of: Database.Schema.space })).at(0)
-  if (!row || !access.isAllowed({ actor, action: getSpace, resource: SpacePolicy.resource(row.membershipId, spaceId) }))
-    return yield* new Primitive.NotFound({ message: "Space not found." })
-  return { isMember: Boolean(row.membershipId), membershipId: row.membershipId }
+  // oxlint-disable-next-line ren/no-comments -- access AC4: what is inside a space is for its members; an admin joins first.
+  if (!row?.membershipId) return yield* new Primitive.NotFound({ message: "Space not found." })
+  return { isMember: true, membershipId: row.membershipId }
 })

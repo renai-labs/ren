@@ -4,8 +4,6 @@ import { Database } from "@ren/db/database"
 import { BrainToken } from "@ren/host-api/brain-token"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Credential } from "@ren/schema/credential"
-import { Primitive } from "@ren/schema/primitive"
-import { Space } from "@ren/schema/space"
 import { Workload } from "@ren/schema/workload"
 import { Auth } from "@ren/schema/auth"
 import { and, eq, isNull, sql } from "drizzle-orm"
@@ -29,7 +27,7 @@ import { Credentials } from "./credentials.js"
 import { GitHubApp } from "./github-app.js"
 import { McpProvider } from "./mcp-provider.js"
 import { Models } from "./models.js"
-import { SpacePolicy } from "./space/policy.js"
+import { SessionPolicy } from "./session/policy.js"
 
 export type Value =
   | { readonly type: "key"; readonly value: Redacted.Redacted }
@@ -141,9 +139,8 @@ const ttlUntil = (expiresAtMillis: number, now: number) =>
 const ren = "REN"
 const models = "MODELS"
 const person = Models.personLabel
-const spaceGet = Primitive.action(Space.definition, "get")
 
-// oxlint-disable-next-line ren/no-comments -- Ren mints REN (the brain's host token, for Ren's own host: the host of REN_URL) and MODELS (the model keys). PERSON is the member id of each member who can chat in the brain's space, on the model hosts: its space members and the organization's admins and owners, as Actor.fromSession allows. One mint at a time per workload; a 5xx is retried; a value is kept until 20 minutes before its expiry, so the old one stays in use until then (C29, C37; ren-v1 INV-24, INV-25, INV-26, OI-11).
+// oxlint-disable-next-line ren/no-comments -- Ren mints REN (the brain's host token, for Ren's own host: the host of REN_URL) and MODELS (the model keys). PERSON is the member id of each member who can send a turn in the brain's space, on the model hosts: its space members, as Actor.fromSession allows (access AC4). One mint at a time per workload; a 5xx is retried; a value is kept until 20 minutes before its expiry, so the old one stays in use until then (C29, C37; ren-v1 INV-24, INV-25, INV-26, OI-11).
 export const layerMinted = Layer.effect(
   Minted,
   Effect.gen(function* () {
@@ -315,11 +312,8 @@ export const layerMinted = Layer.effect(
                 organizationId: scope.organizationId,
                 roles: Auth.roles(row.role),
               },
-              action: spaceGet,
-              resource: Option.match(scope.spaceId, {
-                onNone: () => Access.organization,
-                onSome: (spaceId) => SpacePolicy.resource(row.membershipId, spaceId),
-              }),
+              action: SessionPolicy.actions.send,
+              resource: SessionPolicy.resource(Option.isSome(scope.spaceId) ? row.membershipId : null),
             }),
           )
           return Option.some({

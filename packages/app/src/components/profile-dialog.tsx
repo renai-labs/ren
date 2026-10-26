@@ -1,3 +1,4 @@
+import type { SpaceKind } from "@ren/client"
 import { AppProfile } from "@ren/schema/app-profile"
 import { Pagination } from "@ren/schema/pagination"
 import { Primitive } from "@ren/schema/primitive"
@@ -24,7 +25,7 @@ const page = { page: 1, pageSize: Pagination.maximumPageSize }
 export function ProfileDialog(props: {
   appId: string
   profileId?: string
-  from?: { readonly spaceId: string; readonly members: number }
+  from?: { readonly spaceId: string; readonly kind: SpaceKind }
   onClose: () => void
 }) {
   const [profileId, setProfileId] = useState(props.profileId)
@@ -48,7 +49,7 @@ export function ProfileDialog(props: {
 
 function CreateProfile(props: {
   appId: string
-  from: { readonly spaceId: string; readonly members: number } | undefined
+  from: { readonly spaceId: string; readonly kind: SpaceKind } | undefined
   onCreated: (id: string) => void
 }) {
   const context = RouterContext.useRouterContext()
@@ -107,7 +108,7 @@ function CreateProfile(props: {
               {(field) => (
                 <field.RadioGroup label="Who uses it">
                   <RadioGroup.Item value="shared" label="Shared" description="The spaces you pick use it." />
-                  <RadioGroup.Item value="private" label="Private" description="Only your Personal Space uses it." />
+                  <RadioGroup.Item value="private" label="Private" description="Only your private space uses it." />
                 </field.RadioGroup>
               )}
             </form.AppField>

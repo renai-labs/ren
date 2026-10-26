@@ -454,7 +454,7 @@ export function LabelsControl(props: ControlProps) {
   const [color, setColor] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
-  const labels = Tasks.useLabels({ enabled: open })
+  const labels = Tasks.useLabels({ enabled: open, spaceId: props.task.spaceId })
   const create = Tasks.useCreateLabel()
   const selected = draft ?? props.task.labels
   const catalog = [
@@ -499,7 +499,7 @@ export function LabelsControl(props: ControlProps) {
     const problem = nameProblem(naming, selected.length + 1)
     setError(problem)
     if (problem !== null) return
-    void create.mutateAsync({ name: naming, color }).then(
+    void create.mutateAsync({ spaceId: props.task.spaceId, name: naming, color }).then(
       (label) => {
         change([...selected, label])
         setNaming(null)

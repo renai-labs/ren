@@ -72,13 +72,11 @@ export const layer = Layer.effect(
 
     return Service.of({
       list: Effect.fn("AgentMembership.list")(function* (actor: Actor.Info, input: AgentMembership.ListInput) {
-        const plan = access.plan(actor, actions.list)
         const page = { page: input.page, pageSize: input.pageSize }
-        if (!plan.isAllowedEverywhere && plan.allowedWhere.length === 0) return { items: [], ...page, total: 0 }
         const visible = and(
           eq(Database.Schema.agent.organization_id, actor.organizationId),
           isNull(Database.Schema.agent.archived_at),
-          plan.isAllowedEverywhere ? undefined : AgentQueries.isSpaceMember(actor),
+          Access.where(access.plan(actor, actions.list), AgentQueries.where(actor)),
           input.agentId ? eq(Database.Schema.agent.id, input.agentId) : undefined,
         )
         return yield* database.transaction((transaction) =>
@@ -128,7 +126,7 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const found = yield* findAgent(transaction, actor, input.agentId)
-            const target = yield* AgentQueries.visibleSpace(transaction, access, actor, input.spaceId)
+            const target = yield* AgentQueries.visibleSpace(transaction, actor, input.spaceId)
             if (
               !access.isAllowed({
                 actor,

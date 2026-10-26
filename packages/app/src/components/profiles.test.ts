@@ -37,16 +37,16 @@ const profile = (items: ReadonlyArray<AppProfileItem>): AppProfileInfo => ({
 })
 
 describe("the profile dialog (P12, P32, §9 rule 6)", () => {
-  test("from a space with other members only Shared is offered; from a one-member space or the Apps page both are", () => {
-    expect(Profiles.kinds({ members: 2 })).toEqual(["shared"])
-    expect(Profiles.kinds({ members: 1 })).toEqual(["shared", "private"])
+  test("from a shared space only Shared is offered, whatever its member count; from a private space or the Apps page both are", () => {
+    expect(Profiles.kinds({ kind: "shared" })).toEqual(["shared"])
+    expect(Profiles.kinds({ kind: "private" })).toEqual(["shared", "private"])
     expect(Profiles.kinds(undefined)).toEqual(["shared", "private"])
   })
 
   test("the account notice names the spaces the person sees, counts the others, and says every space for all_spaces", () => {
     const base = { kind: "shared" as const, allSpaces: false, hiddenSpaces: 2 }
     expect(Profiles.audience({ ...base, spaces: [{ name: "sales" }] })).toBe(
-      "Everyone in sales and 2 other spaces, and in the personal spaces of their members, can use this account.",
+      "Everyone in sales and 2 other spaces can use this account.",
     )
     expect(Profiles.audience({ ...base, allSpaces: true, spaces: [] })).toBe(
       "Everyone in the organization can use this account.",

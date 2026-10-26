@@ -68,4 +68,36 @@ describe("GET /me", () => {
     expect((await (await me(joiner)).json()).organization).toEqual(personal)
     expect((await getSession(joiner)).session.activeOrganizationId).toBe(personal.id)
   })
+
+  test("a person leaves an organization themselves, and the leave archives their private space (access AC2)", async () => {
+    const owner = sessionCookie(await signUp(app, "lovelace@gmail.com", "Ada Lovelace"))
+    const joiner = sessionCookie(await signUp(app, "turing@gmail.com", "Alan Turing"))
+    const team = await (
+      await app.handler(authRequest("/organization/create", { name: "Leavers", slug: "leavers" }, owner))
+    ).json()
+    const invitation = await (
+      await app.handler(
+        authRequest(
+          "/organization/invite-member",
+          { email: "turing@gmail.com", role: "member", organizationId: team.id },
+          owner,
+        ),
+      )
+    ).json()
+    await app.handler(authRequest("/organization/accept-invitation", { invitationId: invitation.id }, joiner))
+    await app.handler(authRequest("/organization/set-active", { organizationId: team.id }, owner))
+    const joinerId = (await (await me(joiner)).json()).user.id
+    const privateSpaces = async () =>
+      (
+        await (
+          await app.handler(
+            new Request("http://localhost:4000/spaces?page=1&pageSize=50", { headers: { cookie: owner } }),
+          )
+        ).json()
+      ).items.filter((space: { ownerUserId: string | null }) => space.ownerUserId === joinerId)
+    expect(await privateSpaces()).toHaveLength(1)
+    const left = await app.handler(authRequest("/organization/leave", { organizationId: team.id }, joiner))
+    expect(left.status).toBe(200)
+    expect(await privateSpaces()).toHaveLength(0)
+  })
 })

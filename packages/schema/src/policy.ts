@@ -2,30 +2,33 @@ export * as Policy from "./policy.js"
 
 import { Schema } from "effect"
 
-export const everywhere = "all"
+export const Effect = Schema.Literals(["allow", "deny"]).annotate({
+  identifier: "Policy.Effect",
+  description: "A deny rule wins over every allow rule that also matches.",
+})
+export type Effect = typeof Effect.Type
 
-export interface Statement extends Schema.Schema.Type<typeof Statement> {}
-export const Statement = Schema.Struct({
+export interface Rule extends Schema.Schema.Type<typeof Rule> {}
+export const Rule = Schema.Struct({
   actions: Schema.Array(Schema.String).check(Schema.isNonEmpty()),
+  effect: Effect,
   roles: Schema.NonEmptyArray(Schema.String),
-  on: Schema.String,
-  agents: Schema.optional(Schema.Boolean).annotate({
+  when: Schema.Array(Schema.String).annotate({
     description:
-      "Whether an agent acting in a session also gets this statement, within the session’s space. Without it, agents are denied.",
+      "Facts about the resource that must all hold, such as `space.member`. An empty list holds for every resource.",
   }),
-}).annotate({ identifier: "Policy.Statement" })
+}).annotate({ identifier: "Policy.Rule" })
 
 export interface Document extends Schema.Schema.Type<typeof Document> {}
 export const Document = Schema.Struct({
-  primitive: Schema.String,
-  statements: Schema.Array(Statement),
+  resource: Schema.String,
+  rules: Schema.Array(Rule),
 })
   .check(
     Schema.makeFilter(
       (document) =>
-        document.statements.every((statement) =>
-          statement.actions.every((action) => action.startsWith(`${document.primitive}.`)),
-        ) || `Every action must start with "${document.primitive}.".`,
+        document.rules.every((rule) => rule.actions.every((action) => action.startsWith(`${document.resource}.`))) ||
+        `Every action must start with "${document.resource}.".`,
     ),
   )
   .annotate({ identifier: "Policy.Document" })
@@ -33,26 +36,29 @@ export const Document = Schema.Struct({
 const either = (words: ReadonlyArray<string>) =>
   words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} or ${words.slice(-1).join("")}`
 
+const both = (words: ReadonlyArray<string>) =>
+  words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words.slice(-1).join("")}`
+
 export const describe = (documents: ReadonlyArray<Document>) =>
   [
     ...documents.flatMap((document) => [
-      document.primitive,
-      ...document.statements.map((statement) => {
-        const actions = statement.actions.map((action) => action.slice(document.primitive.length + 1))
-        const scope = statement.on === everywhere ? "on all" : `when ${statement.on}`
-        return `  ${either(statement.roles)}${statement.agents ? " and their agents" : ""} may ${either(actions)}, ${scope}`
+      document.resource,
+      ...document.rules.map((rule) => {
+        const actions = rule.actions.map((action) => action.slice(document.resource.length + 1))
+        const scope = rule.when.length === 0 ? "on all" : `when ${both(rule.when)}`
+        return `  ${either(rule.roles)} ${rule.effect === "allow" ? "may" : "may never"} ${either(actions)}, ${scope}`
       }),
       "",
     ]),
-    "Anything not allowed is denied.",
+    "A deny wins over an allow. Anything not allowed is denied.",
   ].join("\n")
 
 export const Documents = Schema.Array(Document)
   .check(
     Schema.makeFilter(
       (documents) =>
-        new Set(documents.map((document) => document.primitive)).size === documents.length ||
-        "Each primitive has one document.",
+        new Set(documents.map((document) => document.resource)).size === documents.length ||
+        "Each resource has one document.",
     ),
   )
   .annotate({ identifier: "Policy.Documents" })

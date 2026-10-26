@@ -33,7 +33,6 @@ export const layer = Layer.effect(
             const rows = yield* transaction
               .select({
                 app: Database.Schema.app,
-                organizationId: Database.Schema.app.organization_id,
                 isOwnerMember: AppQueries.isOwnerMember(actor),
                 isSpaceMember: AppQueries.isSpaceMember(actor),
               })
@@ -69,10 +68,9 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* AppQueries.lock(transaction, actor)
-            const target = yield* AppQueries.visibleSpace(transaction, access, actor, input.ownerSpaceId)
+            const target = yield* AppQueries.visibleSpace(transaction, actor, input.ownerSpaceId)
             if (
               !authorize(actor, "app.create", {
-                organizationId: actor.organizationId,
                 isOwnerMember: false,
                 isSpaceMember: false,
                 isTargetMember: target.isMember,
@@ -182,7 +180,7 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             yield* AppQueries.lock(transaction, actor)
             const found = yield* AppQueries.find(transaction, access, actor, id)
-            const target = yield* AppQueries.visibleSpace(transaction, access, actor, input.spaceId)
+            const target = yield* AppQueries.visibleSpace(transaction, actor, input.spaceId)
             if (!authorize(actor, "app.transferOwnership", { ...found, isTargetMember: target.isMember }))
               return yield* new Primitive.Forbidden({ message: "Moving an app requires access to both spaces." })
             if (found.app.owner_space_id === input.spaceId) return yield* AppQueries.info(transaction, found.app)

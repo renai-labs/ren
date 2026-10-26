@@ -80,7 +80,7 @@ export function SpacesPage(props: { userId: string }) {
 function SpaceActions(props: { spaces: ReadonlyArray<SpaceInfo>; userId: string }) {
   const [creating, setCreating] = useState(false)
   const [joining, setJoining] = useState(false)
-  const canJoin = props.spaces.some((space) => !space.membershipId)
+  const canJoin = props.spaces.some((space) => space.canJoin)
   return (
     <>
       {canJoin ? (

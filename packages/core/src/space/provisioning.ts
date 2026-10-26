@@ -29,9 +29,16 @@ const insertSpace = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   organizationId: Auth.OrganizationID,
   name: string,
+  owner: Auth.UserID | null = null,
 ) {
   const id = Space.ID.create()
-  yield* transaction.insert(Database.Schema.space).values({ id, organization_id: organizationId, name })
+  yield* transaction.insert(Database.Schema.space).values({
+    id,
+    organization_id: organizationId,
+    name,
+    kind: owner ? "private" : "shared",
+    owner_user_id: owner,
+  })
   return id
 })
 
@@ -61,11 +68,25 @@ export const layer = Layer.effect(
             const firstOrganizationSpaceId =
               firstSpaceRows.at(0)?.id ?? (yield* insertSpace(transaction, organizationId, "General Space"))
             const ownerName = user.name.trim().slice(0, maximumOwnerNameLength)
-            const personalSpaceId = yield* insertSpace(
-              transaction,
-              organizationId,
-              ownerName ? `${ownerName}'s Personal Space` : "Personal Space",
-            )
+            // oxlint-disable-next-line ren/no-comments -- private-spaces rules 2, 3: one private space per person per org, made at join; a second join keeps it.
+            const personalSpaceId =
+              (yield* transaction
+                .select({ id: Database.Schema.space.id })
+                .from(Database.Schema.space)
+                .where(
+                  and(
+                    eq(Database.Schema.space.organization_id, organizationId),
+                    eq(Database.Schema.space.kind, "private"),
+                    eq(Database.Schema.space.owner_user_id, user.id),
+                    isNull(Database.Schema.space.archived_at),
+                  ),
+                )).at(0)?.id ??
+              (yield* insertSpace(
+                transaction,
+                organizationId,
+                ownerName ? `${ownerName}'s Personal Space` : "Personal Space",
+                user.id,
+              ))
             yield* transaction
               .insert(Database.Schema.space_member)
               .values(
@@ -151,7 +172,27 @@ export const layer = Layer.effect(
                   ),
                 ),
               )
-            return yield* CredentialOffboarding.forMember(transaction, organizationId, userId)
+            // oxlint-disable-next-line ren/no-comments -- private-spaces rule 16, access AC12: the person's private space goes with them, and so do the agents and apps it owns.
+            const own = yield* transaction
+              .update(Database.Schema.space)
+              .set({ archived_at: sql`now()`, updated_at: sql`now()` })
+              .where(
+                and(
+                  eq(Database.Schema.space.organization_id, organizationId),
+                  eq(Database.Schema.space.kind, "private"),
+                  eq(Database.Schema.space.owner_user_id, userId),
+                  isNull(Database.Schema.space.archived_at),
+                ),
+              )
+              .returning({ id: Database.Schema.space.id })
+            yield* Effect.forEach(own, (space) => SpaceQueries.archiveOwned(transaction, space.id), { discard: true })
+            const spaces = yield* Effect.forEach(own, (space) => CredentialOffboarding.forSpace(transaction, space.id))
+            const removed = yield* CredentialOffboarding.forMember(transaction, organizationId, userId)
+            return {
+              labels: [...removed.labels, ...spaces.flatMap((space) => space.labels)],
+              workloads: [...removed.workloads, ...spaces.flatMap((space) => space.workloads)],
+              providers: [...removed.providers, ...spaces.flatMap((space) => space.providers)],
+            }
           }),
         )
         yield* CredentialOffboarding.invalidate(removed).pipe(Effect.provideService(EgressControl.Service, control))

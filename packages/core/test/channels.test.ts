@@ -225,7 +225,9 @@ describe("Channels", () => {
       const subject = yield* routed
       const database = yield* Database.Service
       const later = yield* Seed.space(subject.owner.organizationId)
+      yield* Seed.join(later, subject.owner.createdBy)
       const archived = yield* Seed.space(subject.owner.organizationId)
+      yield* Seed.join(archived, subject.owner.createdBy)
       yield* Effect.forEach(
         [
           { id: archived, created_at: new Date("2026-01-01"), archived_at: new Date("2026-02-01") },
@@ -335,7 +337,7 @@ const asAgent = (subject: Effect.Success<typeof routed>, sessionId: Session.ID):
   userId: subject.owner.createdBy,
   organizationId: subject.owner.organizationId,
   roles: ["owner"],
-  agent: { agentId: Agent.ID.create(), sessionId, spaceId: subject.owner.spaceId },
+  agent: { agentId: Agent.ID.create(), sessionId, spaceId: subject.owner.spaceId, fence: null },
 })
 
 describe("ChannelReply", () => {
@@ -712,6 +714,7 @@ describe("ChannelMappings", () => {
       yield* ChannelFixture.settled(first)
       const original = (yield* ChannelFixture.accepted(1)).at(0)?.sessionId
       const destination = yield* Seed.space(subject.owner.organizationId)
+      yield* Seed.join(destination, subject.owner.createdBy)
       const sender = yield* person(subject.owner.organizationId, { inSpace: destination })
       outbox.emails.set("U02", sender.email)
       yield* mappings.create(owner, { installId, place: first.place.id, spaceId: destination, fallback: false })
@@ -736,6 +739,7 @@ describe("ChannelMappings", () => {
       const mappings = yield* ChannelMappings.Service
       const owner = { userId: subject.owner.createdBy, organizationId: subject.owner.organizationId, roles: ["owner"] }
       const eng = yield* Seed.space(subject.owner.organizationId)
+      yield* Seed.join(eng, subject.owner.createdBy)
       const triage = yield* Seed.agent({ organizationId: subject.owner.organizationId, spaceId: eng }, "triage", {
         isSubagent: false,
       })
@@ -780,6 +784,7 @@ describe("ChannelMappings", () => {
           roles: ["owner"],
         }
         const support = yield* Seed.space(subject.owner.organizationId)
+        yield* Seed.join(support, subject.owner.createdBy)
         const installId = yield* installOf(subject.install)
         expect((yield* installs.update(owner, installId, { defaultSpaceId: support })).defaultSpace).toEqual({
           id: support,
@@ -849,6 +854,7 @@ describe("ChannelMappings", () => {
         }
         const installId = yield* installOf(subject.install)
         const sales = yield* Seed.space(subject.owner.organizationId)
+        yield* Seed.join(sales, subject.owner.createdBy)
         yield* database.db
           .update(Database.Schema.space)
           .set({ name: "Sales" })
@@ -974,6 +980,7 @@ const tasked = Effect.gen(function* () {
   const tasks = yield* Task.Service
   const owner = { userId: subject.owner.createdBy, organizationId: subject.owner.organizationId, roles: ["owner"] }
   const spaceId = yield* Seed.space(subject.owner.organizationId)
+  yield* Seed.join(spaceId, subject.owner.createdBy)
   const agent = (name: string) =>
     Seed.agent({ organizationId: subject.owner.organizationId, spaceId }, name, { isSubagent: false })
   const build = yield* agent("build")

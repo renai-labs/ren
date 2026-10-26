@@ -127,10 +127,16 @@ export function useParentCandidates(task: TaskInfo, options: { readonly enabled:
   })
 }
 
-export function useLabels(options: { readonly enabled: boolean }) {
+export function useLabels(options: { readonly enabled: boolean; readonly spaceId?: string }) {
   const context = RouterContext.useRouterContext()
   return useQuery({
-    ...Pages.all((number) => context.api.label.list.queryOptions({ ...page, page: number })),
+    ...Pages.all((number) =>
+      context.api.label.list.queryOptions({
+        ...page,
+        page: number,
+        ...(options.spaceId && { spaceId: options.spaceId }),
+      }),
+    ),
     enabled: options.enabled,
   })
 }

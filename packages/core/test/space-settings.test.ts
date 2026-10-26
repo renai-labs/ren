@@ -18,7 +18,7 @@ const it = testEffect(
 const settings = { instructions: "We use Bun.", permissions: [], references: [] }
 
 describe("SpaceSettings", () => {
-  it.live("space members edit space settings, admins too, and other members get NotFound", () =>
+  it.live("space members edit space settings; other members, admins included (AC4), get NotFound", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service
       const space = yield* SpaceSettings.Service
@@ -28,7 +28,7 @@ describe("SpaceSettings", () => {
       const admin = yield* Seed.actor(organizationId, "admin")
       const team = yield* spaces.create(ada, { name: "Team" })
       expect((yield* space.update(ada, team.id, { settings })).settings).toEqual(settings)
-      expect((yield* space.get(admin, team.id)).canUpdate).toBe(true)
+      expect((yield* Effect.flip(space.get(admin, team.id)))._tag).toBe("Primitive.NotFound")
       expect((yield* Effect.flip(space.get(grace, team.id)))._tag).toBe("Primitive.NotFound")
       expect((yield* Effect.flip(space.update(grace, team.id, { settings })))._tag).toBe("Primitive.NotFound")
     }),

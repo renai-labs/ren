@@ -1,31 +1,31 @@
 export * as RenInferencePolicy from "./policy.js"
 
 import { Auth } from "@ren/schema/auth"
-import { Policy } from "@ren/schema/policy"
+import type { Policy } from "@ren/schema/policy"
 import type { Access } from "../access.js"
 
-const primitive = "ren-inference"
+const resource = "ren-inference"
 
 export const actions = {
-  connect: `${primitive}.connect`,
-  list: `${primitive}.connection.list`,
-  manage: `${primitive}.connection.manage`,
+  connect: `${resource}.connect`,
+  list: `${resource}.connection.list`,
+  manage: `${resource}.connection.manage`,
 } as const
 
-const connector = `${primitive}.connector`
+const connector = `${resource}.connector`
 
 // oxlint-disable-next-line ren/no-comments -- The Ren Inference Service knows no roles.
 export const documents = [
   {
-    primitive,
-    statements: [
-      { actions: [actions.connect, actions.list], roles: Auth.Role.literals, on: Policy.everywhere },
-      { actions: [actions.manage], roles: Auth.administratorRoles, on: Policy.everywhere },
-      { actions: [actions.manage], roles: Auth.Role.literals, on: connector },
+    resource,
+    rules: [
+      { actions: [actions.connect, actions.list], effect: "allow", roles: Auth.Role.literals, when: [] },
+      { actions: [actions.manage], effect: "allow", roles: Auth.administratorRoles, when: [] },
+      { actions: [actions.manage], effect: "allow", roles: Auth.Role.literals, when: [connector] },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
 
 export const connection = (holds: { readonly isConnector: boolean }): Access.Resource => ({
-  relationships: holds.isConnector ? [connector] : [],
+  facts: holds.isConnector ? [connector] : [],
 })

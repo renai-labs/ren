@@ -18,6 +18,13 @@ export type AssignmentID = typeof AssignmentID.Type
 
 export const maximumAgentOrder = 64
 
+export const Kind = Schema.Literals(["shared", "private"]).annotate({
+  identifier: "Space.Kind",
+  description:
+    "A shared space belongs to its members. A private space belongs to its owner, who is its only member; it never changes kind.",
+})
+export type Kind = typeof Kind.Type
+
 const AgentOrder = Schema.Array(Schema.String).annotate({
   description:
     "The space’s factory order: agent IDs, first to last. It orders the task board’s columns and does not limit which agent holds a task.",
@@ -27,6 +34,10 @@ export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
   organizationId: Auth.OrganizationID,
+  kind: Kind,
+  ownerUserId: Schema.NullOr(Auth.UserID).annotate({
+    description: "The owner of a private space. Null for a shared space.",
+  }),
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
   brainScope: Brain.Scope,
@@ -34,6 +45,7 @@ export const Info = Schema.Struct({
   membershipId: Schema.NullOr(MembershipID),
   agentOrder: AgentOrder,
   canUpdate: Schema.Boolean,
+  canJoin: Schema.Boolean.annotate({ description: "An admin who is not a member can join this shared space." }),
   canAddMember: Schema.Boolean,
   canRemoveMember: Schema.Boolean,
   canArchive: Schema.Boolean,

@@ -5,6 +5,7 @@ import { Auth } from "./auth.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { Space } from "./space.js"
 
 export const ID = Identifier.make("lbl", "Label.ID")
 export type ID = typeof ID.Type
@@ -45,18 +46,30 @@ export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   ...Summary.fields,
   organizationId: Schema.NullOr(Auth.OrganizationID),
+  spaceId: Schema.NullOr(Space.ID).annotate({
+    description: "The space of a space label, which only that space sees. Null for an org label or a system label.",
+  }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
   archivedAt: Schema.NullOr(Schema.DateTimeUtc),
 }).annotate({ identifier: "Label.Info" })
 
 export interface ListInput extends Schema.Schema.Type<typeof ListInput> {}
-export const ListInput = Schema.Struct({ ...Pagination.fields(100) }).annotate({ identifier: "Label.ListInput" })
+export const ListInput = Schema.Struct({
+  spaceId: Schema.optional(Space.ID).annotate({
+    description:
+      "Only the system labels, the org labels and the labels of this space. Without it, the labels of every space you are in.",
+  }),
+  ...Pagination.fields(100),
+}).annotate({ identifier: "Label.ListInput" })
 
 const Page = Pagination.Page(Info).annotate({ identifier: "Label.Page" })
 
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
+  spaceId: Schema.optional(Space.ID).annotate({
+    description: "Make a space label, which only this space sees. Without it, an org label, which only admins make.",
+  }),
   name: UserName,
   color: Schema.optional(Schema.NullOr(Color)),
 }).annotate({ identifier: "Label.CreateInput" })
