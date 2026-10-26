@@ -28,6 +28,22 @@ export const retryStatus = (assistants: ReadonlyArray<SessionMessage.Assistant>)
   return last && { attempt: last.attempt, message: last.error.message, next: DateTime.toEpochMillis(last.at) }
 }
 
+const errorTitles: Readonly<Record<string, string>> = {
+  "provider.auth": "The model provider rejected the credentials.",
+  "provider.quota": "The model account is out of credits.",
+  "provider.free-limit": "The free limit for this model is used up.",
+  "provider.rate-limit": "The model provider is limiting requests. Try again shortly.",
+  "provider.timeout": "The model provider did not answer in time.",
+  "provider.transport": "Ren could not reach the model provider.",
+  "provider.no-route": "This model is not available.",
+  "provider.content-filter": "The model provider blocked this content.",
+  "provider.invalid-request": "The model provider rejected the request.",
+  "provider.internal": "The model provider had an internal error.",
+  "provider.unknown": "The model request failed.",
+}
+
+export const errorTitle = (kind: string) => errorTitles[kind]
+
 export const errorParts = (text: string) => {
   const colon = text.indexOf(":")
   return colon < 0 ? { head: "", body: text } : { head: text.slice(0, colon + 1), body: text.slice(colon + 1) }

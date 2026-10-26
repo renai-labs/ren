@@ -53,6 +53,18 @@ export const admit = (state: ChatState.State, prompt: Prompt, now: DateTime.Utc)
   )
 }
 
+// oxlint-disable-next-line ren/no-comments -- Ren delivers a new chat's first prompt before the chat connects, so it is never pending.
+export const handoff = (state: ChatState.State, prompt: Prompt, now: DateTime.Utc): ChatState.State => {
+  if (!isFresh(state, prompt.sessionID, prompt.id)) return state
+  return Reducer.insert({ ...state, outbox: new Set([...state.outbox, prompt.id]) }, prompt.sessionID, {
+    id: prompt.id,
+    type: "user",
+    text: prompt.text,
+    ...(prompt.sender && { sender: prompt.sender }),
+    time: { created: now },
+  })
+}
+
 export const rollback = (state: ChatState.State, sessionID: string, id: string): ChatState.State => {
   if (!state.outbox.has(id)) return state
   return Reducer.retract({ ...state, outbox: new Set([...state.outbox].filter((item) => item !== id)) }, sessionID, id)

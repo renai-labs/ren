@@ -140,6 +140,8 @@ export const make = <R, ER>(options: Options<R, ER>) => {
 
   const status = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.status))
 
+  const boot = Atom.family((sessionID: Session.ID) => watch(sessionID, (opened) => opened.boot))
+
   const project = (get: Atom.AtomContext, view: View) =>
     AsyncResult.map(get(state(view.root)), (current): Projection.Projection => {
       const previous = Option.flatMap(get.self<AsyncResult.AsyncResult<Projection.Projection>>(), AsyncResult.value)
@@ -245,6 +247,7 @@ export const make = <R, ER>(options: Options<R, ER>) => {
     session,
     state,
     status,
+    boot,
     attention,
     timeline,
     child,

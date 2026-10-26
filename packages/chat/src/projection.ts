@@ -325,7 +325,9 @@ const messageRows = (
     const error = lastStep.message.error
     if (isActive && lastStep.message.retry) rows.push(new TimelineRow.Retry({ userMessageID: turnID }))
     else if (error && !isInterrupted(error))
-      rows.push(new TimelineRow.Error({ userMessageID: turnID, text: unwrapErrorMessage(error.message) }))
+      rows.push(
+        new TimelineRow.Error({ userMessageID: turnID, kind: error.type, text: unwrapErrorMessage(error.message) }),
+      )
   }
 
   const appendSegment = (messages: ReadonlyArray<SessionMessage.Assistant>) => {
@@ -354,7 +356,11 @@ const messageRows = (
       appendSegment(current)
       if (entry === lastStep)
         rows.push(
-          new TimelineRow.Error({ userMessageID: turnID, text: unwrapErrorMessage(entry.message.error.message) }),
+          new TimelineRow.Error({
+            userMessageID: turnID,
+            kind: entry.message.error.type,
+            text: unwrapErrorMessage(entry.message.error.message),
+          }),
         )
       return []
     }

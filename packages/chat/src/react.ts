@@ -26,6 +26,7 @@ export const useSession = (sessionID: Session.ID) => {
   return {
     state: useAtomValue(atoms.state(sessionID)),
     status: useAtomValue(atoms.status(sessionID)),
+    boot: useAtomValue(atoms.boot(sessionID)),
     timeline: useAtomValue(atoms.timeline(sessionID)),
   }
 }

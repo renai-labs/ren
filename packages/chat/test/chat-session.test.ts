@@ -260,11 +260,13 @@ test("while access is starting the history comes from Ren, a page that is too la
         sender: { userId: "user_1" },
       }).pipe(Effect.provide(http(brain)))
       yield* chat.open(brain.id).pipe(Effect.forkChild)
+      expect(yield* until(chat.boot, (boot) => boot._tag === "Starting")).toEqual({ _tag: "Starting", phase: "waking" })
       const saved = yield* until(chat.state, (state) => ChatState.messages(state, brain.id).length > 0)
       expect(limits).toEqual([100, 50, 25])
       expect(ChatState.messages(saved, brain.id).map((message) => message.id)).toEqual(expected)
       ready.value = true
       yield* until(chat.status, (status) => status === "connected")
+      expect(yield* SubscriptionRef.get(chat.boot)).toEqual({ _tag: "Ready" })
       const live = yield* until(chat.state, settled(brain.id))
       expect(ChatState.messages(live, brain.id).map((message) => message.id)).toEqual(expected)
     }),

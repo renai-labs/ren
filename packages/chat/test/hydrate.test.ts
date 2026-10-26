@@ -225,7 +225,7 @@ describe("outbox", () => {
 
 describe("new chat handoff", () => {
   const id = SessionMessage.ID.make("msg_first")
-  const handed = Outbox.admit(
+  const handed = Outbox.handoff(
     ChatState.empty,
     { sessionID, id, text: "Draft the report", delivery: "steer" },
     Fixture.at(1),
@@ -235,7 +235,24 @@ describe("new chat handoff", () => {
   test("shows a new chat's first prompt before the session echoes it, through reads that miss it", () => {
     const read = Hydrate.messages(unread, sessionID, Fixture.page([]))
     expect(ChatState.messages(read, sessionID).map((message) => message.id)).toEqual([id])
-    expect(ChatState.inputs(read, sessionID)).toEqual([id])
+    expect(ChatState.pending(read, sessionID)).toEqual([])
+  })
+
+  test("keeps the first prompt above the reply when the session delivered it before the chat connected", () => {
+    const replying = Reducer.apply(
+      unread,
+      Fixture.event({
+        id: "evt_step",
+        created: 4,
+        type: "session.step.started",
+        data: { sessionID, assistantMessageID: "msg_reply", agent: "build", model: Fixture.model, started: 4 },
+      }),
+    ).state
+    expect(ChatState.visible(replying, sessionID).map((message) => message.id)).toEqual([
+      id,
+      SessionMessage.ID.make("msg_reply"),
+    ])
+    expect(ChatState.pending(replying, sessionID)).toEqual([])
   })
 
   test("merges the first prompt into the server's copy once the session has delivered it", () => {
