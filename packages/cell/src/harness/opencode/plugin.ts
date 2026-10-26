@@ -121,6 +121,11 @@ const senderOf = (origin: ChannelOrigin.Info) => {
   return `${origin.sender} (@${origin.handle})`
 }
 
+const replies: Partial<Record<Channel.Provider, string>> = {
+  github:
+    "Text in this chat is not posted on GitHub. Act on the issue or pull request yourself with gh: comment, review or push.",
+}
+
 const channelHeader = (origin: ChannelOrigin.Info) =>
   [
     [`${Channel.titles[origin.provider]} ${origin.place}`, senderOf(origin), origin.threadUrl]
@@ -128,8 +133,9 @@ const channelHeader = (origin: ChannelOrigin.Info) =>
       .join(" · "),
     origin.context,
     origin.trigger
-      ? `Automated run (${origin.trigger}): nobody wrote to you in this thread. Do the work, then post the result with channel_reply.`
+      ? `Automated run (${origin.trigger}): nobody wrote to you in this thread. Do the work, then post the result there.`
       : undefined,
+    replies[origin.provider],
     "---\n\n",
   ]
     .filter(Predicate.isNotUndefined)
@@ -327,21 +333,6 @@ export const make = (
             event.messages = event.messages.map(withOrigin)
           }),
         )
-        if (isSession) {
-          yield* tool.transform((editor) =>
-            editor.update(OpenCodeMcp.channelReply, (found) => {
-              found.options = {
-                ...Struct.omit(found.options ?? {}, ["codemode", "pinned"]),
-                codemode: false,
-              }
-            }),
-          )
-          yield* tool.hook("execute.before", (event) =>
-            event.tool === OpenCodeMcp.channelReply && event.sessionID !== sessionId
-              ? Effect.fail(new Tool.Error({ message: "Only the main agent replies in the thread." }))
-              : Effect.void,
-          )
-        }
         const initial = yield* Ref.get(desired)
         const appConflicts = yield* Ref.make(conflictsOf(initial.apps))
         const applied = yield* Ref.make(

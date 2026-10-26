@@ -1320,15 +1320,6 @@ const adaptGroupChannelConnect = (raw: RawClient["channel-connect"]) => ({
   "channel-place": { list: EndpointChannelConnectChannelPlaceList(raw) },
 })
 
-type ChannelReplyChannelReplyRequest = Parameters<RawClient["channel-reply"]["channel.reply"]>[0]
-type ChannelReplyChannelReplyInput = { readonly text: ChannelReplyChannelReplyRequest["payload"]["text"] }
-const EndpointChannelReplyChannelReply = (raw: RawClient["channel-reply"]) => (input: ChannelReplyChannelReplyInput) =>
-  raw["channel.reply"]({ payload: { text: input["text"] } }).pipe(Effect.mapError(mapClientError))
-
-const adaptGroupChannelReply = (raw: RawClient["channel-reply"]) => ({
-  channel: { reply: EndpointChannelReplyChannelReply(raw) },
-})
-
 const EndpointSignInSignInProviderList = (raw: RawClient["sign-in"]) => () =>
   raw["sign-in-provider.list"]({}).pipe(Effect.mapError(mapClientError))
 
@@ -1367,7 +1358,6 @@ const adaptClient = (raw: RawClient) => ({
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
   "channel-mapping": adaptGroupChannelMapping(raw["channel-mapping"]),
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
-  "channel-reply": adaptGroupChannelReply(raw["channel-reply"]),
   "sign-in": adaptGroupSignIn(raw["sign-in"]),
 })
 

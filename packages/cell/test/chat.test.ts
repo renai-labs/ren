@@ -159,7 +159,7 @@ test("the model sees where a channel message came from above its text on every c
       const text = `@ren-test look ${first.marker}`
       yield* brain.send(text, { channel })
       const header =
-        "GitHub acme/api · @octocat · https://github.com/acme/api/issues/12\nIssue #12 “The deploy fails”, open\n---\n\n"
+        "GitHub acme/api · @octocat · https://github.com/acme/api/issues/12\nIssue #12 “The deploy fails”, open\nText in this chat is not posted on GitHub. Act on the issue or pull request yourself with gh: comment, review or push.\n---\n\n"
       expect((yield* Effect.promise(() => first.called())).text).toBe(`${header}${text}`)
       yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
       const second = stub.script()
@@ -414,7 +414,9 @@ test("a client compacts the session through the Chat API and reads the summary; 
       })
       const summarizer = stub.calls.find((call) => call.kind === "compaction" && call.marker === fromGitHub.marker)
       expect(JSON.stringify(summarizer?.body.messages)).toContain(
-        JSON.stringify(`GitHub acme/api · @octocat\n---\n\n${fromGitHub.marker}`),
+        JSON.stringify(
+          `GitHub acme/api · @octocat\nText in this chat is not posted on GitHub. Act on the issue or pull request yourself with gh: comment, review or push.\n---\n\n${fromGitHub.marker}`,
+        ),
       )
     }),
   ))

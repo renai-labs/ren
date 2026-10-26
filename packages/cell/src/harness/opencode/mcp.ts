@@ -11,8 +11,6 @@ import type { OpenCodeExecution } from "./execution.js"
 
 export const renServer = "ren"
 
-export const channelReply = `${renServer}_channel_reply`
-
 export interface RenAccess {
   readonly address: Effect.Effect<Option.Option<string>>
   readonly token: Effect.Effect<Option.Option<string>>

@@ -202,8 +202,6 @@ import type {
   ChannelConnectChannelInstallStartOutput,
   ChannelConnectChannelPlaceListInput,
   ChannelConnectChannelPlaceListOutput,
-  ChannelReplyChannelReplyInput,
-  ChannelReplyChannelReplyOutput,
   SignInSignInProviderListOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
@@ -1722,22 +1720,6 @@ export function make(options: ClientOptions) {
               query: { installId: input["installId"], page: input["page"], pageSize: input["pageSize"] },
               successStatus: 200,
               declaredStatuses: [401, 403, 404, 503],
-              empty: false,
-            },
-            requestOptions,
-          ),
-      },
-    },
-    "channel-reply": {
-      channel: {
-        reply: (input: ChannelReplyChannelReplyInput, requestOptions?: RequestOptions) =>
-          request<ChannelReplyChannelReplyOutput>(
-            {
-              method: "POST",
-              path: `/channel-replies`,
-              body: { text: input["text"] },
-              successStatus: 200,
-              declaredStatuses: [400, 401, 403],
               empty: false,
             },
             requestOptions,

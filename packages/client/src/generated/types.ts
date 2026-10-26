@@ -444,8 +444,6 @@ export type ChannelOriginInfo = {
   trigger?: string
 }
 
-export type ChannelSent = { provider: ChannelProvider; place: string }
-
 export type SessionMessageSynthetic = {
   id: SessionMessageID
   time: { created: number }
@@ -6041,9 +6039,5 @@ export type ChannelConnectChannelPlaceListInput = {
 }
 
 export type ChannelConnectChannelPlaceListOutput = ChannelPlacePage
-
-export type ChannelReplyChannelReplyInput = { readonly text: { readonly text: string }["text"] }
-
-export type ChannelReplyChannelReplyOutput = ChannelSent
 
 export type SignInSignInProviderListOutput = AuthSignInProviders

@@ -5,12 +5,10 @@ import type { SessionMessage } from "@ren/schema/session/message"
 import { Option, Schema } from "effect"
 import { ToolState } from "./tool-state.js"
 
-const tool = "ren_channel_reply"
-
 const decodeSent = Schema.decodeUnknownOption(Schema.fromJsonString(Channel.Sent))
 
 export const shown = (content: SessionMessage.Tool) =>
-  content.name === tool &&
+  content.name.endsWith("_reply_to_current_thread") &&
   !ToolState.failed(content) &&
   (content.state.status !== "completed" || Option.isSome(decodeSent(ToolState.output(content) ?? "")))
 

@@ -165,26 +165,3 @@ it.live("a brain without Ren has no ren server", () =>
     expect(yield* opened.call(sessionId, Option.some("usr_ada"))).toContain("Unknown tool 'ren.marker'")
   }),
 )
-
-it.live("channel_reply is a tool of its own, and a subagent's call is refused before it reaches Ren", () =>
-  Effect.gen(function* () {
-    const ren = yield* renAt("host-1", ["channel_reply"])
-    const opened = yield* open(Option.some(ren.ren))
-    const sessionId = yield* opened.chat()
-    yield* opened.call(sessionId, Option.some("user_1"))
-    const root = stub.script({ tools: [{ name: OpenCodeMcp.channelReply, input: { text: "Rolled back." } }] })
-    yield* opened.prompt(sessionId, `${root.marker} reply`)
-    expect((yield* Effect.promise(() => root.called(1))).tools).toContain(OpenCodeMcp.channelReply)
-    expect(ren.peer.calls).toEqual(["marker", "channel_reply"])
-    const child = stub.script({ tools: [{ name: OpenCodeMcp.channelReply, input: { text: "From a helper." } }] })
-    yield* opened.prompt(
-      sessionId,
-      `${stub.script({ tool: { name: "subagent", input: { agent: "general", description: "Help", prompt: `${child.marker} help` } } }).marker} delegate`,
-    )
-    const refused = (yield* Effect.promise(() => child.called(2))).body.messages.findLast(
-      (message) => message.role === "tool",
-    )?.content
-    expect(JSON.stringify(refused)).toContain("Only the main agent replies in the thread.")
-    expect(ren.peer.calls).toEqual(["marker", "channel_reply"])
-  }),
-)

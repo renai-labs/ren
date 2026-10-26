@@ -12,7 +12,6 @@ import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { ChannelInstalls } from "@ren/core/channel-installs"
 import { ChannelMappings } from "@ren/core/channel-mappings"
-import { ChannelReply } from "@ren/core/channel-reply"
 import { ChannelTurns } from "@ren/core/channel-turns"
 import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
@@ -45,7 +44,6 @@ import { CredentialHandler } from "./handlers/api/credential.js"
 import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
 import { OAuthAppHandler } from "./handlers/api/oauth-app.js"
 import { ChannelConnectHandler, ChannelInstallHandler, ChannelMappingHandler } from "./handlers/api/channel-install.js"
-import { ChannelReplyHandler } from "./handlers/api/channel-reply.js"
 import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
@@ -132,7 +130,6 @@ export const layer = Layer.mergeAll(
         ChannelInstallHandler,
         ChannelMappingHandler,
         ChannelConnectHandler,
-        ChannelReplyHandler,
         SignInHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
@@ -157,7 +154,6 @@ export const layer = Layer.mergeAll(
         OAuthApps.layer,
         ChannelInstalls.layer,
         ChannelMappings.layer,
-        ChannelReply.layer,
         CredentialRequirements.layer,
       ]),
     ),

@@ -3,16 +3,15 @@ import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Agent } from "@ren/schema/agent"
 import { Brain } from "@ren/schema/brain"
+import { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { Session } from "@ren/schema/session"
 import { Space } from "@ren/schema/space"
 import { and, eq, inArray } from "drizzle-orm"
-import { Deferred, Effect, Layer, Option, Schedule, Struct } from "effect"
-import type { Actor } from "../src/actor.js"
+import { Deferred, Effect, Layer, Option, Schedule } from "effect"
 import { ChannelIdentity } from "../src/channel-identity.js"
 import { ChannelInstalls } from "../src/channel-installs.js"
 import { ChannelMappings } from "../src/channel-mappings.js"
-import { ChannelReply } from "../src/channel-reply.js"
 import { ChannelRoute } from "../src/channel-route.js"
 import { ChannelTurns } from "../src/channel-turns.js"
 import { Channels } from "../src/channels.js"
@@ -333,101 +332,6 @@ describe("Channels", () => {
   )
 })
 
-const asAgent = (subject: Effect.Success<typeof routed>, sessionId: Session.ID): Actor.Info => ({
-  userId: subject.owner.createdBy,
-  organizationId: subject.owner.organizationId,
-  roles: ["owner"],
-  agent: { agentId: Agent.ID.create(), sessionId, spaceId: subject.owner.spaceId, fence: null },
-})
-
-describe("ChannelReply", () => {
-  it.live("a reply goes to the thread of the session's latest channel message, at its place and message", () =>
-    Effect.gen(function* () {
-      const subject = yield* routed
-      const sessionId = yield* started(subject.owner)
-      const replies = yield* ChannelReply.Service
-      const outbox = yield* ChannelFixture.Outbox
-      const first = ChannelFixture.event(subject.install)
-      const second = ChannelFixture.event(subject.install, {
-        place: { id: "C09", kind: "channel", name: "sales" },
-        thread: { id: "C09:1713.90" },
-        message: "1713.95",
-      })
-      yield* Effect.forEach([first, second], (each) =>
-        ChannelFixture.thread(subject.owner.organizationId, each, sessionId).pipe(
-          Effect.andThen(ChannelFixture.receive(ChannelFixture.delivery(each))),
-          Effect.andThen(ChannelFixture.settled(each)),
-        ),
-      )
-      expect(yield* replies.reply(asAgent(subject, sessionId), { text: "Rolled back." })).toEqual({
-        provider: "slack",
-        place: "sales",
-      })
-      expect(outbox.sent).toEqual([
-        {
-          target: { install: subject.install, place: "sales", thread: "C09:1713.90", message: "1713.95" },
-          text: "Rolled back.",
-        },
-      ])
-    }),
-  )
-
-  it.live("only a main agent in the session's organization with a channel thread can reply", () =>
-    Effect.gen(function* () {
-      const subject = yield* routed
-      const database = yield* Database.Service
-      const replies = yield* ChannelReply.Service
-      const parent = yield* started(subject.owner)
-      const child = yield* started(subject.owner)
-      const found = ChannelFixture.event(subject.install)
-      yield* ChannelFixture.thread(subject.owner.organizationId, found, parent)
-      yield* ChannelFixture.receive(ChannelFixture.delivery(found))
-      yield* ChannelFixture.settled(found)
-      yield* database.db
-        .update(Database.Schema.agent_session)
-        .set({ parent_id: parent, root_id: parent })
-        .where(eq(Database.Schema.agent_session.id, child))
-      expect(
-        (yield* Effect.flip(replies.reply(Struct.omit(asAgent(subject, parent), ["agent"]), { text: "hi" }))).message,
-      ).toBe("Only the agent of a chat that came from a channel replies in its thread.")
-      expect(
-        (yield* Effect.flip(
-          replies.reply({ ...asAgent(subject, parent), organizationId: yield* Seed.organization() }, { text: "hi" }),
-        )).message,
-      ).toBe("This chat has no thread to reply to.")
-      expect((yield* Effect.flip(replies.reply(asAgent(subject, child), { text: "hi" }))).message).toBe(
-        "Only the main agent replies in the thread.",
-      )
-      expect(
-        (yield* Effect.flip(replies.reply(asAgent(subject, yield* started(subject.owner)), { text: "hi" }))).message,
-      ).toBe("This chat has no thread to reply to.")
-      expect((yield* ChannelFixture.Outbox).sent).toEqual([])
-    }),
-  )
-
-  it.live("a gone thread or a refusal returns an error at once; a provider that does not answer is tried 4 times", () =>
-    Effect.gen(function* () {
-      const subject = yield* routed
-      const sessionId = yield* started(subject.owner)
-      const replies = yield* ChannelReply.Service
-      const outbox = yield* ChannelFixture.Outbox
-      const found = ChannelFixture.event(subject.install)
-      yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
-      yield* ChannelFixture.receive(ChannelFixture.delivery(found))
-      yield* ChannelFixture.settled(found)
-      const failed = yield* Effect.forEach(["gone", "refused", "down"], (text) =>
-        ChannelFixture.quickly(Effect.flip(replies.reply(asAgent(subject, sessionId), { text }))),
-      )
-      expect(failed.map((error) => error.message)).toEqual([
-        "The Slack thread is gone, so the reply was not sent.",
-        "Slack refused the reply: msg_too_long",
-        "Slack did not answer, so the reply was not sent. Try again later.",
-      ])
-      expect(outbox.attempts).toEqual(["gone", "refused", "down", "down", "down", "down"])
-    }),
-  )
-})
-
 const turnEnded = Effect.fnUntraced(function* (
   subject: Effect.Success<typeof routed>,
   sessionId: Session.ID,
@@ -484,7 +388,7 @@ describe("ChannelTurns", () => {
           sessionId: thread.sessionId,
           delivery: "queue",
           prompt: {
-            text: "You have not answered in the Slack thread. Text in this chat is not sent there: answer the person with the channel_reply tool.",
+            text: "You have not answered in the Slack thread. Text in this chat is not sent there: answer the person with slack_reply_to_current_thread.",
           },
           synthetic: { description: "Reminder: reply in the thread", source: "channel" },
         },
@@ -509,10 +413,35 @@ describe("ChannelTurns", () => {
   it.live("a reply in the thread before the turn ends needs no reminder", () =>
     Effect.gen(function* () {
       const subject = yield* routed
-      const replies = yield* ChannelReply.Service
+      const database = yield* Database.Service
       const thread = yield* threadOf(subject)
-      yield* replies.reply(asAgent(subject, thread.sessionId), { text: "Rolled back." })
+      yield* database.db
+        .update(Database.Schema.channel_thread)
+        .set({ last_reply_at: new Date() })
+        .where(eq(Database.Schema.channel_thread.session_id, thread.sessionId))
       yield* turnEnded(subject, thread.sessionId, { idle: 1, outcome: "succeeded", messages: [fromChannel, answered] })
+      expect((yield* ChannelFixture.Cell).accepted.filter((delivered) => delivered.synthetic)).toEqual([])
+    }),
+  )
+
+  it.live("a thread whose provider has no reply tool, such as GitHub, gets the end marker and no reminder", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const database = yield* Database.Service
+      const sessionId = yield* started(subject.owner)
+      yield* database.db.insert(Database.Schema.channel_thread).values({
+        id: Channel.ThreadID.create(),
+        organization_id: subject.owner.organizationId,
+        provider: "github",
+        install: subject.install,
+        thread: "123:7",
+        session_id: sessionId,
+        place_name: "acme/api",
+        last_message: "issue:456",
+        last_message_at: new Date(),
+      })
+      yield* turnEnded(subject, sessionId, { idle: 1, outcome: "succeeded", messages: [fromChannel, answered] })
+      expect((yield* ChannelFixture.Outbox).progress).toEqual([{ message: "issue:456", status: "done" }])
       expect((yield* ChannelFixture.Cell).accepted.filter((delivered) => delivered.synthetic)).toEqual([])
     }),
   )

@@ -8720,75 +8720,6 @@
         "summary": "List channel places"
       }
     },
-    "/channel-replies": {
-      "post": {
-        "tags": ["channel-reply"],
-        "operationId": "channel.reply",
-        "parameters": [],
-        "security": [
-          {
-            "bearer": []
-          },
-          {
-            "cookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Channel.Sent",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Channel.Sent"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "ForbiddenError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Answer the person in the Slack, Linear or GitHub thread this chat came from. Plain text in the chat is not sent.",
-        "summary": "Reply in the thread",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Channel.ReplyInput"
-              }
-            }
-          },
-          "required": true
-        }
-      }
-    },
     "/sign-in-providers": {
       "get": {
         "tags": ["sign-in"],
@@ -10210,32 +10141,6 @@
       "Channel.Provider": {
         "type": "string",
         "enum": ["slack", "linear", "github"]
-      },
-      "Channel.ReplyInput": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string",
-            "minLength": 1,
-            "description": "The answer, in Markdown. Ren posts it in the thread as is."
-          }
-        },
-        "required": ["text"],
-        "additionalProperties": false
-      },
-      "Channel.Sent": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "$ref": "#/components/schemas/Channel.Provider"
-          },
-          "place": {
-            "type": "string",
-            "description": "The channel, project or repository that the reply went to."
-          }
-        },
-        "required": ["provider", "place"],
-        "additionalProperties": false
       },
       "Channel.Trigger": {
         "type": "object",
@@ -16883,9 +16788,6 @@
     },
     {
       "name": "channel-connect"
-    },
-    {
-      "name": "channel-reply"
     },
     {
       "name": "sign-in"

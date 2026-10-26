@@ -227,9 +227,9 @@ it.live("a synthetic send starts a turn, shows as a notice in the transcript and
       messageId: Session.MessageID.create(),
       synthetic: { description: "Reminder: reply in the thread", source: "channel" },
     }
-    yield* brain.send(`Reply with channel_reply. ${script.marker}`, input)
-    yield* brain.send(`Reply with channel_reply. ${script.marker}`, input)
-    expect((yield* Effect.promise(() => script.called())).text).toBe(`Reply with channel_reply. ${script.marker}`)
+    yield* brain.send(`Reply in the thread. ${script.marker}`, input)
+    yield* brain.send(`Reply in the thread. ${script.marker}`, input)
+    expect((yield* Effect.promise(() => script.called())).text).toBe(`Reply in the thread. ${script.marker}`)
     const sessionID = SessionID.make(brain.id)
     yield* brain.opencode.session.wait({ sessionID })
     const page = yield* brain.chat.session["session.messages"]({ params: { sessionID: brain.id }, query: {} })

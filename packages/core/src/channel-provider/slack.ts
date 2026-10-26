@@ -72,20 +72,19 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
   const unavailable = (error: SlackApp.Failed) => new ChannelProvider.Unavailable({ message: error.message })
   const later = (what: string) => new ChannelProvider.Unavailable({ message: `Slack ${what} are not handled yet` })
   const tokenOf = (workspace: string) =>
-    secrets
-      .ofWorkspace("slack", workspace)
-      .pipe(
-        Effect.flatMap(
-          Option.match({
-            onNone: () =>
-              Effect.fail(new ChannelProvider.Unavailable({ message: `Ren holds no Slack token for ${workspace}` })),
-            onSome: (found) => Effect.succeed(found.secret),
-          }),
-        ),
-      )
+    secrets.ofWorkspace("slack", workspace).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () =>
+            Effect.fail(new ChannelProvider.Unavailable({ message: `Ren holds no Slack token for ${workspace}` })),
+          onSome: (found) => Effect.succeed(found.secret),
+        }),
+      ),
+    )
   return {
     id: "slack",
     triggers: [],
+    replyTool: "slack_reply_to_current_thread",
     verify: Effect.fnUntraced(function* (request) {
       const timestamp = request.headers.get("x-slack-request-timestamp") ?? ""
       const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)

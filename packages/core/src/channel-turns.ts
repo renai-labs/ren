@@ -25,8 +25,8 @@ export const TurnRun = DurableRunner.make("ChannelTurn", {
 const reminder = {
   description: "Reminder: reply in the thread",
   source: "channel",
-  text: (provider: Channel.Provider) =>
-    `You have not answered in the ${Channel.titles[provider]} thread. Text in this chat is not sent there: answer the person with the channel_reply tool.`,
+  text: (provider: Channel.Provider, tool: string) =>
+    `You have not answered in the ${Channel.titles[provider]} thread. Text in this chat is not sent there: answer the person with ${tool}.`,
 }
 
 const reasonOf = (errorType: string | null): Channel.FailureReason => {
@@ -96,7 +96,9 @@ export const layer = Layer.effect(
       }
       const sent = found.thread.last_reply_at
       const asked = found.thread.last_message_at
+      const tool = found.provider.replyTool
       if (
+        tool &&
         found.outcome === "succeeded" &&
         !(sent && asked && sent >= asked) &&
         reminded.get(payload.sessionId) !== found.latest
@@ -105,7 +107,7 @@ export const layer = Layer.effect(
         yield* runner.send({
           sessionId: payload.sessionId,
           messageId: Session.MessageID.create(),
-          prompt: { text: reminder.text(found.thread.provider) },
+          prompt: { text: reminder.text(found.thread.provider, tool) },
           delivery: "queue",
           sender: { userId: found.createdBy },
           synthetic: { description: reminder.description, source: reminder.source },

@@ -100,7 +100,6 @@ import type {
   ChannelMappingRemoveInput,
   ChannelConnectChannelInstallStartInput,
   ChannelConnectChannelPlaceListInput,
-  ChannelReplyChannelReplyInput,
 } from "../../generated/index.js"
 
 export function make(client: ReturnType<typeof Ren.make>) {
@@ -1070,18 +1069,6 @@ export function make(client: ReturnType<typeof Ren.make>) {
               queryKey: ["channel-connect", "channel-place", "list", input] as const,
               queryFn: (context) =>
                 client["channel-connect"]["channel-place"]["list"](input, { signal: context.signal }),
-            }),
-        },
-      },
-    },
-    "channel-reply": {
-      channel: {
-        reply: {
-          mutationKey: () => ["channel-reply", "channel", "reply"] as const,
-          mutationOptions: () =>
-            mutationOptions({
-              mutationKey: ["channel-reply", "channel", "reply"] as const,
-              mutationFn: (input: ChannelReplyChannelReplyInput) => client["channel-reply"]["channel"]["reply"](input),
             }),
         },
       },
