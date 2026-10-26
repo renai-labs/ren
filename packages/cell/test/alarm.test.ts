@@ -140,6 +140,7 @@ const setup = Effect.gen(function* () {
       ),
     session: (fields: Partial<Effect.Success<Harness.Instance["sessions"]>[number]> = {}) => ({
       id: "root",
+      root: true,
       progress: "0",
       active: false,
       inbox: [],

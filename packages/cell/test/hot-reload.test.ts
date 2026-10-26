@@ -436,6 +436,27 @@ it.live("a busy chat that Ren deleted is interrupted and dropped, and its model 
   }),
 )
 
+it.live("a pull names only root chats, so Ren never deletes a running subagent that it has not synced yet", () =>
+  Effect.gen(function* () {
+    const opened = yield* open({ active: true })
+    yield* opened.reload.pull
+    const harness = yield* opened.harness.get
+    const sessionId = Session.ID.create()
+    yield* harness.start({ sessionId, harness: "opencode", interactive: true })
+    const client = yield* OpenCodeServer.client(harness.fetch)
+    const stub = Shared.stub()
+    const child = stub.script({ hold: true })
+    yield* Effect.addFinalizer(() => Effect.sync(child.release))
+    const parent = stub.script({
+      tool: { name: "subagent", input: { agent: "general", description: "Help", prompt: `${child.marker} help` } },
+    })
+    yield* client.session.prompt({ sessionID: SessionID.make(sessionId), text: `${parent.marker} go` }).pipe(Effect.orDie)
+    yield* Effect.promise(() => child.called())
+    yield* opened.reload.pull
+    expect(opened.requests.at(-1)?.roots).toEqual([sessionId])
+  }),
+)
+
 it.live("a pull that finishes after the harness closes does not reopen it to offer config", () =>
   Effect.gen(function* () {
     const opened = yield* open({ active: true })
