@@ -1,7 +1,7 @@
 export * as GitHub from "./github.js"
 
 import type { Channel } from "@ren/schema/channel"
-import { Effect, Option, Redacted, Schema } from "effect"
+import { Clock, Effect, Option, Redacted, Schema } from "effect"
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { ChannelProvider } from "../channel-provider.js"
 import { GitHubApp } from "../github-app.js"
@@ -234,10 +234,12 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
             ),
           ),
         )
-      const reachable = yield* app
-        .exchangeCode(query.code)
-        .pipe(Effect.flatMap(app.userInstallations), Effect.catchTag("GitHubApp.Failed", unavailable))
-      if (!reachable.includes(installationId))
+      const token = yield* app.exchangeCode(query.code).pipe(Effect.catchTag("GitHubApp.Failed", unavailable))
+      const checked = yield* Effect.all(
+        { reachable: app.userInstallations(token.accessToken), user: app.user(token.accessToken) },
+        { concurrency: 2 },
+      ).pipe(Effect.catchTag("GitHubApp.Failed", unavailable))
+      if (!checked.reachable.includes(installationId))
         return yield* new ChannelProvider.InstallFailed({
           message: "Your GitHub account cannot reach this installation.",
         })
@@ -248,7 +250,11 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
         workspace: installationId,
         name: installation.account?.login ?? installationId,
         botUser: app.settings.botUserId,
-      }
+        installer: {
+          accountId: String(checked.user.id),
+          credential: GitHubApp.personCredential(app.settings, checked.user, token, yield* Clock.currentTimeMillis),
+        },
+      } satisfies ChannelProvider.Installed
     }),
     changedOnProvider: (query) => query.setup_action === "update" && !query.state,
     revoke: (workspace) =>

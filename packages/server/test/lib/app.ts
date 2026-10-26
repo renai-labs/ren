@@ -3,6 +3,8 @@ import { BrainClient } from "@ren/core/brain-client"
 import { BrainHost } from "@ren/core/brain-host"
 import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
+import { GitHubAccounts } from "@ren/core/github-accounts"
+import { PersonCredentials } from "@ren/core/person-credentials"
 import { ChannelProvider } from "@ren/core/channel-provider"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
@@ -109,7 +111,7 @@ export const services = Layer.mergeAll(
   Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
   Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
-  Layer.provideMerge(Credentials.layer),
+  Layer.provideMerge(Layer.mergeAll(Credentials.layer, PersonCredentials.layer, GitHubAccounts.layerNone)),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),

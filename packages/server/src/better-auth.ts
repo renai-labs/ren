@@ -25,6 +25,12 @@ export interface Input {
   readonly baseURL: string
   readonly trustedOrigins: ReadonlyArray<string>
   readonly google: { readonly clientId: string; readonly clientSecret: string }
+  readonly github?: {
+    readonly clientId: string
+    readonly clientSecret: string
+    readonly sync: (userId: string) => Promise<void>
+    readonly disconnect: (userId: string) => Promise<void>
+  }
   readonly appURL: string
   readonly requireEmailVerification: boolean
   readonly mcpResource: string
@@ -190,6 +196,9 @@ const consentOrganization = (input: Input) =>
     },
   }) satisfies BetterAuthPlugin
 
+const syncGitHub = (input: Input, account: { readonly providerId: string; readonly userId: string }) =>
+  account.providerId === "github" ? input.github?.sync(account.userId) : undefined
+
 const guardAccountCreation =
   (input: Input) =>
   async <User extends { email: string }>(user: User, ctx: { path?: string } | null | undefined) => {
@@ -277,13 +286,29 @@ export const make = (input: Input) => {
         clientSecret: input.google.clientSecret,
         requireEmailVerification: true,
       },
+      ...(input.github && {
+        github: { clientId: input.github.clientId, clientSecret: input.github.clientSecret },
+      }),
     },
     account: {
       accountLinking: { enabled: true, trustedProviders: ["google"] },
     },
     databaseHooks: {
       user: { create: { before: guardAccountCreation(input) } },
-      session: { create: { before: provisionOrganization(input) } },
+      session: {
+        create: {
+          before: provisionOrganization(input),
+          after: async (session) => input.github?.sync(session.userId),
+        },
+      },
+      account: {
+        create: { after: async (account) => syncGitHub(input, account) },
+        update: { after: async (account) => syncGitHub(input, account) },
+        delete: {
+          after: async (account) =>
+            account.providerId === "github" ? input.github?.disconnect(account.userId) : undefined,
+        },
+      },
     },
     plugins: [
       bearer(),

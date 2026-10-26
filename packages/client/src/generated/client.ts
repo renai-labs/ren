@@ -194,6 +194,7 @@ import type {
   ChannelConnectChannelInstallStartOutput,
   ChannelReplyChannelReplyInput,
   ChannelReplyChannelReplyOutput,
+  SignInSignInProviderListOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -1652,6 +1653,15 @@ export function make(options: ClientOptions) {
               declaredStatuses: [400, 401, 403],
               empty: false,
             },
+            requestOptions,
+          ),
+      },
+    },
+    "sign-in": {
+      "sign-in-provider": {
+        list: (requestOptions?: RequestOptions) =>
+          request<SignInSignInProviderListOutput>(
+            { method: "GET", path: `/sign-in-providers`, successStatus: 200, declaredStatuses: [], empty: false },
             requestOptions,
           ),
       },

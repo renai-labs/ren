@@ -8305,6 +8305,28 @@
           "required": true
         }
       }
+    },
+    "/sign-in-providers": {
+      "get": {
+        "tags": ["sign-in"],
+        "operationId": "sign-in-provider.list",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Auth.SignInProviders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Auth.SignInProviders"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return the accounts that a person can sign in with on this Ren server, besides email.",
+        "summary": "List sign-in providers"
+      }
     }
   },
   "components": {
@@ -9619,6 +9641,23 @@
       "Auth.OrganizationID": {
         "type": "string",
         "pattern": "^org_"
+      },
+      "Auth.SignInProvider": {
+        "type": "string",
+        "enum": ["google", "github"]
+      },
+      "Auth.SignInProviders": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Auth.SignInProvider"
+            }
+          }
+        },
+        "required": ["items"],
+        "additionalProperties": false
       },
       "Auth.User": {
         "type": "object",
@@ -15908,6 +15947,9 @@
     },
     {
       "name": "channel-reply"
+    },
+    {
+      "name": "sign-in"
     }
   ]
 }

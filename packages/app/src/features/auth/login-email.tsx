@@ -3,7 +3,7 @@ import { Form } from "@ren/ui/form"
 import { Text } from "@ren/ui/text"
 import { TextLink } from "../../components/text-link.js"
 import type { CompleteAuth } from "./complete-auth.js"
-import { GoogleButton } from "./google-button.js"
+import { ProviderButtons } from "./provider-buttons.js"
 import { AuthSchemas } from "./schemas.js"
 
 export function LoginEmail(props: {
@@ -18,7 +18,7 @@ export function LoginEmail(props: {
   })
   return (
     <>
-      <GoogleButton destination={props.destination} />
+      <ProviderButtons destination={props.destination} />
       <Form.Root form={form}>
         <form.AppField name="email">
           {(field) => (

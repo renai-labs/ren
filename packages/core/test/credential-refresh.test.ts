@@ -122,6 +122,34 @@ const reset = Effect.all([
 ])
 
 describe("CredentialRefresh", () => {
+  it.live("organization copies of a person's token share one refresh and all receive the renewed value", () =>
+    Effect.gen(function* () {
+      yield* reset
+      const database = yield* Database.Service
+      const refresh = yield* CredentialRefresh.Service
+      const user = yield* Seed.user()
+      const ids = [yield* expiring(3), yield* expiring(3)]
+      yield* Effect.forEach(ids, (id) =>
+        database.db
+          .update(Database.Schema.credential)
+          .set({
+            owner: "person",
+            user_id: user.id,
+            label: "GITHUB",
+            provider_account_id: "123",
+          })
+          .where(eq(Database.Schema.credential.id, id)),
+      )
+      yield* refresh.sweep
+      expect(yield* Ref.get(calls)).toHaveLength(1)
+      const saved = yield* Effect.forEach(ids, stored)
+      expect(saved.map((each) => each?.value.type === "oauth" && Redacted.value(each.value.accessToken))).toEqual([
+        "refreshed",
+        "refreshed",
+      ])
+    }),
+  )
+
   it.live("two sweeps at once refresh an expiring credential once, and skip one far from its expiry", () =>
     Effect.gen(function* () {
       const refresh = yield* CredentialRefresh.Service

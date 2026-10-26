@@ -16,6 +16,7 @@ import { Forms } from "../../lib/forms.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { PasswordDialog } from "./password-dialog.js"
+import { useGitHubLink } from "../../lib/use-github-link.js"
 
 const detailOptions: ReadonlyArray<Select.Option<ChatPreferences.Detail>> = [
   { value: "standard", label: "Standard" },
@@ -96,6 +97,45 @@ function ChatSettings() {
   )
 }
 
+function LinkedAccounts() {
+  const github = useGitHubLink("/settings/preferences")
+  if (!github.offered) return null
+  return (
+    <PageShell.Section title="Linked accounts" frame="divided">
+      <Field.Root
+        label="GitHub"
+        description={
+          github.linked
+            ? "Ren runs your GitHub mentions as you, with your GitHub access."
+            : "Link it so Ren runs your GitHub mentions as you, with your GitHub access."
+        }
+        orientation="horizontal"
+      >
+        {github.linked ? (
+          <Button
+            appearance="outline"
+            size="small"
+            pending={github.unlink.isPending}
+            onClick={() => github.unlink.mutate()}
+          >
+            Disconnect GitHub
+          </Button>
+        ) : (
+          <Button
+            appearance="outline"
+            size="small"
+            pending={github.link.isPending}
+            disabled={github.loading}
+            onClick={() => github.link.mutate()}
+          >
+            Connect GitHub
+          </Button>
+        )}
+      </Field.Root>
+    </PageShell.Section>
+  )
+}
+
 export function Preferences(props: { user: { name: string; email: string } }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
@@ -139,6 +179,7 @@ export function Preferences(props: { user: { name: string; email: string } }) {
         </Field.Root>
       </PageShell.Section>
       <ChatSettings />
+      <LinkedAccounts />
       <PageShell.Section title="Security" frame="divided">
         <Field.Root label="Password" orientation="row">
           <Button appearance="outline" size="small" onClick={() => setChangingPassword(true)}>

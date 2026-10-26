@@ -2,6 +2,7 @@ export * as ChannelProvider from "./channel-provider.js"
 
 import type { Channel } from "@ren/schema/channel"
 import { Context, Effect, Layer, Option, Schema } from "effect"
+import type { PersonCredentials } from "./person-credentials.js"
 
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()("ChannelProvider.Unauthorized", {
   message: Schema.String,
@@ -49,6 +50,10 @@ export interface Installed {
   readonly workspace: string
   readonly name: string
   readonly botUser?: string
+  readonly installer?: {
+    readonly accountId: string
+    readonly credential?: PersonCredentials.Saved
+  }
 }
 
 export interface Provider {

@@ -45,6 +45,7 @@ import { CredentialConnectHandler } from "./handlers/api/credential-connect.js"
 import { OAuthAppHandler } from "./handlers/api/oauth-app.js"
 import { ChannelConnectHandler, ChannelInstallHandler } from "./handlers/api/channel-install.js"
 import { ChannelReplyHandler } from "./handlers/api/channel-reply.js"
+import { SignInHandler } from "./handlers/api/sign-in.js"
 import { OAuthSessionHandler } from "./handlers/api/oauth-session.js"
 import { OAuthRoutes } from "./oauth-routes.js"
 import { ChannelRoutes } from "./channel-routes.js"
@@ -130,6 +131,7 @@ export const layer = Layer.mergeAll(
         ChannelInstallHandler,
         ChannelConnectHandler,
         ChannelReplyHandler,
+        SignInHandler,
       ]),
       Layer.provide([ActiveOrganizationLayer, AuthenticationLayer]),
       Layer.provide([

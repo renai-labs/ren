@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { RouterContext } from "../../lib/router-context.js"
 import { Channels } from "./channels.js"
+import { useGitHubLink } from "../../lib/use-github-link.js"
 import { useInstall } from "./use-install.js"
 
 const page = { page: 1, pageSize: Pagination.maximumPageSize }
@@ -24,6 +25,17 @@ export function ChannelsPage(props: { query: string; onQueryChange: (query: stri
     refetchOnWindowFocus: "always",
   })
   const offered = useQuery(context.api["channel-connect"]["channel-provider"].list.queryOptions())
+  const github = useGitHubLink("/settings/channels")
+  const attention: Partial<Record<Channels.Provider, Attention>> = {
+    ...(github.offered &&
+      !github.loading &&
+      !github.linked && {
+        github: {
+          label: "Connect your GitHub account",
+          act: () => github.link.mutate(),
+        },
+      }),
+  }
   const byProvider = new Map((installs.data?.items ?? []).map((install) => [install.provider, install]))
   const available = new Set((offered.data?.items ?? []).map((provider) => provider.id))
   const needle = props.query.trim().toLowerCase()
@@ -47,7 +59,8 @@ export function ChannelsPage(props: { query: string; onQueryChange: (query: stri
                 provider={provider}
                 install={byProvider.get(provider.id)}
                 available={available.has(provider.id)}
-                loading={installs.isLoading || offered.isLoading}
+                loading={installs.isLoading || offered.isLoading || (provider.id === "github" && github.link.isPending)}
+                attention={attention[provider.id]}
               />
             ))}
           </List.Root>
@@ -65,10 +78,23 @@ export function ChannelsPage(props: { query: string; onQueryChange: (query: stri
   )
 }
 
+interface Attention {
+  readonly label: string
+  readonly act: () => void
+}
+
+const actionOf = (row: {
+  readonly provider: (typeof Channels.providers)[number]
+  readonly install: ChannelInstallInfo | undefined
+  readonly attention: Attention | undefined
+}) => (row.install ? (row.attention?.label ?? "Configure") : `Install Ren on ${row.provider.title}`)
+
 const statusOf = (row: {
   readonly install: ChannelInstallInfo | undefined
   readonly available: boolean
+  readonly attention: Attention | undefined
 }): { readonly label: string; readonly tone: TextTone } => {
+  if (row.install && row.attention) return { label: "Needs attention", tone: "warning" }
   if (row.install) return { label: `Connected to ${row.install.name}`, tone: "success" }
   if (row.available) return { label: "Not connected", tone: "secondary" }
   return { label: "Not set up on this server", tone: "secondary" }
@@ -79,6 +105,7 @@ function ProviderRow(props: {
   install: ChannelInstallInfo | undefined
   available: boolean
   loading: boolean
+  attention: Attention | undefined
 }) {
   const started = useInstall(props.provider.id, props.provider.title)
   const busy = props.loading || started.isPending
@@ -96,12 +123,13 @@ function ProviderRow(props: {
       <ProgressIndicator label="Checking" />
     ) : (
       <span className="flex items-center gap-1">
-        {props.install ? "Configure" : `Install Ren on ${props.provider.title}`}
+        {actionOf(props)}
         <Icon glyph="ChevronRight" tone="secondary" />
       </span>
     ),
   }
   if (busy) return <List.Item {...item} disabled />
+  if (props.install && props.attention) return <List.Item {...item} onActivate={props.attention.act} />
   if (props.install)
     return (
       <List.Item
