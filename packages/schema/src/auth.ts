@@ -37,7 +37,9 @@ export const OAuthClientAssertionID = Identifier.make("oca", "Auth.OAuthClientAs
 
 export const consentOrganizationHeader = "x-ren-consent-organization"
 
-export const SignInProvider = Schema.Literals(["google", "github"]).annotate({ identifier: "Auth.SignInProvider" })
+export const SignInProvider = Schema.Literals(["google", "github", "slack"]).annotate({
+  identifier: "Auth.SignInProvider",
+})
 export type SignInProvider = typeof SignInProvider.Type
 
 export interface SignInProviders extends Schema.Schema.Type<typeof SignInProviders> {}

@@ -30,6 +30,7 @@ import { Clock, ConfigProvider, Effect, Layer, Logger, Schema } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { Routes } from "../../src/routes.js"
 import { Signer } from "@ren/core/signer"
+import { SlackApp } from "@ren/core/slack-app"
 import { EgressControl } from "@ren/core/egress-control"
 import { Access } from "@ren/core/access"
 import { Credentials } from "@ren/core/credentials"
@@ -112,6 +113,7 @@ export const services = Layer.mergeAll(
   Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
   Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
+  Layer.provideMerge(SlackApp.layer),
   Layer.provideMerge(
     Layer.mergeAll(Credentials.layer, PersonCredentials.layer, ChannelSecrets.layer, GitHubAccounts.layerNone),
   ),

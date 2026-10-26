@@ -218,7 +218,7 @@ export type ChannelMappingID = string
 
 export type ChannelTriggerID = string
 
-export type AuthSignInProvider = "google" | "github"
+export type AuthSignInProvider = "google" | "github" | "slack"
 
 export type HealthInfo = { status: HealthStatus; version: string }
 

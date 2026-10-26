@@ -14,6 +14,7 @@ import { BASE_ERROR_CODES, betterAuth } from "better-auth"
 import type { BetterAuthPlugin } from "better-auth"
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api"
 import { bearer, emailOTP, jwt, organization } from "better-auth/plugins"
+import { genericOAuth } from "better-auth/plugins/generic-oauth"
 import { Effect, Option, Schema } from "effect"
 import { AuthEmail } from "./auth-email.js"
 import { DefaultOrganization } from "./default-organization.js"
@@ -30,6 +31,12 @@ export interface Input {
     readonly clientSecret: string
     readonly sync: (userId: string) => Promise<void>
     readonly disconnect: (userId: string) => Promise<void>
+  }
+  readonly slack?: {
+    readonly clientId: string
+    readonly clientSecret: string
+    readonly api: string
+    readonly web: string
   }
   readonly appURL: string
   readonly requireEmailVerification: boolean
@@ -208,6 +215,26 @@ const consentOrganization = (input: Input) =>
     },
   }) satisfies BetterAuthPlugin
 
+const SlackProfile = Schema.Struct({
+  "https://slack.com/team_id": Schema.String,
+  "https://slack.com/user_id": Schema.String,
+})
+
+const slackSignIn = (slack: NonNullable<Input["slack"]>) => ({
+  providerId: "slack",
+  name: "Slack",
+  authorizationUrl: `${slack.web}/openid/connect/authorize`,
+  tokenUrl: `${slack.api}/openid.connect.token`,
+  userInfoUrl: `${slack.api}/openid.connect.userInfo`,
+  clientId: slack.clientId,
+  clientSecret: slack.clientSecret,
+  scopes: ["openid", "email", "profile"],
+  accountSubject: (context: { readonly profile: unknown }) => {
+    const profile = Schema.decodeUnknownSync(SlackProfile)(context.profile)
+    return `${profile["https://slack.com/team_id"]}:${profile["https://slack.com/user_id"]}`
+  },
+})
+
 const syncGitHub = (input: Input, account: { readonly providerId: string; readonly userId: string }) =>
   account.providerId === "github" ? input.github?.sync(account.userId) : undefined
 
@@ -354,6 +381,7 @@ export const make = (input: Input) => {
         }),
       ),
       consentOrganization(input),
+      genericOAuth({ config: input.slack ? [slackSignIn(input.slack)] : [] }),
       indexes,
     ],
     advanced: {
