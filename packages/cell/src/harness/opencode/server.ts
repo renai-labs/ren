@@ -19,6 +19,7 @@ import { Workspace } from "@opencode/core/workspace"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
 import type { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { GitHubReader } from "@ren/brain/github/reader"
 import { SkillCache } from "@ren/brain/skill/cache"
 import { SkillSource } from "@ren/brain/skill/source"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
@@ -62,7 +63,8 @@ export interface Options {
   readonly makeDirectory?: (directory: string) => Effect.Effect<void>
   readonly apps?: Option.Option<AppCatalog.Info>
   readonly channels?: ReadonlyArray<Channel.Provider>
-  readonly skills?: { readonly hosts?: SkillSource.Hosts; readonly refresh?: Duration.Input }
+  readonly github?: Effect.Effect<GitHubReader.Hosts>
+  readonly skills?: { readonly refresh?: Duration.Input }
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
   readonly egress?: boolean
 }
@@ -201,7 +203,10 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       ),
     )
   const api = yield* client(fetch)
-  const skillSource = yield* SkillSource.make(options.skills?.hosts).pipe(Effect.provide(FetchHttpClient.layer))
+  const github = yield* GitHubReader.make(options.github ?? Effect.succeed(GitHubReader.hostsOf({}))).pipe(
+    Effect.provide(FetchHttpClient.layer),
+  )
+  const skillSource = SkillSource.make(github)
   const skillCache = yield* SkillCache.make(skillSource, { refresh: options.skills?.refresh ?? "5 minutes" })
   const approvals = (sessionId: string) =>
     located(sessionId, Location.Service).pipe(

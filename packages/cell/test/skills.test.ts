@@ -103,7 +103,7 @@ const open = Effect.fnUntraced(function* (github?: TestGitHub.Instance) {
     {
       saved: Option.none(),
       directoryOf: () => local,
-      ...(github && { skills: { hosts: github.hosts, refresh: 0 } }),
+      ...(github && { github: Effect.succeed(github.hosts), skills: { refresh: 0 } }),
     },
   )
   const harness = yield* OpenCodeHarness.make(host, endpoints)
@@ -268,7 +268,7 @@ it.live("parallel environment calls wait for a loaded skill's files", () =>
     const results = call.body.messages.filter((message) => message.role === "tool").slice(-2)
     expect(results).toHaveLength(2)
     for (const message of results) expect(JSON.stringify(message.content)).toContain("copied")
-    expect((yield* github.requests).filter((request) => request.startsWith("/archive/"))).toHaveLength(1)
+    expect((yield* github.requests).filter((request) => request.startsWith("/api/repos/"))).toHaveLength(1)
   }),
 )
 

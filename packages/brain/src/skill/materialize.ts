@@ -12,7 +12,12 @@ export interface File {
 }
 
 export type Files =
-  | { readonly type: "archive"; readonly url: string; readonly folder: string }
+  | {
+      readonly type: "archive"
+      readonly url: string
+      readonly headers: Readonly<Record<string, string>>
+      readonly folder: string
+    }
   | { readonly type: "inline"; readonly files: ReadonlyArray<File> }
 
 const isInside = Schema.is(Skill.SourceDirectory)
@@ -27,7 +32,7 @@ export const ensure = Effect.fn("SkillMaterialize.ensure")(function* (
     new Failed({ message: `Could not put the skill’s files in ${directory}: ${error.message}` })
   if (files.type === "archive")
     return yield* environment
-      .unpack({ url: files.url, folder: files.folder, path: directory })
+      .unpack({ url: files.url, headers: files.headers, folder: files.folder, path: directory })
       .pipe(Effect.mapError(failed))
   const exists = yield* environment.stat(directory).pipe(
     Effect.as(true),

@@ -5,6 +5,7 @@ import type { OpenCodeClient } from "@opencode/client/effect"
 import { Location } from "@opencode/schema/location"
 import { SessionInbox } from "@opencode/schema/session-inbox"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { GitHubReader } from "@ren/brain/github/reader"
 import { BrainSettings } from "@ren/brain/settings"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
@@ -37,6 +38,7 @@ import { AppStore } from "../../app-store.js"
 import { ChannelStore } from "../../channel-store.js"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
+import { CredentialEnv } from "../../credential-env.js"
 import { HarnessStorage } from "../../harness-storage.js"
 import { HostToken } from "../../host-token.js"
 import { ModelRefresh } from "../../model-refresh.js"
@@ -371,7 +373,7 @@ type Opener = (
   apps: Option.Option<AppCatalog.Info>,
   channels: ReadonlyArray<Channel.Provider>,
   ren: Option.Option<OpenCodeMcp.RenAccess>,
-  host: { readonly egress: boolean },
+  host: { readonly egress: boolean; readonly github: Effect.Effect<GitHubReader.Hosts> },
 ) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
 
 const layerWith = (opener: Opener) =>
@@ -386,6 +388,7 @@ const layerWith = (opener: Opener) =>
       const channels = yield* Effect.serviceOption(ChannelStore.Service)
       const address = yield* Effect.serviceOption(RenAddress.Service)
       const hostToken = yield* Effect.serviceOption(HostToken.Service)
+      const credentialEnv = yield* Effect.serviceOption(CredentialEnv.Service)
       const ren =
         cell.vars.REN_URL && Option.isSome(address) && Option.isSome(hostToken)
           ? Option.some({ address: address.value.current, token: hostToken.value.current })
@@ -415,7 +418,13 @@ const layerWith = (opener: Opener) =>
                 Option.isSome(apps) ? yield* apps.value.current : Option.none(),
                 Option.isSome(channels) ? yield* channels.value.current : [],
                 ren,
-                { egress: cell.vars.REN_EGRESS === "1" },
+                {
+                  egress: cell.vars.REN_EGRESS === "1",
+                  github: Option.match(credentialEnv, {
+                    onNone: () => Effect.succeed(GitHubReader.hostsOf({})),
+                    onSome: (env) => Effect.map(env.current, GitHubReader.hostsOf),
+                  }),
+                },
               )
               return yield* make(server, endpoints, settings, Option.some({ inference, refreshKey }))
             }),
@@ -433,6 +442,7 @@ export const layer = (storage: DurableObjectStorage) =>
       channels,
       ren,
       egress: host.egress,
+      github: host.github,
       directoryOf: (sessionId) => `/workspace/${sessionId}`,
     }),
   )
@@ -445,6 +455,7 @@ export const layerProcess = (database: string, confinement: RenPlugin.Confinemen
       channels,
       ren,
       egress: host.egress,
+      github: host.github,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
       confinement,
       makeDirectory: (directory) => Effect.promise(() => mkdir(directory, { recursive: true })),
