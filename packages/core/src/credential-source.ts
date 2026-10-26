@@ -140,7 +140,7 @@ const ren = "REN"
 const models = "MODELS"
 const person = Models.personLabel
 
-// oxlint-disable-next-line ren/no-comments -- Ren mints REN (the brain's host token, for Ren's own host: the host of REN_URL) and MODELS (the model keys). PERSON is the member id of each member who can send a turn in the brain's space, on the model hosts: its space members, as Actor.fromSession allows (access AC4). One mint at a time per workload; a 5xx is retried; a value is kept until 20 minutes before its expiry, so the old one stays in use until then (C29, C37; ren-v1 INV-24, INV-25, INV-26, OI-11).
+// oxlint-disable-next-line ren/no-comments -- Ren mints REN, MODELS and PERSON (space members only, AC4); one mint at a time per workload (C29).
 export const layerMinted = Layer.effect(
   Minted,
   Effect.gen(function* () {

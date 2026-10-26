@@ -15,7 +15,7 @@ export const facts = {
 
 const every = SpacePolicy.organizationRoles
 
-// oxlint-disable-next-line ren/no-comments -- access §7 (AC4, AC11): an agent is seen in its owner space and the spaces it is added to, and changed in its owner space. An admin has no rights beyond a member's.
+// oxlint-disable-next-line ren/no-comments -- access §7: agents belong to their owner space.
 export const documents = [
   {
     resource: Agent.definition.name,

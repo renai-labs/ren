@@ -4,14 +4,14 @@ import type { AppProfileInfo } from "@ren/client"
 
 export type Kind = "shared" | "private"
 
-// oxlint-disable-next-line ren/no-comments -- private-spaces rules 10, 11: a private profile runs only in its person's private space, so a shared space offers only a shared one.
+// oxlint-disable-next-line ren/no-comments -- private-spaces rule 11: a shared space offers only shared profiles.
 export const kinds = (from: { readonly kind: "shared" | "private" } | undefined): ReadonlyArray<Kind> =>
   from?.kind === "shared" ? ["shared"] : ["shared", "private"]
 
 const names = (spaces: ReadonlyArray<string>) =>
   spaces.length < 2 ? spaces.join("") : `${spaces.slice(0, -1).join(", ")} and ${spaces.at(-1) ?? ""}`
 
-// oxlint-disable-next-line ren/no-comments -- §9 rule 6 (A41, P21), private-spaces PS5: who can use an account before a sign-in into it. A shared profile reaches the spaces it lists.
+// oxlint-disable-next-line ren/no-comments -- §9 rule 6: who can use an account before a sign-in into it.
 export const audience = (profile: {
   readonly kind: Kind
   readonly allSpaces: boolean

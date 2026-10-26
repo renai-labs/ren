@@ -89,7 +89,7 @@ export const join = Effect.fnUntraced(function* (spaceId: Space.ID, userId: Auth
     .values({ id: Space.MembershipID.create(), space_id: spaceId, user_id: userId })
 })
 
-// oxlint-disable-next-line ren/no-comments -- The creator is a member of the space: inside a space the owner role gives nothing more (access AC4).
+// oxlint-disable-next-line ren/no-comments -- The creator joins the space: roles give nothing inside it (AC4).
 export const owner = Effect.fnUntraced(function* () {
   const organizationId = yield* organization()
   const creator = yield* user()

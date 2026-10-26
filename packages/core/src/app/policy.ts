@@ -16,7 +16,7 @@ export const facts = {
 
 const every = SpacePolicy.organizationRoles
 
-// oxlint-disable-next-line ren/no-comments -- access §8 (AC4, AC11): an org app is seen by its owner space and by whoever reaches one of its profiles, and changed in its owner space; a registry app is read by every member and changed by nobody through the API.
+// oxlint-disable-next-line ren/no-comments -- access §8: org apps belong to their owner space; registry apps are read-only.
 export const documents = [
   {
     resource: App.definition.name,

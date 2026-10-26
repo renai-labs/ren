@@ -5,7 +5,7 @@ import type { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { SpacePolicy } from "../space/policy.js"
 
-// oxlint-disable-next-line ren/no-comments -- access §10 (AC16): every member reads and writes the org's OAuth apps, like org credentials.
+// oxlint-disable-next-line ren/no-comments -- access §10 (AC16): OAuth apps are for every member.
 export const documents = [
   {
     resource: OAuthApp.definition.name,

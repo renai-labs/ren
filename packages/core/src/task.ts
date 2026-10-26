@@ -60,7 +60,7 @@ const identifier = /^(?<prefix>.+)-(?<number>\d+)$/u
 
 const iso = (date: Date | null) => date && DateTime.formatIso(DateTime.fromDateUnsafe(date))
 
-// oxlint-disable-next-line ren/no-comments -- access AC8: a task carries system labels, org labels and the labels of its own space. A new name becomes a label of the task's space; when an org label and a space label share a name, the space label wins.
+// oxlint-disable-next-line ren/no-comments -- access AC8: a new name becomes a space label; a space label wins over an org one.
 const setLabels = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   task: TaskTrail.Target & { readonly spaceId: Space.ID },
@@ -401,7 +401,7 @@ export const layer = Layer.effect(
             ])
           }
           if (next.spaceId !== row.task.space_id) {
-            // oxlint-disable-next-line ren/no-comments -- access AC8: a space label stays in its space, so a moved task and its subtasks drop the labels of the space they leave.
+            // oxlint-disable-next-line ren/no-comments -- access AC8: a moved task drops the labels of the space it leaves.
             yield* transaction.delete(Database.Schema.task_label).where(
               and(
                 inArray(

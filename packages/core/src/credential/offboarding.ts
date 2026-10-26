@@ -89,7 +89,7 @@ export const forMember = Effect.fnUntraced(function* (
         privates.map((row) => row.id),
       ),
     )
-  // oxlint-disable-next-line ren/no-comments -- Person credentials resolve only in the person's private space (private-spaces rule 10), so its brains drop their cached answers.
+  // oxlint-disable-next-line ren/no-comments -- private-spaces rule 10: person credentials live in the private space.
   const own = yield* transaction
     .select({ id: spaces.id })
     .from(spaces)
@@ -137,7 +137,7 @@ export const forProfile = Effect.fnUntraced(function* (transaction: Database.Tra
   return { ...removed, workloads: [] } satisfies Removed
 })
 
-// oxlint-disable-next-line ren/no-comments -- Every brain of the spaces: a member who joins or leaves changes who can be the person of a model request there, and an archived space reaches nothing.
+// oxlint-disable-next-line ren/no-comments -- Every brain of the spaces, to clear their cached answers.
 export const spaceBrains = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   spaceIds: ReadonlyArray<Space.ID>,

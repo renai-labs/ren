@@ -24,7 +24,7 @@ export interface Info {
   }
 }
 
-// oxlint-disable-next-line ren/no-comments -- access AC17, AC18: an agent has its sender's rights, except in the sender's private space when its chat is in another space. That space, and the sender's person items, are hidden from it.
+// oxlint-disable-next-line ren/no-comments -- access AC18: the sender's private space, hidden from an agent whose chat is elsewhere.
 export const isFenced = (actor: Info) => Boolean(actor.agent?.fence)
 
 export const fenced = (actor: Info, spaceId: SQLWrapper): SQL | undefined =>

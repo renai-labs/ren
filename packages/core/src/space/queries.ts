@@ -21,7 +21,7 @@ export const membershipOf = (actor: Actor.Info) =>
     Actor.fenced(actor, membership.space_id),
   )
 
-// oxlint-disable-next-line ren/no-comments -- The SQL of the space and session facts, for a query that joins `membership` with `membershipOf`.
+// oxlint-disable-next-line ren/no-comments -- The SQL of the space and session facts.
 export const where: ReadonlyMap<string, SQL> = new Map([
   [SpacePolicy.facts.member, isNotNull(membership.id)],
   [SpacePolicy.facts.shared, eq(Database.Schema.space.kind, "shared")],
@@ -42,7 +42,7 @@ export const organizationMember = Effect.fnUntraced(function* (
   return rows.at(0)
 })
 
-// oxlint-disable-next-line ren/no-comments -- access AC12, private-spaces rule 8: archiving a private space archives the agents and apps it owns, also those that other spaces use.
+// oxlint-disable-next-line ren/no-comments -- access AC12: a private space's archive takes its agents and apps.
 export const archiveOwned = Effect.fnUntraced(function* (transaction: Database.Transaction, spaceId: Space.ID) {
   const agents = transaction
     .select({ id: Database.Schema.agent.id })
@@ -61,7 +61,7 @@ export const archiveOwned = Effect.fnUntraced(function* (transaction: Database.T
     .where(and(eq(Database.Schema.app.owner_space_id, spaceId), isNull(Database.Schema.app.archived_at)))
 })
 
-// oxlint-disable-next-line ren/no-comments -- Whether a person may send a turn in a space, as the sender of a channel message (access §12 rule 2).
+// oxlint-disable-next-line ren/no-comments -- Whether a person may send a turn in a space (access §13).
 export const actsIn = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   access: Access.Interface,

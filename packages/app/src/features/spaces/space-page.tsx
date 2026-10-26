@@ -60,7 +60,7 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
       {isMember ? (
         props.children
       ) : (
-        // oxlint-disable-next-line ren/no-comments -- access AC4, private-spaces rule 6: who is not a member sees only the list entry. An admin joins a shared space, and its members see the join.
+        // oxlint-disable-next-line ren/no-comments -- access AC4: a non-member sees the list entry and may join a shared space.
         <Notice
           tone="neutral"
           title={space.data.kind === "private" ? "This is a private space" : "You are not a member of this space"}

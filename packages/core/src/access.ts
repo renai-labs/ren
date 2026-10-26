@@ -19,10 +19,10 @@ import { SettingsPolicy } from "./settings/policy.js"
 import { SpacePolicy } from "./space/policy.js"
 import { TaskPolicy } from "./task/policy.js"
 
-// oxlint-disable-next-line ren/no-comments -- access §2: services gather facts about a resource and ask; only the policy documents decide. Facts are names such as `space.member`.
+// oxlint-disable-next-line ren/no-comments -- access §2: services pass facts; only policy documents decide.
 export interface Resource {
   readonly facts: ReadonlyArray<string>
-  // oxlint-disable-next-line ren/no-comments -- The owning organization; null for Ren's own records. A rule with no facts reaches only the actor's.
+  // oxlint-disable-next-line ren/no-comments -- Null for Ren's own records; a rule with no facts reaches only the actor's org.
   readonly organizationId?: Auth.OrganizationID | null
 }
 
@@ -34,7 +34,7 @@ export interface Request {
   readonly resource: Resource
 }
 
-// oxlint-disable-next-line ren/no-comments -- The rules that can apply to an actor and an action, before the resource is known: a list query turns them into SQL with `where`.
+// oxlint-disable-next-line ren/no-comments -- The rules for an actor and an action; `where` turns them into SQL.
 export interface Plan {
   readonly allow: ReadonlyArray<ReadonlyArray<string>>
   readonly deny: ReadonlyArray<ReadonlyArray<string>>
@@ -76,7 +76,7 @@ export const make = (documents: ReadonlyArray<Policy.Document>): Interface => {
   }
 }
 
-// oxlint-disable-next-line ren/no-comments -- A fact with no SQL never lets an allow rule match and always lets a deny rule match, so a missing fact denies.
+// oxlint-disable-next-line ren/no-comments -- A fact with no SQL denies.
 export const where = (plan: Plan, facts: ReadonlyMap<string, SQL>): SQL => {
   const all = (when: ReadonlyArray<string>, missing: SQL) =>
     when.length === 0 ? sql`true` : (and(...when.map((fact) => facts.get(fact) ?? missing)) ?? sql`true`)

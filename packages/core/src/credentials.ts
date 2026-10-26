@@ -47,7 +47,7 @@ export type OwnerKind = Credential.OwnerKind | "workload"
 // oxlint-disable-next-line ren/no-comments -- The order applies to loose keys; a profile label is unique among the credentials a workload reaches (profiles.md §13 rule 3).
 export const lookupOrder: ReadonlyArray<OwnerKind> = ["workload", "profile", "person", "space", "org"]
 
-// oxlint-disable-next-line ren/no-comments -- What a workload may use: its own credentials, its org's, its space's while it serves that space, and one person's only when it serves that person alone (README §6.4 rules 2, A37).
+// oxlint-disable-next-line ren/no-comments -- The scope of a workload (README §6.4 rule 2, A37).
 export interface Scope {
   readonly organizationId: Auth.OrganizationID
   readonly workload: Workload.Info
@@ -364,7 +364,7 @@ export const layer = Layer.effect(
           ),
       )
 
-    // oxlint-disable-next-line ren/no-comments -- The SQL of each credential fact, for a list or a lookup.
+    // oxlint-disable-next-line ren/no-comments -- The SQL of each credential fact.
     const facts = (actor: Actor.Info): ReadonlyMap<string, SQL> =>
       new Map([
         [CredentialPolicy.facts.org, eq(table.owner, "org")],
@@ -380,7 +380,7 @@ export const layer = Layer.effect(
           CredentialPolicy.facts.profile,
           and(
             eq(table.owner, "profile"),
-            // oxlint-disable-next-line ren/no-comments -- profiles.md §10: whoever connects the profile's items sees its credentials.
+            // oxlint-disable-next-line ren/no-comments -- Whoever connects a profile sees its credentials.
             exists(
               database.db
                 .select({ one: sql`1` })
@@ -575,7 +575,7 @@ export const layer = Layer.effect(
         })
     })
 
-    // oxlint-disable-next-line ren/no-comments -- A read already passed the policy, so a space credential's reader is a space member.
+    // oxlint-disable-next-line ren/no-comments -- A reader of a space credential is a space member.
     const toInfo = (
       actor: Actor.Info,
       row: typeof table.$inferSelect,
