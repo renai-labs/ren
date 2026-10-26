@@ -26,6 +26,7 @@ import { SessionSync } from "@ren/core/session-sync"
 import { Space } from "@ren/core/space"
 import { SpaceEnvironmentTemplate } from "@ren/core/space/environment-template"
 import { SpaceMember } from "@ren/core/space/member"
+import { ReferenceCheck } from "@ren/core/reference-check"
 import { SpaceSettings } from "@ren/core/space/settings"
 import { Task } from "@ren/core/task"
 import { TaskActivity } from "@ren/core/task/activity"
@@ -142,13 +143,13 @@ export const layer = Layer.mergeAll(
         SpaceMember.layer,
         EnvironmentTemplates.layer,
         SpaceEnvironmentTemplate.layer,
-        SpaceSettings.layer,
+        Layer.mergeAll(SpaceSettings.layer, OrganizationSettings.layer, Agent.layer).pipe(
+          Layer.provide(ReferenceCheck.layer),
+        ),
         Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
           Layer.provide(SessionRunner.layer),
           Layer.provide(BrainRegistry.layer),
         ),
-        OrganizationSettings.layer,
-        Agent.layer,
         App.layer,
         AppRegistry.layer,
         AgentMembership.layer,

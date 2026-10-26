@@ -54,8 +54,13 @@ export interface Instance {
   readonly resources: Map<string, unknown>
   readonly posted: Array<{ readonly path: string; readonly body: unknown; readonly authorization: string | null }>
   readonly removed: Array<string>
-  readonly repositories: Array<{ readonly id: number; readonly full_name: string; readonly private: boolean }>
-  readonly options: { failDelete: boolean; tokenExpiresAt: string; postStatus: number }
+  readonly repositories: Array<{
+    readonly id: number
+    readonly full_name: string
+    readonly private: boolean
+    readonly description?: string | null
+  }>
+  readonly options: { failDelete: boolean; tokenExpiresAt: string; postStatus: number; unavailable: boolean }
   readonly stop: () => void
 }
 
@@ -166,13 +171,14 @@ export const start = (): Instance => {
     posted: [],
     removed: [],
     repositories: [],
-    options: { failDelete: false, tokenExpiresAt: "2027-01-15T08:00:00Z", postStatus: 201 },
+    options: { failDelete: false, tokenExpiresAt: "2027-01-15T08:00:00Z", postStatus: 201, unavailable: false },
   }
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     fetch: (request) => {
       const url = new URL(request.url)
+      if (state.options.unavailable) return new Response("unavailable", { status: 503 })
       if (request.method === "POST" && url.pathname === "/login/oauth/access_token") return exchange(state, request)
       if (request.method === "GET" && url.pathname === "/user") return userOf(state, request)
       if (request.method === "GET" && url.pathname === "/user/installations")

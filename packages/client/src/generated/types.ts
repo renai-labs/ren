@@ -34,6 +34,8 @@ export type ReferenceRepository = string
 
 export type ReferenceBranch = string
 
+export type ReferenceDescription = string
+
 export type AgentID = string
 
 export type AppID = string
@@ -318,7 +320,7 @@ export type ReferenceInfo = {
   alias: ReferenceAlias
   repository: ReferenceRepository
   branch?: ReferenceBranch
-  description?: string
+  description: ReferenceDescription
 }
 
 export type TaskEventAssigned = {
@@ -882,6 +884,7 @@ export type ChannelPlaceInfo = {
   name: string
   private: boolean
   anyoneCanWrite: boolean
+  description?: string
   mapping: ChannelMappingInfo | null
 }
 
@@ -1316,7 +1319,7 @@ export type SpaceSettingsUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["settings"]
@@ -1343,7 +1346,7 @@ export type OrganizationSettingsUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["settings"]
@@ -1402,7 +1405,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["ownerSpaceId"]
@@ -1423,7 +1426,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["name"]
@@ -1444,7 +1447,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["description"]
@@ -1465,7 +1468,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["isSubagent"]
@@ -1486,7 +1489,7 @@ export type AgentCreateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     }
   }["settings"]
@@ -1512,7 +1515,7 @@ export type AgentUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     } | null
   }["name"]
@@ -1532,7 +1535,7 @@ export type AgentUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     } | null
   }["description"]
@@ -1552,7 +1555,7 @@ export type AgentUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     } | null
   }["isSubagent"]
@@ -1572,7 +1575,7 @@ export type AgentUpdateInput = {
         readonly alias: string
         readonly repository: string
         readonly branch?: string
-        readonly description?: string
+        readonly description: string
       }>
     } | null
   }["settings"]

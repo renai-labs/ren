@@ -19,6 +19,7 @@ import { EnvironmentProvider } from "@ren/core/environment-provider"
 import { Environments } from "@ren/core/environments"
 import { Models } from "@ren/core/models"
 import { OrganizationSettings } from "@ren/core/organization-settings"
+import { ReferenceCheck } from "@ren/core/reference-check"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SpaceSettings } from "@ren/core/space/settings"
@@ -119,7 +120,7 @@ export const start = async (options: {
   const direct = new Bun.SQL(database.href)
   const databaseRuntime = ManagedRuntime.make(
     Layer.mergeAll(Agent.layer, OrganizationSettings.layer, SpaceSettings.layer).pipe(
-      Layer.provideMerge(Access.layer),
+      Layer.provideMerge(Layer.mergeAll(Access.layer, ReferenceCheck.layerNone)),
       Layer.provideMerge(Database.layer),
       Layer.provideMerge(PgClient.layer({ url: Redacted.make(database.href) })),
     ),

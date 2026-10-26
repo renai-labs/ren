@@ -8,7 +8,7 @@ import { ChannelMapping } from "@ren/schema/channel-mapping"
 import type { ChannelPlace } from "@ren/schema/channel-place"
 import { and, asc, count, eq, inArray, isNull } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
-import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Schema, Struct } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { AgentQueries } from "./agent/queries.js"
@@ -185,13 +185,9 @@ export const layer = Layer.effect(
         return {
           items: shown.map((place) => {
             const mapping = byPlace.get(place.id)
-            return {
-              id: place.id,
-              name: place.name,
-              private: place.private,
-              anyoneCanWrite: place.anyoneCanWrite,
+            return Object.assign(Struct.pick(place, ["id", "name", "private", "anyoneCanWrite", "description"]), {
               mapping: mapping ? toInfo(mapping) : null,
-            }
+            })
           }),
           page: input.page,
           pageSize: input.pageSize,
