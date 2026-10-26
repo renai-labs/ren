@@ -36,9 +36,9 @@ export function ProfileCard(props: {
         trigger={
           <Select.Button
             appearance="plain"
-            size="large"
-            width="fill"
-            indicator={navigation.collapsed ? "none" : "chevron-up"}
+            {...(navigation.collapsed
+              ? { shape: "circle", size: "medium", indicator: "none" }
+              : { size: "large", width: "fill", indicator: "chevron-up" })}
             label={`Switch organization (current: ${props.organization.name})`}
             leading={<Avatar.Root name={displayName} image={props.user.image ?? undefined} size="large" decorative />}
           >
