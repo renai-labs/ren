@@ -29,6 +29,7 @@ import { Signer } from "@ren/core/signer"
 import { EgressControl } from "@ren/core/egress-control"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { GitHubApp } from "@ren/core/github-app"
+import { SlackApp } from "@ren/core/slack-app"
 import { PersonCredentials } from "@ren/core/person-credentials"
 import { CredentialEnv } from "@ren/core/credential-env"
 import { Access } from "@ren/core/access"
@@ -81,7 +82,7 @@ HttpRouter.serve(Routes.layer).pipe(
     RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),
     Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
   ]),
-  Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal, GitHubApp.layerNone)),
+  Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal, GitHubApp.layerNone, SlackApp.layerNone)),
   Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers)),
   Layer.provide([AuthDatabase.layer, Database.layer]),
   Layer.provide([FetchHttpClient.layer, BunServices.layer, Postgres.layer]),

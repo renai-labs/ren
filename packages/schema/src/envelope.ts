@@ -18,7 +18,7 @@ export const Sealed = Schema.Struct({
 export interface Context extends Schema.Schema.Type<typeof Context> {}
 export const Context = Schema.Struct({
   organizationId: Auth.OrganizationID,
-  kind: Schema.Literals(["credential", "oauth_app", "oauth_session", "credential_caller"]),
+  kind: Schema.Literals(["credential", "oauth_app", "oauth_session", "credential_caller", "channel_install"]),
   id: Schema.String,
 }).annotate({
   identifier: "Envelope.Context",

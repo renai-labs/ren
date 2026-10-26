@@ -4,6 +4,7 @@ import type { Agent } from "@ren/schema/agent"
 import type { ChannelInstall } from "@ren/schema/channel-install"
 import type { ChannelMapping } from "@ren/schema/channel-mapping"
 import type { Credential } from "@ren/schema/credential"
+import type { Envelope } from "@ren/schema/envelope"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import { boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
@@ -24,6 +25,7 @@ export const channel_install = pgTable(
     workspace: text().notNull(),
     name: text().notNull(),
     bot_user: text(),
+    secret: jsonb().$type<Envelope.Sealed>(),
     credential_id: text()
       .$type<Credential.ID>()
       .references(() => credential.id, { onDelete: "set null" }),
