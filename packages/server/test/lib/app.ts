@@ -124,12 +124,13 @@ export const makeApp = (
     readonly baseURL?: string
     readonly config?: Readonly<Record<string, string>>
     readonly logs?: Array<string>
+    readonly database?: typeof Testing.layer
   },
 ) =>
   HttpRouter.toWebHandler(
     routes.pipe(
       Layer.provide(services),
-      Layer.provide(Testing.layer),
+      Layer.provide(options?.database ?? Testing.layer),
       Layer.provide([FetchHttpClient.layer, BunServices.layer]),
       Layer.provide(BunHttpServer.layerHttpServices),
       Layer.provideMerge(
