@@ -1,12 +1,7 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "agentGuidance": false,
-  "globalDependencies": [
-    "patches/**",
-    "tsconfig.base.json",
-    "bunfig.toml",
-    ".github/actions/setup-bun/**"
-  ],
+  "globalDependencies": ["patches/**", "tsconfig.base.json", "bunfig.toml", ".github/actions/setup-bun/**"],
   "globalEnv": ["CI", "REN_SLOW"],
   "globalPassThroughEnv": ["CI", "DATABASE_URL"],
   "tasks": {
@@ -29,6 +24,11 @@
     "@ren/e2e#test": {
       "outputs": [],
       "cache": false
+    },
+    "@ren/app#build": {
+      "dependsOn": ["transit"],
+      "env": ["VITE_*"],
+      "outputs": ["dist/**"]
     },
     "@ren/storybook#build": {
       "dependsOn": ["transit"],
