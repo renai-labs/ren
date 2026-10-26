@@ -527,41 +527,52 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
   )
 
   it.live(
-    "a person credential reaches only a session-scope brain of that person; another space's label never does",
+    "a person credential reaches the brains of a space only while that person is its one member; another space's label never does",
     () =>
       Effect.gen(function* () {
         const credentials = yield* Credentials.Service
+        const members = yield* SpaceMember.Service
         const setup = yield* team()
         yield* credentials.create(setup.ada, {
           owner: { kind: "person", userId: setup.ada.userId },
           label: "OPENAI_API_KEY",
-          ...key("sk-proj", ["api.openai.com"]),
+          ...key("sk-ada", ["api.openai.com"]),
+        })
+        yield* credentials.create(setup.grace, {
+          owner: { kind: "person", userId: setup.grace.userId },
+          label: "ANTHROPIC_API_KEY",
+          ...key("sk-grace", ["api.anthropic.com"]),
         })
         yield* credentials.create(setup.grace, {
           owner: { kind: "space", spaceId: setup.other.id },
           label: "OTHER_KEY",
           ...key("other", ["api.other.dev"]),
         })
-        const sessionId = yield* Seed.session({
-          organizationId: setup.organizationId,
-          spaceId: setup.space.id,
-          createdBy: setup.ada.userId,
+        const brains = Effect.fnUntraced(function* (spaceId: typeof setup.space.id, createdBy: Auth.UserID) {
+          const sessionId = yield* Seed.session({ organizationId: setup.organizationId, spaceId, createdBy })
+          const spaceBrain = Brain.ID.create()
+          yield* Seed.session({ organizationId: setup.organizationId, spaceId, createdBy, brainId: spaceBrain })
+          return [Brain.ofSession(sessionId), spaceBrain]
         })
-        const spaceBrain = Brain.ID.create()
-        yield* Seed.session({
-          organizationId: setup.organizationId,
-          spaceId: setup.space.id,
-          createdBy: setup.ada.userId,
-          brainId: spaceBrain,
-        })
-        const labels = (brainId: Brain.ID) =>
-          Effect.gen(function* () {
-            const scope = yield* credentials.scopeOf({ kind: "brain", id: brainId, generation: 1 })
-            if (Option.isNone(scope)) return []
-            return (yield* credentials.candidates(scope.value, [])).map((found) => found.label).toSorted()
-          })
-        expect(yield* labels(Brain.ofSession(sessionId))).toEqual(["OPENAI_API_KEY"])
-        expect(yield* labels(spaceBrain)).toEqual([])
+        const labels = (ids: ReadonlyArray<Brain.ID>) =>
+          Effect.forEach(ids, (brainId) =>
+            Effect.gen(function* () {
+              const scope = yield* credentials.scopeOf({ kind: "brain", id: brainId, generation: 1 })
+              if (Option.isNone(scope)) return []
+              return (yield* credentials.candidates(scope.value, [])).map((found) => found.label).toSorted()
+            }),
+          )
+        const shared = yield* brains(setup.space.id, setup.ada.userId)
+        const alone = yield* brains(setup.other.id, setup.grace.userId)
+        expect(yield* labels(shared)).toEqual([[], []])
+        expect(yield* labels(alone)).toEqual([
+          ["ANTHROPIC_API_KEY", "OTHER_KEY"],
+          ["ANTHROPIC_API_KEY", "OTHER_KEY"],
+        ])
+        invalidations.length = 0
+        yield* members.create(setup.grace, { spaceId: setup.other.id, userId: setup.ada.userId })
+        expect(yield* labels(alone)).toEqual([["OTHER_KEY"], ["OTHER_KEY"]])
+        expect(invalidations).toEqual(expect.arrayContaining(alone.map((id) => ({ workload: `brain:${id}:` }))))
       }),
   )
 })

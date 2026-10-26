@@ -30,7 +30,7 @@ export type OwnerKind = Credential.OwnerKind | "workload"
 // oxlint-disable-next-line ren/no-comments -- The order applies to loose keys; a profile label is unique among the credentials a workload reaches (profiles.md §13 rule 3).
 export const lookupOrder: ReadonlyArray<OwnerKind> = ["workload", "profile", "person", "space", "org"]
 
-// oxlint-disable-next-line ren/no-comments -- What a workload may use: its own credentials, its org's, its space's while it serves that space, and one person's only when it serves that person alone (README §6.4 rules 2, A37).
+// oxlint-disable-next-line ren/no-comments -- What a workload may use: its own credentials, its org's, its space's while it serves that space, and one person's only in a space where that person is the one member (README §6.4 rule 2, C28, A37).
 export interface Scope {
   readonly organizationId: Auth.OrganizationID
   readonly workload: Workload.Info
@@ -213,7 +213,6 @@ const members = Database.Schema.space_member
 const profiles = Database.Schema.app_profile
 const listed = Database.Schema.app_profile_space
 
-// oxlint-disable-next-line ren/no-comments -- What a workload may use: its own credentials, its org's, its space's while it serves that space, and one person's only when it serves that person alone (README §6.4 rules 2, A37). Profiles reach by `AppProfiles.reachable` from the same scope.
 export const scopeOf = Effect.fnUntraced(function* (
   client: Pick<Database.Transaction, "select">,
   workload: Workload.Info,
@@ -224,35 +223,33 @@ export const scopeOf = Effect.fnUntraced(function* (
     .from(Database.Schema.brain)
     .where(eq(Database.Schema.brain.id, brainId))).at(0)?.brain
   if (!brain) return Option.none<Scope>()
-  const person =
-    brain.scope === "session"
-      ? Option.fromNullishOr(
-          (yield* client
-            .select({ userId: Database.Schema.agent_session.created_by })
-            .from(Database.Schema.agent_session)
-            .innerJoin(
-              members,
-              and(
-                eq(members.space_id, Database.Schema.agent_session.space_id),
-                eq(members.user_id, Database.Schema.agent_session.created_by),
-                isNull(members.archived_at),
-              ),
-            )
-            .where(
-              and(
-                eq(Database.Schema.agent_session.brain_id, brain.id),
-                isNull(Database.Schema.agent_session.parent_id),
-              ),
-            )
-            .limit(1)).at(0)?.userId,
-        )
-      : Option.none()
-  const servesSpace = brain.scope === "space" || Option.isSome(person)
+  const servesSpace =
+    brain.scope === "space" ||
+    (yield* client
+      .select({ userId: Database.Schema.agent_session.created_by })
+      .from(Database.Schema.agent_session)
+      .innerJoin(
+        members,
+        and(
+          eq(members.space_id, Database.Schema.agent_session.space_id),
+          eq(members.user_id, Database.Schema.agent_session.created_by),
+          isNull(members.archived_at),
+        ),
+      )
+      .where(and(eq(Database.Schema.agent_session.brain_id, brain.id), isNull(Database.Schema.agent_session.parent_id)))
+      .limit(1)).length > 0
+  const people = servesSpace
+    ? yield* client
+        .select({ userId: members.user_id })
+        .from(members)
+        .where(and(eq(members.space_id, brain.space_id), isNull(members.archived_at)))
+        .limit(2)
+    : []
   return Option.some({
     organizationId: brain.organization_id,
     workload,
     spaceId: servesSpace ? Option.some(brain.space_id) : Option.none(),
-    person,
+    person: people.length === 1 ? Option.fromNullishOr(people.at(0)?.userId) : Option.none(),
   } satisfies Scope)
 })
 
