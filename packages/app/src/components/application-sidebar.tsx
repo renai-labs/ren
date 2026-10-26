@@ -57,6 +57,12 @@ export function ApplicationSidebar(props: { onSearch: () => void; chats: ReactNo
           render={<Link to="/tasks" />}
         />
         <ApplicationShell.NavigationItem
+          current={pathname.startsWith("/schedules")}
+          icon={<Icon glyph="CalendarClock" />}
+          label="Schedules"
+          render={<Link to="/schedules" />}
+        />
+        <ApplicationShell.NavigationItem
           current={pathname.startsWith("/marketplace")}
           icon={<Icon glyph="LayoutGrid" />}
           label="Marketplace"

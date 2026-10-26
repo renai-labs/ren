@@ -13,9 +13,10 @@ import { Menu } from "@ren/ui/menu"
 import { ProgressIndicator } from "@ren/ui/progress-indicator"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useState } from "react"
+import { ScheduleDialog } from "../../components/schedule-dialog.js"
 import { Chat } from "../../lib/chat.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
@@ -96,6 +97,11 @@ function Actions(props: {
   const write = platform.writeClipboardText
   const archive = useMutation(context.api.session.archive.mutationOptions())
   const [confirming, setConfirming] = useState(false)
+  const [scheduling, setScheduling] = useState(false)
+  const spaceId = useQuery({
+    ...context.api.session.get.queryOptions({ idOrSlug: props.sessionID }),
+    select: (session) => session.spaceId,
+  }).data
   const approval = Chat.useAutoApprove(props.sessionID)
   return (
     <>
@@ -147,12 +153,20 @@ function Actions(props: {
               Copy chat ID
             </Menu.Item>
           ) : null}
+          {spaceId ? (
+            <Menu.Item icon={<Icon glyph="CalendarClock" />} onSelect={() => setScheduling(true)}>
+              Schedule a message
+            </Menu.Item>
+          ) : null}
           <Menu.Separator />
           <Menu.Item tone="danger" icon={<Icon glyph="Archive" />} onSelect={() => setConfirming(true)}>
             Archive chat
           </Menu.Item>
         </Menu.Popup>
       </Menu.Root>
+      {scheduling && spaceId ? (
+        <ScheduleDialog chat={{ spaceId, sessionId: props.sessionID }} onClose={() => setScheduling(false)} />
+      ) : null}
       <ConfirmationDialog
         open={confirming}
         onOpenChange={setConfirming}

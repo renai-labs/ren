@@ -97,6 +97,8 @@ export type SessionCapabilitiesInfo = {
 
 export type ChannelProvider = "slack" | "linear" | "github"
 
+export type ScheduleOriginInfo = { scheduleId: string; name: string; scheduledAt: string }
+
 export type SessionMessageText = { type: "text"; text: string }
 
 export type SessionMessageReasoning = {
@@ -859,6 +861,7 @@ export type SessionMessageUser = {
   type: "user"
   sender?: SessionMessageSender
   channel?: ChannelOriginInfo
+  schedule?: ScheduleOriginInfo
 }
 
 export type SessionStatusFamily = { [x: string]: SessionStatusInfo }

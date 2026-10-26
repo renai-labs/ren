@@ -79,12 +79,17 @@ describe("Infra.Spec", () => {
     )
   })
 
-  test("rejects a cron on an agent that is not in its space", () => {
+  test("rejects a schedule on an agent that is not in its space", () => {
     const exit = decode({
       engineering: { name: "Engineering", agents: { build: agent } },
-      support: { name: "Support", crons: { digest: { agent: "build", schedule: "0 9 * * *", message: "Post." } } },
+      support: {
+        name: "Support",
+        schedules: { digest: { agent: "build", cron: "0 9 * * *", timeZone: "Europe/Berlin", message: "Post." } },
+      },
     })
-    expect(String(exit)).toContain('Cron "digest" in space "support" runs on agent "build", which is not in the space.')
+    expect(String(exit)).toContain(
+      'Schedule "digest" in space "support" runs on agent "build", which is not in the space.',
+    )
   })
 
   test("rejects a move whose source still exists or whose target does not", () => {

@@ -148,6 +148,24 @@ import type {
   LabelUpdateOutput,
   LabelArchiveInput,
   LabelArchiveOutput,
+  ScheduleListInput,
+  ScheduleListOutput,
+  ScheduleGetInput,
+  ScheduleGetOutput,
+  ScheduleCreateInput,
+  ScheduleCreateOutput,
+  ScheduleUpdateInput,
+  ScheduleUpdateOutput,
+  ScheduleArchiveInput,
+  ScheduleArchiveOutput,
+  SchedulePauseInput,
+  SchedulePauseOutput,
+  ScheduleResumeInput,
+  ScheduleResumeOutput,
+  ScheduleRunInput,
+  ScheduleRunOutput,
+  ScheduleRunListInput,
+  ScheduleRunListOutput,
   CredentialListInput,
   CredentialListOutput,
   CredentialGetInput,
@@ -1325,6 +1343,135 @@ export function make(options: ClientOptions) {
             path: `/labels/${encodeURIComponent(input.id)}`,
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    schedule: {
+      list: (input: ScheduleListInput, requestOptions?: RequestOptions) =>
+        request<ScheduleListOutput>(
+          {
+            method: "GET",
+            path: `/schedules`,
+            query: {
+              spaceId: input["spaceId"],
+              status: input["status"],
+              search: input["search"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      get: (input: ScheduleGetInput, requestOptions?: RequestOptions) =>
+        request<ScheduleGetOutput>(
+          {
+            method: "GET",
+            path: `/schedules/${encodeURIComponent(input.idOrSlug)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: ScheduleCreateInput, requestOptions?: RequestOptions) =>
+        request<ScheduleCreateOutput>(
+          {
+            method: "POST",
+            path: `/schedules`,
+            body: {
+              spaceId: input["spaceId"],
+              name: input["name"],
+              message: input["message"],
+              when: input["when"],
+              target: input["target"],
+              agentId: input["agentId"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      update: (input: ScheduleUpdateInput, requestOptions?: RequestOptions) =>
+        request<ScheduleUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/schedules/${encodeURIComponent(input.id)}`,
+            body: {
+              name: input["name"],
+              message: input["message"],
+              when: input["when"],
+              target: input["target"],
+              agentId: input["agentId"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      archive: (input: ScheduleArchiveInput, requestOptions?: RequestOptions) =>
+        request<ScheduleArchiveOutput>(
+          {
+            method: "DELETE",
+            path: `/schedules/${encodeURIComponent(input.id)}`,
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      pause: (input: SchedulePauseInput, requestOptions?: RequestOptions) =>
+        request<SchedulePauseOutput>(
+          {
+            method: "POST",
+            path: `/schedules/${encodeURIComponent(input.id)}/pause`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      resume: (input: ScheduleResumeInput, requestOptions?: RequestOptions) =>
+        request<ScheduleResumeOutput>(
+          {
+            method: "POST",
+            path: `/schedules/${encodeURIComponent(input.id)}/resume`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      run: (input: ScheduleRunInput, requestOptions?: RequestOptions) =>
+        request<ScheduleRunOutput>(
+          {
+            method: "POST",
+            path: `/schedules/${encodeURIComponent(input.id)}/run`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "schedule-run": {
+      list: (input: ScheduleRunListInput, requestOptions?: RequestOptions) =>
+        request<ScheduleRunListOutput>(
+          {
+            method: "GET",
+            path: `/schedule-runs`,
+            query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
             empty: false,
           },
           requestOptions,

@@ -74,6 +74,15 @@ import type {
   LabelCreateInput,
   LabelUpdateInput,
   LabelArchiveInput,
+  ScheduleListInput,
+  ScheduleGetInput,
+  ScheduleCreateInput,
+  ScheduleUpdateInput,
+  ScheduleArchiveInput,
+  SchedulePauseInput,
+  ScheduleResumeInput,
+  ScheduleRunInput,
+  ScheduleRunListInput,
   CredentialListInput,
   CredentialGetInput,
   CredentialCreateInput,
@@ -805,6 +814,85 @@ export function make(client: ReturnType<typeof Ren.make>) {
           mutationOptions({
             mutationKey: ["label", "archive"] as const,
             mutationFn: (input: LabelArchiveInput) => client["label"]["archive"](input),
+          }),
+      },
+    },
+    schedule: {
+      list: {
+        queryKey: (input?: ScheduleListInput) =>
+          input === undefined ? (["schedule", "list"] as const) : (["schedule", "list", input] as const),
+        queryOptions: (input: ScheduleListInput) =>
+          queryOptions({
+            queryKey: ["schedule", "list", input] as const,
+            queryFn: (context) => client["schedule"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      get: {
+        queryKey: (input?: ScheduleGetInput) =>
+          input === undefined ? (["schedule", "get"] as const) : (["schedule", "get", input] as const),
+        queryOptions: (input: ScheduleGetInput) =>
+          queryOptions({
+            queryKey: ["schedule", "get", input] as const,
+            queryFn: (context) => client["schedule"]["get"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["schedule", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "create"] as const,
+            mutationFn: (input: ScheduleCreateInput) => client["schedule"]["create"](input),
+          }),
+      },
+      update: {
+        mutationKey: () => ["schedule", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "update"] as const,
+            mutationFn: (input: ScheduleUpdateInput) => client["schedule"]["update"](input),
+          }),
+      },
+      archive: {
+        mutationKey: () => ["schedule", "archive"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "archive"] as const,
+            mutationFn: (input: ScheduleArchiveInput) => client["schedule"]["archive"](input),
+          }),
+      },
+      pause: {
+        mutationKey: () => ["schedule", "pause"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "pause"] as const,
+            mutationFn: (input: SchedulePauseInput) => client["schedule"]["pause"](input),
+          }),
+      },
+      resume: {
+        mutationKey: () => ["schedule", "resume"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "resume"] as const,
+            mutationFn: (input: ScheduleResumeInput) => client["schedule"]["resume"](input),
+          }),
+      },
+      run: {
+        mutationKey: () => ["schedule", "run"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["schedule", "run"] as const,
+            mutationFn: (input: ScheduleRunInput) => client["schedule"]["run"](input),
+          }),
+      },
+    },
+    "schedule-run": {
+      list: {
+        queryKey: (input?: ScheduleRunListInput) =>
+          input === undefined ? (["schedule-run", "list"] as const) : (["schedule-run", "list", input] as const),
+        queryOptions: (input: ScheduleRunListInput) =>
+          queryOptions({
+            queryKey: ["schedule-run", "list", input] as const,
+            queryFn: (context) => client["schedule-run"]["list"](input, { signal: context.signal }),
           }),
       },
     },

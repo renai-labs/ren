@@ -140,7 +140,7 @@ test("the model learns who speaks when another member sends a message, and the t
     }),
   ))
 
-test("the model sees where a channel message came from above its text on every call, and the transcript keeps the typed text", () =>
+test("the model sees where a channel message came from above its text on every call, and the transcript keeps the typed text and each origin", () =>
   live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
@@ -161,17 +161,20 @@ test("the model sees where a channel message came from above its text on every c
       expect((yield* Effect.promise(() => first.called())).text).toBe(`${header}${text}`)
       yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
       const second = stub.script()
-      yield* brain.send(`and then ${second.marker}`)
+      const schedule = { scheduleId: "sch_1", name: "Daily report", scheduledAt: "2026-10-28T08:00:00.000Z" }
+      yield* brain.send(`and then ${second.marker}`, { schedule })
       const call = yield* Effect.promise(() => second.called())
       expect(call.text).toBe(`and then ${second.marker}`)
       expect(JSON.stringify(call.body.messages)).toContain(JSON.stringify(`${header}${text}`))
       yield* brain.opencode.session.wait({ sessionID: SessionID.make(brain.id) })
       const page = yield* brain.chat.session["session.messages"]({ params: { sessionID: brain.id }, query: {} })
       expect(
-        page.items.flatMap((message) => (message.type === "user" ? [[message.text, message.channel]] : [])),
+        page.items.flatMap((message) =>
+          message.type === "user" ? [[message.text, message.channel, message.schedule]] : [],
+        ),
       ).toEqual([
-        [`and then ${second.marker}`, undefined],
-        [text, channel],
+        [`and then ${second.marker}`, undefined, schedule],
+        [text, channel, undefined],
       ])
     }),
   ))

@@ -14,7 +14,7 @@ export type Run<Name extends string, Payload extends Workflow.AnyStructSchema> =
 
 export const make = Workflow.make
 
-const retry = Schedule.exponential(Duration.seconds(1)).pipe(
+export const retry = Schedule.exponential(Duration.seconds(1)).pipe(
   Schedule.modifyDelay((metadata) => Effect.succeed(Duration.min(metadata.duration, Duration.minutes(1)))),
 )
 

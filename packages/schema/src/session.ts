@@ -7,6 +7,7 @@ import { EnvironmentTemplate } from "./environment-template.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { ScheduleOrigin } from "./schedule-origin.js"
 import { SessionCapabilities } from "./session/capabilities.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionModel } from "./session/model.js"
@@ -94,6 +95,7 @@ export const SendInput = Schema.Struct({
   delivery: Delivery.pipe(Schema.withDecodingDefaultKey(Effect.succeed("steer" as const))),
   sender: Sender,
   channel: Schema.optionalKey(ChannelOrigin.Info),
+  schedule: Schema.optionalKey(ScheduleOrigin.Info),
   synthetic: Schema.optionalKey(Synthetic),
 }).annotate({ identifier: "Session.SendInput" })
 

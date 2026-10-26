@@ -24,6 +24,7 @@ import { Transcript } from "@ren/ui/transcript"
 import { DateTime } from "effect"
 import { Platform } from "../../platform/platform.js"
 import { ChannelMessageHeader, ChannelReplyMessage } from "./channel-message.js"
+import { ScheduleMessageHeader } from "./schedule-message.js"
 import { ChatView } from "./chat-view.js"
 import { TranscriptError, TranscriptNotice, TranscriptNoticeItem, TranscriptShell } from "./transcript-notice.js"
 import { FileChanges, TranscriptTool } from "./transcript-tool.js"
@@ -358,6 +359,7 @@ function UserMessage(props: { shared: Shared; data: RowData }) {
     >
       <ConversationShell.Bubble>
         <ChannelMessageHeader origin={message.channel} />
+        <ScheduleMessageHeader origin={message.schedule} />
         <Transcript.UserText text={message.text} highlights={TimelineText.mentions(message)} />
       </ConversationShell.Bubble>
       <Text purpose="caption" tone="secondary" element="span">
