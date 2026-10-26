@@ -30,7 +30,7 @@ export function SpacesPage(props: { userId: string }) {
   return (
     <PageShell.Root
       title="Spaces"
-      subtitle="Groups of people in your organization."
+      subtitle="Each space gives a team its own credentials, apps and agents."
       toolbar={
         <Toolbar.Root>
           <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search spaces" />

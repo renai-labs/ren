@@ -32,7 +32,7 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
       media={<Avatar.Root name={space.data.name} glyph="Cube" size="extra-large" shape="square" decorative />}
       title={space.data.name}
       subtitle={space.data.description ?? undefined}
-      actions={<SpaceMenu space={space.data} />}
+      actions={space.data.canArchive ? <SpaceMenu space={space.data} /> : undefined}
       navigation={
         <Tabs.Navigation label={space.data.name}>
           <Tabs.Link render={<Link to="/spaces/$spaceId" params={params} activeOptions={{ exact: true }} />}>
@@ -41,7 +41,7 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
           <Tabs.Link render={<Link to="/spaces/$spaceId/members" params={params} />} count={space.data.memberCount}>
             Members
           </Tabs.Link>
-          <Tabs.Link render={<Link to="/spaces/$spaceId/credentials" params={params} />}>Keys</Tabs.Link>
+          <Tabs.Link render={<Link to="/spaces/$spaceId/credentials" params={params} />}>Credentials</Tabs.Link>
           <Tabs.Link render={<Link to="/spaces/$spaceId/factory" params={params} />}>Factory</Tabs.Link>
         </Tabs.Navigation>
       }
@@ -68,12 +68,7 @@ function SpaceMenu(props: { space: SpaceInfo }) {
           }
         />
         <Menu.Popup alignment="end">
-          <Menu.Item
-            tone="danger"
-            icon={<Icon glyph="Archive" />}
-            disabled={!props.space.canArchive}
-            onSelect={() => setConfirming(true)}
-          >
+          <Menu.Item tone="danger" icon={<Icon glyph="Archive" />} onSelect={() => setConfirming(true)}>
             Archive space
           </Menu.Item>
         </Menu.Popup>
