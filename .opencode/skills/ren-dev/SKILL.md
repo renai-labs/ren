@@ -33,7 +33,7 @@ REN_URL=http://localhost:4000 bun run --cwd packages/cli dev health
 docker compose exec postgres psql -U ren
 ```
 
-Test databases are named `ren_test_clone_<uuid>` and are dropped when a test finishes. A killed run's clones are dropped by the next test process, because each owner holds an advisory lock on its clone. Databases named `ren_test_<uuid>` without `clone_` come from the older harness and are never removed automatically. Databases named `ren_test_template_<hash>` are reusable migration templates; they remain between runs and reject connections. Set `REN_TEST_PROFILE=1` when running tests to report database phases, core Effect setup/body/cleanup, and runner timing. These measurements are nested; do not add them together. Use Turbo's `--force` when profiling through Turbo to avoid replaying cached output.
+Test databases are named `ren_test_clone_<uuid>`, cloned from a cached migrated template `ren_test_template_<hash>`. A clone is dropped when its test finishes, or by the next test run if its run was killed. Templates stay between runs.
 
 ## Tests
 
@@ -44,9 +44,7 @@ Test databases are named `ren_test_clone_<uuid>` and are dropped when a test fin
 - Durations: `bun run test` prints only failures. `bun test <file>` prints each test with its duration. Move a test that takes more than 5 seconds to a `*.slow.test.ts` file, as `AGENTS.md` says.
 - End-to-end: `cd packages/e2e && bun run test`. It starts its own server on port 4010.
 - Everything: `bun turbo test`.
-- Runs through `script/test.ts` use Bun's isolated process workers (default two, or one on a single-CPU host). Set `REN_TEST_WORKERS=1` for a serial run. Every file gets a fresh HOME and temporary directory before package preloads. Bun records file durations in the package's ignored `.cache/test-timings.json` and uses them to start slow files first. Native `--changed` and `--shard=1/3` arguments pass through to Bun.
-- The runner reserves a machine-wide test memory budget before starting. `REN_TEST_MEMORY_MIB` sets the reservation per worker (default 1536); `REN_TEST_BUDGET_MIB` sets the total (default half the host or container memory limit, capped at one reservation per CPU). The requested worker count is capped by available CPUs and the memory budget. One oversized worker can proceed alone on a small machine. Reservations from dead owners are removed on the next attempt. Profiling reports admission time separately as `waitMs`. Bun's `--no-orphans` removes descendant processes when their runner exits.
-- Run homes include their owner's PID under the test budget directory. The next admitted run removes homes whose owners have exited, including runs killed before normal cleanup. Live owners' directories are preserved.
+- `bun run test` runs files in isolated parallel workers and waits when other test runs hold the machine's memory budget. Set `REN_TEST_WORKERS=1` for a serial run and `REN_TEST_PROFILE=1` to print setup, body and cleanup timings.
 
 ## Generated code
 

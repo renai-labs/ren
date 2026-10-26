@@ -37,8 +37,6 @@ bun run build         # static build, which CI serves with script/serve.ts
 REN_V1_PATH=../../../ren-v1 bun run test:parity
 ```
 
-The test server builds through Turbo before serving. The cache includes transitive package inputs and restores `storybook-static/`. Backend-only changes can reuse the frontend build. Parity runs keep the development server because their sources include an external checkout.
-
 ## Parity
 
 - `parity/<name>.stories.tsx` re-exports the matching `ui/` story file's meta and stories with the ren-v1 component imported from `ren-v1/<path>` (aliased to `$REN_V1_PATH/packages/ui/src/<path>`). When a prop differs between the two, define that story in the parity file with the ren-v1 props.
