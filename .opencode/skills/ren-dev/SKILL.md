@@ -46,6 +46,7 @@ Test databases are named `ren_test_<uuid>` and are dropped when a test finishes.
 - Everything: `bun turbo test`.
 - Runs through `script/test.ts` use Bun's isolated process workers (default two, or one on a single-CPU host). Set `REN_TEST_WORKERS=1` for a serial run. Every file gets a fresh HOME and temporary directory before package preloads. Bun records file durations in the package's ignored `.cache/test-timings.json` and uses them to start slow files first. Native `--changed` and `--shard=1/3` arguments pass through to Bun.
 - The runner reserves a machine-wide test memory budget before starting. `REN_TEST_MEMORY_MIB` sets the reservation per worker (default 1536); `REN_TEST_BUDGET_MIB` sets the total (default half the host's memory, capped at one reservation per CPU). An oversized run can proceed alone. Reservations from dead owners are removed on the next attempt. Profiling reports admission time separately as `waitMs`. Bun's `--no-orphans` removes descendant processes when their runner exits.
+- Run homes include their owner's PID under the test budget directory. The next admitted run removes homes whose owners have exited, including runs killed before normal cleanup. Live owners' directories are preserved.
 
 ## Generated code
 

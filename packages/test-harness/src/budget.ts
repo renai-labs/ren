@@ -3,6 +3,7 @@ export * as Budget from "./budget.js"
 import { Database } from "bun:sqlite"
 import { mkdir } from "node:fs/promises"
 import { join } from "node:path"
+import { Process } from "./process.js"
 
 export interface Options {
   readonly directory: string
@@ -33,10 +34,7 @@ export const reserve = async (options: Options): Promise<Reservation> => {
       .all()
       .map(async (row) => ({
         id: row.id,
-        dead: await Promise.try(() => process.kill(row.pid, 0)).then(
-          () => false,
-          (error: unknown) => error instanceof Error && "code" in error && error.code === "ESRCH",
-        ),
+        dead: !(await Process.alive(row.pid)),
       })),
   )
   const id = crypto.randomUUID()
