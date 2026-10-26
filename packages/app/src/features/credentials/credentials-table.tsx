@@ -1,8 +1,8 @@
 import type { CredentialInfo } from "@ren/client"
 import { Badge } from "@ren/ui/badge"
 import { Icon } from "@ren/ui/icon"
+import type { Owners } from "./owners.js"
 import { Menu } from "@ren/ui/menu"
-import type { Select } from "@ren/ui/select"
 import { Table } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { useState } from "react"
@@ -16,7 +16,7 @@ export function CredentialsTable(props: {
   state: "loading" | "failed" | "ready" | "empty"
   query: string
   spaces: ReadonlyMap<string, string>
-  owners: ReadonlyArray<Select.Option>
+  owners: ReadonlyArray<Owners.Option>
   userId: string
   emptyMessage: string
   onChanged: () => Promise<unknown>

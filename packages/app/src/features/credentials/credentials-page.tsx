@@ -7,72 +7,74 @@ import { Tabs } from "@ren/ui/tabs"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useDeferredValue, useState } from "react"
+import type { ReactNode } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { PasteCredentialDialog } from "../../components/paste-credential-dialog.js"
 import { Credentials } from "../../components/credentials.js"
 import { CredentialsTable } from "./credentials-table.js"
 import { Owners } from "./owners.js"
 
-type Tab = "all" | Credentials.Group
+export type Tab = "apps" | "credentials"
 
-export function CredentialsPage(props: { userId: string }) {
+// oxlint-disable-next-line ren/no-comments -- The space Apps and Credentials tabs, for the whole org: app accounts, and loose credentials.
+export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNode; onTabChange: (tab: Tab) => void }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
   const credentials = useQuery(
     context.api.credential.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }),
   )
   const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
-  const [tab, setTab] = useState<Tab>("all")
   const [query, setQuery] = useState("")
   const [creating, setCreating] = useState(false)
   const needle = useDeferredValue(query)
   const spaceList = spaces.data?.items ?? []
   const names = new Map(spaceList.map((space) => [space.id, space.name]))
-  const items = credentials.data?.items ?? []
-  const visible = items
-    .filter((item) => tab === "all" || Credentials.group(item.label) === tab)
-    .filter((item) => Credentials.matches(item, needle))
+  const items = (credentials.data?.items ?? []).filter((item) => item.owner.kind !== "profile")
+  const visible = items.filter((item) => Credentials.matches(item, needle))
   const owners = Owners.options(spaceList)
   const refresh = () => queryClient.invalidateQueries({ queryKey: context.api.credential.list.queryKey() })
   const state = { pending: "loading", error: "failed", success: visible.length > 0 ? "ready" : "empty" } as const
   return (
     <PageShell.Root
       title="Credentials"
-      subtitle="Credentials your chats use. Chats get a placeholder; Ren puts in the key for the hosts you name."
+      subtitle="The app accounts and credentials your organization’s chats use."
+      navigation={
+        <Tabs.Root value={props.tab} onValueChange={props.onTabChange}>
+          <Tabs.List label="Credential kinds">
+            <Tabs.Tab value="apps">Apps</Tabs.Tab>
+            <Tabs.Tab value="credentials" count={items.length}>
+              Credentials
+            </Tabs.Tab>
+          </Tabs.List>
+        </Tabs.Root>
+      }
     >
-      <Toolbar.Root
-        alignment="split"
-        leading={
-          <Tabs.Root value={tab} onValueChange={(next: Tab) => setTab(next)}>
-            <Tabs.List label="Credential groups">
-              <Tabs.Tab value="all" count={items.length}>
-                All
-              </Tabs.Tab>
-              <Tabs.Tab value="mcp" count={items.filter((item) => Credentials.group(item.label) === "mcp").length}>
-                MCP
-              </Tabs.Tab>
-              <Tabs.Tab value="other" count={items.filter((item) => Credentials.group(item.label) === "other").length}>
-                Other
-              </Tabs.Tab>
-            </Tabs.List>
-          </Tabs.Root>
-        }
-      >
-        <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
-        <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setCreating(true)}>
-          Add credential
-        </Button>
-      </Toolbar.Root>
-      <CredentialsTable
-        rows={visible}
-        state={state[credentials.status]}
-        query={needle.trim()}
-        spaces={names}
-        owners={owners}
-        userId={props.userId}
-        emptyMessage="No credentials"
-        onChanged={refresh}
-      />
+      {props.tab === "apps" ? props.apps : null}
+      {props.tab === "credentials" ? (
+        <>
+          <Toolbar.Root>
+            <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
+            <Button
+              appearance="primary"
+              size="small"
+              leadingIcon={<Icon glyph="Plus" />}
+              onClick={() => setCreating(true)}
+            >
+              Add credential
+            </Button>
+          </Toolbar.Root>
+          <CredentialsTable
+            rows={visible}
+            state={state[credentials.status]}
+            query={needle.trim()}
+            spaces={names}
+            owners={owners}
+            userId={props.userId}
+            emptyMessage="No credentials"
+            onChanged={refresh}
+          />
+        </>
+      ) : null}
       {creating ? (
         <PasteCredentialDialog
           title="Add credential"

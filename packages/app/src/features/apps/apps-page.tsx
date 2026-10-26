@@ -1,87 +1,152 @@
-import type { AppProfileInfo } from "@ren/client"
-import { Pagination } from "@ren/schema/pagination"
-import { Badge } from "@ren/ui/badge"
 import { Button } from "@ren/ui/button"
 import { Icon } from "@ren/ui/icon"
-import { List } from "@ren/ui/list"
+import { LoadingMessage } from "@ren/ui/loading-message"
 import { PageShell } from "@ren/ui/page-shell"
-import { useQuery } from "@tanstack/react-query"
-import { useState } from "react"
-import { RouterContext } from "../../lib/router-context.js"
+import { SearchField } from "@ren/ui/search-field"
+import { SegmentedControl } from "@ren/ui/segmented-control"
+import { StateMessage } from "@ren/ui/state-message"
+import { Toolbar } from "@ren/ui/toolbar"
+import { useDeferredValue, useState } from "react"
 import { ProfileDialog } from "../../components/profile-dialog.js"
 import { Profiles } from "../../components/profiles.js"
+import { AddToSpace } from "../../components/add-to-space.js"
+import { AccountList, AppDrawer } from "./app-drawer.js"
+import { AppGrid, AppRow } from "../../components/app-row.js"
+import { Apps } from "../../components/apps.js"
 
-const page = { page: 1, pageSize: Pagination.maximumPageSize }
+export type View = "browse" | "in-use"
 
-const reachOf = (profile: AppProfileInfo) => {
-  if (profile.kind === "private") return "Private"
-  if (profile.allSpaces) return "Every space"
-  const count = profile.spaces.length + profile.hiddenSpaces
-  return count === 1 ? "1 space" : `${count} spaces`
-}
-
-// oxlint-disable-next-line ren/no-comments -- profiles.md §9 rule 1 (P9, P12, P25): the org's apps and registry apps, each with the profiles the person sees, their gaps and the parts Ren skips. "New profile" is the first entry point.
-export function AppsPage() {
-  const context = RouterContext.useRouterContext()
-  const apps = useQuery(context.api.app.list.queryOptions(page))
-  const registry = useQuery(context.api["app-registry"].list.queryOptions(page))
-  const profiles = useQuery({ ...context.api["app-profile"].list.queryOptions(page), refetchOnWindowFocus: "always" })
-  const [opened, setOpened] = useState<{ readonly appId: string; readonly profileId?: string }>()
-  const listed = [
-    ...(apps.data?.items ?? []).map((app) => ({ id: app.id, name: app.name, description: app.description })),
-    ...(registry.data?.items ?? []).map((app) => ({ id: app.id, name: app.name, description: app.description })),
-  ]
-  const byApp = Map.groupBy(profiles.data?.items ?? [], (profile) => profile.appId)
+// oxlint-disable-next-line ren/no-comments -- ren-v1 Marketplace: browse every app, or the ones in use (a profile you can see). Each row adds the app to a space; a click opens its drawer.
+export function AppsPage(props: {
+  view: View
+  appId: string | undefined
+  onViewChange: (view: View) => void
+  onAppChange: (appId: string | undefined) => void
+}) {
+  const catalog = Apps.useCatalog()
+  const [query, setQuery] = useState("")
+  const [profileOf, setProfileOf] = useState<{ readonly appId: string; readonly profileId: string }>()
+  const needle = useDeferredValue(query).trim()
+  const rows = catalog.entries.filter(
+    (entry) => Apps.matches(entry, needle) && (props.view === "browse" || catalog.profiles.has(entry.id)),
+  )
+  const opened = catalog.entries.find((entry) => entry.id === props.appId)
+  const openedProfiles = opened ? (catalog.profiles.get(opened.id) ?? []) : []
+  const openProfile = (appId: string) => (profileId: string) => setProfileOf({ appId, profileId })
   return (
-    <PageShell.Root title="Apps" subtitle="Each profile is one set of accounts for an app. Spaces use the profiles they reach.">
-      {listed.map((app) => (
-        <List.Root key={app.id} label={app.name}>
-          <List.Section title={app.name} appearance="eyebrow">
-            {(byApp.get(app.id) ?? []).map((profile) => {
-              const gaps = Profiles.gaps(profile).length
-              return (
-                <List.Item
-                  key={profile.id}
-                  title={profile.name}
-                  description={[reachOf(profile), ...profile.skipped.map((skipped) => `${skipped.slug} skipped: also in ${skipped.also}`)].join(" · ")}
-                  trailing={
-                    <span className="flex items-center gap-2">
-                      <Badge tone={gaps ? "warning" : "success"}>{gaps ? `${gaps} not connected` : "Connected"}</Badge>
-                      <Button
-                        appearance="secondary"
-                        size="small"
-                        onClick={() => setOpened({ appId: app.id, profileId: profile.id })}
-                      >
-                        Open profile
-                      </Button>
-                    </span>
-                  }
-                />
-              )
-            })}
-            <List.Item
-              title={app.description}
-              trailing={
-                <Button
-                  appearance="secondary"
-                  size="small"
-                  leadingIcon={<Icon glyph="Plus" />}
-                  onClick={() => setOpened({ appId: app.id })}
-                >
-                  New profile
-                </Button>
-              }
+    <PageShell.Root
+      title="Marketplace"
+      subtitle="Add an app to a space, then connect its accounts. Every chat in the space can use it."
+      toolbar={
+        <Toolbar.Root
+          alignment="split"
+          leading={
+            <SegmentedControl<View>
+              label="Marketplace view"
+              value={props.view}
+              onValueChange={props.onViewChange}
+              options={[
+                { value: "browse", label: "Browse" },
+                { value: "in-use", label: "In use" },
+              ]}
             />
-          </List.Section>
-        </List.Root>
-      ))}
-      {opened ? (
+          }
+        >
+          <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search apps" />
+        </Toolbar.Root>
+      }
+    >
+      <section aria-label="Apps" aria-live="polite">
+        <Catalog
+          state={catalog.state}
+          needle={needle}
+          rows={rows}
+          catalog={catalog}
+          onRetry={() => void catalog.retry()}
+          onOpen={props.onAppChange}
+          onAdded={openProfile}
+        />
+      </section>
+      <AppDrawer
+        app={opened}
+        action={
+          opened ? (
+            <AddToSpace
+              app={opened}
+              profiles={openedProfiles}
+              spaces={catalog.spaces}
+              appearance="primary"
+              onAdded={openProfile(opened.id)}
+            />
+          ) : null
+        }
+        onClose={() => props.onAppChange(undefined)}
+      >
+        <AccountList
+          title="Accounts"
+          profiles={openedProfiles}
+          caption={Profiles.audience}
+          action={(profile) => (
+            <Button appearance="secondary" size="small" onClick={() => openProfile(profile.appId)(profile.id)}>
+              {Apps.connectLabel(profile) ?? "Open"}
+            </Button>
+          )}
+        />
+      </AppDrawer>
+      {profileOf ? (
         <ProfileDialog
-          appId={opened.appId}
-          {...(opened.profileId && { profileId: opened.profileId })}
-          onClose={() => setOpened(undefined)}
+          appId={profileOf.appId}
+          profileId={profileOf.profileId}
+          onClose={() => setProfileOf(undefined)}
         />
       ) : null}
     </PageShell.Root>
+  )
+}
+
+function Catalog(props: {
+  state: "failed" | "loading" | "ready"
+  needle: string
+  rows: ReadonlyArray<Apps.Entry>
+  catalog: ReturnType<typeof Apps.useCatalog>
+  onRetry: () => void
+  onOpen: (appId: string) => void
+  onAdded: (appId: string) => (profileId: string) => void
+}) {
+  if (props.state === "failed")
+    return <StateMessage state="failed" title="Couldn’t load apps." onRetry={props.onRetry} />
+  if (props.state === "loading") return <LoadingMessage placement="section" />
+  if (props.rows.length === 0)
+    return (
+      <StateMessage
+        state={props.needle ? "no-results" : "empty"}
+        icon={<Icon glyph="Extension" size="medium" tone="secondary" />}
+        title={props.needle ? `Nothing matches “${props.needle}”` : "No apps in use"}
+        description={props.needle ? undefined : "Browse apps and add one to a space."}
+      />
+    )
+  return (
+    <AppGrid label="Apps">
+      {props.rows.map((entry) => {
+        const profiles = props.catalog.profiles.get(entry.id) ?? []
+        return (
+          <AppRow
+            key={entry.id}
+            name={entry.name}
+            icon={entry.icon}
+            caption={profiles.length > 0 ? Apps.summary(profiles) : entry.description}
+            onOpen={() => props.onOpen(entry.id)}
+            action={
+              <AddToSpace
+                app={entry}
+                profiles={profiles}
+                spaces={props.catalog.spaces}
+                onAdded={props.onAdded(entry.id)}
+              />
+            }
+          />
+        )
+      })}
+    </AppGrid>
   )
 }

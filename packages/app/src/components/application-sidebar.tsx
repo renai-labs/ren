@@ -56,6 +56,12 @@ export function ApplicationSidebar(props: { onSearch: () => void; chats: ReactNo
           label="Tasks"
           render={<Link to="/tasks" />}
         />
+        <ApplicationShell.NavigationItem
+          current={pathname.startsWith("/marketplace")}
+          icon={<Icon glyph="LayoutGrid" />}
+          label="Marketplace"
+          render={<Link to="/marketplace" />}
+        />
       </ApplicationShell.NavigationSection>
       <ApplicationShell.NavigationSection
         title="Chats"
