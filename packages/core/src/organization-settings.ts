@@ -8,6 +8,7 @@ import { Context, Effect, Layer } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Primitive } from "./primitive.js"
+import { ReferenceCheck } from "./reference-check.js"
 import { SettingsRows } from "./settings/rows.js"
 
 export type Interface = Primitive.Interface<typeof OrganizationSettings.definition>
@@ -26,6 +27,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const access = yield* Access.Service
+    const references = yield* ReferenceCheck.Service
 
     const read = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info) {
       const row = (yield* transaction
@@ -56,6 +58,8 @@ export const layer = Layer.effect(
         if (id !== actor.organizationId) return yield* notFound
         if (!access.isAllowed({ actor, action: actions.update, resource: Access.organization }))
           return yield* new Primitive.Forbidden({ message: "Only organization admins can edit organization settings." })
+        const previous = yield* database.transaction((transaction) => read(transaction, actor))
+        yield* references.check(id, previous.settings.references, input.settings.references)
         return yield* database.transaction((transaction) =>
           SettingsRows.write(transaction, { organization_id: id }, input.settings).pipe(
             Effect.andThen(read(transaction, actor)),

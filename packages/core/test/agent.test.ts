@@ -4,6 +4,7 @@ import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
 import { Deferred, Effect, Fiber, Layer } from "effect"
 import { SqlClient } from "effect/sql"
+import { ReferenceCheck } from "../src/reference-check.js"
 import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Agent } from "../src/agent.js"
@@ -16,7 +17,7 @@ import { Seed } from "./lib/seed.js"
 const it = testEffect(
   Layer.mergeAll(Agent.layer, AgentMembership.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer)),
-    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, ReferenceCheck.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),
 )
@@ -243,7 +244,7 @@ describe("Agent", () => {
     Effect.gen(function* () {
       const agents = yield* Agent.Service
       const o = yield* org
-      const references = [{ alias: "docs", repository: "acme/docs" }]
+      const references = [{ alias: "docs", repository: "https://github.com/acme/docs", description: "Product docs" }]
       const refused = yield* Effect.flip(
         agents.create(o.ada, {
           name: "explorer",

@@ -59,7 +59,7 @@ describe("SettingsRows", () => {
   it.live("two references with the same alias are refused", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service
-      const docs = { alias: "docs", repository: "acme/docs" }
+      const docs = { alias: "docs", repository: "https://github.com/acme/docs", description: "Product docs" }
       const refused = yield* Effect.flip(
         database.transaction((transaction) =>
           SettingsRows.write(transaction, SettingsRows.ren, {

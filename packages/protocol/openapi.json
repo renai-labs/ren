@@ -10596,6 +10596,10 @@
             "type": "boolean",
             "description": "People outside the install’s workspace can write there, as on a public GitHub repository. A new mapping of an open place starts with the fallback off."
           },
+          "description": {
+            "type": "string",
+            "description": "The provider’s description of the place, such as a GitHub repository’s."
+          },
           "mapping": {
             "anyOf": [
               {
@@ -13152,6 +13156,11 @@
         "type": "string",
         "pattern": "^(?!-)(?!.*\\.\\.)(?!.*\\/\\/)(?!.*@\\{)(?!.*\\.lock$)[^\\s~^:?*[\\\\]+(?<![/.])$"
       },
+      "Reference.Description": {
+        "type": "string",
+        "minLength": 1,
+        "description": "What the repository holds. The agent sees a reference only through its description (R24)."
+      },
       "Reference.Info": {
         "type": "object",
         "properties": {
@@ -13165,10 +13174,10 @@
             "$ref": "#/components/schemas/Reference.Branch"
           },
           "description": {
-            "type": "string"
+            "$ref": "#/components/schemas/Reference.Description"
           }
         },
-        "required": ["alias", "repository"],
+        "required": ["alias", "repository", "description"],
         "additionalProperties": false
       },
       "Reference.List": {
@@ -13179,7 +13188,8 @@
       },
       "Reference.Repository": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "pattern": "^https:\\/\\/[^/\\s]+\\/[^/\\s]+\\/[^/\\s]+$"
       },
       "RenInference.ConnectInput": {
         "type": "object",

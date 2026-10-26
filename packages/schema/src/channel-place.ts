@@ -16,6 +16,9 @@ export const Info = Schema.Struct({
     description:
       "People outside the install’s workspace can write there, as on a public GitHub repository. A new mapping of an open place starts with the fallback off.",
   }),
+  description: Schema.optionalKey(
+    Schema.String.annotate({ description: "The provider’s description of the place, such as a GitHub repository’s." }),
+  ),
   mapping: Schema.NullOr(ChannelMapping.Info),
 }).annotate({ identifier: "ChannelPlace.Info", description: "A place that an install reaches." })
 

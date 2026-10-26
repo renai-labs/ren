@@ -3,6 +3,7 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
+import { ReferenceCheck } from "../src/reference-check.js"
 import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Agent } from "../src/agent.js"
@@ -15,7 +16,7 @@ import { Seed } from "./lib/seed.js"
 const it = testEffect(
   Layer.mergeAll(Agent.layer, AgentMembership.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(Space.layer, SpaceMember.layer)),
-    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, ReferenceCheck.layerNone)),
     Layer.provideMerge(Testing.layer),
   ),
 )

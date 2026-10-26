@@ -1,19 +1,56 @@
-import { describe, expect } from "bun:test"
+import { afterAll, describe, expect } from "bun:test"
+import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
-import { Effect, Layer } from "effect"
+import type { Auth } from "@ren/schema/auth"
+import { ChannelInstall } from "@ren/schema/channel-install"
+import { ConfigProvider, Effect, Layer } from "effect"
+import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
 import { EgressControl } from "../src/egress-control.js"
+import { GitHubApp } from "../src/github-app.js"
+import { Primitive } from "../src/primitive.js"
+import { ReferenceCheck } from "../src/reference-check.js"
 import { Space } from "../src/space.js"
 import { SpaceSettings } from "../src/space/settings.js"
 import { testEffect } from "./lib/effect.js"
+import { GitHubServer } from "./lib/github-server.js"
 import { Seed } from "./lib/seed.js"
+
+const github = GitHubServer.start()
+afterAll(() => github.stop())
 
 const it = testEffect(
   Layer.mergeAll(SpaceSettings.layer, Space.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone)),
+    Layer.provideMerge(ReferenceCheck.layer),
+    Layer.provideMerge(Layer.mergeAll(Access.layer, EgressControl.layerNone, GitHubApp.layer)),
     Layer.provideMerge(Testing.layer),
+    Layer.provide(FetchHttpClient.layer),
+    Layer.provide(
+      ConfigProvider.layer(
+        ConfigProvider.fromUnknown(GitHubServer.config(github.url, { GITHUB_URL: "https://github.com" })),
+      ),
+    ),
   ),
 )
+
+const installGitHub = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
+  const database = yield* Database.Service
+  const workspace = String(Math.floor(Math.random() * 1e9))
+  github.installations.set(workspace, "acme")
+  yield* database.db.insert(Database.Schema.channel_install).values({
+    id: ChannelInstall.ID.create(),
+    organization_id: organizationId,
+    provider: "github",
+    workspace,
+    name: "acme",
+  })
+})
+
+const reference = (repository: string) => ({
+  alias: repository.split("/").at(-1) ?? "",
+  repository,
+  description: "Docs",
+})
 
 const settings = { instructions: "We use Bun.", permissions: [], references: [] }
 
@@ -45,5 +82,40 @@ describe("SpaceSettings", () => {
         updatedAt: null,
       })
     }),
+  )
+
+  it.live(
+    "a new reference that the installation cannot read, or on another host than GITHUB_URL, is refused; one GitHub does not answer for is saved (R13, R26)",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const space = yield* SpaceSettings.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* Seed.actor(organizationId, "member")
+        const team = yield* spaces.create(ada, { name: "Team" })
+        yield* installGitHub(organizationId)
+        github.resources.set("/repos/acme/docs", { full_name: "acme/docs" })
+        const save = (repositories: ReadonlyArray<string>) =>
+          space.update(ada, team.id, { settings: { ...settings, references: repositories.map(reference) } })
+        expect(yield* save(["https://github.com/acme/docs"])).toMatchObject({
+          settings: { references: [reference("https://github.com/acme/docs")] },
+        })
+        expect(yield* Effect.flip(save(["https://github.com/acme/docs", "https://github.com/acme/secret"]))).toEqual(
+          new Primitive.Invalid({
+            message:
+              "the GitHub App cannot read acme/secret: add the repository to the installation, or acme/secret does not exist",
+            field: "references.secret",
+          }),
+        )
+        expect(yield* Effect.flip(save(["https://gitlab.com/acme/docs"]))).toMatchObject({
+          message: "Ren reads only repositories on github.com, not https://gitlab.com/acme/docs.",
+          field: "references.docs",
+        })
+        github.options.unavailable = true
+        const saved = yield* save(["https://github.com/acme/docs", "https://github.com/acme/secret"]).pipe(
+          Effect.ensuring(Effect.sync(() => (github.options.unavailable = false))),
+        )
+        expect(saved.settings.references.map((each) => each.alias)).toEqual(["docs", "secret"])
+      }),
   )
 })

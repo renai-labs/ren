@@ -62,7 +62,12 @@ const Reactions = Schema.Array(
 
 const Profile = Schema.Struct({ email: Schema.NullOr(Schema.String) })
 
-const Repository = Schema.Struct({ id: Schema.Number, full_name: Schema.String, private: Schema.Boolean })
+const Repository = Schema.Struct({
+  id: Schema.Number,
+  full_name: Schema.String,
+  private: Schema.Boolean,
+  description: Schema.optionalKey(Schema.NullOr(Schema.String)),
+})
 
 const Repositories = Schema.Struct({ total_count: Schema.Number, repositories: Schema.Array(Repository) })
 
@@ -71,6 +76,7 @@ const placeOf = (repository: typeof Repository.Type): ChannelProvider.Place => (
   name: repository.full_name,
   private: repository.private,
   anyoneCanWrite: !repository.private,
+  ...(repository.description && { description: repository.description }),
 })
 
 const Author = Schema.Struct({ user: Schema.NullOr(Schema.Struct({ login: Schema.String })) })
