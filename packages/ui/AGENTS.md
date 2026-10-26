@@ -50,6 +50,7 @@ The design system. It owns every visual decision in Ren: tokens, components and 
   - `ConversationShell.Message` has no `pending` pulse: ren-v1 faded the message, which failed contrast. `ConversationShell.Composer` takes a `label` that names its form.
   - `Questionnaire` names each question's group by its title, which ren-v1 lost on multi-step questionnaires. While a reply is pending, it dims only its controls and shows a spinner in the submit button; ren-v1 faded the whole form, which failed contrast.
   - Controls inside `Field` take their label, description and invalid state from Base UI, so a `Select` inside an invalid field turns red. ren-v1 dropped the invalid state there.
+  - `ConnectionBoard` columns use `overscroll-contain`, so scrolling past a column's end doesn't scroll the page. Their socket dots are drawn with borders instead of `bg-border-secondary` fills, with identical pixels.
 
 ## Testing
 
