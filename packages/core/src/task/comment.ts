@@ -1,8 +1,6 @@
 export * as TaskComment from "./comment.js"
 
 import { Database } from "@ren/db/database"
-import type { Space } from "@ren/schema/space"
-import { Task } from "@ren/schema/task"
 import { TaskComment } from "@ren/schema/task-comment"
 import { and, eq, isNull, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer } from "effect"
@@ -26,15 +24,13 @@ const actions = {
   archive: Primitive.action(TaskComment.definition, "archive"),
 }
 
-const taskGet = Primitive.action(Task.definition, "get")
-
 type Row = typeof Database.Schema.task_comment.$inferSelect
 
-const isAuthor = (actor: Actor.Info, row: Row) =>
-  row.author_user_id === actor.userId && row.author_agent_id === TaskQueries.actorOf(actor).agentId
+// oxlint-disable-next-line ren/no-comments -- access AC17: an agent acts as its sender, so the sender's comments are its own.
+const isAuthor = (actor: Actor.Info, row: Row) => row.author_user_id === actor.userId
 
 export const toInfo =
-  (access: Access.Interface, actor: Actor.Info, spaceId: Space.ID) =>
+  (access: Access.Interface, actor: Actor.Info, membershipId: string | null) =>
   (row: Row): TaskComment.Info => ({
     id: row.id,
     taskId: row.task_id,
@@ -43,8 +39,8 @@ export const toInfo =
     editedAt: row.edited_at && DateTime.fromDateUnsafe(row.edited_at),
     canUpdate: access.isAllowed({
       actor,
-      action: actions.update,
-      resource: TaskPolicy.comment({ isAuthor: isAuthor(actor, row) }, spaceId),
+      action: Primitive.action(TaskComment.definition, "update"),
+      resource: TaskPolicy.comment(membershipId, { isAuthor: isAuthor(actor, row) }),
     }),
     createdAt: DateTime.fromDateUnsafe(row.created_at),
     updatedAt: DateTime.fromDateUnsafe(row.updated_at),
@@ -74,14 +70,17 @@ export const layer = Layer.effect(
         access,
         actor,
         eq(Database.Schema.task.id, row.task_id),
-        taskGet,
+        TaskQueries.actions.get,
       ).pipe(Effect.catchTag("Primitive.NotFound", () => Effect.fail(notFound)))
-      const spaceId = task.task.space_id
       if (
-        !access.isAllowed({ actor, action, resource: TaskPolicy.comment({ isAuthor: isAuthor(actor, row) }, spaceId) })
+        !access.isAllowed({
+          actor,
+          action,
+          resource: TaskPolicy.comment(task.membershipId, { isAuthor: isAuthor(actor, row) }),
+        })
       )
-        return yield* new Primitive.Forbidden({ message: "You cannot change this comment." })
-      return { row, spaceId }
+        return yield* new Primitive.Forbidden({ message: "Only the author can change a comment." })
+      return { row, membershipId: task.membershipId }
     })
 
     const written = (rows: ReadonlyArray<Row>) => {
@@ -113,7 +112,7 @@ export const layer = Layer.effect(
                 created_at: sql`clock_timestamp()`,
               })
               .returning()
-            return toInfo(access, actor, task.task.space_id)(yield* written(rows))
+            return toInfo(access, actor, task.membershipId)(yield* written(rows))
           }),
         )
       }),
@@ -125,13 +124,14 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const found = yield* findOwn(transaction, actor, id, actions.update)
-            if (found.row.body === input.body) return toInfo(access, actor, found.spaceId)(found.row)
+            const info = toInfo(access, actor, found.membershipId)
+            if (found.row.body === input.body) return info(found.row)
             const rows = yield* transaction
               .update(Database.Schema.task_comment)
               .set({ body: input.body, edited_at: sql`now()`, updated_at: sql`now()` })
               .where(eq(Database.Schema.task_comment.id, id))
               .returning()
-            return toInfo(access, actor, found.spaceId)(yield* written(rows))
+            return info(yield* written(rows))
           }),
         )
       }),
@@ -144,7 +144,7 @@ export const layer = Layer.effect(
               .set({ archived_at: sql`now()`, updated_at: sql`now()` })
               .where(eq(Database.Schema.task_comment.id, id))
               .returning()
-            return toInfo(access, actor, found.spaceId)(yield* written(rows))
+            return toInfo(access, actor, found.membershipId)(yield* written(rows))
           }),
         )
       }),

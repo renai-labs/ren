@@ -5968,6 +5968,22 @@
         "operationId": "label.list",
         "parameters": [
           {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the system labels, the org labels and the labels of this space. Without it, the labels of every space you are in."
+            },
+            "required": false
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -12033,6 +12049,17 @@
       "Label.CreateInput": {
         "type": "object",
         "properties": {
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Make a space label, which only this space sees. Without it, an org label, which only admins make."
+          },
           "name": {
             "$ref": "#/components/schemas/Label.UserNameEncoded"
           },
@@ -12093,6 +12120,17 @@
               }
             ]
           },
+          "spaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The space of a space label, which only that space sees. Null for an org label or a system label."
+          },
           "createdAt": {
             "type": "string"
           },
@@ -12110,7 +12148,17 @@
             ]
           }
         },
-        "required": ["id", "name", "color", "isSystem", "organizationId", "createdAt", "updatedAt", "archivedAt"],
+        "required": [
+          "id",
+          "name",
+          "color",
+          "isSystem",
+          "organizationId",
+          "spaceId",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
         "additionalProperties": false
       },
       "Label.NameEncoded": {
@@ -14911,6 +14959,20 @@
           "organizationId": {
             "$ref": "#/components/schemas/Auth.OrganizationID"
           },
+          "kind": {
+            "$ref": "#/components/schemas/Space.Kind"
+          },
+          "ownerUserId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The owner of a private space. Null for a shared space."
+          },
           "name": {
             "type": "string"
           },
@@ -14950,6 +15012,10 @@
           "canUpdate": {
             "type": "boolean"
           },
+          "canJoin": {
+            "type": "boolean",
+            "description": "An admin who is not a member can join this shared space."
+          },
           "canAddMember": {
             "type": "boolean"
           },
@@ -14979,6 +15045,8 @@
         "required": [
           "id",
           "organizationId",
+          "kind",
+          "ownerUserId",
           "name",
           "description",
           "brainScope",
@@ -14986,6 +15054,7 @@
           "membershipId",
           "agentOrder",
           "canUpdate",
+          "canJoin",
           "canAddMember",
           "canRemoveMember",
           "canArchive",
@@ -14994,6 +15063,11 @@
           "archivedAt"
         ],
         "additionalProperties": false
+      },
+      "Space.Kind": {
+        "type": "string",
+        "enum": ["shared", "private"],
+        "description": "A shared space belongs to its members. A private space belongs to its owner, who is its only member; it never changes kind."
       },
       "Space.MembershipID": {
         "type": "string",

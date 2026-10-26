@@ -11,6 +11,8 @@ export const spaceMemberUserConstraint = "space_member_space_id_user_id_uidx"
 
 export const spacePendingMemberEmailConstraint = "space_pending_member_space_id_email_uidx"
 
+export const privateSpaceOwnerConstraint = "space_organization_id_owner_user_id_uidx"
+
 export const space = pgTable(
   "space",
   {
@@ -19,6 +21,10 @@ export const space = pgTable(
       .$type<Auth.OrganizationID>()
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text().$type<Space.Kind>().notNull().default("shared"),
+    owner_user_id: text()
+      .$type<Auth.UserID>()
+      .references(() => user.id, { onDelete: "cascade" }),
     name: text().notNull(),
     description: text(),
     brain_scope: text().$type<Brain.Scope>().notNull().default("space"),
@@ -29,6 +35,11 @@ export const space = pgTable(
   },
   (table) => [
     index("space_organization_id_created_at_id_idx").on(table.organization_id, table.created_at, table.id),
+    uniqueIndex(privateSpaceOwnerConstraint)
+      .on(table.organization_id, table.owner_user_id)
+      .where(sql`${table.kind} = 'private' and ${table.archived_at} is null`),
+    check("space_kind_check", sql`${table.kind} in ('shared', 'private')`),
+    check("space_owner_check", sql`(${table.kind} = 'private') = (${table.owner_user_id} is not null)`),
     check(
       "space_name_length_check",
       sql`char_length(${table.name}) between 1 and ${sql.raw(String(Primitive.maximumNameLength))}`,

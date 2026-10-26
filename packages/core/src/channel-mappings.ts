@@ -117,13 +117,13 @@ export const layer = Layer.effect(
       action: string,
     ) {
       const row = (yield* transaction
-        .select({ name: space.name, membershipId: SpaceQueries.membership.id })
+        .select({ name: space.name, kind: space.kind, membershipId: SpaceQueries.membership.id })
         .from(space)
         .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
         .where(and(eq(space.id, spaceId), eq(space.organization_id, actor.organizationId), isNull(space.archived_at)))
         .for("share", { of: space })).at(0)
       if (!row) return yield* new Primitive.NotFound({ message: "Space not found." })
-      if (!access.isAllowed({ actor, action, resource: SpacePolicy.resource(row.membershipId, spaceId) }))
+      if (!access.isAllowed({ actor, action, resource: SpacePolicy.resource(row) }))
         return yield* new Primitive.Forbidden({ message: "Only a member of the space can map places to it." })
       return row
     })
@@ -244,7 +244,7 @@ export const layer = Layer.effect(
               return yield* new Primitive.Invalid({ message: "The agent is not in this space.", field: "agentId" })
             if (
               values.fallback &&
-              !(yield* SpacePolicy.actsIn(transaction, access, actor.organizationId, input.spaceId, fallbackUserId))
+              !(yield* SpaceQueries.actsIn(transaction, access, actor.organizationId, input.spaceId, fallbackUserId))
             )
               return yield* new Primitive.Invalid({
                 message: "The fallback user must be a member of the space.",

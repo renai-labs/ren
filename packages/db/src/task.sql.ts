@@ -33,6 +33,8 @@ export const labelNameConstraint = "label_organization_id_name_uidx"
 
 export const systemLabelNameConstraint = "label_system_name_uidx"
 
+export const spaceLabelNameConstraint = "label_space_id_name_uidx"
+
 export const taskLinkConstraint = "task_link_task_id_kind_key_uidx"
 
 const literals = (values: ReadonlyArray<string>) => sql.raw(values.map((value) => `'${value}'`).join(", "))
@@ -119,6 +121,9 @@ export const label = pgTable(
     organization_id: text()
       .$type<Auth.OrganizationID>()
       .references(() => organization.id, { onDelete: "cascade" }),
+    space_id: text()
+      .$type<Space.ID>()
+      .references(() => space.id, { onDelete: "cascade" }),
     name: text().notNull(),
     color: text(),
     created_at: timestamp().defaultNow().notNull(),
@@ -128,7 +133,11 @@ export const label = pgTable(
   (table) => [
     uniqueIndex(labelNameConstraint)
       .on(table.organization_id, sql`lower(${table.name})`)
-      .where(isNull(table.archived_at)),
+      .where(sql`${table.space_id} is null and ${table.archived_at} is null`),
+    uniqueIndex(spaceLabelNameConstraint)
+      .on(table.space_id, sql`lower(${table.name})`)
+      .where(sql`${table.space_id} is not null and ${table.archived_at} is null`),
+    check("label_space_check", sql`${table.space_id} is null or ${table.organization_id} is not null`),
     uniqueIndex(systemLabelNameConstraint)
       .on(sql`lower(${table.name})`)
       .where(sql`${table.organization_id} is null and ${table.archived_at} is null`),

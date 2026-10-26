@@ -11,9 +11,9 @@ An app has one current definition. A **profile** is one set of accounts for one 
 Done when:
 
 - An agency creates the shared profiles "Acme client" and "Globex client" of app `meta-ads`. Space `sales` reaches both. The brain has the servers `meta-ads__acme` and `meta-ads__globex`. The agent picks one by its display name.
-- Ana creates a private profile of `google`. It runs in her Personal Space and in no space that has other members.
+- Ana creates a private profile of `google`. It runs in her private space only (`../private-spaces/README.md`).
 - An admin edits a registry app's MCP URL. Every brain that reaches a profile of the app gets the new definition at its next pull. The credentials of that MCP show Reconnect.
-- Bob joins Ana's Personal Space. Ana's private accounts stop at once. The invite dialog warned about it first.
+- Nobody joins Ana's private space; it has one member, her (`../private-spaces/README.md` rule 5).
 - Composio is a provider layer. Removing the layer leaves every app decodable, and its items show "unavailable". A Pipedream layer needs no change outside its own file and one registry entry.
 - The composer pill shows the gaps of the profiles that the chat reaches.
 
@@ -74,7 +74,7 @@ Not in this spec:
                                                   │                                                              │
                                                   │   AppProfiles.reachable(scope)                               │
                                                   │     multi-member space: its list, all_spaces        (P45)    │
-                                                  │     one-member space:   all the person can access   (P44)    │
+                                                  │     private space:      owner's + listed        (PS5)        │
                                                   │     + linked profiles                               (P8)     │
                                                   │     − archived apps                                 (P11)    │
                                                   │                                                              │
@@ -214,7 +214,7 @@ This PR renders profile servers in `cell/src/harness/opencode/mcp.ts`, and makes
 
 1. `AppProfiles.reachable(scope)` is the one function that decides reach. The catalog, the egress candidates and the pill all read it (P41).
 2. A space with two or more active members reaches the shared profiles that list it, or that have `all_spaces` (P45).
-3. A space with exactly one active member P reaches everything P can access: P's private profiles, plus every shared profile that lists any space P belongs to, or that has `all_spaces` (P44). This holds on every brain of the space (P31).
+3. A private space reaches its owner's private profiles, and the shared profiles that list it or have `all_spaces`. A shared space reaches the shared profiles that list it or have `all_spaces`, whatever its member count (`../private-spaces/README.md` rules 10-12, PS5).
 4. Both kinds of space also reach the profiles that their reached profiles link to, and so on down the chain (P8).
 5. A profile of an archived app is not reached (P11). A dependency app with no items is reached wherever an app that depends on it is reached, with no profile (P33).
 6. `scope` comes from `Credentials.scopeOf(workload)`. A session brain whose person left the space has no space, so it reaches nothing (A37).
@@ -298,17 +298,17 @@ A member sees the spaces of a list they belong to, and a count of the others (P2
 
 ## 11. Lifecycle
 
-| Event                                     | Result                                                                                                                                                                                                   |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A holder leaves the org                   | Their sign-in credentials in every profile are deleted, and each provider account is cleaned up (K27). Their private profiles are deleted. Shared profiles they created stay (P10)                       |
-| A member leaves a space                   | Nothing is deleted. Reach changes by section 7. Loose space keys follow owner-access §11                                                                                                                 |
-| A member joins a one-member space         | The space becomes multi-member. The person's private profiles, and the profiles reached only through their other spaces, stop. The invite warns first when the space's chats used private profiles (P42) |
-| A space is archived                       | Its `app_profile_space` rows go                                                                                                                                                                          |
-| An app is archived                        | Its profiles stay and are not reached. The sweep keeps refreshing their tokens. Unarchive brings them back (P11)                                                                                         |
-| A linked profile is deleted               | Its links go, and the linking profiles show "base not linked"                                                                                                                                            |
-| An implied dependency gains items         | Every dependent profile shows "base not linked"                                                                                                                                                          |
-| A registry app is withdrawn               | Existing profiles keep running. New profiles are refused                                                                                                                                                 |
-| An org OAuth app is archived with `force` | Unchanged (owner-access §11)                                                                                                                                                                             |
+| Event                                     | Result                                                                                                                                                                             |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A holder leaves the org                   | Their sign-in credentials in every profile are deleted, and each provider account is cleaned up (K27). Their private profiles are deleted. Shared profiles they created stay (P10) |
+| A member leaves a space                   | Nothing is deleted. Reach changes by section 7. Loose space keys follow owner-access §11                                                                                           |
+| A member joins a space                    | Reach does not change: it follows the space's kind, never its members. A private space never gains a member (`../private-spaces/README.md` rule 5)                                 |
+| A space is archived                       | Its `app_profile_space` rows go                                                                                                                                                    |
+| An app is archived                        | Its profiles stay and are not reached. The sweep keeps refreshing their tokens. Unarchive brings them back (P11)                                                                   |
+| A linked profile is deleted               | Its links go, and the linking profiles show "base not linked"                                                                                                                      |
+| An implied dependency gains items         | Every dependent profile shows "base not linked"                                                                                                                                    |
+| A registry app is withdrawn               | Existing profiles keep running. New profiles are refused                                                                                                                           |
+| An org OAuth app is archived with `force` | Unchanged (owner-access §11)                                                                                                                                                       |
 
 Each mutation in this table and in section 7 clears the egress cache for the brains of the affected spaces, and changes the fingerprint where the catalog changes:
 
@@ -403,18 +403,18 @@ Provider contract (Ren words only, P39):
 
 ## 16. Lifecycle states
 
-| State                                                                                            | What happens                                                                                                                                                         |
-| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Brain asleep                                                                                     | Nothing. On wake, the pull carries the current catalog                                                                                                               |
-| Brain waking                                                                                     | The first pull compares fingerprints and gets the catalog of the current reach                                                                                       |
-| Brain mid-turn, reach shrinks (access removed, member joins a one-member space, profile deleted) | The egress cache is cleared; the next request is denied. The servers leave on the next pull or push; a call that runs on a removed server ends (HR1)                 |
-| Brain mid-turn, reach grows or an item is connected                                              | The next request resolves. The new server appears at a later step, after the next pull                                                                               |
-| A server failed (401, 403, network) and the person reconnects                                    | At the next turn start the cell connects it again; between turns it retries after 10 s, 1 min, 5 min (§6.4 rule 7)                                                   |
-| Brain mid-turn, app edit                                                                         | The catalog changes on the next pull (HR1). A credential whose binding fields changed shows Reconnect; until then, calls may fail upstream                           |
-| Ren down                                                                                         | Pulls fail; the brain keeps its catalog. The egress serves kept replies up to 15 minutes (C37). Reach changes made before the outage are already in the cache clears |
-| Ren restarts during a sign-in                                                                    | `oauth_session` is in Postgres; a callback within 10 minutes completes, after the checks of section 9 rule 8                                                         |
-| Provider down                                                                                    | Its MCP calls and connects fail. Cleanup runs retry for 24 hours (K27). Other credentials work                                                                       |
-| Provider layer removed                                                                           | Items show `unavailable`. Existing rows stay; a later layer for the same id serves them again                                                                        |
+| State                                                           | What happens                                                                                                                                                         |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Brain asleep                                                    | Nothing. On wake, the pull carries the current catalog                                                                                                               |
+| Brain waking                                                    | The first pull compares fingerprints and gets the catalog of the current reach                                                                                       |
+| Brain mid-turn, reach shrinks (access removed, profile deleted) | The egress cache is cleared; the next request is denied. The servers leave on the next pull or push; a call that runs on a removed server ends (HR1)                 |
+| Brain mid-turn, reach grows or an item is connected             | The next request resolves. The new server appears at a later step, after the next pull                                                                               |
+| A server failed (401, 403, network) and the person reconnects   | At the next turn start the cell connects it again; between turns it retries after 10 s, 1 min, 5 min (§6.4 rule 7)                                                   |
+| Brain mid-turn, app edit                                        | The catalog changes on the next pull (HR1). A credential whose binding fields changed shows Reconnect; until then, calls may fail upstream                           |
+| Ren down                                                        | Pulls fail; the brain keeps its catalog. The egress serves kept replies up to 15 minutes (C37). Reach changes made before the outage are already in the cache clears |
+| Ren restarts during a sign-in                                   | `oauth_session` is in Postgres; a callback within 10 minutes completes, after the checks of section 9 rule 8                                                         |
+| Provider down                                                   | Its MCP calls and connects fail. Cleanup runs retry for 24 hours (K27). Other credentials work                                                                       |
+| Provider layer removed                                          | Items show `unavailable`. Existing rows stay; a later layer for the same id serves them again                                                                        |
 
 ## 17. Changes to earlier decisions
 
@@ -442,28 +442,28 @@ Provider contract (Ren words only, P39):
 
 ## 18. Edge cases
 
-| #   | Case                                                                       | Rule                                                                                                                                  | Decision          |
-| --- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| 1   | Two apps both have MCP `gmail` and a profile `acme` in one space           | Refused by the org-wide rule                                                                                                          | P24               |
-| 2   | Two apps both declare `SHOPIFY_TOKEN`                                      | Refused; put the key in a shared dependency app                                                                                       | P35               |
-| 3   | A registry publish adds MCP `gmail`, which an org's custom app already has | The newer app's `gmail` is left out in that org and shown                                                                             | P25               |
-| 4   | Ana creates a private profile from `sales` (two members)                   | The dialog offers Shared only                                                                                                         | P32               |
-| 5   | Bob joins Ana's Personal Space                                             | Private profiles stop; the invite warns                                                                                               | P42, P44          |
-| 6   | Ana leaves `sales`                                                         | Her Personal Space loses the profiles it reached through `sales`                                                                      | P44               |
-| 7   | Bob reconnects Ana's `gmail` in a shared profile                           | Allowed; Bob is the holder                                                                                                            | P27               |
-| 8   | A member edits a list that also names spaces they are not in               | They see a count; their `add`/`remove` never touches the others                                                                       | P19, P21          |
-| 9   | A shared profile tries to link Ana's private profile                       | Refused                                                                                                                               | Section 9 rule 10 |
-| 10  | An app edit moves an MCP URL to a new path on the same host                | `reconnect` (the binding hash changes)                                                                                                | P34               |
-| 11  | An app edit renames a header                                               | No reconnect                                                                                                                          | P34               |
-| 12  | Composio's layer is removed                                                | Items `unavailable`; apps decode                                                                                                      | P38               |
-| 13  | Two people connect one empty item at once                                  | The first saves; the second fails and is cleaned up                                                                                   | Section 9 rule 9  |
-| 14  | The profile is deleted during a sign-in                                    | The callback fails with "This profile was deleted"                                                                                    | Section 9 rule 8  |
-| 15  | A skill runs `gh` with `$GITHUB_TOKEN`                                     | Not set; the agent uses `GITHUB_TOKEN=$GITHUB_TOKEN__ACME` from the note                                                              | P26               |
-| 16  | An MCP with auth `none` in an app with two profiles                        | One server, `<mcp>`                                                                                                                   | P22               |
-| 17  | An item is not connected                                                   | Not in the catalog; the pill shows it                                                                                                 | P23               |
-| 18  | A loose key with label `X__ACME`                                           | Refused                                                                                                                               | Section 8 rule 8  |
-| 19  | A private profile and no one-member space                                  | Not possible today: every member has a Personal Space. If someone adds a member to it, the profile runs nowhere, and its view says so | Section 7         |
-| 20  | A Pipedream Bearer token expires while the egress keeps an allow reply     | The reply lives no longer than `expiresAt`                                                                                            | Section 14 rule 3 |
+| #   | Case                                                                       | Rule                                                                            | Decision          |
+| --- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------- |
+| 1   | Two apps both have MCP `gmail` and a profile `acme` in one space           | Refused by the org-wide rule                                                    | P24               |
+| 2   | Two apps both declare `SHOPIFY_TOKEN`                                      | Refused; put the key in a shared dependency app                                 | P35               |
+| 3   | A registry publish adds MCP `gmail`, which an org's custom app already has | The newer app's `gmail` is left out in that org and shown                       | P25               |
+| 4   | Ana creates a private profile from `sales` (two members)                   | The dialog offers Shared only                                                   | P32               |
+| 5   | Bob joins Ana's Personal Space                                             | Private profiles stop; the invite warns                                         | P42, P44          |
+| 6   | Ana leaves `sales`                                                         | Her Personal Space loses the profiles it reached through `sales`                | P44               |
+| 7   | Bob reconnects Ana's `gmail` in a shared profile                           | Allowed; Bob is the holder                                                      | P27               |
+| 8   | A member edits a list that also names spaces they are not in               | They see a count; their `add`/`remove` never touches the others                 | P19, P21          |
+| 9   | A shared profile tries to link Ana's private profile                       | Refused                                                                         | Section 9 rule 10 |
+| 10  | An app edit moves an MCP URL to a new path on the same host                | `reconnect` (the binding hash changes)                                          | P34               |
+| 11  | An app edit renames a header                                               | No reconnect                                                                    | P34               |
+| 12  | Composio's layer is removed                                                | Items `unavailable`; apps decode                                                | P38               |
+| 13  | Two people connect one empty item at once                                  | The first saves; the second fails and is cleaned up                             | Section 9 rule 9  |
+| 14  | The profile is deleted during a sign-in                                    | The callback fails with "This profile was deleted"                              | Section 9 rule 8  |
+| 15  | A skill runs `gh` with `$GITHUB_TOKEN`                                     | Not set; the agent uses `GITHUB_TOKEN=$GITHUB_TOKEN__ACME` from the note        | P26               |
+| 16  | An MCP with auth `none` in an app with two profiles                        | One server, `<mcp>`                                                             | P22               |
+| 17  | An item is not connected                                                   | Not in the catalog; the pill shows it                                           | P23               |
+| 18  | A loose key with label `X__ACME`                                           | Refused                                                                         | Section 8 rule 8  |
+| 19  | A private profile                                                          | Runs in its person's private space only (`../private-spaces/README.md` rule 10) | Section 7         |
+| 20  | A Pipedream Bearer token expires while the egress keeps an allow reply     | The reply lives no longer than `expiresAt`                                      | Section 14 rule 3 |
 
 ## 19. Open
 
@@ -543,7 +543,7 @@ Write each test first. It must fail before its change. No mocks: real Postgres, 
 | P28 | Anyone who sees a shared profile may delete it                                                                                                                                    |
 | P29 | A shared profile never turns private                                                                                                                                              |
 | P30 | Principle: a space reaches only what all its members may use. P44 and P45 apply it                                                                                                |
-| P31 | In a one-member space, reach is the same on every brain                                                                                                                           |
+| P31 | Replaced by `../private-spaces/README.md` rule 12: reach depends on the space's kind, never on brain scope.                                                                       |
 | P32 | From a space with other members, the dialog offers Shared only                                                                                                                    |
 | P33 | A dependency app with no items is reached wherever its dependent is, with no profile                                                                                              |
 | P34 | `made_for` = hash of the binding fields. A different hash, or a missing declared scope, gives `reconnect`                                                                         |
@@ -554,9 +554,9 @@ Write each test first. It must fail before its change. No mocks: real Postgres, 
 | P39 | Provider contract of section 14: opaque `state`, Ren statuses, headers per credential with an expiry, `ProviderConnect` outside `oauth.ts`                                        |
 | P40 | `toolkit` becomes `integration`                                                                                                                                                   |
 | P41 | Coupling rules of section 15                                                                                                                                                      |
-| P42 | A one-member space whose chats used private profiles warns before it gains a member                                                                                               |
+| P42 | Replaced by `../private-spaces/README.md` rule 5: a private space never gains a member, so nothing warns.                                                                         |
 | P43 | Settings in MCP URLs per profile come later                                                                                                                                       |
-| P44 | A one-member space reaches its person's private profiles and every shared profile that lists any space of that person, or has `all_spaces` (ren-v1 `vault/resolution.ts`)         |
-| P45 | A multi-member space reaches the shared profiles that list it, or have `all_spaces`                                                                                               |
+| P44 | Replaced by `../private-spaces/README.md` rules 10-12 (PS5): a private space reaches its owner's private profiles and the shared profiles that list it or have `all_spaces`.      |
+| P45 | Replaced by `../private-spaces/README.md` rule 11: every shared space reaches the shared profiles that list it, or have `all_spaces`, whatever its member count.                  |
 | P46 | This PR renders credential-backed profile servers in `cell/src/harness/opencode/mcp.ts`: name `server`, placeholder header from `label`, `env` for local servers                  |
 | P47 | This PR also builds the OpenCode parts that MCPs need to work: retries of failed servers, the env note and `unavailable` reasons (§6.4 rules 7–9). App skills come in the next PR |

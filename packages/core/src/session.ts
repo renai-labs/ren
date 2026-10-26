@@ -14,8 +14,8 @@ import { Actor } from "./actor.js"
 import { Brains } from "./brains.js"
 import { Models } from "./models.js"
 import { Primitive } from "./primitive.js"
-import { SessionPolicy } from "./session/policy.js"
 import { SessionRunner } from "./session/runner.js"
+import { SessionPolicy } from "./session/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
 import { TranscriptCodec } from "./transcript-codec.js"
@@ -137,6 +137,8 @@ const cutDataUrls = (message: SessionMessage.Info): SessionMessage.Info => {
   return Struct.evolve(message, { files: () => files.map((file) => Struct.evolve(file, { data: cut })) })
 }
 
+const actions = SessionPolicy.actions
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -167,28 +169,29 @@ export const layer = Layer.effect(
         ),
       )
 
-    const visibleTo = (actor: Actor.Info) =>
+    const visibleTo = (actor: Actor.Info, action: string) =>
       and(
         eq(Database.Schema.space.organization_id, actor.organizationId),
         isNull(Database.Schema.space.archived_at),
         isNull(Database.Schema.agent_session.parent_id),
-        SessionPolicy.filter(actor, access.plan(actor, SessionPolicy.actions.get)),
+        Access.where(access.plan(actor, action), SpaceQueries.where),
       )
 
     const find = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       actor: Actor.Info,
       where: SQL | undefined,
+      action: string = actions.get,
     ) {
-      const row = (yield* select(transaction, actor).where(and(visibleTo(actor), where))).at(0)
+      const row = (yield* select(transaction, actor).where(and(visibleTo(actor, action), where))).at(0)
       if (!row) return yield* notFound
       return row
     })
 
     const visibleSpace = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: Space.ID) {
-      const space = (yield* database.transaction((transaction) =>
+      const space = yield* database.transaction((transaction) =>
         transaction
-          .select({ membershipId: SpaceQueries.membership.id })
+          .select({ id: Database.Schema.space.id, membershipId: SpaceQueries.membership.id })
           .from(Database.Schema.space)
           .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
           .where(
@@ -198,20 +201,17 @@ export const layer = Layer.effect(
               isNull(Database.Schema.space.archived_at),
             ),
           ),
-      )).at(0)
+      )
+      const found = space.at(0)
       if (
-        !space ||
-        !access.isAllowed({
-          actor,
-          action: SessionPolicy.actions.create,
-          resource: SessionPolicy.resource({ membershipId: space.membershipId }, actor, spaceId),
-        })
+        !found ||
+        !access.isAllowed({ actor, action: actions.create, resource: SessionPolicy.resource(found.membershipId) })
       )
         return yield* spaceNotFound
     })
 
-    const read = (actor: Actor.Info, id: Session.ID) =>
-      database.transaction((transaction) => find(transaction, actor, eq(Database.Schema.agent_session.id, id)))
+    const read = (actor: Actor.Info, id: Session.ID, action: string = actions.get) =>
+      database.transaction((transaction) => find(transaction, actor, eq(Database.Schema.agent_session.id, id), action))
 
     const history = Effect.fnUntraced(function* (
       actor: Actor.Info,
@@ -260,12 +260,10 @@ export const layer = Layer.effect(
 
     return Service.of({
       list: Effect.fn("Session.list")(function* (actor: Actor.Info, input: Session.ListInput) {
-        if (!access.isAllowed({ actor, action: SessionPolicy.actions.list, resource: Access.organization }))
-          return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const where = and(
-              visibleTo(actor),
+              visibleTo(actor, actions.list),
               input.spaceId
                 ? eq(Database.Schema.agent_session.space_id, input.spaceId)
                 : eq(Database.Schema.agent_session.created_by, actor.userId),
@@ -354,15 +352,7 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id))
             if (
-              !access.isAllowed({
-                actor,
-                action: SessionPolicy.actions.archive,
-                resource: SessionPolicy.resource(
-                  { membershipId: row.membershipId, createdBy: row.session.created_by },
-                  actor,
-                  row.session.space_id,
-                ),
-              })
+              !access.isAllowed({ actor, action: actions.archive, resource: SessionPolicy.resource(row.membershipId) })
             )
               return yield* new Primitive.Forbidden({ message: "You cannot archive this chat." })
             if (row.session.archived_at) return toInfo(row)
@@ -395,7 +385,7 @@ export const layer = Layer.effect(
         id: Session.ID,
         message: Session.FirstMessage | undefined,
       ) {
-        const row = yield* read(actor, id)
+        const row = yield* read(actor, id, actions.retry)
         yield* brain.retry(id)
         if (!message || row.opencode) return
         const start = yield* Schema.decodeUnknownEffect(Session.StartInput)(
@@ -420,7 +410,7 @@ export const layer = Layer.effect(
         id: Session.ID,
         options: { readonly unreachable?: boolean } = {},
       ) {
-        yield* read(actor, id)
+        yield* read(actor, id, actions.access)
         const user = (yield* database.transaction((transaction) =>
           transaction
             .select({ name: Database.Schema.user.name, email: Database.Schema.user.email })

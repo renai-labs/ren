@@ -167,6 +167,18 @@ const guardRequests = (input: Input) =>
     }
   })
 
+const LeftMember = Schema.Struct({ id: Schema.String, organizationId: Schema.String, userId: Schema.String })
+
+// oxlint-disable-next-line ren/no-comments -- access AC2: a leave runs the same offboarding as a removal. Better Auth's leave route deletes the member row and calls no organization hook.
+const offboardLeaves = (input: Input) =>
+  createAuthMiddleware(async (ctx) => {
+    if (ctx.path !== "/organization/leave") return
+    const left: unknown = ctx.context.returned
+    if (!Schema.is(LeftMember)(left)) return
+    await input.provisioning.archiveMemberships(left.organizationId, left.userId)
+    await input.provisioning.forgetInferenceMember(left.organizationId, left.id)
+  })
+
 const consentOrganization = (input: Input) =>
   ({
     id: "ren-consent-organization",
@@ -246,7 +258,6 @@ export const make = (input: Input) => {
     baseURL: input.baseURL,
     basePath: "/auth",
     disabledPaths: [
-      "/organization/leave",
       "/email-otp/check-verification-otp",
       "/email-otp/request-password-reset",
       "/email-otp/reset-password",
@@ -279,7 +290,7 @@ export const make = (input: Input) => {
     },
     session: { expiresIn: 60 * 60 * 24 * 90 },
     emailVerification: { sendOnSignIn: true, autoSignInAfterVerification: true },
-    hooks: { before: guardRequests(input) },
+    hooks: { before: guardRequests(input), after: offboardLeaves(input) },
     socialProviders: {
       google: {
         clientId: input.google.clientId,

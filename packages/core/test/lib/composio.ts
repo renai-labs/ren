@@ -75,6 +75,7 @@ export const setup = Effect.fnUntraced(function* () {
   const organizationId = yield* Seed.organization()
   const actor = yield* Seed.actor(organizationId, "admin")
   const space = yield* Seed.space(organizationId)
+  yield* Seed.join(space, actor.userId)
   const app = yield* apps.create(
     actor,
     Seed.appInput(space, `google-${crypto.randomUUID().slice(0, 8)}`, { mcps: { gmail } }),

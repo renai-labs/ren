@@ -2,23 +2,25 @@ export * as ChannelMappingPolicy from "./policy.js"
 
 import { Auth } from "@ren/schema/auth"
 import { ChannelMapping } from "@ren/schema/channel-mapping"
-import { Policy } from "@ren/schema/policy"
+import type { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { SpacePolicy } from "../space/policy.js"
 
 const writeActions = Primitive.actions(ChannelMapping.definition, ["create", "remove"])
 
+// oxlint-disable-next-line ren/no-comments -- A mapping sends a channel's messages into a space. Its members map their space; admins map any shared space, never another person's private space (private-spaces rule 6).
 export const documents = [
   {
-    primitive: ChannelMapping.definition.name,
-    statements: [
+    resource: ChannelMapping.definition.name,
+    rules: [
       {
         actions: Primitive.actions(ChannelMapping.definition, ["list"]),
+        effect: "allow",
         roles: Auth.Role.literals,
-        on: Policy.everywhere,
+        when: [],
       },
-      { actions: writeActions, roles: Auth.administratorRoles, on: Policy.everywhere },
-      { actions: writeActions, roles: Auth.Role.literals, on: SpacePolicy.member },
+      { actions: writeActions, effect: "allow", roles: Auth.administratorRoles, when: [SpacePolicy.facts.shared] },
+      { actions: writeActions, effect: "allow", roles: Auth.Role.literals, when: [SpacePolicy.facts.member] },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>

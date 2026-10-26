@@ -1288,7 +1288,7 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/labels`,
-            query: { page: input["page"], pageSize: input["pageSize"] },
+            query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] },
             successStatus: 200,
             declaredStatuses: [401, 403],
             empty: false,
@@ -1300,7 +1300,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/labels`,
-            body: { name: input["name"], color: input["color"] },
+            body: { spaceId: input["spaceId"], name: input["name"], color: input["color"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,

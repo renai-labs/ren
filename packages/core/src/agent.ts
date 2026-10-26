@@ -75,11 +75,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
 
-    const visibleTo = (actor: Actor.Info) => {
-      const plan = access.plan(actor, actions.get)
-      if (plan.isAllowedEverywhere) return
-      return plan.allowedWhere.length > 0 ? AgentQueries.isSpaceMember(actor) : sql`false`
-    }
+    const visibleTo = (actor: Actor.Info) => Access.where(access.plan(actor, actions.get), AgentQueries.where(actor))
 
     const resource = (row: Row, target: { readonly isTargetMember?: boolean } = {}) =>
       AgentPolicy.resource({ isOwnerMember: row.isOwnerMember, isSpaceMember: row.isSpaceMember, ...target })
@@ -151,7 +147,7 @@ export const layer = Layer.effect(
         if (reason) return yield* new Primitive.Conflict({ message: reason })
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            const space = yield* AgentQueries.visibleSpace(transaction, access, actor, input.ownerSpaceId)
+            const space = yield* AgentQueries.visibleSpace(transaction, actor, input.ownerSpaceId)
             if (
               !access.isAllowed({
                 actor,
@@ -244,7 +240,7 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* findLive(transaction, actor, eq(Database.Schema.agent.id, id))
-            const target = yield* AgentQueries.visibleSpace(transaction, access, actor, input.spaceId)
+            const target = yield* AgentQueries.visibleSpace(transaction, actor, input.spaceId)
             if (
               !access.isAllowed({
                 actor,

@@ -54,9 +54,8 @@ import { DurableRunner } from "./durable-runner.js"
 import { Credentials } from "./credentials.js"
 import { Environments } from "./environments.js"
 import { Models } from "./models.js"
-import { Primitive } from "./primitive.js"
 import { Settings } from "./settings.js"
-import { SpacePolicy } from "./space/policy.js"
+import { SessionPolicy } from "./session/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 
 export {
@@ -170,8 +169,6 @@ export const StartRun = DurableRunner.make("StartRun", {
     `start:${payload.input.sessionId}:${payload.input.initialMessage?.messageId ?? ""}:${payload.epoch}`,
 })
 
-const spaceGet = Primitive.action(Space.definition, "get")
-
 const failedAsUnavailable = (cause: BrainHost.BrainFailed) => Effect.fail(new BrainHost.BrainUnavailable({ cause }))
 
 export const layer = Layer.effect(
@@ -274,7 +271,7 @@ export const layer = Layer.effect(
                 eq(Database.Schema.space.id, placement.spaceId),
                 eq(Database.Schema.space.organization_id, placement.organizationId),
                 isNull(Database.Schema.space.archived_at),
-                SpacePolicy.filter(access.plan(actor, spaceGet)),
+                Access.where(access.plan(actor, SessionPolicy.actions.get), SpaceQueries.where),
               ),
             )
           return visible.length > 0

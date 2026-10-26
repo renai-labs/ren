@@ -2,10 +2,14 @@ export * as SpaceQueries from "./queries.js"
 
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
-import { and, eq, isNull } from "drizzle-orm"
+import type { Space } from "@ren/schema/space"
+import { and, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { Effect } from "effect"
-import type { Actor } from "../actor.js"
+import type { Access } from "../access.js"
+import { Actor } from "../actor.js"
+import { SessionPolicy } from "../session/policy.js"
+import { SpacePolicy } from "./policy.js"
 
 export const membership = alias(Database.Schema.space_member, "membership")
 
@@ -14,7 +18,16 @@ export const membershipOf = (actor: Actor.Info) =>
     eq(membership.space_id, Database.Schema.space.id),
     eq(membership.user_id, actor.userId),
     isNull(membership.archived_at),
+    Actor.fenced(actor, membership.space_id),
   )
+
+// oxlint-disable-next-line ren/no-comments -- The SQL of the space and session facts, for a query that joins `membership` with `membershipOf`.
+export const where: ReadonlyMap<string, SQL> = new Map([
+  [SpacePolicy.facts.member, isNotNull(membership.id)],
+  [SpacePolicy.facts.shared, eq(Database.Schema.space.kind, "shared")],
+  [SpacePolicy.facts.private, eq(Database.Schema.space.kind, "private")],
+  [SessionPolicy.facts.spaceMember, isNotNull(membership.id)],
+])
 
 export const organizationMember = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
@@ -27,4 +40,52 @@ export const organizationMember = Effect.fnUntraced(function* (
     .where(and(eq(Database.Schema.member.organizationId, organizationId), eq(Database.Schema.member.userId, userId)))
     .for("share")
   return rows.at(0)
+})
+
+// oxlint-disable-next-line ren/no-comments -- access AC12, private-spaces rule 8: archiving a private space archives the agents and apps it owns, also those that other spaces use.
+export const archiveOwned = Effect.fnUntraced(function* (transaction: Database.Transaction, spaceId: Space.ID) {
+  const agents = transaction
+    .select({ id: Database.Schema.agent.id })
+    .from(Database.Schema.agent)
+    .where(and(eq(Database.Schema.agent.owner_space_id, spaceId), isNull(Database.Schema.agent.archived_at)))
+  yield* transaction
+    .delete(Database.Schema.agent_membership)
+    .where(inArray(Database.Schema.agent_membership.agent_id, agents))
+  yield* transaction
+    .update(Database.Schema.agent)
+    .set({ archived_at: sql`now()`, updated_at: sql`now()` })
+    .where(and(eq(Database.Schema.agent.owner_space_id, spaceId), isNull(Database.Schema.agent.archived_at)))
+  yield* transaction
+    .update(Database.Schema.app)
+    .set({ archived_at: sql`now()`, updated_at: sql`now()` })
+    .where(and(eq(Database.Schema.app.owner_space_id, spaceId), isNull(Database.Schema.app.archived_at)))
+})
+
+// oxlint-disable-next-line ren/no-comments -- Whether a person may send a turn in a space, as the sender of a channel message (access §12 rule 2).
+export const actsIn = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  access: Access.Interface,
+  organizationId: Auth.OrganizationID,
+  spaceId: Space.ID,
+  userId: Auth.UserID,
+) {
+  const rows = yield* transaction
+    .select({ role: Database.Schema.member.role, membershipId: Database.Schema.space_member.id })
+    .from(Database.Schema.member)
+    .leftJoin(
+      Database.Schema.space_member,
+      and(
+        eq(Database.Schema.space_member.space_id, spaceId),
+        eq(Database.Schema.space_member.user_id, userId),
+        isNull(Database.Schema.space_member.archived_at),
+      ),
+    )
+    .where(and(eq(Database.Schema.member.organizationId, organizationId), eq(Database.Schema.member.userId, userId)))
+  return rows.some((row) =>
+    access.isAllowed({
+      actor: { userId, organizationId, roles: Auth.roles(row.role) },
+      action: SessionPolicy.actions.send,
+      resource: SessionPolicy.resource(row.membershipId),
+    }),
+  )
 })

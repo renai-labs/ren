@@ -37,7 +37,7 @@ export const layer = Layer.effect(
               !access.isAllowed({
                 actor,
                 action: list,
-                resource: TaskPolicy.resource(task.membershipId, task.task.space_id),
+                resource: TaskPolicy.resource(task.membershipId),
               })
             )
               return empty
@@ -102,7 +102,7 @@ export const layer = Layer.effect(
                 ...comments.map((row): TaskActivity.Info => ({
                   id: row.id,
                   type: "comment",
-                  comment: TaskComment.toInfo(access, actor, task.task.space_id)(row),
+                  comment: TaskComment.toInfo(access, actor, task.membershipId)(row),
                 })),
               ].map((item) => [item.id, item]),
             )

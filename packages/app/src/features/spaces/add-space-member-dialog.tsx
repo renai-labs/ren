@@ -24,13 +24,7 @@ export function AddSpaceMemberDialog(props: {
   const organization = useQuery(Auth.organizationOptions(context.auth, props.organizationId))
   const create = useMutation(context.api["space-member"].create.mutationOptions())
   const [selected, setSelected] = useState<string | null>(null)
-  const reach = useQuery(context.api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId }))
   const candidates = Spaces.candidates(props.members, organization.data)
-  // oxlint-disable-next-line ren/no-comments -- profiles.md P42: a one-member space reaches its person's private profiles; once someone joins, they stop here.
-  const stopping =
-    props.members.filter((member) => member.status === "active").length === 1
-      ? (reach.data?.profiles ?? []).filter((profile) => profile.kind === "private")
-      : []
   const candidate = candidates.find((each) => each.value === selected)
   const submit = () => {
     if (!candidate) return
@@ -69,11 +63,6 @@ export function AddSpaceMemberDialog(props: {
               onValueChange={setSelected}
             />
           </Field.Root>
-          {stopping.length > 0 ? (
-            <Notice tone="warning" placement="inline">
-              {`Chats here use private profiles: ${stopping.map((profile) => `${profile.appSlug} · ${profile.name}`).join(", ")}. Once someone joins, these profiles stop in this space.`}
-            </Notice>
-          ) : null}
           <Notice tone="danger" placement="inline">
             {create.error?.message}
           </Notice>

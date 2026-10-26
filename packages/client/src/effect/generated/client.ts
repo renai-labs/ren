@@ -923,21 +923,25 @@ const adaptGroupTaskActivity = (raw: RawClient["task-activity"]) => ({ list: End
 
 type LabelListRequest = Parameters<RawClient["label"]["label.list"]>[0]
 type LabelListInput = {
+  readonly spaceId?: LabelListRequest["query"]["spaceId"]
   readonly page: LabelListRequest["query"]["page"]
   readonly pageSize: LabelListRequest["query"]["pageSize"]
 }
 const EndpointLabelList = (raw: RawClient["label"]) => (input: LabelListInput) =>
-  raw["label.list"]({ query: { page: input["page"], pageSize: input["pageSize"] } }).pipe(
+  raw["label.list"]({ query: { spaceId: input["spaceId"], page: input["page"], pageSize: input["pageSize"] } }).pipe(
     Effect.mapError(mapClientError),
   )
 
 type LabelCreateRequest = Parameters<RawClient["label"]["label.create"]>[0]
 type LabelCreateInput = {
+  readonly spaceId?: LabelCreateRequest["payload"]["spaceId"]
   readonly name: LabelCreateRequest["payload"]["name"]
   readonly color?: LabelCreateRequest["payload"]["color"]
 }
 const EndpointLabelCreate = (raw: RawClient["label"]) => (input: LabelCreateInput) =>
-  raw["label.create"]({ payload: { name: input["name"], color: input["color"] } }).pipe(Effect.mapError(mapClientError))
+  raw["label.create"]({ payload: { spaceId: input["spaceId"], name: input["name"], color: input["color"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
 
 type LabelUpdateRequest = Parameters<RawClient["label"]["label.update"]>[0]
 type LabelUpdateInput = {

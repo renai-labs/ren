@@ -3,13 +3,13 @@ export * as AppProfiles from "./profiles.js"
 import { Database } from "@ren/db/database"
 import type { App } from "@ren/schema/app"
 import { AppProfile } from "@ren/schema/app-profile"
-import { Auth } from "@ren/schema/auth"
-import { Space } from "@ren/schema/space"
+import type { Auth } from "@ren/schema/auth"
+import type { Space } from "@ren/schema/space"
 import { Pagination } from "@ren/util/pagination"
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "../access.js"
-import type { Actor } from "../actor.js"
+import { Actor } from "../actor.js"
 import { Credentials } from "../credentials.js"
 import { EgressControl } from "../egress-control.js"
 import { McpProvider } from "../mcp-provider.js"
@@ -18,8 +18,6 @@ import { ProfileItems } from "./profile-items.js"
 import { AppProfilePolicy } from "./profile-policy.js"
 import { AppQueries } from "./queries.js"
 import { AppValidation } from "./validation.js"
-import { SpacePolicy } from "../space/policy.js"
-import { SpaceQueries } from "../space/queries.js"
 
 export interface Reached {
   readonly id: AppProfile.ID
@@ -54,7 +52,6 @@ const listed = Database.Schema.app_profile_space
 const links = Database.Schema.app_profile_link
 const members = Database.Schema.space_member
 const spaces = Database.Schema.space
-const spaceGet = Primitive.action(Space.definition, "get")
 const credentials = Database.Schema.credential
 
 type Row = typeof profiles.$inferSelect
@@ -100,41 +97,30 @@ export const createOwner = Effect.fnUntraced(function* (
   return id
 })
 
-const listsSpaceOf = (userId: Auth.UserID) =>
-  sql`exists (select 1 from ${listed} inner join ${members} on ${members.space_id} = ${listed.space_id} inner join ${spaces} on ${spaces.id} = ${listed.space_id} where ${listed.profile_id} = ${profiles.id} and ${members.user_id} = ${userId} and ${members.archived_at} is null and ${spaces.archived_at} is null)`
-
 const lists = (spaceId: Space.ID) =>
   sql`exists (select 1 from ${listed} where ${listed.profile_id} = ${profiles.id} and ${listed.space_id} = ${spaceId})`
 
-// oxlint-disable-next-line ren/no-comments -- §7 (P44, P45, P8, P11): the one function that decides reach. A one-member space reaches what its person can access; any other space reaches the shared profiles that list it or every space. Links add their profiles, down the chain. An archived app's profiles are not reached. Order: private, then shared, by app slug and profile slug (INV-34).
+// oxlint-disable-next-line ren/no-comments -- private-spaces rules 10-12 (P8, P11): the one function that decides reach. Every space reaches the shared profiles that list it or every space; a private space also reaches its owner's private profiles. Member count and brain scope play no part. Links add their profiles, down the chain. An archived app's profiles are not reached. Order: private, then shared, by app slug and profile slug (INV-34).
 export const reachable = Effect.fnUntraced(function* (client: Pick<Database.Transaction, "select">, scope: Reach) {
   if (Option.isNone(scope.spaceId)) return []
   const spaceId = scope.spaceId.value
-  const people = (yield* client
-    .select({ userId: members.user_id })
-    .from(members)
-    .innerJoin(spaces, eq(spaces.id, members.space_id))
+  const space = (yield* client
+    .select({ kind: spaces.kind, ownerUserId: spaces.owner_user_id })
+    .from(spaces)
     .where(
-      and(
-        eq(members.space_id, spaceId),
-        eq(spaces.organization_id, scope.organizationId),
-        isNull(members.archived_at),
-        isNull(spaces.archived_at),
-      ),
-    )).map((row) => row.userId)
-  const person = people.length === 1 ? people.at(0) : undefined
+      and(eq(spaces.id, spaceId), eq(spaces.organization_id, scope.organizationId), isNull(spaces.archived_at)),
+    )).at(0)
+  if (!space) return []
+  const shared = and(eq(profiles.kind, "shared"), or(eq(profiles.all_spaces, true), lists(spaceId)))
   const direct = yield* client
     .select({ id: profiles.id })
     .from(profiles)
     .where(
       and(
         eq(profiles.organization_id, scope.organizationId),
-        person
-          ? or(
-              and(eq(profiles.kind, "private"), eq(profiles.user_id, person)),
-              and(eq(profiles.kind, "shared"), or(eq(profiles.all_spaces, true), listsSpaceOf(person))),
-            )
-          : and(eq(profiles.kind, "shared"), or(eq(profiles.all_spaces, true), lists(spaceId))),
+        space.kind === "private" && space.ownerUserId
+          ? or(and(eq(profiles.kind, "private"), eq(profiles.user_id, space.ownerUserId)), shared)
+          : shared,
       ),
     )
   const found = new Set(direct.map((row) => row.id))
@@ -184,8 +170,21 @@ export const layer = Layer.effect(
             eq(spaces.organization_id, actor.organizationId),
             isNull(members.archived_at),
             isNull(spaces.archived_at),
+            Actor.fenced(actor, members.space_id),
           ),
         )).map((row) => row.id)
+    })
+
+    const isMemberOf = (actor: Actor.Info) =>
+      sql<boolean>`exists (select 1 from ${members} where ${members.space_id} = ${spaces.id} and ${members.user_id} = ${actor.userId} and ${members.archived_at} is null and ${Actor.fenced(actor, members.space_id) ?? sql`true`})`
+
+    const targetOf = (
+      actor: Actor.Info,
+      space: { readonly isMember: boolean; readonly kind: Space.Kind; readonly ownerUserId: string | null },
+    ): AppProfilePolicy.Target => ({
+      isMember: space.isMember,
+      isPrivate: space.kind === "private",
+      isOwnPrivate: space.kind === "private" && space.isMember && space.ownerUserId === actor.userId,
     })
 
     const listedOf = Effect.fnUntraced(function* (
@@ -196,18 +195,19 @@ export const layer = Layer.effect(
       if (!ids.length)
         return new Map<
           AppProfile.ID,
-          ReadonlyArray<{ id: Space.ID; name: string; membershipId: Space.MembershipID | null }>
+          ReadonlyArray<{ id: Space.ID; name: string; isMember: boolean; kind: Space.Kind; ownerUserId: string | null }>
         >()
       const rows = yield* client
         .select({
           profileId: listed.profile_id,
           id: spaces.id,
           name: spaces.name,
-          membershipId: SpaceQueries.membership.id,
+          isMember: isMemberOf(actor),
+          kind: spaces.kind,
+          ownerUserId: spaces.owner_user_id,
         })
         .from(listed)
         .innerJoin(spaces, and(eq(spaces.id, listed.space_id), isNull(spaces.archived_at)))
-        .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
         .where(inArray(listed.profile_id, [...ids]))
         .orderBy(asc(spaces.name), asc(spaces.id))
       const grouped = Map.groupBy(rows, (row) => row.profileId)
@@ -217,17 +217,21 @@ export const layer = Layer.effect(
     const holdsOf = (
       actor: Actor.Info,
       row: Row,
-      spacesListed: ReadonlyArray<{ readonly membershipId: Space.MembershipID | null }>,
+      spacesListed: ReadonlyArray<{ readonly isMember: boolean }>,
     ): AppProfilePolicy.Holds => ({
       kind: row.kind,
       isCreator: row.created_by_user_id === actor.userId,
-      isListedMember: spacesListed.some((space) => Boolean(space.membershipId)),
+      isListedMember: spacesListed.some((space) => space.isMember),
       allSpaces: row.all_spaces,
-      isSelf: row.user_id === actor.userId,
+      isSelf: row.user_id === actor.userId && !Actor.isFenced(actor),
     })
 
-    const allowed = (actor: Actor.Info, action: string, holds: AppProfilePolicy.Holds) =>
-      access.isAllowed({ actor, action, resource: AppProfilePolicy.resource(holds) })
+    const allowed = (
+      actor: Actor.Info,
+      action: string,
+      holds: AppProfilePolicy.Holds,
+      options: { readonly target?: AppProfilePolicy.Target; readonly link?: AppProfilePolicy.Link } = {},
+    ) => access.isAllowed({ actor, action, resource: AppProfilePolicy.resource(holds, options) })
 
     const isProviderSetUp = Effect.fnUntraced(function* (provider: string) {
       return Option.isSome(yield* Effect.option(registry.get(provider)))
@@ -340,8 +344,9 @@ export const layer = Layer.effect(
           )
           const labels = new Set(declared.map((item) => item.label))
           const visible = spacesListed.get(row.id) ?? []
+          const holds = holdsOf(actor, row, visible)
           const shown = visible.filter((space) =>
-            access.isAllowed({ actor, action: spaceGet, resource: SpacePolicy.resource(space.membershipId, space.id) }),
+            allowed(actor, AppProfilePolicy.actions.seeSpace, holds, { target: targetOf(actor, space) }),
           )
           return {
             id: row.id,
@@ -354,8 +359,8 @@ export const layer = Layer.effect(
             allSpaces: row.all_spaces,
             spaces: shown.map((space) => ({ id: space.id, name: space.name })),
             hiddenSpaces: visible.length - shown.length,
-            canAccess: allowed(actor, AppProfilePolicy.actions.access, holdsOf(actor, row, visible)),
-            canShareEverySpace: allowed(actor, AppProfilePolicy.actions.shareEverySpace, holdsOf(actor, row, visible)),
+            canAccess: allowed(actor, AppProfilePolicy.actions.access, holds),
+            canShareEverySpace: allowed(actor, AppProfilePolicy.actions.allSpaces, holds),
             links: (dependencies.get(row.app_id) ?? [])
               .filter(
                 (edge) =>
@@ -478,35 +483,38 @@ export const layer = Layer.effect(
     const invalidate = (labels: ReadonlyArray<string>) =>
       Effect.forEach([...new Set(labels)], (label) => control.invalidate({ label }), { discard: true })
 
+    // oxlint-disable-next-line ren/no-comments -- Each space a list write names is a resource of its own: the policy decides from the profile's facts and the space's (access AC15, P19).
     const checkSpaces = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       actor: Actor.Info,
-      ids: ReadonlyArray<Space.ID>,
+      holds: AppProfilePolicy.Holds,
+      writes: ReadonlyArray<{ readonly id: Space.ID; readonly action: string }>,
     ) {
-      if (!ids.length) return
-      const known = yield* transaction
-        .select({ id: spaces.id, membershipId: SpaceQueries.membership.id })
-        .from(spaces)
-        .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
-        .where(
-          and(
-            inArray(spaces.id, [...ids]),
-            eq(spaces.organization_id, actor.organizationId),
-            isNull(spaces.archived_at),
-          ),
-        )
-      if (ids.some((id) => !known.some((space) => space.id === id)))
+      if (!writes.length) return
+      const found = new Map(
+        (yield* transaction
+          .select({ id: spaces.id, isMember: isMemberOf(actor), kind: spaces.kind, ownerUserId: spaces.owner_user_id })
+          .from(spaces)
+          .where(
+            and(
+              inArray(
+                spaces.id,
+                writes.map((write) => write.id),
+              ),
+              eq(spaces.organization_id, actor.organizationId),
+              isNull(spaces.archived_at),
+            ),
+          )).map((row) => [row.id, row]),
+      )
+      if (writes.some((write) => !found.has(write.id)))
         return yield* new Primitive.NotFound({ message: "Space not found." })
       if (
-        !known.every((space) =>
-          access.isAllowed({
-            actor,
-            action: AppProfilePolicy.actions.listInSpace,
-            resource: SpacePolicy.resource(space.membershipId, space.id),
-          }),
-        )
+        writes.some((write) => {
+          const space = found.get(write.id)
+          return !space || !allowed(actor, write.action, holds, { target: targetOf(actor, space) })
+        })
       )
-        return yield* new Primitive.Forbidden({ message: "You cannot list a profile in this space (P19)." })
+        return yield* new Primitive.Forbidden({ message: "You cannot change this space in the profile’s list." })
     })
 
     // oxlint-disable-next-line ren/no-comments -- P20: a private profile lists no spaces; only admins choose every space; a member's new shared profile lists the member's spaces unless they name some.
@@ -515,18 +523,17 @@ export const layer = Layer.effect(
       actor: Actor.Info,
       input: AppProfile.CreateInput,
     ) {
-      if (input.kind === "private") {
-        if (input.allSpaces || input.spaceIds?.length)
-          return yield* new Primitive.Invalid({ message: "A private profile lists no spaces.", field: "spaceIds" })
-        return []
-      }
-      if (
-        input.allSpaces &&
-        !allowed(actor, AppProfilePolicy.actions.shareEverySpace, { ...holdsNone, kind: input.kind })
+      const holds = { ...holdsNone, kind: input.kind, isCreator: true, isSelf: input.kind === "private" }
+      if (input.allSpaces && !allowed(actor, AppProfilePolicy.actions.allSpaces, holds))
+        return yield* new Primitive.Forbidden({ message: "Only admins share a profile with every space (P20)." })
+      const spaceIds =
+        input.spaceIds ?? (input.allSpaces || input.kind === "private" ? [] : yield* spacesOf(transaction, actor))
+      yield* checkSpaces(
+        transaction,
+        actor,
+        holds,
+        spaceIds.map((id) => ({ id, action: AppProfilePolicy.actions.addSpace })),
       )
-        return yield* new Primitive.Forbidden({ message: "You cannot share a profile with every space (P20)." })
-      const spaceIds = input.spaceIds ?? (input.allSpaces ? [] : yield* spacesOf(transaction, actor))
-      yield* checkSpaces(transaction, actor, spaceIds)
       return spaceIds
     })
 
@@ -559,9 +566,15 @@ export const layer = Layer.effect(
         )).at(0)
       if (!target) return yield* notFound
       const holds = holdsOf(actor, target, (yield* listedOf(transaction, actor, [target.id])).get(target.id) ?? [])
-      if (target.kind === "private" && (row.kind === "shared" || target.user_id !== row.user_id))
-        return yield* new Primitive.Forbidden({ message: "A shared profile cannot link a private profile." })
       if (!allowed(actor, AppProfilePolicy.actions.get, holds)) return yield* notFound
+      const own = holdsOf(actor, row, (yield* listedOf(transaction, actor, [row.id])).get(row.id) ?? [])
+      const isPrivate = target.kind === "private"
+      if (
+        !allowed(actor, AppProfilePolicy.actions.link, own, {
+          link: { isPrivate, isForeign: isPrivate && target.user_id !== row.user_id },
+        })
+      )
+        return yield* new Primitive.Forbidden({ message: "A shared profile cannot link a private profile." })
     })
 
     const writeLink = Effect.fnUntraced(function* (
@@ -739,16 +752,15 @@ export const layer = Layer.effect(
         const changed = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.access)
-            if (row.kind === "private")
-              return yield* new Primitive.Forbidden({ message: "A private profile lists no spaces." })
-            if (
-              typeof input.allSpaces === "boolean" &&
-              !allowed(actor, AppProfilePolicy.actions.shareEverySpace, { ...holdsNone, kind: row.kind })
-            )
-              return yield* new Primitive.Forbidden({ message: "You cannot share a profile with every space (P20)." })
+            const holds = holdsOf(actor, row, (yield* listedOf(transaction, actor, [row.id])).get(row.id) ?? [])
+            if (typeof input.allSpaces === "boolean" && !allowed(actor, AppProfilePolicy.actions.allSpaces, holds))
+              return yield* new Primitive.Forbidden({ message: "Only admins share a profile with every space (P20)." })
             const add = input.add ?? []
             const remove = input.remove ?? []
-            yield* checkSpaces(transaction, actor, [...add, ...remove])
+            yield* checkSpaces(transaction, actor, holds, [
+              ...add.map((space) => ({ id: space, action: AppProfilePolicy.actions.addSpace })),
+              ...remove.map((space) => ({ id: space, action: AppProfilePolicy.actions.removeSpace })),
+            ])
             if (add.length)
               yield* transaction
                 .insert(listed)

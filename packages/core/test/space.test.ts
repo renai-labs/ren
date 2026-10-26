@@ -42,36 +42,107 @@ describe("Space", () => {
       const grace = yield* user(organizationId)
       const names = (yield* spaces.list(ada, page)).items.map((space) => space.name)
       expect(names).toEqual(["General Space", "Ada's Personal Space"])
+      expect((yield* spaces.list(ada, page)).items.map((space) => space.kind)).toEqual(["shared", "private"])
       const general = (yield* spaces.list(grace, page)).items.at(0)
       expect(general?.name).toBe("General Space")
       expect(general?.memberCount).toBe(2)
     }),
   )
 
-  it.live("hides spaces from organization members outside them and lets admins manage without joining", () =>
+  it.live(
+    "hides spaces from members outside them; an admin sees the list entry and joins before changing anything (AC4)",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const members = yield* SpaceMember.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* user(organizationId)
+        const grace = yield* user(organizationId)
+        const admin = yield* user(organizationId, "admin")
+        const team = yield* spaces.create(ada, { name: "Team", description: "Shared" })
+        expect(team).toMatchObject({ canUpdate: true, canAddMember: true, canRemoveMember: true, canArchive: true })
+        expect(yield* spaces.get(admin, team.id)).toMatchObject({
+          membershipId: null,
+          description: "Shared",
+          canJoin: true,
+          canUpdate: false,
+          canAddMember: false,
+          canArchive: false,
+        })
+        expect((yield* Effect.flip(spaces.get(grace, team.id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* spaces.list(grace, page)).items.map((space) => space.id)).not.toContain(team.id)
+        expect((yield* Effect.flip(spaces.update(admin, team.id, { description: "Mine" })))._tag).toBe(
+          "Primitive.Forbidden",
+        )
+        expect((yield* Effect.flip(members.create(admin, { spaceId: team.id, userId: grace.userId })))._tag).toBe(
+          "Primitive.Forbidden",
+        )
+        yield* members.create(admin, { spaceId: team.id, userId: admin.userId })
+        expect((yield* spaces.update(admin, team.id, { description: "Joined" })).description).toBe("Joined")
+        expect((yield* spaces.get(ada, team.id)).memberCount).toBe(2)
+      }),
+  )
+
+  it.live(
+    "a private space is its owner's alone: one per person, no member joins, an admin sees its list entry and archives it (private-spaces tests 1, 2, 4)",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const spaces = yield* Space.Service
+        const members = yield* SpaceMember.Service
+        const provisioning = yield* SpaceProvisioning.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* user(organizationId)
+        const grace = yield* user(organizationId)
+        const admin = yield* user(organizationId, "admin")
+        const own = (yield* spaces.list(ada, page)).items.find((space) => space.kind === "private")
+        expect(own).toMatchObject({ ownerUserId: ada.userId, canAddMember: false, canArchive: false, canJoin: false })
+        if (!own) return yield* Effect.die(new Error("expected Ada's private space"))
+        yield* provisioning.createInitialMemberships(organizationId, { id: ada.userId, name: "Ada", email: ada.email })
+        expect((yield* spaces.list(ada, page)).items.filter((space) => space.kind === "private")).toHaveLength(1)
+        const two = yield* spaces.create(ada, { name: "Two" })
+        const second = yield* Effect.exit(
+          database.db
+            .update(Database.Schema.space)
+            .set({ kind: "private", owner_user_id: ada.userId })
+            .where(eq(Database.Schema.space.id, two.id)),
+        )
+        expect(second._tag).toBe("Failure")
+        expect((yield* Effect.flip(members.create(ada, { spaceId: own.id, userId: grace.userId })))._tag).toBe(
+          "Primitive.Forbidden",
+        )
+        expect((yield* Effect.flip(members.create(admin, { spaceId: own.id, userId: admin.userId })))._tag).toBe(
+          "Primitive.Forbidden",
+        )
+        const membership = (yield* members.list(ada, { spaceId: own.id, ...page })).items.at(0)
+        if (!membership) return yield* Effect.die(new Error("expected Ada's membership"))
+        expect((yield* Effect.flip(members.archive(ada, membership.id)))._tag).toBe("Primitive.Forbidden")
+        expect((yield* Effect.flip(spaces.archive(ada, own.id)))._tag).toBe("Primitive.Forbidden")
+        expect(yield* spaces.get(admin, own.id)).toMatchObject({
+          name: own.name,
+          ownerUserId: ada.userId,
+          description: null,
+          canJoin: false,
+          canUpdate: false,
+          canArchive: true,
+        })
+        expect((yield* members.list(admin, { spaceId: own.id, ...page })).items).toEqual([])
+        expect((yield* Effect.flip(spaces.get(grace, own.id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* spaces.archive(admin, own.id)).archivedAt).not.toBeNull()
+      }),
+  )
+
+  it.live("a person who leaves the org loses their private space (private-spaces rule 16)", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service
+      const provisioning = yield* SpaceProvisioning.Service
       const organizationId = yield* Seed.organization()
       const ada = yield* user(organizationId)
-      const grace = yield* user(organizationId)
       const admin = yield* user(organizationId, "admin")
-      const team = yield* spaces.create(ada, { name: "Team" })
-      expect(team).toMatchObject({ canUpdate: true, canAddMember: true, canRemoveMember: true, canArchive: true })
-      expect(yield* spaces.get(admin, team.id)).toMatchObject({
-        membershipId: null,
-        canUpdate: true,
-        canAddMember: true,
-        canRemoveMember: true,
-        canArchive: true,
-      })
-      expect((yield* Effect.flip(spaces.get(grace, team.id)))._tag).toBe("Primitive.NotFound")
-      expect((yield* spaces.list(grace, page)).items.map((space) => space.id)).not.toContain(team.id)
-      const managed = yield* spaces.update(admin, team.id, { description: "Shared" })
-      expect(managed.membershipId).toBeNull()
-      expect(managed.description).toBe("Shared")
-      expect((yield* spaces.list(admin, { ...page, joined: true })).items.map((space) => space.id)).not.toContain(
-        team.id,
-      )
+      const own = (yield* spaces.list(ada, page)).items.find((space) => space.kind === "private")
+      if (!own) return yield* Effect.die(new Error("expected Ada's private space"))
+      yield* provisioning.archiveMemberships(organizationId, ada.userId)
+      expect((yield* Effect.flip(spaces.get(admin, own.id)))._tag).toBe("Primitive.NotFound")
     }),
   )
 
@@ -361,22 +432,25 @@ describe("Space factory order", () => {
 })
 
 describe("Space and agents acting in a session", () => {
-  it.live("an agent reads only its session's space, and policies that do not name agents deny it", () =>
-    Effect.gen(function* () {
-      const spaces = yield* Space.Service
-      const organizationId = yield* Seed.organization()
-      const admin = yield* user(organizationId, "admin")
-      const factory = yield* spaces.create(admin, { name: "Factory" })
-      const other = yield* spaces.create(admin, { name: "Other" })
-      const agent = {
-        ...admin,
-        agent: { agentId: Agent.ID.create(), sessionId: Session.ID.create(), spaceId: factory.id },
-      }
-      expect((yield* spaces.get(agent, factory.id)).id).toBe(factory.id)
-      expect((yield* Effect.flip(spaces.get(agent, other.id)))._tag).toBe("Primitive.NotFound")
-      expect((yield* Effect.flip(spaces.update(agent, factory.id, { name: "Mine" })))._tag).toBe("Primitive.Forbidden")
-      expect((yield* Effect.flip(spaces.create(agent, { name: "New" })))._tag).toBe("Primitive.Forbidden")
-      expect((yield* spaces.list(agent, page)).items).toEqual([])
-    }),
+  it.live(
+    "an agent acts as its sender in every space, except the sender's private space when its chat is elsewhere (AC17, AC18)",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* user(organizationId)
+        const factory = yield* spaces.create(ada, { name: "Factory" })
+        const other = yield* spaces.create(ada, { name: "Other" })
+        const own = (yield* spaces.list(ada, page)).items.find((space) => space.kind === "private")
+        if (!own) return yield* Effect.die(new Error("expected Ada's private space"))
+        const agent = {
+          ...ada,
+          agent: { agentId: Agent.ID.create(), sessionId: Session.ID.create(), spaceId: factory.id, fence: own.id },
+        }
+        expect((yield* spaces.get(agent, other.id)).id).toBe(other.id)
+        expect((yield* spaces.update(agent, other.id, { name: "Renamed" })).name).toBe("Renamed")
+        expect((yield* Effect.flip(spaces.get(agent, own.id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* spaces.list(agent, page)).items.map((space) => space.id)).not.toContain(own.id)
+      }),
   )
 })

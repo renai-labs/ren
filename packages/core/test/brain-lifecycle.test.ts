@@ -121,6 +121,7 @@ const seeded = () =>
       const creator = yield* Seed.user()
       const brainId = Brain.ID.create()
       const sessionId = yield* Seed.session({ organizationId, spaceId, createdBy: creator.id, brainId })
+      yield* Seed.join(spaceId, creator.id)
       return { brainId, sessionId, spaceId, organizationId, creatorId: creator.id }
     }),
   )
@@ -460,7 +461,11 @@ describe("brain runs", () => {
     const answers = await runtime.runPromise(
       Brains.Service.use((brains) =>
         Effect.forEach([gone, paused, running], (chat) =>
-          brains.access(chat.sessionId, { userId: chat.creatorId, memberId: Auth.MemberID.create() }, { unreachable: true }),
+          brains.access(
+            chat.sessionId,
+            { userId: chat.creatorId, memberId: Auth.MemberID.create() },
+            { unreachable: true },
+          ),
         ),
       ),
     )

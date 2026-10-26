@@ -147,6 +147,7 @@ const actions = {
   list: Primitive.action(SpaceMember.definition, "list"),
   create: Primitive.action(SpaceMember.definition, "create"),
   archive: Primitive.action(SpaceMember.definition, "archive"),
+  join: SpacePolicy.actions.join,
 }
 
 const forbidden = new Primitive.Forbidden({ message: "You cannot manage the members of this space." })
@@ -164,7 +165,12 @@ export const layer = Layer.effect(
       spaceId: Space.ID,
     ) {
       const rows = yield* transaction
-        .select({ archivedAt: Database.Schema.space.archived_at, membershipId: SpaceQueries.membership.id })
+        .select({
+          archivedAt: Database.Schema.space.archived_at,
+          kind: Database.Schema.space.kind,
+          ownerUserId: Database.Schema.space.owner_user_id,
+          membershipId: SpaceQueries.membership.id,
+        })
         .from(Database.Schema.space)
         .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
         .where(
@@ -173,9 +179,13 @@ export const layer = Layer.effect(
         .for("share", { of: Database.Schema.space })
       const row = rows.at(0)
       if (!row || row.archivedAt) return
-      const resource = SpacePolicy.resource(row.membershipId, spaceId)
+      const resource = SpacePolicy.resource({
+        membershipId: row.membershipId,
+        kind: row.kind,
+        isOwner: row.ownerUserId === actor.userId,
+      })
       if (!access.isAllowed({ actor, action: actions.getSpace, resource })) return
-      return resource
+      return { row, resource }
     })
 
     return Service.of({
@@ -183,7 +193,7 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const space = yield* lockSpace(transaction, actor, input.spaceId)
-            if (!space || !access.isAllowed({ actor, action: actions.list, resource: space })) {
+            if (!space || !access.isAllowed({ actor, action: actions.list, resource: space.resource })) {
               return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
             }
             const members = selectMembers(transaction)
@@ -225,7 +235,9 @@ export const layer = Layer.effect(
           Effect.gen(function* () {
             const space = yield* lockSpace(transaction, actor, input.spaceId)
             if (!space) return yield* notFound
-            if (!access.isAllowed({ actor, action: actions.create, resource: space })) return yield* forbidden
+            const isJoin = "userId" in input && input.userId === actor.userId && !space.row.membershipId
+            if (!access.isAllowed({ actor, action: isJoin ? actions.join : actions.create, resource: space.resource }))
+              return yield* forbidden
             if (!("userId" in input))
               return { member: yield* addPendingMember(transaction, actor, input.spaceId, input.email), workloads: [] }
             return {
@@ -246,7 +258,7 @@ export const layer = Layer.effect(
             const space = yield* lockSpace(transaction, actor, member.spaceId)
             if (!space) return yield* notFound
             if (member.archivedAt) return { member, removed: Option.none() }
-            if (!access.isAllowed({ actor, action: actions.archive, resource: space })) return yield* forbidden
+            if (!access.isAllowed({ actor, action: actions.archive, resource: space.resource })) return yield* forbidden
             const table =
               member.status === "active" ? Database.Schema.space_member : Database.Schema.space_pending_member
             yield* transaction

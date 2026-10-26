@@ -182,26 +182,46 @@ describe("Session", () => {
     }),
   )
 
-  it.live("its creator or an admin archives a chat, which leaves the list; another member may not", () =>
+  it.live("any member of the space archives a chat, which leaves the list (AC7)", () =>
     Effect.gen(function* () {
       const sessions = yield* Session.Service
       const spaces = yield* Space.Service
       const organizationId = yield* Seed.organization()
       const ada = yield* member(organizationId)
       const grace = yield* member(organizationId)
-      const admin = yield* member(organizationId, "admin")
       const general = (yield* spaces.list(ada, page)).items.at(0)
       if (!general) return yield* Effect.die(new Error("Ada has no space"))
       const first = Session.ID.create()
-      const second = Session.ID.create()
       yield* sessions.create(ada, { id: first, spaceId: general.id })
-      yield* sessions.create(ada, { id: second, spaceId: general.id })
-      expect((yield* Effect.flip(sessions.archive(grace, first)))._tag).toBe("Primitive.Forbidden")
-      expect((yield* sessions.archive(ada, first)).archivedAt).not.toBeNull()
-      expect((yield* sessions.archive(admin, second)).archivedAt).not.toBeNull()
+      expect((yield* sessions.archive(grace, first)).archivedAt).not.toBeNull()
       expect((yield* sessions.list(ada, { spaceId: general.id, ...page })).items).toEqual([])
     }),
   )
+
+  it.live(
+    "an admin never lists, reads, archives or joins a chat of another person's private space (private-spaces test 3)",
+    () =>
+      Effect.gen(function* () {
+        const sessions = yield* Session.Service
+        const spaces = yield* Space.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* member(organizationId)
+        const admin = yield* member(organizationId, "admin")
+        const own = (yield* spaces.list(ada, page)).items.find((space) => space.kind === "private")
+        if (!own) return yield* Effect.die(new Error("Ada has no private space"))
+        const id = Session.ID.create()
+        yield* sessions.create(ada, { id, spaceId: own.id })
+        expect((yield* sessions.list(admin, { spaceId: own.id, ...page })).items).toEqual([])
+        expect((yield* Effect.flip(sessions.get(admin, id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(sessions.messages(admin, id, {})))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(sessions.archive(admin, id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(sessions.access(admin, id)))._tag).toBe("Primitive.NotFound")
+        expect((yield* Effect.flip(sessions.create(admin, { id: Session.ID.create(), spaceId: own.id })))._tag).toBe(
+          "Primitive.NotFound",
+        )
+      }),
+  )
+
   it.live(
     "typing in a new chat wakes the space's brain for a member of the space, and is not found for anyone else",
     () =>

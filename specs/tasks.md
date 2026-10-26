@@ -45,7 +45,7 @@ Rules:
 1. A new task is `todo`.
 2. The first start by any agent sets `todo` to `in_progress`. A human or an agent can also set `in_progress`.
 3. A handoff does not change the status. A task that waits for its next agent is still `in_progress`.
-4. Only a human sets `done` or `dismissed`. An agent tool refuses both values. A merged GitHub pull request that the task links sets `done` with no actor and the `automation` data on the `status` event ([channels piece I](runtime/channels/i-tasks.md), CH43).
+4. A person sets `done` or `dismissed`, or an agent acting for the person who sent the turn (`runtime/access/README.md` AC10). A merged GitHub pull request that the task links sets `done` with no actor and the `automation` data on the `status` event ([channels piece I](runtime/channels/i-tasks.md), CH43).
 5. Nothing sets `todo` again automatically. A human can reopen a task to `todo` or `in_progress`.
 6. When the status becomes `done` or `dismissed`, Ren turns human review off.
 7. The actionable statuses are `todo` and `in_progress`. The default list shows them (v1 L32).
@@ -65,7 +65,7 @@ The task stores two fields: `humanReview` (boolean) and `humanReviewReason` (tex
 
 - An agent turns review on with the `task_review` tool and a reason, then ends its turn. The session does not wait: a review can take days.
 - A person can also turn review on, with a reason.
-- Only a person turns review off, with a decision: **Approve** (optional comment) or **Request changes** (comment required). Any member of the space who can write to the task decides; the owner is shown as the person expected to act. A message in the agent's session does not close the review.
+- A person, or an agent acting for the person who sent the turn (`runtime/access/README.md` AC10), turns review off, with a decision: **Approve** (optional comment) or **Request changes** (comment required). Any member of the space who can write to the task decides; the owner is shown as the person expected to act. A message in the agent's session does not close the review.
 - Mark done, dismiss and removing the agent are the normal task actions. They also turn review off, with no decision.
 - Before deciding, a person can do anything: comment, edit the description, chat in the session, or check the pull request.
 - The decision takes `start: "continue" | "none"`. With `continue`, Ren continues the agent's latest session with a message: the decision, the comment, and whether the description changed after the request. With `none`, the agent stays idle until someone starts it.
@@ -273,8 +273,8 @@ Deleting an organization deletes all of these. Deleting a user, agent or session
 - A member of a space reads and writes the tasks of that space. Others get "not found", which never says that the task exists (v1 L2, L8).
 - Writes follow the space's existing policy. Read-only roles read only (v1 L7).
 - An archived task leaves every list, and a get returns not found. Its events stay (v1 L9, L10).
-- `done` and `dismissed` need a user actor with no agent.
-- An agent acting in a session gets only the policy statements marked `agents: true`, and only in its session's space: `Access.plan` carries the space, each policy's filter adds it, and `isAllowed` refuses a resource of another space. Any other statement denies agents, so a service that ignores the agent cannot widen its reach. Agents get every task action except `archive`, and also `task-comment.create`, `task-activity.list`, `label.list` and `space.get`. Roles still come from the session's creator, so an admin's agent has admin rights inside its space.
+- `done` and `dismissed` follow the task policy like every other change (`runtime/access/README.md` AC10).
+- An agent acting in a session has the rights of the person who sent the turn, except in that person's private space when the session is elsewhere (`runtime/access/README.md` AC17, AC18).
 
 ## API
 

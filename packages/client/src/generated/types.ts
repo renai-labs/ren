@@ -10,6 +10,8 @@ export type InvitationState = "pending" | "expired" | "accepted" | "unavailable"
 
 export type SpaceID = string
 
+export type SpaceKind = "shared" | "private"
+
 export type BrainScope = "session" | "space"
 
 export type SpaceMembershipID = string
@@ -241,6 +243,8 @@ export type AppProfileSpaceRef = { id: SpaceID; name: string }
 export type SpaceInfo = {
   id: SpaceID
   organizationId: AuthOrganizationID
+  kind: SpaceKind
+  ownerUserId: AuthUserID | null
   name: string
   description: string | null
   brainScope: BrainScope
@@ -248,6 +252,7 @@ export type SpaceInfo = {
   membershipId: SpaceMembershipID | null
   agentOrder: Array<string>
   canUpdate: boolean
+  canJoin: boolean
   canAddMember: boolean
   canRemoveMember: boolean
   canArchive: boolean
@@ -511,6 +516,7 @@ export type LabelInfo = {
   color: string | null
   isSystem: boolean
   organizationId: AuthOrganizationID | null
+  spaceId: SpaceID | null
   createdAt: string
   updatedAt: string
   archivedAt: string | null
@@ -5345,15 +5351,37 @@ export type TaskActivityListInput = {
 export type TaskActivityListOutput = TaskActivityPage
 
 export type LabelListInput = {
-  readonly page: { readonly page: number; readonly pageSize: number }["page"]
-  readonly pageSize: { readonly page: number; readonly pageSize: number }["pageSize"]
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: { readonly spaceId?: string | undefined; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
 }
 
 export type LabelListOutput = LabelPage
 
 export type LabelCreateInput = {
-  readonly name: { readonly name: string; readonly color?: string | null | null }["name"]
-  readonly color?: { readonly name: string; readonly color?: string | null | null }["color"]
+  readonly spaceId?: {
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly color?: string | null | null
+  }["spaceId"]
+  readonly name: {
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly color?: string | null | null
+  }["name"]
+  readonly color?: {
+    readonly spaceId?: string | null
+    readonly name: string
+    readonly color?: string | null | null
+  }["color"]
 }
 
 export type LabelCreateOutput = LabelInfo

@@ -5,12 +5,12 @@ import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
-import { Space } from "@ren/schema/space"
-import { and, eq, isNull } from "drizzle-orm"
+import type { Space } from "@ren/schema/space"
+import { and, eq, isNull, ne, type SQL, type SQLWrapper } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Access } from "./access.js"
 import { Primitive } from "./primitive.js"
-import { SpacePolicy } from "./space/policy.js"
+import { SessionPolicy } from "./session/policy.js"
 
 export interface Info {
   readonly userId: Auth.UserID
@@ -20,8 +20,15 @@ export interface Info {
     readonly agentId: Agent.ID
     readonly sessionId: Session.ID
     readonly spaceId: Space.ID
+    readonly fence: Space.ID | null
   }
 }
+
+// oxlint-disable-next-line ren/no-comments -- access AC17, AC18: an agent has its sender's rights, except in the sender's private space when its chat is in another space. That space, and the sender's person items, are hidden from it.
+export const isFenced = (actor: Info) => Boolean(actor.agent?.fence)
+
+export const fenced = (actor: Info, spaceId: SQLWrapper): SQL | undefined =>
+  actor.agent?.fence ? ne(spaceId, actor.agent.fence) : undefined
 
 export interface AgentInfo extends Info {
   readonly agent: NonNullable<Info["agent"]>
@@ -52,8 +59,6 @@ export const memberOf = Effect.fn("Actor.memberOf")(function* (
   if (!found) return yield* new Primitive.Forbidden({ message: "You are not a member of this organization." })
   return Auth.MemberID.make(found.id)
 })
-
-const spaceGet = Primitive.action(Space.definition, "get")
 
 export interface Interface {
   readonly fromSession: (session: SessionRef) => Effect.Effect<AgentInfo, Primitive.Forbidden>
@@ -103,19 +108,27 @@ export const layer = Layer.effect(
           )
           .pipe(Effect.orDie)).at(0)
         if (!row) return yield* new Primitive.Forbidden({ message: "The session is not available." })
-        const sender = {
-          userId: session.userId ?? row.session.created_by,
-          organizationId: session.organizationId,
-          roles: Auth.roles(row.role),
-        }
+        const sender = session.userId ?? row.session.created_by
         if (
           !access.isAllowed({
-            actor: sender,
-            action: spaceGet,
-            resource: SpacePolicy.resource(row.spaceMember, row.session.space_id),
+            actor: { userId: sender, organizationId: session.organizationId, roles: row.role.split(",") },
+            action: SessionPolicy.actions.send,
+            resource: SessionPolicy.resource(row.spaceMember),
           })
         )
-          return yield* new Primitive.Forbidden({ message: "The sender cannot see the session’s space." })
+          return yield* new Primitive.Forbidden({ message: "The sender cannot send a turn in this chat." })
+        const own = (yield* database.db
+          .select({ id: Database.Schema.space.id })
+          .from(Database.Schema.space)
+          .where(
+            and(
+              eq(Database.Schema.space.organization_id, session.organizationId),
+              eq(Database.Schema.space.kind, "private"),
+              eq(Database.Schema.space.owner_user_id, sender),
+              isNull(Database.Schema.space.archived_at),
+            ),
+          )
+          .pipe(Effect.orDie)).at(0)?.id
         const agentId =
           row.session.agent_id ??
           (yield* database.db
@@ -131,8 +144,15 @@ export const layer = Layer.effect(
             .pipe(Effect.orDie)).at(0)?.id
         if (!agentId) return yield* new Primitive.Forbidden({ message: "The session’s agent is not available." })
         return {
-          ...sender,
-          agent: { agentId, sessionId: session.sessionId, spaceId: row.session.space_id },
+          userId: sender,
+          organizationId: session.organizationId,
+          roles: row.role.split(","),
+          agent: {
+            agentId,
+            sessionId: session.sessionId,
+            spaceId: row.session.space_id,
+            fence: own && own !== row.session.space_id ? own : null,
+          },
         }
       }),
     })

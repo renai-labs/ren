@@ -157,7 +157,7 @@ describe("EnvironmentTemplates", () => {
       const foreign = yield* templates.create(elsewhere.admin, input)
       expect(
         (yield* links
-          .create(setup.admin, { spaceId: setup.space.id, environmentTemplateId: foreign.id })
+          .create(setup.ada, { spaceId: setup.space.id, environmentTemplateId: foreign.id })
           .pipe(Effect.flip))._tag,
       ).toBe("Primitive.NotFound")
       expect(

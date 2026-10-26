@@ -1,38 +1,46 @@
 export * as SettingsPolicy from "./policy.js"
 
-import { Auth } from "@ren/schema/auth"
 import { OrganizationSettings } from "@ren/schema/organization-settings"
-import { Policy } from "@ren/schema/policy"
+import type { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { SpaceSettings } from "@ren/schema/space-settings"
 import type { Access } from "../access.js"
 import { SpacePolicy } from "../space/policy.js"
 
-const spaceMember = SpacePolicy.member
+const facts = { spaceMember: "space.member" } as const
 
+// oxlint-disable-next-line ren/no-comments -- access §3 and §11: every member reads the org settings and admins change them; a space's settings are for its members (AC4).
 export const documents = [
   {
-    primitive: OrganizationSettings.definition.name,
-    statements: [
+    resource: OrganizationSettings.definition.name,
+    rules: [
       {
         actions: Primitive.actions(OrganizationSettings.definition, ["get"]),
-        roles: Auth.Role.literals,
-        on: Policy.everywhere,
+        effect: "allow",
+        roles: SpacePolicy.organizationRoles,
+        when: [],
       },
       {
         actions: Primitive.actions(OrganizationSettings.definition, ["update"]),
-        roles: Auth.administratorRoles,
-        on: Policy.everywhere,
+        effect: "allow",
+        roles: SpacePolicy.administratorRoles,
+        when: [],
       },
     ],
   },
   {
-    primitive: SpaceSettings.definition.name,
-    statements: [
-      { actions: Primitive.actions(SpaceSettings.definition), roles: Auth.administratorRoles, on: Policy.everywhere },
-      { actions: Primitive.actions(SpaceSettings.definition), roles: Auth.Role.literals, on: spaceMember },
+    resource: SpaceSettings.definition.name,
+    rules: [
+      {
+        actions: Primitive.actions(SpaceSettings.definition),
+        effect: "allow",
+        roles: SpacePolicy.organizationRoles,
+        when: [facts.spaceMember],
+      },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
 
-export const space = (isMember: boolean): Access.Resource => ({ relationships: isMember ? [spaceMember] : [] })
+export const organization: Access.Resource = { facts: [] }
+
+export const space = (isMember: boolean): Access.Resource => ({ facts: isMember ? [facts.spaceMember] : [] })

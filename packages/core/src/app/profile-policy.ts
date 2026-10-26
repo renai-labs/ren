@@ -1,23 +1,24 @@
 export * as AppProfilePolicy from "./profile-policy.js"
 
-import { Database } from "@ren/db/database"
 import { AppProfile } from "@ren/schema/app-profile"
-import { Auth } from "@ren/schema/auth"
-import { Policy } from "@ren/schema/policy"
+import type { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
-import { and, eq, sql } from "drizzle-orm"
 import type { Access } from "../access.js"
-import { AccessFilter } from "../access-filter.js"
-import type { Actor } from "../actor.js"
 import { SpacePolicy } from "../space/policy.js"
 
-export const relationships = {
+export const facts = {
   shared: "profile.shared",
   creator: "profile.creator",
   listedMember: "profile.listedMember",
   allSpaces: "profile.allSpaces",
   private: "profile.private",
   self: "profile.self",
+  targetMember: "target.member",
+  targetPrivate: "target.private",
+  targetShared: "target.shared",
+  targetOwnPrivate: "target.ownPrivate",
+  linkPrivate: "link.private",
+  linkForeign: "link.foreign",
 } as const
 
 export const actions = {
@@ -30,34 +31,67 @@ export const actions = {
   promote: Primitive.action(AppProfile.definition, "promote"),
   connect: `${AppProfile.definition.name}.connect`,
   delete: `${AppProfile.definition.name}.delete`,
-  shareEverySpace: `${AppProfile.definition.name}.shareEverySpace`,
-  listInSpace: `${AppProfile.definition.name}.listInSpace`,
+  addSpace: `${AppProfile.definition.name}.addSpace`,
+  removeSpace: `${AppProfile.definition.name}.removeSpace`,
+  allSpaces: `${AppProfile.definition.name}.allSpaces`,
+  seeSpace: `${AppProfile.definition.name}.seeSpace`,
 } as const
 
-const every = Auth.Role.literals
+const every = SpacePolicy.organizationRoles
 
-const admins = Auth.administratorRoles
+const admins = SpacePolicy.administratorRoles
 
 const see = [actions.list, actions.get, actions.connect, actions.delete]
 
-// oxlint-disable-next-line ren/no-comments -- profiles.md §10 (P5, P19, P20, P27, P28).
+const manage = [actions.update, actions.link, actions.access]
+
+// oxlint-disable-next-line ren/no-comments -- profiles.md §10, access §9 (AC13-AC15), private-spaces PS4, PS5, PS9. Anyone who sees a shared profile connects its items and deletes it; its creator and admins rename and link it. Its creator changes its list for spaces they are in; admins add any shared space and remove any space. Anyone who sees it adds their own private space; the creator removes any private space. Only admins choose every space. An admin sees a private profile's metadata and deletes it, never uses it. A shared profile never links a private profile, and a private profile links only its person's own.
 export const documents = [
   {
-    primitive: AppProfile.definition.name,
-    statements: [
-      { actions: [actions.create], roles: every, on: Policy.everywhere },
-      { actions: [...see, actions.update, actions.link, actions.access], roles: admins, on: relationships.shared },
-      { actions: see, roles: every, on: relationships.listedMember },
-      { actions: see, roles: every, on: relationships.allSpaces },
-      { actions: [...see, actions.update, actions.link, actions.access], roles: every, on: relationships.creator },
+    resource: AppProfile.definition.name,
+    rules: [
+      { actions: [actions.create], effect: "allow", roles: every, when: [] },
+      { actions: [...see, ...manage], effect: "allow", roles: admins, when: [facts.shared] },
+      { actions: see, effect: "allow", roles: every, when: [facts.listedMember] },
+      { actions: see, effect: "allow", roles: every, when: [facts.allSpaces] },
+      { actions: [...see, ...manage], effect: "allow", roles: every, when: [facts.creator] },
       {
         actions: [...see, actions.update, actions.link, actions.promote],
+        effect: "allow",
         roles: every,
-        on: relationships.self,
+        when: [facts.self],
       },
-      { actions: [actions.list, actions.get, actions.delete], roles: admins, on: relationships.private },
-      { actions: [actions.shareEverySpace, actions.listInSpace], roles: admins, on: Policy.everywhere },
-      { actions: [actions.listInSpace], roles: every, on: SpacePolicy.member },
+      { actions: [actions.list, actions.get, actions.delete], effect: "allow", roles: admins, when: [facts.private] },
+      { actions: [actions.access], effect: "allow", roles: every, when: [facts.listedMember] },
+      { actions: [actions.access], effect: "allow", roles: every, when: [facts.allSpaces] },
+      { actions: [actions.addSpace], effect: "allow", roles: admins, when: [facts.shared, facts.targetShared] },
+      { actions: [actions.removeSpace], effect: "allow", roles: admins, when: [facts.shared] },
+      {
+        actions: [actions.addSpace, actions.removeSpace],
+        effect: "allow",
+        roles: every,
+        when: [facts.creator, facts.targetMember],
+      },
+      {
+        actions: [actions.addSpace],
+        effect: "allow",
+        roles: every,
+        when: [facts.listedMember, facts.targetOwnPrivate],
+      },
+      { actions: [actions.addSpace], effect: "allow", roles: every, when: [facts.allSpaces, facts.targetOwnPrivate] },
+      { actions: [actions.removeSpace], effect: "allow", roles: every, when: [facts.creator, facts.targetPrivate] },
+      { actions: [actions.removeSpace], effect: "allow", roles: every, when: [facts.targetOwnPrivate] },
+      { actions: [actions.allSpaces], effect: "allow", roles: admins, when: [facts.shared] },
+      { actions: [actions.seeSpace], effect: "allow", roles: admins, when: [] },
+      { actions: [actions.seeSpace], effect: "allow", roles: every, when: [facts.targetMember] },
+      {
+        actions: [actions.access, actions.addSpace, actions.removeSpace, actions.allSpaces],
+        effect: "deny",
+        roles: every,
+        when: [facts.private],
+      },
+      { actions: [actions.link], effect: "deny", roles: every, when: [facts.shared, facts.linkPrivate] },
+      { actions: [actions.link], effect: "deny", roles: every, when: [facts.linkForeign] },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
@@ -70,40 +104,45 @@ export interface Holds {
   readonly isSelf: boolean
 }
 
-export const resource = (holds: Holds): Access.Resource => ({
-  relationships:
-    holds.kind === "shared"
-      ? [
-          relationships.shared,
-          ...(holds.isCreator ? [relationships.creator] : []),
-          ...(holds.isListedMember ? [relationships.listedMember] : []),
-          ...(holds.allSpaces ? [relationships.allSpaces] : []),
-        ]
-      : [relationships.private, ...(holds.isSelf ? [relationships.self] : [])],
-})
-
-const profiles = Database.Schema.app_profile
-const listed = Database.Schema.app_profile_space
-const members = Database.Schema.space_member
-
-// oxlint-disable-next-line ren/no-comments -- The relationships of `resource`, as SQL on app_profile.
-export const conditions = (actor: Actor.Info) => {
-  const shared = eq(profiles.kind, "shared")
-  const isPrivate = eq(profiles.kind, "private")
-  return new Map([
-    [relationships.shared, shared],
-    [relationships.creator, and(shared, eq(profiles.created_by_user_id, actor.userId))],
-    [
-      relationships.listedMember,
-      and(
-        shared,
-        sql`exists (select 1 from ${listed} inner join ${members} on ${members.space_id} = ${listed.space_id} where ${listed.profile_id} = ${profiles.id} and ${members.user_id} = ${actor.userId} and ${members.archived_at} is null)`,
-      ),
-    ],
-    [relationships.allSpaces, and(shared, eq(profiles.all_spaces, true))],
-    [relationships.private, isPrivate],
-    [relationships.self, and(isPrivate, eq(profiles.user_id, actor.userId))],
-  ])
+export interface Target {
+  readonly isMember: boolean
+  readonly isPrivate: boolean
+  readonly isOwnPrivate: boolean
 }
 
-export const filter = (actor: Actor.Info, plan: Access.Plan) => AccessFilter.where(plan, conditions(actor))
+export interface Link {
+  readonly isPrivate: boolean
+  readonly isForeign: boolean
+}
+
+const holdFacts = (holds: Holds) =>
+  holds.kind === "private"
+    ? [facts.private, ...(holds.isSelf ? [facts.self] : [])]
+    : [
+        facts.shared,
+        ...(holds.isCreator ? [facts.creator] : []),
+        ...(holds.isListedMember ? [facts.listedMember] : []),
+        ...(holds.allSpaces ? [facts.allSpaces] : []),
+      ]
+
+const targetFacts = (target: Target) => [
+  target.isPrivate ? facts.targetPrivate : facts.targetShared,
+  ...(target.isMember ? [facts.targetMember] : []),
+  ...(target.isOwnPrivate ? [facts.targetOwnPrivate] : []),
+]
+
+const linkFacts = (link: Link) => [
+  ...(link.isPrivate ? [facts.linkPrivate] : []),
+  ...(link.isForeign ? [facts.linkForeign] : []),
+]
+
+export const resource = (
+  holds: Holds,
+  options: { readonly target?: Target; readonly link?: Link } = {},
+): Access.Resource => ({
+  facts: [
+    ...holdFacts(holds),
+    ...(options.target ? targetFacts(options.target) : []),
+    ...(options.link ? linkFacts(options.link) : []),
+  ],
+})

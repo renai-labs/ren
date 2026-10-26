@@ -1,4 +1,4 @@
-import type { AppProfileInfo, CredentialInfo } from "@ren/client"
+import type { AppProfileInfo, CredentialInfo, SpaceKind } from "@ren/client"
 import { Credential } from "@ren/schema/credential"
 import { Avatar } from "@ren/ui/avatar"
 import { Icon } from "@ren/ui/icon"
@@ -143,7 +143,7 @@ function Strip(props: { spaceId: string; profiles: ReadonlyArray<AppProfileInfo>
       <StripDialogs
         dialog={dialog}
         space={target}
-        members={space.data?.memberCount}
+        kind={space.data?.kind}
         added={new Set(byApp.map(([appId]) => appId))}
         userId={authed.me.user.id}
         onChange={setDialog}
@@ -156,7 +156,7 @@ function Strip(props: { spaceId: string; profiles: ReadonlyArray<AppProfileInfo>
 function StripDialogs(props: {
   dialog: Dialogs
   space: { readonly id: string; readonly name: string }
-  members: number | undefined
+  kind: SpaceKind | undefined
   added: ReadonlySet<string>
   userId: string
   onChange: (dialog: Dialogs) => void
@@ -178,7 +178,7 @@ function StripDialogs(props: {
       <ProfileDialog
         appId={dialog.appId}
         {...(dialog.profileId && { profileId: dialog.profileId })}
-        {...(props.members !== undefined && { from: { spaceId: props.space.id, members: props.members } })}
+        {...(props.kind && { from: { spaceId: props.space.id, kind: props.kind } })}
         onClose={close}
       />
     )

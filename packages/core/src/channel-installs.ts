@@ -14,7 +14,6 @@ import { ChannelInstallPolicy } from "./channel-install/policy.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { PersonCredentials } from "./person-credentials.js"
 import { Primitive } from "./primitive.js"
-import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 
 export type Outcome =
@@ -328,7 +327,7 @@ export const layer = Layer.effect(
               return yield* new Primitive.Invalid({ message: "Space not found.", field: "defaultSpaceId" })
             if (
               defaultSpaceId &&
-              !(yield* SpacePolicy.actsIn(transaction, access, actor.organizationId, defaultSpaceId, actor.userId))
+              !(yield* SpaceQueries.actsIn(transaction, access, actor.organizationId, defaultSpaceId, actor.userId))
             )
               return yield* new Primitive.Invalid({
                 message: "Choose a space you are a member of.",
