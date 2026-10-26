@@ -18,6 +18,7 @@ import { BrainPush } from "@ren/core/brain-push"
 import { BrainLifecycle } from "@ren/core/brain-lifecycle"
 import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
+import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelProvider } from "@ren/core/channel-provider"
 import { GitHub } from "@ren/core/channel-provider/github"
 import { GitHubAccounts } from "@ren/core/github-accounts"
@@ -51,6 +52,7 @@ import { tmpdir } from "node:os"
 import { EgressRoutes } from "./egress.js"
 import { Routes } from "./routes.js"
 import { Signer } from "@ren/core/signer"
+import { SlackApp } from "@ren/core/slack-app"
 import { EgressControl } from "@ren/core/egress-control"
 
 const host = Layer.unwrap(
@@ -110,6 +112,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   ),
   Layer.provideMerge(GitHubAccounts.layer),
   Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, PersonCredentials.layer)),
+  Layer.provideMerge(SlackApp.layer.pipe(Layer.provide(ChannelSecrets.layer))),
   Layer.provideMerge(McpProvider.layerCleanup),
   Layer.provideMerge(McpProvider.layer([McpProvider.composio])),
   Layer.provideMerge(Layer.mergeAll(envelope, Access.layer, OAuthFetch.layerPublic)),

@@ -1,0 +1,1 @@
+ALTER TABLE "channel_install" ADD COLUMN "secret" jsonb;
