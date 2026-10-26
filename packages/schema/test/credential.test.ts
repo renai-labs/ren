@@ -17,11 +17,10 @@ describe("Credential.Label", () => {
 })
 
 describe("Credential.Host", () => {
-  test("hosts are names or one leading wildcard label; no bare *, IP address or private name (A39)", () => {
-    expect(["api.stripe.com", "*.stripe.com", "github.com"].map(isHost)).toEqual([true, true, true])
+  test("hosts are names, one leading wildcard label or * for any host; no IP address or private name (A39)", () => {
+    expect(["api.stripe.com", "*.stripe.com", "github.com", "*"].map(isHost)).toEqual([true, true, true, true])
     expect(
       [
-        "*",
         "*.com",
         "10.0.0.1",
         "[::1]",
@@ -32,7 +31,7 @@ describe("Credential.Host", () => {
         "a.*.com",
         "Api.Stripe.com",
       ].map(isHost),
-    ).toEqual([false, false, false, false, false, false, false, false, false, false])
+    ).toEqual([false, false, false, false, false, false, false, false, false])
   })
 })
 

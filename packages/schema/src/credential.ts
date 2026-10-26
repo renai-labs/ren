@@ -182,7 +182,9 @@ const hostLabel = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 
 const privateSuffixes = [".localhost", ".local", ".internal", ".lan", ".localdomain", ".home.arpa"]
 
-export const Host = Schema.String.check(
+export const anyHost = "*"
+
+const NamedHost = Schema.String.check(
   Schema.isMaxLength(253),
   Schema.isPattern(new RegExp(`^(?:\\*\\.)?(?:${hostLabel}\\.)+[a-z][a-z0-9-]*[a-z0-9]$`, "u"), {
     message: "Use a host name such as api.example.com, or *.example.com.",
@@ -194,13 +196,17 @@ export const Host = Schema.String.check(
     (host) =>
       !privateSuffixes.some((suffix) => `.${host}`.endsWith(suffix)) || "Private host names cannot get credentials.",
   ),
-).annotate({
+)
+
+export const Host = Schema.Union([Schema.Literal(anyHost), NamedHost]).annotate({
   identifier: "Credential.Host",
-  description: "A host that may get the credential: a name, or `*.<domain>` for its subdomains.",
+  description: "A host that may get the credential: a name, `*.<domain>` for its subdomains, or `*` for any host.",
 })
 
-export const matchesHost = (pattern: string, host: string) =>
-  pattern.startsWith("*.") ? host.endsWith(pattern.slice(1)) : pattern === host
+export const matchesHost = (pattern: string, host: string) => {
+  if (pattern === anyHost) return true
+  return pattern.startsWith("*.") ? host.endsWith(pattern.slice(1)) : pattern === host
+}
 
 export const Hosts = Schema.Array(Host)
   .check(Schema.isMinLength(1, { message: "Add at least one host." }), Schema.isMaxLength(maximumHosts))
@@ -220,8 +226,7 @@ const isHost = Schema.is(Host)
 export const HostsText = Schema.String.check(
   Schema.makeFilter((text) => splitHosts(text).length > 0 || "Add at least one host, such as api.stripe.com."),
   Schema.makeFilter(
-    (text) =>
-      splitHosts(text).every(isHost) || "Use host names such as api.stripe.com or *.stripe.com; no IP address or *.",
+    (text) => splitHosts(text).every(isHost) || "Use host names such as api.stripe.com or *.stripe.com; no IP address.",
   ),
 ).annotate({
   identifier: "Credential.HostsText",

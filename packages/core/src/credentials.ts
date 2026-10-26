@@ -479,6 +479,17 @@ export const layer = Layer.effect(
         return yield* new Primitive.Forbidden({ message: `You cannot ${verb} credentials for this owner.` })
     })
 
+    // oxlint-disable-next-line ren/no-comments -- A39: a by-host credential for any host would go on every request, and a profile item's host names its MCP URL.
+    const checkAnyHost = (owner: Credential.Owner, hosts: ReadonlyArray<string>, inject: Credential.Inject) =>
+      hosts.includes(Credential.anyHost) && (owner.kind === "profile" || inject.op !== "replace")
+        ? Effect.fail(
+            new Primitive.Invalid({
+              message: "Only a key used through its placeholder can go to any host.",
+              field: "hosts",
+            }),
+          )
+        : Effect.void
+
     const checkDelivery = (actor: Actor.Info, owner: Credential.Owner, delivery: Credential.Delivery | undefined) =>
       delivery === "delivered" && owner.kind === "org" && !actor.roles.some(Auth.isAdministrator)
         ? Effect.fail(new Primitive.Forbidden({ message: "Only admins choose delivered for an org credential." }))
@@ -757,6 +768,7 @@ export const layer = Layer.effect(
           if (!item) return yield* new Primitive.NotFound({ message: "The app has no such item." })
           if (item.kind === "oauth" || item.kind === "provider")
             return yield* new Primitive.Invalid({ message: "This item connects with a sign-in.", field: "item" })
+          yield* checkAnyHost(owner, input.hosts, Credential.defaultInject(input.value.type))
           const exchanged = yield* exchange(sealedOf(input.value))
           const created = yield* insert(actor, owner, {
             label,
@@ -775,6 +787,7 @@ export const layer = Layer.effect(
         }
         yield* checkTarget(actor, input.owner, "create")
         yield* checkDelivery(actor, input.owner, input.delivery)
+        yield* checkAnyHost(input.owner, input.hosts, input.inject ?? Credential.defaultInject(input.value.type))
         if (input.value.type === "client_credentials" && input.owner.kind === "person")
           return yield* new Primitive.Invalid({
             message: "Client credentials reach an app’s own account; save them for a space or the org.",
@@ -803,6 +816,7 @@ export const layer = Layer.effect(
         const owner = ownerOf(found.row)
         if (!owner) return yield* notFound
         yield* checkDelivery(actor, owner, input.delivery)
+        if (input.hosts) yield* checkAnyHost(owner, input.hosts, found.row.inject)
         yield* database.db
           .update(table)
           .set({

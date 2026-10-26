@@ -448,7 +448,7 @@ Deep check against ren-v1 and E2B (README §11a, `owner-access.md` §14a), in pl
 32. Every image trusts the egress certificate in every common place (system, Python, Node, curl, git, AWS) (C44).
 33. GitHub works for `gh` and `git` through `GH_TOKEN`, `GITHUB_TOKEN` and injection by host (C45).
 34. A new key's placeholder env var appears at once, not at turn end (C47). System names like `PATH` cannot be labels (C48).
-35. Hosts are required for every key; no bare `*` (A39). An agent cannot set hosts (A40).
+35. Hosts are required for every key; `*` only for a loose key used through its placeholder (A39). An agent cannot set hosts (A40).
 36. Removing a member from a space stops their session brain there from using space credentials (A37).
 
 Later (A34): the composer pill, OAuth for MCPs and MCP connections wait until Ren stores which apps and MCPs a space uses. Open: request signing; a KMS signer for the egress certificate authority; budget checks at the egress (REN-1482); whether E2B keeps the proxy login across pause and resume (live test).
