@@ -15,7 +15,7 @@ Paper is the source of truth. Never edit `packages/ui/DESIGN.md` or `tokens.gene
    - Every other token becomes a Type and geometry row: the name without `--`, then the value as-is.
 5. From `packages/ui`, run:
    ```sh
-   bunx prettier --write DESIGN.md
+   bunx oxfmt DESIGN.md
    bun run generate
    bun run test
    ```

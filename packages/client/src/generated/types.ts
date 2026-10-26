@@ -721,7 +721,9 @@ export type SessionMessageToolError = {
 }
 
 export type SessionMessageCompaction =
-  SessionMessageCompactionRunning | SessionMessageCompactionCompleted | SessionMessageCompactionFailed
+  | SessionMessageCompactionRunning
+  | SessionMessageCompactionCompleted
+  | SessionMessageCompactionFailed
 
 export type LabelPage = { items: Array<LabelInfo>; page: number; pageSize: number; total: number }
 
@@ -830,7 +832,11 @@ export type AppProfileInfo = {
 }
 
 export type CredentialRequirement =
-  CredentialEnv | CredentialSecret | CredentialOAuthApp | CredentialText | CredentialSelect
+  | CredentialEnv
+  | CredentialSecret
+  | CredentialOAuthApp
+  | CredentialText
+  | CredentialSelect
 
 export type CredentialInfo = {
   id: CredentialID
@@ -856,7 +862,10 @@ export type CredentialInfo = {
 }
 
 export type SessionMessageToolState =
-  SessionMessageToolStreaming | SessionMessageToolRunning | SessionMessageToolCompleted | SessionMessageToolError
+  | SessionMessageToolStreaming
+  | SessionMessageToolRunning
+  | SessionMessageToolCompleted
+  | SessionMessageToolError
 
 export type TaskPage = { items: Array<TaskInfo>; page: number; pageSize: number; total: number }
 
@@ -1171,7 +1180,8 @@ export type SpaceMemberListOutput = SpaceMemberPage
 
 export type SpaceMemberCreateInput = {
   readonly payload:
-    { readonly spaceId: string; readonly userId: string } | { readonly spaceId: string; readonly email: string }
+    | { readonly spaceId: string; readonly userId: string }
+    | { readonly spaceId: string; readonly email: string }
 }
 
 export type SpaceMemberCreateOutput = SpaceMemberInfo

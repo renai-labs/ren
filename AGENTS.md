@@ -76,5 +76,5 @@ Lint enforces most style rules. Run `bun run check` and follow each message. The
 
 ## Checks
 
-- Run `bun run check` from the repo root before pushing. The pre-push hook runs it too.
+- Run `bun run check` from the repo root before pushing. The pre-push hook runs it too. Run `bun run format` to fix formatting.
 - Run `bun typecheck` from a package directory to typecheck one package. Never run `tsc` directly.

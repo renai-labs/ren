@@ -763,7 +763,9 @@ export type SessionInboxSynthetic = {
 }
 
 export type SessionMessageCompaction =
-  SessionMessageCompactionRunning | SessionMessageCompactionCompleted | SessionMessageCompactionFailed
+  | SessionMessageCompactionRunning
+  | SessionMessageCompactionCompleted
+  | SessionMessageCompactionFailed
 
 export type SessionEventSessionToolSuccess = {
   id: string
@@ -831,7 +833,12 @@ export type SessionInfoInfo = {
 }
 
 export type FormField =
-  FormStringField | FormNumberField | FormIntegerField | FormBooleanField | FormMultiselectField | FormExternalField
+  | FormStringField
+  | FormNumberField
+  | FormIntegerField
+  | FormBooleanField
+  | FormMultiselectField
+  | FormExternalField
 
 export type SessionEventFormReplied = {
   id: string
@@ -871,7 +878,10 @@ export type SessionInboxUser = {
 }
 
 export type SessionMessageToolState =
-  SessionMessageToolStreaming | SessionMessageToolRunning | SessionMessageToolCompleted | SessionMessageToolError
+  | SessionMessageToolStreaming
+  | SessionMessageToolRunning
+  | SessionMessageToolCompleted
+  | SessionMessageToolError
 
 export type FormInfo = {
   id: FormID
@@ -972,7 +982,10 @@ export type SessionMessageAssistant = {
 }
 
 export type SessionEventFrame =
-  SessionEventServerConnected | SessionEventServerHeartbeat | SessionEventStreamEnded | SessionEventEvent
+  | SessionEventServerConnected
+  | SessionEventServerHeartbeat
+  | SessionEventStreamEnded
+  | SessionEventEvent
 
 export type SessionMessageInfo =
   | SessionMessageAgentSwitched

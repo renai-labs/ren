@@ -1,5 +1,5 @@
 import { OpenApi } from "effect/http-api"
-import { format } from "prettier"
+import { format } from "oxfmt"
 import { fileURLToPath } from "url"
 import { ClientApi } from "../src/client.js"
 import { checkContract } from "./contract.js"
@@ -11,11 +11,12 @@ if (violations.length > 0) {
   process.exit(1)
 }
 
-const document = await format(JSON.stringify(stabilizeOpenApi(OpenApi.fromApi(ClientApi)), null, 2), {
-  parser: "json",
+const target = fileURLToPath(new URL("../openapi.json", import.meta.url))
+const formatted = await format(target, JSON.stringify(stabilizeOpenApi(OpenApi.fromApi(ClientApi)), null, 2), {
   printWidth: 120,
 })
-const target = fileURLToPath(new URL("../openapi.json", import.meta.url))
+if (formatted.errors.length > 0) throw new Error(formatted.errors.map((error) => error.message).join("\n"))
+const document = formatted.code
 
 if (process.argv.includes("--check")) {
   if ((await Bun.file(target).text()) !== document) {

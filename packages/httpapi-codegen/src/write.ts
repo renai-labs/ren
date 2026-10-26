@@ -2,7 +2,7 @@ export * as Write from "./write.js"
 
 import { isAbsolute, join } from "node:path"
 import { Effect, FileSystem, PlatformError, Schema } from "effect"
-import { format } from "prettier"
+import { format } from "oxfmt"
 import { Errors } from "./errors.js"
 import type { Types } from "./types.js"
 
@@ -11,6 +11,21 @@ const manifestName = ".httpapi-codegen.json"
 
 function isSafeOutputPath(path: string) {
   return path !== manifestName && !isAbsolute(path) && path !== "." && path !== ".." && !/[\\/]/.test(path)
+}
+
+function formatted(path: string, content: string) {
+  return Effect.tryPromise({
+    try: () => format(path, content, { semi: false, printWidth: 120 }),
+    catch: (error) => new Errors.GenerationError({ reason: `Failed to format ${path}: ${String(error)}` }),
+  }).pipe(
+    Effect.flatMap((result) =>
+      result.errors.length === 0
+        ? Effect.succeed(result.code)
+        : new Errors.GenerationError({
+            reason: `Failed to format ${path}: ${result.errors.map((error) => error.message).join("; ")}`,
+          }),
+    ),
+  )
 }
 
 export function write(
@@ -63,18 +78,13 @@ export function write(
     yield* Effect.forEach(
       output.files,
       (file) =>
-        Effect.tryPromise({
-          try: () => format(file.content, { filepath: file.path, parser: "typescript", semi: false, printWidth: 120 }),
-          catch: (error) => new Errors.GenerationError({ reason: `Failed to format ${file.path}: ${String(error)}` }),
-        }).pipe(Effect.flatMap((content) => fs.writeFileString(join(directory, file.path), content))),
+        formatted(file.path, file.content).pipe(
+          Effect.flatMap((content) => fs.writeFileString(join(directory, file.path), content)),
+        ),
       { concurrency: 8, discard: true },
     )
-    // oxlint-disable-next-line ren/no-comments -- The manifest must use the repo-wide prettier settings so `check:generated` stays clean after the generate bot reformats the tree.
-    const manifestJson = JSON.stringify(output.files.map((file) => file.path).toSorted())
-    const manifestContent = yield* Effect.tryPromise({
-      try: () => format(manifestJson, { filepath: manifest, parser: "json", printWidth: 120 }),
-      catch: (error) => new Errors.GenerationError({ reason: `Failed to format ${manifest}: ${String(error)}` }),
-    })
+    // oxlint-disable-next-line ren/no-comments -- The manifest must use the repo-wide formatter settings so `check:generated` stays clean after the generate bot reformats the tree.
+    const manifestContent = yield* formatted(manifest, JSON.stringify(output.files.map((file) => file.path).toSorted()))
     yield* fs.writeFileString(manifest, manifestContent)
   })
 }
