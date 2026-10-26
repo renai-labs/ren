@@ -18,7 +18,7 @@ import { SpaceQueries } from "./space/queries.js"
 import { TaskQueries } from "./task/queries.js"
 
 export class Refused extends Schema.TaggedError<Refused>()("ChannelRoute.Refused", {
-  reason: Schema.Literals(["unlinked", "not_member", "fallback_gone"]),
+  reason: Schema.Literals(["unlinked", "not_member", "fallback_gone", "no_private_space"]),
 }) {}
 
 export class Unroutable extends Schema.TaggedError<Unroutable>()("ChannelRoute.Unroutable", {
@@ -71,9 +71,8 @@ export const layer = Layer.effect(
     const runAs = Effect.fnUntraced(function* (
       organizationId: Auth.OrganizationID,
       routed: { readonly spaceId: Space.ID; readonly fallback: boolean; readonly fallbackUserId: Auth.UserID | null },
-      event: Channel.Event,
+      sender: Option.Option<Auth.UserID>,
     ) {
-      const sender = yield* identity.find(organizationId, event)
       if (Option.isSome(sender) && (yield* actsIn(organizationId, routed.spaceId, sender.value))) return sender.value
       if (!routed.fallback) return yield* new Refused({ reason: Option.isSome(sender) ? "not_member" : "unlinked" })
       if (routed.fallbackUserId && (yield* actsIn(organizationId, routed.spaceId, routed.fallbackUserId)))
@@ -90,7 +89,7 @@ export const layer = Layer.effect(
     })
 
     const unmapped = (installedBy: Auth.UserID | null, event: Channel.Event, task: Route["task"]) => ({
-      fallback: !task && !event.place.anyoneCanWrite,
+      fallback: !task && !event.place.anyoneCanWrite && event.place.kind !== "dm",
       fallbackUserId: installedBy,
     })
 
@@ -106,6 +105,35 @@ export const layer = Layer.effect(
           Effect.orDie,
           Effect.map((chosen) => Option.getOrUndefined(Option.map(chosen, (spaceId) => ({ spaceId, agentId: null })))),
         )
+
+    const privateSpace = (organizationId: Auth.OrganizationID, userId: Auth.UserID) =>
+      database.db
+        .select({ spaceId: space.id })
+        .from(space)
+        .where(
+          and(
+            eq(space.organization_id, organizationId),
+            eq(space.kind, "private"),
+            eq(space.owner_user_id, userId),
+            isNull(space.archived_at),
+          ),
+        )
+        .pipe(
+          Effect.orDie,
+          Effect.map((rows) => Option.fromNullishOr(rows.at(0)?.spaceId)),
+        )
+
+    const unmappedSpace = Effect.fnUntraced(function* (
+      found: { readonly organizationId: Auth.OrganizationID; readonly defaultSpaceId: Space.ID | null },
+      event: Channel.Event,
+      sender: Option.Option<Auth.UserID>,
+    ) {
+      if (event.place.kind !== "dm") return yield* defaultSpace(found)
+      if (Option.isNone(sender)) return yield* new Refused({ reason: "unlinked" })
+      const own = yield* privateSpace(found.organizationId, sender.value)
+      if (Option.isNone(own)) return yield* new Refused({ reason: "no_private_space" })
+      return { spaceId: own.value, agentId: null }
+    })
 
     return Service.of({
       resolve: Effect.fn("ChannelRoute.resolve")(function* (event: Channel.Event) {
@@ -140,7 +168,8 @@ export const layer = Layer.effect(
             message: `${event.provider} place ${event.place.id} has no mapping with the trigger ${event.trigger}`,
           })
         const task = yield* taskOf(found.organizationId, event)
-        const place = task ?? mapped ?? (yield* defaultSpace(found))
+        const sender = yield* identity.find(found.organizationId, event)
+        const place = task ?? mapped ?? (yield* unmappedSpace(found, event, sender))
         if (!place)
           return yield* new Unroutable({ message: `Organization ${found.organizationId} has no active space` })
         const routed = { ...(mapped ?? unmapped(found.installedBy, event, task)), ...place }
@@ -148,7 +177,7 @@ export const layer = Layer.effect(
           organizationId: found.organizationId,
           spaceId: routed.spaceId,
           ...(routed.agentId && { agentId: routed.agentId }),
-          senderUserId: yield* runAs(found.organizationId, routed, event),
+          senderUserId: yield* runAs(found.organizationId, routed, sender),
           text: trigger?.prompt ?? event.text,
           task,
         } satisfies Route

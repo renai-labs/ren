@@ -1,7 +1,8 @@
 export * as SlackApp from "./slack-app.js"
 
 import type { Auth } from "@ren/schema/auth"
-import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Session } from "@ren/schema/session"
+import { Config, Context, Effect, Layer, Option, Redacted, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 import { ChannelSecrets } from "./channel-secrets.js"
 
@@ -133,7 +134,32 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
       ),
     )
 
-  return { settings: app, post, upload }
+  const download = (url: string, token: Redacted.Redacted) =>
+    http.execute(HttpClientRequest.get(url).pipe(HttpClientRequest.bearerToken(Redacted.value(token)))).pipe(
+      Effect.flatMap((response): Effect.Effect<Uint8Array, unknown> =>
+        response.status >= 200 && response.status < 300
+          ? response.stream.pipe(
+              Stream.runFoldEffect(
+                () => ({ size: 0, chunks: new Array<Uint8Array>() }),
+                (body, chunk) => {
+                  if (body.size + chunk.byteLength > Session.maxFileBytes)
+                    return Effect.fail(new Failed({ message: "Slack file exceeds the 10 MB limit" }))
+                  body.size += chunk.byteLength
+                  body.chunks.push(chunk)
+                  return Effect.succeed(body)
+                },
+              ),
+              Effect.map((body) => Buffer.concat(body.chunks, body.size)),
+            )
+          : Effect.fail(new Failed({ message: `Slack answered ${response.status} to a file download` })),
+      ),
+      Effect.timeout(timeLimit),
+      Effect.mapError((cause) =>
+        cause instanceof Failed ? cause : new Failed({ message: `Slack did not send the file: ${String(cause)}` }),
+      ),
+    )
+
+  return { settings: app, post, upload, download }
 })
 
 export type Client = Effect.Success<ReturnType<typeof make>>

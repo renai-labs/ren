@@ -10,6 +10,7 @@ import { Envelope } from "./envelope.js"
 
 export interface Found {
   readonly workspace: string
+  readonly botUser: string | null
   readonly secret: Redacted.Redacted
 }
 
@@ -36,7 +37,9 @@ export const layer = Layer.effect(
     const install = Database.Schema.channel_install
 
     const opened = (
-      rows: ReadonlyArray<Pick<typeof install.$inferSelect, "id" | "organization_id" | "workspace" | "secret">>,
+      rows: ReadonlyArray<
+        Pick<typeof install.$inferSelect, "id" | "organization_id" | "workspace" | "bot_user" | "secret">
+      >,
     ) =>
       Effect.gen(function* () {
         const row = rows.at(0)
@@ -44,7 +47,7 @@ export const layer = Layer.effect(
         const secret = yield* envelope
           .open(row.secret, { organizationId: row.organization_id, kind: "channel_install", id: row.id })
           .pipe(Effect.orDie)
-        return Option.some<Found>({ workspace: row.workspace, secret })
+        return Option.some<Found>({ workspace: row.workspace, botUser: row.bot_user, secret })
       })
 
     const select = () =>
@@ -53,6 +56,7 @@ export const layer = Layer.effect(
           id: install.id,
           organization_id: install.organization_id,
           workspace: install.workspace,
+          bot_user: install.bot_user,
           secret: install.secret,
         })
         .from(install)

@@ -71,6 +71,7 @@ export interface Provider {
   readonly replyTool?: string
   readonly verify: (request: Request) => Effect.Effect<void, Unauthorized>
   readonly parse: (request: Request) => Effect.Effect<Channel.Parsed, Malformed>
+  readonly enrich?: (event: Channel.Event) => Effect.Effect<Channel.Event>
   readonly fetchFile: (install: string, file: Channel.FileRef) => Effect.Effect<Uint8Array, FileUnavailable>
   readonly context: (event: Channel.Event) => Effect.Effect<Option.Option<string>, Unavailable>
   readonly linkOf: (event: Channel.Event) => Option.Option<TaskLink.Ref>
