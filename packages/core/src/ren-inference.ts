@@ -6,10 +6,12 @@ import type { Brain } from "@ren/schema/brain"
 import { Models } from "@ren/schema/models"
 import { RenInference } from "@ren/schema/ren-inference"
 import { and, eq } from "drizzle-orm"
-import { Clock, Config, Context, Effect, Layer, Option, Schema } from "effect"
+import { Clock, Config, Context, Effect, Layer, Option, Schema, Struct } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
+import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Primitive } from "./primitive.js"
+import { RenInferencePolicy } from "./ren-inference/policy.js"
 import { Signer } from "./signer.js"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("RenInference.Unavailable", {
@@ -46,6 +48,14 @@ const roleOrder = ["owner", "admin", "member"] as const
 
 const ErrorBody = Schema.Struct({ error: Schema.optional(Schema.String) })
 
+// oxlint-disable-next-line ren/no-comments -- A connection as the service sends it: the user who connected it, never who may manage it, which Ren decides.
+const Upstream = Schema.Struct({
+  ...Struct.omit(RenInference.Connection.fields, ["canManage"]),
+  connectedBy: Schema.NullOr(Schema.String),
+})
+
+const notFound = new Primitive.NotFound({ message: "Connection not found." })
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -53,6 +63,7 @@ export const layer = Layer.effect(
     const http = yield* HttpClient.HttpClient
     const signer = yield* Signer.Service
     const database = yield* Database.Service
+    const access = yield* Access.Service
 
     const send = (
       claims: { readonly org: string; readonly sub?: string; readonly member?: string; readonly role?: string },
@@ -121,8 +132,30 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.orDie)).at(0)
       if (!member) return yield* new Primitive.Forbidden({ message: "You are not a member of this organization." })
+      // ast-grep-ignore: no-hardcoded-policy, -- Sent until the service stops reading it; Ren decides every check (RenInferencePolicy).
       const role = roleOrder.find((candidate) => actor.roles.includes(candidate)) ?? "member"
       return { org: actor.organizationId, sub: actor.userId, member: member.id, role }
+    })
+
+    const forbidden = (actor: Actor.Info, action: string, resource: Access.Resource) =>
+      access.isAllowed({ actor, action, resource })
+        ? Effect.void
+        : Effect.fail(new Primitive.Forbidden({ message: "You cannot change this connection." }))
+
+    const connections = Effect.fnUntraced(function* (actor: Actor.Info) {
+      yield* forbidden(actor, RenInferencePolicy.actions.list, Access.organization)
+      const found = yield* call(yield* personOf(actor), "GET", "/v1/connections", Schema.Array(Upstream))
+      return found.map((connection) => {
+        const resource = RenInferencePolicy.connection({ isConnector: connection.connectedBy === actor.userId })
+        const canManage = access.isAllowed({ actor, action: RenInferencePolicy.actions.manage, resource })
+        return { resource, info: { ...Struct.omit(connection, ["connectedBy"]), canManage } }
+      })
+    })
+
+    const manageable = Effect.fnUntraced(function* (actor: Actor.Info, id: string) {
+      const found = (yield* connections(actor)).find((connection) => connection.info.id === id)
+      if (!found) return yield* notFound
+      yield* forbidden(actor, RenInferencePolicy.actions.manage, found.resource)
     })
 
     const onlyUnavailable = <A>(effect: Effect.Effect<A, Failure>) =>
@@ -143,21 +176,26 @@ export const layer = Layer.effect(
 
     return Service.of({
       connect: Effect.fn("RenInference.connect")(function* (actor, input) {
+        yield* forbidden(actor, RenInferencePolicy.actions.connect, Access.organization)
+        if (input.connectionId) yield* manageable(actor, input.connectionId)
         return yield* call(yield* personOf(actor), "POST", "/v1/connect", RenInference.ConnectResult, input)
       }),
       list: Effect.fn("RenInference.list")(function* (actor) {
-        return yield* call(yield* personOf(actor), "GET", "/v1/connections", Schema.Array(RenInference.Connection))
+        return (yield* connections(actor)).map((connection) => connection.info)
       }),
       rename: Effect.fn("RenInference.rename")(function* (actor, id, input) {
-        return yield* call(
+        yield* manageable(actor, id)
+        const renamed = yield* call(
           yield* personOf(actor),
           "PATCH",
           `/v1/connections/${encodeURIComponent(id)}`,
-          RenInference.Connection,
+          Upstream,
           input,
         )
+        return { ...Struct.omit(renamed, ["connectedBy"]), canManage: true }
       }),
       remove: Effect.fn("RenInference.remove")(function* (actor, id) {
+        yield* manageable(actor, id)
         yield* send(yield* personOf(actor), "DELETE", `/v1/connections/${encodeURIComponent(id)}`)
       }),
       catalog: Effect.fn("RenInference.catalog")(function* (organizationId) {

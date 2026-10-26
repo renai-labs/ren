@@ -4,6 +4,7 @@ import { Brain } from "@ren/schema/brain"
 import { Signature } from "@ren/schema/signature"
 import { ConfigProvider, Effect, Layer, Option, Redacted, Schema, Struct } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { Access } from "../src/access.js"
 import { Models } from "../src/models.js"
 import { RenInference } from "../src/ren-inference.js"
 import { Signer } from "../src/signer.js"
@@ -47,7 +48,7 @@ const service = Bun.serve({
 const it = testEffect(
   Models.layerRenInference.pipe(
     Layer.provideMerge(RenInference.layer),
-    Layer.provide([Signer.layerLocal, FetchHttpClient.layer]),
+    Layer.provide([Signer.layerLocal, FetchHttpClient.layer, Access.layer]),
     Layer.provideMerge(Testing.layer),
     Layer.provide(
       ConfigProvider.layer(
