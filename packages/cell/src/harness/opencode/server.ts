@@ -24,6 +24,7 @@ import { SkillSource } from "@ren/brain/skill/source"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
 import type { Models } from "@ren/schema/models"
 import type { AppCatalog } from "@ren/schema/app-catalog"
+import type { Channel } from "@ren/schema/channel"
 import {
   Context,
   Deferred,
@@ -60,6 +61,7 @@ export interface Options {
   readonly confinement?: RenPlugin.Confinement
   readonly makeDirectory?: (directory: string) => Effect.Effect<void>
   readonly apps?: Option.Option<AppCatalog.Info>
+  readonly channels?: ReadonlyArray<Channel.Provider>
   readonly skills?: { readonly hosts?: SkillSource.Hosts; readonly refresh?: Duration.Input }
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
   readonly egress?: boolean
@@ -159,6 +161,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
     revision: 0,
     models: initial,
     apps: options.apps ?? Option.none(),
+    channels: options.channels ?? [],
     chats: Option.isSome(chats) ? yield* Ref.get(chats.value.latest) : new Map(),
   })
   const updates = yield* Semaphore.make(1)

@@ -21,6 +21,7 @@ import { FetchHttpClient } from "effect/http"
 import type { State as BrainApiState } from "@ren/host-api/brain-api"
 import manifest from "../package.json"
 import { AppStore } from "./app-store.js"
+import { ChannelStore } from "./channel-store.js"
 import { BrainStorage } from "./brain-storage.js"
 import { Env } from "./env.js"
 import { Fence } from "./fence.js"
@@ -213,7 +214,9 @@ export const hostLayer = Layer.unwrap(
     const behindEgress = cell.vars.REN_EGRESS === "1"
     return (behindEgress ? ModelRefresh.layerEgress : ModelRefresh.layer(cell.vars.REN_URL)).pipe(
       Layer.provideMerge(behindEgress ? HostToken.layerEgress : HostToken.layer(cell.vars.REN_URL)),
-      Layer.provideMerge(Layer.mergeAll(ModelStore.layer, CredentialEnv.layer, AppStore.layer, Inference.layer)),
+      Layer.provideMerge(
+        Layer.mergeAll(ModelStore.layer, CredentialEnv.layer, AppStore.layer, ChannelStore.layer, Inference.layer),
+      ),
       Layer.provideMerge(Fence.layer),
       Layer.provide(RenAddress.http),
       Layer.provide(FetchHttpClient.layer),

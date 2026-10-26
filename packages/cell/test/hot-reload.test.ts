@@ -13,6 +13,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { AppStore } from "../src/app-store.js"
+import { ChannelStore } from "../src/channel-store.js"
 import { BrainKeys } from "../src/brain-keys.js"
 import { BrainStorage } from "../src/brain-storage.js"
 import { Cell } from "../src/cell.js"
@@ -242,6 +243,7 @@ const open = Effect.fnUntraced(function* (
         Layer.mergeAll(
           ModelStore.layer,
           AppStore.layer,
+          ChannelStore.layer,
           ChatSettings.layer,
           Cell.activityLayer,
           CredentialEnv.layer,
