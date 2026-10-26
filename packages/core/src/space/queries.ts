@@ -5,7 +5,7 @@ import { Auth } from "@ren/schema/auth"
 import { and, eq, isNull } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { Effect } from "effect"
-import { Actor } from "../actor.js"
+import type { Actor } from "../actor.js"
 
 export const membership = alias(Database.Schema.space_member, "membership")
 

@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import type { App } from "@ren/schema/app"
 import { AppProfile } from "@ren/schema/app-profile"
 import { Auth } from "@ren/schema/auth"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { Pagination } from "@ren/util/pagination"
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
@@ -18,6 +18,8 @@ import { ProfileItems } from "./profile-items.js"
 import { AppProfilePolicy } from "./profile-policy.js"
 import { AppQueries } from "./queries.js"
 import { AppValidation } from "./validation.js"
+import { SpacePolicy } from "../space/policy.js"
+import { SpaceQueries } from "../space/queries.js"
 
 export interface Reached {
   readonly id: AppProfile.ID
@@ -52,6 +54,7 @@ const listed = Database.Schema.app_profile_space
 const links = Database.Schema.app_profile_link
 const members = Database.Schema.space_member
 const spaces = Database.Schema.space
+const spaceGet = Primitive.action(Space.definition, "get")
 const credentials = Database.Schema.credential
 
 type Row = typeof profiles.$inferSelect
@@ -192,16 +195,21 @@ export const layer = Layer.effect(
       actor: Actor.Info,
       ids: ReadonlyArray<AppProfile.ID>,
     ) {
-      if (!ids.length) return new Map<AppProfile.ID, ReadonlyArray<{ id: Space.ID; name: string; isMember: boolean }>>()
+      if (!ids.length)
+        return new Map<
+          AppProfile.ID,
+          ReadonlyArray<{ id: Space.ID; name: string; membershipId: Space.MembershipID | null }>
+        >()
       const rows = yield* client
         .select({
           profileId: listed.profile_id,
           id: spaces.id,
           name: spaces.name,
-          isMember: sql<boolean>`exists (select 1 from ${members} where ${members.space_id} = ${spaces.id} and ${members.user_id} = ${actor.userId} and ${members.archived_at} is null)`,
+          membershipId: SpaceQueries.membership.id,
         })
         .from(listed)
         .innerJoin(spaces, and(eq(spaces.id, listed.space_id), isNull(spaces.archived_at)))
+        .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
         .where(inArray(listed.profile_id, [...ids]))
         .orderBy(asc(spaces.name), asc(spaces.id))
       const grouped = Map.groupBy(rows, (row) => row.profileId)
@@ -211,11 +219,11 @@ export const layer = Layer.effect(
     const holdsOf = (
       actor: Actor.Info,
       row: Row,
-      spacesListed: ReadonlyArray<{ readonly isMember: boolean }>,
+      spacesListed: ReadonlyArray<{ readonly membershipId: Space.MembershipID | null }>,
     ): AppProfilePolicy.Holds => ({
       kind: row.kind,
       isCreator: row.created_by_user_id === actor.userId,
-      isListedMember: spacesListed.some((space) => space.isMember),
+      isListedMember: spacesListed.some((space) => space.membershipId !== null),
       allSpaces: row.all_spaces,
       isSelf: row.user_id === actor.userId,
     })
@@ -334,7 +342,9 @@ export const layer = Layer.effect(
           )
           const labels = new Set(declared.map((item) => item.label))
           const visible = spacesListed.get(row.id) ?? []
-          const shown = isAdmin(actor) ? visible : visible.filter((space) => space.isMember)
+          const shown = visible.filter((space) =>
+            access.isAllowed({ actor, action: spaceGet, resource: SpacePolicy.resource(space.membershipId, space.id) }),
+          )
           return {
             id: row.id,
             appId: row.app_id,

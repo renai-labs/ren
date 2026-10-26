@@ -4,6 +4,8 @@ import { Database } from "@ren/db/database"
 import { BrainToken } from "@ren/host-api/brain-token"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Credential } from "@ren/schema/credential"
+import { Primitive } from "@ren/schema/primitive"
+import { Space } from "@ren/schema/space"
 import { Workload } from "@ren/schema/workload"
 import { Auth } from "@ren/schema/auth"
 import { and, eq, isNull, sql } from "drizzle-orm"
@@ -21,10 +23,12 @@ import {
   Schedule,
   Schema,
 } from "effect"
+import { Access } from "./access.js"
 import { BrainClient } from "./brain-client.js"
 import { Credentials } from "./credentials.js"
 import { McpProvider } from "./mcp-provider.js"
 import { Models } from "./models.js"
+import { SpacePolicy } from "./space/policy.js"
 
 export type Value =
   | { readonly type: "key"; readonly value: Redacted.Redacted }
@@ -136,6 +140,7 @@ const ttlUntil = (expiresAtMillis: number, now: number) =>
 const ren = "REN"
 const models = "MODELS"
 const person = Models.personLabel
+const spaceGet = Primitive.action(Space.definition, "get")
 
 // oxlint-disable-next-line ren/no-comments -- Ren mints REN (the brain's host token, for Ren's own host: the host of REN_URL) and MODELS (the model keys). PERSON is the member id of each member who can chat in the brain's space, on the model hosts: its space members and the organization's admins and owners, as Actor.fromSession allows. One mint at a time per workload; a 5xx is retried; a value is kept until 20 minutes before its expiry, so the old one stays in use until then (C29, C37; ren-v1 INV-24, INV-25, INV-26, OI-11).
 export const layerMinted = Layer.effect(
@@ -144,6 +149,7 @@ export const layerMinted = Layer.effect(
     const brains = yield* BrainClient.Service
     const grants = yield* Models.Service
     const database = yield* Database.Service
+    const access = yield* Access.Service
     const renHost = new URL(brains.renUrl).hostname
 
     const Key = Schema.fromJsonString(
@@ -260,7 +266,12 @@ export const layerMinted = Layer.effect(
       ) {
         if (candidate.label === person) {
           const rows = yield* database.db
-            .select({ id: Database.Schema.member.id, role: Database.Schema.member.role, inSpace: Database.Schema.space_member.id })
+            .select({
+              id: Database.Schema.member.id,
+              userId: Database.Schema.member.userId,
+              role: Database.Schema.member.role,
+              membershipId: Database.Schema.space_member.id,
+            })
             .from(Database.Schema.member)
             .leftJoin(
               Database.Schema.space_member,
@@ -275,7 +286,16 @@ export const layerMinted = Layer.effect(
             )
             .where(eq(Database.Schema.member.organizationId, scope.organizationId))
             .pipe(Effect.orDie)
-          const allowed = rows.filter((row) => Boolean(row.inSpace) || Auth.isAdministrator(row.role))
+          const allowed = rows.filter((row) =>
+            access.isAllowed({
+              actor: { userId: Auth.UserID.make(row.userId), organizationId: scope.organizationId, roles: Auth.roles(row.role) },
+              action: spaceGet,
+              resource: Option.match(scope.spaceId, {
+                onNone: () => SpacePolicy.organization,
+                onSome: (spaceId) => SpacePolicy.resource(row.membershipId, spaceId),
+              }),
+            }),
+          )
           return Option.some({
             value: { type: "fields", fields: Object.fromEntries(allowed.map((row) => [row.id, Redacted.make(row.id)])) },
           } satisfies Sourced)

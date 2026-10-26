@@ -1,17 +1,19 @@
 export * as CredentialRequirements from "./credential-requirements.js"
 
 import { Database } from "@ren/db/database"
-import { Auth } from "@ren/schema/auth"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { and, eq, isNull } from "drizzle-orm"
 import { Context, Effect, Layer, Option } from "effect"
+import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { AppProfiles } from "./app/profiles.js"
 import { Credentials } from "./credentials.js"
 import { Primitive } from "./primitive.js"
+import { SpacePolicy } from "./space/policy.js"
+import { SpaceQueries } from "./space/queries.js"
 
 export interface Interface {
   readonly forSession: (actor: Actor.Info, sessionId: Session.ID) => Effect.Effect<AppProfile.Reach, Primitive.NotFound>
@@ -22,6 +24,7 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Cr
 
 const members = Database.Schema.space_member
 const chats = Database.Schema.agent_session
+const spaceGet = Primitive.action(Space.definition, "get")
 
 // oxlint-disable-next-line ren/no-comments -- profiles.md P15: the composer pill. A chat reaches what its brain's scope reaches (§7 rule 6); a new chat reaches what its space reaches. Each profile comes with its gaps; one the caller may not see is left out.
 export const layer = Layer.effect(
@@ -29,6 +32,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const profiles = yield* AppProfiles.Service
+    const access = yield* Access.Service
 
     const member = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: Space.ID) {
       const found = (yield* database.db
@@ -48,15 +52,17 @@ export const layer = Layer.effect(
       if (!found) return yield* new Primitive.NotFound({ message: "Space not found." })
     })
 
-    const space = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: Space.ID) {
+    const visibleSpace = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: Space.ID) {
       const found = (yield* database.db
         .select({ id: Database.Schema.space.id })
         .from(Database.Schema.space)
+        .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
         .where(
           and(
             eq(Database.Schema.space.id, spaceId),
             eq(Database.Schema.space.organization_id, actor.organizationId),
             isNull(Database.Schema.space.archived_at),
+            SpacePolicy.filter(access.plan(actor, spaceGet)),
           ),
         )
         .pipe(Effect.orDie)).at(0)
@@ -74,10 +80,9 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      // oxlint-disable-next-line ren/no-comments -- profiles.md §10: admins see a space's profiles without joining it; `infos` still gives them metadata only for private ones.
+      // oxlint-disable-next-line ren/no-comments -- profiles.md §10: whoever sees the space sees its profiles; `infos` gives an admin metadata only for private ones.
       forSpace: Effect.fn("CredentialRequirements.forSpace")(function* (actor, spaceId) {
-        if (actor.roles.some(Auth.isAdministrator)) yield* space(actor, spaceId)
-        else yield* member(actor, spaceId)
+        yield* visibleSpace(actor, spaceId)
         return yield* reach(actor, { organizationId: actor.organizationId, spaceId: Option.some(spaceId) })
       }),
       forSession: Effect.fn("CredentialRequirements.forSession")(function* (actor, sessionId) {
