@@ -25,22 +25,20 @@ export function PasteCredentialDialog(props: {
   const form = Form.useForm({
     defaultValues: {
       label: props.defaults?.label ?? "",
-      name: "",
+      anyHost: false as boolean,
       hosts: "",
       value: "",
       owner: props.defaults?.owner ?? props.owners.at(0)?.value ?? "org",
     },
     schema: Credentials.PasteForm,
     onSubmit: async (value) => {
-      const name = value.name.trim()
       const saved = await create
         .mutateAsync({
           payload: {
             owner: Credentials.ownerOf(value.owner, props.userId),
             label: value.label,
-            hosts: Credentials.hosts(value.hosts),
+            hosts: Credentials.hostsOf(value),
             value: { type: "key", value: value.value },
-            ...(name && { name }),
           },
         })
         .catch(() => undefined)
@@ -79,21 +77,25 @@ export function PasteCredentialDialog(props: {
                 />
               )}
             </form.AppField>
-            <form.AppField name="hosts">
-              {(field) => (
-                <field.TextField
-                  label="Hosts"
-                  description="Ren sends the key only to these hosts."
-                  placeholder="api.stripe.com, *.stripe.com"
-                />
-              )}
-            </form.AppField>
             <form.AppField name="value">
               {(field) => <field.PasswordField label="Key" placeholder="sk_live_…" autoComplete="off" />}
             </form.AppField>
-            <form.AppField name="name">
-              {(field) => <field.TextField label="Display name" necessity="optional" placeholder="Stripe live key" />}
-            </form.AppField>
+            <form.AppField name="anyHost">{(field) => <field.Switch label="Use on any website" />}</form.AppField>
+            <form.Subscribe selector={(state) => state.values.anyHost}>
+              {(anyHost) =>
+                anyHost ? null : (
+                  <form.AppField name="hosts">
+                    {(field) => (
+                      <field.TextField
+                        label="Websites"
+                        description="Ren adds the key only to requests to these hosts."
+                        placeholder="api.stripe.com"
+                      />
+                    )}
+                  </form.AppField>
+                )
+              }
+            </form.Subscribe>
             {props.owners.length > 1 ? (
               <form.AppField name="owner">
                 {(field) => <field.Select label="Who can use it" options={props.owners} />}

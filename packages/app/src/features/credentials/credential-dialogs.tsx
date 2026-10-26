@@ -60,57 +60,6 @@ export function RotateCredentialDialog(props: {
   )
 }
 
-export function RenameCredentialDialog(props: {
-  credential: CredentialInfo
-  onClose: () => void
-  onSaved: () => Promise<unknown>
-}) {
-  const context = RouterContext.useRouterContext()
-  const update = useMutation(context.api.credential.update.mutationOptions())
-  const form = Form.useForm({
-    defaultValues: { name: props.credential.name ?? "" },
-    schema: Credentials.RenameForm,
-    onSubmit: async (value) => {
-      const name = value.name.trim()
-      const saved = await update.mutateAsync({ id: props.credential.id, name: name || null }).catch(() => undefined)
-      if (!saved) return
-      await props.onSaved()
-      props.onClose()
-    },
-  })
-  return (
-    <Dialog.Root
-      open
-      onOpenChange={(open) => {
-        if (!open) props.onClose()
-      }}
-      dismissal={update.isPending ? "blocked" : "allowed"}
-    >
-      <Dialog.Content>
-        <Dialog.Header>
-          <Dialog.Title>Rename {props.credential.label}</Dialog.Title>
-          <Dialog.Description>
-            Only the display name changes. Chats keep using {props.credential.label}.
-          </Dialog.Description>
-        </Dialog.Header>
-        <Form.Root form={form} arrangement="contents">
-          <Dialog.Body>
-            <form.AppField name="name">
-              {(field) => <field.TextField label="Display name" necessity="optional" placeholder="Stripe live key" />}
-            </form.AppField>
-            <Notice tone="danger" placement="inline">
-              {update.error?.message}
-            </Notice>
-          </Dialog.Body>
-          <Dialog.Footer>
-            <form.SubmitButton pendingLabel="Saving…">Save name</form.SubmitButton>
-          </Dialog.Footer>
-        </Form.Root>
-      </Dialog.Content>
-    </Dialog.Root>
-  )
-}
-
 export function MoveCredentialDialog(props: {
   credential: CredentialInfo
   action: "move" | "copy"
@@ -158,7 +107,7 @@ export function MoveCredentialDialog(props: {
           <Dialog.Description>
             {props.action === "move"
               ? "Chats of the old owner lose this key at once."
-              : "The copy is a separate key. Rotating one does not change the other."}
+              : "The copy is a separate credential. Rotating one does not change the other."}
           </Dialog.Description>
         </Dialog.Header>
         <Form.Root form={form} arrangement="contents">
@@ -172,7 +121,7 @@ export function MoveCredentialDialog(props: {
           </Dialog.Body>
           <Dialog.Footer>
             <form.SubmitButton pendingLabel="Saving…">
-              {props.action === "move" ? "Move key" : "Copy key"}
+              {props.action === "move" ? "Move credential" : "Copy credential"}
             </form.SubmitButton>
           </Dialog.Footer>
         </Form.Root>
@@ -189,7 +138,7 @@ export function DeleteCredentialDialog(props: {
 }) {
   const context = RouterContext.useRouterContext()
   const remove = useMutation(context.api.credential.remove.mutationOptions())
-  const label = props.credential?.label ?? "key"
+  const label = props.credential?.label ?? "this credential"
   return (
     <ConfirmationDialog
       open={props.open}

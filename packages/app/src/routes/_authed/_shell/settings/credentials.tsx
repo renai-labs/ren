@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { CredentialsPage } from "../../../../features/credentials/credentials-page.js"
 
 export const Route = createFileRoute("/_authed/_shell/settings/credentials")({
-  head: () => ({ meta: [{ title: "Keys · Ren" }] }),
+  head: () => ({ meta: [{ title: "Credentials · Ren" }] }),
   loader: (options) => {
     const context = options.context
     const page = { page: 1, pageSize: Pagination.maximumPageSize }

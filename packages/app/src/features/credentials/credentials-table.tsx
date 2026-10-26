@@ -6,15 +6,10 @@ import type { Select } from "@ren/ui/select"
 import { Table } from "@ren/ui/table"
 import { Text } from "@ren/ui/text"
 import { useState } from "react"
-import {
-  DeleteCredentialDialog,
-  MoveCredentialDialog,
-  RenameCredentialDialog,
-  RotateCredentialDialog,
-} from "./credential-dialogs.js"
+import { DeleteCredentialDialog, MoveCredentialDialog, RotateCredentialDialog } from "./credential-dialogs.js"
 import { Credentials } from "../../components/credentials.js"
 
-type Editing = { readonly kind: "rename" | "rotate" | "move" | "copy"; readonly credential: CredentialInfo } | undefined
+type Editing = { readonly kind: "rotate" | "move" | "copy"; readonly credential: CredentialInfo } | undefined
 
 export function CredentialsTable(props: {
   rows: ReadonlyArray<CredentialInfo>
@@ -34,12 +29,12 @@ export function CredentialsTable(props: {
     <>
       <Table.Root
         state={props.state}
-        failureMessage="Couldn’t load keys."
+        failureMessage="Couldn’t load credentials."
         emptyMessage={props.query ? `Nothing matches “${props.query}”` : props.emptyMessage}
-        caption="Keys"
+        caption="Credentials"
       >
         <Table.Header>
-          <Table.HeaderCell width="fill">Key</Table.HeaderCell>
+          <Table.HeaderCell width="fill">Credential</Table.HeaderCell>
           <Table.HeaderCell width="third" visibility="wide-screens">
             Hosts
           </Table.HeaderCell>
@@ -75,12 +70,6 @@ export function CredentialsTable(props: {
                 </span>
               </Table.Cell>
               <Table.RowActions label={`${row.label} actions`}>
-                <Menu.Item
-                  icon={<Icon glyph="Pencil" />}
-                  onSelect={() => setEditing({ kind: "rename", credential: row })}
-                >
-                  Rename
-                </Menu.Item>
                 {Credentials.canCopy(row) ? (
                   <Menu.Item
                     icon={<Icon glyph="RefreshCw" />}
@@ -118,9 +107,6 @@ export function CredentialsTable(props: {
           ))}
         </Table.Body>
       </Table.Root>
-      {editing?.kind === "rename" ? (
-        <RenameCredentialDialog credential={editing.credential} onClose={close} onSaved={props.onChanged} />
-      ) : null}
       {editing?.kind === "rotate" ? (
         <RotateCredentialDialog credential={editing.credential} onClose={close} onSaved={props.onChanged} />
       ) : null}
