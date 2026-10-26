@@ -48,6 +48,7 @@ export function Root(props: RootProps) {
 export type SectionProps = {
   title: ReactNode
   appearance?: "plain" | "eyebrow"
+  actions?: ReactNode
   children?: ReactNode
 }
 
@@ -55,7 +56,12 @@ export function Section(props: SectionProps) {
   const eyebrow = props.appearance === "eyebrow"
   return (
     <section className="flex min-w-0 flex-col gap-1">
-      <header className={composeClasses("flex items-center justify-between gap-3 px-2", eyebrow ? "pt-2" : "min-h-8")}>
+      <header
+        className={composeClasses(
+          "flex items-center justify-between gap-3 px-2",
+          eyebrow && !props.actions ? "pt-2" : "min-h-8",
+        )}
+      >
         <span className="flex min-w-0 items-center gap-2">
           {eyebrow ? (
             <span className="truncate text-2xs font-reading-semibold text-text-secondary uppercase">{props.title}</span>
@@ -65,6 +71,7 @@ export function Section(props: SectionProps) {
             </Text>
           )}
         </span>
+        {props.actions ? <span className="flex shrink-0 items-center gap-1">{props.actions}</span> : null}
       </header>
       {props.children}
     </section>
