@@ -20,7 +20,7 @@ import { TaskPolicy } from "./task/policy.js"
 export interface Resource {
   readonly relationships: ReadonlyArray<string>
   readonly spaceId?: Space.ID
-  // oxlint-disable-next-line ren/no-comments -- The organization that owns the record, or null for a record Ren gives every organization. Without it, the record is the actor's. A statement on all reaches only the actor's own records; another's record needs a relationship.
+  // oxlint-disable-next-line ren/no-comments -- The owning organization; null for Ren's own records. A statement on all reaches only the actor's.
   readonly organizationId?: Auth.OrganizationID | null
 }
 
@@ -66,7 +66,7 @@ export const make = (documents: ReadonlyArray<Policy.Document>): Interface => {
       const allowed = plan(request.actor, request.action)
       if (allowed.spaceId && request.resource.spaceId && allowed.spaceId !== request.resource.spaceId) return false
       const isOwn =
-        // ast-grep-ignore: no-nullish-comparison, -- null names a record Ren gives every organization; only a missing owner means the actor's.
+        // ast-grep-ignore: no-nullish-comparison, -- null means Ren's own record.
         request.resource.organizationId === undefined ||
         request.resource.organizationId === request.actor.organizationId
       return (

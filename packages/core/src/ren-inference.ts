@@ -48,7 +48,7 @@ const roleOrder = ["owner", "admin", "member"] as const
 
 const ErrorBody = Schema.Struct({ error: Schema.optional(Schema.String) })
 
-// oxlint-disable-next-line ren/no-comments -- A connection as the service sends it: the user who connected it, never who may manage it, which Ren decides.
+// oxlint-disable-next-line ren/no-comments -- As the service sends it; Ren decides who manages it.
 const Upstream = Schema.Struct({
   ...Struct.omit(RenInference.Connection.fields, ["canManage"]),
   connectedBy: Schema.NullOr(Schema.String),
@@ -132,7 +132,7 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.orDie)).at(0)
       if (!member) return yield* new Primitive.Forbidden({ message: "You are not a member of this organization." })
-      // ast-grep-ignore: no-hardcoded-policy, -- Sent until the service stops reading it; Ren decides every check (RenInferencePolicy).
+      // ast-grep-ignore: no-hardcoded-policy, -- Sent until the service stops reading it.
       const role = roleOrder.find((candidate) => actor.roles.includes(candidate)) ?? "member"
       return { org: actor.organizationId, sub: actor.userId, member: member.id, role }
     })

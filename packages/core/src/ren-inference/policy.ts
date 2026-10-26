@@ -14,7 +14,7 @@ export const actions = {
 
 const connector = `${primitive}.connector`
 
-// oxlint-disable-next-line ren/no-comments -- Any member connects a model provider and sees the organization's connections; the member who connected one and admins rename, reconnect and remove it. The Ren Inference Service knows no roles.
+// oxlint-disable-next-line ren/no-comments -- The Ren Inference Service knows no roles.
 export const documents = [
   {
     primitive,

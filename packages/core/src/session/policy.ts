@@ -28,7 +28,7 @@ const every = Auth.Role.literals
 
 const admins = Auth.administratorRoles
 
-// oxlint-disable-next-line ren/no-comments -- Whoever sees a space reads and starts its chats, and so does an agent in that space. Its creator or an admin archives a chat.
+// oxlint-disable-next-line ren/no-comments -- Its creator or an admin archives a chat.
 export const documents = [
   {
     primitive: Session.definition.name,
@@ -54,7 +54,7 @@ export const resource = (
   spaceId,
 })
 
-// oxlint-disable-next-line ren/no-comments -- On a query that joins the chat's space and SpaceQueries.membership.
+// oxlint-disable-next-line ren/no-comments -- Needs SpaceQueries.membership joined.
 export const filter = (actor: Actor.Info, plan: Access.Plan) =>
   and(
     plan.spaceId ? eq(Database.Schema.agent_session.space_id, plan.spaceId) : undefined,

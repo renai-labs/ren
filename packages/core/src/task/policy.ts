@@ -30,7 +30,7 @@ export const actions = {
   decide: `${Task.definition.name}.decide`,
 } as const
 
-// oxlint-disable-next-line ren/no-comments -- Agents may request a review but only a person decides it, and only a person marks a task done or dismissed. Only its author, as a person, changes a comment.
+// oxlint-disable-next-line ren/no-comments -- Only a person closes a task, decides a review or changes their comment.
 export const documents = [
   {
     primitive: Task.definition.name,
