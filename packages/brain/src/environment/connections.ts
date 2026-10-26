@@ -53,12 +53,19 @@ export interface Connection {
   readonly hello: EnvironmentApi.Hello
   readonly client: EnvironmentClient.Client
   readonly generation: Environment.Access["generation"]
+  readonly egress: Environment.Access["egress"]
+}
+
+// oxlint-disable-next-line ren/no-comments -- The env vars of each pull (README §6.5, C21): real values, and ren:<LABEL> placeholders that only an egress makes work (R19).
+export interface Env {
+  readonly variables: Readonly<Record<string, string>>
+  readonly placeholders: Readonly<Record<string, string>>
 }
 
 export interface Interface {
   readonly connect: (sessionId: Session.ID) => Effect.Effect<Connection, Unavailable, Scope.Scope>
-  // oxlint-disable-next-line ren/no-comments -- Env vars the host adds to every process a session starts, read at each start: credential placeholders and delivered secrets (README §6.5, C21).
-  readonly variables?: Effect.Effect<Readonly<Record<string, string>>>
+  // oxlint-disable-next-line ren/no-comments -- Env vars the host adds to every process a session starts, read at each start.
+  readonly env?: Effect.Effect<Env>
   readonly release: (sessionId: Session.ID) => Effect.Effect<void>
 }
 
@@ -196,7 +203,10 @@ export const layer = Layer.effect(
               message: "The access to the environment expired",
             })
           })
-          return { connection: { hello, client, generation: access.generation }, checkAccess }
+          return {
+            connection: { hello, client, generation: access.generation, egress: access.egress },
+            checkAccess,
+          }
         }).pipe(
           Scope.provide(attempt),
           Effect.onError(() => Scope.close(attempt, Exit.void)),

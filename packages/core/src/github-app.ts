@@ -1,6 +1,7 @@
 export * as GitHubApp from "./github-app.js"
 
 import { Database } from "@ren/db/database"
+import type { PullEnv } from "@ren/host-api/ren-host-api"
 import type { Auth } from "@ren/schema/auth"
 import { Credential } from "@ren/schema/credential"
 import { and, eq } from "drizzle-orm"
@@ -275,9 +276,16 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
 
 export type Client = Effect.Success<ReturnType<typeof make>>
 
+// oxlint-disable-next-line ren/no-comments -- R21: raw.githubusercontent.com serves the files of github.com only, so a GitHub Enterprise token never goes there.
 export const hosts = (app: Settings) => {
   const web = new URL(app.web).hostname
-  return [`api.${web}`, web, `codeload.${web}`, `uploads.${web}`]
+  return [
+    `api.${web}`,
+    web,
+    `codeload.${web}`,
+    `uploads.${web}`,
+    ...(web === "github.com" ? ["raw.githubusercontent.com"] : []),
+  ]
 }
 
 export const personCredential = (
@@ -305,10 +313,7 @@ export const personCredential = (
   ...(token.expiresIn && { expiresAt: new Date(now + token.expiresIn * 1000) }),
 })
 
-export const variables = (
-  app: Settings,
-  person: Option.Option<PersonCredentials.Account>,
-): Readonly<Record<string, string>> => {
+export const variables = (app: Settings, person: Option.Option<PersonCredentials.Account>): PullEnv => {
   const placeholder = Credential.placeholder(label)
   const name = Option.match(person, { onNone: () => `${app.slug}[bot]`, onSome: (account) => account.name })
   const email = Option.match(person, {
@@ -316,15 +321,21 @@ export const variables = (
     onSome: (account) => `${account.id}+${account.name}@users.noreply.github.com`,
   })
   return {
-    GITHUB_TOKEN: placeholder,
-    GH_TOKEN: placeholder,
-    GIT_AUTHOR_NAME: name,
-    GIT_AUTHOR_EMAIL: email,
-    GIT_COMMITTER_NAME: name,
-    GIT_COMMITTER_EMAIL: email,
-    GIT_CONFIG_COUNT: "1",
-    GIT_CONFIG_KEY_0: `http.${app.web}/.extraHeader`,
-    GIT_CONFIG_VALUE_0: `Authorization: Basic ${Buffer.from(`x-access-token:${placeholder}`).toString("base64")}`,
+    variables: {
+      GITHUB_URL: app.web,
+      GITHUB_API_URL: app.api,
+      GIT_AUTHOR_NAME: name,
+      GIT_AUTHOR_EMAIL: email,
+      GIT_COMMITTER_NAME: name,
+      GIT_COMMITTER_EMAIL: email,
+    },
+    placeholders: {
+      GITHUB_TOKEN: placeholder,
+      GH_TOKEN: placeholder,
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: `http.${app.web}/.extraHeader`,
+      GIT_CONFIG_VALUE_0: `Authorization: Basic ${Buffer.from(`x-access-token:${placeholder}`).toString("base64")}`,
+    },
   }
 }
 

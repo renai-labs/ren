@@ -1,6 +1,7 @@
 export * as Credentials from "./credentials.js"
 
 import { Database } from "@ren/db/database"
+import type { PullEnv } from "@ren/host-api/ren-host-api"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
@@ -195,10 +196,7 @@ export interface Interface extends Omit<Methods, "rotate" | "update"> {
     scope: Scope,
     profileIds: ReadonlyArray<AppProfile.ID>,
   ) => Effect.Effect<ReadonlyArray<Candidate>>
-  readonly environment: (
-    scope: Scope,
-    profileIds: ReadonlyArray<AppProfile.ID>,
-  ) => Effect.Effect<Readonly<Record<string, string>>>
+  readonly environment: (scope: Scope, profileIds: ReadonlyArray<AppProfile.ID>) => Effect.Effect<PullEnv>
   readonly open: (id: Credential.ID) => Effect.Effect<Option.Option<Opened>>
   readonly authorize: (
     actor: Actor.Info,
@@ -1028,7 +1026,7 @@ export const layer = Layer.effect(
         }))
       }),
 
-      // oxlint-disable-next-line ren/no-comments -- A35: each key that reaches the workload is an env var that holds its placeholder; a delivered key holds its value (C9). The first owner in the lookup order wins a label. Each connected env item of a reached profile is `LABEL=ren:LABEL` (profiles.md §13 rule 4).
+      // oxlint-disable-next-line ren/no-comments -- A35: each key that reaches the workload is an env var that holds its placeholder; a delivered key holds its value (C9). Placeholders are a list of their own, because they work only behind the egress (R19). The first owner in the lookup order wins a label. Each connected env item of a reached profile is `LABEL=ren:LABEL` (profiles.md §13 rule 4).
       environment: Effect.fn("Credentials.environment")(function* (
         scope: Scope,
         profileIds: ReadonlyArray<AppProfile.ID>,
@@ -1043,10 +1041,10 @@ export const layer = Layer.effect(
         )
         const entries = yield* Effect.forEach(ordered, (row) =>
           row.delivery === "egress"
-            ? Effect.succeed([[row.label, Credential.placeholder(row.label)]] as const)
+            ? Effect.succeed([{ label: row.label, value: Credential.placeholder(row.label), isPlaceholder: true }])
             : Effect.map(openRow(row), (value) =>
                 Option.isSome(value) && value.value.type === "key"
-                  ? ([[row.label, Redacted.value(value.value.value)]] as const)
+                  ? [{ label: row.label, value: Redacted.value(value.value.value), isPlaceholder: false }]
                   : [],
               ),
         )
@@ -1068,10 +1066,26 @@ export const layer = Layer.effect(
               )
               .pipe(Effect.orDie)
           : []
-        return Object.fromEntries([
-          ...entries.flat(),
-          ...connected.map((row) => [row.label, Credential.placeholder(row.label)] as const),
-        ])
+        const winners = [
+          ...new Map(
+            [
+              ...entries.flat(),
+              ...connected.map((row) => ({
+                label: row.label,
+                value: Credential.placeholder(row.label),
+                isPlaceholder: true,
+              })),
+            ].map((entry) => [entry.label, entry]),
+          ).values(),
+        ]
+        return {
+          variables: Object.fromEntries(
+            winners.filter((entry) => !entry.isPlaceholder).map((entry) => [entry.label, entry.value]),
+          ),
+          placeholders: Object.fromEntries(
+            winners.filter((entry) => entry.isPlaceholder).map((entry) => [entry.label, entry.value]),
+          ),
+        }
       }),
 
       open: Effect.fn("Credentials.open")(function* (id: Credential.ID) {

@@ -66,13 +66,14 @@ export const make = (
     ChildProcessSpawner.make((command) =>
       Effect.all({
         connection: connections.connect(sessionId),
-        variables: connections.variables ?? Effect.succeed({}),
+        env: connections.env ?? Effect.succeed({ variables: {}, placeholders: {} }),
       }).pipe(
         Effect.mapError(EnvironmentSpawner.childProcessError("spawn")),
         Effect.flatMap((found) =>
-          EnvironmentSpawner.make(found.connection, killedBySignal, { ...options, variables: found.variables }).spawn(
-            command,
-          ),
+          EnvironmentSpawner.make(found.connection, killedBySignal, {
+            ...options,
+            variables: { ...found.env.variables, ...(found.connection.egress && found.env.placeholders) },
+          }).spawn(command),
         ),
       ),
     )
