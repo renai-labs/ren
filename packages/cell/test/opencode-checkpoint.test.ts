@@ -1,8 +1,8 @@
-import { describe, expect } from "bun:test"
+import { afterAll, describe, expect } from "bun:test"
 import { Database } from "bun:sqlite"
 import { AbsolutePath, Agent, Model, Provider, Session, SessionMessage } from "@opencode/client/effect"
 import { testEffect } from "@ren/executor/testing"
-import { Effect, Fiber, Layer, Option, Schedule, Schema, Stream } from "effect"
+import { Context, Effect, Fiber, Layer, ManagedRuntime, Option, Schedule, Schema, Stream } from "effect"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -129,7 +129,7 @@ const expectCovered = (log: ReadonlyArray<Write>) => {
 
 const open = Effect.fnUntraced(function* () {
   const file = join(yield* folder, "opencode.db")
-  const brain = yield* BrainTest.make({ database: file })
+  const brain = yield* BrainTest.make({ database: file, plugin: BrainTest.instantRetry })
   const db = new Database(file)
   yield* Effect.addFinalizer(() => Effect.sync(() => db.close()))
   yield* brain.start({ interactive: false })
@@ -157,6 +157,12 @@ const open = Effect.fnUntraced(function* () {
 })
 
 type Opened = Effect.Success<ReturnType<typeof open>>
+
+class SharedBrain extends Context.Service<SharedBrain, Opened>()("@ren/cell/test/OpenCodeCheckpoint/SharedBrain") {}
+
+const shared = ManagedRuntime.make(Layer.effect(SharedBrain, open()))
+
+afterAll(() => shared.dispose())
 
 const it = testEffect(Layer.empty)
 
@@ -333,9 +339,11 @@ describe("OpenCode checkpoint", () => {
     () =>
       Effect.gen(function* () {
         const file = join(yield* folder, "opencode.db")
+        // oxlint-disable-next-line ren/no-comments -- bun test runs in UTC; a child in another time zone can be on another date, and OpenCode then adds a date note to the resumed prompt.
         const child = Bun.spawn(["bun", join(import.meta.dir, "lib/crash-host.ts"), file], {
           stdout: "pipe",
           stderr: "ignore",
+          env: { ...process.env, TZ: Intl.DateTimeFormat().resolvedOptions().timeZone },
         })
         yield* Effect.addFinalizer(() => Effect.sync(() => child.kill("SIGKILL")))
         const line = yield* Stream.fromReadableStream({ evaluate: () => child.stdout, onError: (cause) => cause }).pipe(
@@ -360,7 +368,6 @@ describe("OpenCode checkpoint", () => {
         expect(writes.some((write) => write.tbl === "session_message" && write.sid === sessionID)).toBe(true)
         expectCovered(writes)
       }),
-    60_000,
   )
 
   for (const operation of operations)
@@ -368,19 +375,18 @@ describe("OpenCode checkpoint", () => {
       `${operation[0]}: each message write changes E of its session, and a session write that leaves E the same changes only time_suspended and resume_attempts`,
       () =>
         Effect.gen(function* () {
-          const opened = yield* open()
+          const opened = yield* Effect.promise(() => shared.runPromise(SharedBrain))
           const from = opened.log.mark()
           yield* operation[1](opened)
           expectCovered(opened.log.read(from))
         }),
-      60_000,
     )
 
   it.live(
     "a second read-only connection reads E, L and the rows in one read transaction during a turn, with no SQLITE_BUSY",
     () =>
       Effect.gen(function* () {
-        const opened = yield* open()
+        const opened = yield* Effect.promise(() => shared.runPromise(SharedBrain))
         const reader = new Database(opened.db.filename, { readonly: true })
         yield* Effect.addFinalizer(() => Effect.sync(() => reader.close()))
         const session = yield* opened.create()
@@ -407,7 +413,9 @@ describe("OpenCode checkpoint", () => {
         yield* opened.client.session.prompt({ sessionID: session.id, text: script.marker }).pipe(Effect.orDie)
         yield* Effect.promise(() => script.called())
         const idle = () =>
-          opened.log.read().some((write) => write.tbl === "session_message" && write.new?.type === "idle")
+          opened.log
+            .read()
+            .some((write) => write.tbl === "session_message" && write.sid === session.id && write.new?.type === "idle")
         const counted = { reads: 0, writesDuring: opened.log.mark() }
         yield* read.pipe(
           Effect.tap(() => Effect.sync(() => counted.reads++)),
@@ -425,7 +433,6 @@ describe("OpenCode checkpoint", () => {
             .get(session.id)?.seq ?? null,
         )
       }),
-    60_000,
   )
 
   it.live("a read-only connection opened before OpenCode made its tables finds them after", () =>

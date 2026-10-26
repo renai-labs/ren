@@ -2,7 +2,7 @@ export * as BrainTest from "./brain.js"
 
 import { OpenCode } from "@opencode/client/effect"
 import { SdkPlugins } from "@opencode/core/plugin/sdk"
-import type { Plugin } from "@opencode/plugin/effect"
+import { Plugin } from "@opencode/plugin/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { BrainApi } from "@ren/host-api/brain-api"
 import { ChatApi } from "@ren/protocol/chat"
@@ -35,6 +35,19 @@ import { Sync } from "../../src/sync.js"
 import { ModelsTest } from "./models.js"
 import { Shared } from "./shared.js"
 import { TestToken } from "./token.js"
+
+// oxlint-disable-next-line ren/no-comments -- OpenCode waits seconds before it retries a failed model call; a test that only needs the retry to happen retries at once.
+export const instantRetry = Plugin.define({
+  id: "instant-retry",
+  effect: (context) =>
+    context.session
+      .hook("retry", (event) =>
+        Effect.sync(() => {
+          if (event.decision.retry) event.decision = { retry: true, delay: 0 }
+        }),
+      )
+      .pipe(Effect.asVoid),
+})
 
 export const make = Effect.fnUntraced(function* (
   options: {

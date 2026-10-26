@@ -1,4 +1,4 @@
-import { expect, setDefaultTimeout } from "bun:test"
+import { expect } from "bun:test"
 import { Plugin } from "@opencode/plugin/effect"
 import { Mcp } from "@opencode/schema/mcp"
 import { SessionID } from "@opencode/schema/session-id"
@@ -12,8 +12,6 @@ import { OpenCodeMcp } from "../src/harness/opencode/mcp.js"
 import { BrainTest } from "./lib/brain.js"
 import { McpPeer } from "./lib/mcp.js"
 import { Shared } from "./lib/shared.js"
-
-setDefaultTimeout(20_000)
 
 const it = testEffect(Layer.empty)
 

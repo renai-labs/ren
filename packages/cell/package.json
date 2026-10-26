@@ -13,7 +13,7 @@
     "deploy:celld": "celld deploy",
     "deploy:cloudflare": "wrangler deploy",
     "test": "bun ../../script/test.ts",
-    "test:cloudflare": "CELL_RUNTIME=wrangler bun ../../script/test.ts test/cell.test.ts test/environment-lifecycle-cell.test.ts test/sync-storage.test.ts",
+    "test:cloudflare": "CELL_RUNTIME=wrangler REN_SLOW=1 bun ../../script/test.ts test/cell.test.ts test/environment-lifecycle-cell.test.ts test/sync-storage.test.ts test/sync-storage.slow.test.ts",
     "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo -b",
     "template:e2b": "bun e2b/stage.ts"

@@ -1,4 +1,4 @@
-import { expect, setDefaultTimeout, test } from "bun:test"
+import { expect, test } from "bun:test"
 import { SessionID } from "@opencode/schema/session-id"
 import { testEffect } from "@ren/executor/testing"
 import { ChatApi } from "@ren/protocol/chat"
@@ -12,8 +12,6 @@ import { HttpApi } from "effect/http-api"
 import { Chat } from "../src/chat.js"
 import { BrainTest } from "./lib/brain.js"
 import { Shared } from "./lib/shared.js"
-
-setDefaultTimeout(30_000)
 
 const stub = Shared.stub()
 
