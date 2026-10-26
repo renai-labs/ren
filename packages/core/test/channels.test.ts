@@ -1,13 +1,17 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
 import { Database } from "@ren/db/database"
-import type { Auth } from "@ren/schema/auth"
+import { Auth } from "@ren/schema/auth"
 import { Agent } from "@ren/schema/agent"
 import { Brain } from "@ren/schema/brain"
+import { ChannelInstall } from "@ren/schema/channel-install"
 import { Session } from "@ren/schema/session"
+import { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Deferred, Effect, Layer, Option, Schedule, Struct } from "effect"
 import type { Actor } from "../src/actor.js"
+import { ChannelIdentity } from "../src/channel-identity.js"
 import { ChannelReply } from "../src/channel-reply.js"
+import { ChannelRoute } from "../src/channel-route.js"
 import { ChannelTurns } from "../src/channel-turns.js"
 import { Channels } from "../src/channels.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
@@ -540,6 +544,113 @@ describe("ChannelTurns", () => {
       })
       expect(outbox.progress).toEqual([{ message: thread.found.message, status: "received" }])
       expect((yield* ChannelFixture.Cell).accepted.filter((delivered) => delivered.synthetic)).toEqual([])
+    }),
+  )
+})
+
+const person = Effect.fnUntraced(function* (
+  organizationId: Auth.OrganizationID,
+  options: { readonly inSpace?: Space.ID; readonly email?: string } = {},
+) {
+  const database = yield* Database.Service
+  const seeded = yield* Seed.user(options.email ? { email: options.email } : {})
+  yield* Seed.member(organizationId, seeded.id, "member")
+  if (options.inSpace)
+    yield* database.db
+      .insert(Database.Schema.space_member)
+      .values({ id: Space.MembershipID.create(), space_id: options.inSpace, user_id: seeded.id })
+  return seeded
+})
+
+describe("ChannelIdentity", () => {
+  it.live("a sign-in link wins over an email match, with no lookup", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const database = yield* Database.Service
+      const identity = yield* ChannelIdentity.Service
+      const outbox = yield* ChannelFixture.Outbox
+      const linked = yield* person(subject.owner.organizationId)
+      const other = yield* person(subject.owner.organizationId)
+      yield* database.db.insert(Database.Schema.account).values({
+        id: Auth.AccountID.create(),
+        providerId: "slack",
+        accountId: "U01",
+        userId: linked.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      outbox.emails.set("U01", other.email)
+      expect(yield* identity.find(subject.owner.organizationId, ChannelFixture.event(subject.install))).toEqual(
+        Option.some(linked.id),
+      )
+      expect(outbox.lookups).toEqual([])
+    }),
+  )
+
+  it.live(
+    "each mention of an unlinked sender reads their email and matches an organization member; a provider that is down matches no one",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* routed
+        const identity = yield* ChannelIdentity.Service
+        const outbox = yield* ChannelFixture.Outbox
+        const ana = yield* person(subject.owner.organizationId, { email: "Ana@Acme.test" })
+        const stranger = yield* person(yield* Seed.organization(), { email: "bob@acme.test" })
+        const event = ChannelFixture.event(subject.install)
+        outbox.emails.set("U01", "ana@acme.test")
+        expect(yield* identity.find(subject.owner.organizationId, event)).toEqual(Option.some(ana.id))
+        expect(yield* identity.find(subject.owner.organizationId, event)).toEqual(Option.some(ana.id))
+        outbox.emails.set("U01", "down")
+        expect(yield* identity.find(subject.owner.organizationId, event)).toEqual(Option.none())
+        expect(outbox.lookups).toEqual(["U01", "U01", "U01"])
+        outbox.emails.set("U02", stranger.email)
+        expect(
+          yield* identity.find(
+            subject.owner.organizationId,
+            ChannelFixture.event(subject.install, { sender: { accountId: "U02", name: "Bob" } }),
+          ),
+        ).toEqual(Option.none())
+      }),
+  )
+})
+
+describe("ChannelRoute", () => {
+  it.live("a known sender in the space runs as themself; one outside it runs as the fallback user", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const routes = yield* ChannelRoute.Service
+      const outbox = yield* ChannelFixture.Outbox
+      const inside = yield* person(subject.owner.organizationId, { inSpace: subject.owner.spaceId })
+      const outside = yield* person(subject.owner.organizationId)
+      outbox.emails.set("U01", inside.email)
+      outbox.emails.set("U02", outside.email)
+      expect(yield* routes.resolve(ChannelFixture.event(subject.install))).toMatchObject({ senderUserId: inside.id })
+      expect(
+        yield* routes.resolve(ChannelFixture.event(subject.install, { sender: { accountId: "U02", name: "Bob" } })),
+      ).toMatchObject({ senderUserId: subject.owner.createdBy })
+    }),
+  )
+
+  it.live("with no sender that may act and a fallback user outside the space, the event is refused", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const routes = yield* ChannelRoute.Service
+      const organizationId = yield* Seed.organization()
+      yield* Seed.space(organizationId)
+      const installer = yield* person(organizationId)
+      const workspace = `T${crypto.randomUUID()}`
+      yield* database.db.insert(Database.Schema.channel_install).values({
+        id: ChannelInstall.ID.create(),
+        organization_id: organizationId,
+        provider: "slack",
+        workspace,
+        name: "Acme",
+        installed_by: installer.id,
+      })
+      expect(yield* Effect.flip(routes.resolve(ChannelFixture.event(workspace)))).toMatchObject({
+        _tag: "ChannelRoute.Refused",
+        reason: "fallback_gone",
+      })
     }),
   )
 })

@@ -21,6 +21,7 @@ import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelProvider } from "@ren/core/channel-provider"
 import { GitHub } from "@ren/core/channel-provider/github"
 import { GitHubApp } from "@ren/core/github-app"
+import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
@@ -118,8 +119,9 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       Retention.layer,
       RenInferenceRemoval.layer,
     ),
-    ChannelNotice.layer.pipe(Layer.provideMerge(ChannelProvider.layer([GitHub.provider]))),
-    ChannelRoute.layer,
+    Layer.mergeAll(ChannelNotice.layer, ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer))).pipe(
+      Layer.provideMerge(ChannelProvider.layer([GitHub.provider])),
+    ),
     Mailer.layer,
     SignupGuard.layer,
     TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),

@@ -13,6 +13,7 @@ export const titles: Readonly<Record<Provider, string>> = { slack: "Slack", line
 export const ThreadID = Identifier.make("cth", "Channel.ThreadID")
 export type ThreadID = typeof ThreadID.Type
 
+
 export interface FileRef extends Schema.Schema.Type<typeof FileRef> {}
 export const FileRef = Schema.Struct({
   url: Schema.String,

@@ -59,6 +59,10 @@ export interface Provider {
   readonly context: (event: Channel.Event) => Effect.Effect<Option.Option<string>, Unavailable>
   readonly send: (target: Target, text: string) => Effect.Effect<void, PlaceGone | Unavailable | Rejected>
   readonly progress: (target: Target, status: Status) => Effect.Effect<void, Unavailable>
+  readonly email: (
+    install: string,
+    sender: Channel.Event["sender"],
+  ) => Effect.Effect<Option.Option<string>, Unavailable>
   readonly installUrl: (state: string) => string
   readonly completeInstall: (query: Readonly<Record<string, string>>) => Effect.Effect<Installed, InstallFailed>
   readonly changedOnProvider: (query: Readonly<Record<string, string>>) => boolean

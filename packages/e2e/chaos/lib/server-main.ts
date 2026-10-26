@@ -5,6 +5,7 @@ import { Brains } from "@ren/core/brains"
 import { BrainPush } from "@ren/core/brain-push"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelProvider } from "@ren/core/channel-provider"
+import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
 import { EnvironmentProvider } from "@ren/core/environment-provider"
@@ -60,8 +61,10 @@ HttpRouter.serve(Routes.layer).pipe(
       Layer.provide(CredentialEnv.layerNone),
     ),
     RenInferenceRemoval.layer,
-    ChannelProvider.layer<never, never>([]),
-    ChannelRoute.layer,
+    ChannelRoute.layer.pipe(
+      Layer.provide(ChannelIdentity.layer),
+      Layer.provideMerge(ChannelProvider.layer<never, never>([])),
+    ),
     ChannelNotice.layerLog,
     Mailer.layer,
     SignupGuard.layer,
