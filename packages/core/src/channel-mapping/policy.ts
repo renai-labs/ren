@@ -8,7 +8,7 @@ import { SpacePolicy } from "../space/policy.js"
 
 const writeActions = Primitive.actions(ChannelMapping.definition, ["create", "remove"])
 
-// oxlint-disable-next-line ren/no-comments -- A mapping sends a channel's messages into a space. Its members map their space; admins map any shared space, never another person's private space (private-spaces rule 6).
+// oxlint-disable-next-line ren/no-comments -- access §13: members map their space; admins map shared spaces only.
 export const documents = [
   {
     resource: ChannelMapping.definition.name,

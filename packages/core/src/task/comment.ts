@@ -26,7 +26,7 @@ const actions = {
 
 type Row = typeof Database.Schema.task_comment.$inferSelect
 
-// oxlint-disable-next-line ren/no-comments -- access AC17: an agent acts as its sender, so the sender's comments are its own.
+// oxlint-disable-next-line ren/no-comments -- An agent acts as its sender (AC17).
 const isAuthor = (actor: Actor.Info, row: Row) => row.author_user_id === actor.userId
 
 export const toInfo =

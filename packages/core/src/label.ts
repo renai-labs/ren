@@ -44,7 +44,7 @@ const label = Database.Schema.label
 const memberOf = (actor: Actor.Info) =>
   sql<boolean>`exists (select 1 from ${Database.Schema.space_member} where ${Database.Schema.space_member.space_id} = ${label.space_id} and ${Database.Schema.space_member.user_id} = ${actor.userId} and ${Database.Schema.space_member.archived_at} is null and ${Actor.fenced(actor, Database.Schema.space_member.space_id) ?? sql`true`})`
 
-// oxlint-disable-next-line ren/no-comments -- The SQL of each label fact, for a list (access AC8).
+// oxlint-disable-next-line ren/no-comments -- The SQL of each label fact.
 const facts = (actor: Actor.Info): ReadonlyMap<string, SQL> =>
   new Map([
     [TaskPolicy.facts.systemLabel, isNull(label.organization_id)],

@@ -53,7 +53,7 @@ export const environment = pgTable(
       .$type<EnvironmentTemplate.ID>()
       .notNull()
       .references(() => environment_template.id, { onDelete: "cascade" }),
-    // oxlint-disable-next-line ren/no-comments -- private-spaces PS8: an environment serves the sessions of one space. Null on environments made before the rule; Ren never places a session in one of those again.
+    // oxlint-disable-next-line ren/no-comments -- private-spaces PS8: one space per environment; null on older ones.
     space_id: text()
       .$type<Space.ID>()
       .references(() => space.id, { onDelete: "cascade" }),

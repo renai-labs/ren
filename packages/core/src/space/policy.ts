@@ -33,7 +33,7 @@ export const actions = {
 
 const member = Primitive.actions(SpaceMember.definition)
 
-// oxlint-disable-next-line ren/no-comments -- access §4 (AC3-AC5), private-spaces rules 5-8. `get` is the list entry; `read` is what is inside. An admin sees every list entry, reads a shared space's description, joins a shared space and archives another person's private space.
+// oxlint-disable-next-line ren/no-comments -- access §4: `get` is the list entry, `read` is what is inside.
 export const documents = [
   {
     resource: Space.definition.name,

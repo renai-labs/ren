@@ -33,7 +33,7 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const profiles = yield* AppProfiles.Service
 
-    // oxlint-disable-next-line ren/no-comments -- access AC14: admins see a shared space's profiles without joining it; a private space's reach is for its owner.
+    // oxlint-disable-next-line ren/no-comments -- access AC14: a private space's reach is its owner's only.
     const space = Effect.fnUntraced(function* (
       actor: Actor.Info,
       spaceId: Space.ID,

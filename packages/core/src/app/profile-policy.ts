@@ -45,7 +45,7 @@ const see = [actions.list, actions.get, actions.connect, actions.delete]
 
 const manage = [actions.update, actions.link, actions.access]
 
-// oxlint-disable-next-line ren/no-comments -- profiles.md §10, access §9 (AC13-AC15), private-spaces PS4, PS5, PS9. Anyone who sees a shared profile connects its items and deletes it; its creator and admins rename and link it. Its creator changes its list for spaces they are in; admins add any shared space and remove any space. Anyone who sees it adds their own private space; the creator removes any private space. Only admins choose every space. An admin sees a private profile's metadata and deletes it, never uses it. A shared profile never links a private profile, and a private profile links only its person's own.
+// oxlint-disable-next-line ren/no-comments -- access §9: who sees, connects and lists a profile.
 export const documents = [
   {
     resource: AppProfile.definition.name,

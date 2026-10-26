@@ -18,7 +18,7 @@ export const actions = {
   send: `${Session.definition.name}.send`,
 } as const
 
-// oxlint-disable-next-line ren/no-comments -- access §5 (AC4, AC6, AC7): a chat belongs to its space. Every space member reads, joins, sends a turn to and archives every chat of the space; an admin joins the space first.
+// oxlint-disable-next-line ren/no-comments -- access §5: a chat belongs to its space and its members.
 export const documents = [
   {
     resource: Session.definition.name,

@@ -42,7 +42,7 @@ const every = SpacePolicy.organizationRoles
 
 const admins = SpacePolicy.administratorRoles
 
-// oxlint-disable-next-line ren/no-comments -- owner-access §4, access §10 (AC4, AC16), private-spaces PS4. Every member writes org credentials; space members write their space's; a person writes their own. An admin sees a person's credential without its preview and deletes it, never uses, moves or copies it. A profile's credentials follow who sees the profile. A profile's credential stays in its profile; only a pasted key is copied; only its holder moves an account credential, and never to the org or another person.
+// oxlint-disable-next-line ren/no-comments -- access §10: who writes, moves and sees each credential owner.
 export const documents = [
   {
     resource: Credential.definition.name,
@@ -75,7 +75,7 @@ export interface Context {
   readonly isFenced: boolean
 }
 
-// oxlint-disable-next-line ren/no-comments -- The facts of an owner, as the target of a create, move or copy. A fenced agent (access AC18) does not count as the person.
+// oxlint-disable-next-line ren/no-comments -- The facts of a target owner; a fenced agent is not the person (AC18).
 export const resource = (owner: Credential.Owner, context: Context): Access.Resource => {
   if (owner.kind === "org") return { facts: [facts.org] }
   if (owner.kind === "space") return { facts: context.isSpaceMember ? [facts.spaceMember] : [] }
@@ -83,7 +83,7 @@ export const resource = (owner: Credential.Owner, context: Context): Access.Reso
   return { facts: owner.userId === context.userId && !context.isFenced ? [facts.self] : [facts.person] }
 }
 
-// oxlint-disable-next-line ren/no-comments -- A move names a credential and a target; the target adds its facts.
+// oxlint-disable-next-line ren/no-comments -- The facts of a move's source and target.
 export const moveTo = (
   source: { readonly accountUserId: string | null },
   target: Credential.Owner,

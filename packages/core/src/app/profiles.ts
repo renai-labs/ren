@@ -100,7 +100,7 @@ export const createOwner = Effect.fnUntraced(function* (
 const lists = (spaceId: Space.ID) =>
   sql`exists (select 1 from ${listed} where ${listed.profile_id} = ${profiles.id} and ${listed.space_id} = ${spaceId})`
 
-// oxlint-disable-next-line ren/no-comments -- private-spaces rules 10-12 (P8, P11): the one function that decides reach. Every space reaches the shared profiles that list it or every space; a private space also reaches its owner's private profiles. Member count and brain scope play no part. Links add their profiles, down the chain. An archived app's profiles are not reached. Order: private, then shared, by app slug and profile slug (INV-34).
+// oxlint-disable-next-line ren/no-comments -- private-spaces rules 10-12: reach follows the space's kind, never its members.
 export const reachable = Effect.fnUntraced(function* (client: Pick<Database.Transaction, "select">, scope: Reach) {
   if (Option.isNone(scope.spaceId)) return []
   const spaceId = scope.spaceId.value
@@ -483,7 +483,7 @@ export const layer = Layer.effect(
     const invalidate = (labels: ReadonlyArray<string>) =>
       Effect.forEach([...new Set(labels)], (label) => control.invalidate({ label }), { discard: true })
 
-    // oxlint-disable-next-line ren/no-comments -- Each space a list write names is a resource of its own: the policy decides from the profile's facts and the space's (access AC15, P19).
+    // oxlint-disable-next-line ren/no-comments -- access AC15: each listed space is checked as its own resource.
     const checkSpaces = Effect.fnUntraced(function* (
       transaction: Database.Transaction,
       actor: Actor.Info,

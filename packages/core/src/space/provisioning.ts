@@ -68,7 +68,7 @@ export const layer = Layer.effect(
             const firstOrganizationSpaceId =
               firstSpaceRows.at(0)?.id ?? (yield* insertSpace(transaction, organizationId, "General Space"))
             const ownerName = user.name.trim().slice(0, maximumOwnerNameLength)
-            // oxlint-disable-next-line ren/no-comments -- private-spaces rules 2, 3: one private space per person per org, made at join; a second join keeps it.
+            // oxlint-disable-next-line ren/no-comments -- private-spaces rule 2: one private space per person per org.
             const personalSpaceId =
               (yield* transaction
                 .select({ id: Database.Schema.space.id })
@@ -172,7 +172,7 @@ export const layer = Layer.effect(
                   ),
                 ),
               )
-            // oxlint-disable-next-line ren/no-comments -- private-spaces rule 16, access AC12: the person's private space goes with them, and so do the agents and apps it owns.
+            // oxlint-disable-next-line ren/no-comments -- private-spaces rule 16: the private space leaves with its person.
             const own = yield* transaction
               .update(Database.Schema.space)
               .set({ archived_at: sql`now()`, updated_at: sql`now()` })

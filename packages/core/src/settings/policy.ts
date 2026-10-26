@@ -9,7 +9,7 @@ import { SpacePolicy } from "../space/policy.js"
 
 const facts = { spaceMember: "space.member" } as const
 
-// oxlint-disable-next-line ren/no-comments -- access §3 and §11: every member reads the org settings and admins change them; a space's settings are for its members (AC4).
+// oxlint-disable-next-line ren/no-comments -- access §3, §11: org settings for admins, space settings for members.
 export const documents = [
   {
     resource: OrganizationSettings.definition.name,

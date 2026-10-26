@@ -32,7 +32,7 @@ export const isSpaceMember = (actor: Actor.Info) =>
       and ${Actor.fenced(actor, Database.Schema.space_member.space_id) ?? sql`true`}
   ))`
 
-// oxlint-disable-next-line ren/no-comments -- The SQL of the agent facts that a list can use.
+// oxlint-disable-next-line ren/no-comments -- The SQL of the agent facts.
 export const where = (actor: Actor.Info): ReadonlyMap<string, SQL> =>
   new Map([
     [AgentPolicy.facts.spaceMember, isSpaceMember(actor)],
@@ -127,7 +127,7 @@ export const visibleSpace = Effect.fnUntraced(function* (
       ),
     )
     .for("share", { of: Database.Schema.space })).at(0)
-  // oxlint-disable-next-line ren/no-comments -- access AC4: what is inside a space is for its members; an admin joins first.
+  // oxlint-disable-next-line ren/no-comments -- access AC4: members only.
   if (!row?.membershipId) return yield* new Primitive.NotFound({ message: "Space not found." })
   return { isMember: true, membershipId: row.membershipId }
 })

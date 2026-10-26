@@ -26,7 +26,7 @@ const every = SpacePolicy.organizationRoles
 
 const labelWrites = Primitive.actions(Label.definition, ["create", "update", "archive"])
 
-// oxlint-disable-next-line ren/no-comments -- access §6 (AC4, AC8, AC10, AC17): tasks are inside their space, for its members; an agent acts as its sender. Org labels are for admins; space labels for the members of their space; a system label has neither fact, so nobody changes it.
+// oxlint-disable-next-line ren/no-comments -- access §6: tasks are for space members; org labels for admins, space labels for members.
 export const documents = [
   {
     resource: Task.definition.name,

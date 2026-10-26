@@ -80,7 +80,7 @@ export const layer = Layer.effect(
         isFirst: row.isFirstOrganizationSpace,
       })
 
-    // oxlint-disable-next-line ren/no-comments -- private-spaces rule 7: who may not read a space sees its list entry only.
+    // oxlint-disable-next-line ren/no-comments -- private-spaces rule 7: no `read`, list entry only.
     const toInfo =
       (actor: Actor.Info) =>
       (row: Row): Space.Info => {

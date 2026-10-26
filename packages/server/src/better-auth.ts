@@ -169,7 +169,7 @@ const guardRequests = (input: Input) =>
 
 const LeftMember = Schema.Struct({ id: Schema.String, organizationId: Schema.String, userId: Schema.String })
 
-// oxlint-disable-next-line ren/no-comments -- access AC2: a leave runs the same offboarding as a removal. Better Auth's leave route deletes the member row and calls no organization hook.
+// oxlint-disable-next-line ren/no-comments -- access AC2: Better Auth's leave runs no hook, so Ren offboards here.
 const offboardLeaves = (input: Input) =>
   createAuthMiddleware(async (ctx) => {
     if (ctx.path !== "/organization/leave") return

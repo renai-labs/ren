@@ -10,7 +10,7 @@ const facts = { installer: "channelInstall.installer" } as const
 
 const changeActions = Primitive.actions(ChannelInstall.definition, ["update", "remove"])
 
-// oxlint-disable-next-line ren/no-comments -- An install is org config: every member sees it; admins and its installer change it.
+// oxlint-disable-next-line ren/no-comments -- Admins and the installer change an install.
 export const documents = [
   {
     resource: ChannelInstall.definition.name,
