@@ -261,8 +261,10 @@ export const writableSpace = Effect.fnUntraced(function* (
   action: string,
 ) {
   const space = yield* AgentQueries.visibleSpace(transaction, access, actor, spaceId)
-  if (!access.isAllowed({ actor, action, resource: TaskPolicy.resource(space.membershipId, spaceId) }))
+  const resource = TaskPolicy.resource(space.membershipId, spaceId)
+  if (!access.isAllowed({ actor, action, resource }))
     return yield* new Primitive.Forbidden({ message: "You cannot change tasks in this space." })
+  return resource
 })
 
 export const checkAssignment = Effect.fnUntraced(function* (

@@ -9,6 +9,7 @@ import type { Actor } from "../actor.js"
 import { AgentQueries } from "../agent/queries.js"
 import { Primitive } from "../primitive.js"
 import { AppPolicy } from "./policy.js"
+import { AppProfilePolicy } from "./profile-policy.js"
 
 export const notFound = new Primitive.NotFound({ message: "App not found." })
 
@@ -94,8 +95,11 @@ export const isOwnerMember = (actor: Actor.Info) =>
   sql<boolean>`exists (select 1 from space_member where space_id = ${Database.Schema.app}.owner_space_id and user_id = ${actor.userId} and archived_at is null)`
 
 // oxlint-disable-next-line ren/no-comments -- profiles.md §7 rule 8: members of the owner space, the person of a private profile, and members of a space that a shared profile lists or that every space reaches.
-export const isSpaceMember = (actor: Actor.Info) =>
-  sql<boolean>`(${isOwnerMember(actor)} or exists (select 1 from app_profile where app_profile.app_id = ${Database.Schema.app}.id and app_profile.organization_id = ${actor.organizationId} and ((app_profile.kind = 'private' and app_profile.user_id = ${actor.userId}) or (app_profile.kind = 'shared' and (app_profile.all_spaces or exists (select 1 from app_profile_space inner join space_member on space_member.space_id = app_profile_space.space_id where app_profile_space.profile_id = app_profile.id and space_member.user_id = ${actor.userId} and space_member.archived_at is null))))))`
+export const isSpaceMember = (actor: Actor.Info) => {
+  const reaches = AppProfilePolicy.conditions(actor)
+  const profiles = Database.Schema.app_profile
+  return sql<boolean>`(${isOwnerMember(actor)} or exists (select 1 from ${profiles} where ${profiles.app_id} = ${Database.Schema.app.id} and ${profiles.organization_id} = ${actor.organizationId} and ${or(reaches.get(AppProfilePolicy.relationships.self), reaches.get(AppProfilePolicy.relationships.allSpaces), reaches.get(AppProfilePolicy.relationships.listedMember))}))`
+}
 
 export const find = Effect.fnUntraced(function* (
   transaction: Database.Transaction,

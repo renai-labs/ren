@@ -213,10 +213,6 @@ const members = Database.Schema.space_member
 const profiles = Database.Schema.app_profile
 const listed = Database.Schema.app_profile_space
 
-// oxlint-disable-next-line ren/no-comments -- profiles.md §10: who sees a profile's credentials. Anyone who sees a shared profile; for a private profile, only its person (an admin sees its metadata on the profile, never its credentials).
-const profileSeen = (actor: Actor.Info) =>
-  sql`exists (select 1 from ${profiles} where ${profiles.id} = ${table.profile_id} and ((${profiles.kind} = 'shared' and (${actor.roles.some(Auth.isAdministrator)} or ${profiles.created_by_user_id} = ${actor.userId} or ${profiles.all_spaces} or exists (select 1 from ${listed} inner join ${members} on ${members.space_id} = ${listed.space_id} where ${listed.profile_id} = ${profiles.id} and ${members.user_id} = ${actor.userId} and ${members.archived_at} is null))) or (${profiles.kind} = 'private' and ${profiles.user_id} = ${actor.userId})))`
-
 // oxlint-disable-next-line ren/no-comments -- What a workload may use: its own credentials, its org's, its space's while it serves that space, and one person's only when it serves that person alone (README §6.4 rules 2, A37). Profiles reach by `AppProfiles.reachable` from the same scope.
 export const scopeOf = Effect.fnUntraced(function* (
   client: Pick<Database.Transaction, "select">,
@@ -386,7 +382,24 @@ export const layer = Layer.effect(
         [CredentialPolicy.relationships.spaceMember, and(eq(table.owner, "space"), membershipOf(actor))],
         [CredentialPolicy.relationships.self, and(eq(table.owner, "person"), eq(table.user_id, actor.userId))],
         [CredentialPolicy.relationships.person, eq(table.owner, "person")],
-        [CredentialPolicy.relationships.profile, and(eq(table.owner, "profile"), profileSeen(actor))],
+        [
+          CredentialPolicy.relationships.profile,
+          and(
+            eq(table.owner, "profile"),
+            // oxlint-disable-next-line ren/no-comments -- profiles.md §10: a profile's credentials go to whoever connects its items: anyone who sees a shared profile, and only the person of a private one.
+            exists(
+              database.db
+                .select({ one: sql`1` })
+                .from(profiles)
+                .where(
+                  and(
+                    eq(profiles.id, table.profile_id),
+                    AppProfilePolicy.filter(actor, access.plan(actor, AppProfilePolicy.actions.connect)),
+                  ),
+                ),
+            ),
+          ),
+        ],
       ])
 
     const visible = (actor: Actor.Info, action: string) => {
@@ -490,10 +503,16 @@ export const layer = Layer.effect(
           )
         : Effect.void
 
-    const checkDelivery = (actor: Actor.Info, owner: Credential.Owner, delivery: Credential.Delivery | undefined) =>
-      delivery === "delivered" && owner.kind === "org" && !actor.roles.some(Auth.isAdministrator)
-        ? Effect.fail(new Primitive.Forbidden({ message: "Only admins choose delivered for an org credential." }))
-        : Effect.void
+    const checkDelivery = Effect.fnUntraced(function* (
+      actor: Actor.Info,
+      owner: Credential.Owner,
+      delivery: Credential.Delivery | undefined,
+    ) {
+      if (delivery !== "delivered") return
+      const resource = yield* resourceOf(actor, owner)
+      if (Option.isNone(resource) || !isAllowed(actor, CredentialPolicy.actions.deliver, resource.value))
+        return yield* new Primitive.Forbidden({ message: "You cannot choose delivered for this credential." })
+    })
 
     // oxlint-disable-next-line ren/no-comments -- A24: the count runs under a lock on the owner's row, so two creates at 99 cannot both pass.
     const lockOwner = Effect.fnUntraced(function* (
@@ -889,6 +908,7 @@ export const layer = Layer.effect(
           }
         }
         yield* checkTarget(actor, input.owner, "move")
+        yield* checkDelivery(actor, input.owner, found.row.delivery)
         yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* lockOwner(transaction, actor.organizationId, input.owner)
@@ -914,6 +934,7 @@ export const layer = Layer.effect(
         if (!isPasted(found.row))
           return yield* ownerRule("copy_rotating", "Only pasted keys can be copied. Move a sign-in instead.")
         yield* checkTarget(actor, input.owner, "copy")
+        yield* checkDelivery(actor, input.owner, found.row.delivery)
         const value = yield* openRow(found.row)
         if (Option.isNone(value)) return yield* Effect.die(new Error(`Credential ${id} holds a value Ren cannot read`))
         return yield* insert(actor, input.owner, {

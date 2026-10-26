@@ -6,8 +6,9 @@ import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { SpaceSettings } from "@ren/schema/space-settings"
 import type { Access } from "../access.js"
+import { SpacePolicy } from "../space/policy.js"
 
-const spaceMember = "space.member"
+const spaceMember = SpacePolicy.member
 
 const organizationRoles = Auth.Role.literals
 

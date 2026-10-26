@@ -288,7 +288,11 @@ export const layerMinted = Layer.effect(
             .pipe(Effect.orDie)
           const allowed = rows.filter((row) =>
             access.isAllowed({
-              actor: { userId: Auth.UserID.make(row.userId), organizationId: scope.organizationId, roles: Auth.roles(row.role) },
+              actor: {
+                userId: Auth.UserID.make(row.userId),
+                organizationId: scope.organizationId,
+                roles: Auth.roles(row.role),
+              },
               action: spaceGet,
               resource: Option.match(scope.spaceId, {
                 onNone: () => SpacePolicy.organization,
@@ -297,7 +301,10 @@ export const layerMinted = Layer.effect(
             }),
           )
           return Option.some({
-            value: { type: "fields", fields: Object.fromEntries(allowed.map((row) => [row.id, Redacted.make(row.id)])) },
+            value: {
+              type: "fields",
+              fields: Object.fromEntries(allowed.map((row) => [row.id, Redacted.make(row.id)])),
+            },
           } satisfies Sourced)
         }
         if (candidate.label === ren) {

@@ -327,10 +327,17 @@ export const layer = Layer.effect(
       return { spaceId, agentId, ownerId: Predicate.isUndefined(input.ownerId) ? keptOwner : input.ownerId }
     })
 
-    const refuseClosing = (actor: Actor.Info, status: Task.Status | undefined) =>
-      actor.agent && status && closed.has(status)
-        ? Effect.fail(new Primitive.Forbidden({ message: "Only a person marks a task done or dismissed." }))
+    const refuseClosing = (actor: Actor.Info, resource: Access.Resource, status: Task.Status | undefined) =>
+      status && closed.has(status) && !access.isAllowed({ actor, action: TaskPolicy.actions.close, resource })
+        ? Effect.fail(new Primitive.Forbidden({ message: "You cannot mark this task done or dismissed." }))
         : Effect.void
+
+    const canCreateLabels = (actor: Actor.Info) =>
+      access.isAllowed({
+        actor,
+        action: Primitive.action(Label.definition, "create"),
+        resource: TaskPolicy.organization,
+      })
 
     const handOff = Effect.fn("Task.handOff")(function* (
       actor: Actor.Info,
@@ -525,10 +532,10 @@ export const layer = Layer.effect(
         )
       }),
       create: Effect.fn("Task.create")(function* (actor: Actor.Info, input: Task.CreateInput) {
-        yield* refuseClosing(actor, input.status)
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            yield* TaskQueries.writableSpace(transaction, access, actor, input.spaceId, actions.create)
+            const space = yield* TaskQueries.writableSpace(transaction, access, actor, input.spaceId, actions.create)
+            yield* refuseClosing(actor, space, input.status)
             yield* TaskQueries.checkAssignment(transaction, actor.organizationId, input.spaceId, input)
             const parent = yield* TaskQueries.lockParent(transaction, access, actor, input.parentId)
             if (parent && parent.task.space_id !== input.spaceId)
@@ -571,7 +578,7 @@ export const layer = Layer.effect(
                 .insert(Database.Schema.task_session)
                 .values({ task_id: task.id, session_id: actor.agent.sessionId, agent_id: actor.agent.agentId })
             const labels = input.labels
-              ? yield* setLabels(transaction, task, input.labels, { canCreate: !actor.agent })
+              ? yield* setLabels(transaction, task, input.labels, { canCreate: canCreateLabels(actor) })
               : []
             const links = yield* editLinks(transaction, task, input.links ?? [], [])
             yield* TaskTrail.record(transaction, task, actor, [{ _tag: "created" }, ...labels, ...links])
@@ -580,7 +587,6 @@ export const layer = Layer.effect(
         )
       }),
       update: Effect.fn("Task.update")(function* (actor: Actor.Info, id: Task.ID, input: Task.UpdateInput) {
-        yield* refuseClosing(actor, input.status)
         if (input.parentId === id)
           return yield* new Primitive.Invalid({ message: "A task cannot be its own parent.", field: "parentId" })
         return yield* database.transaction((transaction) =>
@@ -598,6 +604,7 @@ export const layer = Layer.effect(
               eq(Database.Schema.task.id, id),
               actions.update,
             )
+            yield* refuseClosing(actor, TaskPolicy.resource(row.membershipId, row.task.space_id), input.status)
             const task = { id, organizationId: row.task.organization_id }
             const status = input.status !== row.task.status ? input.status : undefined
             const dueAt = input.dueAt && DateTime.toDateUtc(input.dueAt)
@@ -617,7 +624,7 @@ export const layer = Layer.effect(
               ),
             ]
             const labels = input.labels
-              ? yield* setLabels(transaction, task, input.labels, { canCreate: !actor.agent })
+              ? yield* setLabels(transaction, task, input.labels, { canCreate: canCreateLabels(actor) })
               : []
             const links = yield* editLinks(transaction, task, input.addLinks ?? [], input.removeLinks ?? [])
             const reparented = yield* editParent(transaction, row, parent, input.parentId)
@@ -681,8 +688,6 @@ export const layer = Layer.effect(
         )
       }),
       review: Effect.fn("Task.review")(function* (actor: Actor.Info, id: Task.ID, input: Task.ReviewInput) {
-        if (!input.humanReview && actor.agent)
-          return yield* new Primitive.Forbidden({ message: "Only a person decides a review." })
         const decided = yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* TaskQueries.lockForWrite(
@@ -690,7 +695,7 @@ export const layer = Layer.effect(
               access,
               actor,
               eq(Database.Schema.task.id, id),
-              actions.review,
+              input.humanReview ? actions.review : TaskPolicy.actions.decide,
             )
             if (!input.humanReview) {
               const review = yield* decide(transaction, row, actor, input)

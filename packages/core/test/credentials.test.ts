@@ -250,6 +250,14 @@ describe("Credentials: who may do what (owner-access §4)", () => {
       }
       expect(failure(yield* Effect.exit(credentials.create(setup.ada, input)))).toContain("Primitive.Forbidden")
       expect((yield* credentials.create(setup.admin, input)).delivery).toBe("delivered")
+      const mine = yield* credentials.create(setup.ada, {
+        ...input,
+        owner: { kind: "space", spaceId: setup.space.id },
+        label: "PG_SPACE",
+      })
+      const org = { owner: { kind: "org" as const } }
+      expect(failure(yield* Effect.exit(credentials.copy(setup.ada, mine.id, org)))).toContain("Primitive.Forbidden")
+      expect(failure(yield* Effect.exit(credentials.move(setup.ada, mine.id, org)))).toContain("Primitive.Forbidden")
     }),
   )
 })

@@ -173,8 +173,6 @@ export const layer = Layer.effect(
     const control = yield* EgressControl.Service
     const registry = yield* McpProvider.Registry
 
-    const isAdmin = (actor: Actor.Info) => actor.roles.some(Auth.isAdministrator)
-
     const spacesOf = Effect.fnUntraced(function* (client: Pick<Database.Transaction, "select">, actor: Actor.Info) {
       return (yield* client
         .select({ id: spaces.id })
@@ -484,23 +482,29 @@ export const layer = Layer.effect(
       ids: ReadonlyArray<Space.ID>,
     ) {
       if (!ids.length) return
-      const known = new Set(
-        (yield* transaction
-          .select({ id: spaces.id })
-          .from(spaces)
-          .where(
-            and(
-              inArray(spaces.id, [...ids]),
-              eq(spaces.organization_id, actor.organizationId),
-              isNull(spaces.archived_at),
-            ),
-          )).map((row) => row.id),
+      const known = yield* transaction
+        .select({ id: spaces.id, membershipId: SpaceQueries.membership.id })
+        .from(spaces)
+        .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
+        .where(
+          and(
+            inArray(spaces.id, [...ids]),
+            eq(spaces.organization_id, actor.organizationId),
+            isNull(spaces.archived_at),
+          ),
+        )
+      if (ids.some((id) => !known.some((space) => space.id === id)))
+        return yield* new Primitive.NotFound({ message: "Space not found." })
+      if (
+        !known.every((space) =>
+          access.isAllowed({
+            actor,
+            action: AppProfilePolicy.actions.listInSpace,
+            resource: SpacePolicy.resource(space.membershipId, space.id),
+          }),
+        )
       )
-      if (ids.some((id) => !known.has(id))) return yield* new Primitive.NotFound({ message: "Space not found." })
-      if (isAdmin(actor)) return
-      const own = yield* spacesOf(transaction, actor)
-      if (ids.some((id) => !own.includes(id)))
-        return yield* new Primitive.Forbidden({ message: "You can list only spaces you belong to (P19)." })
+        return yield* new Primitive.Forbidden({ message: "You cannot list a profile in this space (P19)." })
     })
 
     // oxlint-disable-next-line ren/no-comments -- P20: a private profile lists no spaces; only admins choose every space; a member's new shared profile lists the member's spaces unless they name some.
@@ -514,8 +518,11 @@ export const layer = Layer.effect(
           return yield* new Primitive.Invalid({ message: "A private profile lists no spaces.", field: "spaceIds" })
         return []
       }
-      if (input.allSpaces && !isAdmin(actor))
-        return yield* new Primitive.Forbidden({ message: "Only admins share a profile with every space (P20)." })
+      if (
+        input.allSpaces &&
+        !allowed(actor, AppProfilePolicy.actions.shareEverySpace, { ...holdsNone, kind: input.kind })
+      )
+        return yield* new Primitive.Forbidden({ message: "You cannot share a profile with every space (P20)." })
       const spaceIds = input.spaceIds ?? (input.allSpaces ? [] : yield* spacesOf(transaction, actor))
       yield* checkSpaces(transaction, actor, spaceIds)
       return spaceIds
@@ -732,8 +739,11 @@ export const layer = Layer.effect(
             const row = yield* find(transaction, actor, id, AppProfilePolicy.actions.access)
             if (row.kind === "private")
               return yield* new Primitive.Forbidden({ message: "A private profile lists no spaces." })
-            if (typeof input.allSpaces === "boolean" && !isAdmin(actor))
-              return yield* new Primitive.Forbidden({ message: "Only admins share a profile with every space (P20)." })
+            if (
+              typeof input.allSpaces === "boolean" &&
+              !allowed(actor, AppProfilePolicy.actions.shareEverySpace, { ...holdsNone, kind: row.kind })
+            )
+              return yield* new Primitive.Forbidden({ message: "You cannot share a profile with every space (P20)." })
             const add = input.add ?? []
             const remove = input.remove ?? []
             yield* checkSpaces(transaction, actor, [...add, ...remove])
