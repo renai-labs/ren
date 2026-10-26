@@ -476,6 +476,32 @@ describe("ChannelTurns", () => {
     }),
   )
 
+  it.live("a start that the brain rejects ends with failed and one notice that links to the chat", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const outbox = yield* ChannelFixture.Outbox
+      ;(yield* ChannelFixture.Cell).rejectStarts()
+      const found = ChannelFixture.event(subject.install)
+      yield* ChannelFixture.receive(ChannelFixture.delivery(found))
+      yield* ChannelFixture.settled(found)
+      yield* Effect.sync(() => outbox.progress.length).pipe(
+        Effect.repeat({ until: (length) => length >= 2, schedule: Schedule.spaced("20 millis") }),
+        Effect.timeoutOrElse({
+          duration: "20 seconds",
+          orElse: () => Effect.die(new Error("The rejected start sent no failure")),
+        }),
+      )
+      const sessionId = (yield* ChannelFixture.threads).at(0)?.session_id
+      expect(outbox.progress).toEqual([
+        { message: found.message, status: "received" },
+        { message: found.message, status: "failed" },
+      ])
+      expect(outbox.sent.map((each) => each.text)).toEqual([
+        `I couldn’t start working on your message. Please try again. [Open in Ren](${ChannelFixture.app}/sessions/${sessionId})`,
+      ])
+    }),
+  )
+
   it.live("a turn that a message from the app started sends nothing to the thread", () =>
     Effect.gen(function* () {
       const subject = yield* routed
