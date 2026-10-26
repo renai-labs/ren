@@ -280,7 +280,7 @@ const forbiddenElements = [
 ].map((entry) => ({ element: entry[0], message: `Use ${entry[1]} from @ren/ui.` }))
 
 const tailwind = {
-  cwd: "packages/ui",
+  cwd: new URL("packages/ui", import.meta.url).pathname,
   entryPoint: "src/styles/index.css",
   selectors: [
     ...getDefaultSelectors(),

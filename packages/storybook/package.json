@@ -10,6 +10,7 @@
     "build": "storybook build -o storybook-static --quiet",
     "test": "playwright test --project ui",
     "test:parity": "playwright test --project parity",
+    "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {

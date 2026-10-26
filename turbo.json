@@ -15,6 +15,11 @@
     "transit": {
       "dependsOn": ["^transit"]
     },
+    "lint": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/oxlint.config.ts", "$TURBO_ROOT$/script/oxlint/**"],
+      "outputs": []
+    },
     "test": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts", "$TURBO_ROOT$/packages/test-harness/src/**"],

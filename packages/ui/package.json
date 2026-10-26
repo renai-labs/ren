@@ -11,6 +11,7 @@
   },
   "scripts": {
     "test": "bun test --only-failures",
+    "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit",
     "generate": "bun run script/design-tokens.ts"
   },

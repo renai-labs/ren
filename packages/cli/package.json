@@ -19,6 +19,7 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "test": "bun ../../script/test.ts",
+    "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
