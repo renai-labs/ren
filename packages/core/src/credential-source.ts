@@ -219,7 +219,11 @@ export const layerMinted = Layer.effect(
         const granted = yield* cachedGrant(scope).pipe(Effect.option)
         const endpoints = Option.match(granted, { onNone: () => [], onSome: (found) => found.access.endpoints })
         const modelHosts = [
-          ...new Set(endpoints.flatMap((endpoint) => Option.toArray(Option.fromNullishOr(URL.parse(endpoint.baseUrl)?.hostname)))),
+          ...new Set(
+            endpoints.flatMap((endpoint) =>
+              Option.toArray(Option.fromNullishOr(URL.parse(endpoint.baseUrl)?.hostname)),
+            ),
+          ),
         ]
         return [
           {
@@ -295,7 +299,7 @@ export const layerMinted = Layer.effect(
               },
               action: spaceGet,
               resource: Option.match(scope.spaceId, {
-                onNone: () => SpacePolicy.organization,
+                onNone: () => Access.organization,
                 onSome: (spaceId) => SpacePolicy.resource(row.membershipId, spaceId),
               }),
             }),

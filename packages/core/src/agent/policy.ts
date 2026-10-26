@@ -15,13 +15,9 @@ const targetMember = "target.spaceMember"
 
 const ownerAndTargetMember = "agent.ownerAndTargetMember"
 
-const organizationRoles = Auth.Role.literals
-
-const administratorRoles = ["owner", "admin"] as const satisfies ReadonlyArray<Auth.Role>
-
 const statements = (actions: ReadonlyArray<string>, relationship: string) => [
-  { actions, roles: administratorRoles, on: Policy.everywhere },
-  { actions, roles: organizationRoles, on: relationship },
+  { actions, roles: Auth.administratorRoles, on: Policy.everywhere },
+  { actions, roles: Auth.Role.literals, on: relationship },
 ]
 
 export const documents = [
@@ -42,7 +38,7 @@ export const documents = [
       ...statements(Primitive.actions(AgentMembership.definition, ["archive"]), targetMember),
       {
         actions: Primitive.actions(AgentMembership.definition, ["archive"]),
-        roles: organizationRoles,
+        roles: Auth.Role.literals,
         on: ownerMember,
       },
     ],

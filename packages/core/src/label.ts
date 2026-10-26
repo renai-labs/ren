@@ -74,7 +74,7 @@ export const layer = Layer.effect(
 
     return Service.of({
       list: Effect.fn("Label.list")(function* (actor: Actor.Info, input: Label.ListInput) {
-        if (!access.isAllowed({ actor, action: actions.list, resource: TaskPolicy.organization }))
+        if (!access.isAllowed({ actor, action: actions.list, resource: Access.organization }))
           return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
@@ -103,7 +103,7 @@ export const layer = Layer.effect(
         )
       }),
       create: Effect.fn("Label.create")(function* (actor: Actor.Info, input: Label.CreateInput) {
-        if (!access.isAllowed({ actor, action: actions.create, resource: TaskPolicy.organization }))
+        if (!access.isAllowed({ actor, action: actions.create, resource: Access.organization }))
           return yield* new Primitive.Forbidden({ message: "You cannot create labels." })
         return yield* database.transaction((transaction) =>
           transaction

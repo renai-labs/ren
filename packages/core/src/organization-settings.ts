@@ -8,7 +8,6 @@ import { Context, Effect, Layer } from "effect"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { Primitive } from "./primitive.js"
-import { SettingsPolicy } from "./settings/policy.js"
 import { SettingsRows } from "./settings/rows.js"
 
 export type Interface = Primitive.Interface<typeof OrganizationSettings.definition>
@@ -36,7 +35,7 @@ export const layer = Layer.effect(
       return {
         id: actor.organizationId,
         ...(yield* SettingsRows.decode(row)),
-        canUpdate: access.isAllowed({ actor, action: actions.update, resource: SettingsPolicy.organization }),
+        canUpdate: access.isAllowed({ actor, action: actions.update, resource: Access.organization }),
       } satisfies OrganizationSettings.Info
     })
 
@@ -44,7 +43,7 @@ export const layer = Layer.effect(
       get: Effect.fn("OrganizationSettings.get")(function* (actor: Actor.Info, idOrSlug: string) {
         if (
           idOrSlug !== actor.organizationId ||
-          !access.isAllowed({ actor, action: actions.get, resource: SettingsPolicy.organization })
+          !access.isAllowed({ actor, action: actions.get, resource: Access.organization })
         )
           return yield* notFound
         return yield* database.transaction((transaction) => read(transaction, actor))
@@ -55,7 +54,7 @@ export const layer = Layer.effect(
         input: OrganizationSettings.UpdateInput,
       ) {
         if (id !== actor.organizationId) return yield* notFound
-        if (!access.isAllowed({ actor, action: actions.update, resource: SettingsPolicy.organization }))
+        if (!access.isAllowed({ actor, action: actions.update, resource: Access.organization }))
           return yield* new Primitive.Forbidden({ message: "Only organization admins can edit organization settings." })
         return yield* database.transaction((transaction) =>
           SettingsRows.write(transaction, { organization_id: id }, input.settings).pipe(

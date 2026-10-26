@@ -2,6 +2,7 @@ export * as AppProfilePolicy from "./profile-policy.js"
 
 import { Database } from "@ren/db/database"
 import { AppProfile } from "@ren/schema/app-profile"
+import { Auth } from "@ren/schema/auth"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { and, eq, sql } from "drizzle-orm"
@@ -33,9 +34,9 @@ export const actions = {
   listInSpace: `${AppProfile.definition.name}.listInSpace`,
 } as const
 
-const every = SpacePolicy.organizationRoles
+const every = Auth.Role.literals
 
-const admins = SpacePolicy.administratorRoles
+const admins = Auth.administratorRoles
 
 const see = [actions.list, actions.get, actions.connect, actions.delete]
 

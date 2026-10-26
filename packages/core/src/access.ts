@@ -23,6 +23,8 @@ export interface Resource {
   readonly organizationId?: Auth.OrganizationID | null
 }
 
+export const organization: Resource = { relationships: [] }
+
 export interface Request {
   readonly actor: Actor.Info
   readonly action: string

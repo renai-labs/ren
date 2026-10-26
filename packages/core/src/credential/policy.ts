@@ -1,10 +1,10 @@
 export * as CredentialPolicy from "./policy.js"
 
+import { Auth } from "@ren/schema/auth"
 import { Credential } from "@ren/schema/credential"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import type { Access } from "../access.js"
-import { SpacePolicy } from "../space/policy.js"
 
 export const relationships = {
   org: "credential.org",
@@ -27,9 +27,9 @@ export const actions = {
   moveAccount: `${Credential.definition.name}.moveAccount`,
 } as const
 
-const every = SpacePolicy.organizationRoles
+const every = Auth.Role.literals
 
-const admins = SpacePolicy.administratorRoles
+const admins = Auth.administratorRoles
 
 // oxlint-disable-next-line ren/no-comments -- owner-access §4. A profile's credentials follow who sees the profile (profiles.md §10), which `Credentials` checks before this statement applies. An admin sees a person's credential and may delete it, never use, move or copy it. Only admins choose delivered for an org credential. Only its holder moves an account credential (moveAccount, on top of move).
 export const documents = [

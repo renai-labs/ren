@@ -129,7 +129,7 @@ export const layer = Layer.effect(
       list: Effect.fn("Space.list")(function* (actor: Actor.Info, input: Space.ListInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            if (!access.isAllowed({ actor, action: actions.list, resource: SpacePolicy.organization })) {
+            if (!access.isAllowed({ actor, action: actions.list, resource: Access.organization })) {
               return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
             }
             const where = and(visibleTo(actor), input.joined ? isNotNull(SpaceQueries.membership.id) : undefined)
@@ -161,7 +161,7 @@ export const layer = Layer.effect(
       create: Effect.fn("Space.create")(function* (actor: Actor.Info, input: Space.CreateInput) {
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            if (!access.isAllowed({ actor, action: actions.create, resource: SpacePolicy.organization })) {
+            if (!access.isAllowed({ actor, action: actions.create, resource: Access.organization })) {
               return yield* new Primitive.Forbidden({ message: "Join the organization to create spaces." })
             }
             const id = Space.ID.create()

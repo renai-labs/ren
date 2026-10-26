@@ -260,7 +260,7 @@ export const layer = Layer.effect(
 
     return Service.of({
       list: Effect.fn("Session.list")(function* (actor: Actor.Info, input: Session.ListInput) {
-        if (!access.isAllowed({ actor, action: SessionPolicy.actions.list, resource: SessionPolicy.organization }))
+        if (!access.isAllowed({ actor, action: SessionPolicy.actions.list, resource: Access.organization }))
           return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {

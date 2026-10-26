@@ -336,7 +336,7 @@ export const layer = Layer.effect(
       access.isAllowed({
         actor,
         action: Primitive.action(Label.definition, "create"),
-        resource: TaskPolicy.organization,
+        resource: Access.organization,
       })
 
     const handOff = Effect.fn("Task.handOff")(function* (
@@ -488,7 +488,7 @@ export const layer = Layer.effect(
         )
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            if (!access.isAllowed({ actor, action: actions.list, resource: TaskPolicy.organization }))
+            if (!access.isAllowed({ actor, action: actions.list, resource: Access.organization }))
               return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
             const rows = yield* TaskQueries.select(transaction, actor)
               .where(where)

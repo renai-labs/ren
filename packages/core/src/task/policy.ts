@@ -1,7 +1,7 @@
 export * as TaskPolicy from "./policy.js"
 
 import { Database } from "@ren/db/database"
-import type { Auth } from "@ren/schema/auth"
+import { Auth } from "@ren/schema/auth"
 import { Label } from "@ren/schema/label"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
@@ -13,7 +13,6 @@ import { and, eq, isNotNull } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import type { Access } from "../access.js"
 import { AccessFilter } from "../access-filter.js"
-import { SpacePolicy } from "../space/policy.js"
 
 const spaceMember = "task.spaceMember"
 
@@ -22,8 +21,8 @@ const commentAuthor = "comment.author"
 export const membership = alias(Database.Schema.space_member, "task_membership")
 
 const statements = (actions: ReadonlyArray<string>, options: { readonly agents: boolean }) => [
-  { actions, roles: SpacePolicy.administratorRoles, on: Policy.everywhere, agents: options.agents },
-  { actions, roles: SpacePolicy.organizationRoles, on: spaceMember, agents: options.agents },
+  { actions, roles: Auth.administratorRoles, on: Policy.everywhere, agents: options.agents },
+  { actions, roles: Auth.Role.literals, on: spaceMember, agents: options.agents },
 ]
 
 export const actions = {
@@ -38,7 +37,7 @@ export const documents = [
     statements: [
       {
         actions: Primitive.actions(Task.definition, ["list"]),
-        roles: SpacePolicy.organizationRoles,
+        roles: Auth.Role.literals,
         on: Policy.everywhere,
         agents: true,
       },
@@ -56,7 +55,7 @@ export const documents = [
       ...statements(Primitive.actions(TaskComment.definition, ["create"]), { agents: true }),
       {
         actions: Primitive.actions(TaskComment.definition, ["update", "archive"]),
-        roles: SpacePolicy.organizationRoles,
+        roles: Auth.Role.literals,
         on: commentAuthor,
       },
     ],
@@ -70,20 +69,18 @@ export const documents = [
     statements: [
       {
         actions: Primitive.actions(Label.definition, ["list"]),
-        roles: SpacePolicy.organizationRoles,
+        roles: Auth.Role.literals,
         on: Policy.everywhere,
         agents: true,
       },
       {
         actions: Primitive.actions(Label.definition, ["create", "update", "archive"]),
-        roles: SpacePolicy.organizationRoles,
+        roles: Auth.Role.literals,
         on: Policy.everywhere,
       },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
-
-export const organization: Access.Resource = { relationships: [] }
 
 export const comment = (holds: { readonly isAuthor: boolean }, spaceId: Space.ID): Access.Resource => ({
   relationships: holds.isAuthor ? [commentAuthor] : [],

@@ -10,22 +10,18 @@ import { SpacePolicy } from "../space/policy.js"
 
 const spaceMember = SpacePolicy.member
 
-const organizationRoles = Auth.Role.literals
-
-const administratorRoles = ["owner", "admin"] as const satisfies ReadonlyArray<Auth.Role>
-
 export const documents = [
   {
     primitive: OrganizationSettings.definition.name,
     statements: [
       {
         actions: Primitive.actions(OrganizationSettings.definition, ["get"]),
-        roles: organizationRoles,
+        roles: Auth.Role.literals,
         on: Policy.everywhere,
       },
       {
         actions: Primitive.actions(OrganizationSettings.definition, ["update"]),
-        roles: administratorRoles,
+        roles: Auth.administratorRoles,
         on: Policy.everywhere,
       },
     ],
@@ -33,12 +29,10 @@ export const documents = [
   {
     primitive: SpaceSettings.definition.name,
     statements: [
-      { actions: Primitive.actions(SpaceSettings.definition), roles: administratorRoles, on: Policy.everywhere },
-      { actions: Primitive.actions(SpaceSettings.definition), roles: organizationRoles, on: spaceMember },
+      { actions: Primitive.actions(SpaceSettings.definition), roles: Auth.administratorRoles, on: Policy.everywhere },
+      { actions: Primitive.actions(SpaceSettings.definition), roles: Auth.Role.literals, on: spaceMember },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
-
-export const organization: Access.Resource = { relationships: [] }
 
 export const space = (isMember: boolean): Access.Resource => ({ relationships: isMember ? [spaceMember] : [] })
