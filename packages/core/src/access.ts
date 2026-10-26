@@ -66,6 +66,7 @@ export const make = (documents: ReadonlyArray<Policy.Document>): Interface => {
       const allowed = plan(request.actor, request.action)
       if (allowed.spaceId && request.resource.spaceId && allowed.spaceId !== request.resource.spaceId) return false
       const isOwn =
+        // ast-grep-ignore: no-nullish-comparison, -- null names a record Ren gives every organization; only a missing owner means the actor's.
         request.resource.organizationId === undefined ||
         request.resource.organizationId === request.actor.organizationId
       return (
