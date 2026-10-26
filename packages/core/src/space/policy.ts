@@ -7,7 +7,8 @@ import { Primitive } from "@ren/schema/primitive"
 import { Space } from "@ren/schema/space"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { SpaceMember } from "@ren/schema/space-member"
-import { and, eq, isNotNull } from "drizzle-orm"
+import { and, eq, isNotNull, isNull } from "drizzle-orm"
+import { Effect } from "effect"
 import type { Access } from "../access.js"
 import { AccessFilter } from "../access-filter.js"
 import { SpaceQueries } from "./queries.js"
@@ -62,6 +63,34 @@ export const documents = [
 export const resource = (membershipId: Space.MembershipID | null, spaceId: Space.ID): Access.Resource => ({
   relationships: spaceMember.holds(membershipId) ? [spaceMember.name] : [],
   spaceId,
+})
+
+export const actsIn = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  access: Access.Interface,
+  organizationId: Auth.OrganizationID,
+  spaceId: Space.ID,
+  userId: Auth.UserID,
+) {
+  const rows = yield* transaction
+    .select({ role: Database.Schema.member.role, membershipId: Database.Schema.space_member.id })
+    .from(Database.Schema.member)
+    .leftJoin(
+      Database.Schema.space_member,
+      and(
+        eq(Database.Schema.space_member.space_id, spaceId),
+        eq(Database.Schema.space_member.user_id, userId),
+        isNull(Database.Schema.space_member.archived_at),
+      ),
+    )
+    .where(and(eq(Database.Schema.member.organizationId, organizationId), eq(Database.Schema.member.userId, userId)))
+  return rows.some((row) =>
+    access.isAllowed({
+      actor: { userId, organizationId, roles: Auth.roles(row.role) },
+      action: Primitive.action(Space.definition, "get"),
+      resource: resource(row.membershipId, spaceId),
+    }),
+  )
 })
 
 export const filter = (plan: Access.Plan) =>

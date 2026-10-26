@@ -130,7 +130,7 @@ export const layer = Layer.effect(
 
     return Service.of({
       list: Effect.fn("ChannelMappings.list")(function* (actor: Actor.Info, input: ChannelMapping.ListInput) {
-        if (!access.isAllowed({ actor, action: actions.list, resource: SpacePolicy.organization }))
+        if (!access.isAllowed({ actor, action: actions.list, resource: Access.organization }))
           return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
         const where = and(
           eq(install.organization_id, actor.organizationId),
@@ -244,7 +244,7 @@ export const layer = Layer.effect(
               return yield* new Primitive.Invalid({ message: "The agent is not in this space.", field: "agentId" })
             if (
               values.fallback &&
-              !(yield* SpaceQueries.actsIn(transaction, actor.organizationId, input.spaceId, fallbackUserId))
+              !(yield* SpacePolicy.actsIn(transaction, access, actor.organizationId, input.spaceId, fallbackUserId))
             )
               return yield* new Primitive.Invalid({
                 message: "The fallback user must be a member of the space.",

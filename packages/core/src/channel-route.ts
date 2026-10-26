@@ -9,10 +9,11 @@ import type { Space } from "@ren/schema/space"
 import type { Task } from "@ren/schema/task"
 import { and, asc, eq, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Schema } from "effect"
+import { Access } from "./access.js"
 import { ChannelIdentity } from "./channel-identity.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { AgentQueries } from "./agent/queries.js"
-import { SpaceQueries } from "./space/queries.js"
+import { SpacePolicy } from "./space/policy.js"
 import { TaskQueries } from "./task/queries.js"
 
 export class Refused extends Schema.TaggedError<Refused>()("ChannelRoute.Refused", {
@@ -57,13 +58,14 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const identity = yield* ChannelIdentity.Service
     const registry = yield* ChannelProvider.Registry
+    const access = yield* Access.Service
     const install = Database.Schema.channel_install
     const mapping = Database.Schema.channel_mapping
     const space = Database.Schema.space
     const agent = Database.Schema.agent
 
     const actsIn = (organizationId: Auth.OrganizationID, spaceId: Space.ID, userId: Auth.UserID) =>
-      database.transaction((transaction) => SpaceQueries.actsIn(transaction, organizationId, spaceId, userId))
+      database.transaction((transaction) => SpacePolicy.actsIn(transaction, access, organizationId, spaceId, userId))
 
     const runAs = Effect.fnUntraced(function* (
       organizationId: Auth.OrganizationID,
