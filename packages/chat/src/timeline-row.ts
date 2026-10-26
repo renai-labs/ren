@@ -33,7 +33,11 @@ export class AssistantPart extends Data.TaggedClass("AssistantPart")<{
 
 export class Thinking extends Data.TaggedClass("Thinking")<{ readonly userMessageID: string; readonly ref: PartRef }> {}
 
-export class Error extends Data.TaggedClass("Error")<{ readonly userMessageID: string; readonly text: string }> {}
+export class Error extends Data.TaggedClass("Error")<{
+  readonly userMessageID: string
+  readonly kind: string
+  readonly text: string
+}> {}
 
 export class Retry extends Data.TaggedClass("Retry")<{ readonly userMessageID: string }> {}
 

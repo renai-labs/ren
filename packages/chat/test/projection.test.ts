@@ -980,7 +980,11 @@ describe("current session timeline rows", () => {
     }).rows
     expect(tags(preStep)).toEqual(["UserMessage", "Error", "Notice"])
     expect(preStep[1]).toEqual(
-      new TimelineRow.Error({ userMessageID: "msg_user", text: "Model unavailable: opencode/gpt-5.2" }),
+      new TimelineRow.Error({
+        userMessageID: "msg_user",
+        kind: "provider.no-route",
+        text: "Model unavailable: opencode/gpt-5.2",
+      }),
     )
 
     expect(
@@ -1029,6 +1033,7 @@ describe("current session timeline rows", () => {
     ).toEqual(
       new TimelineRow.Error({
         userMessageID: "msg_user",
+        kind: "aborted",
         text: "Execution was interrupted repeatedly and will not be resumed automatically.",
       }),
     )

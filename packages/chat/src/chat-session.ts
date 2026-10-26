@@ -107,6 +107,11 @@ export interface Options {
   readonly onError?: (error: unknown) => Effect.Effect<void>
 }
 
+export type Boot =
+  | { readonly _tag: "Ready" }
+  | { readonly _tag: "Starting"; readonly phase: string }
+  | { readonly _tag: "Failed"; readonly reason: string }
+
 export interface Handoff {
   readonly id: SessionMessage.ID
   readonly text: string
@@ -173,7 +178,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
   const handoff = options.handoff
   const state = yield* SubscriptionRef.make(
     handoff
-      ? Outbox.admit(
+      ? Outbox.handoff(
           ChatState.empty,
           {
             sessionID: root,
@@ -187,6 +192,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       : ChatState.empty,
   )
   const status = yield* SubscriptionRef.make<Connection.Status>("connecting")
+  const boot = yield* SubscriptionRef.make<Boot>({ _tag: "Ready" })
   const events = yield* PubSub.unbounded<SessionEvent.Event>()
   const reads = yield* Reads.make<unknown>()
   const accessLock = yield* Semaphore.make(1)
@@ -261,10 +267,15 @@ export const make = Effect.fnUntraced(function* (options: Options) {
       const access = yield* options.access({ unreachable }).pipe(
         Effect.mapError((cause) => new AccessFailed({ cause })),
         Effect.flatMap((answer) => {
-          if (answer.status === "ready") return Effect.succeed(Option.some(answer))
+          if (answer.status === "ready")
+            return SubscriptionRef.set(boot, { _tag: "Ready" }).pipe(Effect.as(Option.some(answer)))
           if (answer.status === "failed")
-            return showSaved.pipe(Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error(answer.reason) }))))
-          return showSaved.pipe(
+            return SubscriptionRef.set(boot, { _tag: "Failed", reason: answer.reason }).pipe(
+              Effect.andThen(showSaved),
+              Effect.andThen(Effect.fail(new AccessFailed({ cause: new Error(answer.reason) }))),
+            )
+          return SubscriptionRef.set(boot, { _tag: "Starting", phase: answer.phase }).pipe(
+            Effect.andThen(showSaved),
             Effect.andThen(Effect.sleep(startingPollMs)),
             Effect.as(Option.none<Session.ReadyAccess>()),
           )
@@ -974,6 +985,7 @@ export const make = Effect.fnUntraced(function* (options: Options) {
     sessionID: root,
     state,
     status,
+    boot,
     open,
     enrich,
     loadMore,
