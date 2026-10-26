@@ -1,6 +1,7 @@
 export * as CredentialRequirements from "./credential-requirements.js"
 
 import { Database } from "@ren/db/database"
+import { Auth } from "@ren/schema/auth"
 import type { AppProfile } from "@ren/schema/app-profile"
 import { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
@@ -47,6 +48,21 @@ export const layer = Layer.effect(
       if (!found) return yield* new Primitive.NotFound({ message: "Space not found." })
     })
 
+    const space = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: Space.ID) {
+      const found = (yield* database.db
+        .select({ id: Database.Schema.space.id })
+        .from(Database.Schema.space)
+        .where(
+          and(
+            eq(Database.Schema.space.id, spaceId),
+            eq(Database.Schema.space.organization_id, actor.organizationId),
+            isNull(Database.Schema.space.archived_at),
+          ),
+        )
+        .pipe(Effect.orDie)).at(0)
+      if (!found) return yield* new Primitive.NotFound({ message: "Space not found." })
+    })
+
     const reach = Effect.fnUntraced(function* (actor: Actor.Info, scope: AppProfiles.Reach) {
       const reached = yield* profiles.reachable(scope)
       return {
@@ -58,8 +74,10 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
+      // oxlint-disable-next-line ren/no-comments -- profiles.md §10: admins see a space's profiles without joining it; `infos` still gives them metadata only for private ones.
       forSpace: Effect.fn("CredentialRequirements.forSpace")(function* (actor, spaceId) {
-        yield* member(actor, spaceId)
+        if (actor.roles.some(Auth.isAdministrator)) yield* space(actor, spaceId)
+        else yield* member(actor, spaceId)
         return yield* reach(actor, { organizationId: actor.organizationId, spaceId: Option.some(spaceId) })
       }),
       forSession: Effect.fn("CredentialRequirements.forSession")(function* (actor, sessionId) {

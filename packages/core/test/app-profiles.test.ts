@@ -88,6 +88,32 @@ it.live(
     }),
 )
 
+it.live("removing a shared profile from its last space deletes it; a space the caller cannot see still counts", () =>
+  Effect.gen(function* () {
+    const found = yield* org()
+    const profiles = yield* AppProfiles.Service
+    const both = yield* ProfilesFixture.profile(found.ana, {
+      appId: found.google.id,
+      slug: "both",
+      kind: "shared",
+      spaceIds: [found.sales],
+    })
+    yield* profiles.access(found.root, both.id, { add: [found.finance] })
+    yield* profiles.access(found.ana, both.id, { remove: [found.sales] })
+    expect((yield* profiles.get(found.root, both.id)).spaces.map((space) => space.id)).toEqual([found.finance])
+    yield* profiles.access(found.root, both.id, { remove: [found.finance] })
+    expect((yield* Effect.flip(profiles.get(found.root, both.id)))._tag).toBe("Primitive.NotFound")
+    const everywhere = yield* ProfilesFixture.profile(found.root, {
+      appId: found.google.id,
+      slug: "everywhere",
+      kind: "shared",
+      allSpaces: true,
+    })
+    yield* profiles.access(found.root, everywhere.id, { allSpaces: false })
+    expect((yield* Effect.flip(profiles.get(found.root, everywhere.id)))._tag).toBe("Primitive.NotFound")
+  }),
+)
+
 it.live("a member's list writes touch only their spaces; get shows the hidden count; only admins set all_spaces", () =>
   Effect.gen(function* () {
     const found = yield* org()
