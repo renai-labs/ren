@@ -6,11 +6,12 @@ import { Brain } from "@ren/schema/brain"
 import { Space } from "@ren/schema/space"
 import { eq } from "drizzle-orm"
 import { Effect, Layer } from "effect"
+import { Access } from "../src/access.js"
 import { Actor } from "../src/actor.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
 
-const it = testEffect(Actor.layer.pipe(Layer.provideMerge(Testing.layer)))
+const it = testEffect(Actor.layer.pipe(Layer.provide(Access.layer), Layer.provideMerge(Testing.layer)))
 
 const chat = Effect.fnUntraced(function* () {
   const database = yield* Database.Service

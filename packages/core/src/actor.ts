@@ -5,10 +5,12 @@ import type { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
-import type { Space } from "@ren/schema/space"
+import { Space } from "@ren/schema/space"
 import { and, eq, isNull } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
+import { Access } from "./access.js"
 import { Primitive } from "./primitive.js"
+import { SpacePolicy } from "./space/policy.js"
 
 export interface Info {
   readonly userId: Auth.UserID
@@ -51,6 +53,8 @@ export const memberOf = Effect.fn("Actor.memberOf")(function* (
   return Auth.MemberID.make(found.id)
 })
 
+const spaceGet = Primitive.action(Space.definition, "get")
+
 export interface Interface {
   readonly fromSession: (session: SessionRef) => Effect.Effect<AgentInfo, Primitive.Forbidden>
 }
@@ -61,6 +65,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const database = yield* Database.Service
+    const access = yield* Access.Service
     return Service.of({
       fromSession: Effect.fn("Actor.fromSession")(function* (session: SessionRef) {
         const userId = session.userId ?? Database.Schema.agent_session.created_by
@@ -98,7 +103,18 @@ export const layer = Layer.effect(
           )
           .pipe(Effect.orDie)).at(0)
         if (!row) return yield* new Primitive.Forbidden({ message: "The session is not available." })
-        if (!row.spaceMember && !Auth.isAdministrator(row.role))
+        const sender = {
+          userId: session.userId ?? row.session.created_by,
+          organizationId: session.organizationId,
+          roles: Auth.roles(row.role),
+        }
+        if (
+          !access.isAllowed({
+            actor: sender,
+            action: spaceGet,
+            resource: SpacePolicy.resource(row.spaceMember, row.session.space_id),
+          })
+        )
           return yield* new Primitive.Forbidden({ message: "The sender cannot see the session’s space." })
         const agentId =
           row.session.agent_id ??
@@ -115,9 +131,7 @@ export const layer = Layer.effect(
             .pipe(Effect.orDie)).at(0)?.id
         if (!agentId) return yield* new Primitive.Forbidden({ message: "The session’s agent is not available." })
         return {
-          userId: session.userId ?? row.session.created_by,
-          organizationId: session.organizationId,
-          roles: row.role.split(","),
+          ...sender,
           agent: { agentId, sessionId: session.sessionId, spaceId: row.session.space_id },
         }
       }),
