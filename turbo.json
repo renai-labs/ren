@@ -19,6 +19,8 @@
     },
     "test": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts"],
+      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE"],
       "outputs": []
     },
     "@ren/e2e#test": {
