@@ -25,6 +25,10 @@ export const maxUnpackBytes = 100 * 1024 * 1024
 
 export const maxUnpackFiles = 2000
 
+export const maxReferenceBytes = 1024 * 1024 * 1024
+
+export const maxReferenceFiles = 100_000
+
 export const ProcessID = Identifier.make("prc", "Executor.ProcessID")
 export type ProcessID = typeof ProcessID.Type
 
@@ -169,6 +173,26 @@ export const UnpackInput = Schema.Struct({
     description:
       "Where the folder’s files go. The path appears only when every file is there. An existing path is kept, and nothing is downloaded",
   }),
+  headers: Schema.optionalKey(
+    Schema.Record(Schema.String, Schema.String).annotate({
+      description: "Headers of the download request, such as a credential placeholder that the egress replaces",
+    }),
+  ),
+  maxBytes: Schema.optionalKey(
+    Schema.Int.check(Schema.isGreaterThan(0)).annotate({
+      description: `The most bytes of the folder, ${maxUnpackBytes} if not given`,
+    }),
+  ),
+  maxFiles: Schema.optionalKey(
+    Schema.Int.check(Schema.isGreaterThan(0)).annotate({
+      description: `The most files of the folder, ${maxUnpackFiles} if not given`,
+    }),
+  ),
+  links: Schema.optionalKey(
+    Schema.Literals(["fail", "skip"]).annotate({
+      description: "What a link in the archive does: fail the unpack, or stay out of the folder. fail if not given",
+    }),
+  ),
 }).annotate({ identifier: "Executor.UnpackInput" })
 
 export class ProcessNotFoundError extends Schema.TaggedError<ProcessNotFoundError>()("ProcessNotFoundError", {

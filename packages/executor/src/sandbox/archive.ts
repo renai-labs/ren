@@ -108,21 +108,17 @@ const isSafe = (path: string) =>
   !path.includes("\0") &&
   path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..")
 
-// oxlint-disable-next-line ren/no-comments -- Downloads into a staging folder beside the path and renames it at the end, so the path exists only with every file in it.
+// oxlint-disable-next-line ren/no-comments -- Downloads into a staging folder beside the path and renames it at the end, so the path exists only with every file in it. When another unpack of the path renames first, this one succeeds.
 export const unpack = (workspace: string) =>
   Effect.fn("Executor.unpack")(function* (input: EnvironmentApi.UnpackInput) {
     const target = resolve(workspace, input.path)
     const failed = (message: string) => new EnvironmentApi.ArchiveError({ url: input.url, message })
-    const exists = yield* Effect.promise(() =>
-      lstat(target).then(
-        () => true,
-        () => false,
-      ),
-    )
-    if (exists) return
     const staging = `${target}.${crypto.randomUUID()}.staging`
     const totals = { bytes: 0, files: 0 }
+    const maxBytes = input.maxBytes ?? EnvironmentApi.maxUnpackBytes
+    const maxFiles = input.maxFiles ?? EnvironmentApi.maxUnpackFiles
     const write = (entry: Entry): Effect.Effect<void, EnvironmentApi.ArchiveError | EnvironmentApi.FileSystemError> => {
+      if ((entry.type === "1" || entry.type === "2") && input.links === "skip") return Effect.void
       if (entry.type !== "0" && entry.type !== "7")
         return Effect.fail(
           failed(
@@ -136,12 +132,8 @@ export const unpack = (workspace: string) =>
         return Effect.fail(failed(`The archive has a path outside its folder: ${entry.path}`))
       totals.bytes += entry.bytes.length
       totals.files += 1
-      if (totals.bytes > EnvironmentApi.maxUnpackBytes || totals.files > EnvironmentApi.maxUnpackFiles)
-        return Effect.fail(
-          failed(
-            `The folder is larger than ${EnvironmentApi.maxUnpackFiles} files or ${EnvironmentApi.maxUnpackBytes} bytes`,
-          ),
-        )
+      if (totals.bytes > maxBytes || totals.files > maxFiles)
+        return Effect.fail(failed(`The folder is larger than ${maxFiles} files or ${maxBytes} bytes`))
       return Effect.tryPromise({
         try: async () => {
           await mkdir(dirname(destination), { recursive: true })
@@ -154,8 +146,15 @@ export const unpack = (workspace: string) =>
           }),
       })
     }
+    const isThere = Effect.promise(() =>
+      lstat(target).then(
+        () => true,
+        () => false,
+      ),
+    )
+    if (yield* isThere) return
     yield* Effect.tryPromise({
-      try: () => fetch(input.url),
+      try: () => fetch(input.url, { headers: input.headers ?? {} }),
       catch: (cause) =>
         failed(`Could not download the archive: ${cause instanceof Error ? cause.message : String(cause)}`),
     }).pipe(
@@ -191,5 +190,8 @@ export const unpack = (workspace: string) =>
         }),
       ),
       Effect.onError(() => Effect.promise(() => rm(staging, { recursive: true, force: true }))),
+      Effect.catchTag("FileSystemError", (error) =>
+        Effect.flatMap(isThere, (isUnpacked) => (isUnpacked ? Effect.void : Effect.fail(error))),
+      ),
     )
   })

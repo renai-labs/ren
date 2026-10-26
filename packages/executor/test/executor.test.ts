@@ -385,7 +385,10 @@ it.live(
     }),
 )
 
-const archives = Effect.fnUntraced(function* (folders: Readonly<Record<string, (root: string) => Promise<void>>>) {
+const archives = Effect.fnUntraced(function* (
+  folders: Readonly<Record<string, (root: string) => Promise<void>>>,
+  options: { readonly together?: number } = {},
+) {
   const source = yield* Effect.promise(() => mkdtemp(join(tmpdir(), "ren-archive-")))
   yield* Effect.forEach(Object.entries(folders), (entry) =>
     Effect.promise(async () => {
@@ -402,22 +405,31 @@ const archives = Effect.fnUntraced(function* (folders: Readonly<Record<string, (
     }),
   )
   const requests: Array<string> = []
+  const authorizations: Array<string | null> = []
+  const arrived = Promise.withResolvers<void>()
   const server = yield* Effect.acquireRelease(
     Effect.sync(() =>
       Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
-        fetch: (request) => {
+        fetch: async (request) => {
           const name = new URL(request.url).pathname.slice(1)
           requests.push(name)
+          authorizations.push(request.headers.get("authorization"))
+          if (requests.length >= (options.together ?? 1)) arrived.resolve()
+          await arrived.promise
           const file = Bun.file(join(source, name))
-          return file.exists().then((found) => (found ? new Response(file) : new Response("missing", { status: 404 })))
+          return (await file.exists()) ? new Response(file) : new Response("missing", { status: 404 })
         },
       }),
     ),
     (served) => Effect.promise(() => served.stop(true)),
   )
-  return { url: (name: string) => `http://127.0.0.1:${server.port}/${name}`, requests: () => [...requests] }
+  return {
+    url: (name: string) => `http://127.0.0.1:${server.port}/${name}`,
+    requests: () => [...requests],
+    authorizations: () => [...authorizations],
+  }
 })
 
 const put = (path: string, text: string) =>
@@ -467,6 +479,39 @@ it.live("an archive with a link or a download that fails leaves nothing at the p
       .pipe(Effect.flip)
     expect(missing.message).toBe("The archive answered 404")
     expect(yield* Effect.promise(() => readdir(join(workspace, "refused")).catch(() => []))).toEqual([])
+  }),
+)
+
+it.live("two unpacks of one path at the same time both succeed", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* archives({ docs: (root) => put(join(root, "README.md"), "docs") }, { together: 2 })
+    const input = { url: served.url("docs.tar.gz"), folder: ".", path: "together/docs/c1" }
+    yield* Effect.all([executor.unpack(input), executor.unpack(input)], { concurrency: "unbounded" })
+    expect(served.requests()).toEqual(["docs.tar.gz", "docs.tar.gz"])
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, "together/docs/c1/README.md")).text())).toBe("docs")
+    expect(yield* Effect.promise(() => readdir(join(workspace, "together/docs")))).toEqual(["c1"])
+  }),
+)
+
+it.live("an unpack that skips links leaves the link out and sends the caller's headers", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* archives({
+      linked: async (root) => {
+        await put(join(root, "README.md"), "docs")
+        await symlink("/etc/passwd", join(root, "escape"))
+      },
+    })
+    yield* executor.unpack({
+      url: served.url("linked.tar.gz"),
+      folder: ".",
+      path: "skipped/linked",
+      headers: { authorization: "Bearer ren:GITHUB" },
+      links: "skip",
+    })
+    expect(yield* Effect.promise(() => readdir(join(workspace, "skipped/linked")))).toEqual(["README.md"])
+    expect(served.authorizations()).toEqual(["Bearer ren:GITHUB"])
   }),
 )
 
