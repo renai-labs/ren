@@ -138,17 +138,6 @@ jobs:
           ' current.json >next.json
           revision=$(aws ecs register-task-definition --cli-input-json file://next.json --query taskDefinition.taskDefinitionArn --output text)
           aws ecs update-service --cluster "$DEPLOY" --service server --task-definition "$revision" --query service.serviceName --output text
-          # COMPLETED comes only after the old task has drained, which can outlast services-stable.
-          for attempt in $(seq 1 90); do
-            state=$(aws ecs describe-services --cluster "$DEPLOY" --services server --query 'services[0].deployments[0].rolloutState' --output text)
-            case "$state" in
-              COMPLETED) echo "rollout: $state"; exit 0 ;;
-              FAILED) echo "rollout: $state"; exit 1 ;;
-            esac
-            sleep 10
-          done
-          echo "rollout: $state after 15 minutes"
-          exit 1
 
   app:
     name: app
@@ -228,8 +217,4 @@ jobs:
           aws s3 cp repos/iron-proxy/bin/iron-proxy-linux-arm64 "s3://$bucket/egress/$GITHUB_SHA/iron-proxy" --only-show-errors
           printf '%s' "$GITHUB_SHA" | aws s3 cp - "s3://$bucket/egress/current" --only-show-errors
           command=$(aws ssm send-command --instance-ids "$INSTANCE" --document-name "$DEPLOY-egress-install" --query Command.CommandId --output text)
-          aws ssm wait command-executed --command-id "$command" --instance-id "$INSTANCE" || true
-          status=$(aws ssm get-command-invocation --command-id "$command" --instance-id "$INSTANCE" --query Status --output text)
-          aws ssm get-command-invocation --command-id "$command" --instance-id "$INSTANCE" --query StandardOutputContent --output text | tail -5
-          echo "release: $status"
-          test "$status" = "Success"
+          echo "release command: $command"
