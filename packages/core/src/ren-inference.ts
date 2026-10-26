@@ -44,7 +44,6 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@ren/core/RenInference") {}
 
 const tokenLifetimeSeconds = 5 * 60
-const roleOrder = ["owner", "admin", "member"] as const
 
 const ErrorBody = Schema.Struct({ error: Schema.optional(Schema.String) })
 
@@ -66,7 +65,7 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
 
     const send = (
-      claims: { readonly org: string; readonly sub?: string; readonly member?: string; readonly role?: string },
+      claims: { readonly org: string; readonly sub?: string; readonly member?: string },
       method: "GET" | "POST" | "PATCH" | "DELETE",
       path: string,
       body?: object,
@@ -101,7 +100,7 @@ export const layer = Layer.effect(
       })
 
     const call = <A, I>(
-      claims: { readonly org: string; readonly sub?: string; readonly member?: string; readonly role?: string },
+      claims: { readonly org: string; readonly sub?: string; readonly member?: string },
       method: "GET" | "POST" | "PATCH" | "DELETE",
       path: string,
       success: Schema.Codec<A, I>,
@@ -132,9 +131,7 @@ export const layer = Layer.effect(
         )
         .pipe(Effect.orDie)).at(0)
       if (!member) return yield* new Primitive.Forbidden({ message: "You are not a member of this organization." })
-      // ast-grep-ignore: no-hardcoded-policy, -- Sent until the service stops reading it.
-      const role = roleOrder.find((candidate) => actor.roles.includes(candidate)) ?? "member"
-      return { org: actor.organizationId, sub: actor.userId, member: member.id, role }
+      return { org: actor.organizationId, sub: actor.userId, member: member.id }
     })
 
     const forbidden = (actor: Actor.Info, action: string, resource: Access.Resource) =>

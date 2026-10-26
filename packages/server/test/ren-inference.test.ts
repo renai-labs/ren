@@ -93,10 +93,10 @@ describe("ren-inference", () => {
           org: expect.stringMatching(/^org_/),
           sub: expect.stringMatching(/^usr_/),
           member: expect.stringMatching(/^mem_/),
-          role: "owner",
         }),
       },
     ])
+    expect(seen.at(0)?.claims.role).toBeUndefined()
   })
 
   test("removing a member asks the service to forget them, and a 503 does not block the removal", async () => {
