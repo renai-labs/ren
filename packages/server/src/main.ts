@@ -21,6 +21,7 @@ import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelProvider } from "@ren/core/channel-provider"
 import { GitHub } from "@ren/core/channel-provider/github"
+import { Slack } from "@ren/core/channel-provider/slack"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { GitHubApp } from "@ren/core/github-app"
 import { PersonCredentials } from "@ren/core/person-credentials"
@@ -112,7 +113,7 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   ),
   Layer.provideMerge(GitHubAccounts.layer),
   Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, PersonCredentials.layer)),
-  Layer.provideMerge(SlackApp.layer.pipe(Layer.provide(ChannelSecrets.layer))),
+  Layer.provideMerge(SlackApp.layer.pipe(Layer.provideMerge(ChannelSecrets.layer))),
   Layer.provideMerge(McpProvider.layerCleanup),
   Layer.provideMerge(McpProvider.layer([McpProvider.composio])),
   Layer.provideMerge(Layer.mergeAll(envelope, Access.layer, OAuthFetch.layerPublic)),
@@ -126,7 +127,7 @@ Layer.mergeAll(HttpRouter.serve(Routes.layer), EgressRoutes.serve).pipe(
       RenInferenceRemoval.layer,
     ),
     Layer.mergeAll(ChannelNotice.layer, ChannelRoute.layer.pipe(Layer.provide(ChannelIdentity.layer))).pipe(
-      Layer.provideMerge(ChannelProvider.layer([GitHub.provider])),
+      Layer.provideMerge(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider]))),
     ),
     Mailer.layer,
     SignupGuard.layer,

@@ -16,6 +16,7 @@ import { BrainRegistry } from "../../src/brain-registry.js"
 import { Access } from "../../src/access.js"
 import { ChannelIdentity } from "../../src/channel-identity.js"
 import { ChannelInstalls } from "../../src/channel-installs.js"
+import { ChannelSecrets } from "../../src/channel-secrets.js"
 import { ChannelMappings } from "../../src/channel-mappings.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
@@ -316,9 +317,11 @@ const core = (held: boolean) =>
     Layer.provideMerge(
       Layer.mergeAll(
         BrainRegistry.layer,
-        ChannelProvider.layer([provider]),
+        ChannelProvider.layer(Effect.all([provider])),
         Access.layer,
-        PersonCredentials.layer.pipe(Layer.provide(Layer.mergeAll(Envelope.layerLocal, EgressControl.layerNone))),
+        Layer.mergeAll(PersonCredentials.layer, ChannelSecrets.layer).pipe(
+          Layer.provide(Layer.mergeAll(Envelope.layerLocal, EgressControl.layerNone)),
+        ),
       ),
     ),
     Layer.provideMerge(

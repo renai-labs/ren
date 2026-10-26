@@ -30,7 +30,7 @@ const echo = Effect.succeedSome<ChannelProvider.Provider>({
   announce: () => Effect.void,
 })
 
-const app = makeApp(Routes.layer.pipe(Layer.provide(ChannelProvider.layer([echo]))))
+const app = makeApp(Routes.layer.pipe(Layer.provide(ChannelProvider.layer(Effect.all([echo])))))
 afterAll(() => app.dispose())
 
 const post = (path: string, body: string, signature: string) =>

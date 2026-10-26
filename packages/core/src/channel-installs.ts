@@ -5,13 +5,14 @@ import { Auth } from "@ren/schema/auth"
 import { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import type { WriteResult } from "@ren/schema/write-result"
-import { and, asc, count, eq, isNull } from "drizzle-orm"
+import { and, asc, count, desc, eq, isNull } from "drizzle-orm"
 import { Clock, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Random } from "@ren/util/random"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { ChannelInstallPolicy } from "./channel-install/policy.js"
 import { ChannelProvider } from "./channel-provider.js"
+import { ChannelSecrets } from "./channel-secrets.js"
 import { PersonCredentials } from "./person-credentials.js"
 import { Primitive } from "./primitive.js"
 import { SpaceQueries } from "./space/queries.js"
@@ -42,6 +43,7 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Ch
 const table = Database.Schema.channel_install
 const states = Database.Schema.channel_install_state
 const users = Database.Schema.user
+const accounts = Database.Schema.account
 const spaces = Database.Schema.space
 
 const notFound = new Primitive.NotFound({ message: "Install not found." })
@@ -55,6 +57,18 @@ export const layer = Layer.effect(
     const access = yield* Access.Service
     const registry = yield* ChannelProvider.Registry
     const people = yield* PersonCredentials.Service
+    const secrets = yield* ChannelSecrets.Service
+
+    const accountsOf = (userId: Auth.UserID, provider: Channel.Provider) =>
+      database.db
+        .select({ accountId: accounts.accountId })
+        .from(accounts)
+        .where(and(eq(accounts.providerId, provider), eq(accounts.userId, userId)))
+        .orderBy(desc(accounts.updatedAt))
+        .pipe(
+          Effect.orDie,
+          Effect.map((rows) => rows.map((row) => row.accountId)),
+        )
 
     const mayChange = (actor: Actor.Info, installedBy: Auth.UserID | null) =>
       access.isAllowed({
@@ -125,6 +139,7 @@ export const layer = Layer.effect(
     })
 
     const claim = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
       organizationId: Auth.OrganizationID,
       installedBy: Auth.UserID,
       provider: Channel.Provider,
@@ -132,22 +147,26 @@ export const layer = Layer.effect(
     ): Effect.fn.Return<Outcome> {
       const title = Channel.titles[provider]
       const claimed = { ok: true, provider, name: installed.name } satisfies Outcome
-      const inserted = yield* database.db
+      const sealed = (id: ChannelInstall.ID) =>
+        installed.secret ? secrets.seal(organizationId, id, installed.secret) : Effect.succeed(null)
+      const id = ChannelInstall.ID.create()
+      const inserted = yield* transaction
         .insert(table)
         .values({
-          id: ChannelInstall.ID.create(),
+          id,
           organization_id: organizationId,
           provider,
           workspace: installed.workspace,
           name: installed.name,
           bot_user: installed.botUser ?? null,
+          secret: yield* sealed(id),
           installed_by: installedBy,
         })
         .onConflictDoNothing()
         .returning({ id: table.id })
         .pipe(Effect.orDie)
       if (inserted.length > 0) return claimed
-      const held = (yield* database.db
+      const held = (yield* transaction
         .select({ id: table.id, organizationId: table.organization_id })
         .from(table)
         .where(and(eq(table.provider, provider), eq(table.workspace, installed.workspace)))
@@ -157,30 +176,33 @@ export const layer = Layer.effect(
           `This ${title} workspace is connected to another organization. Switch to that organization, then try again.`,
         )
       if (held) {
-        const updated = yield* database.db
+        const updated = yield* transaction
           .update(table)
-          .set({ name: installed.name, bot_user: installed.botUser ?? null })
+          .set({ name: installed.name, bot_user: installed.botUser ?? null, secret: yield* sealed(held.id) })
           .where(and(eq(table.id, held.id), eq(table.organization_id, organizationId)))
           .returning({ id: table.id })
           .pipe(Effect.orDie)
-        return updated.length > 0 ? claimed : yield* claim(organizationId, installedBy, provider, installed)
+        return updated.length > 0
+          ? claimed
+          : yield* claim(transaction, organizationId, installedBy, provider, installed)
       }
-      const other = (yield* database.db
+      const other = (yield* transaction
         .select({ name: table.name })
         .from(table)
         .where(and(eq(table.organization_id, organizationId), eq(table.provider, provider)))
         .pipe(Effect.orDie)).at(0)
-      if (!other) return yield* claim(organizationId, installedBy, provider, installed)
+      if (!other) return yield* claim(transaction, organizationId, installedBy, provider, installed)
       return failed(`This organization already has ${title} connected: ${other.name}.`)
     })
 
     const link = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
       row: typeof states.$inferSelect,
       provider: Channel.Provider,
       installer: NonNullable<ChannelProvider.Installed["installer"]>,
     ) {
       const now = new Date(yield* Clock.currentTimeMillis)
-      yield* database.db
+      yield* transaction
         .insert(Database.Schema.account)
         .values({
           id: Auth.AccountID.create(),
@@ -192,7 +214,7 @@ export const layer = Layer.effect(
         })
         .onConflictDoNothing()
         .pipe(Effect.orDie)
-      const linked = (yield* database.db
+      const linked = (yield* transaction
         .select({ userId: Database.Schema.account.userId })
         .from(Database.Schema.account)
         .where(
@@ -204,9 +226,8 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)).at(0)
       if (linked?.userId !== row.initiator_user_id)
         return yield* new ChannelProvider.InstallFailed({
-          message: "This GitHub account is linked to another Ren account. Sign in to that Ren account to connect it.",
+          message: `This ${Channel.titles[provider]} account is linked to another Ren account. Sign in to that Ren account to connect it.`,
         })
-      if (installer.credential) yield* people.save(row.organization_id, row.initiator_user_id, installer.credential)
     })
 
     return Service.of({
@@ -257,7 +278,10 @@ export const layer = Layer.effect(
             expires_at: expiresAt,
           })
           .pipe(Effect.orDie)
-        return { redirectUrl: provider.value.installUrl(state), expiresAt: DateTime.fromDateUnsafe(expiresAt) }
+        return {
+          redirectUrl: provider.value.installUrl(state, yield* accountsOf(actor.userId, input.provider)),
+          expiresAt: DateTime.fromDateUnsafe(expiresAt),
+        }
       }),
 
       complete: Effect.fn("ChannelInstalls.complete")(function* (
@@ -289,16 +313,34 @@ export const layer = Layer.effect(
           )
           .pipe(Effect.orDie)
         if (!member) return failed("You are no longer a member of the organization that started this install.")
-        const installed = yield* Effect.result(provider.value.completeInstall(query))
+        const installed = yield* Effect.result(
+          provider.value.completeInstall(query, yield* accountsOf(row.initiator_user_id, provider.value.id)),
+        )
         if (installed._tag === "Failure") return failed(installed.failure.message)
-        const outcome = yield* claim(row.organization_id, row.initiator_user_id, provider.value.id, installed.success)
         const installer = installed.success.installer
-        if (outcome.ok && installer)
-          return yield* link(row, provider.value.id, installer).pipe(
-            Effect.as(outcome),
+        return yield* database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              const outcome = yield* claim(
+                transaction,
+                row.organization_id,
+                row.initiator_user_id,
+                provider.value.id,
+                installed.success,
+              )
+              if (outcome.ok && installer) yield* link(transaction, row, provider.value.id, installer)
+              return outcome
+            }),
+          )
+          .pipe(
+            Effect.tap(
+              Effect.fnUntraced(function* (outcome) {
+                if (outcome.ok && installer?.credential)
+                  yield* people.save(row.organization_id, row.initiator_user_id, installer.credential)
+              }),
+            ),
             Effect.catchTag("ChannelProvider.InstallFailed", (error) => Effect.succeed(failed(error.message))),
           )
-        return outcome
       }),
 
       update: Effect.fn("ChannelInstalls.update")(function* (
@@ -346,7 +388,6 @@ export const layer = Layer.effect(
 
       remove: Effect.fn("ChannelInstalls.remove")(function* (actor: Actor.Info, id: ChannelInstall.ID) {
         const found = yield* held(actor, id, "remove")
-        yield* database.db.delete(table).where(eq(table.id, id)).pipe(Effect.orDie)
         yield* Option.match(registry.get(found.install.provider), {
           onNone: () => Effect.void,
           onSome: (provider) =>
@@ -358,6 +399,7 @@ export const layer = Layer.effect(
                 ),
               ),
         })
+        yield* database.db.delete(table).where(eq(table.id, id)).pipe(Effect.orDie)
         return toInfo(actor)(found)
       }),
 
