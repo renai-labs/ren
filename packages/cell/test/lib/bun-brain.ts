@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import type { Brain } from "@ren/schema/brain"
+import { Schema } from "effect"
 
 export interface Instance {
   readonly url: string
@@ -17,6 +18,7 @@ export interface Instance {
 
 const entry = path.resolve(import.meta.dir, "../../src/bun.ts")
 const startup = 60_000
+const Ready = Schema.Struct({ type: Schema.Literal("brain-ready"), port: Schema.Int })
 
 const freePort = async () => {
   const socket = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() })
@@ -37,16 +39,9 @@ export const make = async (
     const decoder = new TextDecoder()
     for await (const chunk of stream) state.output += decoder.decode(chunk, { stream: true })
   }
-  const ready = async (deadline: number): Promise<void> => {
-    const response = await fetch(`${url}/ren/state`, { signal: AbortSignal.timeout(1_000) }).catch(() => undefined)
-    if (response && response.status !== 503) return
-    if (state.child?.exitCode !== null && state.child?.exitCode !== undefined)
-      throw new Error(`The Bun brain exited before it served a request\n${state.output.slice(-4000)}`)
-    if (Date.now() > deadline) throw new Error(`The Bun brain did not answer at ${url} within ${startup} ms`)
-    await Bun.sleep(50)
-    return ready(deadline)
-  }
   const start = async () => {
+    const started = performance.now()
+    const ready = Promise.withResolvers<void>()
     const child = Bun.spawn([process.execPath, entry], {
       env: {
         PATH: process.env.PATH,
@@ -60,11 +55,35 @@ export const make = async (
       },
       stdout: "pipe",
       stderr: "pipe",
+      ipc: (message: unknown) => {
+        if (Schema.is(Ready)(message) && message.port === port) ready.resolve()
+      },
     })
     state.child = child
     void drain(child.stdout)
     void drain(child.stderr)
-    await ready(Date.now() + startup)
+    void child.exited.then(() =>
+      ready.reject(new Error(`The Bun brain exited before it was ready\n${state.output.slice(-4000)}`)),
+    )
+    const timeout = setTimeout(
+      () =>
+        ready.reject(
+          new Error(`The Bun brain did not become ready within ${startup} ms\n${state.output.slice(-4000)}`),
+        ),
+      startup,
+    )
+    await ready.promise
+      .catch(async (error: unknown) => {
+        await kill()
+        throw error
+      })
+      .finally(() => {
+        clearTimeout(timeout)
+        if (process.env.REN_TEST_PROFILE)
+          process.stderr.write(
+            `${JSON.stringify({ harness: "brain", phase: "startup", ms: Math.round(performance.now() - started) })}\n`,
+          )
+      })
   }
   const kill = async (signal: NodeJS.Signals = "SIGKILL") => {
     if (!state.child) return
@@ -72,7 +91,10 @@ export const make = async (
     await state.child.exited
     state.child = undefined
   }
-  await start()
+  await start().catch(async (error: unknown) => {
+    await fs.rm(home, { recursive: true, force: true })
+    throw error
+  })
   return {
     url,
     brain: options.brain,
