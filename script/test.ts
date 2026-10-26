@@ -5,20 +5,29 @@ import { Budget } from "@ren/test-harness/budget"
 import { Homes } from "@ren/test-harness/homes"
 
 const started = performance.now()
-const workers = Number(process.env.REN_TEST_WORKERS ?? Math.min(2, os.availableParallelism()))
-if (!Number.isSafeInteger(workers) || workers < 1) throw new Error("REN_TEST_WORKERS must be a positive integer")
+const requested = Number(process.env.REN_TEST_WORKERS ?? 2)
+if (!Number.isSafeInteger(requested) || requested < 1) throw new Error("REN_TEST_WORKERS must be a positive integer")
 if (
   process.argv.slice(2).some((arg) => arg === "--parallel" || arg.startsWith("--parallel=") || arg === "--no-isolate")
 ) {
   throw new Error("Set REN_TEST_WORKERS to select the worker count; test files must remain isolated")
 }
 const memory = Number(process.env.REN_TEST_MEMORY_MIB ?? 1536)
+if (!Number.isSafeInteger(memory) || memory < 1) throw new Error("REN_TEST_MEMORY_MIB must be a positive integer")
+const capacity = Number(
+  process.env.REN_TEST_BUDGET_MIB ??
+    Math.max(
+      1,
+      Math.min(
+        Math.floor(Math.min(os.totalmem(), process.constrainedMemory() || os.totalmem()) / 2 / 1024 ** 2),
+        os.availableParallelism() * memory,
+      ),
+    ),
+)
+const workers = Math.min(requested, os.availableParallelism(), Math.max(1, Math.floor(capacity / memory)))
 const budget = {
   directory: path.join(os.tmpdir(), `ren-test-budget-${process.getuid?.() ?? os.userInfo().username}`),
-  capacityMiB: Number(
-    process.env.REN_TEST_BUDGET_MIB ??
-      Math.max(1, Math.min(Math.floor(os.totalmem() / 2 / 1024 ** 2), os.availableParallelism() * memory)),
-  ),
+  capacityMiB: capacity,
   costMiB: memory * workers,
 }
 let reservation = await Budget.reserve(budget)
