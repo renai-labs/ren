@@ -6,6 +6,7 @@ import { ChannelNotice } from "@ren/core/channel-notice"
 import { GitHubAccounts } from "@ren/core/github-accounts"
 import { PersonCredentials } from "@ren/core/person-credentials"
 import { ChannelProvider } from "@ren/core/channel-provider"
+import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -97,7 +98,7 @@ export const services = Layer.mergeAll(
   ),
   ChannelRoute.layer.pipe(
     Layer.provide(ChannelIdentity.layer),
-    Layer.provideMerge(ChannelProvider.layer<never, never>([])),
+    Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
   ),
   ChannelNotice.layerLog,
   Mailer.layer,
@@ -111,7 +112,9 @@ export const services = Layer.mergeAll(
   Layer.provideMerge([BrainClient.layer.pipe(Layer.provide(Signer.layerLocal)), Settings.layer]),
   Layer.provideMerge([Models.layerNone, Environments.layer.pipe(Layer.provide(Signer.layerLocal))]),
   Layer.provideMerge(RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal))),
-  Layer.provideMerge(Layer.mergeAll(Credentials.layer, PersonCredentials.layer, GitHubAccounts.layerNone)),
+  Layer.provideMerge(
+    Layer.mergeAll(Credentials.layer, PersonCredentials.layer, ChannelSecrets.layer, GitHubAccounts.layerNone),
+  ),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),

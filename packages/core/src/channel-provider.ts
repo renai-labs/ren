@@ -2,7 +2,7 @@ export * as ChannelProvider from "./channel-provider.js"
 
 import type { Channel } from "@ren/schema/channel"
 import type { TaskLink } from "@ren/schema/task-link"
-import { Context, Effect, Layer, Option, Schema } from "effect"
+import { Context, Effect, Layer, Option, type Redacted, Schema } from "effect"
 import type { PersonCredentials } from "./person-credentials.js"
 
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()("ChannelProvider.Unauthorized", {
@@ -51,6 +51,7 @@ export interface Installed {
   readonly workspace: string
   readonly name: string
   readonly botUser?: string
+  readonly secret?: Redacted.Redacted
   readonly installer?: {
     readonly accountId: string
     readonly credential?: PersonCredentials.Saved
@@ -78,8 +79,11 @@ export interface Provider {
     install: string,
     sender: Channel.Event["sender"],
   ) => Effect.Effect<Option.Option<string>, Unavailable>
-  readonly installUrl: (state: string) => string
-  readonly completeInstall: (query: Readonly<Record<string, string>>) => Effect.Effect<Installed, InstallFailed>
+  readonly installUrl: (state: string, accounts: ReadonlyArray<string>) => string
+  readonly completeInstall: (
+    query: Readonly<Record<string, string>>,
+    accounts: ReadonlyArray<string>,
+  ) => Effect.Effect<Installed, InstallFailed>
   readonly changedOnProvider: (query: Readonly<Record<string, string>>) => boolean
   readonly revoke: (workspace: string) => Effect.Effect<void, Unavailable>
   readonly places: (workspace: string) => Effect.Effect<ReadonlyArray<Place>, Unavailable>
@@ -96,11 +100,11 @@ export class Registry extends Context.Service<
   { readonly providers: ReadonlyArray<Provider>; readonly get: (id: string) => Option.Option<Provider> }
 >()("@ren/core/ChannelProvider/Registry") {}
 
-export const layer = <E, R>(providers: ReadonlyArray<Effect.Effect<Option.Option<Provider>, E, R>>) =>
+export const layer = <E, R>(providers: Effect.Effect<ReadonlyArray<Option.Option<Provider>>, E, R>) =>
   Layer.effect(
     Registry,
     Effect.gen(function* () {
-      const all = (yield* Effect.all(providers)).flatMap(Option.toArray)
+      const all = (yield* providers).flatMap(Option.toArray)
       const ids = all.map((provider) => provider.id)
       if (new Set(ids).size !== ids.length)
         return yield* Effect.die(new Error(`Two channel providers share an id: ${ids.join(", ")}`))

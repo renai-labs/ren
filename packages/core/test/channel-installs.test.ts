@@ -2,7 +2,7 @@ import { afterAll, describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
 import { Testing } from "@ren/db/testing"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
@@ -10,22 +10,31 @@ import type { Actor } from "../src/actor.js"
 import { ChannelInstalls } from "../src/channel-installs.js"
 import { ChannelProvider } from "../src/channel-provider.js"
 import { GitHub } from "../src/channel-provider/github.js"
+import { Slack } from "../src/channel-provider/slack.js"
+import { ChannelSecrets } from "../src/channel-secrets.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
 import { GitHubAccounts } from "../src/github-accounts.js"
 import { GitHubApp } from "../src/github-app.js"
 import { PersonCredentials } from "../src/person-credentials.js"
+import { SlackApp } from "../src/slack-app.js"
 import { testEffect } from "./lib/effect.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { Seed } from "./lib/seed.js"
+import { SlackServer } from "./lib/slack-server.js"
 
 const github = GitHubServer.start()
-afterAll(() => github.stop())
+const slack = SlackServer.start()
+afterAll(() => {
+  github.stop()
+  slack.stop()
+})
 
 const settings = (overrides: Record<string, string> = {}) =>
   ConfigProvider.layer(
     ConfigProvider.fromUnknown({
       ...GitHubServer.config(github.url, overrides),
+      ...SlackServer.config(slack.url),
       ENVELOPE_KEYS: JSON.stringify([
         { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
       ]),
@@ -34,11 +43,15 @@ const settings = (overrides: Record<string, string> = {}) =>
 
 const it = testEffect(
   ChannelInstalls.layer.pipe(
-    Layer.provideMerge(Layer.mergeAll(ChannelProvider.layer([GitHub.provider]), Access.layer)),
-    Layer.provideMerge(GitHubAccounts.layer),
-    Layer.provideMerge(GitHubApp.layer),
     Layer.provideMerge(
-      PersonCredentials.layer.pipe(Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, EgressControl.layerNone))),
+      Layer.mergeAll(ChannelProvider.layer(Effect.all([GitHub.provider, Slack.provider])), Access.layer),
+    ),
+    Layer.provideMerge(GitHubAccounts.layer),
+    Layer.provideMerge(Layer.mergeAll(GitHubApp.layer, SlackApp.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(PersonCredentials.layer, ChannelSecrets.layer).pipe(
+        Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, EgressControl.layerNone)),
+      ),
     ),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
@@ -83,14 +96,16 @@ describe("ChannelInstalls with GitHub", () => {
       const other = yield* Seed.user()
       const id = installation("acme")
       const code = authorized(id)
-      yield* database.db.insert(Database.Schema.account).values({
-        id: Auth.AccountID.create(),
-        providerId: "github",
-        accountId: String(7000 + code.length),
-        userId: other.id,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
+      yield* database.db
+        .insert(Database.Schema.account)
+        .values({
+          id: Auth.AccountID.create(),
+          providerId: "github",
+          accountId: String(7000 + code.length),
+          userId: other.id,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
       expect(yield* finish(yield* started(actor), { installation_id: id, code })).toMatchObject({ ok: false })
       expect(
         yield* database.db
@@ -241,9 +256,7 @@ describe("ChannelInstalls with GitHub", () => {
       ).toEqual({ ok: true, provider: "github", name: null })
       expect(
         yield* installs.complete("github", { installation_id: "1", setup_action: "install" }, Option.none()),
-      ).toMatchObject({
-        ok: false,
-      })
+      ).toMatchObject({ ok: false })
       expect(yield* database.db.select().from(Database.Schema.channel_install)).toEqual([])
     }),
   )
@@ -276,10 +289,7 @@ describe("ChannelInstalls with GitHub", () => {
         const colleague = yield* Seed.actor(first.organizationId, "member")
         const second = installation("other")
         expect(yield* finish(yield* started(colleague), { installation_id: second, code: authorized(second) })).toEqual(
-          {
-            ok: false,
-            reason: "This organization already has GitHub connected: acme.",
-          },
+          { ok: false, reason: "This organization already has GitHub connected: acme." },
         )
         github.installations.set(id, "acme-renamed")
         expect(yield* finish(yield* started(first), { installation_id: id, code: authorized(id) })).toMatchObject({
@@ -336,6 +346,153 @@ describe("ChannelInstalls with GitHub", () => {
   )
 })
 
+const team = () => `T${crypto.randomUUID().slice(0, 8).toUpperCase()}`
+
+const granted = (grant: SlackServer.Grant) => {
+  const code = `slack-${crypto.randomUUID()}`
+  slack.grants.set(code, grant)
+  return code
+}
+
+const slackStart = Effect.fnUntraced(function* (actor: Actor.Info) {
+  const installs = yield* ChannelInstalls.Service
+  return new URL((yield* installs.start(actor, { provider: "slack" })).redirectUrl)
+})
+
+const slackFinish = Effect.fnUntraced(function* (actor: Actor.Info, grant: SlackServer.Grant) {
+  const installs = yield* ChannelInstalls.Service
+  const state = (yield* slackStart(actor)).searchParams.get("state") ?? ""
+  return yield* installs.complete("slack", { state, code: granted(grant) }, Option.none())
+})
+
+const slackAccounts = (userId: Auth.UserID) =>
+  Effect.flatMap(Database.Service, (database) =>
+    database.db
+      .select({ accountId: Database.Schema.account.accountId })
+      .from(Database.Schema.account)
+      .where(and(eq(Database.Schema.account.userId, userId), eq(Database.Schema.account.providerId, "slack"))),
+  )
+
+describe("ChannelInstalls with Slack", () => {
+  it.live("an installer account owned by another person leaves no Slack install or token", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const secrets = yield* ChannelSecrets.Service
+      const actor = yield* member()
+      const other = yield* Seed.user()
+      const workspace = team()
+      yield* database.db
+        .insert(Database.Schema.account)
+        .values({
+          id: Auth.AccountID.create(),
+          providerId: "slack",
+          accountId: `${workspace}:U01`,
+          userId: other.id,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      expect(
+        yield* slackFinish(actor, { team: workspace, teamName: "Acme", user: "U01", token: "xoxb-conflict" }),
+      ).toMatchObject({ ok: false })
+      expect(yield* secrets.ofWorkspace("slack", workspace)).toEqual(Option.none())
+      expect(
+        yield* database.db
+          .select()
+          .from(Database.Schema.channel_install)
+          .where(eq(Database.Schema.channel_install.workspace, workspace)),
+      ).toEqual([])
+    }),
+  )
+
+  it.live(
+    "an install keeps the bot token sealed and links the installer as team:user; the next install names the team, and a reinstall replaces the token",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const secrets = yield* ChannelSecrets.Service
+        const actor = yield* member()
+        const workspace = team()
+        const first = yield* slackStart(actor)
+        expect(`${first.origin}${first.pathname}`).toBe(`${slack.url}/oauth/v2/authorize`)
+        expect(Object.fromEntries(first.searchParams)).toMatchObject({
+          client_id: "slack-client",
+          scope: SlackApp.botScopes.join(","),
+          redirect_uri: "https://api.ren.test/channels/slack/callback",
+        })
+        expect(first.searchParams.has("team")).toBe(false)
+        const grant = { team: workspace, teamName: "Acme", user: "U01", token: `xoxb-${crypto.randomUUID()}` }
+        expect(yield* slackFinish(actor, grant)).toEqual({ ok: true, provider: "slack", name: "Acme" })
+        const row = (yield* database.db
+          .select()
+          .from(Database.Schema.channel_install)
+          .where(eq(Database.Schema.channel_install.workspace, workspace))).at(0)
+        expect(row).toMatchObject({ name: "Acme", bot_user: "UBOT" })
+        expect(JSON.stringify(row?.secret)).not.toContain(grant.token)
+        expect(
+          Option.map(yield* secrets.ofWorkspace("slack", workspace), (found) => Redacted.value(found.secret)),
+        ).toEqual(Option.some(grant.token))
+        expect(yield* slackAccounts(actor.userId)).toEqual([{ accountId: `${workspace}:U01` }])
+        expect((yield* slackStart(actor)).searchParams.get("team")).toBe(workspace)
+        const renewed = { ...grant, token: `xoxb-${crypto.randomUUID()}` }
+        expect(yield* slackFinish(actor, renewed)).toMatchObject({ ok: true })
+        expect(
+          Option.map(yield* secrets.ofWorkspace("slack", workspace), (found) => Redacted.value(found.secret)),
+        ).toEqual(Option.some(renewed.token))
+        expect(
+          yield* database.db
+            .select({ id: Database.Schema.channel_install.id })
+            .from(Database.Schema.channel_install)
+            .where(eq(Database.Schema.channel_install.workspace, workspace)),
+        ).toHaveLength(1)
+      }),
+  )
+
+  it.live("an install by another Slack user of the workspace than the one the person signed in with is refused", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const actor = yield* member()
+      const workspace = team()
+      yield* database.db
+        .insert(Database.Schema.account)
+        .values({
+          id: Auth.AccountID.create(),
+          providerId: "slack",
+          accountId: `${workspace}:U01`,
+          userId: actor.userId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      expect(
+        yield* slackFinish(actor, { team: workspace, teamName: "Acme", user: "U02", token: "xoxb-other" }),
+      ).toEqual({
+        ok: false,
+        reason:
+          "You installed Ren as another Slack user than the one you signed in with. Sign in to Slack as yourself, then install again.",
+      })
+      expect(
+        yield* database.db
+          .select()
+          .from(Database.Schema.channel_install)
+          .where(eq(Database.Schema.channel_install.workspace, workspace)),
+      ).toEqual([])
+    }),
+  )
+
+  it.live("removing a Slack install revokes its bot token before Ren forgets it", () =>
+    Effect.gen(function* () {
+      const installs = yield* ChannelInstalls.Service
+      const actor = yield* member()
+      const token = `xoxb-${crypto.randomUUID()}`
+      yield* slackFinish(actor, { team: team(), teamName: "Acme", user: "U01", token })
+      const install = (yield* installs.list(actor, { page: 1, pageSize: 50 })).items.at(0)
+      if (!install) return yield* Effect.die(new Error("No install"))
+      yield* installs.remove(actor, install.id, {})
+      expect(slack.revoked).toContain(token)
+      expect((yield* installs.list(actor, { page: 1, pageSize: 50 })).items).toEqual([])
+    }),
+  )
+})
+
 describe("GitHubAccounts", () => {
   it.live(
     "a GitHub sign-in becomes the person's GITHUB credential in each of their organizations, the account keeps no token, and an unlink removes it",
@@ -348,16 +505,18 @@ describe("GitHubAccounts", () => {
         yield* Seed.member(second, first.userId, "member")
         const code = authorized()
         const account = Auth.AccountID.create()
-        yield* database.db.insert(Database.Schema.account).values({
-          id: account,
-          providerId: "github",
-          accountId: String(7000 + code.length),
-          userId: first.userId,
-          accessToken: `user:${code}`,
-          refreshToken: `refresh:${code}`,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
+        yield* database.db
+          .insert(Database.Schema.account)
+          .values({
+            id: account,
+            providerId: "github",
+            accountId: String(7000 + code.length),
+            userId: first.userId,
+            accessToken: `user:${code}`,
+            refreshToken: `refresh:${code}`,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          })
         yield* accounts.sync(first.userId)
         const saved = yield* database.db
           .select({ organizationId: Database.Schema.credential.organization_id, name: Database.Schema.credential.name })

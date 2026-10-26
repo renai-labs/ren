@@ -79,14 +79,15 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
 
   const post = <S extends Schema.Top>(
     method: string,
-    params: Readonly<Record<string, Param | undefined>>,
+    params: Readonly<Record<string, Param>>,
     schema: S,
     token?: Redacted.Redacted,
   ) => {
     const form = Object.fromEntries(
-      Object.entries(params).flatMap(([key, value]) =>
-        value === undefined ? [] : [[key, typeof value === "object" ? JSON.stringify(value) : String(value)]],
-      ),
+      Object.entries(params).map(([key, value]) => [
+        key,
+        typeof value === "object" ? JSON.stringify(value) : String(value),
+      ]),
     )
     const request = HttpClientRequest.post(`${app.api}/${method}`).pipe(
       HttpClientRequest.bodyUrlParams(form),

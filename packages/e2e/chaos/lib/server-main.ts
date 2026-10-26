@@ -5,6 +5,7 @@ import { Brains } from "@ren/core/brains"
 import { BrainPush } from "@ren/core/brain-push"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelProvider } from "@ren/core/channel-provider"
+import { ChannelSecrets } from "@ren/core/channel-secrets"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -21,7 +22,7 @@ import { Database } from "@ren/db/database"
 import { Postgres } from "@ren/db/postgres"
 import { OpenCodeTranscript } from "@ren/opencode-transcript/transcript"
 import { Routes } from "@ren/server/routes"
-import { Config, Layer } from "effect"
+import { Config, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { ChaosEnvironments } from "./provider/environments.js"
 import { ChaosModels } from "./provider/models.js"
@@ -52,7 +53,9 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
     Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
   ),
   Layer.provideMerge(AppProfiles.layer),
-  Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, PersonCredentials.layer)),
+  Layer.provideMerge(
+    Layer.mergeAll(Credentials.layer, CredentialCallers.layer, PersonCredentials.layer, ChannelSecrets.layer),
+  ),
   Layer.provideMerge(GitHubAccounts.layerNone),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerPublic)),
 )
@@ -67,7 +70,7 @@ HttpRouter.serve(Routes.layer).pipe(
     RenInferenceRemoval.layer,
     ChannelRoute.layer.pipe(
       Layer.provide(ChannelIdentity.layer),
-      Layer.provideMerge(ChannelProvider.layer<never, never>([])),
+      Layer.provideMerge(ChannelProvider.layer(Effect.succeed([]))),
     ),
     ChannelNotice.layerLog,
     Mailer.layer,
