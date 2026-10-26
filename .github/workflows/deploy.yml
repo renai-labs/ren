@@ -138,10 +138,17 @@ jobs:
           ' current.json >next.json
           revision=$(aws ecs register-task-definition --cli-input-json file://next.json --query taskDefinition.taskDefinitionArn --output text)
           aws ecs update-service --cluster "$DEPLOY" --service server --task-definition "$revision" --query service.serviceName --output text
-          aws ecs wait services-stable --cluster "$DEPLOY" --services server
-          state=$(aws ecs describe-services --cluster "$DEPLOY" --services server --query 'services[0].deployments[0].rolloutState' --output text)
-          echo "rollout: $state"
-          test "$state" = "COMPLETED"
+          # COMPLETED comes only after the old task has drained, which can outlast services-stable.
+          for attempt in $(seq 1 90); do
+            state=$(aws ecs describe-services --cluster "$DEPLOY" --services server --query 'services[0].deployments[0].rolloutState' --output text)
+            case "$state" in
+              COMPLETED) echo "rollout: $state"; exit 0 ;;
+              FAILED) echo "rollout: $state"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "rollout: $state after 15 minutes"
+          exit 1
 
   app:
     name: app
