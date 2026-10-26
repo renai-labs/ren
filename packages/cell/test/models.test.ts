@@ -1,4 +1,4 @@
-import { expect, setDefaultTimeout } from "bun:test"
+import { expect } from "bun:test"
 import { Session } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { testEffect } from "@ren/executor/testing"
@@ -18,8 +18,6 @@ import { Inference } from "../src/inference.js"
 import { ModelsTest } from "./lib/models.js"
 import { Shared } from "./lib/shared.js"
 import { StubModel } from "./lib/stub-model.js"
-
-setDefaultTimeout(60_000)
 
 const it = testEffect(Layer.empty)
 

@@ -2,31 +2,19 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { Sync } from "@ren/schema/sync"
 import { Schema } from "effect"
 import { Shared } from "./lib/shared.js"
+import { SyncStorage } from "./lib/sync-storage.js"
 import { TestCell } from "./lib/test-cell.js"
 
 setDefaultTimeout(120_000)
 
-const worker = "test/lib/sync-storage-worker.ts"
 const stub = Shared.stub()
-const wrangler = process.env.CELL_RUNTIME === "wrangler"
-const files = Bun.serve({
-  hostname: "0.0.0.0",
-  port: 0,
-  fetch: (request) =>
-    new Response("a".repeat(Number(new URL(request.url).pathname.slice(1))), {
-      headers: { "content-type": "text/plain" },
-    }),
-})
 let cell: Shared.Runtime
 
 beforeAll(async () => {
-  cell = await Shared.make({ worker })
+  cell = await Shared.make({ worker: SyncStorage.worker })
 }, 180_000)
 
-afterAll(async () => {
-  await cell.dispose()
-  await files.stop(true)
-})
+afterAll(() => cell.dispose())
 
 const Step = <S extends Schema.Top>(value: S) =>
   Schema.Union([Schema.Struct({ value }), Schema.Struct({ error: Schema.String })])
@@ -53,16 +41,6 @@ const Read = Schema.Struct({
 
 const AlarmRead = Schema.Struct({ isOpen: Schema.Boolean, ...Read.fields })
 
-const Sizes = Schema.Struct({
-  session: Schema.Struct({ time_suspended: Schema.NullOr(Schema.Int), idle_outcome: Schema.NullOr(Schema.String) }),
-  messages: Schema.Array(
-    Schema.Struct({
-      type: Schema.String,
-      bytes: Schema.Int,
-    }),
-  ),
-})
-
 type Opened = Awaited<ReturnType<typeof TestCell.make>>
 
 const read = async (opened: Opened) =>
@@ -82,15 +60,6 @@ const alarmRead = async (
   // ast-grep-ignore: no-test-sleep -- polls the reads that the cell's alarm records, as TestCell.until polls /ren/state
   await Bun.sleep(25)
   return alarmRead(opened, predicate, timeout - 25)
-}
-
-const turn = async (behaviour: Parameters<typeof stub.script>[0] = {}) => {
-  const opened = await TestCell.make(cell)
-  await opened.start()
-  const script = stub.script(behaviour)
-  await opened.prompt(`sync ${script.marker}`)
-  await opened.opencode.session.wait({ sessionID: opened.id })
-  return opened
 }
 
 const ids = async (opened: Opened) => (await opened.messages()).map((message) => message.id)
@@ -123,6 +92,7 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
     await opened.opencode.session.wait({ sessionID: opened.id })
     const messages = await ids(opened)
     const open = await read(opened)
+    expect((await opened.request(`/test/alarm?session=${opened.id}`)).status).toBe(204)
     await opened.until((state) => Bun.deepEquals(state, opened.idle))
     expect((await opened.request(`/test/alarm?session=${opened.id}`)).status).toBe(204)
     const closed = await alarmRead(opened, (entry) => !entry.isOpen)
@@ -132,7 +102,7 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
   })
 
   test("E100: a cell that opens OpenCode after another harness version clears its tables only when that version flushed sync", async () => {
-    const opened = await turn()
+    const opened = await SyncStorage.turn(cell)
     const older = "0.0.1-older"
     const boot = async (flushed: boolean) =>
       Schema.decodeUnknownSync(Schema.Struct({ isKept: Schema.Boolean }))(
@@ -147,7 +117,7 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
   })
 
   test("S2-04: PRAGMA table_info of session_v2 and session_message lists the columns that sync reads", async () => {
-    const opened = await turn()
+    const opened = await SyncStorage.turn(cell)
     expect(await read(opened)).toMatchObject({
       columns: {
         value: {
@@ -159,7 +129,7 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
   })
 
   test("S5-01: the worker bundles fromRow and SessionMessage.Info, and they decode the rows that the read returns", async () => {
-    const opened = await turn()
+    const opened = await SyncStorage.turn(cell)
     const session = await opened.opencode.session.get({ sessionID: opened.id })
     const messages = await opened.messages()
     expect(await read(opened)).toMatchObject({
@@ -173,76 +143,18 @@ describe("the sync read of the OpenCode tables in a Durable Object", () => {
   })
 })
 
-const largest = (sizes: typeof Sizes.Type) => Math.max(...sizes.messages.map((message) => message.bytes))
-
-const large = async (behaviour: Parameters<typeof stub.script>[0]) => {
-  // oxlint-disable-next-line ren/no-comments -- Each case runs in a new process, because in celld the large strings of an earlier case can leave the isolate over its V8 heap limit.
-  await cell.kill()
-  await cell.start()
-  const opened = await turn(behaviour)
-  return Schema.decodeUnknownSync(Sizes)(await (await opened.request(`/test/sizes?session=${opened.id}`)).json())
-}
-
-const fetched = (bytes: number) => ({
-  tool: {
-    name: "webfetch",
-    input: { url: `http://${wrangler ? "127.0.0.1" : "host.docker.internal"}:${files.port}/${bytes}`, format: "text" },
-  },
-})
-
 describe("S4-04: large message rows in a Durable Object", () => {
   test("the largest value that SQLite binds: celld refuses one byte over 2,200,000; Wrangler takes 3 MB", async () => {
     const opened = await TestCell.make(cell)
     const bind = async (bytes: number) => (await opened.request(`/test/bind?bytes=${bytes}`)).json()
     expect(await Promise.all([2_200_000, 2_200_001, 3_000_000].map(bind))).toEqual(
-      wrangler
+      SyncStorage.wrangler
         ? [{ value: 2_200_000 }, { value: 2_200_001 }, { value: 3_000_000 }]
         : [
             { value: 2_200_000 },
             { error: "Error: SQL error: bind sync KV cursor: string or blob too big" },
             { error: "Error: SQL error: bind sync KV cursor: string or blob too big" },
           ],
-    )
-  })
-
-  test.each([2_000_000, 3_000_000])(
-    "a tool output of %d bytes leaves a small row, because OpenCode cuts each tool output over 50 KB",
-    async (bytes) => {
-      const sizes = await large(fetched(bytes))
-      expect({ outcome: sizes.session.idle_outcome, small: largest(sizes) < 2_000 }).toEqual({
-        outcome: "succeeded",
-        small: true,
-      })
-    },
-  )
-
-  test("model text of 2 MB: OpenCode writes a 2 MB row, and the turn succeeds", async () => {
-    const sizes = await large({ reply: "b".repeat(2_000_000) })
-    expect({
-      outcome: sizes.session.idle_outcome,
-      types: sizes.messages.map((message) => message.type),
-      written: largest(sizes) > 2_000_000,
-    }).toEqual({ outcome: "succeeded", types: ["user", "assistant", "idle"], written: true })
-  })
-
-  test("model text of 3 MB: celld cannot write the row, so the turn is lost and the session stays busy; Wrangler writes it", async () => {
-    const sizes = await large({ reply: "b".repeat(3_000_000) })
-    expect({
-      session: sizes.session,
-      types: sizes.messages.map((message) => message.type),
-      written: largest(sizes) > 3_000_000,
-    }).toEqual(
-      wrangler
-        ? {
-            session: { time_suspended: null, idle_outcome: "succeeded" },
-            types: ["user", "assistant", "idle"],
-            written: true,
-          }
-        : {
-            session: { time_suspended: expect.any(Number), idle_outcome: null },
-            types: ["user", "assistant"],
-            written: false,
-          },
     )
   })
 })
