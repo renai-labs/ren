@@ -59,6 +59,7 @@ export interface Instance {
     readonly full_name: string
     readonly private: boolean
     readonly description?: string | null
+    readonly html_url?: string
   }>
   readonly options: { failDelete: boolean; tokenExpiresAt: string; postStatus: number; unavailable: boolean }
   readonly stop: () => void

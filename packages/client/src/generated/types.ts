@@ -885,6 +885,7 @@ export type ChannelPlaceInfo = {
   private: boolean
   anyoneCanWrite: boolean
   description?: string
+  url?: string
   mapping: ChannelMappingInfo | null
 }
 
