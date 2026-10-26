@@ -40,7 +40,7 @@ const admins = Auth.administratorRoles
 
 const see = [actions.list, actions.get, actions.connect, actions.delete]
 
-// oxlint-disable-next-line ren/no-comments -- profiles.md §10. Anyone who sees a shared profile connects its items and deletes it (P27, P28); its creator and admins rename it, link it and edit its list. A member lists a profile only in spaces they belong to, an admin in any space (listInSpace, checked on each space, P19); only admins share a profile with every space (P20). An admin sees a private profile's metadata and may delete it, never use it (P5).
+// oxlint-disable-next-line ren/no-comments -- profiles.md §10 (P5, P19, P20, P27, P28).
 export const documents = [
   {
     primitive: AppProfile.definition.name,
@@ -86,7 +86,7 @@ const profiles = Database.Schema.app_profile
 const listed = Database.Schema.app_profile_space
 const members = Database.Schema.space_member
 
-// oxlint-disable-next-line ren/no-comments -- Each relationship as a condition on app_profile, the same facts `resource` reads from one row.
+// oxlint-disable-next-line ren/no-comments -- The relationships of `resource`, as SQL on app_profile.
 export const conditions = (actor: Actor.Info) => {
   const shared = eq(profiles.kind, "shared")
   const isPrivate = eq(profiles.kind, "private")
