@@ -40,6 +40,53 @@ test("concurrent fixtures clone a prepared template and keep writes isolated", a
   )
 })
 
+test("collection removes a killed run's database and keeps a live run's database", async () => {
+  const holders = [0, 1].map(() =>
+    Bun.spawn([process.execPath, new URL("./lib/holder.ts", import.meta.url).pathname], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "inherit",
+    }),
+  )
+  const names = await Promise.all(
+    holders.map(async (holder) => {
+      const reader = holder.stdout.getReader()
+      const chunk = await reader.read()
+      reader.releaseLock()
+      return new TextDecoder().decode(chunk.value)
+    }),
+  )
+  const killed = holders.at(0)
+  const live = holders.at(1)
+  if (!killed || !live) throw new Error("Both holders must start")
+  killed.kill("SIGKILL")
+  await killed.exited
+  await Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient
+    yield* Testing.collect()
+    const remaining = yield* sql<{
+      readonly name: string
+    }>`select datname as name from pg_database where datname in ${sql.in(names)}`
+    expect(remaining.map((row) => row.name)).toEqual(names.slice(1))
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(
+      PgClient.layerConfig({
+        url: Config.Redacted("DATABASE_URL").pipe(
+          Config.withDefault(Redacted.make("postgres://ren:ren@localhost:54320/ren")),
+        ),
+      }),
+    ),
+    Effect.ensuring(
+      Effect.promise(async () => {
+        await live.stdin.end()
+        await live.exited
+      }),
+    ),
+    Effect.runPromise,
+  )
+})
+
 test("failed test bodies release their database", async () => {
   const names: string[] = []
   const exit = await Effect.gen(function* () {
