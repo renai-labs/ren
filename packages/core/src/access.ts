@@ -1,5 +1,6 @@
 export * as Access from "./access.js"
 
+import type { Auth } from "@ren/schema/auth"
 import { Policy } from "@ren/schema/policy"
 import type { Space } from "@ren/schema/space"
 import { Context, Effect, Layer, Schema } from "effect"
@@ -17,6 +18,8 @@ import { TaskPolicy } from "./task/policy.js"
 export interface Resource {
   readonly relationships: ReadonlyArray<string>
   readonly spaceId?: Space.ID
+  // oxlint-disable-next-line ren/no-comments -- The organization that owns the record, or null for a record Ren gives every organization. Without it, the record is the actor's. A statement on all reaches only the actor's own records; another's record needs a relationship.
+  readonly organizationId?: Auth.OrganizationID | null
 }
 
 export interface Request {
@@ -58,8 +61,11 @@ export const make = (documents: ReadonlyArray<Policy.Document>): Interface => {
     isAllowed: (request) => {
       const allowed = plan(request.actor, request.action)
       if (allowed.spaceId && request.resource.spaceId && allowed.spaceId !== request.resource.spaceId) return false
+      const isOwn =
+        request.resource.organizationId === undefined ||
+        request.resource.organizationId === request.actor.organizationId
       return (
-        allowed.isAllowedEverywhere ||
+        (allowed.isAllowedEverywhere && isOwn) ||
         allowed.allowedWhere.some((relationship) => request.resource.relationships.includes(relationship))
       )
     },

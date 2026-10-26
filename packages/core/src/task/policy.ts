@@ -1,6 +1,7 @@
 export * as TaskPolicy from "./policy.js"
 
 import { Database } from "@ren/db/database"
+import type { Auth } from "@ren/schema/auth"
 import { Label } from "@ren/schema/label"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
@@ -68,6 +69,11 @@ export const documents = [
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
 
 export const organization: Access.Resource = { relationships: [] }
+
+export const label = (organizationId: Auth.OrganizationID | null): Access.Resource => ({
+  relationships: [],
+  organizationId,
+})
 
 export const resource = (membershipId: Space.MembershipID | null, spaceId: Space.ID): Access.Resource => ({
   relationships: membershipId ? [spaceMember] : [],

@@ -107,6 +107,7 @@ export const find = Effect.fnUntraced(function* (
   const row = (yield* transaction
     .select({
       app: Database.Schema.app,
+      organizationId: Database.Schema.app.organization_id,
       isOwnerMember: isOwnerMember(actor),
       isSpaceMember: isSpaceMember(actor),
       isListed,
@@ -130,19 +131,6 @@ export const find = Effect.fnUntraced(function* (
     !access.isAllowed({ actor, action: Primitive.action(App.definition, "get"), resource: AppPolicy.resource(row) })
   )
     return yield* notFound
-  return row
-})
-
-export const findOwned = Effect.fnUntraced(function* (
-  transaction: Database.Transaction,
-  access: Access.Interface,
-  actor: Actor.Info,
-  idOrSlug: string,
-  options: { readonly includeArchived?: boolean } = {},
-) {
-  const row = yield* find(transaction, access, actor, idOrSlug, options)
-  if (row.app.organization_id !== actor.organizationId)
-    return yield* new Primitive.Forbidden({ message: "A listed app can be read and used, not changed." })
   return row
 })
 

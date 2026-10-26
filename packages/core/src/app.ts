@@ -33,6 +33,7 @@ export const layer = Layer.effect(
             const rows = yield* transaction
               .select({
                 app: Database.Schema.app,
+                organizationId: Database.Schema.app.organization_id,
                 isOwnerMember: AppQueries.isOwnerMember(actor),
                 isSpaceMember: AppQueries.isSpaceMember(actor),
               })
@@ -71,6 +72,7 @@ export const layer = Layer.effect(
             const target = yield* AppQueries.visibleSpace(transaction, access, actor, input.ownerSpaceId)
             if (
               !authorize(actor, "app.create", {
+                organizationId: actor.organizationId,
                 isOwnerMember: false,
                 isSpaceMember: false,
                 isTargetMember: target.isMember,
@@ -121,7 +123,7 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* AppQueries.lock(transaction, actor)
-            const found = yield* AppQueries.findOwned(transaction, access, actor, id)
+            const found = yield* AppQueries.find(transaction, access, actor, id)
             if (!authorize(actor, "app.update", found))
               return yield* new Primitive.Forbidden({ message: "Only the owner space can edit this app." })
             if (found.app.revision !== input.expectedRevision) return yield* stale
@@ -161,7 +163,7 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* AppQueries.lock(transaction, actor)
-            const found = yield* AppQueries.findOwned(transaction, access, actor, id, { includeArchived: true })
+            const found = yield* AppQueries.find(transaction, access, actor, id, { includeArchived: true })
             if (!authorize(actor, "app.archive", found))
               return yield* new Primitive.Forbidden({ message: "Only the owner space can archive this app." })
             if (found.app.archived_at) return yield* AppQueries.info(transaction, found.app)
@@ -179,7 +181,7 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             yield* AppQueries.lock(transaction, actor)
-            const found = yield* AppQueries.findOwned(transaction, access, actor, id)
+            const found = yield* AppQueries.find(transaction, access, actor, id)
             const target = yield* AppQueries.visibleSpace(transaction, access, actor, input.spaceId)
             if (!authorize(actor, "app.transferOwnership", { ...found, isTargetMember: target.isMember }))
               return yield* new Primitive.Forbidden({ message: "Moving an app requires access to both spaces." })
