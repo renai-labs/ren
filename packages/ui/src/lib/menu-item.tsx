@@ -45,6 +45,7 @@ export type CheckboxItemProps = {
   checked: boolean
   onCheckedChange: (checked: boolean) => void
   icon?: ReactNode
+  disabled?: boolean
   children: ReactNode
 }
 
@@ -54,6 +55,7 @@ export function CheckboxItem(props: CheckboxItemProps) {
     <Menu.CheckboxItem
       data-slot="menu-item"
       checked={props.checked}
+      disabled={props.disabled}
       onCheckedChange={(next) => props.onCheckedChange(next)}
       closeOnClick={false}
       className={composeClasses(itemVariants({ tone: "neutral", density }), markedItem[density])}
