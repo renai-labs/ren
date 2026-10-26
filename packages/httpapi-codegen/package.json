@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "effect": "catalog:",
-    "prettier": "catalog:"
+    "oxfmt": "catalog:"
   },
   "devDependencies": {
     "@effect/platform-bun": "catalog:",

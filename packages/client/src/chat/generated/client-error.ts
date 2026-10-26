@@ -1,5 +1,9 @@
 export type ClientErrorReason =
-  "Transport" | "UnexpectedStatus" | "UnsupportedContentType" | "MalformedResponse" | "SseEventTooLarge"
+  | "Transport"
+  | "UnexpectedStatus"
+  | "UnsupportedContentType"
+  | "MalformedResponse"
+  | "SseEventTooLarge"
 
 export class ClientError extends Error {
   override readonly name = "ClientError"

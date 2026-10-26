@@ -13,7 +13,7 @@
     "dev:storybook": "bun run --cwd packages/storybook dev",
     "print-policies": "bun run --cwd packages/core print-policies",
     "ren:settings": "bun run --cwd packages/core ren:settings",
-    "lint": "bun turbo lint --concurrency=3 --output-logs=errors-only && oxlint --disable-nested-config --type-aware --deny-warnings script && oxlint --disable-nested-config --deny-warnings oxlint.config.ts && ast-grep scan -c script/ast-grep/sgconfig.yml --globs '!**/generated/**' --globs '!**/*.gen.ts' --globs '!packages/db/src/auth.sql.ts' packages script && knip --no-config-hints",
+    "lint": "bun turbo lint --concurrency=3 --output-logs=errors-only && oxlint --disable-nested-config --type-aware --deny-warnings script && oxlint --disable-nested-config --deny-warnings oxlint.config.ts && ast-grep scan -c script/ast-grep/sgconfig.yml --globs '!**/generated/**' --globs '!**/*.gen.ts' --globs '!packages/db/src/auth.sql.ts' packages script && knip --no-config-hints && oxfmt --check",
     "typecheck": "bun turbo typecheck --concurrency=3 && tsgo --noEmit",
     "check": "bun run lint && bun run typecheck",
     "generate": "bun run script/generate.ts",
@@ -88,7 +88,7 @@
       "effect": "4.0.1",
       "free-email-domains": "1.12.21",
       "jose": "6.2.12",
-      "prettier": "3.9.9",
+      "oxfmt": "0.74.0",
       "react": "19.3.0",
       "react-dom": "19.3.0",
       "storybook": "10.6.1",
@@ -112,9 +112,9 @@
     "eslint-plugin-better-tailwindcss": "4.9.0",
     "husky": "9.1.7",
     "knip": "6.40.0",
+    "oxfmt": "catalog:",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
-    "prettier": "catalog:",
     "turbo": "2.11.7"
   },
   "trustedDependencies": [
@@ -124,9 +124,5 @@
   "overrides": {
     "effect": "catalog:",
     "@types/bun": "catalog:"
-  },
-  "prettier": {
-    "semi": false,
-    "printWidth": 120
   }
 }

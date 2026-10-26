@@ -47,6 +47,6 @@
     "@typescript/native-preview": "catalog:",
     "auth": "catalog:",
     "jose": "catalog:",
-    "prettier": "catalog:"
+    "oxfmt": "catalog:"
   }
 }
