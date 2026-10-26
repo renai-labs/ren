@@ -6,8 +6,9 @@ import { TestEnvironment } from "@ren/executor/testing"
 import type { Brain } from "@ren/schema/brain"
 import type { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
-import { ConfigProvider, Context, type Duration, Effect, Layer, Schedule, Schema } from "effect"
+import { ConfigProvider, Context, Duration, Effect, Layer, Schedule, Schema } from "effect"
 import { FetchHttpClient, type HttpClient, HttpRouter, HttpServer } from "effect/http"
+import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
 import type { WorkflowEngine } from "effect/workflow"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -70,27 +71,37 @@ interface StackOptions<E, R> {
   readonly maxRunning?: number
   readonly template?: string
   readonly sandbox?: Layer.Layer<SandboxProvider.Service, unknown, HttpClient.HttpClient>
+  readonly keepBrains?: boolean
 }
 
-// oxlint-disable-next-line ren/no-comments -- Each brain is a real Bun brain process on this machine (LocalSandbox), under root. Brains reach Ren on REN_URL, where serve answers.
+// oxlint-disable-next-line ren/no-comments -- Each brain is a real Bun brain process on this machine (LocalSandbox), under root. Brains reach Ren on REN_URL, where serve answers. The runner waits at most 100 ms for runs in flight at shutdown. destroyBrains sits between the runner and the sandbox, so it kills the brains under root after the runs have stopped, unless keepBrains leaves them for a later stack on the same root.
 export const stack = <E, R>(options: StackOptions<E, R>) =>
   Brains.layer.pipe(
     Layer.provide(CredentialEnv.layerNone),
     Layer.provideMerge(BrainHost.layerSandbox),
     Layer.provideMerge(BrainLifecycle.layer.pipe(Layer.provide(SandboxEgress.layerNone))),
     Layer.provideMerge(
-      options.sandbox ??
-        LocalSandbox.layer({
-          entry,
-          executor,
-          root: options.root,
-          owner: process.pid,
-          ...(options.lostEvery && { lostEvery: options.lostEvery }),
-          ...(options.maxRunning && { maxRunning: options.maxRunning }),
-          ...(options.template && { template: options.template }),
-        }),
+      ClusterWorkflowEngine.layer.pipe(
+        Layer.provideMerge(SingleRunner.layer({ shardingConfig: { entityTerminationTimeout: "100 millis" } })),
+        Layer.provide(BunCrypto.layer),
+      ),
     ),
-    Layer.provideMerge(DurableRunner.layerEffect.pipe(Layer.provide(BunCrypto.layer))),
+    Layer.provideMerge(
+      (options.keepBrains ? Layer.empty : destroyBrains).pipe(
+        Layer.provideMerge(
+          options.sandbox ??
+            LocalSandbox.layer({
+              entry,
+              executor,
+              root: options.root,
+              owner: process.pid,
+              ...(options.lostEvery && { lostEvery: options.lostEvery }),
+              ...(options.maxRunning && { maxRunning: options.maxRunning }),
+              ...(options.template && { template: options.template }),
+            }),
+        ),
+      ),
+    ),
     Layer.provideMerge(BrainClient.layer.pipe(Layer.provide(Signer.layerLocal))),
     Layer.provide(Settings.layer),
     Layer.provide(options.models),
@@ -251,7 +262,6 @@ export const layerWith = <E, R>(
       const found = yield* freePort
       return Layer.mergeAll(
         options.synced ? serveSynced(found) : serve(found, around),
-        destroyBrains,
         Layer.effectDiscard(Seed.ren()),
       ).pipe(Layer.provideMerge(stack({ port: found, root: yield* root, config, models, environments })))
     }),
