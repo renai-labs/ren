@@ -67,6 +67,7 @@ const Repository = Schema.Struct({
   full_name: Schema.String,
   private: Schema.Boolean,
   description: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  html_url: Schema.optionalKey(Schema.String),
 })
 
 const Repositories = Schema.Struct({ total_count: Schema.Number, repositories: Schema.Array(Repository) })
@@ -77,6 +78,7 @@ const placeOf = (repository: typeof Repository.Type): ChannelProvider.Place => (
   private: repository.private,
   anyoneCanWrite: !repository.private,
   ...(repository.description && { description: repository.description }),
+  ...(repository.html_url && { url: repository.html_url }),
 })
 
 const Author = Schema.Struct({ user: Schema.NullOr(Schema.Struct({ login: Schema.String })) })

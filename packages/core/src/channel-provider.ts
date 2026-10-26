@@ -64,6 +64,7 @@ export interface Place {
   readonly private: boolean
   readonly anyoneCanWrite: boolean
   readonly description?: string
+  readonly url?: string
 }
 
 export interface Provider {

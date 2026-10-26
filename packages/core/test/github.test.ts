@@ -396,6 +396,7 @@ describe("GitHub", () => {
             full_name: `acme/repo-${index}`,
             private: index > 0,
             description: index === 0 ? "Product docs" : null,
+            html_url: `https://github.com/acme/repo-${index}`,
           })),
         )
         const places = yield* provider.places(install)
@@ -406,9 +407,16 @@ describe("GitHub", () => {
           private: false,
           anyoneCanWrite: true,
           description: "Product docs",
+          url: "https://github.com/acme/repo-0",
         })
         expect(yield* provider.place(install, "9149")).toEqual(
-          Option.some({ id: "9149", name: "acme/repo-149", private: true, anyoneCanWrite: false }),
+          Option.some({
+            id: "9149",
+            name: "acme/repo-149",
+            private: true,
+            anyoneCanWrite: false,
+            url: "https://github.com/acme/repo-149",
+          }),
         )
         expect(yield* provider.place(install, "1")).toEqual(Option.none())
       }),

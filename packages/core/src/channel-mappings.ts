@@ -185,9 +185,12 @@ export const layer = Layer.effect(
         return {
           items: shown.map((place) => {
             const mapping = byPlace.get(place.id)
-            return Object.assign(Struct.pick(place, ["id", "name", "private", "anyoneCanWrite", "description"]), {
-              mapping: mapping ? toInfo(mapping) : null,
-            })
+            return Object.assign(
+              Struct.pick(place, ["id", "name", "private", "anyoneCanWrite", "description", "url"]),
+              {
+                mapping: mapping ? toInfo(mapping) : null,
+              },
+            )
           }),
           page: input.page,
           pageSize: input.pageSize,

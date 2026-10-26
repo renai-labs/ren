@@ -19,6 +19,9 @@ export const Info = Schema.Struct({
   description: Schema.optionalKey(
     Schema.String.annotate({ description: "The provider’s description of the place, such as a GitHub repository’s." }),
   ),
+  url: Schema.optionalKey(
+    Schema.String.annotate({ description: "The web address of the place, such as https://github.com/acme/docs." }),
+  ),
   mapping: Schema.NullOr(ChannelMapping.Info),
 }).annotate({ identifier: "ChannelPlace.Info", description: "A place that an install reaches." })
 
