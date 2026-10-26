@@ -26,6 +26,8 @@ const profile = (items: ReadonlyArray<AppProfileItem>): AppProfileInfo => ({
   hiddenSpaces: 0,
   canAccess: false,
   canShareEverySpace: false,
+  canAdd: [],
+  canRemove: [],
   links: [],
   items: [...items],
   unused: [],

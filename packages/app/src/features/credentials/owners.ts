@@ -10,5 +10,5 @@ export const options = (
 ): ReadonlyArray<Option> => [
   { value: "org", label: "Organization", glyph: "Building" },
   ...spaces.map((space) => ({ value: `space:${space.id}`, label: space.name, glyph: "Cube" as const })),
-  { value: "person", label: "Only me", glyph: "Lock" },
+  { value: "person", label: "Only me, in my private space", glyph: "Lock" },
 ]

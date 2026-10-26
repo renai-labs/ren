@@ -1,4 +1,5 @@
 import { Button } from "@ren/ui/button"
+import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { Field } from "@ren/ui/field"
 import { InlineEdit } from "@ren/ui/inline-edit"
 import { PageShell } from "@ren/ui/page-shell"
@@ -136,7 +137,47 @@ function LinkedAccounts() {
   )
 }
 
-export function Preferences(props: { user: { name: string; email: string } }) {
+// oxlint-disable-next-line ren/no-comments -- access AC2: any member leaves; Better Auth refuses the last owner.
+function LeaveOrganization(props: { organization: { id: string; name: string } }) {
+  const context = RouterContext.useRouterContext()
+  const queryClient = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <PageShell.Section title="Organization" frame="divided">
+      <Field.Root
+        label={props.organization.name}
+        description="Leaving archives your private space and deletes your personal credentials here."
+        orientation="horizontal"
+      >
+        <Button appearance="outline" size="small" onClick={() => setConfirming(true)}>
+          Leave organization
+        </Button>
+      </Field.Root>
+      <ConfirmationDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Leave ${props.organization.name}?`}
+        description="You lose access to its spaces and chats. Your private space is archived and your personal credentials here are deleted."
+        confirmLabel="Leave"
+        tone="danger"
+        onConfirm={async () => {
+          const result = await context.auth.organization.leave({ organizationId: props.organization.id })
+          if (result.error !== null) throw new Error(result.error.message ?? "Couldn’t leave the organization")
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: Auth.sessionOptions(context.auth).queryKey }),
+            queryClient.invalidateQueries({ queryKey: context.api.me.get.queryKey() }),
+          ])
+        }}
+        onConfirmed={() => Toast.manager.add({ type: "success", title: `You left ${props.organization.name}` })}
+      />
+    </PageShell.Section>
+  )
+}
+
+export function Preferences(props: {
+  user: { name: string; email: string }
+  organization: { id: string; name: string } | null
+}) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
   const theme = Theme.useTheme()
@@ -180,6 +221,7 @@ export function Preferences(props: { user: { name: string; email: string } }) {
       </PageShell.Section>
       <ChatSettings />
       <LinkedAccounts />
+      {props.organization ? <LeaveOrganization organization={props.organization} /> : null}
       <PageShell.Section title="Security" frame="divided">
         <Field.Root label="Password" orientation="row">
           <Button appearance="outline" size="small" onClick={() => setChangingPassword(true)}>

@@ -4,6 +4,7 @@ import { Icon } from "@ren/ui/icon"
 import { LoadingMessage } from "@ren/ui/loading-message"
 import { StateMessage } from "@ren/ui/state-message"
 import { useQuery } from "@tanstack/react-query"
+import { useRouteContext } from "@tanstack/react-router"
 import { useState } from "react"
 import { AccountAccess } from "../../components/account-access.js"
 import { AccountActions } from "../../components/account-actions.js"
@@ -17,6 +18,7 @@ import { AccountList, AppDrawer } from "./app-drawer.js"
 // oxlint-disable-next-line ren/no-comments -- The space Apps tab for the whole org: every app with an account you can see, and where each account is used.
 export function OrgApps(props: { appId: string | undefined; onAppChange: (appId?: string) => void }) {
   const context = RouterContext.useRouterContext()
+  const authed = useRouteContext({ from: "/_authed" })
   const spaces = useQuery(context.api.space.list.queryOptions(Apps.page))
   const catalog = Apps.useCatalog()
   const [dialog, setDialog] = useState<{ readonly appId: string; readonly profileId?: string }>()
@@ -62,7 +64,7 @@ export function OrgApps(props: { appId: string | undefined; onAppChange: (appId?
             caption={Apps.reach}
             action={(profile: AppProfileInfo) => (
               <>
-                <AccountAccess profile={profile} spaces={spaces.data?.items ?? []} />
+                <AccountAccess profile={profile} spaces={spaces.data?.items ?? []} userId={authed.me.user.id} />
                 <AccountActions
                   profile={profile}
                   onOpen={() => setDialog({ appId: profile.appId, profileId: profile.id })}

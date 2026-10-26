@@ -36,7 +36,15 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
           <Breadcrumbs.Page>{space.data.name}</Breadcrumbs.Page>
         </Breadcrumbs.Root>
       }
-      media={<Avatar.Root name={space.data.name} glyph="Cube" size="extra-large" shape="square" decorative />}
+      media={
+        <Avatar.Root
+          name={space.data.name}
+          glyph={space.data.kind === "private" ? "Lock" : "Cube"}
+          size="extra-large"
+          shape="square"
+          decorative
+        />
+      }
       title={space.data.name}
       subtitle={space.data.description ?? undefined}
       actions={space.data.canArchive ? <SpaceMenu space={space.data} /> : undefined}

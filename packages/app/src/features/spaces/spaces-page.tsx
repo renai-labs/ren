@@ -57,14 +57,24 @@ export function SpacesPage(props: { userId: string }) {
                 render={<Link to="/spaces/$spaceId" params={{ spaceId: space.id }} />}
                 label={`Open ${space.name}`}
                 appearanceOrder={index}
-                media={<Avatar.Root name={space.name} glyph="Cube" size="extra-large" shape="square" decorative />}
+                media={
+                  <Avatar.Root
+                    name={space.name}
+                    glyph={space.kind === "private" ? "Lock" : "Cube"}
+                    size="extra-large"
+                    shape="square"
+                    decorative
+                  />
+                }
                 title={space.name}
                 description={space.description?.trim() || "No description"}
                 footer={
                   <Text purpose="caption" numerals="tabular" element="span">
                     <span className="flex items-center gap-2">
-                      <Icon glyph="Users" />
-                      {space.memberCount} {space.memberCount === 1 ? "member" : "members"}
+                      <Icon glyph={space.kind === "private" ? "Lock" : "Users"} />
+                      {space.kind === "private"
+                        ? "Private"
+                        : `${space.memberCount} ${space.memberCount === 1 ? "member" : "members"}`}
                     </span>
                   </Text>
                 }

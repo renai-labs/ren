@@ -37,7 +37,7 @@ export function NewChat(props: { userId: string }) {
   const [sessionID, setSessionID] = useState(() => Session.ID.create())
   const [sent, setSent] = useState<string>()
   const transitionName = `new-chat-${useId()}`
-  const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: 100 }))
+  const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: 100, joined: true }))
   const models = useQuery(context.api.chat.models.queryOptions({ id: sessionID }))
   const create = useMutation(context.api.session.create.mutationOptions())
   const prepare = useMutation(context.api.chat.prepare.mutationOptions())

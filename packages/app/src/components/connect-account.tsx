@@ -14,6 +14,7 @@ import { ProgressIndicator } from "@ren/ui/progress-indicator"
 import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRouteContext } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
@@ -323,6 +324,7 @@ function KeyRow(props: {
 
 function EditAccount(props: { profile: AppProfileInfo; onChanged: () => Promise<unknown> }) {
   const context = RouterContext.useRouterContext()
+  const authed = useRouteContext({ from: "/_authed" })
   const spaces = useQuery(context.api.space.list.queryOptions(Apps.page))
   const update = useMutation(context.api["app-profile"].update.mutationOptions())
   return (
@@ -338,7 +340,7 @@ function EditAccount(props: { profile: AppProfileInfo; onChanged: () => Promise<
         />
       </Field.Root>
       <Field.Root label="Used in" orientation="row" description={Apps.reach(props.profile)}>
-        <AccountAccess profile={props.profile} spaces={spaces.data?.items ?? []} />
+        <AccountAccess profile={props.profile} spaces={spaces.data?.items ?? []} userId={authed.me.user.id} />
       </Field.Root>
       <Notice tone="danger" placement="inline">
         {update.error?.message}

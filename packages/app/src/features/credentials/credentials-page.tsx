@@ -23,7 +23,9 @@ export function CredentialsPage(props: { userId: string; tab: Tab; apps: ReactNo
   const credentials = useQuery(
     context.api.credential.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }),
   )
-  const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
+  const spaces = useQuery(
+    context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize, joined: true }),
+  )
   const [query, setQuery] = useState("")
   const [creating, setCreating] = useState(false)
   const needle = useDeferredValue(query)
