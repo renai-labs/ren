@@ -37,8 +37,7 @@ export const layer = Layer.effect(
           .where(and(eq(session.id, sessionId), eq(session.organization_id, actor.organizationId)))
           .pipe(Effect.orDie)).at(0)
         if (!current) return yield* new Refused({ message: "This chat has no thread to reply to." })
-        if (current.parentId)
-          return yield* new Refused({ message: "Only the main agent replies in the thread." })
+        if (current.parentId) return yield* new Refused({ message: "Only the main agent replies in the thread." })
         const latest = (yield* database.db
           .select()
           .from(thread)
@@ -74,6 +73,11 @@ export const layer = Layer.effect(
                 Effect.fail(new Refused({ message: `${title} refused the reply: ${error.message}` })),
             }),
           )
+        yield* database.db
+          .update(thread)
+          .set({ last_reply_at: new Date() })
+          .where(eq(thread.id, latest.id))
+          .pipe(Effect.orDie)
         return { provider: latest.provider, place } satisfies Channel.Sent
       }),
     })

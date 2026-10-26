@@ -39,6 +39,10 @@ const Pull = Schema.Struct({
   base: Schema.Struct({ ref: Schema.String }),
 })
 
+const Reactions = Schema.Array(
+  Schema.Struct({ id: Schema.Number, user: Schema.NullOr(Schema.Struct({ id: Schema.Number })) }),
+)
+
 const Author = Schema.Struct({ user: Schema.NullOr(Schema.Struct({ login: Schema.String })) })
 
 const commentEvents: Readonly<Record<string, "issue" | "review">> = {
@@ -184,6 +188,23 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
         ),
       )
     }),
+    progress: Effect.fn("GitHub.progress")(
+      function* (target, status) {
+        const repository = target.place.split("/").map(encodeURIComponent).join("/")
+        const review = target.message.startsWith("review:")
+        const comment = target.message.slice(target.message.indexOf(":") + 1)
+        const reactions = `/repos/${repository}/${review ? "pulls" : "issues"}/comments/${comment}/reactions`
+        if (status === "received") return yield* app.post(target.install, reactions, { content: "eyes" })
+        yield* app.post(target.install, reactions, { content: status === "done" ? "rocket" : "confused" })
+        const eyes = yield* app.read(target.install, `${reactions}?content=eyes&per_page=100`, Reactions)
+        yield* Effect.forEach(
+          eyes.filter((reaction) => String(reaction.user?.id) === app.settings.botUserId),
+          (reaction) => app.remove(target.install, `${reactions}/${reaction.id}`),
+          { discard: true },
+        )
+      },
+      Effect.mapError((error) => new ChannelProvider.Unavailable({ message: error.message })),
+    ),
     installUrl: app.installUrl,
     completeInstall: Effect.fnUntraced(function* (query) {
       if (query.setup_action === "request")

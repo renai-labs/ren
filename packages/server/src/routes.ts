@@ -12,6 +12,7 @@ import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { ChannelInstalls } from "@ren/core/channel-installs"
 import { ChannelReply } from "@ren/core/channel-reply"
+import { ChannelTurns } from "@ren/core/channel-turns"
 import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
 import { Health } from "@ren/core/health"
@@ -170,7 +171,12 @@ export const layer = Layer.mergeAll(
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),
   HttpApiBuilder.layer(SyncApi).pipe(
     Layer.provide(SyncHandler),
-    Layer.provide([Brains.hostAuthentication, bodyLimit(Sync.maxBodyBytes), SessionSync.layer]),
+    Layer.provide([
+      Brains.hostAuthentication,
+      bodyLimit(Sync.maxBodyBytes),
+      SessionSync.layer,
+      ChannelTurns.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+    ]),
   ),
   Cors,
 ).pipe(Layer.provide(Auth.layer), Layer.provide(Access.layer))

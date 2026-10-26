@@ -65,6 +65,7 @@ export const channel_thread = pgTable(
     place_name: text(),
     last_message: text(),
     last_message_at: timestamp(),
+    last_reply_at: timestamp(),
     created_at: timestamp().defaultNow().notNull(),
     updated_at: timestamp().defaultNow().notNull(),
   },

@@ -14,6 +14,7 @@ const echo = Effect.succeedSome<ChannelProvider.Provider>({
   fetchFile: () => Effect.fail(new ChannelProvider.FileUnavailable({ message: "no files" })),
   context: () => Effect.succeedNone,
   send: () => Effect.void,
+  progress: () => Effect.void,
   installUrl: (state) => `https://slack.test/install?state=${state}`,
   completeInstall: (query) =>
     query.team

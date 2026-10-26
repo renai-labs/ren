@@ -166,6 +166,20 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
     return { token: minted.token, expiresAt: minted.expiresAt }
   })
 
+  const write = (installationId: string, request: HttpClientRequest.HttpClientRequest) =>
+    token(installationId).pipe(
+      Effect.mapError((error) => new Failed({ message: `No installation token: ${error.message}` })),
+      Effect.flatMap((minted) => {
+        const authorized = withToken(request, minted.token)
+        return http.execute(authorized).pipe(
+          Effect.flatMap((response) => answered(authorized, response)),
+          Effect.timeout(timeLimit),
+          Effect.mapError(failed(authorized)),
+        )
+      }),
+      Effect.asVoid,
+    )
+
   const userInstallationsFrom = (
     userToken: Redacted.Redacted,
     page: number,
@@ -227,21 +241,12 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
     token,
     forget: (installationId: string) => Cache.invalidate(tokens, installationId),
     post: (installationId: string, path: string, body: unknown) =>
-      token(installationId).pipe(
-        Effect.mapError((error) => new Failed({ message: `No installation token: ${error.message}` })),
-        Effect.flatMap((minted) => {
-          const request = withToken(HttpClientRequest.post(`${app.api}${path}`), minted.token).pipe(
-            HttpClientRequest.bodyJsonUnsafe(body),
-          )
-          return http.execute(request).pipe(
-            Effect.flatMap((response) => answered(request, response)),
-            Effect.timeout(timeLimit),
-            Effect.mapError(failed(request)),
-          )
-        }),
-        Effect.asVoid,
-        Effect.withSpan("GitHubApp.post"),
-      ),
+      write(
+        installationId,
+        HttpClientRequest.post(`${app.api}${path}`).pipe(HttpClientRequest.bodyJsonUnsafe(body)),
+      ).pipe(Effect.withSpan("GitHubApp.post")),
+    remove: (installationId: string, path: string) =>
+      write(installationId, HttpClientRequest.delete(`${app.api}${path}`)).pipe(Effect.withSpan("GitHubApp.remove")),
     read: <S extends Schema.Top>(installationId: string, path: string, schema: S) =>
       token(installationId).pipe(
         Effect.flatMap((minted) => json(schema, withToken(HttpClientRequest.get(`${app.api}${path}`), minted.token))),
