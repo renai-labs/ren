@@ -1,8 +1,26 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
+import { Budget } from "@ren/test-harness/budget"
 
 const started = performance.now()
+const budget = {
+  directory: path.join(os.tmpdir(), `ren-test-budget-${process.getuid?.() ?? os.userInfo().username}`),
+  capacityMiB: Number(process.env.REN_TEST_BUDGET_MIB ?? Math.max(1, Math.floor(os.totalmem() / 2 / 1024 ** 2))),
+  costMiB: Number(process.env.REN_TEST_MEMORY_MIB ?? 1536),
+}
+let reservation = await Budget.reserve(budget)
+if (reservation._tag === "Waiting") {
+  console.error(`Tests waiting for memory: ${reservation.heldMiB} MiB reserved of ${budget.capacityMiB} MiB`)
+}
+while (reservation._tag === "Waiting") {
+  // oxlint-disable-next-line eslint/no-await-in-loop -- Budget retries must wait for the preceding attempt.
+  await Bun.sleep(250)
+  // oxlint-disable-next-line eslint/no-await-in-loop -- Only one admission attempt may run at a time.
+  reservation = await Budget.reserve(budget)
+}
+process.once("exit", reservation.release)
+const admitted = performance.now()
 const home = await fs.mkdtemp(path.join(os.tmpdir(), "ren-test-"))
 const temporary = path.join(home, "tmp")
 await fs.mkdir(temporary)
@@ -56,7 +74,8 @@ if (process.env.REN_TEST_PROFILE) {
   console.error(
     JSON.stringify({
       harness: "runner",
-      setupMs: Math.round(ready - started),
+      waitMs: Math.round(admitted - started),
+      setupMs: Math.round(ready - admitted),
       childMs: Math.round(exited - ready),
       cleanupMs: Math.round(ended - exited),
       totalMs: Math.round(ended - started),

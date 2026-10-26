@@ -44,6 +44,7 @@ Test databases are named `ren_test_<uuid>` and are dropped when a test finishes.
 - Durations: `bun run test` prints only failures. `bun test <file>` prints each test with its duration. Move a test that takes more than 5 seconds to a `*.slow.test.ts` file, as `AGENTS.md` says.
 - End-to-end: `cd packages/e2e && bun run test`. It starts its own server on port 4010.
 - Everything: `bun turbo test`.
+- Runs through `script/test.ts` reserve a machine-wide test memory budget before starting. `REN_TEST_MEMORY_MIB` sets the reservation per run (default 1536); `REN_TEST_BUDGET_MIB` sets the total (default half the host's memory). An oversized run can proceed alone. Reservations from dead owners are removed on the next attempt. Profiling reports admission time separately as `waitMs`.
 
 ## Generated code
 
