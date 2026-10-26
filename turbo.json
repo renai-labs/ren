@@ -20,7 +20,7 @@
     "test": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/script/test.ts", "$TURBO_ROOT$/packages/test-harness/src/**"],
-      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_BUDGET_MIB", "REN_TEST_MEMORY_MIB"],
+      "env": ["CELL_RUNTIME", "REN_TEST_PROFILE", "REN_TEST_BUDGET_MIB", "REN_TEST_MEMORY_MIB", "REN_TEST_WORKERS"],
       "outputs": []
     },
     "@ren/e2e#test": {

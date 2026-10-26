@@ -4,10 +4,21 @@ import path from "path"
 import { Budget } from "@ren/test-harness/budget"
 
 const started = performance.now()
+const workers = Number(process.env.REN_TEST_WORKERS ?? Math.min(2, os.availableParallelism()))
+if (!Number.isSafeInteger(workers) || workers < 1) throw new Error("REN_TEST_WORKERS must be a positive integer")
+if (
+  process.argv.slice(2).some((arg) => arg === "--parallel" || arg.startsWith("--parallel=") || arg === "--no-isolate")
+) {
+  throw new Error("Set REN_TEST_WORKERS to select the worker count; test files must remain isolated")
+}
+const memory = Number(process.env.REN_TEST_MEMORY_MIB ?? 1536)
 const budget = {
   directory: path.join(os.tmpdir(), `ren-test-budget-${process.getuid?.() ?? os.userInfo().username}`),
-  capacityMiB: Number(process.env.REN_TEST_BUDGET_MIB ?? Math.max(1, Math.floor(os.totalmem() / 2 / 1024 ** 2))),
-  costMiB: Number(process.env.REN_TEST_MEMORY_MIB ?? 1536),
+  capacityMiB: Number(
+    process.env.REN_TEST_BUDGET_MIB ??
+      Math.max(1, Math.min(Math.floor(os.totalmem() / 2 / 1024 ** 2), os.availableParallelism() * memory)),
+  ),
+  costMiB: memory * workers,
 }
 let reservation = await Budget.reserve(budget)
 if (reservation._tag === "Waiting") {
@@ -24,6 +35,8 @@ const admitted = performance.now()
 const home = await fs.mkdtemp(path.join(os.tmpdir(), "ren-test-"))
 const temporary = path.join(home, "tmp")
 await fs.mkdir(temporary)
+const timings = path.join(process.cwd(), ".cache", "test-timings.json")
+await fs.mkdir(path.dirname(timings), { recursive: true })
 
 const environment = {
   ...Object.fromEntries(
@@ -44,6 +57,7 @@ const environment = {
   XDG_CACHE_HOME: path.join(home, ".cache"),
   XDG_STATE_HOME: path.join(home, ".local", "state"),
   TMPDIR: temporary,
+  REN_TEST_HOME_ROOT: home,
 }
 
 const ready = performance.now()
@@ -51,6 +65,13 @@ const child = Bun.spawn({
   cmd: [
     process.execPath,
     "test",
+    "--no-orphans",
+    `--parallel=${workers}`,
+    "--preload",
+    new URL(import.meta.resolve("@ren/test-harness/isolate")).pathname,
+    "--timings",
+    timings,
+    "--update-timings",
     "--only-failures",
     ...(process.env.REN_SLOW ? [] : ["--path-ignore-patterns", "**/*.slow.test.ts"]),
     ...process.argv.slice(2),
@@ -74,6 +95,7 @@ if (process.env.REN_TEST_PROFILE) {
   console.error(
     JSON.stringify({
       harness: "runner",
+      workers,
       waitMs: Math.round(admitted - started),
       setupMs: Math.round(ready - admitted),
       childMs: Math.round(exited - ready),
