@@ -8,7 +8,7 @@ import { ChannelInstall } from "@ren/schema/channel-install"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Session } from "@ren/schema/session"
 import { BunCrypto } from "@effect/platform-bun"
-import { Clock, Context, Deferred, Duration, Effect, Layer, Option, Queue, Schedule, Schema } from "effect"
+import { Clock, ConfigProvider, Context, Deferred, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainRegistry } from "../../src/brain-registry.js"
@@ -17,11 +17,13 @@ import { ChannelInstalls } from "../../src/channel-installs.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
 import { ChannelReply } from "../../src/channel-reply.js"
+import { ChannelTurns } from "../../src/channel-turns.js"
 import { ChannelRoute } from "../../src/channel-route.js"
 import { Channels } from "../../src/channels.js"
 import { DurableRunner } from "../../src/durable-runner.js"
 import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
+import { SessionSync } from "../../src/session-sync.js"
 import { Host } from "./host.js"
 
 const secret = "channel-test-secret"
@@ -57,6 +59,7 @@ export class Outbox extends Context.Service<
   {
     readonly sent: Array<{ readonly target: ChannelProvider.Target; readonly text: string }>
     readonly attempts: Array<string>
+    readonly progress: Array<{ readonly message: string; readonly status: ChannelProvider.Status }>
   }
 >()("@ren/core/test/ChannelFixture/Outbox") {}
 
@@ -104,6 +107,7 @@ const provider = Effect.gen(function* () {
           return Effect.void
         },
       ),
+    progress: (target, status) => Effect.sync(() => void outbox.progress.push({ message: target.message, status })),
     installUrl: (state) => `https://slack.test/install?state=${state}`,
     completeInstall: (query) =>
       query.team
@@ -151,18 +155,11 @@ export const install = Effect.fnUntraced(function* (owner: {
   return workspace
 })
 
-export class Notices extends Context.Service<
-  Notices,
-  Queue.Queue<{ readonly event: Channel.Event; readonly reason: Channel.FailureReason }>
->()("@ren/core/test/ChannelFixture/Notices") {}
+export const app = "https://ren.test/app"
 
-const notices = Layer.effect(
-  ChannelNotice.Service,
-  Effect.gen(function* () {
-    const queue = yield* Notices
-    return ChannelNotice.Service.of({ notice: (found, reason) => Queue.offer(queue, { event: found, reason }) })
-  }),
-).pipe(Layer.provideMerge(Layer.effect(Notices, Queue.unbounded())))
+const notices = ChannelNotice.layer.pipe(
+  Layer.provide(ConfigProvider.layerAdd(ConfigProvider.fromUnknown({ APP_URL: app }))),
+)
 
 const Start = Schema.Struct({
   sessionId: Session.ID,
@@ -172,6 +169,7 @@ const Start = Schema.Struct({
       prompt: Session.Prompt,
       sender: Session.Sender,
       channel: Schema.optionalKey(ChannelOrigin.Info),
+      synthetic: Schema.optionalKey(Session.Synthetic),
     }),
   ),
 })
@@ -181,6 +179,7 @@ const Send = Schema.Struct({
   prompt: Session.Prompt,
   delivery: Session.Delivery,
   channel: Schema.optionalKey(ChannelOrigin.Info),
+  synthetic: Schema.optionalKey(Session.Synthetic),
 })
 
 export interface Delivered {
@@ -190,6 +189,7 @@ export interface Delivered {
   readonly prompt: Session.Prompt
   readonly delivery?: Session.Delivery
   readonly channel?: ChannelOrigin.Info
+  readonly synthetic?: Session.Synthetic
 }
 
 export class Cell extends Context.Service<
@@ -200,6 +200,7 @@ export class Cell extends Context.Service<
     readonly sends: ReadonlyArray<Session.MessageID>
     readonly start: (sessionId: Session.ID) => void
     readonly failSends: (count: number) => void
+    readonly rejectSends: () => void
   }
 >()("@ren/core/test/ChannelFixture/Cell") {}
 
@@ -209,7 +210,7 @@ const cell = Layer.effect(
     const accepted: Array<Delivered> = []
     const sends: Array<Session.MessageID> = []
     const started = new Set<string>()
-    const failures = { left: 0 }
+    const failures = { left: 0, rejected: false }
     const server = yield* Effect.acquireRelease(
       Effect.sync(() =>
         Bun.serve({
@@ -227,6 +228,7 @@ const cell = Layer.effect(
             const sessionId = Session.ID.make(path.split("/")[3] ?? "")
             const body = Schema.decodeUnknownSync(Send)(await incoming.json())
             sends.push(body.messageId)
+            if (failures.rejected) return new Response("too large", { status: 413 })
             if (failures.left > 0) {
               failures.left -= 1
               return new Response("waking", { status: 503 })
@@ -248,6 +250,9 @@ const cell = Layer.effect(
       failSends: (count) => {
         failures.left = count
       },
+      rejectSends: () => {
+        failures.rejected = true
+      },
     })
   }),
 )
@@ -255,18 +260,25 @@ const cell = Layer.effect(
 const models = Models.layerNone
 
 const core = (held: boolean) =>
-  Layer.mergeAll(SessionRunner.layer, ChannelInstalls.layer, ChannelRoute.layer, ChannelReply.layer, notices).pipe(
+  Layer.mergeAll(
+    SessionRunner.layer,
+    ChannelInstalls.layer,
+    ChannelRoute.layer,
+    ChannelReply.layer,
+    SessionSync.layer,
+    notices,
+  ).pipe(
     Layer.provideMerge(Layer.mergeAll(BrainRegistry.layer, ChannelProvider.layer([provider]), Access.layer)),
     Layer.provideMerge(
       Layer.mergeAll(
         hold(held),
-        Layer.sync(Outbox, () => ({ sent: [], attempts: [] })),
+        Layer.sync(Outbox, () => ({ sent: [], attempts: [], progress: [] })),
       ),
     ),
   )
 
-const onCell = <E, R, RE, RR>(
-  channels: Layer.Layer<Channels.Service, E, R>,
+const onCell = <A, E, R, RE, RR>(
+  channels: Layer.Layer<A, E, R>,
   runner: Layer.Layer<WorkflowEngine.WorkflowEngine, RE, RR>,
   options: { readonly held: boolean } = { held: false },
 ) =>
@@ -283,7 +295,9 @@ const onCell = <E, R, RE, RR>(
     Layer.provideMerge(cell),
   )
 
-export const cellLayer = onCell(Channels.layer, DurableRunner.layerMemory).pipe(Layer.provideMerge(Testing.layer))
+export const cellLayer = onCell(Layer.mergeAll(Channels.layer, ChannelTurns.layer), DurableRunner.layerMemory).pipe(
+  Layer.provideMerge(Testing.layer),
+)
 
 export const unstoredLayer = onCell(
   Channels.layer.pipe(

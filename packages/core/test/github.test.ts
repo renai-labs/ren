@@ -227,6 +227,33 @@ describe("GitHub", () => {
       }),
   )
 
+  app.live("progress: received puts 👀 on the comment; done and failed swap Ren's own 👀 for 🚀 or 😕", () =>
+    Effect.gen(function* () {
+      const provider = GitHub.make(yield* client)
+      const install = installation("acme")
+      const issue = { install, place: "acme/api", thread: "8812:12", message: "issue:456" }
+      const review = { ...issue, thread: "8812:41", message: "review:789" }
+      github.resources.set("/repos/acme/api/issues/comments/456/reactions", [
+        { id: 1, user: { id: 9001 } },
+        { id: 2, user: { id: 583231 } },
+      ])
+      github.resources.set("/repos/acme/api/pulls/comments/789/reactions", [{ id: 3, user: { id: 9001 } }])
+      const before = github.posted.length
+      yield* provider.progress(issue, "received")
+      yield* provider.progress(issue, "done")
+      yield* provider.progress(review, "failed")
+      expect(github.posted.slice(before).map((each) => [each.path, each.body])).toEqual([
+        ["/repos/acme/api/issues/comments/456/reactions", { content: "eyes" }],
+        ["/repos/acme/api/issues/comments/456/reactions", { content: "rocket" }],
+        ["/repos/acme/api/pulls/comments/789/reactions", { content: "confused" }],
+      ])
+      expect(github.removed).toEqual([
+        "/repos/acme/api/issues/comments/456/reactions/1",
+        "/repos/acme/api/pulls/comments/789/reactions/3",
+      ])
+    }),
+  )
+
   app.effect("the App JWT is issued 60 seconds in the past and expires within 10 minutes", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(1_800_000_000_000)

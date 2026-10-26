@@ -31,6 +31,8 @@ export class Rejected extends Schema.TaggedError<Rejected>()("ChannelProvider.Re
   message: Schema.String,
 }) {}
 
+export type Status = "received" | "done" | "failed"
+
 export interface Target {
   readonly install: string
   readonly place: string
@@ -56,6 +58,7 @@ export interface Provider {
   readonly fetchFile: (install: string, file: Channel.FileRef) => Effect.Effect<Uint8Array, FileUnavailable>
   readonly context: (event: Channel.Event) => Effect.Effect<Option.Option<string>, Unavailable>
   readonly send: (target: Target, text: string) => Effect.Effect<void, PlaceGone | Unavailable | Rejected>
+  readonly progress: (target: Target, status: Status) => Effect.Effect<void, Unavailable>
   readonly installUrl: (state: string) => string
   readonly completeInstall: (query: Readonly<Record<string, string>>) => Effect.Effect<Installed, InstallFailed>
   readonly changedOnProvider: (query: Readonly<Record<string, string>>) => boolean

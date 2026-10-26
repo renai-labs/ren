@@ -34,6 +34,7 @@ export const EventRun = DurableRunner.make("ChannelEvent", {
 class Stopped extends Schema.TaggedError<Stopped>()("Channels.Stopped", {
   reason: Channel.FailureReason,
   message: Schema.String,
+  sessionId: Session.ID,
 }) {}
 
 const filesAtOnce = 4
@@ -140,21 +141,58 @@ export const layer = Layer.effect(
 
     const send = (input: Session.SendInput) =>
       runner.send(input).pipe(
+        Effect.catchTag("BrainRejectedError", (error) =>
+          Effect.fail(new Stopped({ reason: "unknown", message: error.message, sessionId: input.sessionId })),
+        ),
         Effect.catchTag("BrainUnavailable", (error) =>
           Effect.gen(function* () {
             const session = yield* runner.get(input.sessionId).pipe(Effect.orDie)
             const state = yield* brainHost.access(session.brainId)
             if (state._tag === "Failed")
-              return yield* new Stopped({ reason: "brain_failed", message: `The brain failed: ${state.reason}` })
+              return yield* new Stopped({
+                reason: "brain_failed",
+                message: `The brain failed: ${state.reason}`,
+                sessionId: input.sessionId,
+              })
             return yield* error
           }),
         ),
+      )
+
+    const targetOf = (event: Channel.Event): ChannelProvider.Target => ({
+      install: event.install,
+      place: event.place.name ?? event.place.id,
+      thread: event.thread.id,
+      message: event.message,
+    })
+
+    const failed = (event: Channel.Event, reason: Channel.FailureReason, sessionId?: Session.ID) =>
+      Effect.all(
+        [
+          Option.match(registry.get(event.provider), {
+            onNone: () => Effect.void,
+            onSome: (provider) =>
+              provider
+                .progress(targetOf(event), "failed")
+                .pipe(Effect.catchCause((cause) => Effect.logWarning("A channel progress could not be sent", cause))),
+          }),
+          notices.notice({
+            provider: event.provider,
+            target: targetOf(event),
+            reason,
+            ...(sessionId && { sessionId }),
+          }),
+        ],
+        { discard: true },
       )
 
     const run = Effect.fnUntraced(function* (payload: typeof EventRun.payloadSchema.Type) {
       const event = payload.event
       const found = registry.get(event.provider)
       if (Option.isNone(found)) return yield* Effect.logError(`No channel provider ${event.provider} runs this event`)
+      yield* found.value
+        .progress(targetOf(event), "received")
+        .pipe(Effect.catchCause((cause) => Effect.logWarning("A channel progress could not be sent", cause)))
       const route = yield* routes.resolve(event)
       const context = yield* found.value.context(event).pipe(
         Effect.tapError((error) => Effect.logWarning(`The ${event.provider} thread context could not be read`, error)),
@@ -204,7 +242,12 @@ export const layer = Layer.effect(
             )
           : create({})
       ).pipe(
-        Effect.catchTags({ "SessionRunner.AlreadyExists": () => sendToThread, "SessionRunner.NotFound": Effect.die }),
+        Effect.catchTags({
+          "SessionRunner.AlreadyExists": () => sendToThread,
+          "SessionRunner.NotFound": Effect.die,
+          BrainRejectedError: (error) =>
+            Effect.fail(new Stopped({ reason: "unknown", message: error.message, sessionId: claimed.sessionId })),
+        }),
       )
     })
 
@@ -213,15 +256,11 @@ export const layer = Layer.effect(
         `channel:${payload.event.provider}:${payload.event.install}:${payload.event.eventId}`,
         run(payload).pipe(
           Effect.catchTags({
-            "ChannelRoute.Refused": (error) => notices.notice(payload.event, error.reason),
+            "ChannelRoute.Refused": (error) => failed(payload.event, error.reason),
             "ChannelRoute.Unroutable": (error) => Effect.logWarning(`A channel event has no route: ${error.message}`),
-            BrainRejectedError: (error) =>
-              Effect.logError(`The brain rejected a channel message: ${error.message}`).pipe(
-                Effect.andThen(notices.notice(payload.event, "unknown")),
-              ),
             "Channels.Stopped": (error) =>
               Effect.logWarning(`A channel message stopped: ${error.message}`).pipe(
-                Effect.andThen(notices.notice(payload.event, error.reason)),
+                Effect.andThen(failed(payload.event, error.reason, error.sessionId)),
               ),
           }),
         ),

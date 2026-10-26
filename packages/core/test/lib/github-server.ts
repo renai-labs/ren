@@ -53,6 +53,7 @@ export interface Instance {
   readonly minted: Array<string>
   readonly resources: Map<string, unknown>
   readonly posted: Array<{ readonly path: string; readonly body: unknown; readonly authorization: string | null }>
+  readonly removed: Array<string>
   readonly options: { failDelete: boolean; tokenExpiresAt: string; postStatus: number }
   readonly stop: () => void
 }
@@ -115,6 +116,13 @@ const post = async (state: State, request: Request, url: URL) => {
     : Response.json({ message: "Not Found" }, { status: state.options.postStatus })
 }
 
+const api = (state: State, request: Request, url: URL) => {
+  if (request.method === "POST") return post(state, request, url)
+  if (request.method !== "DELETE") return resource(state, request, url)
+  state.removed.push(url.pathname)
+  return new Response(null, { status: 204 })
+}
+
 export const start = (): Instance => {
   const state: State = {
     installations: new Map(),
@@ -123,6 +131,7 @@ export const start = (): Instance => {
     minted: [],
     resources: new Map(),
     posted: [],
+    removed: [],
     options: { failDelete: false, tokenExpiresAt: "2027-01-15T08:00:00Z", postStatus: 201 },
   }
   const server = Bun.serve({
@@ -133,8 +142,7 @@ export const start = (): Instance => {
       if (request.method === "POST" && url.pathname === "/login/oauth/access_token") return exchange(state, request)
       if (request.method === "GET" && url.pathname === "/user/installations")
         return userInstallations(state, request, url)
-      if (url.pathname.startsWith("/repos/"))
-        return request.method === "POST" ? post(state, request, url) : resource(state, request, url)
+      if (url.pathname.startsWith("/repos/")) return api(state, request, url)
       const match = /^\/app\/installations\/(\d+)(\/access_tokens)?$/u.exec(url.pathname)
       if (!match?.[1]) return new Response(null, { status: 404 })
       return appInstallation(state, request, match[1], { tokens: request.method === "POST" && Boolean(match[2]) })

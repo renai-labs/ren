@@ -5,13 +5,15 @@ import { Agent } from "@ren/schema/agent"
 import { Brain } from "@ren/schema/brain"
 import { Session } from "@ren/schema/session"
 import { eq } from "drizzle-orm"
-import { Deferred, Effect, Layer, Queue, Struct } from "effect"
+import { Deferred, Effect, Layer, Option, Schedule, Struct } from "effect"
 import type { Actor } from "../src/actor.js"
 import { ChannelReply } from "../src/channel-reply.js"
+import { ChannelTurns } from "../src/channel-turns.js"
 import { Channels } from "../src/channels.js"
 import { ChannelFixture } from "./lib/channel-fixture.js"
 import { testEffect } from "./lib/effect.js"
 import { Seed } from "./lib/seed.js"
+import { SyncFixture } from "./lib/sync-fixture.js"
 import { Testing } from "@ren/db/testing"
 
 setDefaultTimeout(60_000)
@@ -41,6 +43,22 @@ const started = Effect.fnUntraced(function* (owner: Effect.Success<typeof routed
 })
 
 describe("Channels", () => {
+  it.live("a rejected follow-up links to the existing channel session", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const sessionId = yield* started(subject.owner)
+      const found = ChannelFixture.event(subject.install)
+      yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
+      const cell = yield* ChannelFixture.Cell
+      cell.rejectSends()
+      yield* ChannelFixture.receive(ChannelFixture.delivery(found))
+      yield* ChannelFixture.settled(found)
+      expect((yield* ChannelFixture.Outbox).sent.map((sent) => sent.text)).toEqual([
+        `Something went wrong while I was working on your message. Please try again. [Open in Ren](${ChannelFixture.app}/sessions/${sessionId})`,
+      ])
+    }),
+  )
+
   it.live(
     "an unknown provider answers 404, a body that does not parse 400, an ignored event 200, and a handshake its body",
     () =>
@@ -231,11 +249,11 @@ describe("Channels", () => {
   it.live("an event of a workspace that no organization installed starts nothing and posts no notice", () =>
     Effect.gen(function* () {
       const owner = yield* Seed.owner()
-      const notices = yield* ChannelFixture.Notices
+      const outbox = yield* ChannelFixture.Outbox
       const found = ChannelFixture.event("T-not-installed")
       expect(yield* ChannelFixture.receive(ChannelFixture.delivery(found))).toEqual({ status: 200 })
       yield* ChannelFixture.settled(found)
-      expect(yield* Queue.size(notices)).toBe(0)
+      expect(outbox.sent).toEqual([])
       expect(yield* sessionsOf(owner)).toEqual([])
       expect(yield* ChannelFixture.threads).toEqual([])
     }),
@@ -401,14 +419,139 @@ describe("ChannelReply", () => {
   )
 })
 
+const turnEnded = Effect.fnUntraced(function* (
+  subject: Effect.Success<typeof routed>,
+  sessionId: Session.ID,
+  turn: {
+    readonly idle: number
+    readonly outcome: "succeeded" | "failed"
+    readonly messages: ReadonlyArray<{ readonly id: string; readonly type: string; readonly data: object }>
+  },
+) {
+  const turns = yield* ChannelTurns.Service
+  yield* SyncFixture.pass(
+    SyncFixture.host(subject.owner.organizationId, sessionId),
+    SyncFixture.session(sessionId, { time_idle: turn.idle, idle_outcome: turn.outcome }),
+    turn.messages.length,
+    turn.messages.map((message, index) =>
+      SyncFixture.message(sessionId, message.id, index + 1, { type: message.type, data: JSON.stringify(message.data) }),
+    ),
+  )
+  yield* turns.synced(sessionId)
+  const executionId = yield* ChannelTurns.TurnRun.executionId({ sessionId, idle: turn.idle })
+  yield* ChannelTurns.TurnRun.poll(executionId).pipe(
+    Effect.repeat({ until: Option.isSome, schedule: Schedule.spaced("20 millis") }),
+    Effect.timeoutOrElse({
+      duration: "20 seconds",
+      orElse: () => Effect.die(new Error("The turn run did not finish")),
+    }),
+  )
+})
+
+const fromChannel = { id: "msg_1", type: "user", data: { text: "the deploy failed", metadata: { channel: {} } } }
+
+const answered = { id: "msg_2", type: "assistant", data: { content: [] } }
+
+const threadOf = Effect.fnUntraced(function* (subject: Effect.Success<typeof routed>) {
+  const sessionId = yield* started(subject.owner)
+  const found = ChannelFixture.event(subject.install)
+  yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
+  yield* ChannelFixture.receive(ChannelFixture.delivery(found))
+  yield* ChannelFixture.settled(found)
+  return { sessionId, found }
+})
+
+describe("ChannelTurns", () => {
+  it.live("a reminder never earns another reminder, but a new channel message can", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const outbox = yield* ChannelFixture.Outbox
+      const thread = yield* threadOf(subject)
+      yield* turnEnded(subject, thread.sessionId, { idle: 1, outcome: "succeeded", messages: [fromChannel, answered] })
+      const reminders = (yield* ChannelFixture.accepted(2)).filter((delivered) => delivered.synthetic)
+      expect(reminders).toMatchObject([
+        {
+          kind: "send",
+          sessionId: thread.sessionId,
+          delivery: "queue",
+          prompt: {
+            text: "You have not answered in the Slack thread. Text in this chat is not sent there: answer the person with the channel_reply tool.",
+          },
+          synthetic: { description: "Reminder: reply in the thread", source: "channel" },
+        },
+      ])
+      yield* turnEnded(subject, thread.sessionId, { idle: 1, outcome: "succeeded", messages: [fromChannel, answered] })
+      yield* turnEnded(subject, thread.sessionId, { idle: 2, outcome: "succeeded", messages: [fromChannel, answered] })
+      expect((yield* ChannelFixture.Cell).accepted.filter((delivered) => delivered.synthetic)).toHaveLength(1)
+      expect(outbox.progress).toEqual([
+        { message: thread.found.message, status: "received" },
+        { message: thread.found.message, status: "done" },
+        { message: thread.found.message, status: "done" },
+      ])
+      yield* turnEnded(subject, thread.sessionId, {
+        idle: 3,
+        outcome: "succeeded",
+        messages: [fromChannel, answered, { ...fromChannel, id: "msg_3" }, { ...answered, id: "msg_4" }],
+      })
+      expect((yield* ChannelFixture.Cell).accepted.filter((delivered) => delivered.synthetic)).toHaveLength(2)
+    }),
+  )
+
+  it.live("a reply in the thread before the turn ends needs no reminder", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const replies = yield* ChannelReply.Service
+      const thread = yield* threadOf(subject)
+      yield* replies.reply(asAgent(subject, thread.sessionId), { text: "Rolled back." })
+      yield* turnEnded(subject, thread.sessionId, { idle: 1, outcome: "succeeded", messages: [fromChannel, answered] })
+      expect((yield* ChannelFixture.Cell).accepted.filter((delivered) => delivered.synthetic)).toEqual([])
+    }),
+  )
+
+  it.live("a failed turn ends with failed and the fixed notice of its error, never the error text", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const outbox = yield* ChannelFixture.Outbox
+      const thread = yield* threadOf(subject)
+      const failure = {
+        id: "msg_2",
+        type: "assistant",
+        data: { content: [], error: { type: "provider.rate-limit", message: "429 from api.internal: org_123" } },
+      }
+      yield* turnEnded(subject, thread.sessionId, { idle: 1, outcome: "failed", messages: [fromChannel, failure] })
+      expect(outbox.progress.at(-1)).toEqual({ message: thread.found.message, status: "failed" })
+      expect(outbox.sent.map((each) => each.text)).toEqual([
+        `I’m temporarily unable to respond. Please try again in a minute. [Open in Ren](${ChannelFixture.app}/sessions/${thread.sessionId})`,
+      ])
+      expect((yield* ChannelFixture.Cell).accepted.filter((delivered) => delivered.synthetic)).toEqual([])
+    }),
+  )
+
+  it.live("a turn that a message from the app started sends nothing to the thread", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const outbox = yield* ChannelFixture.Outbox
+      const thread = yield* threadOf(subject)
+      const fromApp = { id: "msg_3", type: "user", data: { text: "and from the app", metadata: { userID: "u" } } }
+      yield* turnEnded(subject, thread.sessionId, {
+        idle: 1,
+        outcome: "succeeded",
+        messages: [fromChannel, answered, fromApp, { ...answered, id: "msg_4" }],
+      })
+      expect(outbox.progress).toEqual([{ message: thread.found.message, status: "received" }])
+      expect((yield* ChannelFixture.Cell).accepted.filter((delivered) => delivered.synthetic)).toEqual([])
+    }),
+  )
+})
+
 const onBrains = testEffect(ChannelFixture.sandboxLayer)
 
 describe("Channels on brains", () => {
-  onBrains.live("a failed brain stops the run with one notice", () =>
+  onBrains.live("a failed brain stops the run: 👀 becomes a failure and one fixed notice links to the chat", () =>
     Effect.gen(function* () {
       const subject = yield* routed
       const database = yield* Database.Service
-      const notices = yield* ChannelFixture.Notices
+      const outbox = yield* ChannelFixture.Outbox
       const sessionId = yield* Seed.session(subject.owner)
       yield* database.db
         .update(Database.Schema.brain)
@@ -417,9 +560,17 @@ describe("Channels on brains", () => {
       const found = ChannelFixture.event(subject.install)
       yield* ChannelFixture.thread(subject.owner.organizationId, found, sessionId)
       yield* ChannelFixture.receive(ChannelFixture.delivery(found))
-      expect(yield* Queue.take(notices)).toEqual({ event: found, reason: "brain_failed" })
       yield* ChannelFixture.settled(found)
-      expect(yield* Queue.size(notices)).toBe(0)
+      expect(outbox.progress).toEqual([
+        { message: found.message, status: "received" },
+        { message: found.message, status: "failed" },
+      ])
+      expect(outbox.sent).toEqual([
+        {
+          target: { install: found.install, place: "eng", thread: found.thread.id, message: found.message },
+          text: `I couldn’t start working on your message. Please try again. [Open in Ren](${ChannelFixture.app}/sessions/${sessionId})`,
+        },
+      ])
     }),
   )
 })
