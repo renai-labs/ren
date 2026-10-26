@@ -210,6 +210,8 @@ export type ChannelInstallID = string
 
 export type ChannelMappingID = string
 
+export type ChannelTriggerID = string
+
 export type AuthSignInProvider = "google" | "github"
 
 export type HealthInfo = { status: HealthStatus; version: string }
@@ -430,9 +432,8 @@ export type ChannelOriginInfo = {
   sender: string
   handle?: string
   context?: string
+  trigger?: string
 }
-
-export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string }
 
 export type ChannelSent = { provider: ChannelProvider; place: string }
 
@@ -580,19 +581,9 @@ export type ChannelInstallInfo = {
   createdAt: string
 }
 
-export type ChannelMappingInfo = {
-  id: ChannelMappingID
-  installId: ChannelInstallID
-  provider: ChannelProvider
-  place: string
-  placeName: string
-  space: { id: SpaceID; name: string }
-  agent: { id: AgentID; name: string } | null
-  fallback: boolean
-  fallbackUser: { id: AuthUserID; name: string } | null
-  createdAt: string
-  updatedAt: string
-}
+export type ChannelTriggerSetting = { id: ChannelTriggerID; prompt?: string }
+
+export type ChannelTrigger = { id: ChannelTriggerID; title: string; description: string; defaultPrompt: string }
 
 export type AuthSignInProviders = { items: Array<AuthSignInProvider> }
 
@@ -699,8 +690,6 @@ export type SessionMessageUser = {
   channel?: ChannelOriginInfo
 }
 
-export type ChannelInstallProviderInfos = { items: Array<ChannelInstallProviderInfo> }
-
 export type SessionMessageToolCompleted = {
   status: "completed"
   input: { [x: string]: JsonValue }
@@ -766,15 +755,22 @@ export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize:
 
 export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
 
-export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
-
-export type ChannelPlaceInfo = {
-  id: string
-  name: string
-  private: boolean
-  anyoneCanWrite: boolean
-  mapping: ChannelMappingInfo | null
+export type ChannelMappingInfo = {
+  id: ChannelMappingID
+  installId: ChannelInstallID
+  provider: ChannelProvider
+  place: string
+  placeName: string
+  space: { id: SpaceID; name: string }
+  agent: { id: AgentID; name: string } | null
+  fallback: boolean
+  fallbackUser: { id: AuthUserID; name: string } | null
+  triggers: Array<ChannelTriggerSetting>
+  createdAt: string
+  updatedAt: string
 }
+
+export type ChannelInstallProviderInfo = { id: ChannelProvider; title: string; triggers: Array<ChannelTrigger> }
 
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
@@ -855,7 +851,17 @@ export type TaskEventInfo = {
   createdAt: string
 }
 
-export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; pageSize: number; total: number }
+export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
+
+export type ChannelPlaceInfo = {
+  id: string
+  name: string
+  private: boolean
+  anyoneCanWrite: boolean
+  mapping: ChannelMappingInfo | null
+}
+
+export type ChannelInstallProviderInfos = { items: Array<ChannelInstallProviderInfo> }
 
 export type SpaceSettingsInfo = { id: SpaceID; settings: SettingsInfo; canUpdate: boolean; updatedAt: string | null }
 
@@ -928,6 +934,8 @@ export type SessionMessageTool = {
 export type TaskActivityInfo =
   | { id: TaskEventID; type: "event"; event: TaskEventInfo }
   | { id: TaskCommentID; type: "comment"; comment: TaskCommentInfo }
+
+export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; pageSize: number; total: number }
 
 export type AgentPage = { items: Array<AgentInfo>; page: number; pageSize: number; total: number }
 
@@ -5905,6 +5913,7 @@ export type ChannelMappingCreateInput = {
     readonly agentId?: string | undefined
     readonly fallback?: boolean | undefined
     readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
   }["installId"]
   readonly place: {
     readonly installId: string
@@ -5913,6 +5922,7 @@ export type ChannelMappingCreateInput = {
     readonly agentId?: string | undefined
     readonly fallback?: boolean | undefined
     readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
   }["place"]
   readonly spaceId: {
     readonly installId: string
@@ -5921,6 +5931,7 @@ export type ChannelMappingCreateInput = {
     readonly agentId?: string | undefined
     readonly fallback?: boolean | undefined
     readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
   }["spaceId"]
   readonly agentId?: {
     readonly installId: string
@@ -5929,6 +5940,7 @@ export type ChannelMappingCreateInput = {
     readonly agentId?: string | undefined
     readonly fallback?: boolean | undefined
     readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
   }["agentId"]
   readonly fallback?: {
     readonly installId: string
@@ -5937,6 +5949,7 @@ export type ChannelMappingCreateInput = {
     readonly agentId?: string | undefined
     readonly fallback?: boolean | undefined
     readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
   }["fallback"]
   readonly fallbackUserId?: {
     readonly installId: string
@@ -5945,7 +5958,17 @@ export type ChannelMappingCreateInput = {
     readonly agentId?: string | undefined
     readonly fallback?: boolean | undefined
     readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
   }["fallbackUserId"]
+  readonly triggers?: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+    readonly triggers?: ReadonlyArray<{ readonly id: string; readonly prompt?: string }> | undefined
+  }["triggers"]
 }
 
 export type ChannelMappingCreateOutput = ChannelMappingInfo

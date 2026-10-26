@@ -738,6 +738,7 @@ export type ChannelOriginInfo = {
   sender: string
   handle?: string
   context?: string
+  trigger?: string
 }
 
 export type SessionStatusInfo = SessionStatusIdle | SessionStatusBusy

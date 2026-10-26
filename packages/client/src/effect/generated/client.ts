@@ -1261,6 +1261,7 @@ type ChannelMappingCreateInput = {
   readonly agentId?: ChannelMappingCreateRequest["payload"]["agentId"]
   readonly fallback?: ChannelMappingCreateRequest["payload"]["fallback"]
   readonly fallbackUserId?: ChannelMappingCreateRequest["payload"]["fallbackUserId"]
+  readonly triggers?: ChannelMappingCreateRequest["payload"]["triggers"]
 }
 const EndpointChannelMappingCreate = (raw: RawClient["channel-mapping"]) => (input: ChannelMappingCreateInput) =>
   raw["channel-mapping.create"]({
@@ -1271,6 +1272,7 @@ const EndpointChannelMappingCreate = (raw: RawClient["channel-mapping"]) => (inp
       agentId: input["agentId"],
       fallback: input["fallback"],
       fallbackUserId: input["fallbackUserId"],
+      triggers: input["triggers"],
     },
   }).pipe(Effect.mapError(mapClientError))
 

@@ -56,7 +56,11 @@ export const StartInput = Schema.Struct({ provider: Channel.Provider }).annotate
 })
 
 export interface ProviderInfo extends Schema.Schema.Type<typeof ProviderInfo> {}
-export const ProviderInfo = Schema.Struct({ id: Channel.Provider, title: Schema.String }).annotate({
+export const ProviderInfo = Schema.Struct({
+  id: Channel.Provider,
+  title: Schema.String,
+  triggers: Schema.Array(Channel.Trigger),
+}).annotate({
   identifier: "ChannelInstall.ProviderInfo",
   description: "A provider that this Ren server can install.",
 })

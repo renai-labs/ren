@@ -6,7 +6,7 @@ import type { ChannelMapping } from "@ren/schema/channel-mapping"
 import type { Credential } from "@ren/schema/credential"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
-import { boolean, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
+import { boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
 import { agent } from "./agent.sql.js"
 import { organization, user } from "./auth.sql.js"
 import { credential } from "./credential.sql.js"
@@ -62,6 +62,7 @@ export const channel_mapping = pgTable(
     fallback_user_id: text()
       .$type<Auth.UserID>()
       .references(() => user.id, { onDelete: "set null" }),
+    triggers: jsonb().$type<ReadonlyArray<Channel.TriggerSetting>>().notNull().default([]),
     created_by: text()
       .$type<Auth.UserID>()
       .references(() => user.id, { onDelete: "set null" }),

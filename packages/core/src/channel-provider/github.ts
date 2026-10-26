@@ -11,17 +11,32 @@ const Envelope = Schema.Struct({
   installation: Schema.optionalKey(Schema.Struct({ id: Schema.Number })),
 })
 
+const Account = Schema.Struct({ id: Schema.Number, login: Schema.String, type: Schema.String })
+
 const Item = Schema.Struct({ number: Schema.Number, html_url: Schema.String })
 
 const Comment = Schema.Struct({
   action: Schema.String,
   installation: Schema.Struct({ id: Schema.Number }),
-  sender: Schema.Struct({ id: Schema.Number, login: Schema.String, type: Schema.String }),
+  sender: Account,
   repository: Schema.Struct({ id: Schema.Number, full_name: Schema.String }),
   comment: Schema.Struct({ id: Schema.Number, body: Schema.String }),
   changes: Schema.optionalKey(Schema.Struct({ body: Schema.optionalKey(Schema.Struct({ from: Schema.String })) })),
   issue: Schema.optionalKey(Item),
   pull_request: Schema.optionalKey(Item),
+})
+
+const PullRequestEvent = Schema.Struct({
+  action: Schema.String,
+  installation: Schema.Struct({ id: Schema.Number }),
+  sender: Account,
+  repository: Schema.Struct({ id: Schema.Number, full_name: Schema.String }),
+  pull_request: Schema.Struct({
+    number: Schema.Number,
+    html_url: Schema.String,
+    draft: Schema.optionalKey(Schema.Boolean),
+    user: Account,
+  }),
 })
 
 const Issue = Schema.Struct({
@@ -68,6 +83,23 @@ const decodeJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unkno
 const decodeEnvelope = Schema.decodeUnknownEffect(Envelope)
 
 const decodeComment = Schema.decodeUnknownEffect(Comment)
+
+const decodePullRequest = Schema.decodeUnknownEffect(PullRequestEvent)
+
+export const pullRequestReady: Channel.Trigger = {
+  id: "pull_request_ready",
+  title: "Review pull requests when ready",
+  description: "When a pull request is opened, or marked ready for review. Not for a draft, and not on each push.",
+  defaultPrompt: "Review this pull request.",
+}
+
+const subjectOf = (message: string) => {
+  const kind = message.slice(0, message.indexOf(":"))
+  const id = message.slice(kind.length + 1)
+  if (kind === "pull") return { kind, id, comment: undefined, reactions: `issues/${id}/reactions` }
+  const comment = `${kind === "review" ? "pulls" : "issues"}/comments/${id}`
+  return { kind, id, comment, reactions: `${comment}/reactions` }
+}
 
 const malformed = (error: Schema.SchemaError) => new ChannelProvider.Malformed({ message: error.message })
 
@@ -134,8 +166,32 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       },
     }
   }
+  const fromPullRequest = (delivery: string, body: typeof PullRequestEvent.Type): Channel.Parsed => {
+    const pull = body.pull_request
+    if (!(body.action === "ready_for_review" || (body.action === "opened" && !pull.draft)))
+      return ignore(`GitHub pull_request.${body.action}${pull.draft ? " of a draft" : ""} is not handled`)
+    if (body.sender.type === "Bot" || String(body.sender.id) === app.settings.botUserId)
+      return ignore(`GitHub pull_request.${body.action} is from the bot ${body.sender.login}`)
+    const url = webUrl(pull.html_url)
+    return {
+      _tag: "Event",
+      event: {
+        provider: "github",
+        eventId: delivery,
+        install: String(body.installation.id),
+        place: { id: String(body.repository.id), kind: "repository", name: body.repository.full_name },
+        thread: { id: `${body.repository.id}:${pull.number}`, ...(url && { url }) },
+        message: `pull:${pull.number}`,
+        sender: { accountId: String(pull.user.id), handle: pull.user.login },
+        text: pullRequestReady.defaultPrompt,
+        files: [],
+        trigger: pullRequestReady.id,
+      },
+    }
+  }
   return {
     id: "github",
+    triggers: [pullRequestReady],
     verify: (request) => {
       const given = Buffer.from(request.headers.get("x-hub-signature-256") ?? "")
       const expected = Buffer.from(`sha256=${createHmac("sha256", secret).update(request.body).digest("hex")}`)
@@ -151,9 +207,15 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       if (event === "installation" && envelope.action === "deleted" && envelope.installation)
         return { _tag: "Uninstalled", install: String(envelope.installation.id) } satisfies Channel.Parsed
       const kind = commentEvents[event]
-      if (!kind) return ignore(`GitHub ${[event, envelope.action].filter(Boolean).join(".")} is not handled`)
+      if (!kind && event !== "pull_request")
+        return ignore(`GitHub ${[event, envelope.action].filter(Boolean).join(".")} is not handled`)
       const delivery = request.headers.get("x-github-delivery")
       if (!delivery) return yield* new ChannelProvider.Malformed({ message: "GitHub sent no X-GitHub-Delivery" })
+      if (!kind)
+        return yield* decodePullRequest(body).pipe(
+          Effect.map((pull) => fromPullRequest(delivery, pull)),
+          Effect.orElseSucceed(() => ignore("GitHub pull_request has no sender, installation, repository or author")),
+        )
       return yield* decodeComment(body).pipe(
         Effect.map((comment) => fromComment({ event, kind, delivery, body: comment })),
         Effect.orElseSucceed(() => ignore(`GitHub ${event} has no sender, installation, repository or comment`)),
@@ -164,20 +226,21 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       function* (event) {
         const repository = (event.place.name ?? "").split("/").map(encodeURIComponent).join("/")
         const number = event.thread.id.split(":").at(1) ?? ""
-        const kind = event.message.startsWith("review:") ? "review" : "issue"
-        const comment = event.message.slice(kind.length + 1)
+        const subject = subjectOf(event.message)
         const read = <S extends Schema.Top>(path: string, schema: S) =>
           app.read(event.install, `/repos/${repository}${path}`, schema)
         const found = yield* Effect.all(
           {
             issue: read(`/issues/${number}`, Issue),
-            comment: read(kind === "review" ? `/pulls/comments/${comment}` : `/issues/comments/${comment}`, Author),
+            comment: subject.comment ? read(`/${subject.comment}`, Author) : Effect.succeed(undefined),
           },
           { concurrency: 2 },
         )
         const issue = found.issue
-        const author = found.comment.user ? ` by @${found.comment.user.login}` : ""
-        const triggering = `Triggering comment: ${comment} (${kind})${author}`
+        const author = found.comment?.user ? ` by @${found.comment.user.login}` : ""
+        const triggering = found.comment
+          ? `Triggering comment: ${subject.id} (${subject.kind})${author}`
+          : `Ready for review, by @${event.sender.handle ?? event.sender.accountId}`
         if (!issue.pull_request) return Option.some(`Issue #${number} “${issue.title}”, ${issue.state}\n${triggering}`)
         const pull = yield* read(`/pulls/${number}`, Pull)
         return Option.some(
@@ -218,9 +281,7 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
     progress: Effect.fn("GitHub.progress")(
       function* (target, status) {
         const repository = target.place.split("/").map(encodeURIComponent).join("/")
-        const review = target.message.startsWith("review:")
-        const comment = target.message.slice(target.message.indexOf(":") + 1)
-        const reactions = `/repos/${repository}/${review ? "pulls" : "issues"}/comments/${comment}/reactions`
+        const reactions = `/repos/${repository}/${subjectOf(target.message).reactions}`
         if (status === "received") return yield* app.post(target.install, reactions, { content: "eyes" })
         yield* app.post(target.install, reactions, { content: status === "done" ? "rocket" : "confused" })
         const eyes = yield* app.read(target.install, `${reactions}?content=eyes&per_page=100`, Reactions)

@@ -27,7 +27,9 @@ export function ChannelMessageHeader(props: { origin: ChannelOrigin.Info | undef
       <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <Icon glyph={glyphs[origin.provider]} size="small" tone="secondary" />
         <Text purpose="caption" tone="secondary" element="span" wrapping="anywhere">
-          Sent from {title} by {senderOf(origin)} in {origin.place}
+          {origin.trigger
+            ? `Started on ${title} by “${origin.trigger}” in ${origin.place}, for ${senderOf(origin)}`
+            : `Sent from ${title} by ${senderOf(origin)} in ${origin.place}`}
         </Text>
         {origin.threadUrl ? (
           <Text purpose="caption" element="span">

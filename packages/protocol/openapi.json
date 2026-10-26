@@ -10200,6 +10200,47 @@
         "required": ["provider", "place"],
         "additionalProperties": false
       },
+      "Channel.Trigger": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Channel.TriggerID"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "defaultPrompt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "title", "description", "defaultPrompt"],
+        "additionalProperties": false,
+        "description": "An event that a mapping can turn on, so that Ren runs a turn with no mention."
+      },
+      "Channel.TriggerID": {
+        "type": "string",
+        "minLength": 1,
+        "description": "A provider’s event that starts a turn with no mention of Ren, such as GitHub’s pull_request_ready."
+      },
+      "Channel.TriggerSetting": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Channel.TriggerID"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Without it, the trigger’s default."
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false,
+        "description": "A trigger that a mapping turned on."
+      },
       "ChannelInstall.ID": {
         "type": "string",
         "pattern": "^chi_"
@@ -10304,9 +10345,15 @@
           },
           "title": {
             "type": "string"
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Channel.Trigger"
+            }
           }
         },
-        "required": ["id", "title"],
+        "required": ["id", "title", "triggers"],
         "additionalProperties": false,
         "description": "A provider that this Ren server can install."
       },
@@ -10401,11 +10448,25 @@
               }
             ],
             "description": "A member of the space. Without it, the caller."
+          },
+          "triggers": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Channel.TriggerSetting"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The provider’s triggers to turn on, each at most once. Without it, none: every trigger is off."
           }
         },
         "required": ["installId", "place", "spaceId"],
         "additionalProperties": false,
-        "description": "Map a place, or replace the space, agent and fallback of its mapping. The same request twice gives the same mapping."
+        "description": "Map a place, or replace the space, agent, fallback and triggers of its mapping. The same request twice gives the same mapping."
       },
       "ChannelMapping.ID": {
         "type": "string",
@@ -10488,6 +10549,13 @@
               }
             ]
           },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Channel.TriggerSetting"
+            },
+            "description": "The provider’s triggers that this mapping turned on. Each starts a turn with no mention."
+          },
           "createdAt": {
             "type": "string"
           },
@@ -10505,6 +10573,7 @@
           "agent",
           "fallback",
           "fallbackUser",
+          "triggers",
           "createdAt",
           "updatedAt"
         ],
@@ -10558,6 +10627,10 @@
           },
           "context": {
             "type": "string"
+          },
+          "trigger": {
+            "type": "string",
+            "description": "The title of the trigger that started this message, when nobody mentioned Ren."
           }
         },
         "required": ["provider", "place", "sender"],

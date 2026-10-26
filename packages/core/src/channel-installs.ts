@@ -202,7 +202,11 @@ export const layer = Layer.effect(
 
     return Service.of({
       providers: Effect.succeed({
-        items: registry.providers.map((provider) => ({ id: provider.id, title: Channel.titles[provider.id] })),
+        items: registry.providers.map((provider) => ({
+          id: provider.id,
+          title: Channel.titles[provider.id],
+          triggers: provider.triggers,
+        })),
       }),
 
       list: Effect.fn("ChannelInstalls.list")(function* (actor: Actor.Info, input: ChannelInstall.ListInput) {
