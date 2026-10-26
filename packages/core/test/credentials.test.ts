@@ -172,6 +172,44 @@ describe("Credentials: who may do what (owner-access §4)", () => {
       }),
   )
 
+  it.live(
+    "a credential for any host (*) injects only through its placeholder: by-host and profile ones are refused",
+    () =>
+      Effect.gen(function* () {
+        const credentials = yield* Credentials.Service
+        const profiles = yield* AppProfiles.Service
+        const setup = yield* team()
+        const spaced = yield* credentials.create(setup.ada, {
+          owner: { kind: "space", spaceId: setup.space.id },
+          label: "OPENAI_API_KEY",
+          ...key("sk-any", ["*"]),
+        })
+        expect(spaced.hosts).toEqual(["*"])
+        const byHost = yield* Effect.exit(
+          credentials.create(setup.ada, {
+            owner: { kind: "space", spaceId: setup.space.id },
+            label: "GITHUB",
+            inject: { op: "setHeader", name: "Authorization", format: "Bearer {value}" },
+            ...key("ghp_any", ["*"]),
+          }),
+        )
+        expect(failure(byHost)).toContain("Primitive.Invalid")
+        const app = yield* ProfilesFixture.app(setup.ada, setup.space.id, "mail", {
+          requiredCredentials: [Seed.env("MAIL_KEY")],
+        })
+        const shared = (yield* profiles.list(setup.ada, { appId: app.id, ...page })).items.at(0)
+        if (!shared) return yield* Effect.die(new Error("expected the owner-space profile"))
+        const profiled = yield* Effect.exit(
+          credentials.create(setup.ada, {
+            owner: { kind: "profile", profileId: shared.id },
+            item: { env: "MAIL_KEY" },
+            ...key("mail-key", ["*"]),
+          }),
+        )
+        expect(failure(profiled)).toContain("Primitive.Invalid")
+      }),
+  )
+
   it.live("an admin lists and deletes a person's credential, and cannot move it", () =>
     Effect.gen(function* () {
       const credentials = yield* Credentials.Service
@@ -444,6 +482,18 @@ describe("Credentials: lookup (README §6.3, §6.4)", () => {
         ok: false,
         reason: "credential_missing",
         label: "MISSING",
+      })
+    }),
+  )
+
+  it.effect("a credential for any host (*) goes to every host its placeholder reaches, never by host", () =>
+    Effect.sync(() => {
+      const candidates = [candidate("OPENAI_API_KEY", "space", ["*"])]
+      const found = Credentials.match(candidates, { host: "api.openai.com", placeholders: ["ren:OPENAI_API_KEY"] })
+      expect(found.ok && found.matches.map((matched) => matched.candidate.label)).toEqual(["OPENAI_API_KEY"])
+      expect(Credentials.match(candidates, { host: "api.openai.com", placeholders: [] })).toEqual({
+        ok: true,
+        matches: [],
       })
     }),
   )
