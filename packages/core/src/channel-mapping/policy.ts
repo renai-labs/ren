@@ -1,5 +1,6 @@
 export * as ChannelMappingPolicy from "./policy.js"
 
+import { Auth } from "@ren/schema/auth"
 import { ChannelMapping } from "@ren/schema/channel-mapping"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
@@ -13,11 +14,11 @@ export const documents = [
     statements: [
       {
         actions: Primitive.actions(ChannelMapping.definition, ["list"]),
-        roles: SpacePolicy.organizationRoles,
+        roles: Auth.Role.literals,
         on: Policy.everywhere,
       },
-      { actions: writeActions, roles: SpacePolicy.administratorRoles, on: Policy.everywhere },
-      { actions: writeActions, roles: SpacePolicy.organizationRoles, on: "space.member" },
+      { actions: writeActions, roles: Auth.administratorRoles, on: Policy.everywhere },
+      { actions: writeActions, roles: Auth.Role.literals, on: SpacePolicy.member },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>

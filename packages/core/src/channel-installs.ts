@@ -10,12 +10,12 @@ import { Clock, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Random } from "@ren/util/random"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
+import { ChannelInstallPolicy } from "./channel-install/policy.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { PersonCredentials } from "./person-credentials.js"
 import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
-import { TaskPolicy } from "./task/policy.js"
 
 export type Outcome =
   | { readonly ok: true; readonly provider: Channel.Provider; readonly name: string | null }
@@ -49,26 +49,6 @@ const notFound = new Primitive.NotFound({ message: "Install not found." })
 
 const failed = (reason: string): Outcome => ({ ok: false, reason })
 
-const mayChange = (actor: Actor.Info, installedBy: Auth.UserID | null) =>
-  installedBy === actor.userId || SpacePolicy.administratorRoles.some((role) => actor.roles.includes(role))
-
-const toInfo =
-  (actor: Actor.Info) =>
-  (row: {
-    readonly install: typeof table.$inferSelect
-    readonly installer: { readonly id: string; readonly name: string } | null
-    readonly defaultSpace: ChannelInstall.Info["defaultSpace"]
-  }): ChannelInstall.Info => ({
-    id: row.install.id,
-    provider: row.install.provider,
-    workspace: row.install.workspace,
-    name: row.install.name,
-    installedBy: row.installer && { id: Auth.UserID.make(row.installer.id), name: row.installer.name },
-    defaultSpace: row.defaultSpace,
-    canUpdate: mayChange(actor, row.install.installed_by),
-    createdAt: DateTime.fromDateUnsafe(row.install.created_at),
-  })
-
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -77,14 +57,38 @@ export const layer = Layer.effect(
     const registry = yield* ChannelProvider.Registry
     const people = yield* PersonCredentials.Service
 
-    const allowed = (actor: Actor.Info, operation: "list" | "update" | "remove") =>
+    const mayChange = (actor: Actor.Info, installedBy: Auth.UserID | null) =>
       access.isAllowed({
         actor,
-        action: Primitive.action(ChannelInstall.definition, operation),
-        resource: TaskPolicy.organization,
+        action: Primitive.action(ChannelInstall.definition, "update"),
+        resource: ChannelInstallPolicy.resource(installedBy === actor.userId),
+      })
+
+    const toInfo =
+      (actor: Actor.Info) =>
+      (row: {
+        readonly install: typeof table.$inferSelect
+        readonly installer: { readonly id: string; readonly name: string } | null
+        readonly defaultSpace: ChannelInstall.Info["defaultSpace"]
+      }): ChannelInstall.Info => ({
+        id: row.install.id,
+        provider: row.install.provider,
+        workspace: row.install.workspace,
+        name: row.install.name,
+        installedBy: row.installer && { id: Auth.UserID.make(row.installer.id), name: row.installer.name },
+        defaultSpace: row.defaultSpace,
+        canUpdate: mayChange(actor, row.install.installed_by),
+        createdAt: DateTime.fromDateUnsafe(row.install.created_at),
+      })
+
+    const allowed = (actor: Actor.Info) =>
+      access.isAllowed({
+        actor,
+        action: Primitive.action(ChannelInstall.definition, "list"),
+        resource: Access.organization,
       })
         ? Effect.void
-        : Effect.fail(new Primitive.Forbidden({ message: "You cannot change channel installs." }))
+        : Effect.fail(new Primitive.Forbidden({ message: "You cannot see channel installs." }))
 
     const select = () =>
       database.db
@@ -102,13 +106,19 @@ export const layer = Layer.effect(
       id: ChannelInstall.ID,
       operation: "update" | "remove",
     ) {
-      yield* allowed(actor, operation)
+      yield* allowed(actor)
       if (!Schema.is(ChannelInstall.ID)(id)) return yield* notFound
       const found = (yield* select()
         .where(and(eq(table.id, id), eq(table.organization_id, actor.organizationId)))
         .pipe(Effect.orDie)).at(0)
       if (!found) return yield* notFound
-      if (!mayChange(actor, found.install.installed_by))
+      if (
+        !access.isAllowed({
+          actor,
+          action: Primitive.action(ChannelInstall.definition, operation),
+          resource: ChannelInstallPolicy.resource(found.install.installed_by === actor.userId),
+        })
+      )
         return yield* new Primitive.Forbidden({
           message: `Only the person who installed ${Channel.titles[found.install.provider]}, or an admin, can ${operation === "update" ? "change" : "remove"} it.`,
         })
@@ -210,7 +220,7 @@ export const layer = Layer.effect(
       }),
 
       list: Effect.fn("ChannelInstalls.list")(function* (actor: Actor.Info, input: ChannelInstall.ListInput) {
-        yield* allowed(actor, "list").pipe(Effect.orDie)
+        yield* allowed(actor).pipe(Effect.orDie)
         const where = eq(table.organization_id, actor.organizationId)
         const rows = yield* select()
           .where(where)
@@ -228,7 +238,7 @@ export const layer = Layer.effect(
       }),
 
       start: Effect.fn("ChannelInstalls.start")(function* (actor: Actor.Info, input: ChannelInstall.StartInput) {
-        yield* allowed(actor, "list")
+        yield* allowed(actor)
         const title = Channel.titles[input.provider]
         const provider = registry.get(input.provider)
         if (Option.isNone(provider))
@@ -318,7 +328,7 @@ export const layer = Layer.effect(
               return yield* new Primitive.Invalid({ message: "Space not found.", field: "defaultSpaceId" })
             if (
               defaultSpaceId &&
-              !(yield* SpaceQueries.actsIn(transaction, actor.organizationId, defaultSpaceId, actor.userId))
+              !(yield* SpacePolicy.actsIn(transaction, access, actor.organizationId, defaultSpaceId, actor.userId))
             )
               return yield* new Primitive.Invalid({
                 message: "Choose a space you are a member of.",
