@@ -4,10 +4,11 @@ import { Session } from "@ren/schema/session"
 import { useNavigate, useParams, useRouteContext, useSearch } from "@tanstack/react-router"
 import { Chat } from "../../lib/chat.js"
 import { SessionChat } from "./session-chat.js"
+import type { ComposerRepositories } from "./composer-repositories.js"
 
 const from = "/_authed/_shell/sessions/$sessionId/"
 
-export function SessionPage() {
+export function SessionPage(props: { addRepositories?: ComposerRepositories.Dialog }) {
   const context = useRouteContext({ from: "/_authed" })
   const params = useParams({ from })
   const search = useSearch({ from })
@@ -34,6 +35,7 @@ export function SessionPage() {
           onNavigate={(sessionID) =>
             void navigate({ to: "/sessions/$sessionId", params: { sessionId: sessionID }, search: {} })
           }
+          addRepositories={props.addRepositories}
         />
       </ChatReact.Provider>
     </RegistryContext>

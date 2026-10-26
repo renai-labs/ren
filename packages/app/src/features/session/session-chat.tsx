@@ -34,6 +34,7 @@ import { SessionRequests } from "./session-requests.js"
 import { SessionTitle } from "./session-title.js"
 import { useTranscriptRows } from "./transcript-rows.js"
 import { Timeline } from "./timeline.js"
+import type { ComposerRepositories } from "./composer-repositories.js"
 
 function useShortcuts(input: {
   child: Session.ID | undefined
@@ -278,6 +279,7 @@ export function SessionChat(props: {
   onChild: (sessionID: Session.ID | undefined) => void
   onArchived: () => void
   onNavigate: (sessionID: Session.ID) => void
+  addRepositories?: ComposerRepositories.Dialog | undefined
 }) {
   const platform = Platform.usePlatform()
   const context = RouterContext.useRouterContext()
@@ -453,6 +455,7 @@ export function SessionChat(props: {
             onUndo={onUndo}
             onRedo={onRedo}
             onCompact={onCompact}
+            addRepositories={props.addRepositories}
           />
         )
       }

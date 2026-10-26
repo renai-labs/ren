@@ -25,6 +25,7 @@ import { ChatComposer } from "./chat-composer.js"
 import { ComposerCopy } from "./composer-copy.js"
 import { Failure } from "./failure.js"
 import { ComposerAddMenu } from "./composer-add-menu.js"
+import type { ComposerRepositories } from "./composer-repositories.js"
 import { ComposerStatus } from "./composer-status.js"
 import type { ChatView } from "./chat-view.js"
 import { ComposerKeys } from "./composer-keys.js"
@@ -225,6 +226,7 @@ export function SessionComposer(props: {
   onUndo: () => void
   onRedo: () => void
   onCompact: () => void
+  addRepositories?: ComposerRepositories.Dialog | undefined
 }) {
   const platform = Platform.usePlatform()
   const mobile = Viewport.useMobile()
@@ -384,6 +386,8 @@ export function SessionComposer(props: {
   const addMenu = (
     <ComposerAddMenu
       disabled={readOnly}
+      sessionID={props.sessionID}
+      addRepositories={props.addRepositories}
       populated={content}
       commands={suggested.runnable}
       onCommands={() => {
