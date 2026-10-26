@@ -2,6 +2,7 @@ import { createFileRoute, lazyRouteComponent } from "@tanstack/react-router"
 import { Session } from "@ren/schema/session"
 import { SessionMessage } from "@ren/schema/session/message"
 import { Effect, Schema } from "effect"
+import { Suspense } from "react"
 import { RouteError } from "../../../../../components/error-page.js"
 
 export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
@@ -18,5 +19,24 @@ export const Route = createFileRoute("/_authed/_shell/sessions/$sessionId/")({
     ),
   head: (options) => ({ meta: [{ title: `${options.loaderData?.title ?? "Chat"} · Ren` }] }),
   errorComponent: (props) => <RouteError error={props.error} />,
-  component: lazyRouteComponent(() => import("../../../../../features/session/session-page.js"), "SessionPage"),
+  component: SessionRoute,
 })
+
+const SessionPage = lazyRouteComponent(() => import("../../../../../features/session/session-page.js"), "SessionPage")
+
+const AddRepositories = lazyRouteComponent(
+  () => import("../../../../../features/spaces/add-repositories-dialog.js"),
+  "SpaceAddRepositories",
+)
+
+function SessionRoute() {
+  return (
+    <SessionPage
+      addRepositories={(props) => (
+        <Suspense fallback={null}>
+          <AddRepositories spaceId={props.spaceId} onClose={props.onClose} />
+        </Suspense>
+      )}
+    />
+  )
+}
