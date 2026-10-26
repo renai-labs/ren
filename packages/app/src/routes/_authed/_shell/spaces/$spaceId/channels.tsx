@@ -1,6 +1,6 @@
 import { Pagination } from "@ren/schema/pagination"
 import { createFileRoute } from "@tanstack/react-router"
-import { SpaceChannels } from "../../../../../features/channels/channel-mappings.js"
+import { SpaceChannels } from "../../../../../features/channels/space-channels.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/channels")({
   head: () => ({ meta: [{ title: "Space channels · Ren" }] }),

@@ -28,6 +28,13 @@ export interface Info {
   readonly category: Category
   readonly description: string
   readonly place: { readonly noun: string; readonly title: string }
+  readonly board: {
+    readonly label: string
+    readonly noun: string
+    readonly glyph: Glyph
+    readonly prefix: string
+    readonly targetSharing: "exclusive" | "shared"
+  }
 }
 
 export const byId: Readonly<Record<Provider, Info>> = {
@@ -38,6 +45,7 @@ export const byId: Readonly<Record<Provider, Info>> = {
     category: "code",
     description: "Clone repositories, create branches, commit changes, and review pull requests.",
     place: { noun: "repository", title: "Repository" },
+    board: { label: "GitHub repositories", noun: "repo", glyph: "GitBranch", prefix: "", targetSharing: "shared" },
   },
   slack: {
     id: "slack",
@@ -46,6 +54,7 @@ export const byId: Readonly<Record<Provider, Info>> = {
     category: "communication",
     description: "Route channel mentions to spaces and respond in the conversation where work starts.",
     place: { noun: "channel", title: "Channel" },
+    board: { label: "Slack channels", noun: "channel", glyph: "Hash", prefix: "#", targetSharing: "exclusive" },
   },
   linear: {
     id: "linear",
@@ -54,6 +63,7 @@ export const byId: Readonly<Record<Provider, Info>> = {
     category: "planning",
     description: "Assign work to Ren, respond to mentions, and keep issue conversations in sync.",
     place: { noun: "project", title: "Project" },
+    board: { label: "Linear projects", noun: "Linear project", glyph: "ListChecks", prefix: "", targetSharing: "shared" },
   },
 }
 

@@ -18,6 +18,14 @@ export function useMobile() {
   )
 }
 
+export const height = {
+  height: () => window.innerHeight,
+  subscribe: (listener: () => void) => {
+    window.addEventListener("resize", listener)
+    return () => window.removeEventListener("resize", listener)
+  },
+}
+
 export const apple = /Mac|iPhone|iPad/.test(navigator.userAgent)
 
 export function shortcut(key: string) {
