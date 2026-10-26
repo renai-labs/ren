@@ -78,7 +78,7 @@ export const layer = Layer.effect(
               busy: session.active,
               progress: session.progress,
             })),
-            roots: sessions.map((session) => Session.ID.make(session.id)),
+            roots: sessions.filter((session) => session.root).map((session) => Session.ID.make(session.id)),
           },
         })
         .pipe(HostToken.withToken(token.value), Effect.timeout(HostToken.renAnswersWithin))

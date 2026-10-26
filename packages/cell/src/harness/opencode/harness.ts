@@ -696,6 +696,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
           )
           return {
             id: info.id,
+            root: true,
             inbox,
             progress: String(DateTime.toEpochMillis(info.time.updated)),
             unfinished: Option.isSome(lastRelevantMessage) && lastRelevantMessage.value.type !== "idle",
@@ -712,13 +713,14 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
         ...snapshots,
         ...active
           .filter((id) => !snapshots.some((session) => session.id === id))
-          .map((id) => ({ id, inbox: [], progress: "", unfinished: false })),
+          .map((id) => ({ id, root: false, inbox: [], progress: "", unfinished: false })),
       ].map((session) => {
         const questionAgesMs = forms
           .filter((form) => form.sessionID === session.id)
           .map((form) => now - (state.firstAskedAt.get(form.id) ?? now))
         return {
           id: session.id,
+          root: session.root,
           active: active.includes(session.id),
           progress: session.progress,
           unfinished: session.unfinished,
