@@ -12,7 +12,7 @@ const it = testEffect(Layer.empty)
 const cacheOf = (github: TestGitHub.Instance) =>
   GitHubReader.make(Effect.succeed(github.hosts)).pipe(
     Effect.provide(FetchHttpClient.layer),
-    Effect.flatMap(ReferenceCache.make),
+    Effect.flatMap((reader) => ReferenceCache.make(reader)),
   )
 
 const refReads = (github: TestGitHub.Instance) =>
