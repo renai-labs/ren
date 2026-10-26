@@ -9,7 +9,7 @@ import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
 import { Apps } from "./apps.js"
 
-// oxlint-disable-next-line ren/no-comments -- profiles.md §10 (P19, P20): who changes a shared account's spaces, and who shares it with every space, comes with the profile; the space list holds only spaces the caller sees.
+// oxlint-disable-next-line ren/no-comments -- profiles.md §10 (P19, P20): the server decides, through canAccess and canShareEverySpace.
 export function AccountAccess(props: { profile: AppProfileInfo; spaces: ReadonlyArray<SpaceInfo> }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()

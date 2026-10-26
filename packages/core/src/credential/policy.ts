@@ -31,7 +31,7 @@ const every = Auth.Role.literals
 
 const admins = Auth.administratorRoles
 
-// oxlint-disable-next-line ren/no-comments -- owner-access §4. A profile's credentials follow who sees the profile (profiles.md §10), which `Credentials` checks before this statement applies. An admin sees a person's credential and may delete it, never use, move or copy it. Only admins choose delivered for an org credential. Only its holder moves an account credential (moveAccount, on top of move).
+// oxlint-disable-next-line ren/no-comments -- owner-access §4, profiles.md §10.
 export const documents = [
   {
     primitive: Credential.definition.name,

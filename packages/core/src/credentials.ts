@@ -386,7 +386,7 @@ export const layer = Layer.effect(
           CredentialPolicy.relationships.profile,
           and(
             eq(table.owner, "profile"),
-            // oxlint-disable-next-line ren/no-comments -- profiles.md §10: a profile's credentials go to whoever connects its items: anyone who sees a shared profile, and only the person of a private one.
+            // oxlint-disable-next-line ren/no-comments -- profiles.md §10: whoever connects the profile's items.
             exists(
               database.db
                 .select({ one: sql`1` })

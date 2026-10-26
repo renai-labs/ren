@@ -80,7 +80,7 @@ export const layer = Layer.effect(
     })
 
     return Service.of({
-      // oxlint-disable-next-line ren/no-comments -- profiles.md §10: whoever sees the space sees its profiles; `infos` gives an admin metadata only for private ones.
+      // oxlint-disable-next-line ren/no-comments -- profiles.md §10.
       forSpace: Effect.fn("CredentialRequirements.forSpace")(function* (actor, spaceId) {
         yield* visibleSpace(actor, spaceId)
         return yield* reach(actor, { organizationId: actor.organizationId, spaceId: Option.some(spaceId) })

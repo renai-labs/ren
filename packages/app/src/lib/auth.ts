@@ -107,7 +107,7 @@ export function slugAvailabilityOptions(client: Client, slug: string) {
 
 const canAdministerKey = ["auth", "can-administer"] as const
 
-// oxlint-disable-next-line ren/no-comments -- Better Auth's own organization access control (`OrganizationAccess` on the server) decides who administers the organization.
+// oxlint-disable-next-line ren/no-comments -- Better Auth's `OrganizationAccess` decides.
 export function canAdministerOptions(client: Client) {
   return queryOptions({
     queryKey: canAdministerKey,
