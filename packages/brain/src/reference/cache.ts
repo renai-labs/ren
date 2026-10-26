@@ -17,7 +17,13 @@ export const refreshAfter = Duration.days(1)
 export const retryAfter = Duration.minutes(1)
 
 // oxlint-disable-next-line ren/no-comments -- R3: one lookup per reference and day for the whole brain. A failed lookup is tried again after a minute and keeps the last good commit until then; a commit in the branch never changes.
-export const make = Effect.fnUntraced(function* (reader: GitHubReader.Interface) {
+export const make = Effect.fnUntraced(function* (
+  reader: GitHubReader.Interface,
+  options: { readonly refresh: Duration.Input; readonly retry: Duration.Input } = {
+    refresh: refreshAfter,
+    retry: retryAfter,
+  },
+) {
   const lastGood = MutableHashMap.empty<Reference, GitHubReader.Lookup>()
   const cache = yield* Cache.makeWith(
     (reference: Reference) =>
@@ -36,8 +42,8 @@ export const make = Effect.fnUntraced(function* (reader: GitHubReader.Interface)
     {
       capacity: Number.MAX_SAFE_INTEGER,
       timeToLive: (exit, reference) => {
-        if (Exit.isFailure(exit) || !exit.value.isFresh) return retryAfter
-        return GitHubReader.commitPattern.test(reference.branch ?? "") ? Duration.infinity : refreshAfter
+        if (Exit.isFailure(exit) || !exit.value.isFresh) return options.retry
+        return GitHubReader.commitPattern.test(reference.branch ?? "") ? Duration.infinity : options.refresh
       },
     },
   )

@@ -20,6 +20,7 @@ import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { ServerWorkerd } from "@opencode/server/workerd"
 import type { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { GitHubReader } from "@ren/brain/github/reader"
+import { ReferenceCache } from "@ren/brain/reference/cache"
 import { SkillCache } from "@ren/brain/skill/cache"
 import { SkillSource } from "@ren/brain/skill/source"
 import { OpenCode, type OpenCodeClient } from "@opencode/client/effect"
@@ -65,6 +66,7 @@ export interface Options {
   readonly channels?: ReadonlyArray<Channel.Provider>
   readonly github?: Effect.Effect<GitHubReader.Hosts>
   readonly skills?: { readonly refresh?: Duration.Input }
+  readonly references?: { readonly refresh: Duration.Input; readonly retry: Duration.Input }
   readonly ren?: Option.Option<OpenCodeMcp.RenAccess>
   readonly egress?: boolean
 }
@@ -208,6 +210,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
   )
   const skillSource = SkillSource.make(github)
   const skillCache = yield* SkillCache.make(skillSource, { refresh: options.skills?.refresh ?? "5 minutes" })
+  const referenceCache = yield* ReferenceCache.make(github, options.references)
   const approvals = (sessionId: string) =>
     located(sessionId, Location.Service).pipe(
       Effect.flatMap((location) => api.permission.saved.list({ projectID: location.project.id }).pipe(Effect.orDie)),
@@ -239,6 +242,7 @@ export const make = Effect.fn("OpenCodeServer.make")(function* (
       executions.get,
       options.directoryOf,
       { source: skillSource, cache: skillCache },
+      { reader: github, cache: referenceCache },
       Option.map(options.ren ?? Option.none(), (access) => ({
         ...access,
         lastSender: (sessionId: string) =>

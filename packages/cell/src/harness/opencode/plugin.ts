@@ -38,6 +38,7 @@ import { RenWorkspaceDriver } from "./workspace-driver.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 import { OpenCodeMcp } from "./mcp.js"
+import { OpenCodeReferences } from "./references.js"
 import { OpenCodeSkills } from "./skills.js"
 import type { HarnessConfig } from "../config.js"
 
@@ -245,6 +246,7 @@ export const make = (
   boundaryOf: (location: Plugin.Context["location"]) => OpenCodeExecution.Boundary,
   directoryOf: (sessionId: string) => string,
   skillSources: OpenCodeSkills.Sources,
+  referenceSources: OpenCodeReferences.Sources,
   ren: Option.Option<OpenCodeMcp.Ren>,
   members: {
     readonly egress: boolean
@@ -277,7 +279,7 @@ export const make = (
           )
         const folder = context.location.directory
         if (Option.isSome(confinement) && folder.startsWith(`${confinement.value.workspace}/`)) {
-          const allow = confinement.value.allow
+          const allow = [...confinement.value.allow, `${OpenCodeReferences.rootOf(folder)}/`]
           yield* context.permission.hook("evaluate", (event) =>
             Effect.sync(() => {
               if (event.action !== "external_directory" || event.effect === "deny") return
@@ -433,14 +435,24 @@ export const make = (
               })
             editor.default(resolved.primary.name)
           })
-          yield* context.reference.transform((editor) => {
-            for (const reference of Option.getOrUndefined(Ref.getUnsafe(installed))?.resolved.references ?? [])
-              editor.add(reference.alias, {
-                type: "git",
-                repository: reference.repository,
-                ...(reference.branch && { branch: reference.branch }),
-                ...(reference.description && { description: reference.description }),
-              })
+          const references = yield* OpenCodeReferences.make({
+            context,
+            environment: Option.flatMap(connections, (each) =>
+              workspaceID
+                ? Option.some({
+                    files: EnvironmentSession.make(each, Session.ID.make(sessionId), RenWorkspaceDriver.killedBySignal)
+                      .files,
+                    generation: each.connect(Session.ID.make(sessionId)).pipe(
+                      Effect.map((connection) => connection.generation),
+                      Effect.scoped,
+                    ),
+                  })
+                : Option.none(),
+            ),
+            sources: referenceSources,
+            references: Effect.sync(() =>
+              Option.match(Ref.getUnsafe(installed), { onNone: () => [], onSome: (chat) => chat.resolved.references }),
+            ),
           })
           yield* context.session.hook("context", (event) =>
             Effect.sync(() => {
@@ -495,7 +507,7 @@ export const make = (
           )
           turns.ended.push((sessionID) => Effect.flatMap(Ref.get(shared.turnEnded), (ended) => ended(sessionID)))
           const instance = {
-            reload: Effect.all([context.agent.reload(), context.reference.reload()], { discard: true }),
+            reload: Effect.all([context.agent.reload(), references.refresh], { discard: true }),
             session: context.session,
             installed,
           }

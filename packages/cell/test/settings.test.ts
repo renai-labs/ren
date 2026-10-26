@@ -345,18 +345,13 @@ describe("settings in the cell", () => {
     }),
   )
 
-  it.live("the layers' references reach the model as git references", () =>
+  it.live("a chat without an environment gets no references", () =>
     Effect.gen(function* () {
-      const docs = {
-        alias: "docs",
-        repository: "https://git.example.invalid/acme/docs.git",
-        branch: "main",
-        description: "Product docs",
-      }
+      const docs = { alias: "docs", repository: "https://github.com/acme/docs", description: "Product docs" }
       const opened = yield* open(TestSettings.layers({ ren: { references: [docs] } }))
       const first = stub.script()
       yield* opened.turn(first)
-      expect(JSON.stringify(first.calls[0]?.body)).toContain("Product docs")
+      expect(JSON.stringify(first.calls[0]?.body)).not.toContain("Product docs")
     }),
   )
 
