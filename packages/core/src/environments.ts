@@ -29,6 +29,7 @@ export interface Hand {
   readonly generation: number
   readonly url: string
   readonly workspace: Environment.Directory
+  readonly egress: boolean
 }
 
 interface Bound {
@@ -259,6 +260,7 @@ export const layer = Layer.effect(
           ),
           expiresAt: DateTime.makeUnsafe(exp * 1000),
           generation: hand.value.generation,
+          egress: hand.value.egress,
         } satisfies Environment.Access
       }
       const templateRows = yield* database.db
@@ -318,6 +320,8 @@ export const layer = Layer.effect(
         ),
         expiresAt: DateTime.makeUnsafe(exp * 1000),
         generation: assigned.generation,
+        // oxlint-disable-next-line ren/no-comments -- No environment provider routes its machines through the egress yet (environment-provider/docker.ts), so a template environment gets no placeholders (R19, §11.1).
+        egress: false,
       } satisfies Environment.Access
     })
 

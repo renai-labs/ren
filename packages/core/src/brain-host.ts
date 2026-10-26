@@ -7,7 +7,6 @@ import { eq } from "drizzle-orm"
 import { Config, Context, Duration, Effect, Layer, Option, Schema } from "effect"
 import { BrainClient } from "./brain-client.js"
 import { BrainLifecycle } from "./brain-lifecycle.js"
-import type { SandboxProvider } from "./sandbox-provider.js"
 
 export class BrainUnavailable extends Schema.TaggedError<BrainUnavailable>()("BrainUnavailable", {
   cause: Schema.Defect(),
@@ -20,7 +19,7 @@ export interface Interface {
   readonly access: (brainId: Brain.ID) => Effect.Effect<BrainLifecycle.Access>
   readonly ensure: (brainId: Brain.ID) => Effect.Effect<void>
   readonly observe: (brainId: Brain.ID, sessions: PullRequest["sessions"]) => Effect.Effect<void>
-  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<SandboxProvider.Hand>>
+  readonly hand: (brainId: Brain.ID) => Effect.Effect<Option.Option<BrainLifecycle.Hand>>
   readonly unavailable: (brainId: Brain.ID) => Effect.Effect<void>
   readonly retry: (brainId: Brain.ID) => Effect.Effect<void>
   readonly notify: (brainId: Brain.ID) => Effect.Effect<void>

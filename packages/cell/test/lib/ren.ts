@@ -161,7 +161,7 @@ export const start = (options: { readonly hostname?: string; readonly port?: num
               publicKeys: [...TestToken.publicKeys],
               ...(baseUrl && { inference: { baseUrl } }),
               ...(state.apps && { apps: state.apps }),
-              env: { variables: state.env },
+              env: { variables: {}, placeholders: state.env },
               layers: state.settings,
               chats: state.chats,
               deleted: (request.payload.roots ?? []).filter((id) => state.deleted.has(id)),

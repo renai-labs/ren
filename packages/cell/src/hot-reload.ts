@@ -101,7 +101,7 @@ export const layer = Layer.effect(
           ),
         )
       yield* keys.save(reply.publicKeys)
-      yield* credentialEnv.apply(reply.env.variables)
+      yield* credentialEnv.apply(reply.env)
       const inferenceChanged = yield* inference.saveBaseUrl(Option.fromNullishOr(reply.inference?.baseUrl))
       const settingsChanged = yield* settings.save(reply.layers, reply.chats)
       yield* Effect.scoped(

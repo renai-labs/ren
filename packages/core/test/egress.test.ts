@@ -931,15 +931,14 @@ describe("GitHub through the egress", () => {
           { op: "replace", placeholder: "ren:GITHUB", value: "ghu_ada", in: ["header"] },
         ])
         expect(yield* env.of(mine.workload)).toMatchObject({
-          GITHUB_TOKEN: "ren:GITHUB",
-          GIT_AUTHOR_NAME: "ada-gh",
-          GIT_AUTHOR_EMAIL: "42+ada-gh@users.noreply.github.com",
+          variables: { GIT_AUTHOR_NAME: "ada-gh", GIT_AUTHOR_EMAIL: "42+ada-gh@users.noreply.github.com" },
+          placeholders: { GITHUB_TOKEN: "ren:GITHUB" },
         })
         const shared = yield* proofIn(alone.id)
         expect(values(yield* resolver.resolve(all, request(shared.proof, "api.github.com", ["ren:GITHUB"])))).toEqual([
           { op: "replace", placeholder: "ren:GITHUB", value: expect.stringMatching(/^ghs_/u), in: ["header"] },
         ])
-        expect(yield* env.of(shared.workload)).toMatchObject({ GIT_AUTHOR_NAME: "ren-test[bot]" })
+        expect(yield* env.of(shared.workload)).toMatchObject({ variables: { GIT_AUTHOR_NAME: "ren-test[bot]" } })
       }),
   )
 
@@ -954,27 +953,32 @@ describe("GitHub through the egress", () => {
     }),
   )
 
-  it.live("a workload of an org with the GitHub App holds placeholders for GitHub and the bot's git identity", () =>
-    Effect.gen(function* () {
-      const env = yield* CredentialEnv.Service
-      const found = yield* setup()
-      const workload = { kind: "brain", id: found.brainId, generation: 1 } as const
-      expect(yield* env.of(workload)).not.toHaveProperty("GITHUB_TOKEN")
-      yield* installGitHub(found.organizationId)
-      const variables = yield* env.of(workload)
-      expect(variables).toMatchObject({
-        GITHUB_TOKEN: "ren:GITHUB",
-        GH_TOKEN: "ren:GITHUB",
-        GIT_AUTHOR_NAME: "ren-test[bot]",
-        GIT_AUTHOR_EMAIL: "9001+ren-test[bot]@users.noreply.github.com",
-        GIT_COMMITTER_NAME: "ren-test[bot]",
-        GIT_COMMITTER_EMAIL: "9001+ren-test[bot]@users.noreply.github.com",
-        GIT_CONFIG_COUNT: "1",
-        GIT_CONFIG_KEY_0: "http.https://github.com/.extraHeader",
-      })
-      expect(variables.GIT_CONFIG_VALUE_0).toBe(
-        `Authorization: Basic ${Buffer.from("x-access-token:ren:GITHUB").toString("base64")}`,
-      )
-    }),
+  it.live(
+    "a workload of an org with the GitHub App holds placeholders for GitHub apart from the bot's git identity and the GitHub URLs",
+    () =>
+      Effect.gen(function* () {
+        const env = yield* CredentialEnv.Service
+        const found = yield* setup()
+        const workload = { kind: "brain", id: found.brainId, generation: 1 } as const
+        expect(yield* env.of(workload)).toEqual({ variables: {}, placeholders: {} })
+        yield* installGitHub(found.organizationId)
+        expect(yield* env.of(workload)).toEqual({
+          variables: {
+            GITHUB_URL: "https://github.com",
+            GITHUB_API_URL: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+$/u),
+            GIT_AUTHOR_NAME: "ren-test[bot]",
+            GIT_AUTHOR_EMAIL: "9001+ren-test[bot]@users.noreply.github.com",
+            GIT_COMMITTER_NAME: "ren-test[bot]",
+            GIT_COMMITTER_EMAIL: "9001+ren-test[bot]@users.noreply.github.com",
+          },
+          placeholders: {
+            GITHUB_TOKEN: "ren:GITHUB",
+            GH_TOKEN: "ren:GITHUB",
+            GIT_CONFIG_COUNT: "1",
+            GIT_CONFIG_KEY_0: "http.https://github.com/.extraHeader",
+            GIT_CONFIG_VALUE_0: `Authorization: Basic ${Buffer.from("x-access-token:ren:GITHUB").toString("base64")}`,
+          },
+        })
+      }),
   )
 })

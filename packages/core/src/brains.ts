@@ -252,6 +252,7 @@ export const layer = Layer.effect(
         generation,
         url: hand.url,
         workspace: hand.workspace,
+        egress: hand.egress,
       }))
     })
 
@@ -520,9 +521,7 @@ export const layer = Layer.effect(
           layers: pulled.layers,
           chats: pulled.chats,
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),
-          env: {
-            variables: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),
-          },
+          env: yield* credentialEnv.of({ kind: "brain", id: host.brainId, generation: host.generation }),
         } satisfies PullReply
       }),
       refreshModels: Effect.fn("Brains.refreshModels")(function* (host: CurrentHost["Service"]) {

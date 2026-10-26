@@ -1,6 +1,6 @@
 export * as Environment from "./environment.js"
 
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import type { Brain } from "./brain.js"
 import { Identifier } from "./identifier.js"
 
@@ -22,5 +22,9 @@ export const Access = Schema.Struct({
   expiresAt: Schema.DateTimeUtc,
   generation: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
     description: "Increases each time Ren gives the session another environment, not when its token is refreshed.",
+  }),
+  egress: Schema.Boolean.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(false))).annotate({
+    description:
+      "Whether the environment’s traffic goes through the egress, which replaces each ren:<LABEL> placeholder. Without it, a process gets no placeholders (R19).",
   }),
 }).annotate({ identifier: "Environment.Access" })

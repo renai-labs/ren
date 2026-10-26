@@ -422,7 +422,7 @@ const layerWith = (opener: Opener) =>
                   egress: cell.vars.REN_EGRESS === "1",
                   github: Option.match(credentialEnv, {
                     onNone: () => Effect.succeed(GitHubReader.hostsOf({})),
-                    onSome: (env) => Effect.map(env.current, GitHubReader.hostsOf),
+                    onSome: (env) => Effect.map(env.current, (current) => GitHubReader.hostsOf(current.variables)),
                   }),
                 },
               )
