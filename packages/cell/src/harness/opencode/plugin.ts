@@ -10,6 +10,7 @@ import { Wildcard } from "@opencode/core/util/wildcard"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { EnvironmentSession } from "@ren/brain/environment/session"
 import { BrainSettings } from "@ren/brain/settings"
+import { HostMcp } from "@ren/host-api/host-mcp"
 import { AppCatalog } from "@ren/schema/app-catalog"
 import { Models } from "@ren/schema/models"
 import { Channel } from "@ren/schema/channel"
@@ -55,6 +56,11 @@ const naming: AppCatalog.Naming = {
       source: `OpenCode’s built-in ${slug} tools`,
     })),
     { kind: "mcps" as const, slug: OpenCodeMcp.renServer, source: "Ren’s own tools" },
+    ...Object.keys(HostMcp.channelServers).map((slug) => ({
+      kind: "mcps" as const,
+      slug,
+      source: "Ren’s channel tools",
+    })),
   ],
 }
 
@@ -125,6 +131,12 @@ const replies: Partial<Record<Channel.Provider, string>> = {
   github:
     "Text in this chat is not posted on GitHub. Act on the issue or pull request yourself with gh: comment, review or push.",
 }
+
+const channelPosts = new Set(
+  Object.entries(HostMcp.channelServers).flatMap(([server, found]) => found.posting.map((name) => `${server}_${name}`)),
+)
+
+const channelReplies = Object.entries(HostMcp.channelServers).map(([server, found]) => `${server}_${found.reply}`)
 
 const channelHeader = (origin: ChannelOrigin.Info) =>
   [
@@ -333,6 +345,22 @@ export const make = (
             event.messages = event.messages.map(withOrigin)
           }),
         )
+        if (isSession) {
+          yield* tool.transform((editor) => {
+            for (const name of channelReplies)
+              editor.update(name, (found) => {
+                found.options = {
+                  ...Struct.omit(found.options ?? {}, ["codemode", "pinned"]),
+                  codemode: false,
+                }
+              })
+          })
+          yield* tool.hook("execute.before", (event) =>
+            channelPosts.has(event.tool) && event.sessionID !== sessionId
+              ? Effect.fail(new Tool.Error({ message: "Only the main agent posts in the channel." }))
+              : Effect.void,
+          )
+        }
         const initial = yield* Ref.get(desired)
         const appConflicts = yield* Ref.make(conflictsOf(initial.apps))
         const applied = yield* Ref.make(
@@ -344,6 +372,7 @@ export const make = (
           isSession,
           hasEnvironment: Boolean(workspaceID),
           apps: (yield* Ref.get(applied)).apps,
+          channels: initial.channels,
           sessionId,
           ren,
         })
@@ -530,7 +559,7 @@ export const make = (
               const before = (yield* Ref.get(applied)).apps
               const apps = conflicts.length ? before : snapshot.apps
               yield* Ref.set(applied, { ...snapshot, apps })
-              yield* mcp.apply(apps)
+              yield* mcp.apply(apps, snapshot.channels)
               if (!conflicts.length) yield* skills.apply(prepared)
               yield* synced
             }),

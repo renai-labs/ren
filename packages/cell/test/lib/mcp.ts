@@ -79,6 +79,7 @@ export const make = Effect.fnUntraced(function* (
   const encoder = new TextEncoder()
   const state = { label: "first", status: 200 }
   const headers: Array<Headers> = []
+  const paths: Array<string> = []
   const calls: Array<string> = []
   const release = Promise.withResolvers<void>()
   const initialized = options.holdInitialization ? release.promise : Promise.resolve()
@@ -143,6 +144,7 @@ export const make = Effect.fnUntraced(function* (
           if (request.method === "DELETE") return new Response(null, { status: 200 })
           if (request.method === "GET") return stream(request)
           headers.push(request.headers)
+          paths.push(new URL(request.url).pathname)
           const body = Schema.decodeUnknownSync(RequestBody)(await request.json())
           Queue.offerUnsafe(requests, body)
           if (body.id === undefined) return new Response(null, { status: 202 })
@@ -163,6 +165,7 @@ export const make = Effect.fnUntraced(function* (
     listening: Deferred.await(listening),
     release: () => release.resolve(),
     headers,
+    paths,
     calls,
     refuse: (status: number) =>
       Effect.sync(() => {

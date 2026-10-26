@@ -3,6 +3,7 @@ import { Session } from "@opencode/client/effect"
 import { createEmbeddedRoutes } from "@opencode/server/routes"
 import { testEffect } from "@ren/executor/testing"
 import { HostMcp } from "@ren/host-api/host-mcp"
+import type { Channel } from "@ren/schema/channel"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import { Effect, Layer, Option, Ref } from "effect"
@@ -24,7 +25,11 @@ const stub = Shared.stub()
 
 const open = Effect.fnUntraced(function* (
   ren: Option.Option<OpenCodeMcp.RenAccess>,
-  options: { readonly database?: string; readonly directory?: string } = {},
+  options: {
+    readonly database?: string
+    readonly directory?: string
+    readonly channels?: ReadonlyArray<Channel.Provider>
+  } = {},
 ) {
   const access = Shared.access(undefined, stub.url)
   const directory =
@@ -48,6 +53,7 @@ const open = Effect.fnUntraced(function* (
       directoryOf: (sessionId) => join(directory, sessionId),
       makeDirectory: (path) => Effect.promise(() => mkdir(path, { recursive: true })),
       ren,
+      ...(options.channels && { channels: options.channels }),
     },
   )
   const harness = yield* OpenCodeHarness.make(server, access.endpoints)
@@ -164,4 +170,35 @@ it.live("a brain without Ren has no ren server", () =>
     const sessionId = yield* opened.chat()
     expect(yield* opened.call(sessionId, Option.some("usr_ada"))).toContain("Unknown tool 'ren.marker'")
   }),
+)
+
+it.live(
+  "a space with Slack gets the slack server with its chat and no sender; its reply is a tool of its own that a subagent cannot call",
+  () =>
+    Effect.gen(function* () {
+      const ren = yield* renAt("host-1", ["reply_to_current_thread"])
+      const opened = yield* open(Option.some(ren.ren), { channels: ["slack"] })
+      const sessionId = yield* opened.chat()
+      yield* opened.call(sessionId, Option.some("usr_ada"))
+      const reply = "slack_reply_to_current_thread"
+      const root = stub.script({ tools: [{ name: reply, input: { text: "Rolled back." } }] })
+      yield* opened.prompt(sessionId, `${root.marker} reply`)
+      expect((yield* Effect.promise(() => root.called(1))).tools).toContain(reply)
+      const called = ren.peer.paths.lastIndexOf(HostMcp.channelPath("slack"))
+      expect(ren.peer.calls.at(-1)).toBe("reply_to_current_thread")
+      expect([
+        ren.peer.headers[called]?.get(HostMcp.sessionHeader),
+        ren.peer.headers[called]?.get(HostMcp.userHeader),
+      ]).toEqual([sessionId, null])
+      const child = stub.script({ tools: [{ name: reply, input: { text: "From a helper." } }] })
+      yield* opened.prompt(
+        sessionId,
+        `${stub.script({ tool: { name: "subagent", input: { agent: "general", description: "Help", prompt: `${child.marker} help` } } }).marker} delegate`,
+      )
+      const refused = (yield* Effect.promise(() => child.called(2))).body.messages.findLast(
+        (message) => message.role === "tool",
+      )?.content
+      expect(JSON.stringify(refused)).toContain("Only the main agent posts in the channel.")
+      expect(ren.peer.calls.filter((name) => name === "reply_to_current_thread")).toHaveLength(1)
+    }),
 )

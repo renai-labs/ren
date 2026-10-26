@@ -7,6 +7,7 @@ import { SessionInbox } from "@opencode/schema/session-inbox"
 import { EnvironmentConnections } from "@ren/brain/environment/connections"
 import { BrainSettings } from "@ren/brain/settings"
 import type { AppCatalog } from "@ren/schema/app-catalog"
+import type { Channel } from "@ren/schema/channel"
 import type { SessionCreateInput, SessionListInput, SessionUpdateInput } from "@opencode/client/effect/api"
 import { BrainRejectedError, SessionNotStartedError } from "@ren/host-api/errors"
 import { Environment } from "@ren/schema/environment"
@@ -33,6 +34,7 @@ import { mkdir, rm, stat } from "node:fs/promises"
 import opencode from "../../../node_modules/@opencode/core/package.json"
 import { BrainStorage } from "../../brain-storage.js"
 import { AppStore } from "../../app-store.js"
+import { ChannelStore } from "../../channel-store.js"
 import { Cell } from "../../cell.js"
 import { ChatSettings } from "../../chat-settings.js"
 import { HarnessStorage } from "../../harness-storage.js"
@@ -367,6 +369,7 @@ type Opener = (
   config: string,
   settings: Option.Option<ChatSettings.Interface>,
   apps: Option.Option<AppCatalog.Info>,
+  channels: ReadonlyArray<Channel.Provider>,
   ren: Option.Option<OpenCodeMcp.RenAccess>,
   host: { readonly egress: boolean },
 ) => Effect.Effect<OpenCodeServer.Instance, Error, Scope.Scope>
@@ -380,6 +383,7 @@ const layerWith = (opener: Opener) =>
       const connections = yield* Effect.serviceOption(EnvironmentConnections.Service)
       const settings = cell.vars.REN_URL ? yield* Effect.serviceOption(ChatSettings.Service) : Option.none()
       const apps = yield* Effect.serviceOption(AppStore.Service)
+      const channels = yield* Effect.serviceOption(ChannelStore.Service)
       const address = yield* Effect.serviceOption(RenAddress.Service)
       const hostToken = yield* Effect.serviceOption(HostToken.Service)
       const ren =
@@ -409,6 +413,7 @@ const layerWith = (opener: Opener) =>
                 cell.vars.OPENCODE_CONFIG,
                 settings,
                 Option.isSome(apps) ? yield* apps.value.current : Option.none(),
+                Option.isSome(channels) ? yield* channels.value.current : [],
                 ren,
                 { egress: cell.vars.REN_EGRESS === "1" },
               )
@@ -421,10 +426,11 @@ const layerWith = (opener: Opener) =>
   )
 
 export const layer = (storage: DurableObjectStorage) =>
-  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren, host) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps, channels, ren, host) =>
     OpenCodeServer.open(storage, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
       apps,
+      channels,
       ren,
       egress: host.egress,
       directoryOf: (sessionId) => `/workspace/${sessionId}`,
@@ -432,10 +438,11 @@ export const layer = (storage: DurableObjectStorage) =>
   )
 
 export const layerProcess = (database: string, confinement: RenPlugin.Confinement) =>
-  layerWith((endpoints, refreshKey, connections, config, settings, apps, ren, host) =>
+  layerWith((endpoints, refreshKey, connections, config, settings, apps, channels, ren, host) =>
     OpenCodeServer.openProcess(database, config, endpoints, refreshKey, connections, {
       saved: Option.map(settings, (each) => each.saved),
       apps,
+      channels,
       ren,
       egress: host.egress,
       directoryOf: (sessionId) => `${confinement.workspace}/${sessionId}`,
@@ -509,6 +516,7 @@ export const make = Effect.fn("OpenCodeHarness.make")(function* (
     yield* server.configure({
       models,
       ...(update.apps && { apps: update.apps }),
+      ...(update.channels && { channels: update.channels }),
       ...(Option.isSome(server.chats) && { chats: yield* Ref.get(server.chats.value.latest) }),
     })
   })
