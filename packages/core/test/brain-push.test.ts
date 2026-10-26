@@ -5,6 +5,8 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { AgentMembership } from "@ren/schema/agent-membership"
 import { Brain } from "@ren/schema/brain"
+import { ChannelInstall } from "@ren/schema/channel-install"
+import { ChannelMapping } from "@ren/schema/channel-mapping"
 import { eq } from "drizzle-orm"
 import { Effect, Layer, Queue, Ref, Schedule } from "effect"
 import { BrainHost } from "../src/brain-host.js"
@@ -50,6 +52,41 @@ describe("ren_notify_brains (HR10, HR23)", () => {
         .where(eq(Database.Schema.settings.owner_id, Database.Schema.renOwner))
       yield* database.db.insert(Database.Schema.settings).values({ settings: {} }).onConflictDoNothing()
       expect(yield* listener.collect).toEqual([`space:${owner.spaceId}`, "all"])
+    }),
+  )
+
+  it.live("a channel install notifies its organization; a mapping its space, and a moved mapping both spaces", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const listener = yield* listening
+      const owner = yield* Seed.owner()
+      const other = yield* Seed.space(owner.organizationId)
+      const installId = ChannelInstall.ID.create()
+      yield* listener.collect
+      yield* database.db.insert(Database.Schema.channel_install).values({
+        id: installId,
+        organization_id: owner.organizationId,
+        provider: "slack",
+        workspace: `T${crypto.randomUUID().slice(0, 8)}`,
+        name: "Acme",
+      })
+      expect(yield* listener.collect).toEqual([`org:${owner.organizationId}`])
+      const mappingId = ChannelMapping.ID.create()
+      yield* database.db.insert(Database.Schema.channel_mapping).values({
+        id: mappingId,
+        install_id: installId,
+        place: "C07",
+        place_name: "eng",
+        space_id: owner.spaceId,
+        fallback: true,
+        created_by: owner.createdBy,
+      })
+      expect(yield* listener.collect).toEqual([`space:${owner.spaceId}`])
+      yield* database.db
+        .update(Database.Schema.channel_mapping)
+        .set({ space_id: other })
+        .where(eq(Database.Schema.channel_mapping.id, mappingId))
+      expect(yield* listener.collect).toEqual([`space:${owner.spaceId}`, `space:${other}`])
     }),
   )
 

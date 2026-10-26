@@ -3,6 +3,7 @@ export * as Slack from "./slack.js"
 import type { Channel } from "@ren/schema/channel"
 import { Clock, Effect, Option, Redacted, Schema, Stream } from "effect"
 import { createHmac, timingSafeEqual } from "node:crypto"
+import { slackifyMarkdown } from "slackify-markdown"
 import { ChannelProvider } from "../channel-provider.js"
 import { ChannelSecrets } from "../channel-secrets.js"
 import { SlackApp } from "../slack-app.js"
@@ -49,6 +50,37 @@ const maxPages = 25
 const goneErrors = new Set(["channel_not_found", "not_in_channel", "is_archived"])
 
 const revokedErrors = new Set(["invalid_auth", "token_revoked", "account_inactive", "not_authed"])
+
+const markdownBudget = 11_000
+
+const sectionLimit = 2_900
+
+export const fallback = (text: string) => slackifyMarkdown(text).trimEnd()
+
+const sections = (text: string): ReadonlyArray<string> => {
+  if (text.length <= sectionLimit) return text ? [text] : []
+  const candidate = text.slice(0, sectionLimit + 1)
+  const at =
+    [candidate.lastIndexOf("\n\n"), candidate.lastIndexOf("\n"), candidate.lastIndexOf(" ")].find(
+      (index) => index > 0,
+    ) ?? sectionLimit
+  return [text.slice(0, at).trimEnd(), ...sections(text.slice(at).trimStart())]
+}
+
+export const blocks = (text: string) => {
+  const trimmed = text.trimEnd()
+  if (!trimmed) return []
+  if (trimmed.length <= markdownBudget) return [{ type: "markdown", text: trimmed }]
+  return sections(fallback(trimmed)).map((part) => ({ type: "section", text: { type: "mrkdwn", text: part } }))
+}
+
+export const message = (text: string) => ({ text: fallback(text), blocks: blocks(text) })
+
+export const delivery = (error: SlackApp.Failed) => {
+  if (error.error && goneErrors.has(error.error)) return new ChannelProvider.PlaceGone({ message: error.message })
+  if (error.error) return new ChannelProvider.Rejected({ message: error.message })
+  return new ChannelProvider.Unavailable({ message: error.message })
+}
 
 const ignore = (reason: string) => ({ _tag: "Ignore", reason }) satisfies Channel.Parsed
 
@@ -111,7 +143,18 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
     fetchFile: () => Effect.fail(new ChannelProvider.FileUnavailable({ message: "Slack files are not handled yet" })),
     linkOf: () => Option.none(),
     context: () => Effect.fail(later("threads")),
-    send: () => Effect.fail(later("replies")),
+    send: Effect.fn("Slack.send")(function* (target, text) {
+      const token = yield* tokenOf(target.install)
+      const channel = target.thread.slice(0, target.thread.indexOf(":"))
+      yield* app
+        .post(
+          "chat.postMessage",
+          { channel, thread_ts: target.thread.slice(channel.length + 1), ...message(text) },
+          Posted,
+          token,
+        )
+        .pipe(Effect.mapError(delivery))
+    }),
     progress: () => Effect.fail(later("reactions")),
     email: () => Effect.fail(later("senders")),
     installUrl: (state, accounts) => {
@@ -218,14 +261,7 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
     }),
     announce: Effect.fn("Slack.announce")(function* (workspace, place, text) {
       const token = yield* tokenOf(workspace)
-      yield* app.post("chat.postMessage", { channel: place.id, text }, Posted, token).pipe(
-        Effect.mapError((error) => {
-          if (error.error && goneErrors.has(error.error))
-            return new ChannelProvider.PlaceGone({ message: error.message })
-          if (error.error) return new ChannelProvider.Rejected({ message: error.message })
-          return unavailable(error)
-        }),
-      )
+      yield* app.post("chat.postMessage", { channel: place.id, text }, Posted, token).pipe(Effect.mapError(delivery))
     }),
   }
 }

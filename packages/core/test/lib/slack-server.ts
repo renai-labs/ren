@@ -37,6 +37,8 @@ export interface Instance {
   readonly grants: Map<string, Grant>
   readonly revoked: Array<string>
   readonly channels: Array<Channel>
+  readonly uploads: Map<string, string>
+  readonly replies: Array<{ readonly ts: string; readonly user: string; readonly text: string }>
   readonly posted: Array<{ readonly method: string; readonly token: string; readonly params: Params }>
   readonly options: { pageSize: number; revokeError: string | undefined; postError: string | undefined }
   readonly stop: () => void
@@ -76,7 +78,16 @@ const conversations = (state: State, params: Params) => {
   })
 }
 
-const method = (state: State, name: string, token: string, params: Params) => {
+const replies = (state: State, params: Params) => {
+  const start = Number(params.cursor ?? "0")
+  const next = start + Number(params.limit ?? "50")
+  return answer({
+    messages: state.replies.slice(start, next),
+    response_metadata: { next_cursor: next < state.replies.length ? String(next) : "" },
+  })
+}
+
+const method = (state: State, name: string, token: string, params: Params, origin: string) => {
   if (name === "oauth.v2.access") return exchange(state, params)
   if (!known(state, token)) return refuse("invalid_auth")
   switch (name) {
@@ -84,6 +95,13 @@ const method = (state: State, name: string, token: string, params: Params) => {
       if (state.options.revokeError) return refuse(state.options.revokeError)
       state.revoked.push(token)
       return answer({ revoked: true })
+    case "files.getUploadURLExternal":
+      return answer({
+        upload_url: `${origin}/upload/F${state.uploads.size + 1}`,
+        file_id: `F${state.uploads.size + 1}`,
+      })
+    case "conversations.replies":
+      return replies(state, params)
     case "conversations.list":
       return conversations(state, params)
     case "conversations.info": {
@@ -101,6 +119,8 @@ export const start = (): Instance => {
     grants: new Map(),
     revoked: [],
     channels: [],
+    uploads: new Map(),
+    replies: [],
     posted: [],
     options: { pageSize: 200, revokeError: undefined, postError: undefined },
   }
@@ -109,10 +129,15 @@ export const start = (): Instance => {
     port: 0,
     fetch: async (request) => {
       const url = new URL(request.url)
+      const uploaded = /^\/upload\/(F\d+)$/u.exec(url.pathname)?.[1]
+      if (uploaded) {
+        state.uploads.set(uploaded, await request.text())
+        return new Response(null, { status: 200 })
+      }
       const name = /^\/api\/([\w.]+)$/u.exec(url.pathname)?.[1]
       if (request.method !== "POST" || !name) return new Response(null, { status: 404 })
       const params = Object.fromEntries(new URLSearchParams(await request.text()))
-      return method(state, name, tokenOf(request), params)
+      return method(state, name, tokenOf(request), params, url.origin)
     },
   })
   return { ...state, url: server.url.origin, stop: () => void server.stop(true) }

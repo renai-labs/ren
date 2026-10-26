@@ -1,10 +1,30 @@
 export * as HostMcp from "./host-mcp.js"
 
 import { Auth } from "@ren/schema/auth"
+import type { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
 import { Option, Schema } from "effect"
 
 export const path = "/mcp"
+
+export const channelServers: Readonly<
+  Partial<Record<Channel.Provider, { readonly reply: string; readonly posting: ReadonlyArray<string> }>>
+> = {
+  slack: {
+    reply: "reply_to_current_thread",
+    posting: [
+      "reply_to_current_thread",
+      "post_new_message",
+      "reply_in_thread",
+      "upload_file",
+      "react",
+      "edit_message",
+      "delete_message",
+    ],
+  },
+}
+
+export const channelPath = (provider: Channel.Provider): `${typeof path}/${Channel.Provider}` => `${path}/${provider}`
 
 // oxlint-disable-next-line ren/no-comments -- no x-ren- prefix: the egress removes x-ren-* headers from every request (credentials README row 24).
 export const sessionHeader = "ren-session"

@@ -7,10 +7,11 @@ import type { Channel } from "@ren/schema/channel"
 import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
 import type { Task } from "@ren/schema/task"
-import { and, asc, eq, isNull, sql } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "./access.js"
 import { ChannelIdentity } from "./channel-identity.js"
+import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { AgentQueries } from "./agent/queries.js"
 import { SpaceQueries } from "./space/queries.js"
@@ -97,19 +98,13 @@ export const layer = Layer.effect(
       readonly organizationId: Auth.OrganizationID
       readonly defaultSpaceId: Space.ID | null
     }) =>
-      database.db
-        .select({ spaceId: space.id })
-        .from(space)
-        .where(and(eq(space.organization_id, found.organizationId), isNull(space.archived_at)))
-        .orderBy(
-          sql`case when ${space.id} = ${found.defaultSpaceId} then 0 else 1 end`,
-          asc(space.created_at),
-          asc(space.id),
+      database
+        .transaction((transaction) =>
+          ChannelInstallQueries.defaultSpace(transaction, found.organizationId, found.defaultSpaceId),
         )
-        .limit(1)
         .pipe(
           Effect.orDie,
-          Effect.map((rows) => rows.map((row) => ({ spaceId: row.spaceId, agentId: null })).at(0)),
+          Effect.map((chosen) => Option.getOrUndefined(Option.map(chosen, (spaceId) => ({ spaceId, agentId: null })))),
         )
 
     return Service.of({
