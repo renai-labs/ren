@@ -96,16 +96,14 @@ describe("ChannelInstalls with GitHub", () => {
       const other = yield* Seed.user()
       const id = installation("acme")
       const code = authorized(id)
-      yield* database.db
-        .insert(Database.Schema.account)
-        .values({
-          id: Auth.AccountID.create(),
-          providerId: "github",
-          accountId: String(7000 + code.length),
-          userId: other.id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
+      yield* database.db.insert(Database.Schema.account).values({
+        id: Auth.AccountID.create(),
+        providerId: "github",
+        accountId: String(7000 + code.length),
+        userId: other.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
       expect(yield* finish(yield* started(actor), { installation_id: id, code })).toMatchObject({ ok: false })
       expect(
         yield* database.db
@@ -381,16 +379,14 @@ describe("ChannelInstalls with Slack", () => {
       const actor = yield* member()
       const other = yield* Seed.user()
       const workspace = team()
-      yield* database.db
-        .insert(Database.Schema.account)
-        .values({
-          id: Auth.AccountID.create(),
-          providerId: "slack",
-          accountId: `${workspace}:U01`,
-          userId: other.id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
+      yield* database.db.insert(Database.Schema.account).values({
+        id: Auth.AccountID.create(),
+        providerId: "slack",
+        accountId: `${workspace}:U01`,
+        userId: other.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
       expect(
         yield* slackFinish(actor, { team: workspace, teamName: "Acme", user: "U01", token: "xoxb-conflict" }),
       ).toMatchObject({ ok: false })
@@ -452,16 +448,14 @@ describe("ChannelInstalls with Slack", () => {
       const database = yield* Database.Service
       const actor = yield* member()
       const workspace = team()
-      yield* database.db
-        .insert(Database.Schema.account)
-        .values({
-          id: Auth.AccountID.create(),
-          providerId: "slack",
-          accountId: `${workspace}:U01`,
-          userId: actor.userId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
+      yield* database.db.insert(Database.Schema.account).values({
+        id: Auth.AccountID.create(),
+        providerId: "slack",
+        accountId: `${workspace}:U01`,
+        userId: actor.userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
       expect(
         yield* slackFinish(actor, { team: workspace, teamName: "Acme", user: "U02", token: "xoxb-other" }),
       ).toEqual({
@@ -505,18 +499,16 @@ describe("GitHubAccounts", () => {
         yield* Seed.member(second, first.userId, "member")
         const code = authorized()
         const account = Auth.AccountID.create()
-        yield* database.db
-          .insert(Database.Schema.account)
-          .values({
-            id: account,
-            providerId: "github",
-            accountId: String(7000 + code.length),
-            userId: first.userId,
-            accessToken: `user:${code}`,
-            refreshToken: `refresh:${code}`,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          })
+        yield* database.db.insert(Database.Schema.account).values({
+          id: account,
+          providerId: "github",
+          accountId: String(7000 + code.length),
+          userId: first.userId,
+          accessToken: `user:${code}`,
+          refreshToken: `refresh:${code}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
         yield* accounts.sync(first.userId)
         const saved = yield* database.db
           .select({ organizationId: Database.Schema.credential.organization_id, name: Database.Schema.credential.name })

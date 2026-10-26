@@ -450,7 +450,9 @@ it.live("a pull names only root chats, so Ren never deletes a running subagent t
     const parent = stub.script({
       tool: { name: "subagent", input: { agent: "general", description: "Help", prompt: `${child.marker} help` } },
     })
-    yield* client.session.prompt({ sessionID: SessionID.make(sessionId), text: `${parent.marker} go` }).pipe(Effect.orDie)
+    yield* client.session
+      .prompt({ sessionID: SessionID.make(sessionId), text: `${parent.marker} go` })
+      .pipe(Effect.orDie)
     yield* Effect.promise(() => child.called())
     yield* opened.reload.pull
     expect(opened.requests.at(-1)?.roots).toEqual([sessionId])
