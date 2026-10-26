@@ -1,10 +1,11 @@
+import type { ReactNode } from "react"
 import { Menu } from "./menu.js"
 import { Select } from "./select.js"
 import { Text } from "./text.js"
 
 export type Variant = { value: string; label: string }
 
-export type Model = { value: string; label: string; group: string; variants: readonly Variant[] }
+export type Model = { value: string; label: string; group: string; icon?: ReactNode; variants: readonly Variant[] }
 
 export type Selection = { model: string; variant?: string }
 
@@ -14,6 +15,7 @@ export type ModelPickerProps = {
   onValueChange: (value: Selection) => void
   disabled?: boolean
   loading?: boolean
+  fallback?: string
   open?: boolean | undefined
   onOpenChange?: ((open: boolean) => void) | undefined
 }
@@ -29,14 +31,19 @@ function triggerLabel(name: string | undefined, effort: string | undefined) {
   return `Model: ${name}, reasoning effort: ${effort}`
 }
 
+const describe = (props: ModelPickerProps, selected: Model | undefined) => {
+  if (props.loading) return { name: "Loading…", effort: undefined }
+  if (!selected?.variants.length) return { name: selected?.label ?? props.fallback, effort: undefined }
+  const variant = selected.variants.find((each) => each.value === props.value?.variant)
+  return { name: selected.label, effort: variant?.label ?? "Default" }
+}
+
 export function ModelPicker(props: ModelPickerProps) {
   const selected = props.models.find((model) => model.value === props.value?.model)
-  const name = props.loading ? "Loading…" : selected?.label
-  const effort =
-    props.loading || !selected?.variants.length
-      ? undefined
-      : (selected.variants.find((variant) => variant.value === props.value?.variant)?.label ?? "Default")
-  const groups = [...new Set(props.models.map((model) => model.group))]
+  const shown = describe(props, selected)
+  const name = shown.name
+  const effort = shown.effort
+  const groups = [...Map.groupBy(props.models, (model) => model.group)]
   return (
     <Menu.Root open={props.open} onOpenChange={props.onOpenChange}>
       <Menu.Trigger
@@ -48,27 +55,21 @@ export function ModelPicker(props: ModelPickerProps) {
             disabled={props.disabled === true || props.loading === true || props.models.length === 0}
             label={triggerLabel(name, effort)}
           >
-            {name ? (
-              <Text purpose="body" tone="inherit" truncation="single-line" element="span">
-                {name}
-              </Text>
-            ) : null}
-            {effort ? (
-              <>
-                <Text purpose="body" tone="secondary" element="span">
-                  ·
-                </Text>
-                <Text purpose="body" tone="inherit" truncation="single-line" element="span">
-                  {effort}
-                </Text>
-              </>
-            ) : null}
+            <TriggerContent icon={props.loading ? undefined : selected?.icon} name={name} effort={effort} />
           </Select.Button>
         }
       />
       <Menu.Popup placement="top" alignment="start" width="large">
-        {groups.map((group) => (
-          <Menu.Section key={group} label={group}>
+        {groups.map(([group, models]) => (
+          <Menu.Section
+            key={group}
+            label={
+              <span className="flex items-center gap-2">
+                {models[0]?.icon}
+                {group}
+              </span>
+            }
+          >
             <Menu.RadioGroup
               value={selected?.group === group ? selected.value : ""}
               onValueChange={(value) => {
@@ -76,23 +77,44 @@ export function ModelPicker(props: ModelPickerProps) {
                 if (model) props.onValueChange(select(model, defaultVariant))
               }}
             >
-              {props.models
-                .filter((model) => model.group === group)
-                .map((model) => (
-                  <Choice
-                    key={model.value}
-                    model={model}
-                    selected={model === selected}
-                    variant={props.value?.variant}
-                    effort={model === selected ? effort : undefined}
-                    onValueChange={props.onValueChange}
-                  />
-                ))}
+              {models.map((model) => (
+                <Choice
+                  key={model.value}
+                  model={model}
+                  selected={model === selected}
+                  variant={props.value?.variant}
+                  effort={model === selected ? effort : undefined}
+                  onValueChange={props.onValueChange}
+                />
+              ))}
             </Menu.RadioGroup>
           </Menu.Section>
         ))}
       </Menu.Popup>
     </Menu.Root>
+  )
+}
+
+function TriggerContent(props: { icon: ReactNode; name: string | undefined; effort: string | undefined }) {
+  return (
+    <>
+      {props.icon}
+      {props.name ? (
+        <Text purpose="body" tone="inherit" truncation="single-line" element="span">
+          {props.name}
+        </Text>
+      ) : null}
+      {props.effort ? (
+        <>
+          <Text purpose="body" tone="secondary" element="span">
+            ·
+          </Text>
+          <Text purpose="body" tone="inherit" truncation="single-line" element="span">
+            {props.effort}
+          </Text>
+        </>
+      ) : null}
+    </>
   )
 }
 

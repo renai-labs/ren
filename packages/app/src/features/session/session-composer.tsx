@@ -20,9 +20,13 @@ import { DraftStore } from "../../platform/draft-store.js"
 import { Keyboard } from "../../platform/keyboard.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
-import { SessionProfilesPill } from "../../components/profiles-pill.js"
+import { SessionAppsStrip } from "../../components/apps-strip.js"
+import { ChatComposer } from "./chat-composer.js"
+import { ComposerCopy } from "./composer-copy.js"
 import { Failure } from "./failure.js"
 import { ComposerAddMenu } from "./composer-add-menu.js"
+import { ComposerStatus } from "./composer-status.js"
+import type { ChatView } from "./chat-view.js"
 import { ComposerKeys } from "./composer-keys.js"
 import { ComposerModelPicker } from "./composer-model-picker.js"
 import { ComposerQueue } from "./composer-queue.js"
@@ -215,6 +219,9 @@ export function SessionComposer(props: {
   reverted: boolean
   unavailable: boolean
   covered: boolean
+  notice: ChatView.Notice | undefined
+  retrying: boolean
+  onRetry: () => void
   onUndo: () => void
   onRedo: () => void
   onCompact: () => void
@@ -473,6 +480,7 @@ export function SessionComposer(props: {
     if (Keyboard.isPrintable(event) && !props.unavailable) input.current?.focus()
   })
 
+  const hint = running ? "Also list who reviewed each one" : ComposerCopy.placeholder
   const controls = (
     <Controls
       running={running}
@@ -493,6 +501,7 @@ export function SessionComposer(props: {
               if (!open) requestAnimationFrame(() => input.current?.focus())
             }}
             onChange={(model) => {
+              ChatPreferences.model.write(platform.storage, model)
               change(Composer.withModel(draft, model))
               requestAnimationFrame(() => input.current?.focus())
             }}
@@ -505,7 +514,7 @@ export function SessionComposer(props: {
   )
 
   return (
-    <ConversationShell.Composer
+    <ChatComposer
       label="Message Ren"
       layout="adaptive"
       onSubmit={() => submit(false)}
@@ -537,15 +546,13 @@ export function SessionComposer(props: {
           />
         ) : undefined
       }
-      leading={addMenu}
-      footerLeading={
-        <>
-          {addMenu}
-          <SessionProfilesPill sessionId={props.sessionID} />
-        </>
-      }
-      trailing={controls}
-      footerTrailing={controls}
+      addMenu={addMenu}
+      apps={<SessionAppsStrip sessionId={props.sessionID} />}
+      {...(props.notice &&
+        !draft.text && {
+          status: <ComposerStatus notice={props.notice} retrying={props.retrying} onRetry={props.onRetry} />,
+        })}
+      controls={controls}
     >
       <ConversationShell.ComposerInput
         ref={input}
@@ -553,7 +560,7 @@ export function SessionComposer(props: {
         dir="auto"
         autoComplete="off"
         focusOnMount={!mobile}
-        placeholder={running ? "Also list who reviewed each one" : "Summarise the open pull requests"}
+        placeholder={props.notice ? "" : hint}
         readOnly={readOnly}
         value={draft.text}
         mentions={tokens.map((token) => ({
@@ -587,6 +594,6 @@ export function SessionComposer(props: {
             event.preventDefault()
         }}
       />
-    </ConversationShell.Composer>
+    </ChatComposer>
   )
 }

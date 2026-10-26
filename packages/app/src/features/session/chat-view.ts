@@ -2,6 +2,7 @@ export * as ChatView from "./chat-view.js"
 
 import { useAtomValue } from "@effect/atom-react"
 import { ChatState, Family, SessionTasks, TimelineRow, Working } from "@ren/chat"
+import type { ChatSession, Connection } from "@ren/chat"
 import { ChatReact } from "@ren/chat/react"
 import { Session } from "@ren/schema/session"
 import type { SessionMessage } from "@ren/schema/session/message"
@@ -43,6 +44,16 @@ const requests = (state: ChatState.State, sessionID: string) => {
   }
 }
 
+export type Notice = ChatSession.Boot | { readonly _tag: "Reconnecting" }
+
+const notice = (
+  status: AsyncResult.AsyncResult<Connection.Status, unknown>,
+  boot: AsyncResult.AsyncResult<ChatSession.Boot, unknown>,
+): Notice | undefined => {
+  if (AsyncResult.isSuccess(boot) && boot.value._tag !== "Ready") return boot.value
+  return AsyncResult.isSuccess(status) && status.value === "reconnecting" ? { _tag: "Reconnecting" } : undefined
+}
+
 export function useRoot(sessionID: Session.ID, child: Session.ID | undefined) {
   const session = ChatReact.useSession(sessionID)
   const state = AsyncResult.getOrElse(session.state, () => ChatState.empty)
@@ -66,7 +77,7 @@ export function useRoot(sessionID: Session.ID, child: Session.ID | undefined) {
     tasks: useEqual(SessionTasks.latest(messages)),
     more: ChatState.more(state, sessionID),
     loadingHistory: ChatState.loadingHistory(state, sessionID),
-    reconnecting: AsyncResult.isSuccess(session.status) && session.status.value === "reconnecting",
+    notice: notice(session.status, session.boot),
     failed: AsyncResult.isFailure(session.state),
     childParent: parent && parent !== sessionID ? Session.ID.make(parent) : undefined,
   }
