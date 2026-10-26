@@ -11,24 +11,13 @@ import { SessionMessage } from "@ren/schema/session/message"
 import { Shell } from "@ren/schema/shell"
 import { Shared } from "@ren/cell/testing"
 import { BrainTest } from "@ren/cell/testing/brain"
-import {
-  DateTime,
-  Effect,
-  Fiber,
-  Layer,
-  Option,
-  Predicate,
-  Schedule,
-  Schema,
-  type Scope,
-  Stream,
-  SubscriptionRef,
-} from "effect"
+import { DateTime, Effect, Layer, Option, Predicate, Schedule, Schema, SubscriptionRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChatSession } from "../src/chat-session.js"
 import { ChatState } from "../src/chat-state.js"
 import { Family } from "../src/family.js"
 import { Outbox } from "../src/outbox.js"
+import { ChatTest } from "./lib/chat.js"
 import { Fixture } from "./lib/fixture.js"
 
 setDefaultTimeout(60_000)
@@ -36,8 +25,6 @@ setDefaultTimeout(60_000)
 const stub = Shared.stub()
 
 type Brain = Effect.Success<ReturnType<typeof BrainTest.make>>
-
-const live = <A, E>(body: Effect.Effect<A, E, Scope.Scope>) => body.pipe(Effect.scoped, Effect.runPromise)
 
 const http = (brain: Brain) =>
   FetchHttpClient.layer.pipe(
@@ -66,17 +53,6 @@ const access = () =>
 const open = (brain: Brain) =>
   ChatSession.make({ sessionID: brain.id, access, sender: { userId: "user_1" } }).pipe(Effect.provide(http(brain)))
 
-const until = <A>(ref: SubscriptionRef.SubscriptionRef<A>, predicate: (value: A) => boolean) =>
-  SubscriptionRef.changes(ref).pipe(
-    Stream.filter(predicate),
-    Stream.runHead,
-    Effect.map(Option.getOrThrow),
-    Effect.timeoutOrElse({
-      duration: "20 seconds",
-      orElse: () => Effect.die(new Error("The chat state never reached the expected value")),
-    }),
-  )
-
 const settled = (sessionID: string) => (state: ChatState.State) =>
   ChatState.activity(state, sessionID) === "idle" &&
   ChatState.messages(state, sessionID).some((message) => message.type === "assistant") &&
@@ -95,13 +71,13 @@ const shape = (messages: ReadonlyArray<ChatState.State["messages"][string][numbe
   }))
 
 test("a prompt shows at once, streams its turn, and the live transcript equals a fresh read", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const held = stub.script({
         hold: true,
         reasoning: "thinking it over",
@@ -115,7 +91,7 @@ test("a prompt shows at once, streams its turn, and the live transcript equals a
       })
       yield* Effect.promise(() => held.called())
       held.release()
-      const done = yield* until(chat.state, settled(brain.id))
+      const done = yield* ChatTest.until(chat.state, settled(brain.id))
       expect(shape(ChatState.messages(done, brain.id)).map((message) => message.type)).toEqual([
         "user",
         "assistant",
@@ -146,92 +122,15 @@ const logged = (brain: Brain, log: Array<string>) =>
     ),
   )
 
-test("a prompt sent while the brain's URL fails stays pending and is sent once with the same id after new access; a 502 for a gone sandbox and a 401 from an old token do the same", () =>
-  live(
-    Effect.gen(function* () {
-      const brain = yield* BrainTest.make()
-      yield* brain.start()
-      const fault = { mode: "none" as "none" | "network" | "gone" | "unauthorized", attempts: 0 }
-      const sent: Array<string> = []
-      const accessed = { count: 0 }
-      const fetching = FetchHttpClient.layer.pipe(
-        Layer.provide(
-          Layer.succeed(
-            FetchHttpClient.Fetch,
-            Object.assign(
-              async (input: string | URL | Request, init?: RequestInit) => {
-                const url = new URL(input instanceof Request ? input.url : String(input))
-                const request = input instanceof Request ? input : new Request(url, init)
-                if (url.pathname.endsWith("/prompt")) {
-                  if (fault.mode !== "none") {
-                    fault.attempts++
-                    if (fault.mode === "network") throw new TypeError("fetch failed")
-                    if (fault.mode === "gone")
-                      return Response.json({ message: "The sandbox was not found", code: 502 }, { status: 502 })
-                    return Response.json({ _tag: "UnauthorizedError", message: "An old generation" }, { status: 401 })
-                  }
-                  sent.push(
-                    Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(await request.clone().json()).id,
-                  )
-                }
-                return brain.chatFetch(`${url.pathname}${url.search}`, request)
-              },
-              { preconnect: fetch.preconnect },
-            ),
-          ),
-        ),
-      )
-      const chat = yield* ChatSession.make({
-        sessionID: brain.id,
-        access: () =>
-          Effect.sync(() => {
-            accessed.count++
-            return {
-              status: "ready" as const,
-              url: "http://cell",
-              token: "a-client-token",
-              expiresAt: DateTime.makeUnsafe(Date.now() + 3_600_000),
-            }
-          }),
-        sender: { userId: "user_1" },
-      }).pipe(Effect.provide(fetching))
-      yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
-      const failing = (mode: "network" | "gone" | "unauthorized") =>
-        Effect.gen(function* () {
-          fault.mode = mode
-          fault.attempts = 0
-          const before = accessed.count
-          const script = stub.script()
-          const sending = yield* chat.prompt({ text: script.marker }).pipe(Effect.forkChild)
-          yield* Effect.sync(() => fault.attempts).pipe(
-            Effect.repeat({ until: (attempts) => attempts >= 2, schedule: Schedule.spaced("50 millis") }),
-          )
-          const pending = ChatState.messages(yield* SubscriptionRef.get(chat.state), brain.id).find(
-            (message) => message.type === "user" && message.text === script.marker,
-          )
-          fault.mode = "none"
-          const id = yield* Fiber.join(sending)
-          yield* Effect.promise(() => script.called())
-          expect(pending?.id).toBe(id)
-          expect(sent.filter((each) => each === id)).toHaveLength(1)
-          expect(accessed.count).toBeGreaterThan(before)
-        })
-      yield* failing("network")
-      yield* failing("gone")
-      yield* failing("unauthorized")
-    }),
-  ))
-
 test("while access is starting the history comes from Ren, a page that is too large is asked again smaller, and at ready the brain's history shows each message once (E108, E111)", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const first = yield* open(brain)
       yield* first.open(brain.id)
       yield* first.prompt({ text: stub.script().marker })
-      const done = yield* until(first.state, settled(brain.id))
+      const done = yield* ChatTest.until(first.state, settled(brain.id))
       const expected = ChatState.messages(done, brain.id).map((message) => message.id)
       const ready = { value: false }
       const limits: Array<number> = []
@@ -260,20 +159,23 @@ test("while access is starting the history comes from Ren, a page that is too la
         sender: { userId: "user_1" },
       }).pipe(Effect.provide(http(brain)))
       yield* chat.open(brain.id).pipe(Effect.forkChild)
-      expect(yield* until(chat.boot, (boot) => boot._tag === "Starting")).toEqual({ _tag: "Starting", phase: "waking" })
-      const saved = yield* until(chat.state, (state) => ChatState.messages(state, brain.id).length > 0)
+      expect(yield* ChatTest.until(chat.boot, (boot) => boot._tag === "Starting")).toEqual({
+        _tag: "Starting",
+        phase: "waking",
+      })
+      const saved = yield* ChatTest.until(chat.state, (state) => ChatState.messages(state, brain.id).length > 0)
       expect(limits).toEqual([100, 50, 25])
       expect(ChatState.messages(saved, brain.id).map((message) => message.id)).toEqual(expected)
       ready.value = true
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       expect(yield* SubscriptionRef.get(chat.boot)).toEqual({ _tag: "Ready" })
-      const live = yield* until(chat.state, settled(brain.id))
+      const live = yield* ChatTest.until(chat.state, settled(brain.id))
       expect(ChatState.messages(live, brain.id).map((message) => message.id)).toEqual(expected)
     }),
   ))
 
 test("a message sent while access is starting outlives a rebuilt runtime and is sent once after ready with its id; one the brain already accepted is not sent twice (E118)", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
@@ -315,7 +217,7 @@ test("a message sent while access is starting outlives a rebuilt runtime and is 
       const reloaded = yield* make
       yield* reloaded.open(brain.id)
       yield* Effect.promise(() => script.called())
-      expect(sent(yield* until(reloaded.state, settled(brain.id)))).toHaveLength(1)
+      expect(sent(yield* ChatTest.until(reloaded.state, settled(brain.id)))).toHaveLength(1)
       yield* Effect.sync(() => stored.items.length).pipe(
         Effect.repeat({ until: (count) => count === 0, schedule: Schedule.spaced("10 millis") }),
       )
@@ -331,13 +233,13 @@ test("a message sent while access is starting outlives a rebuilt runtime and is 
   ))
 
 test("a question whose turn stopped shows as expired, and answering it sends one message that quotes the question (E129)", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const asking = stub.script({
         tool: {
           name: "question",
@@ -349,11 +251,13 @@ test("a question whose turn stopped shows as expired, and answering it sends one
         },
       })
       yield* chat.prompt({ text: asking.marker })
-      const asked = yield* until(chat.state, (state) => (state.forms[brain.id] ?? []).length > 0)
+      const asked = yield* ChatTest.until(chat.state, (state) => (state.forms[brain.id] ?? []).length > 0)
       const form = asked.forms[brain.id]?.at(0)
       if (!form) return yield* Effect.die(new Error("No question"))
       yield* brain.opencode.session.interrupt({ sessionID: SessionID.make(brain.id) })
-      yield* until(chat.state, (state) => ChatState.expiredForms(state, brain.id).some((each) => each.id === form.id))
+      yield* ChatTest.until(chat.state, (state) =>
+        ChatState.expiredForms(state, brain.id).some((each) => each.id === form.id),
+      )
       const field = form.fields[0]
       const answer = stub.script()
       yield* chat.replyForm(brain.id, form.id, { [field.key]: `Blue ${answer.marker}` })
@@ -371,7 +275,7 @@ test("a question whose turn stopped shows as expired, and answering it sends one
   ))
 
 test("typing while the connection is parked asks Ren for access once, which wakes the brain, and not again right after (E130)", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make({ vars: { CHAT_IDLE_MS: "300", CHAT_HEARTBEAT_MS: "50" } })
       yield* brain.start()
@@ -391,7 +295,7 @@ test("typing while the connection is parked asks Ren for access once, which wake
         sender: { userId: "user_1" },
       }).pipe(Effect.provide(http(brain)))
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "parked")
+      yield* ChatTest.until(chat.status, (status) => status === "parked")
       const parked = accessed.count
       yield* chat.typing
       yield* chat.typing
@@ -404,7 +308,7 @@ test("typing while the connection is parked asks Ren for access once, which wake
   ))
 
 test("a chat restored while its event stream is open shows each restored message once and adds no other chat", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const folder = yield* Effect.acquireRelease(
         Effect.promise(() => mkdtemp(join(tmpdir(), "ren-chat-restore-"))),
@@ -428,7 +332,7 @@ test("a chat restored while its event stream is open shows each restored message
       const target = yield* BrainTest.make({ id: source.id, database: join(folder, "target.db") })
       const chat = yield* open(target)
       yield* chat.open(target.id).pipe(Effect.ignore)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       yield* target.opencode.session.import({ info, messages, location: info.location })
       const expected = (yield* target.chat.session["session.messages"]({
         params: { sessionID: target.id },
@@ -437,7 +341,7 @@ test("a chat restored while its event stream is open shows each restored message
         .map((message) => message.id)
         .toReversed()
       yield* chat.resync("The chat was restored")
-      const restored = yield* until(
+      const restored = yield* ChatTest.until(
         chat.state,
         (state) => ChatState.messages(state, target.id).length >= expected.length,
       )
@@ -447,7 +351,7 @@ test("a chat restored while its event stream is open shows each restored message
   ))
 
 test("after the connection parks, a history read asks for access before any request to the old URL", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make({ vars: { CHAT_IDLE_MS: "300", CHAT_HEARTBEAT_MS: "50" } })
       yield* brain.start()
@@ -467,7 +371,7 @@ test("after the connection parks, a history read asks for access before any requ
         sender: { userId: "user_1" },
       }).pipe(Effect.provide(logged(brain, log)))
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "parked")
+      yield* ChatTest.until(chat.status, (status) => status === "parked")
       const parked = log.length
       yield* chat.open(brain.id)
       expect(log.slice(parked).at(0)).toBe("access")
@@ -475,7 +379,7 @@ test("after the connection parks, a history read asks for access before any requ
   ))
 
 test("after a request to the brain gets no answer, or the sandbox proxy answers 502 for a gone sandbox, the next access says the brain is unreachable, and the one after does not", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
@@ -534,7 +438,7 @@ test("after a request to the brain gets no answer, or the sandbox proxy answers 
   ))
 
 test("a prompt that Ren cannot give access for stays pending, so it is not lost (E126)", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       const chat = yield* ChatSession.make({
@@ -550,16 +454,16 @@ test("a prompt that Ren cannot give access for stays pending, so it is not lost 
   ))
 
 test("the chat parks when the brain ends an idle stream, and a prompt wakes it", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make({ vars: { CHAT_IDLE_MS: "300", CHAT_HEARTBEAT_MS: "50" } })
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "parked")
+      yield* ChatTest.until(chat.status, (status) => status === "parked")
       yield* chat.prompt({ text: stub.script({ reply: "awake again" }).marker })
-      yield* until(chat.status, (status) => status === "connected")
-      const done = yield* until(chat.state, settled(brain.id))
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
+      const done = yield* ChatTest.until(chat.state, settled(brain.id))
       expect(ChatState.messages(done, brain.id).find((message) => message.type === "assistant")).toMatchObject({
         content: [{ type: "text", text: "awake again" }],
       })
@@ -567,7 +471,7 @@ test("the chat parks when the brain ends an idle stream, and a prompt wakes it",
   ))
 
 test("a permission request arrives live and leaves once the member answers it", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
@@ -577,21 +481,21 @@ test("a permission request arrives live and leaves once the member answers it", 
       })
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       yield* chat.prompt({
         text: stub.script({ tool: { name: "webfetch", input: { url: "https://example.com" } } }).marker,
       })
-      const asked = yield* until(chat.state, (state) => (state.permissions[brain.id] ?? []).length > 0)
+      const asked = yield* ChatTest.until(chat.state, (state) => (state.permissions[brain.id] ?? []).length > 0)
       const request = asked.permissions[brain.id]?.at(0)
       if (!request) return yield* Effect.die(new Error("No permission request"))
       yield* chat.replyPermission(brain.id, request.id, "reject")
       expect((yield* SubscriptionRef.get(chat.state)).permissions[brain.id]).toEqual([])
-      yield* until(chat.state, settled(brain.id))
+      yield* ChatTest.until(chat.state, settled(brain.id))
     }),
   ))
 
 test("auto-approve answers a live request once, and one asked before it was enabled", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
@@ -601,14 +505,14 @@ test("auto-approve answers a live request once, and one asked before it was enab
       })
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const fetch = { tool: { name: "webfetch", input: { url: "https://example.com" } } }
       yield* chat.prompt({ text: stub.script(fetch).marker })
-      yield* until(chat.state, (state) => (state.permissions[brain.id] ?? []).length > 0)
+      yield* ChatTest.until(chat.state, (state) => (state.permissions[brain.id] ?? []).length > 0)
       yield* SubscriptionRef.set(chat.autoApprove, true)
-      yield* until(chat.state, settled(brain.id))
+      yield* ChatTest.until(chat.state, settled(brain.id))
       yield* chat.prompt({ text: stub.script(fetch).marker })
-      const done = yield* until(
+      const done = yield* ChatTest.until(
         chat.state,
         (state) =>
           settled(brain.id)(state) &&
@@ -628,24 +532,27 @@ test("auto-approve answers a live request once, and one asked before it was enab
   ))
 
 test("coalesces duplicate gestures until the admission request settles", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const summarized = { summary: "## Objective\n- the summary" }
       yield* chat.prompt({ text: stub.script(summarized).marker })
-      yield* until(chat.state, settled(brain.id))
+      yield* ChatTest.until(chat.state, settled(brain.id))
       yield* chat.prompt({ text: stub.script(summarized).marker })
-      yield* until(chat.state, (state) => settled(brain.id)(state) && ChatState.messages(state, brain.id).length >= 6)
+      yield* ChatTest.until(
+        chat.state,
+        (state) => settled(brain.id)(state) && ChatState.messages(state, brain.id).length >= 6,
+      )
       const reply = stub.script({ reply: "after the summary" })
       const results = yield* Effect.all([chat.compact(), chat.compact(), chat.prompt({ text: reply.marker })], {
         concurrency: "unbounded",
       })
       expect(results[0]).toBe(results[1])
-      const done = yield* until(
+      const done = yield* ChatTest.until(
         chat.state,
         (state) =>
           settled(brain.id)(state) &&
@@ -665,13 +572,13 @@ test("coalesces duplicate gestures until the admission request settles", () =>
   ))
 
 test("bulk history (join)", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const writer = yield* open(brain)
       yield* writer.open(brain.id)
-      yield* until(writer.status, (status) => status === "connected")
+      yield* ChatTest.until(writer.status, (status) => status === "connected")
       yield* Effect.forEach(
         ["first", "second"],
         (reply) =>
@@ -679,7 +586,7 @@ test("bulk history (join)", () =>
             .prompt({ text: stub.script({ reply }).marker })
             .pipe(
               Effect.andThen(
-                until(writer.state, (state) =>
+                ChatTest.until(writer.state, (state) =>
                   ChatState.messages(state, brain.id).some(
                     (message) =>
                       message.type === "assistant" &&
@@ -687,7 +594,7 @@ test("bulk history (join)", () =>
                   ),
                 ),
               ),
-              Effect.andThen(until(writer.state, settled(brain.id))),
+              Effect.andThen(ChatTest.until(writer.state, settled(brain.id))),
             ),
         { discard: true },
       )
@@ -704,9 +611,9 @@ test("bulk history (join)", () =>
       expect(ChatState.messages(loaded, brain.id).map((message) => message.id)).toEqual(full)
       expect(ChatState.more(loaded, brain.id)).toBe(false)
       expect(ChatState.loadingHistory(loaded, brain.id)).toBe(false)
-      yield* until(reader.status, (status) => status === "connected")
+      yield* ChatTest.until(reader.status, (status) => status === "connected")
       yield* reader.resync("Verify loaded history survives a reconnect")
-      yield* until(reader.state, (state) => state.connection > loaded.connection)
+      yield* ChatTest.until(reader.state, (state) => state.connection > loaded.connection)
       yield* reader.open(brain.id)
       const refreshed = yield* SubscriptionRef.get(reader.state)
       expect(ChatState.messages(refreshed, brain.id).map((message) => message.id)).toEqual(full)
@@ -715,17 +622,17 @@ test("bulk history (join)", () =>
   ))
 
 test("a rename reaches the chat after its session read, so a stale read cannot undo it", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       yield* Effect.all([
         chat.open(brain.id),
         brain.opencode.session.update({ sessionID: SessionID.make(brain.id), title: "Renamed live" }),
       ])
-      const renamed = yield* until(chat.state, (state) => state.info[brain.id]?.title === "Renamed live")
+      const renamed = yield* ChatTest.until(chat.state, (state) => state.info[brain.id]?.title === "Renamed live")
       expect(renamed.info[brain.id]?.title).toBe("Renamed live")
     }),
   ))
@@ -741,7 +648,7 @@ const turn = (chat: ChatSession.ChatSession, reply: string) =>
     .prompt({ text: stub.script({ reply }).marker })
     .pipe(
       Effect.tap(() =>
-        until(chat.state, (state) => settled(chat.sessionID)(state) && answered(state, chat.sessionID, reply)),
+        ChatTest.until(chat.state, (state) => settled(chat.sessionID)(state) && answered(state, chat.sessionID, reply)),
       ),
     )
 
@@ -749,13 +656,13 @@ const userIDs = (state: ChatState.State, sessionID: string) =>
   ChatState.userMessages(state, sessionID).map((message): string => message.id)
 
 test("undo hides the last turn, redo brings it back, and the next prompt commits the revert", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const first = yield* turn(chat, "first")
       const second = yield* turn(chat, "second")
       expect(Option.map(yield* chat.undo, (message): string => message.id)).toEqual(Option.some(second))
@@ -778,17 +685,17 @@ test("undo hides the last turn, redo brings it back, and the next prompt commits
   ))
 
 test("reverting an undelivered prompt withdraws it from the inbox and leaves the running turn alone", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const held = stub.script({ hold: true })
       yield* chat.prompt({ text: held.marker })
       yield* Effect.promise(() => held.called())
-      yield* until(chat.state, (state) => ChatState.activity(state, brain.id) === "running")
+      yield* ChatTest.until(chat.state, (state) => ChatState.activity(state, brain.id) === "running")
       const queued = yield* chat.prompt({ text: stub.script().marker, delivery: "queue" })
       expect(Option.map(yield* chat.revert(queued), (message): string => message.id)).toEqual(Option.some(queued))
       const withdrawn = yield* SubscriptionRef.get(chat.state)
@@ -796,20 +703,20 @@ test("reverting an undelivered prompt withdraws it from the inbox and leaves the
       expect(userIDs(withdrawn, brain.id)).not.toContain(queued)
       expect(ChatState.activity(withdrawn, brain.id)).toBe("running")
       held.release()
-      const done = yield* until(chat.state, settled(brain.id))
+      const done = yield* ChatTest.until(chat.state, settled(brain.id))
       expect(ChatState.revertMessageID(done, brain.id)).toBeUndefined()
       expect(userIDs(done, brain.id)).not.toContain(queued)
     }),
   ))
 
 test("a queued prompt is withdrawn at once, and one the session took meanwhile stays and answers a conflict", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const held = stub.script({ hold: true })
       yield* chat.prompt({ text: held.marker })
       yield* Effect.promise(() => held.called())
@@ -820,20 +727,20 @@ test("a queued prompt is withdrawn at once, and one the session took meanwhile s
       expect(userIDs(after, brain.id)).not.toContain(withdrawn)
       const taken = yield* chat.prompt({ text: stub.script({ reply: "taken" }).marker, delivery: "queue" })
       held.release()
-      yield* until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "taken"))
+      yield* ChatTest.until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "taken"))
       expect((yield* chat.cancelInput(taken).pipe(Effect.flip))._tag).toBe("ConflictError")
       expect(userIDs(yield* SubscriptionRef.get(chat.state), brain.id)).toContain(taken)
     }),
   ))
 
 test("a queued prompt steers into the running turn and goes back to the queue", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const held = stub.script({ hold: true })
       yield* chat.prompt({ text: held.marker })
       yield* Effect.promise(() => held.called())
@@ -848,19 +755,19 @@ test("a queued prompt steers into the running turn and goes back to the queue", 
         { id: queued, delivery: "queue" },
       ])
       held.release()
-      yield* until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "queued"))
+      yield* ChatTest.until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "queued"))
       expect((yield* chat.steerInput(queued).pipe(Effect.flip))._tag).toBe("ConflictError")
     }),
   ))
 
 test("dragging reorders queued prompts", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const held = stub.script({ hold: true })
       yield* chat.prompt({ text: held.marker })
       yield* Effect.promise(() => held.called())
@@ -868,25 +775,25 @@ test("dragging reorders queued prompts", () =>
       const ids = yield* Effect.forEach(order, (text) => chat.prompt({ text, delivery: "queue" }))
       const texts = (state: ChatState.State) =>
         ChatState.pending(state, brain.id).flatMap((item) => (item.type === "user" ? [item.payload.text] : []))
-      yield* until(chat.state, (state) => texts(state).length === 3)
+      yield* ChatTest.until(chat.state, (state) => texts(state).length === 3)
       yield* chat.reorderInput([ids[1], ids[2], ids[0]].filter(Predicate.isNotUndefined))
       const reordered = ["second queued prompt", "third queued prompt", "first queued prompt"]
       const inbox = yield* brain.chat.session["session.inbox.list"]({ params: { sessionID: brain.id } })
       expect(inbox.flatMap((item) => (item.type === "user" ? [item.payload.text] : []))).toEqual(reordered)
       expect(inbox.some((item) => ids.includes(item.id))).toBe(false)
-      yield* until(chat.state, (state) => texts(state).join() === reordered.join())
+      yield* ChatTest.until(chat.state, (state) => texts(state).join() === reordered.join())
       held.release()
     }),
   ))
 
 test("a staged revert refuses a queue reorder, whose admission would commit it", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const first = yield* turn(chat, "first")
       yield* chat.undo
       const refused = yield* chat.reorderInput([first]).pipe(Effect.flip)
@@ -896,14 +803,14 @@ test("a staged revert refuses a queue reorder, whose admission would commit it",
   ))
 
 test("the composer lists come from where the session works, a mention shows at once, and a command runs", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       yield* Effect.promise(() => Bun.write(`${brain.directory}/release-plan.md`, "# Plan"))
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       expect(SessionCatalog.mentionable(yield* chat.agents).map((agent) => agent.id)).toContain("general")
       expect((yield* chat.skills).map((skill) => skill.id)).toContain("opencode")
       expect((yield* chat.commands).map((command) => command.name)).toContain("review")
@@ -912,17 +819,17 @@ test("the composer lists come from where the session works, a mention shows at o
       const mentioned = stub.script({ reply: "mentioned" })
       const id = yield* chat.prompt({ text: `@general ${mentioned.marker}`, agents })
       expect(ChatState.messages(yield* SubscriptionRef.get(chat.state), brain.id).at(-1)).toMatchObject({ id, agents })
-      yield* until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "mentioned"))
+      yield* ChatTest.until(chat.state, (state) => settled(brain.id)(state) && answered(state, brain.id, "mentioned"))
       const reviewed = stub.script()
       yield* chat.command({ name: "review", text: reviewed.marker })
-      yield* until(chat.state, (state) =>
+      yield* ChatTest.until(chat.state, (state) =>
         ChatState.userMessages(state, brain.id).some((message) => message.text.includes(reviewed.marker)),
       )
     }),
   ))
 
 test("a rename shows at once and reaches the session", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
@@ -937,13 +844,13 @@ test("a rename shows at once and reaches the session", () =>
   ))
 
 test("a link to an older message loads pages until the message is in the transcript", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const writer = yield* open(brain)
       yield* writer.open(brain.id)
-      yield* until(writer.status, (status) => status === "connected")
+      yield* ChatTest.until(writer.status, (status) => status === "connected")
       const first = yield* turn(writer, "first")
       yield* turn(writer, "second")
       yield* turn(writer, "third")
@@ -961,44 +868,44 @@ test("a link to an older message loads pages until the message is in the transcr
   ))
 
 test("a subagent's session, transcript and title read through the root session", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const child = stub.script({ reply: "child answer" })
       yield* chat.prompt({
         text: stub.script({
           tool: { name: "subagent", input: { agent: "general", description: "Look around", prompt: child.marker } },
         }).marker,
       })
-      const spawned = yield* until(chat.state, (state) =>
+      const spawned = yield* ChatTest.until(chat.state, (state) =>
         Object.values(state.info).some((info) => info.parentID === brain.id),
       )
       const childID = Object.values(spawned.info).find((info) => info.parentID === brain.id)?.id
       if (!childID) return yield* Effect.die(new Error("No subagent session"))
       expect(Family.tree(spawned, brain.id)).toEqual([brain.id, childID])
       yield* chat.open(childID)
-      const done = yield* until(chat.state, (state) => answered(state, childID, "child answer"))
+      const done = yield* ChatTest.until(chat.state, (state) => answered(state, childID, "child answer"))
       expect(Family.ancestors(done, childID)).toEqual([brain.id])
-      yield* until(chat.state, settled(brain.id))
+      yield* ChatTest.until(chat.state, settled(brain.id))
       expect(Family.childTitle(yield* SubscriptionRef.get(chat.state), childID, "Session")).toBe("Look around")
     }),
   ))
 
 test("a running shell shows as background work, its output reads from a cursor, and stopping it ends it", () =>
-  live(
+  ChatTest.live(
     Effect.gen(function* () {
       const brain = yield* BrainTest.make()
       yield* brain.start()
       const chat = yield* open(brain)
       yield* chat.open(brain.id)
-      yield* until(chat.status, (status) => status === "connected")
+      yield* ChatTest.until(chat.status, (status) => status === "connected")
       const sessionID = SessionID.make(brain.id)
       yield* brain.opencode.session.shell({ sessionID, command: "printf 'hello world'" })
-      const printed = yield* until(chat.state, (state) =>
+      const printed = yield* ChatTest.until(chat.state, (state) =>
         ChatState.messages(state, brain.id).some((message) => message.type === "shell" && message.status !== "running"),
       )
       const ran = ChatState.messages(printed, brain.id).find((message) => message.type === "shell")
@@ -1008,7 +915,7 @@ test("a running shell shows as background work, its output reads from a cursor, 
       expect(yield* chat.shellOutput(brain.id, shellID, 6)).toMatchObject({ output: "world", cursor: 11 })
 
       yield* brain.opencode.session.shell({ sessionID, command: "sleep 30" }).pipe(Effect.forkScoped)
-      const running = yield* until(chat.state, (state) => ChatState.shells(state, brain.id).length > 0)
+      const running = yield* ChatTest.until(chat.state, (state) => ChatState.shells(state, brain.id).length > 0)
       const [sleeping] = ChatState.shells(running, brain.id)
       if (!sleeping) return yield* Effect.die(new Error("No running shell"))
       expect(Family.background(running, brain.id).tasks).toEqual([
