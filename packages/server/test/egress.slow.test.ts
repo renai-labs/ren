@@ -14,19 +14,32 @@ import { OAuthFetch } from "@ren/core/oauth-fetch"
 import { AppProfiles } from "@ren/core/app/profiles"
 import { Models } from "@ren/core/models"
 import { Signer } from "@ren/core/signer"
-import { Seed, testEffect } from "@ren/core/testing"
+import { GitHubServer, Seed, testEffect } from "@ren/core/testing"
 import { Testing } from "@ren/db/testing"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { HostMcp } from "@ren/host-api/host-mcp"
+import { EnvironmentConnections } from "@ren/brain/environment/connections"
+import { EnvironmentSession } from "@ren/brain/environment/session"
+import { GitHubReader } from "@ren/brain/github/reader"
+import { SkillSource } from "@ren/brain/skill/source"
+import { TestAccess, TestGitHub } from "@ren/brain/testing"
+import { EnvironmentApi } from "@ren/environment-api/environment-api"
+import { TestEnvironment } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
+import { ChannelInstall } from "@ren/schema/channel-install"
+import { Environment } from "@ren/schema/environment"
+import { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
 import { Database } from "@ren/db/database"
 import { Credential } from "@ren/schema/credential"
 import { App } from "@ren/schema/app"
 import { AppProfile } from "@ren/schema/app-profile"
 import { eq } from "drizzle-orm"
-import { ConfigProvider, Deferred, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { ConfigProvider, Context, Deferred, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { mkdtemp, realpath } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { EgressRoutes } from "../src/egress.js"
 import { EgressHarness } from "./lib/egress.js"
 
@@ -75,6 +88,8 @@ const upstream = Bun.serve({
   },
 })
 
+const githubApp = GitHubServer.start()
+
 const refreshed = Deferred.makeUnsafe<void>()
 
 // oxlint-disable-next-line ren/no-comments -- Stands in for the provider's token endpoint; the OAuth refresher has its own tests against a local authorization server.
@@ -112,6 +127,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await state.egress?.stop()
   await upstream.stop(true)
+  githubApp.stop()
   if (state.certificates) await EgressHarness.cleanup(state.certificates)
 })
 
@@ -132,13 +148,7 @@ const ren = () => {
       Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
     ),
     Layer.provideMerge(
-      Layer.mergeAll(
-        Credentials.layer,
-        CredentialCallers.layer,
-        BrainClient.layer,
-        Models.layerNone,
-        GitHubApp.layerNone,
-      ),
+      Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, Models.layerNone, GitHubApp.layer),
     ),
     Layer.provideMerge(
       Layer.mergeAll(
@@ -172,6 +182,7 @@ const ren = () => {
           EGRESS_CONTROL_TLS_CERT: certs.clientCert,
           EGRESS_CONTROL_TLS_KEY: certs.clientKey,
           EGRESS_CONTROL_TLS_CA: certs.ca,
+          ...GitHubServer.config(githubApp.url, { GITHUB_URL: "http://github.com" }),
         }),
       ),
     ),
@@ -571,6 +582,129 @@ describe("egress (iron-proxy fork) with Ren", () => {
         EgressHarness.curl([socks(found.login, found.password), at("/v1/charges")]),
       )
       expect(again.status).toBe(0)
+    }),
+  )
+})
+
+// oxlint-disable-next-line ren/no-comments -- A brain and an executor of an org with the GitHub App, both behind the egress: the brain reads GitHub with a proxy on each request, the executor runs as its own process with HTTP_PROXY.
+const behindEgress = Effect.fnUntraced(function* (github: TestGitHub.Instance) {
+  const database = yield* Database.Service
+  const found = yield* setup()
+  const workspace = String(Math.floor(Math.random() * 1e9))
+  githubApp.installations.set(workspace, "acme")
+  yield* database.db.insert(Database.Schema.channel_install).values({
+    id: ChannelInstall.ID.create(),
+    organization_id: found.organizationId,
+    provider: "github",
+    workspace,
+    name: "acme",
+  })
+  const proxy = `http://${found.login}:${found.password}@127.0.0.1:${state.egress?.tunnel ?? 0}`
+  const port = new URL(github.hosts.git).port
+  const hosts: GitHubReader.Hosts = {
+    host: "github.com",
+    git: `http://github.com:${port}/git`,
+    api: `http://api.github.com:${port}/api`,
+    raw: `http://raw.githubusercontent.com:${port}/raw`,
+  }
+  const reader = yield* GitHubReader.make(Effect.succeed(hosts)).pipe(Effect.provide(FetchHttpClient.layer))
+  const proxied = Object.assign(
+    (input: string | URL | Request, init?: RequestInit) => fetch(input, { ...init, proxy }),
+    { preconnect: fetch.preconnect },
+  )
+  const directory = yield* Effect.promise(async () => realpath(await mkdtemp(join(tmpdir(), "ren-executor-"))))
+  const environmentId = Environment.ID.create()
+  const executorPort = EgressHarness.freePort()
+  const executor = yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      Bun.spawn(["bun", new URL("../../executor/src/main.ts", import.meta.url).pathname], {
+        env: {
+          ...process.env,
+          PORT: String(executorPort),
+          EXECUTOR_HOST: "127.0.0.1",
+          EXECUTOR_ENVIRONMENT_ID: environmentId,
+          EXECUTOR_WORKSPACE: directory,
+          ENVIRONMENT_PUBLIC_KEYS: Schema.encodeSync(Signature.PublicKeys)([TestEnvironment.keys.publicKey]),
+          HTTP_PROXY: proxy,
+        },
+        stdout: "ignore",
+        stderr: "pipe",
+      }),
+    ),
+    (spawned) =>
+      Effect.promise(() => {
+        spawned.kill("SIGKILL")
+        return spawned.exited
+      }),
+  )
+  yield* Effect.promise(() => EgressHarness.waitForPort(executorPort, executor, () => "the executor did not start"))
+  const sessionId = Session.ID.create()
+  const access = yield* TestEnvironment.access({
+    url: `http://127.0.0.1:${executorPort}`,
+    environmentId,
+    brain: Brain.ofSession(sessionId),
+    directory: join(directory, sessionId),
+  })
+  const connections = Context.get(
+    yield* Layer.build(
+      EnvironmentConnections.layer.pipe(
+        Layer.provide(TestAccess.fixed(new Map([[sessionId, access]]))),
+        Layer.provide(FetchHttpClient.layer),
+      ),
+    ),
+    EnvironmentConnections.Service,
+  )
+  return {
+    reader,
+    viaEgress: <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      effect.pipe(Effect.provideService(FetchHttpClient.Fetch, proxied)),
+    directory,
+    files: EnvironmentSession.make(connections, sessionId, (signal) => new Error(signal)).files,
+  }
+})
+
+describe("GitHub through the egress", () => {
+  it.live("a private reference unpacks with the GitHub App installed, and the environment holds only ren:GITHUB", () =>
+    Effect.gen(function* () {
+      const github = yield* TestGitHub.make({ repo: "docs", isPrivate: true })
+      const commit = yield* github.commit({ "guide.md": "Use the docs." })
+      const brain = yield* behindEgress(github)
+      const lookup = yield* brain.viaEgress(brain.reader.lookup("https://github.com/acme/docs"))
+      expect(lookup).toMatchObject({ commit, access: "placeholder" })
+      const archive = brain.reader.archive(lookup)
+      expect(archive.headers).toEqual({ authorization: "Bearer ren:GITHUB" })
+      const path = join(brain.directory, "references", commit.slice(0, 12))
+      yield* brain.files.unpack({
+        ...archive,
+        folder: ".",
+        path,
+        maxBytes: EnvironmentApi.maxReferenceBytes,
+        maxFiles: EnvironmentApi.maxReferenceFiles,
+        links: "skip",
+      })
+      expect(yield* Effect.promise(() => Bun.file(join(path, "guide.md")).text())).toBe("Use the docs.")
+      const sent = (yield* github.authorizations).flatMap((request) => (request[1] ? [request[1]] : []))
+      expect(sent.length).toBeGreaterThan(0)
+      expect(sent.filter((authorization) => authorization.includes("ren:GITHUB"))).toEqual([])
+    }),
+  )
+
+  it.live("a skill from a private repository loads with the GitHub App installed", () =>
+    Effect.gen(function* () {
+      const github = yield* TestGitHub.make({ repo: "skills", isPrivate: true })
+      const commit = yield* github.commit({
+        "pdf/SKILL.md": "---\nname: PDF\ndescription: Fill PDF forms\n---\nRun fill.sh\n",
+        "pdf/fill.sh": "echo fill\n",
+      })
+      const brain = yield* behindEgress(github)
+      const skills = SkillSource.make(brain.reader)
+      const resolved = yield* brain.viaEgress(skills.resolve({ url: "https://github.com/acme/skills", path: "pdf" }))
+      expect(resolved.document).toContain("Run fill.sh")
+      const path = join(brain.directory, "skills", commit.slice(0, 12))
+      yield* brain.files.unpack({ ...skills.archive(resolved), folder: "pdf", path })
+      expect(yield* Effect.promise(() => Bun.file(join(path, "fill.sh")).text())).toBe("echo fill\n")
+      const sent = (yield* github.authorizations).flatMap((request) => (request[1] ? [request[1]] : []))
+      expect(sent.filter((authorization) => authorization.includes("ren:GITHUB"))).toEqual([])
     }),
   )
 })

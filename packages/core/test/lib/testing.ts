@@ -1,4 +1,5 @@
 export { testEffect } from "./effect.js"
+export { GitHubServer } from "./github-server.js"
 export { Postmark } from "./postmark.js"
 export { Seed } from "./seed.js"
 export { SyncFixture } from "./sync-fixture.js"
