@@ -15,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
-import { ChannelMappings } from "./channel-mappings.js"
+import { ChannelRoutes } from "./channel-routes.js"
 import { Channels } from "./channels.js"
 
 const page = { page: 1, pageSize: Pagination.maximumPageSize }
@@ -76,12 +76,7 @@ export function ChannelProviderPage(props: {
           <PageShell.Section frame="divided">
             <DefaultSpace install={install} noun={provider.place.noun} />
           </PageShell.Section>
-          <PageShell.Section
-            title="Mappings"
-            description={`Each mapped ${provider.place.noun} answers in its own space, as its own agent.`}
-          >
-            <ChannelMappings installs={[install]} userId={props.userId} />
-          </PageShell.Section>
+          <ChannelRoutes install={install} userId={props.userId} />
         </>
       ) : (
         <Text purpose="body" tone="secondary">
