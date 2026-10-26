@@ -433,14 +433,11 @@ const quick = (live: Clock.Clock): Clock.Clock => ({
   sleep: (duration) => (Duration.isLessThan(duration, Duration.seconds(30)) ? Effect.yieldNow : live.sleep(duration)),
 })
 
+export const quickly = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.flatMap(Clock.Clock, (live) => effect.pipe(Effect.provideService(Clock.Clock, quick(live))))
+
 export const receive = (body: string, signature?: string) =>
-  Effect.gen(function* () {
-    const channels = yield* Channels.Service
-    const live = yield* Clock.Clock
-    return yield* channels
-      .receive("slack", request(body, signature))
-      .pipe(Effect.provideService(Clock.Clock, quick(live)))
-  })
+  Channels.Service.pipe(Effect.flatMap((channels) => quickly(channels.receive("slack", request(body, signature)))))
 
 export const settled = (found: Channel.Event) =>
   Effect.gen(function* () {

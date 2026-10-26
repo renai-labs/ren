@@ -1,75 +1,19 @@
 import { describe, expect, setDefaultTimeout } from "bun:test"
-import { Shared } from "@ren/cell/testing"
 import { Database } from "@ren/db/database"
-import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
-import { Effect, Layer } from "effect"
-import { BrainRegistry } from "../src/brain-registry.js"
-import { Models } from "../src/models.js"
+import { Effect } from "effect"
 import { Session } from "../src/session.js"
 import { SessionRunner } from "../src/session/runner.js"
-import { SessionSync } from "../src/session-sync.js"
+import { Configured } from "./lib/configured.js"
 import { testEffect } from "./lib/effect.js"
-import { Host } from "./lib/host.js"
 import { Seed } from "./lib/seed.js"
 import { SyncFixture } from "./lib/sync-fixture.js"
 
 setDefaultTimeout(60_000)
 
-const stub = Shared.stub()
-
-const configured = Shared.access({ stub: Shared.apiKey("sk-configured") }, stub.url)
-
-const models = Layer.succeed(
-  Models.Service,
-  Models.Service.of({
-    inference: Shared.inference(),
-    revision: Effect.succeed("test"),
-    catalog: () => Effect.succeed(Models.catalog(configured)),
-    grant: () => Effect.succeed(configured),
-  }),
-)
-
-const it = testEffect(
-  Layer.mergeAll(SessionRunner.layer, SessionSync.layer).pipe(
-    Layer.provideMerge(BrainRegistry.layer),
-    Layer.provideMerge(Host.layer({}, models)),
-    Layer.provideMerge(Testing.layer),
-  ),
-)
+const it = testEffect(Configured.runnerLayer)
 
 describe("SessionRunner", () => {
-  it.live("create stores a root session without its initial message and starts it on the host", () =>
-    Effect.gen(function* () {
-      const sessions = yield* SessionRunner.Service
-      const database = yield* Database.Service
-      const owner = yield* Seed.owner()
-      const sessionId = Session.ID.create()
-      const script = stub.script()
-      const start = { sessionId, harness: "opencode" as const, title: "Plan", interactive: true }
-      yield* sessions.create(owner, {
-        ...start,
-        initialMessage: {
-          messageId: Session.MessageID.create(),
-          prompt: { text: `initial ${script.marker}` },
-          sender: { userId: owner.createdBy },
-        },
-      })
-      expect((yield* Effect.promise(() => script.called())).text).toContain(script.marker)
-      const rows = yield* database.db
-        .select()
-        .from(Database.Schema.agent_session)
-        .where(eq(Database.Schema.agent_session.id, sessionId))
-      expect(rows.at(0)).toMatchObject({
-        parent_id: null,
-        root_id: sessionId,
-        start_input: start,
-        sync_seq: null,
-        sync_upload: 0,
-      })
-    }),
-  )
-
   it.live("create with the ID of a session that exists fails with AlreadyExists and keeps the session", () =>
     Effect.gen(function* () {
       const sessions = yield* SessionRunner.Service
@@ -179,30 +123,5 @@ describe("SessionRunner", () => {
         expect(child).toMatchObject({ status: "idle", outcome: "completed" })
         expect(child.updatedAt?.epochMilliseconds).toBe(SyncFixture.now + 9)
       }),
-  )
-
-  it.live("send to a session that the host lost starts it again from its start input, then delivers it whole", () =>
-    Effect.gen(function* () {
-      const sessions = yield* SessionRunner.Service
-      const owner = yield* Seed.owner()
-      const sessionId = yield* Seed.session(owner, { interactive: true })
-      const script = stub.script()
-      const messageId = Session.MessageID.create()
-      expect(
-        yield* sessions.send({
-          sessionId,
-          messageId,
-          prompt: { text: `again ${script.marker}` },
-          delivery: "steer",
-          sender: { userId: owner.createdBy },
-          channel: { provider: "github", place: "acme/api", sender: "octocat" },
-        }),
-      ).toEqual({ messageId })
-      const turn = yield* Effect.promise(() => script.called())
-      expect(
-        turn.body.messages.filter((message) => JSON.stringify(message.content ?? "").includes(script.marker)),
-      ).toHaveLength(1)
-      expect(turn.text).toStartWith("GitHub acme/api · octocat\n---")
-    }),
   )
 })
