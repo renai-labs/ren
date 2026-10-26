@@ -10,6 +10,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { EnvironmentConnections } from "../src/environment/connections.js"
 import { EnvironmentSession } from "../src/environment/session.js"
+import { GitHubReader } from "../src/github/reader.js"
 import { SkillMaterialize } from "../src/skill/materialize.js"
 import { SkillSource } from "../src/skill/source.js"
 import { TestAccess } from "./lib/access.js"
@@ -69,24 +70,23 @@ it.live("puts inline files on the environment once, and a copy that fails leaves
   }),
 )
 
-it.live("the environment downloads a GitHub skill's folder at its commit itself", () =>
+it.live("the environment downloads a private GitHub skill's folder at its commit itself", () =>
   Effect.gen(function* () {
-    const github = yield* TestGitHub.make()
+    const github = yield* TestGitHub.make({ isPrivate: true })
     const first = yield* github.commit({
       "skills/pdf/SKILL.md": "first",
       "skills/pdf/scripts/fill.py": "print('first')\n",
       "README.md": "repository",
     })
     yield* github.commit({ "skills/pdf/scripts/fill.py": "print('second')\n" })
-    const source = yield* SkillSource.make(github.hosts).pipe(Effect.provide(FetchHttpClient.layer))
-    const pointer = { url: github.url, path: "skills/pdf" }
+    const source = SkillSource.make(
+      yield* GitHubReader.make(Effect.succeed(github.hosts)).pipe(Effect.provide(FetchHttpClient.layer)),
+    )
+    const pointer = { url: github.url, path: "skills/pdf", ref: first }
     const session = yield* sessionFiles()
     const target = join(session.directory, ".ren", "skills", "pdf", first.slice(0, 12))
-    yield* SkillMaterialize.ensure(session.files, target, {
-      type: "archive",
-      url: yield* source.archive(pointer, first),
-      folder: pointer.path,
-    })
+    const archive = source.archive(yield* source.resolve(pointer))
+    yield* SkillMaterialize.ensure(session.files, target, { type: "archive", ...archive, folder: pointer.path })
     expect(yield* read(join(target, "scripts/fill.py"))).toBe("print('first')\n")
     expect(yield* Effect.promise(() => readdir(target))).toEqual(expect.arrayContaining(["SKILL.md", "scripts"]))
     expect(yield* Effect.promise(() => Bun.file(join(target, "README.md")).exists())).toBe(false)

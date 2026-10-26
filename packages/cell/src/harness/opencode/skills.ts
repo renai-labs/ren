@@ -106,18 +106,18 @@ export const make = Effect.fnUntraced(function* (input: {
           yield* Effect.logWarning(`The SKILL.md of the skill ${entry.slug} has no valid ${read.reason}`)
           return fallback
         }
-        const archive = yield* input.sources.source
-          .archive(declaration.upstream, found.value.commit)
-          .pipe(Effect.option)
-        if (Option.isNone(archive)) return fallback
-        const identity = found.value.commit.slice(0, 12)
+        const identity = found.value.lookup.commit.slice(0, 12)
         const directory = `${root}/${entry.slug}/${identity}`
         return [
           {
             identity,
             directory,
             source: declaration.upstream,
-            files: Option.some({ type: "archive" as const, url: archive.value, folder: declaration.upstream.path }),
+            files: Option.some({
+              type: "archive" as const,
+              ...input.sources.source.archive(found.value),
+              folder: declaration.upstream.path,
+            }),
             info: Struct.evolve(read.skill, {
               id: () => Skill.ID.make(entry.slug),
               path: () => AbsolutePath.make(`${directory}/skill.md`),

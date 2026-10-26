@@ -52,6 +52,7 @@ const isSameEnvironment = (held: Environment.Access, fresh: Environment.Access) 
 export interface Connection {
   readonly hello: EnvironmentApi.Hello
   readonly client: EnvironmentClient.Client
+  readonly generation: Environment.Access["generation"]
 }
 
 export interface Interface {
@@ -195,7 +196,7 @@ export const layer = Layer.effect(
               message: "The access to the environment expired",
             })
           })
-          return { connection: { hello, client }, checkAccess }
+          return { connection: { hello, client, generation: access.generation }, checkAccess }
         }).pipe(
           Scope.provide(attempt),
           Effect.onError(() => Scope.close(attempt, Exit.void)),
