@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 
+const started = performance.now()
 const home = await fs.mkdtemp(path.join(os.tmpdir(), "ren-test-"))
 const temporary = path.join(home, "tmp")
 await fs.mkdir(temporary)
@@ -27,6 +28,7 @@ const environment = {
   TMPDIR: temporary,
 }
 
+const ready = performance.now()
 const child = Bun.spawn({
   cmd: [
     process.execPath,
@@ -45,8 +47,22 @@ const terminate = () => child.kill("SIGTERM")
 process.once("SIGINT", interrupt)
 process.once("SIGTERM", terminate)
 const result = await child.exited
+const exited = performance.now()
 process.off("SIGINT", interrupt)
 process.off("SIGTERM", terminate)
 await fs.rm(home, { recursive: true, force: true })
+if (process.env.REN_TEST_PROFILE) {
+  const ended = performance.now()
+  console.error(
+    JSON.stringify({
+      harness: "runner",
+      setupMs: Math.round(ready - started),
+      childMs: Math.round(exited - ready),
+      cleanupMs: Math.round(ended - exited),
+      totalMs: Math.round(ended - started),
+      exitCode: result,
+    }),
+  )
+}
 
 process.exitCode = result
