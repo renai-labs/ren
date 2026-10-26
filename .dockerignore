@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.turbo
+**/.cache
+.git
+repos/effect
+packages/e2e/.runs
+**/*.pem
+.env
+.env.*

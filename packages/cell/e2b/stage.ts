@@ -10,9 +10,24 @@ import { dirname, join } from "node:path"
 
 export const root = join(import.meta.dir, "../../..")
 
-const name = "ren-brain-dev"
+// oxlint-disable-next-line ren/no-comments -- A deployment builds its own template: its own name, a bigger sandbox, and the full toolset its hands need. CPU and memory are fixed when E2B builds a template, so they are build options. The defaults are the development template.
+const Options = Schema.Struct({
+  E2B_TEMPLATE_NAME: Schema.optionalKey(Schema.String),
+  E2B_TEMPLATE_CPU: Schema.optionalKey(Schema.NumberFromString),
+  E2B_TEMPLATE_MEMORY_MB: Schema.optionalKey(Schema.NumberFromString),
+  E2B_TEMPLATE_TOOLS: Schema.optionalKey(Schema.Literals(["base", "full"])),
+  E2B_TEMPLATE_OWNER: Schema.optionalKey(Schema.String),
+})
 
-const owner = "ren-v2-dev"
+const options = Schema.decodeUnknownSync(Options)(Bun.env)
+
+const name = options.E2B_TEMPLATE_NAME ?? "ren-brain-dev"
+
+const owner = options.E2B_TEMPLATE_OWNER ?? "ren-v2-dev"
+
+const size = { cpuCount: options.E2B_TEMPLATE_CPU ?? 2, memoryMB: options.E2B_TEMPLATE_MEMORY_MB ?? 2048 }
+
+const dockerfiles = options.E2B_TEMPLATE_TOOLS === "full" ? ["e2b.Dockerfile", "e2b.tools.Dockerfile"] : ["e2b.Dockerfile"]
 
 const Manifest = Schema.Struct({
   name: Schema.String,
@@ -103,7 +118,7 @@ if (import.meta.main) {
   const entries = await Promise.all(
     [
       ...staged.map((file) => join(root, file)),
-      join(import.meta.dir, "e2b.Dockerfile"),
+      ...dockerfiles.map((file) => join(import.meta.dir, file)),
       join(import.meta.dir, "start.sh"),
     ].map(async (path) => ({ path: path.slice(root.length + 1), content: await Bun.file(path).bytes() })),
   )
@@ -111,7 +126,11 @@ if (import.meta.main) {
     /^bun@/,
     "",
   )
-  const version = hash([...entries, { path: "bun", content: new TextEncoder().encode(bun) }])
+  const version = hash([
+    ...entries,
+    { path: "bun", content: new TextEncoder().encode(bun) },
+    { path: "size", content: new TextEncoder().encode(`${size.cpuCount}/${size.memoryMB}`) },
+  ])
   const tag = `${name}:${version}`
   const dirty = (await Bun.$`git status --porcelain`.cwd(root).text()).trim().length > 0
   const tags = await Template.getTags(name).catch(() => [])
@@ -130,16 +149,14 @@ if (import.meta.main) {
   await Bun.$`tar -czf ${join(context, "ren.tar.gz")} -C ${tree} .`
   await rm(tree, { recursive: true, force: true })
   await Bun.write(join(context, "start.sh"), Bun.file(join(import.meta.dir, "start.sh")))
-  const dockerfile = `${(await Bun.file(join(import.meta.dir, "e2b.Dockerfile")).text()).replace(
-    /^FROM oven\/bun:.*$/m,
-    `FROM oven/bun:${bun}`,
-  )}\nENV REN_BRAIN_VERSION=${version}\n`
+  const parts = await Promise.all(dockerfiles.map((file) => Bun.file(join(import.meta.dir, file)).text()))
+  const dockerfile = `${parts.join("\n").replace(/^FROM oven\/bun:.*$/m, `FROM oven/bun:${bun}`)}\nENV REN_BRAIN_VERSION=${version}\n`
   await Template.build(
     Template({ fileContextPath: context })
       .fromDockerfile(dockerfile)
       .setStartCmd("/opt/ren/start.sh", "pgrep -f /opt/ren/start.sh"),
     tag,
-    { cpuCount: 2, memoryMB: 2048, onBuildLogs: defaultBuildLogger() },
+    { ...size, onBuildLogs: defaultBuildLogger() },
   )
   await rm(context, { recursive: true, force: true })
   if (!(await smoke(tag))) {

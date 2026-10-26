@@ -1,0 +1,100 @@
+#!/bin/bash
+# Installs the current egress release on this instance and restarts it. Run at boot and by each
+# release. Exits without a change while no release exists yet.
+set -euo pipefail
+
+bucket=${bucket}
+region=${region}
+
+release=$(aws s3 cp --region "$region" "s3://$bucket/egress/current" - 2>/dev/null || true)
+if [ -z "$release" ]; then
+  echo "no egress release yet"
+  exit 0
+fi
+
+dnf install -y jq >/dev/null
+id ren-egress >/dev/null 2>&1 || useradd --system --home-dir /var/lib/ren-egress --create-home --shell /usr/sbin/nologin ren-egress
+
+mkdir -p /opt/ren-egress /etc/ren-egress/certs
+aws s3 cp --region "$region" "s3://$bucket/egress/$release/iron-proxy" "/opt/ren-egress/iron-proxy-$release"
+chmod 0755 "/opt/ren-egress/iron-proxy-$release"
+ln -sfn "/opt/ren-egress/iron-proxy-$release" /opt/ren-egress/iron-proxy
+
+secret=$(aws secretsmanager get-secret-value --region "$region" --secret-id "${secret}" --query SecretString --output text)
+for key in ca_cert cert key mitm_ca_cert mitm_ca_key; do
+  value=$(printf '%s' "$secret" | jq -r --arg key "$key" '.[$key] // empty')
+  if [ -z "$value" ]; then
+    # The egress does not start without its certificates (fork change 4); fail here, where it shows.
+    echo "FATAL: $key missing from ${secret}" >&2
+    exit 1
+  fi
+  printf '%s\n' "$value" >"/etc/ren-egress/certs/$key.pem"
+done
+chown -R root:ren-egress /etc/ren-egress
+chmod 0750 /etc/ren-egress /etc/ren-egress/certs
+chmod 0640 /etc/ren-egress/certs/*.pem
+
+cat >/etc/ren-egress/config.yaml <<'YAML'
+dns:
+  enabled: false
+proxy:
+  http_listen: "127.0.0.1:18080"
+  https_listen: "127.0.0.1:18443"
+  tunnel_listen: "0.0.0.0:1080"
+  # The default list (metadata and loopback) plus the private ranges (README C25).
+  upstream_deny_cidrs:
+    - "169.254.169.254/32"
+    - "fd00:ec2::254/128"
+    - "fd20:ce::254/128"
+    - "127.0.0.0/8"
+    - "::1/128"
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+    - "100.64.0.0/10"
+    - "fc00::/7"
+    - "169.254.0.0/16"
+tls:
+  ca_cert: "/etc/ren-egress/certs/mitm_ca_cert.pem"
+  ca_key: "/etc/ren-egress/certs/mitm_ca_key.pem"
+metrics:
+  listen: "127.0.0.1:19090"
+log:
+  level: "info"
+ren:
+  hook: "${hook}"
+  ca_cert: "/etc/ren-egress/certs/ca_cert.pem"
+  cert: "/etc/ren-egress/certs/cert.pem"
+  key: "/etc/ren-egress/certs/key.pem"
+  control_listen: "0.0.0.0:9443"
+  drain: "${drain}"
+YAML
+chown root:ren-egress /etc/ren-egress/config.yaml
+chmod 0640 /etc/ren-egress/config.yaml
+
+cat >/etc/systemd/system/ren-egress.service <<'UNIT'
+[Unit]
+Description=Ren egress
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ren-egress
+Group=ren-egress
+ExecStart=/opt/ren-egress/iron-proxy --config /etc/ren-egress/config.yaml
+Restart=always
+RestartSec=2
+KillSignal=SIGTERM
+TimeoutStopSec=90
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable ren-egress >/dev/null
+systemctl restart ren-egress
+sleep 2
+systemctl is-active --quiet ren-egress || { journalctl -u ren-egress -n 50 --no-pager >&2; exit 1; }
+echo "egress $release running"

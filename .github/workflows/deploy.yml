@@ -1,0 +1,228 @@
+name: deploy
+
+# Deploys main to the deployment in the `v2-prod` GitHub environment. Every value that names the
+# account lives in that environment: the role as a secret, the rest as variables. Infrastructure
+# (infra/aws) is applied by hand, never here.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-v2-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  changes:
+    name: changes
+    if: github.repository == 'renai-labs/ren'
+    runs-on: ubuntu-latest
+    outputs:
+      egress: ${{ steps.diff.outputs.egress }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      # A release restarts the one egress copy, which pauses new sandbox connections for its drain
+      # time, so the egress is released only when its code changed.
+      - name: Find changed parts
+        id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != "push" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "egress=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --quiet "$BEFORE" "$GITHUB_SHA" -- repos/iron-proxy; then
+            echo "egress=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "egress=true" >>"$GITHUB_OUTPUT"
+          fi
+
+  template:
+    name: brain template
+    needs: changes
+    runs-on: ubuntu-latest
+    environment: v2-prod
+    timeout-minutes: 60
+    outputs:
+      tag: ${{ steps.build.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      # Builds only when no template with this code's hash exists; then prints the existing tag.
+      - name: Build the brain template
+        id: build
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+          E2B_TEMPLATE_NAME: ${{ vars.E2B_TEMPLATE_NAME }}
+          E2B_TEMPLATE_OWNER: ${{ vars.E2B_OWNER }}
+          E2B_TEMPLATE_CPU: "8"
+          E2B_TEMPLATE_MEMORY_MB: "8192"
+          E2B_TEMPLATE_TOOLS: full
+        run: |
+          set -euo pipefail
+          E2B_API_KEY=$(aws secretsmanager get-secret-value --secret-id "$DEPLOY/deploy" --query SecretString --output text | jq -r .E2B_API_KEY)
+          echo "::add-mask::$E2B_API_KEY"
+          export E2B_API_KEY
+          bun run --cwd packages/cell template:e2b | tee template.log
+          tag=$(sed -n -e 's/^E2B_TEMPLATE=\([^ ]*\).*/\1/p' -e 's/^\([^ ]*:[0-9a-f]*\) exists.*/\1/p' template.log | tail -1)
+          test -n "$tag"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+
+  server:
+    name: server
+    needs: template
+    runs-on: ubuntu-latest
+    environment: v2-prod
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Build and push the image
+        id: image
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+          REGION: ${{ vars.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$REGION.amazonaws.com"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          image="$registry/$DEPLOY-server:$GITHUB_SHA"
+          docker build --platform linux/amd64 -f packages/server/Dockerfile -t "$image" .
+          docker push "$image"
+          echo "image=$image" >>"$GITHUB_OUTPUT"
+
+      # The newest revision of the family carries what infra/aws last set; only the image and the
+      # template change here.
+      - name: Roll out
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+          IMAGE: ${{ steps.image.outputs.image }}
+          TEMPLATE: ${{ needs.template.outputs.tag }}
+        run: |
+          set -euo pipefail
+          aws ecs describe-task-definition --task-definition "$DEPLOY-server" --query taskDefinition >current.json
+          jq --arg image "$IMAGE" --arg template "$TEMPLATE" '
+            .containerDefinitions[0].image = $image
+            | .containerDefinitions[0].environment = ([.containerDefinitions[0].environment[] | select(.name != "E2B_TEMPLATE")] + [{ name: "E2B_TEMPLATE", value: $template }])
+            | { family, taskRoleArn, executionRoleArn, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory, runtimePlatform }
+          ' current.json >next.json
+          revision=$(aws ecs register-task-definition --cli-input-json file://next.json --query taskDefinition.taskDefinitionArn --output text)
+          aws ecs update-service --cluster "$DEPLOY" --service server --task-definition "$revision" --query service.serviceName --output text
+          aws ecs wait services-stable --cluster "$DEPLOY" --services server
+          state=$(aws ecs describe-services --cluster "$DEPLOY" --services server --query 'services[0].deployments[0].rolloutState' --output text)
+          echo "rollout: $state"
+          test "$state" = "COMPLETED"
+
+  app:
+    name: app
+    needs: changes
+    runs-on: ubuntu-latest
+    environment: v2-prod
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Build the app
+        env:
+          VITE_REN_API_URL: ${{ vars.REN_API_URL }}
+          VITE_REN_VERSION: ${{ github.sha }}
+        run: bun run --cwd packages/app build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      # Hashed files first and kept a year; then the index, never cached, so it never points at a
+      # file that is not there yet.
+      - name: Upload
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+          DISTRIBUTION: ${{ vars.APP_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+          bucket="$DEPLOY-app-$(aws sts get-caller-identity --query Account --output text)"
+          aws s3 sync packages/app/dist/assets/ "s3://$bucket/app/assets/" --cache-control "public, max-age=31536000, immutable" --only-show-errors
+          aws s3 sync packages/app/dist/ "s3://$bucket/app/" --exclude "assets/*" --cache-control "no-cache" --delete --only-show-errors
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/app/*" --query Invalidation.Status --output text
+
+  egress:
+    name: egress
+    needs: [changes, server]
+    if: needs.changes.outputs.egress == 'true'
+    runs-on: ubuntu-latest
+    environment: v2-prod
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Build the egress
+        working-directory: repos/iron-proxy
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: bun script/go.ts build -o bin/iron-proxy-linux-arm64 ./cmd/iron-proxy
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Release
+        env:
+          DEPLOY: ${{ vars.DEPLOY_NAME }}
+          INSTANCE: ${{ vars.EGRESS_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          bucket="$DEPLOY-artifacts-$(aws sts get-caller-identity --query Account --output text)"
+          aws s3 cp repos/iron-proxy/bin/iron-proxy-linux-arm64 "s3://$bucket/egress/$GITHUB_SHA/iron-proxy" --only-show-errors
+          printf '%s' "$GITHUB_SHA" | aws s3 cp - "s3://$bucket/egress/current" --only-show-errors
+          command=$(aws ssm send-command --instance-ids "$INSTANCE" --document-name "$DEPLOY-egress-install" --query Command.CommandId --output text)
+          aws ssm wait command-executed --command-id "$command" --instance-id "$INSTANCE" || true
+          status=$(aws ssm get-command-invocation --command-id "$command" --instance-id "$INSTANCE" --query Status --output text)
+          aws ssm get-command-invocation --command-id "$command" --instance-id "$INSTANCE" --query StandardOutputContent --output text | tail -5
+          echo "release: $status"
+          test "$status" = "Success"
