@@ -33,7 +33,7 @@ REN_URL=http://localhost:4000 bun run --cwd packages/cli dev health
 docker compose exec postgres psql -U ren
 ```
 
-Test databases are named `ren_test_<uuid>` and are dropped when a test finishes. Leftovers mean a test crashed before its scope closed.
+Test databases are named `ren_test_<uuid>` and are dropped when a test finishes. Leftover clones mean a test crashed before its scope closed. Databases named `ren_test_template_<hash>` are reusable migration templates; they remain between runs and reject connections. Set `REN_TEST_PROFILE=1` when running tests to report database phases, core Effect setup/body/cleanup, and runner timing. These measurements are nested; do not add them together. Use Turbo's `--force` when profiling through Turbo to avoid replaying cached output.
 
 ## Tests
 
