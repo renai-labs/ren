@@ -142,7 +142,7 @@ export const start = (): Instance => {
       if (request.method === "POST" && url.pathname === "/login/oauth/access_token") return exchange(state, request)
       if (request.method === "GET" && url.pathname === "/user/installations")
         return userInstallations(state, request, url)
-      if (url.pathname.startsWith("/repos/")) return api(state, request, url)
+      if (url.pathname.startsWith("/repos/") || url.pathname.startsWith("/users/")) return api(state, request, url)
       const match = /^\/app\/installations\/(\d+)(\/access_tokens)?$/u.exec(url.pathname)
       if (!match?.[1]) return new Response(null, { status: 404 })
       return appInstallation(state, request, match[1], { tokens: request.method === "POST" && Boolean(match[2]) })

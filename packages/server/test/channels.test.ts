@@ -15,6 +15,7 @@ const echo = Effect.succeedSome<ChannelProvider.Provider>({
   context: () => Effect.succeedNone,
   send: () => Effect.void,
   progress: () => Effect.void,
+  email: () => Effect.succeedNone,
   installUrl: (state) => `https://slack.test/install?state=${state}`,
   completeInstall: (query) =>
     query.team

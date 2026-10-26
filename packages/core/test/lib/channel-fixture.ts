@@ -13,6 +13,7 @@ import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainRegistry } from "../../src/brain-registry.js"
 import { Access } from "../../src/access.js"
+import { ChannelIdentity } from "../../src/channel-identity.js"
 import { ChannelInstalls } from "../../src/channel-installs.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
@@ -60,6 +61,8 @@ export class Outbox extends Context.Service<
     readonly sent: Array<{ readonly target: ChannelProvider.Target; readonly text: string }>
     readonly attempts: Array<string>
     readonly progress: Array<{ readonly message: string; readonly status: ChannelProvider.Status }>
+    readonly emails: Map<string, string>
+    readonly lookups: Array<string>
   }
 >()("@ren/core/test/ChannelFixture/Outbox") {}
 
@@ -108,6 +111,14 @@ const provider = Effect.gen(function* () {
         },
       ),
     progress: (target, status) => Effect.sync(() => void outbox.progress.push({ message: target.message, status })),
+    email: (_install, sender) =>
+      Effect.suspend(() => {
+        outbox.lookups.push(sender.accountId)
+        const found = outbox.emails.get(sender.accountId)
+        return found === "down"
+          ? Effect.fail(new ChannelProvider.Unavailable({ message: "Slack is down" }))
+          : Effect.succeed(Option.fromNullishOr(found))
+      }),
     installUrl: (state) => `https://slack.test/install?state=${state}`,
     completeInstall: (query) =>
       query.team
@@ -263,7 +274,7 @@ const core = (held: boolean) =>
   Layer.mergeAll(
     SessionRunner.layer,
     ChannelInstalls.layer,
-    ChannelRoute.layer,
+    ChannelRoute.layer.pipe(Layer.provideMerge(ChannelIdentity.layer)),
     ChannelReply.layer,
     SessionSync.layer,
     notices,
@@ -272,7 +283,7 @@ const core = (held: boolean) =>
     Layer.provideMerge(
       Layer.mergeAll(
         hold(held),
-        Layer.sync(Outbox, () => ({ sent: [], attempts: [], progress: [] })),
+        Layer.sync(Outbox, () => ({ sent: [], attempts: [], progress: [], emails: new Map(), lookups: [] })),
       ),
     ),
   )

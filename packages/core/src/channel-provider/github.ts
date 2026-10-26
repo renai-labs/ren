@@ -43,6 +43,8 @@ const Reactions = Schema.Array(
   Schema.Struct({ id: Schema.Number, user: Schema.NullOr(Schema.Struct({ id: Schema.Number })) }),
 )
 
+const Profile = Schema.Struct({ email: Schema.NullOr(Schema.String) })
+
 const Author = Schema.Struct({ user: Schema.NullOr(Schema.Struct({ login: Schema.String })) })
 
 const commentEvents: Readonly<Record<string, "issue" | "review">> = {
@@ -205,6 +207,11 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       },
       Effect.mapError((error) => new ChannelProvider.Unavailable({ message: error.message })),
     ),
+    email: (install, sender) =>
+      app.read(install, `/users/${encodeURIComponent(sender.handle ?? sender.accountId)}`, Profile).pipe(
+        Effect.map((profile) => Option.fromNullishOr(profile.email)),
+        Effect.mapError((error) => new ChannelProvider.Unavailable({ message: error.message })),
+      ),
     installUrl: app.installUrl,
     completeInstall: Effect.fnUntraced(function* (query) {
       if (query.setup_action === "request")

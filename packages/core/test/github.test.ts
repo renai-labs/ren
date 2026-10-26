@@ -254,6 +254,19 @@ describe("GitHub", () => {
     }),
   )
 
+  app.live("a sender's email is the public email of their login, if they show one", () =>
+    Effect.gen(function* () {
+      const provider = GitHub.make(yield* client)
+      const install = installation("acme")
+      github.resources.set("/users/octocat", { email: "octocat@github.test" })
+      github.resources.set("/users/hubot", { email: null })
+      expect(yield* provider.email(install, { accountId: "583231", handle: "octocat" })).toEqual(
+        Option.some("octocat@github.test"),
+      )
+      expect(yield* provider.email(install, { accountId: "1", handle: "hubot" })).toEqual(Option.none())
+    }),
+  )
+
   app.effect("the App JWT is issued 60 seconds in the past and expires within 10 minutes", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(1_800_000_000_000)
