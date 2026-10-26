@@ -3,6 +3,8 @@ import { Pagination } from "@ren/schema/pagination"
 import { Button } from "@ren/ui/button"
 import { Dialog } from "@ren/ui/dialog"
 import { Icon } from "@ren/ui/icon"
+import { IconButton } from "@ren/ui/icon-button"
+import { Menu } from "@ren/ui/menu"
 import { List } from "@ren/ui/list"
 import { Notice } from "@ren/ui/notice"
 import { SearchField } from "@ren/ui/search-field"
@@ -45,18 +47,33 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
       <Toolbar.Root>
         <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
         {elsewhere.length > 0 ? (
+          <Menu.Root>
+            <Menu.Trigger
+              render={
+                <IconButton appearance="primary" size="small" label="Add or copy a credential">
+                  <Icon glyph="Plus" />
+                </IconButton>
+              }
+            />
+            <Menu.Popup alignment="end" width="small">
+              <Menu.Item icon={<Icon glyph="Plus" />} onSelect={() => setCreating(true)}>
+                Add credential
+              </Menu.Item>
+              <Menu.Item icon={<Icon glyph="Copy" />} onSelect={() => setCopying(true)}>
+                Copy from a space
+              </Menu.Item>
+            </Menu.Popup>
+          </Menu.Root>
+        ) : (
           <Button
-            appearance="secondary"
+            appearance="primary"
             size="small"
-            leadingIcon={<Icon glyph="Copy" />}
-            onClick={() => setCopying(true)}
+            leadingIcon={<Icon glyph="Plus" />}
+            onClick={() => setCreating(true)}
           >
-            Copy from a space
+            Add credential
           </Button>
-        ) : null}
-        <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setCreating(true)}>
-          Add credential
-        </Button>
+        )}
       </Toolbar.Root>
       <CredentialsTable
         rows={visible}
@@ -72,7 +89,7 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
         <PasteCredentialDialog
           title="Add credential to this space"
           description="Every chat in this space can use it."
-          owners={[{ value: `space:${props.spaceId}`, label: names.get(props.spaceId) ?? "This space" }]}
+          owners={[{ value: `space:${props.spaceId}`, label: names.get(props.spaceId) ?? "This space", glyph: "Cube" }]}
           userId={props.userId}
           submitLabel="Save credential"
           onClose={() => setCreating(false)}

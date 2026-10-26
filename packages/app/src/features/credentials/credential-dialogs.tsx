@@ -3,9 +3,10 @@ import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { Dialog } from "@ren/ui/dialog"
 import { Form } from "@ren/ui/form"
 import { Notice } from "@ren/ui/notice"
-import type { Select } from "@ren/ui/select"
+import { Icon } from "@ren/ui/icon"
 import { Toast } from "@ren/ui/toast"
 import { useMutation } from "@tanstack/react-query"
+import type { Owners } from "./owners.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Credentials } from "../../components/credentials.js"
 
@@ -63,7 +64,7 @@ export function RotateCredentialDialog(props: {
 export function MoveCredentialDialog(props: {
   credential: CredentialInfo
   action: "move" | "copy"
-  owners: ReadonlyArray<Select.Option>
+  owners: ReadonlyArray<Owners.Option>
   userId: string
   onClose: () => void
   onSaved: () => Promise<unknown>
@@ -113,7 +114,16 @@ export function MoveCredentialDialog(props: {
         <Form.Root form={form} arrangement="contents">
           <Dialog.Body>
             <form.AppField name="owner">
-              {(field) => <field.Select label="New owner" options={targets} />}
+              {(field) => (
+                <field.Select
+                  label="New owner"
+                  options={targets.map((owner) => ({
+                    value: owner.value,
+                    label: owner.label,
+                    icon: <Icon glyph={owner.glyph} />,
+                  }))}
+                />
+              )}
             </form.AppField>
             <Notice tone="danger" placement="inline">
               {(move.error ?? copy.error)?.message}

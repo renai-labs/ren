@@ -28,6 +28,7 @@ type Entry = { value: string; label: string; glyph: Glyph; hint?: string; keywor
 const actions: ReadonlyArray<Entry> = [
   { value: "new-chat", label: "New Chat", glyph: "Compose", keywords: ["create", "start"] },
   { value: "spaces", label: "Open Spaces", glyph: "Cube", keywords: ["groups", "people"] },
+  { value: "marketplace", label: "Open Marketplace", glyph: "LayoutGrid", keywords: ["apps", "integrations", "mcp"] },
   { value: "settings", label: "Open Settings", glyph: "Settings" },
   { value: "light", label: "Use Light Theme", glyph: "Sun", hint: "Appearance", keywords: ["appearance", "mode"] },
   { value: "dark", label: "Use Dark Theme", glyph: "Moon", hint: "Appearance", keywords: ["appearance", "mode"] },
@@ -85,6 +86,7 @@ export function WorkspaceSearch(props: { onClose: () => void }) {
     if (value === "light" || value === "dark" || value === "system") return theme.setPreference(value)
     if (value === "new-chat") return void navigate({ to: "/" })
     if (value === "spaces") return void navigate({ to: "/spaces" })
+    if (value === "marketplace") return void navigate({ to: "/marketplace" })
     const page = [...SettingsPages.personal, ...SettingsPages.organization].find((entry) => entry.to === value)
     void navigate({ to: page?.to ?? "/settings" })
   }

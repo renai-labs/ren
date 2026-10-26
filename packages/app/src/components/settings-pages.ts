@@ -7,7 +7,6 @@ export type Page = {
   to:
     | "/settings/preferences"
     | "/settings/credentials"
-    | "/settings/apps"
     | "/settings/general"
     | "/settings/members"
     | "/settings/providers"
@@ -17,7 +16,6 @@ export type Page = {
 export const personal: ReadonlyArray<Page> = [
   { label: "Preferences", to: "/settings/preferences", glyph: "Sliders" },
   { label: "Credentials", to: "/settings/credentials", glyph: "KeyRound" },
-  { label: "Apps", to: "/settings/apps", glyph: "Extension" },
 ]
 
 export const organization: ReadonlyArray<Page> = [

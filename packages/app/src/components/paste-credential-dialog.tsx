@@ -2,7 +2,8 @@ import type { CredentialInfo } from "@ren/client"
 import { Dialog } from "@ren/ui/dialog"
 import { Form } from "@ren/ui/form"
 import { Notice } from "@ren/ui/notice"
-import type { Select } from "@ren/ui/select"
+import { Icon } from "@ren/ui/icon"
+import type { Glyph } from "@ren/ui/icon"
 import { useMutation } from "@tanstack/react-query"
 import type { ReactNode } from "react"
 import { RouterContext } from "../lib/router-context.js"
@@ -11,7 +12,7 @@ import { Credentials } from "./credentials.js"
 export function PasteCredentialDialog(props: {
   title: string
   description: ReactNode
-  owners: ReadonlyArray<Select.Option>
+  owners: ReadonlyArray<{ readonly value: string; readonly label: string; readonly glyph: Glyph }>
   userId: string
   defaults?: { readonly label?: string; readonly owner?: string }
   labelFixed?: boolean
@@ -98,7 +99,16 @@ export function PasteCredentialDialog(props: {
             </form.Subscribe>
             {props.owners.length > 1 ? (
               <form.AppField name="owner">
-                {(field) => <field.Select label="Who can use it" options={props.owners} />}
+                {(field) => (
+                  <field.Select
+                    label="Who can use it"
+                    options={props.owners.map((owner) => ({
+                      value: owner.value,
+                      label: owner.label,
+                      icon: <Icon glyph={owner.glyph} />,
+                    }))}
+                  />
+                )}
               </form.AppField>
             ) : null}
             <Notice tone="danger" placement="inline">
