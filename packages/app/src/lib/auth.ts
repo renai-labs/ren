@@ -85,6 +85,19 @@ export function organizationsOptions(client: Client) {
   })
 }
 
+const accountsKey = ["auth", "accounts"] as const
+
+export function accountsOptions(client: Client) {
+  return queryOptions({
+    queryKey: accountsKey,
+    queryFn: async (context) => {
+      const result = await client.listAccounts({ fetchOptions: { signal: context.signal } })
+      assertSuccess(result, "Failed to load your linked accounts")
+      return result.data
+    },
+  })
+}
+
 const slugTakenCodes = new Set(["ORGANIZATION_ALREADY_EXISTS", "ORGANIZATION_SLUG_ALREADY_TAKEN"])
 
 export function isSlugTaken(error: { code?: string | undefined }) {

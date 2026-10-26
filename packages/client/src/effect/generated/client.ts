@@ -1249,6 +1249,13 @@ const adaptGroupChannelReply = (raw: RawClient["channel-reply"]) => ({
   channel: { reply: EndpointChannelReplyChannelReply(raw) },
 })
 
+const EndpointSignInSignInProviderList = (raw: RawClient["sign-in"]) => () =>
+  raw["sign-in-provider.list"]({}).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSignIn = (raw: RawClient["sign-in"]) => ({
+  "sign-in-provider": { list: EndpointSignInSignInProviderList(raw) },
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroupHealth(raw["health"]),
   me: adaptGroupMe(raw["me"]),
@@ -1280,6 +1287,7 @@ const adaptClient = (raw: RawClient) => ({
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
   "channel-reply": adaptGroupChannelReply(raw["channel-reply"]),
+  "sign-in": adaptGroupSignIn(raw["sign-in"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

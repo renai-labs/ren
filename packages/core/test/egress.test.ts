@@ -26,6 +26,7 @@ import { Egress } from "../src/egress.js"
 import { EgressControl } from "../src/egress-control.js"
 import { Envelope } from "../src/envelope.js"
 import { GitHubApp } from "../src/github-app.js"
+import { PersonCredentials } from "../src/person-credentials.js"
 import { OAuthFetch } from "../src/oauth-fetch.js"
 import { McpProvider } from "../src/mcp-provider.js"
 import { Models } from "../src/models.js"
@@ -148,7 +149,15 @@ const it = testEffect(
     Layer.provideMerge(
       Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
     ),
-    Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, BrainClient.layer, models)),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        Credentials.layer,
+        CredentialCallers.layer,
+        BrainClient.layer,
+        models,
+        PersonCredentials.layer,
+      ),
+    ),
     Layer.provideMerge(
       Layer.mergeAll(
         Access.layer,
@@ -853,6 +862,49 @@ describe("GitHub through the egress", () => {
         yield* resolver.resolve(all, request(found.proof, "api.github.com", ["ren:GITHUB"]))
         expect(github.minted.filter((each) => each === workspace)).toHaveLength(2)
       }),
+  )
+
+  it.live("in a chat that serves one person, their own GitHub token and git identity win over the App's", () =>
+    Effect.gen(function* () {
+      const resolver = yield* Egress.Service
+      const callers = yield* CredentialCallers.Service
+      const env = yield* CredentialEnv.Service
+      const people = yield* PersonCredentials.Service
+      const app = yield* GitHubApp.Service
+      const found = yield* setup()
+      yield* installGitHub(found.organizationId)
+      if (Option.isNone(app.client)) return yield* Effect.die(new Error("GitHub is off"))
+      yield* people.save(
+        found.organizationId,
+        found.ada.userId,
+        GitHubApp.personCredential(
+          app.client.value.settings,
+          { id: 42, login: "ada-gh" },
+          { accessToken: Redacted.make("ghu_ada") },
+          Date.now(),
+        ),
+      )
+      const sessionId = yield* Seed.session({
+        organizationId: found.organizationId,
+        spaceId: found.space.id,
+        createdBy: found.ada.userId,
+      })
+      const workload = { kind: "brain", id: Brain.ofSession(sessionId), generation: 1 } as const
+      const placement = yield* callers.issue({ workload, organizationId: found.organizationId }, "ProxyLogin")
+      if (placement.kind !== "ProxyLogin") return yield* Effect.die(new Error("expected a proxy login"))
+      const proof = { kind: "ProxyLogin" as const, username: placement.username, password: placement.password }
+      expect(values(yield* resolver.resolve(all, request(proof, "api.github.com", ["ren:GITHUB"])))).toEqual([
+        { op: "replace", placeholder: "ren:GITHUB", value: "ghu_ada", in: ["header"] },
+      ])
+      expect(yield* env.of(workload)).toMatchObject({
+        GITHUB_TOKEN: "ren:GITHUB",
+        GIT_AUTHOR_NAME: "ada-gh",
+        GIT_AUTHOR_EMAIL: "42+ada-gh@users.noreply.github.com",
+      })
+      expect(yield* env.of({ kind: "brain", id: found.brainId, generation: 1 })).toMatchObject({
+        GIT_AUTHOR_NAME: "ren-test[bot]",
+      })
+    }),
   )
 
   it.live("without the GitHub App, or when GitHub refuses the mint, GITHUB is credential_missing", () =>

@@ -208,6 +208,8 @@ export type RenInferenceMeter = { key: string; title: string; percent: number | 
 
 export type ChannelInstallID = string
 
+export type AuthSignInProvider = "google" | "github"
+
 export type HealthInfo = { status: HealthStatus; version: string }
 
 export type AuthUser = {
@@ -573,6 +575,8 @@ export type ChannelInstallInfo = {
   installedBy: { id: AuthUserID; name: string } | null
   createdAt: string
 }
+
+export type AuthSignInProviders = { items: Array<AuthSignInProvider> }
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
@@ -5838,3 +5842,5 @@ export type ChannelConnectChannelInstallStartOutput = WriteResultRedirect
 export type ChannelReplyChannelReplyInput = { readonly text: { readonly text: string }["text"] }
 
 export type ChannelReplyChannelReplyOutput = ChannelSent
+
+export type SignInSignInProviderListOutput = AuthSignInProviders

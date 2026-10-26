@@ -5,6 +5,7 @@ import { Primitive } from "../src/primitive.js"
 const exceptions = new Map([
   ["health", "Server status for clients and load balancers."],
   ["me", "The signed-in user and their active organization."],
+  ["sign-in", "The accounts a person can sign in with, before anyone is signed in."],
   ["invitation", "Invitation preview before the invitee signs in."],
   [
     "environmentProvider",

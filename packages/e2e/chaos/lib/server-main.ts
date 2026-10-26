@@ -27,7 +27,9 @@ import { ChaosEnvironments } from "./provider/environments.js"
 import { ChaosModels } from "./provider/models.js"
 import { Signer } from "@ren/core/signer"
 import { EgressControl } from "@ren/core/egress-control"
+import { GitHubAccounts } from "@ren/core/github-accounts"
 import { GitHubApp } from "@ren/core/github-app"
+import { PersonCredentials } from "@ren/core/person-credentials"
 import { CredentialEnv } from "@ren/core/credential-env"
 import { Access } from "@ren/core/access"
 import { CredentialCallers } from "@ren/core/credential-callers"
@@ -49,7 +51,8 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
     Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
   ),
   Layer.provideMerge(AppProfiles.layer),
-  Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
+  Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, PersonCredentials.layer)),
+  Layer.provideMerge(GitHubAccounts.layerNone),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerPublic)),
 )
 

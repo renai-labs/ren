@@ -1032,5 +1032,17 @@ export function make(client: ReturnType<typeof Ren.make>) {
         },
       },
     },
+    "sign-in": {
+      "sign-in-provider": {
+        list: {
+          queryKey: () => ["sign-in", "sign-in-provider", "list"] as const,
+          queryOptions: () =>
+            queryOptions({
+              queryKey: ["sign-in", "sign-in-provider", "list"] as const,
+              queryFn: (context) => client["sign-in"]["sign-in-provider"]["list"]({ signal: context.signal }),
+            }),
+        },
+      },
+    },
   }
 }

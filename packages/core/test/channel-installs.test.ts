@@ -1,15 +1,20 @@
 import { afterAll, describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
+import { Auth } from "@ren/schema/auth"
 import { Testing } from "@ren/db/testing"
 import { eq } from "drizzle-orm"
-import { ConfigProvider, Effect, Layer, Option } from "effect"
+import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { Access } from "../src/access.js"
 import type { Actor } from "../src/actor.js"
 import { ChannelInstalls } from "../src/channel-installs.js"
 import { ChannelProvider } from "../src/channel-provider.js"
 import { GitHub } from "../src/channel-provider/github.js"
+import { EgressControl } from "../src/egress-control.js"
+import { Envelope } from "../src/envelope.js"
+import { GitHubAccounts } from "../src/github-accounts.js"
 import { GitHubApp } from "../src/github-app.js"
+import { PersonCredentials } from "../src/person-credentials.js"
 import { testEffect } from "./lib/effect.js"
 import { GitHubServer } from "./lib/github-server.js"
 import { Seed } from "./lib/seed.js"
@@ -18,12 +23,23 @@ const github = GitHubServer.start()
 afterAll(() => github.stop())
 
 const settings = (overrides: Record<string, string> = {}) =>
-  ConfigProvider.layer(ConfigProvider.fromUnknown(GitHubServer.config(github.url, overrides)))
+  ConfigProvider.layer(
+    ConfigProvider.fromUnknown({
+      ...GitHubServer.config(github.url, overrides),
+      ENVELOPE_KEYS: JSON.stringify([
+        { id: "local:test", key: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url") },
+      ]),
+    }),
+  )
 
 const it = testEffect(
   ChannelInstalls.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(ChannelProvider.layer([GitHub.provider]), Access.layer)),
+    Layer.provideMerge(GitHubAccounts.layer),
     Layer.provideMerge(GitHubApp.layer),
+    Layer.provideMerge(
+      PersonCredentials.layer.pipe(Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, EgressControl.layerNone))),
+    ),
     Layer.provideMerge(Testing.layer),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(settings()),
@@ -60,6 +76,31 @@ const member = Effect.fnUntraced(function* (role = "member") {
 })
 
 describe("ChannelInstalls with GitHub", () => {
+  it.live("an installer cannot link a GitHub account owned by another Ren user", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const actor = yield* member()
+      const other = yield* Seed.user()
+      const id = installation("acme")
+      const code = authorized(id)
+      yield* database.db.insert(Database.Schema.account).values({
+        id: Auth.AccountID.create(),
+        providerId: "github",
+        accountId: String(7000 + code.length),
+        userId: other.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      expect(yield* finish(yield* started(actor), { installation_id: id, code })).toMatchObject({ ok: false })
+      expect(
+        yield* database.db
+          .select()
+          .from(Database.Schema.credential)
+          .where(eq(Database.Schema.credential.user_id, actor.userId)),
+      ).toEqual([])
+    }),
+  )
+
   it.live(
     "start sends the person to the App's install page with a one-time state; the callback stores the install",
     () =>
@@ -84,6 +125,53 @@ describe("ChannelInstalls with GitHub", () => {
         expect((yield* installs.list(actor, { page: 1, pageSize: 50 })).items).toMatchObject([
           { provider: "github", workspace: id, name: "acme", installedBy: { id: actor.userId, name: "Ada" } },
         ])
+      }),
+  )
+
+  it.live(
+    "the install links the installer's GitHub account and keeps their sealed token as their GITHUB credential",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const envelope = yield* Envelope.Service
+        const actor = yield* member()
+        const id = installation("acme")
+        const code = authorized(id)
+        yield* finish(yield* started(actor), { installation_id: id, code })
+        const login = `person-${code.slice(-6)}`
+        expect(
+          yield* database.db
+            .select({ providerId: Database.Schema.account.providerId, accountId: Database.Schema.account.accountId })
+            .from(Database.Schema.account)
+            .where(eq(Database.Schema.account.userId, actor.userId)),
+        ).toEqual([{ providerId: "github", accountId: String(7000 + code.length) }])
+        const credential = (yield* database.db
+          .select()
+          .from(Database.Schema.credential)
+          .where(eq(Database.Schema.credential.user_id, actor.userId))).at(0)
+        expect(credential).toMatchObject({
+          owner: "person",
+          organization_id: actor.organizationId,
+          label: "GITHUB",
+          type: "oauth",
+          name: login,
+          provider_account_id: String(7000 + code.length),
+          hosts: ["api", "", "codeload", "uploads"].map((sub) =>
+            [sub, new URL(github.url).hostname].filter(Boolean).join("."),
+          ),
+        })
+        if (!credential) return yield* Effect.die(new Error("No credential"))
+        expect(JSON.stringify(credential.value)).not.toContain(`user:${code}`)
+        const opened = yield* envelope.open(credential.value, {
+          organizationId: actor.organizationId,
+          kind: "credential",
+          id: credential.id,
+        })
+        expect(JSON.parse(Redacted.value(opened))).toMatchObject({
+          type: "oauth",
+          accessToken: `user:${code}`,
+          refresh: { refreshToken: `refresh:${code}`, tokenEndpoint: `${github.url}/login/oauth/access_token` },
+        })
       }),
   )
 
@@ -245,5 +333,55 @@ describe("ChannelInstalls with GitHub", () => {
       if (!again) return yield* Effect.die(new Error("No install"))
       expect(yield* installs.remove(admin, again.id, {})).toMatchObject({ id: again.id })
     }),
+  )
+})
+
+describe("GitHubAccounts", () => {
+  it.live(
+    "a GitHub sign-in becomes the person's GITHUB credential in each of their organizations, the account keeps no token, and an unlink removes it",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const accounts = yield* GitHubAccounts.Service
+        const first = yield* member()
+        const second = yield* Seed.organization()
+        yield* Seed.member(second, first.userId, "member")
+        const code = authorized()
+        const account = Auth.AccountID.create()
+        yield* database.db.insert(Database.Schema.account).values({
+          id: account,
+          providerId: "github",
+          accountId: String(7000 + code.length),
+          userId: first.userId,
+          accessToken: `user:${code}`,
+          refreshToken: `refresh:${code}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        yield* accounts.sync(first.userId)
+        const saved = yield* database.db
+          .select({ organizationId: Database.Schema.credential.organization_id, name: Database.Schema.credential.name })
+          .from(Database.Schema.credential)
+          .where(eq(Database.Schema.credential.user_id, first.userId))
+        expect(saved.map((row) => row.organizationId).toSorted()).toEqual([first.organizationId, second].toSorted())
+        expect(saved.every((row) => row.name === `person-${code.slice(-6)}`)).toBe(true)
+        expect(
+          yield* database.db
+            .select({
+              accessToken: Database.Schema.account.accessToken,
+              refreshToken: Database.Schema.account.refreshToken,
+            })
+            .from(Database.Schema.account)
+            .where(eq(Database.Schema.account.id, account)),
+        ).toEqual([{ accessToken: null, refreshToken: null }])
+        yield* database.db.delete(Database.Schema.account).where(eq(Database.Schema.account.id, account))
+        yield* accounts.disconnect(first.userId)
+        expect(
+          yield* database.db
+            .select()
+            .from(Database.Schema.credential)
+            .where(eq(Database.Schema.credential.user_id, first.userId)),
+        ).toEqual([])
+      }),
   )
 })

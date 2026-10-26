@@ -20,7 +20,9 @@ import { Brains } from "@ren/core/brains"
 import { ChannelNotice } from "@ren/core/channel-notice"
 import { ChannelProvider } from "@ren/core/channel-provider"
 import { GitHub } from "@ren/core/channel-provider/github"
+import { GitHubAccounts } from "@ren/core/github-accounts"
 import { GitHubApp } from "@ren/core/github-app"
+import { PersonCredentials } from "@ren/core/person-credentials"
 import { ChannelIdentity } from "@ren/core/channel-identity"
 import { ChannelRoute } from "@ren/core/channel-route"
 import { DurableRunner } from "@ren/core/durable-runner"
@@ -106,7 +108,8 @@ const credentials = Layer.mergeAll(Egress.layer, OAuth.layer).pipe(
   Layer.provideMerge(
     Layer.mergeAll(CredentialSource.layerStatic, CredentialSource.layerMinted, CredentialSource.layerProvider),
   ),
-  Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer)),
+  Layer.provideMerge(GitHubAccounts.layer),
+  Layer.provideMerge(Layer.mergeAll(Credentials.layer, CredentialCallers.layer, PersonCredentials.layer)),
   Layer.provideMerge(McpProvider.layerCleanup),
   Layer.provideMerge(McpProvider.layer([McpProvider.composio])),
   Layer.provideMerge(Layer.mergeAll(envelope, Access.layer, OAuthFetch.layerPublic)),

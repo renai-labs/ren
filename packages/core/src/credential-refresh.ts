@@ -97,16 +97,37 @@ export const layer = Layer.effect(
       envelope.seal(Redacted.make(encodeSealed(value)), contextOf(row)).pipe(Effect.orDie)
 
     const write = Effect.fnUntraced(function* (
-      row: typeof table.$inferSelect,
+      rows: ReadonlyArray<typeof table.$inferSelect>,
       set: Partial<typeof table.$inferInsert>,
+      value: Credentials.Sealed,
     ) {
-      const written = yield* database.db
-        .update(table)
-        .set({ ...set, revision: sql`${table.revision} + 1`, refresh_lease_at: null, updated_at: sql`now()` })
-        .where(and(eq(table.id, row.id), eq(table.revision, row.revision)))
-        .returning({ id: table.id })
+      const row = rows.at(0)
+      if (!row) return false
+      const values = yield* Effect.forEach(rows, (each) =>
+        Effect.map(seal(each, value), (sealed) => ({ row: each, value: sealed })),
+      )
+      const written = yield* database
+        .transaction((transaction) =>
+          Effect.gen(function* () {
+            const current = (yield* transaction.select().from(table).where(eq(table.id, row.id)).for("update")).at(0)
+            if (!current || current.revision !== row.revision) return false
+            yield* Effect.forEach(values, (each) =>
+              transaction
+                .update(table)
+                .set({
+                  ...set,
+                  value: each.value,
+                  revision: sql`${table.revision} + 1`,
+                  refresh_lease_at: null,
+                  updated_at: sql`now()`,
+                })
+                .where(and(eq(table.id, each.row.id), eq(table.revision, each.row.revision))),
+            )
+            return true
+          }),
+        )
         .pipe(Effect.orDie)
-      if (written.length === 0) {
+      if (!written) {
         yield* Effect.logInfo(`Credential ${row.label} changed during its refresh; Ren keeps the newer value`)
         return false
       }
@@ -133,14 +154,35 @@ export const layer = Layer.effect(
       options: { readonly revision?: number },
     ) {
       const now = yield* Clock.currentTimeMillis
+      const requested = (yield* database.db.select().from(table).where(eq(table.id, id)).pipe(Effect.orDie)).at(0)
+      if (!requested || (typeof options.revision === "number" && requested.revision !== options.revision)) return
+      const rows =
+        requested.owner === "person" && requested.label === "GITHUB"
+          ? yield* database.db
+              .select()
+              .from(table)
+              .where(
+                and(
+                  eq(table.owner, "person"),
+                  eq(table.label, requested.label),
+                  sql`${table.user_id} = ${requested.user_id}`,
+                  sql`${table.provider_account_id} is not distinct from ${requested.provider_account_id}`,
+                ),
+              )
+              .orderBy(table.id)
+              .pipe(Effect.orDie)
+          : [requested]
+      const owner = rows.at(0)
+      if (!owner) return
+      if (rows.find((row) => row.id === requested.id)?.revision !== requested.revision) return
       const taken = yield* database.db
         .update(table)
         .set({ refresh_lease_at: new Date(now) })
         .where(
           and(
-            eq(table.id, id),
+            eq(table.id, owner.id),
             eq(table.status, "ok"),
-            typeof options.revision === "number" ? eq(table.revision, options.revision) : undefined,
+            eq(table.revision, owner.revision),
             or(isNull(table.refresh_lease_at), lt(table.refresh_lease_at, new Date(now - Duration.toMillis(lease)))),
           ),
         )
@@ -173,19 +215,22 @@ export const layer = Layer.effect(
               onNone: () => release(row, { failed: false }),
               onSome: (renewed) =>
                 Effect.gen(function* () {
-                  const saved = yield* write(row, {
-                    value: yield* seal(row, renewed.value),
-                    expires_at: Option.getOrNull(renewed.expiresAt),
-                    ...(renewed.scopes && { scopes: [...renewed.scopes] }),
-                    refresh_failures: 0,
-                  })
+                  const saved = yield* write(
+                    rows,
+                    {
+                      expires_at: Option.getOrNull(renewed.expiresAt),
+                      ...(renewed.scopes && { scopes: [...renewed.scopes] }),
+                      refresh_failures: 0,
+                    },
+                    renewed.value,
+                  )
                   if (saved && renewed.saved) yield* renewed.saved
                 }),
             }),
           ),
           Effect.catchTag("CredentialRefresh.Fatal", (error) =>
             Effect.gen(function* () {
-              yield* write(row, { status: "reconnect", value: yield* seal(row, { type: "cleared" }) })
+              yield* write(rows, { status: "reconnect" }, { type: "cleared" })
               yield* Effect.logWarning(`Credential ${row.label} could not refresh and needs a reconnect`, error)
             }),
           ),
@@ -209,7 +254,7 @@ export const layer = Layer.effect(
         types.length === 0
           ? []
           : yield* database.db
-              .select({ id: table.id })
+              .select({ id: table.id, revision: table.revision })
               .from(table)
               .where(
                 and(
@@ -226,7 +271,10 @@ export const layer = Layer.effect(
                 ),
               )
               .pipe(Effect.orDie)
-      yield* Effect.forEach(due, (row) => refresh(row.id, {}), { concurrency: 8, discard: true })
+      yield* Effect.forEach(due, (row) => refresh(row.id, { revision: row.revision }), {
+        concurrency: 8,
+        discard: true,
+      })
       yield* database.db
         .delete(Database.Schema.oauth_session)
         .where(lt(Database.Schema.oauth_session.created_at, new Date(now - Duration.toMillis(sessionsKept))))

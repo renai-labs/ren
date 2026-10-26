@@ -11,6 +11,7 @@ import { Random } from "@ren/util/random"
 import { Access } from "./access.js"
 import type { Actor } from "./actor.js"
 import { ChannelProvider } from "./channel-provider.js"
+import { PersonCredentials } from "./person-credentials.js"
 import { Primitive } from "./primitive.js"
 import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
@@ -65,6 +66,7 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
     const registry = yield* ChannelProvider.Registry
+    const people = yield* PersonCredentials.Service
 
     const allowed = (actor: Actor.Info, operation: "list" | "remove") =>
       access.isAllowed({
@@ -129,6 +131,41 @@ export const layer = Layer.effect(
         .pipe(Effect.orDie)).at(0)
       if (!other) return yield* claim(organizationId, installedBy, provider, installed)
       return failed(`This organization already has ${title} connected: ${other.name}.`)
+    })
+
+    const link = Effect.fnUntraced(function* (
+      row: typeof states.$inferSelect,
+      provider: Channel.Provider,
+      installer: NonNullable<ChannelProvider.Installed["installer"]>,
+    ) {
+      const now = new Date(yield* Clock.currentTimeMillis)
+      yield* database.db
+        .insert(Database.Schema.account)
+        .values({
+          id: Auth.AccountID.create(),
+          providerId: provider,
+          accountId: installer.accountId,
+          userId: row.initiator_user_id,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoNothing()
+        .pipe(Effect.orDie)
+      const linked = (yield* database.db
+        .select({ userId: Database.Schema.account.userId })
+        .from(Database.Schema.account)
+        .where(
+          and(
+            eq(Database.Schema.account.providerId, provider),
+            eq(Database.Schema.account.accountId, installer.accountId),
+          ),
+        )
+        .pipe(Effect.orDie)).at(0)
+      if (linked?.userId !== row.initiator_user_id)
+        return yield* new ChannelProvider.InstallFailed({
+          message: "This GitHub account is linked to another Ren account. Sign in to that Ren account to connect it.",
+        })
+      if (installer.credential) yield* people.save(row.organization_id, row.initiator_user_id, installer.credential)
     })
 
     return Service.of({
@@ -204,7 +241,14 @@ export const layer = Layer.effect(
         if (!member) return failed("You are no longer a member of the organization that started this install.")
         const installed = yield* Effect.result(provider.value.completeInstall(query))
         if (installed._tag === "Failure") return failed(installed.failure.message)
-        return yield* claim(row.organization_id, row.initiator_user_id, provider.value.id, installed.success)
+        const outcome = yield* claim(row.organization_id, row.initiator_user_id, provider.value.id, installed.success)
+        const installer = installed.success.installer
+        if (outcome.ok && installer)
+          return yield* link(row, provider.value.id, installer).pipe(
+            Effect.as(outcome),
+            Effect.catchTag("ChannelProvider.InstallFailed", (error) => Effect.succeed(failed(error.message))),
+          )
+        return outcome
       }),
 
       remove: Effect.fn("ChannelInstalls.remove")(function* (actor: Actor.Info, id: ChannelInstall.ID) {

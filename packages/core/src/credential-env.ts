@@ -5,6 +5,7 @@ import { Context, Effect, Layer, Option } from "effect"
 import { AppProfiles } from "./app/profiles.js"
 import { Credentials } from "./credentials.js"
 import { GitHubApp } from "./github-app.js"
+import { PersonCredentials } from "./person-credentials.js"
 
 export interface Interface {
   readonly of: (workload: Workload.Info) => Effect.Effect<Readonly<Record<string, string>>>
@@ -20,16 +21,23 @@ export const layer = Layer.effect(
     const credentials = yield* Credentials.Service
     const profiles = yield* AppProfiles.Service
     const github = yield* GitHubApp.Service
+    const people = yield* PersonCredentials.Service
     return Service.of({
       of: Effect.fn("CredentialEnv.of")(function* (workload: Workload.Info) {
         const scope = yield* credentials.scopeOf(workload)
         if (Option.isNone(scope)) return {}
         const reached = yield* profiles.reachable(scope.value)
-        const installation = yield* github.installationOf(scope.value.organizationId)
+        const organizationId = scope.value.organizationId
+        const person = yield* Option.match(scope.value.person, {
+          onNone: () => Effect.succeedNone,
+          onSome: (userId) => people.account(organizationId, userId, GitHubApp.label),
+        })
+        const installed = Option.isSome(yield* github.installationOf(organizationId))
         return {
-          ...Option.match(installation, {
+          ...Option.match(github.client, {
             onNone: () => ({}),
-            onSome: (found) => GitHubApp.variables(found.client.settings),
+            onSome: (client) =>
+              installed || Option.isSome(person) ? GitHubApp.variables(client.settings, person) : {},
           }),
           ...(yield* credentials.environment(
             scope.value,

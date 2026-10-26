@@ -2,6 +2,7 @@ export * as Auth from "./auth.js"
 
 import { fetchClientMetadataResource } from "@better-auth/cimd/node"
 import type { ClientMetadataResourceFetch } from "@better-auth/oauth-provider"
+import { GitHubAccounts } from "@ren/core/github-accounts"
 import { Mailer } from "@ren/core/mailer"
 import { RenInferenceRemoval } from "@ren/core/ren-inference-removal"
 import { SignupGuard } from "@ren/core/signup-guard"
@@ -64,6 +65,7 @@ export const layer = Layer.effect(
     const signupGuard = yield* SignupGuard.Service
     const provisioning = yield* SpaceProvisioning.Service
     const inferenceRemoval = yield* RenInferenceRemoval.Service
+    const accounts = yield* GitHubAccounts.Service
     const toProvisioningUser = (user: BetterAuth.ProvisioningUser) => ({ ...user, id: Auth.UserID.make(user.id) })
     const clientMetadataFetch = yield* ClientMetadataFetch
     const run = yield* FiberSet.makeRuntime()
@@ -88,6 +90,17 @@ export const layer = Layer.effect(
       baseURL: config.baseURL,
       trustedOrigins: config.trustedOrigins,
       google: { clientId: config.googleClientId, clientSecret: Redacted.value(config.googleClientSecret) },
+      ...Option.match(accounts.signIn, {
+        onNone: () => ({}),
+        onSome: (app) => ({
+          github: {
+            clientId: app.clientId,
+            clientSecret: Redacted.value(app.clientSecret),
+            sync: (userId: string) => runPromise(accounts.sync(Auth.UserID.make(userId))),
+            disconnect: (userId: string) => runPromise(accounts.disconnect(Auth.UserID.make(userId))),
+          },
+        }),
+      }),
       appURL: config.appURL,
       mcpResource,
       fetchClientMetadataResource: clientMetadataFetch,

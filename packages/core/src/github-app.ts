@@ -6,6 +6,7 @@ import { Credential } from "@ren/schema/credential"
 import { and, eq } from "drizzle-orm"
 import { Cache, Clock, Config, Context, Duration, Effect, Exit, Layer, Option, Redacted, Schema } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
+import type { PersonCredentials } from "./person-credentials.js"
 import { createPrivateKey, type KeyObject, sign } from "node:crypto"
 
 export class Failed extends Schema.TaggedError<Failed>()("GitHubApp.Failed", {
@@ -49,8 +50,18 @@ const UserInstallations = Schema.Struct({
 
 const Exchanged = Schema.Struct({
   access_token: Schema.optionalKey(Schema.String),
+  refresh_token: Schema.optionalKey(Schema.String),
+  expires_in: Schema.optionalKey(Schema.Number),
   error: Schema.optionalKey(Schema.String),
 })
+
+const User = Schema.Struct({ id: Schema.Number, login: Schema.String, name: Schema.NullOr(Schema.String) })
+
+export interface UserToken {
+  readonly accessToken: Redacted.Redacted
+  readonly refreshToken?: Redacted.Redacted
+  readonly expiresIn?: number
+}
 
 const base64url = (value: string | Buffer) => Buffer.from(value).toString("base64url")
 
@@ -222,7 +233,14 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
       )
       if (answer.error || !answer.access_token)
         return yield* new Failed({ message: `GitHub refused the code: ${answer.error ?? "no access token"}` })
-      return Redacted.make(answer.access_token)
+      return {
+        accessToken: Redacted.make(answer.access_token),
+        ...(answer.refresh_token && { refreshToken: Redacted.make(answer.refresh_token) }),
+        ...(answer.expires_in && { expiresIn: answer.expires_in }),
+      } satisfies UserToken
+    }),
+    user: Effect.fn("GitHubApp.user")(function* (userToken: Redacted.Redacted) {
+      return yield* json(User, withToken(HttpClientRequest.get(`${app.api}/user`), userToken))
     }),
     userInstallations: Effect.fn("GitHubApp.userInstallations")(function* (userToken: Redacted.Redacted) {
       return yield* userInstallationsFrom(userToken, 1, [])
@@ -262,10 +280,41 @@ export const hosts = (app: Settings) => {
   return [`api.${web}`, web, `codeload.${web}`, `uploads.${web}`]
 }
 
-export const variables = (app: Settings): Readonly<Record<string, string>> => {
+export const personCredential = (
+  app: Settings,
+  user: { readonly id: number; readonly login: string },
+  token: UserToken,
+  now: number,
+): PersonCredentials.Saved => ({
+  label,
+  account: { id: String(user.id), name: user.login },
+  hosts: hosts(app),
+  value: {
+    type: "oauth",
+    accessToken: token.accessToken,
+    ...(token.refreshToken && {
+      refresh: {
+        refreshToken: token.refreshToken,
+        clientId: app.clientId,
+        clientSecret: app.clientSecret,
+        tokenEndpoint: `${app.web}/login/oauth/access_token`,
+        tokenEndpointAuth: "client_secret_post",
+      },
+    }),
+  },
+  ...(token.expiresIn && { expiresAt: new Date(now + token.expiresIn * 1000) }),
+})
+
+export const variables = (
+  app: Settings,
+  person: Option.Option<PersonCredentials.Account>,
+): Readonly<Record<string, string>> => {
   const placeholder = Credential.placeholder(label)
-  const name = `${app.slug}[bot]`
-  const email = `${app.botUserId}+${name}@users.noreply.github.com`
+  const name = Option.match(person, { onNone: () => `${app.slug}[bot]`, onSome: (account) => account.name })
+  const email = Option.match(person, {
+    onNone: () => `${app.botUserId}+${name}@users.noreply.github.com`,
+    onSome: (account) => `${account.id}+${account.name}@users.noreply.github.com`,
+  })
   return {
     GITHUB_TOKEN: placeholder,
     GH_TOKEN: placeholder,

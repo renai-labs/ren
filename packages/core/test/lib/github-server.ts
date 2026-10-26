@@ -64,13 +64,29 @@ const exchange = async (state: State, request: Request) => {
   const body = Schema.decodeUnknownSync(Exchange)(await request.text())
   const answer =
     state.users.has(body.code) && body.client_secret === "client-secret"
-      ? { access_token: `user:${body.code}`, token_type: "bearer" }
+      ? {
+          access_token: `user:${body.code}`,
+          token_type: "bearer",
+          refresh_token: `refresh:${body.code}`,
+          expires_in: 28800,
+        }
       : { error: "bad_verification_code" }
   return request.headers.get("accept") === "application/json"
     ? Response.json(answer)
-    : new Response(new URLSearchParams(answer).toString(), {
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-      })
+    : new Response(
+        new URLSearchParams(
+          Object.fromEntries(Object.entries(answer).map(([key, value]) => [key, String(value)])),
+        ).toString(),
+        {
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+        },
+      )
+}
+
+const userOf = (state: State, request: Request) => {
+  const code = request.headers.get("authorization")?.replace(/^Bearer user:/u, "") ?? ""
+  if (!state.users.has(code)) return new Response(null, { status: 401 })
+  return Response.json({ id: 7000 + code.length, login: `person-${code.slice(-6)}`, name: null })
 }
 
 const userInstallations = (state: State, request: Request, url: URL) => {
@@ -140,6 +156,7 @@ export const start = (): Instance => {
     fetch: (request) => {
       const url = new URL(request.url)
       if (request.method === "POST" && url.pathname === "/login/oauth/access_token") return exchange(state, request)
+      if (request.method === "GET" && url.pathname === "/user") return userOf(state, request)
       if (request.method === "GET" && url.pathname === "/user/installations")
         return userInstallations(state, request, url)
       if (url.pathname.startsWith("/repos/") || url.pathname.startsWith("/users/")) return api(state, request, url)

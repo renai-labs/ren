@@ -100,7 +100,8 @@ export const readToken = (status: number, body: unknown): Result.Result<Token, T
 }
 
 export const isFatal = (error: TokenError, codes: ReadonlyArray<string>) =>
-  (error.status === 400 || error.status === 401) && codes.includes(error.code)
+  (error.status === 400 || error.status === 401 || (error.status === 200 && error.code === "bad_refresh_token")) &&
+  codes.includes(error.code)
 
 // oxlint-disable-next-line ren/no-comments -- §7 rules 15 and 16, §8 rule 11: one token request for sign-in and refresh. Every request carries `client_id`; the secret goes only to this endpoint, in the way the client was registered.
 export const post = (

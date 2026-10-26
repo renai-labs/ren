@@ -19,6 +19,9 @@ import { ChannelNotice } from "../../src/channel-notice.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
 import { ChannelReply } from "../../src/channel-reply.js"
 import { ChannelTurns } from "../../src/channel-turns.js"
+import { EgressControl } from "../../src/egress-control.js"
+import { Envelope } from "../../src/envelope.js"
+import { PersonCredentials } from "../../src/person-credentials.js"
 import { ChannelRoute } from "../../src/channel-route.js"
 import { Channels } from "../../src/channels.js"
 import { DurableRunner } from "../../src/durable-runner.js"
@@ -279,7 +282,14 @@ const core = (held: boolean) =>
     SessionSync.layer,
     notices,
   ).pipe(
-    Layer.provideMerge(Layer.mergeAll(BrainRegistry.layer, ChannelProvider.layer([provider]), Access.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        BrainRegistry.layer,
+        ChannelProvider.layer([provider]),
+        Access.layer,
+        PersonCredentials.layer.pipe(Layer.provide(Layer.mergeAll(Envelope.layerLocal, EgressControl.layerNone))),
+      ),
+    ),
     Layer.provideMerge(
       Layer.mergeAll(
         hold(held),
