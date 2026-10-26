@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { RouterContext } from "../../lib/router-context.js"
 import { Channels } from "./channels.js"
-import { useGitHubLink } from "../../lib/use-github-link.js"
+import { useAccountLink } from "../../lib/use-account-link.js"
 import { useInstall } from "./use-install.js"
 
 const page = { page: 1, pageSize: Pagination.maximumPageSize }
@@ -25,7 +25,7 @@ export function ChannelsPage(props: { query: string; onQueryChange: (query: stri
     refetchOnWindowFocus: "always",
   })
   const offered = useQuery(context.api["channel-connect"]["channel-provider"].list.queryOptions())
-  const github = useGitHubLink("/settings/channels")
+  const github = useAccountLink("github", "/settings/channels")
   const attention: Partial<Record<Channels.Provider, Attention>> = {
     ...(github.offered &&
       !github.loading &&

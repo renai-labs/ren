@@ -17,7 +17,7 @@ import { Forms } from "../../lib/forms.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { PasswordDialog } from "./password-dialog.js"
-import { useGitHubLink } from "../../lib/use-github-link.js"
+import { useAccountLink } from "../../lib/use-account-link.js"
 
 const detailOptions: ReadonlyArray<Select.Option<ChatPreferences.Detail>> = [
   { value: "standard", label: "Standard" },
@@ -98,41 +98,27 @@ function ChatSettings() {
   )
 }
 
+const linkedDescriptions = {
+  github: {
+    linked: "Ren runs your GitHub mentions as you, with your GitHub access.",
+    unlinked: "Link it so Ren runs your GitHub mentions as you, with your GitHub access.",
+  },
+  slack: {
+    linked: "Ren knows your Slack messages are yours, in any channel it answers.",
+    unlinked: "Link it so Ren knows your Slack messages are yours, even when your Slack email differs.",
+  },
+} as const
+
 function LinkedAccounts() {
-  const github = useGitHubLink("/settings/preferences")
-  if (!github.offered) return null
+  const github = useAccountLink("github", "/settings/preferences")
+  const slack = useAccountLink("slack", "/settings/preferences")
+  const offered = [github, slack].filter((link) => link.offered)
+  if (offered.length === 0) return null
   return (
     <PageShell.Section title="Linked accounts" frame="divided">
-      <Field.Root
-        label="GitHub"
-        description={
-          github.linked
-            ? "Ren runs your GitHub mentions as you, with your GitHub access."
-            : "Link it so Ren runs your GitHub mentions as you, with your GitHub access."
-        }
-        orientation="horizontal"
-      >
-        {github.linked ? (
-          <Button
-            appearance="outline"
-            size="small"
-            pending={github.unlink.isPending}
-            onClick={() => github.unlink.mutate()}
-          >
-            Disconnect GitHub
-          </Button>
-        ) : (
-          <Button
-            appearance="outline"
-            size="small"
-            pending={github.link.isPending}
-            disabled={github.loading}
-            onClick={() => github.link.mutate()}
-          >
-            Connect GitHub
-          </Button>
-        )}
-      </Field.Root>
+      {offered.map((link) => (
+        <LinkedAccount key={link.provider} link={link} />
+      ))}
     </PageShell.Section>
   )
 }
@@ -171,6 +157,33 @@ function LeaveOrganization(props: { organization: { id: string; name: string } }
         onConfirmed={() => Toast.manager.add({ type: "success", title: `You left ${props.organization.name}` })}
       />
     </PageShell.Section>
+  )
+}
+
+function LinkedAccount(props: { link: ReturnType<typeof useAccountLink> }) {
+  const link = props.link
+  return (
+    <Field.Root
+      label={link.title}
+      description={linkedDescriptions[link.provider][link.linked ? "linked" : "unlinked"]}
+      orientation="horizontal"
+    >
+      {link.linked ? (
+        <Button appearance="outline" size="small" pending={link.unlink.isPending} onClick={() => link.unlink.mutate()}>
+          Disconnect {link.title}
+        </Button>
+      ) : (
+        <Button
+          appearance="outline"
+          size="small"
+          pending={link.link.isPending}
+          disabled={link.loading}
+          onClick={() => link.link.mutate()}
+        >
+          Connect {link.title}
+        </Button>
+      )}
+    </Field.Root>
   )
 }
 
