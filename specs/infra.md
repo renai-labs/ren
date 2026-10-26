@@ -10,22 +10,22 @@ The registry holds templates: listings for apps and factories. Installing a temp
 
 ## 2. Terms
 
-| Term         | Meaning                                                                                                    |
-| ------------ | ---------------------------------------------------------------------------------------------------------- |
-| Spec         | The `.ren/` folder. It declares one organization.                                                          |
-| Bindings     | `deploy.yaml`. The values that belong to one deployment: channel ids, credentials, timezone, secrets.      |
-| Managed kind | A kind of row that the spec declares. Every row of a managed kind in the organization belongs to the spec. |
-| Plan         | The diff between the spec and the live organization.                                                       |
-| Digest       | A hash of one plan. Apply uses it to find a stale plan.                                                    |
-| App          | Skills, MCPs, required credentials and environment packages that a space can use.                          |
-| Listing      | A registry entry for an app or a factory. It is a template. Only a listing has seeds, never an app.        |
-| Seed         | Listing content that installation copies into the spec, for example crons. It exists only in the registry. |
-| Factory      | A listing that is a template for one space and its agents.                                                 |
+| Term         | Meaning                                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
+| Spec         | The `.ren/` folder. It declares one organization.                                                              |
+| Bindings     | `deploy.yaml`. The values that belong to one deployment: channel ids, credentials, timezone, secrets.          |
+| Managed kind | A kind of row that the spec declares. Every row of a managed kind in the organization belongs to the spec.     |
+| Plan         | The diff between the spec and the live organization.                                                           |
+| Digest       | A hash of one plan. Apply uses it to find a stale plan.                                                        |
+| App          | Skills, MCPs, required credentials and environment packages that a space can use.                              |
+| Listing      | A registry entry for an app or a factory. It is a template. Only a listing has seeds, never an app.            |
+| Seed         | Listing content that installation copies into the spec, for example schedules. It exists only in the registry. |
+| Factory      | A listing that is a template for one space and its agents.                                                     |
 
 ## 3. Scope
 
 1. One spec declares one whole organization.
-2. The managed kinds are: spaces, agents, agent memberships, custom apps, app uses, settings (organization, space, agent), environments, crons, webhooks and channel mappings.
+2. The managed kinds are: spaces, agents, agent memberships, custom apps, app uses, settings (organization, space, agent), environments, schedules, webhooks and channel mappings.
 3. These are not in the spec: human members and their roles, sessions, tasks and credential values.
 4. A row of a managed kind that the spec does not declare shows in the plan as a removal. Apply archives it. To keep a row that someone made in the UI, run `ren infra pull` first.
 
@@ -59,7 +59,7 @@ The folder is a fixed mapping of `Infra.Spec`:
 
 1. A record of resources becomes one folder for each key: `spaces/<slug>/`, `agents/<name>/`.
 2. The other fields of a resource go in one yaml file named after its kind: `space.yaml`, `agent.yaml`.
-3. A record of small entries, with no files of their own, becomes one yaml file keyed by slug: `crons.yaml`, `mcps.yaml`.
+3. A record of small entries, with no files of their own, becomes one yaml file keyed by slug: `schedules.yaml`, `mcps.yaml`.
 4. `settings.instructions` goes in `instructions.md` next to the yaml file.
 
 Today the spec has these parts:
@@ -78,7 +78,7 @@ Today the spec has these parts:
           instructions.md
 ```
 
-Each primitive adds its folder or file when it is implemented: `apps/<slug>/`, `crons.yaml`, `webhooks.yaml`, `channels.yaml`, `environment.yaml`, and `deploy.yaml` for bindings.
+Each primitive adds its folder or file when it is implemented: `apps/<slug>/`, `schedules.yaml`, `webhooks.yaml`, `channels.yaml`, `environment.yaml`, and `deploy.yaml` for bindings.
 
 ### 4.4 Ownership
 
@@ -97,7 +97,7 @@ Each primitive's declaration is in its own module in `@ren/schema`. This documen
 | `apps/<slug>/skills/<slug>/`         | `Skill.Declaration`: `Skill.Content` or `Skill.Upstream`     | `registry/AGENTS.md` (content or pointer, never both) |
 | `apps/<slug>/mcps.yaml`              | `Mcp.Declaration`                                            | `mcp.yaml`, `McpEntry` in `registry/src/content.ts`   |
 | `requiredCredentials`                | `Credential.Requirement`, `Credential.SkillRequirement`      | `vault/requirements.ts`                               |
-| `spaces/<slug>/crons.yaml`           | `Cron.Declaration`                                           | `cron_trigger`                                        |
+| `spaces/<slug>/schedules.yaml`       | `Schedule.Declaration`                                       | `cron_trigger`                                        |
 | `spaces/<slug>/webhooks.yaml`        | `Webhook.Declaration`, `Webhook.Request`                     | `webhook_trigger` with `provider = "generic"`         |
 | `spaces/<slug>/channels.yaml`        | `Channel.Declaration`                                        | `SpecChannelBinding` and the channel mapping tables   |
 | `spaces/<slug>/environment.yaml`     | `EnvironmentTemplate.Declaration`                            | v2 `EnvironmentTemplate.CreateInput` without `name`   |
@@ -116,7 +116,7 @@ Full tree:
     space.yaml                 # name, description, settings, uses { agents, apps }
     instructions.md
     environment.yaml
-    crons.yaml
+    schedules.yaml
     webhooks.yaml
     channels.yaml
     agents/<name>/
@@ -133,7 +133,7 @@ Rules that `Infra.Spec` checks across spaces, beyond the agent rules in section 
 1. An app is defined in one space only. A space does not list an app it owns in `uses`.
 2. A space that uses a custom app also uses each app in its `dependsOn`. A registry app's dependencies are checked by `plan`, because `validate` runs without the registry.
 3. Each skill slug and MCP slug is defined in one custom app only.
-4. A cron, webhook or channel names an agent that is in its space, or no agent.
+4. A schedule, webhook or channel names an agent that is in its space, or no agent.
 5. A `from` path in `moved.yaml` does not exist in the spec, and a `to` path does.
 
 An MCP with header or basic auth names credentials from its own `requiredCredentials` (`Mcp.Declaration`). A credential marked `optional` is not asked for at install.
@@ -168,8 +168,8 @@ All slugs use `Primitive.Slug`: lowercase letters and digits joined by single da
 ### 5.4 Listings and seeds
 
 1. Seeds exist only in a registry listing. The spec has no seeds and Ren keeps no seed state.
-2. Installing a listing copies its seeds into the spec as ordinary declarations. Example: the crons of an app listing go into the `crons.yaml` of the installing space. Then `apply` reconciles them like any other declaration.
-3. A seeded cron runs on the agent it names. A cron that names no agent runs on the space's `ren` agent. Validation fails if the named agent is not in the space.
+2. Installing a listing copies its seeds into the spec as ordinary declarations. Example: the schedules of an app listing go into the `schedules.yaml` of the installing space. Then `apply` reconciles them like any other declaration.
+3. A seeded schedule runs on the agent it names. A schedule that names no agent gets the space's default settings (`runtime/schedules/README.md` S7). Validation fails if the named agent is not in the space.
 4. Tasks are not infrastructure. Installing a listing drops its tasks. Reconciling them would reopen tasks that people closed.
 5. Databases and dashboards are templates in the listing. Installing a listing tells the agent to build them. The result is live state that the agent owns. It is not in the spec.
 6. A factory gets into the spec as a copy of its files. The copy has no link back to the registry.
@@ -202,7 +202,7 @@ Ren keeps no state for infra. No row keeps a hash.
 ### 6.2 Locking
 
 1. Apply runs in one Postgres transaction. The transaction first locks the organization row (`SELECT … FOR NO KEY UPDATE`). A second apply waits, then runs against the result of the first.
-2. Apply writes only database rows. Work that is slow or that calls an external service runs after the commit, from the new rows. Examples: provision an environment, schedule a cron, register a channel mapping. If that work fails, Ren retries it. The spec is never half-applied.
+2. Apply writes only database rows. Work that is slow or that calls an external service runs after the commit, from the new rows. Examples: provision an environment, schedule a run, register a channel mapping. If that work fails, Ren retries it. The spec is never half-applied.
 3. If the process stops, Postgres rolls back the transaction and releases the lock. No lock can stay held.
 
 ### 6.3 Stale plans
@@ -229,7 +229,7 @@ All commands are in the `ren infra` group.
 2. **Natural keys.** Spaces are keyed by `Primitive.Slug` in the schema, but the `space` table has no slug column yet. Plan cannot map a space folder to a row before the column exists. Make a list of each managed kind that needs a slug unique per organization. `EnvironmentTemplate` has only a name.
 3. **Environment packages.** Section 5.3 rule 7 merges app packages into the environment of the space. v2 provider config is specific to each provider: the Docker provider takes an `image` and has no package list. Decide: a provider gets a package capability (it builds an image), or an app states its packages and validation checks that the image has them.
 4. **Reserved agent names.** `AgentDefaults.reserved` (`ren`, `general`, `explore`, …) is in `@ren/core`, so `Infra.Spec` cannot check it. Move the list to `@ren/schema`, or check it in `validate`.
-5. **The ren agent.** A cron without an agent runs on the space's `ren` agent. `ren` is a global agent (`organization_id` is null), not a space agent. Confirm that a cron session on a global agent gets the settings of its space.
+5. **The ren agent.** Closed by `runtime/schedules/README.md` S7: a schedule without an agent gets the space's default settings, as a new chat with no agent picked.
 6. **Credential tiers.** Section 5.3 binds credentials per space. v1 also had organization and user tiers (`vault`). A personal OAuth connection, for example a user's Gmail, is not a space value. Decide whether a binding can name a user credential.
 7. **`pull` and bindings.** `pull` writes the spec. Decide whether it also writes `deploy.yaml` with the live channel ids and credential names. It never writes credential values.
 8. **Installing a listing.** The command that copies a listing into a space, and what it writes.
