@@ -1,4 +1,5 @@
 import {
+  ChannelReply,
   ChatState,
   Projection,
   type TimelineDetail,
@@ -22,6 +23,7 @@ import { Time } from "@ren/ui/time"
 import { Transcript } from "@ren/ui/transcript"
 import { DateTime } from "effect"
 import { Platform } from "../../platform/platform.js"
+import { ChannelMessageHeader, ChannelReplyMessage } from "./channel-message.js"
 import { ChatView } from "./chat-view.js"
 import { TranscriptError, TranscriptNotice, TranscriptNoticeItem, TranscriptShell } from "./transcript-notice.js"
 import { FileChanges, TranscriptTool } from "./transcript-tool.js"
@@ -155,6 +157,8 @@ function Part(props: { shared: Shared; data: RowData; reference: TimelineRow.Par
         />
       </List.Root>
     )
+  if (content?.type === "tool" && ChannelReply.shown(content))
+    return <ChannelReplyMessage tool={content} onOpenSession={props.shared.onOpenSession} />
   if (content?.type === "tool")
     return (
       <List.Root>
@@ -353,6 +357,7 @@ function UserMessage(props: { shared: Shared; data: RowData }) {
       }
     >
       <ConversationShell.Bubble>
+        <ChannelMessageHeader origin={message.channel} />
         <Transcript.UserText text={message.text} highlights={TimelineText.mentions(message)} />
       </ConversationShell.Bubble>
       <Text purpose="caption" tone="secondary" element="span">
