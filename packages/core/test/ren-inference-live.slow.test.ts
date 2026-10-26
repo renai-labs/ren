@@ -34,7 +34,7 @@ const live = {
 
 const models = Models.layerRenInference.pipe(
   Layer.provideMerge(RenInference.layer),
-  Layer.provide([Layer.fresh(Signer.layerLocal), FetchHttpClient.layer]),
+  Layer.provide([Layer.fresh(Signer.layerLocal), FetchHttpClient.layer, Access.layer]),
   Layer.provide(Testing.layer),
   Layer.provide(
     ConfigProvider.layer(

@@ -85,7 +85,7 @@ const models = Layer.unwrap(
   Effect.map(Config.option(Config.String("REN_INFERENCE_URL")), (url) =>
     Option.isSome(url) ? Models.layerRenInference : Models.layerLiteLLM.pipe(Layer.provide(FetchHttpClient.layer)),
   ),
-).pipe(Layer.provideMerge(RenInference.layerConfig))
+).pipe(Layer.provideMerge(RenInference.layerConfig), Layer.provide(Access.layer))
 
 // oxlint-disable-next-line ren/no-comments -- Every stored credential is sealed with ENVELOPE_KEYS; without a key the server would start and then refuse each credential save, so it does not start.
 const envelope = Layer.unwrap(Effect.as(Config.Redacted("ENVELOPE_KEYS"), Envelope.layerLocal))

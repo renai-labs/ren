@@ -65,7 +65,7 @@ HttpRouter.serve(Routes.layer).pipe(
   Layer.provide([BrainClient.layer, Settings.layer]),
   Layer.provide([
     ChaosModels.layer,
-    RenInference.layerConfig.pipe(Layer.provide(Signer.layerLocal)),
+    RenInference.layerConfig.pipe(Layer.provide([Signer.layerLocal, Access.layer])),
     Environments.layer.pipe(Layer.provide(Signer.layerLocal)),
   ]),
   Layer.provide(Layer.mergeAll(EgressControl.layerNone, Signer.layerLocal)),
