@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { Budget } from "@ren/test-harness/budget"
+import { Homes } from "@ren/test-harness/homes"
 
 const started = performance.now()
 const workers = Number(process.env.REN_TEST_WORKERS ?? Math.min(2, os.availableParallelism()))
@@ -32,7 +33,7 @@ while (reservation._tag === "Waiting") {
 }
 process.once("exit", reservation.release)
 const admitted = performance.now()
-const home = await fs.mkdtemp(path.join(os.tmpdir(), "ren-test-"))
+const home = await Homes.create(budget.directory)
 const temporary = path.join(home, "tmp")
 await fs.mkdir(temporary)
 const timings = path.join(process.cwd(), ".cache", "test-timings.json")
