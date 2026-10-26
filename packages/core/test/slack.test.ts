@@ -51,17 +51,15 @@ const installed = Effect.fnUntraced(function* () {
   const token = `xoxb-${crypto.randomUUID()}`
   slack.grants.set(`grant-${workspace}`, { team: workspace, teamName: "Acme", user: "U01", token })
   const id = ChannelInstall.ID.create()
-  yield* database.db
-    .insert(Database.Schema.channel_install)
-    .values({
-      id,
-      organization_id: organizationId,
-      provider: "slack",
-      workspace,
-      name: "Acme",
-      bot_user: "UBOT",
-      secret: yield* secrets.seal(organizationId, id, Redacted.make(token)),
-    })
+  yield* database.db.insert(Database.Schema.channel_install).values({
+    id,
+    organization_id: organizationId,
+    provider: "slack",
+    workspace,
+    name: "Acme",
+    bot_user: "UBOT",
+    secret: yield* secrets.seal(organizationId, id, Redacted.make(token)),
+  })
   return { workspace, token }
 })
 
@@ -153,6 +151,35 @@ describe("Slack", () => {
       })
       slack.options.pageSize = 200
     }),
+  )
+
+  it.live(
+    "a reply goes to its thread as one markdown block up to 11,000 characters, and longer as mrkdwn sections cut at paragraphs",
+    () =>
+      Effect.gen(function* () {
+        const slackProvider = yield* provider
+        const found = yield* installed()
+        const target = { install: found.workspace, place: "eng", thread: "C07:1712.33", message: "1712.40" }
+        const longest = "a".repeat(11_000)
+        yield* slackProvider.send(target, longest)
+        expect(slack.posted.at(-1)?.params).toEqual({
+          channel: "C07",
+          thread_ts: "1712.33",
+          text: longest,
+          blocks: JSON.stringify([{ type: "markdown", text: longest }]),
+        })
+        const paragraph = "word ".repeat(500).trim()
+        yield* slackProvider.send(target, [paragraph, paragraph, paragraph, paragraph, paragraph].join("\n\n"))
+        expect(slack.posted.at(-1)?.params.blocks).toBe(
+          JSON.stringify(
+            Array.from({ length: 5 }, () => ({ type: "section", text: { type: "mrkdwn", text: paragraph } })),
+          ),
+        )
+        slack.options.postError = "channel_not_found"
+        const gone = yield* Effect.flip(slackProvider.send(target, "again"))
+        slack.options.postError = undefined
+        expect(gone).toMatchObject({ _tag: "ChannelProvider.PlaceGone" })
+      }),
   )
 
   it.live("a notice posts to the channel with the bot token; a channel the bot left is gone", () =>

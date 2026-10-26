@@ -50,6 +50,7 @@ import { AppResolve } from "./app/resolve.js"
 import { BrainClient } from "./brain-client.js"
 import { CredentialEnv } from "./credential-env.js"
 import { BrainHost } from "./brain-host.js"
+import { ChannelInstallQueries } from "./channel-install/queries.js"
 import { DurableRunner } from "./durable-runner.js"
 import { Credentials } from "./credentials.js"
 import { Environments } from "./environments.js"
@@ -488,10 +489,14 @@ export const layer = Layer.effect(
                 .where(inArray(Database.Schema.agent_session.id, [...roots]))
                 .pipe(Effect.orDie)
         const inference = yield* models.inference
+        const channels = yield* database
+          .transaction((transaction) => ChannelInstallQueries.servers(transaction, host.organizationId, host.spaceId))
+          .pipe(Effect.orDie)
         return {
           publicKeys: client.publicKeys,
           ...Option.match(inference, { onNone: () => ({}), onSome: (found) => ({ inference: found }) }),
           ...Option.match(apps, { onNone: () => ({}), onSome: (catalog) => ({ apps: catalog }) }),
+          channels,
           layers: pulled.layers,
           chats: pulled.chats,
           deleted: roots.filter((id) => !kept.some((row) => row.id === id)),

@@ -6,6 +6,7 @@ import { StartBody } from "@ren/host-api/brain-api"
 import { BrainToken } from "@ren/host-api/brain-token"
 import { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { ChannelInstall } from "@ren/schema/channel-install"
 import { EnvironmentTemplate } from "@ren/schema/environment-template"
 import { Session } from "@ren/schema/session"
 import { Signature } from "@ren/schema/signature"
@@ -259,6 +260,30 @@ describe("BrainHost pull", () => {
         ),
       ),
     ),
+  )
+
+  it.live("a pull names the Slack MCP server only while the brain's space has Slack (CH54)", () =>
+    Effect.gen(function* () {
+      const subject = yield* seeded
+      const database = yield* Database.Service
+      const brain = yield* Brains.Service
+      const host = {
+        brainId: Brain.ofSession(subject.sessionId),
+        organizationId: subject.owner.organizationId,
+        spaceId: subject.owner.spaceId,
+        generation: 1,
+      }
+      const request = { version: "test", keyIds: [], sessions: [] }
+      expect((yield* brain.pull(host, request)).channels).toEqual([])
+      yield* database.db.insert(Database.Schema.channel_install).values({
+        id: ChannelInstall.ID.create(),
+        organization_id: subject.owner.organizationId,
+        provider: "slack",
+        workspace: `T${crypto.randomUUID().slice(0, 8)}`,
+        name: "Acme",
+      })
+      expect((yield* brain.pull(host, request)).channels).toEqual(["slack"])
+    }).pipe(Effect.provide(cell("http://127.0.0.1:9"))),
   )
 
   it.live("a catalog whose space is archived is omitted while the rest of pull still succeeds", () =>

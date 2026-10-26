@@ -1,6 +1,7 @@
 import { AppCatalog } from "@ren/schema/app-catalog"
 import type { Auth } from "@ren/schema/auth"
 import { Brain } from "@ren/schema/brain"
+import { Channel } from "@ren/schema/channel"
 import { Environment } from "@ren/schema/environment"
 import { Session } from "@ren/schema/session"
 import { SessionSettings } from "@ren/schema/session/settings"
@@ -97,6 +98,12 @@ export const PullReply = Schema.Struct({
   apps: Schema.optionalKey(PullApps).annotate({
     description: "The resolved app catalog. Omitted when unsupported or unavailable.",
   }),
+  channels: Schema.optionalKey(
+    Schema.Array(Channel.Provider).annotate({
+      description:
+        "The channels whose bot MCP server reaches the brain’s space (CH54), at REN_URL/mcp/<provider>. Omitted means none.",
+    }),
+  ),
   layers: SessionSettings.Layers,
   chats: Schema.Array(PullChat),
   deleted: Schema.Array(Session.ID).annotate({

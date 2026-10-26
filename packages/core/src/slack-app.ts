@@ -120,7 +120,20 @@ export const make = Effect.fnUntraced(function* (app: Settings) {
     )
   }
 
-  return { settings: app, post }
+  const upload = (url: string, content: Uint8Array) =>
+    http.execute(HttpClientRequest.post(url).pipe(HttpClientRequest.bodyUint8Array(content))).pipe(
+      Effect.flatMap((response) =>
+        response.status >= 200 && response.status < 300
+          ? Effect.void
+          : Effect.fail(new Failed({ message: `Slack answered ${response.status} to a file upload` })),
+      ),
+      Effect.timeout(timeLimit),
+      Effect.mapError((cause) =>
+        cause instanceof Failed ? cause : new Failed({ message: `Slack did not take the file: ${String(cause)}` }),
+      ),
+    )
+
+  return { settings: app, post, upload }
 })
 
 export type Client = Effect.Success<ReturnType<typeof make>>

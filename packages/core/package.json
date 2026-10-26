@@ -27,7 +27,8 @@
     "@modelcontextprotocol/client": "catalog:",
     "disposable-email-domains-js": "catalog:",
     "drizzle-orm": "catalog:",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "slackify-markdown": "5.0.0"
   },
   "devDependencies": {
     "@effect/platform-bun": "catalog:",

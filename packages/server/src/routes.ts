@@ -12,6 +12,7 @@ import { Brains } from "@ren/core/brains"
 import { BrainRegistry } from "@ren/core/brain-registry"
 import { ChannelInstalls } from "@ren/core/channel-installs"
 import { ChannelMappings } from "@ren/core/channel-mappings"
+import { SlackBot } from "@ren/core/slack-bot"
 import { ChannelTurns } from "@ren/core/channel-turns"
 import { Channels } from "@ren/core/channels"
 import { EnvironmentTemplates } from "@ren/core/environment-templates"
@@ -74,6 +75,7 @@ import { ActiveOrganizationLayer } from "./middleware/active-organization.js"
 import { AuthenticationLayer } from "./middleware/authentication.js"
 import { bodyLimit } from "./middleware/body-limit.js"
 import { RenMcp } from "./ren-mcp.js"
+import { SlackMcp } from "./slack-mcp.js"
 
 // oxlint-disable-next-line react-hooks/rules-of-hooks -- Effect's HttpRouter.use, not a React hook
 const AuthRoute = HttpRouter.use((router) =>
@@ -163,6 +165,7 @@ export const layer = Layer.mergeAll(
     ),
     AuthRoute,
     RenMcp.layer,
+    SlackMcp.layer.pipe(Layer.provide(SlackBot.layer)),
     OAuthRoutes.layer,
     ChannelRoutes.layer.pipe(
       Layer.provide(Channels.layer),
