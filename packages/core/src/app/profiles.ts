@@ -739,12 +739,22 @@ export const layer = Layer.effect(
             if (typeof input.allSpaces === "boolean")
               yield* transaction.update(profiles).set({ all_spaces: input.allSpaces }).where(eq(profiles.id, row.id))
             yield* touch(transaction, row.id)
+            const left = yield* transaction
+              .select({ space: listed.space_id })
+              .from(listed)
+              .where(eq(listed.profile_id, row.id))
             return {
               info: yield* infoOf(transaction, actor, row.id),
               labels: yield* labelsOf(transaction, row.id),
+              unused: unusedAfter(input, { allSpaces: row.all_spaces, left: left.length }),
             }
           }),
         )
+        // oxlint-disable-next-line ren/no-comments -- A shared profile that no space uses any more is deleted, with its sign-ins, as a delete does.
+        if (changed.unused) {
+          yield* store.removeForProfile(changed.info.id)
+          yield* database.db.delete(profiles).where(eq(profiles.id, changed.info.id)).pipe(Effect.orDie)
+        }
         yield* invalidate(changed.labels)
         return changed.info
       }),
@@ -796,5 +806,11 @@ export const layer = Layer.effect(
     })
   }),
 )
+
+// oxlint-disable-next-line ren/no-comments -- An access change that took away the last space of a shared profile that is not for every space.
+const unusedAfter = (input: AppProfile.AccessInput, before: { readonly allSpaces: boolean; readonly left: number }) =>
+  ((input.remove?.length ?? 0) > 0 || input.allSpaces === false) &&
+  !(input.allSpaces ?? before.allSpaces) &&
+  before.left === 0
 
 const holdsNone = { isCreator: false, isListedMember: false, allSpaces: false, isSelf: false }

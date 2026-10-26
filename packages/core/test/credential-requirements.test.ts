@@ -130,7 +130,7 @@ describe("profile items (§9 rule 4, §12)", () => {
 })
 
 describe("the composer pill (P15)", () => {
-  it.live("a new chat in a space lists the profiles it reaches with their gaps; a connect clears one", () =>
+  it.live("a space lists the profiles it reaches with their gaps to its members and admins; a connect clears one", () =>
     Effect.gen(function* () {
       const requirements = yield* CredentialRequirements.Service
       const found = yield* single({ mcps: { calendar: calendar("https://cal.example.com/mcp") } })
@@ -147,6 +147,10 @@ describe("the composer pill (P15)", () => {
       expect(yield* gaps).toEqual([])
       const stranger = yield* ProfilesFixture.user(found.organizationId, "Bob")
       expect((yield* Effect.flip(requirements.forSpace(stranger, found.ana.personal)))._tag).toBe("Primitive.NotFound")
+      const admin = yield* ProfilesFixture.user(found.organizationId, "Cy", "admin")
+      expect((yield* requirements.forSpace(admin, found.ana.personal)).profiles.map((profile) => profile.id)).toEqual([
+        found.profile.id,
+      ])
     }),
   )
 })
