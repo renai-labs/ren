@@ -20,7 +20,9 @@ export default defineConfig({
     { name: "parity", testMatch: /storybook\/parity\/.*\.spec\.ts$/, timeout: 180_000, use: { colorScheme: "dark" } },
   ],
   webServer: {
-    command: process.env.CI ? `bun run script/serve.ts ${port}` : `bunx storybook dev -p ${port} --no-open --ci`,
+    command: process.env.REN_V1_PATH
+      ? `bunx storybook dev -p ${port} --no-open --ci`
+      : `bun run script/serve.ts ${port}`,
     url: `http://127.0.0.1:${port}/iframe.html`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

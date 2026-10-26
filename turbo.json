@@ -14,8 +14,11 @@
       "dependsOn": ["^typecheck"]
     },
     "build": {
-      "dependsOn": [],
+      "dependsOn": ["transit"],
       "outputs": ["dist/**"]
+    },
+    "transit": {
+      "dependsOn": ["^transit"]
     },
     "test": {
       "dependsOn": ["^build"],
@@ -26,6 +29,11 @@
     "@ren/e2e#test": {
       "outputs": [],
       "cache": false
+    },
+    "@ren/storybook#build": {
+      "dependsOn": ["transit"],
+      "env": ["REN_V1_PATH"],
+      "outputs": ["storybook-static/**"]
     }
   }
 }
