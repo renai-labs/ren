@@ -12,7 +12,8 @@ export interface Options {
 }
 
 export type Reservation =
-  { readonly _tag: "Waiting"; readonly heldMiB: number } | { readonly _tag: "Acquired"; readonly release: () => void }
+  | { readonly _tag: "Waiting"; readonly heldMiB: number }
+  | { readonly _tag: "Acquired"; readonly release: () => void }
 
 export const reserve = async (options: Options): Promise<Reservation> => {
   if (

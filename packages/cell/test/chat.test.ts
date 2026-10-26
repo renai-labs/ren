@@ -275,8 +275,7 @@ test.todo("a command another member runs names its speaker to the model, and the
       const page = yield* brain.chat.session["session.messages"]({ params, query: {} })
       expect(page.items.find((message) => message.type === "user")).toMatchObject({ sender: { userId: "user_2" } })
     }),
-  ),
-)
+  ))
 
 test("a member switches the model from the list as the session's setting, an unknown model or a subagent's switch is refused, and Ren's unchanged model does not undo the switch", () =>
   live(

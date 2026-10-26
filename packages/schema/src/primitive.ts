@@ -51,7 +51,10 @@ export interface Definition {
 }
 
 type Result<Info extends Schema.Top> =
-  Info | typeof WriteResult.Redirect | typeof WriteResult.Upload | ReturnType<typeof WriteResult.Secret<Info>>
+  | Info
+  | typeof WriteResult.Redirect
+  | typeof WriteResult.Upload
+  | ReturnType<typeof WriteResult.Secret<Info>>
 
 interface Checked<D extends Definition> {
   readonly info: { readonly Type: { readonly id: D["id"]["Type"] } }

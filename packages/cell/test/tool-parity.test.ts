@@ -670,8 +670,7 @@ test(
 )
 
 test.todo("J28 a background job stops on the sandbox 30 seconds or less after the idle cell closes", () =>
-  closedHarnessStops(30),
-)
+  closedHarnessStops(30))
 
 test("J29 five shell calls at once each get only their own output", () =>
   live(
@@ -764,8 +763,7 @@ test.todo("J41 a page near the end of a 10 MiB file does not transfer the file",
       const pages = yield* pagesOf10MiB([163_839])
       expect(pages[0]?.transferred).toBeLessThan(mebibyte)
     }),
-  ),
-)
+  ))
 
 const outsideWrite = Effect.fnUntraced(function* () {
   const opened = yield* open()
@@ -794,8 +792,7 @@ test.todo("J46 a write outside /workspace is refused by external_directory when 
       expect(outcome.result).not.toContain("Created file successfully")
       expect(outcome.written).toBeUndefined()
     }),
-  ),
-)
+  ))
 
 it.live("J50 a read of a 50 MiB file with no range gives a short answer, and the cell goes on", () =>
   Effect.gen(function* () {
@@ -859,8 +856,7 @@ test.todo("J51 a session reads another session's file by that session's /workspa
       )
       expect(lastToolResult(answer)).toContain("1: shared")
     }),
-  ),
-)
+  ))
 
 it.live("J52 interrupting one session's turn leaves another session's command running", () =>
   Effect.gen(function* () {

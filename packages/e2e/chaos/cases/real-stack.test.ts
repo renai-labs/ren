@@ -291,17 +291,14 @@ describe.skipIf(Platform.wrangler !== undefined || Platform.docker !== undefined
     }, 600_000)
 
     // oxlint-disable-next-line ren/no-comments -- OpenCode's import API takes only a directory, so a restored session has no workspace yet (the TODO in the cell's OpenCode harness).
-    test.todo(
-      "P5-08 a session with an environment whose cell lost its storage restores, and its next tool call runs in the same container folder",
-      async () => {
-        const session = await stack().session()
-        expect(await session.tool("shell", { command: "echo kept > kept.txt" })).toBe("(no output)")
-        await session.synced()
-        await stack().loseCellStorage()
-        expect(await session.tool("shell", { command: "cat kept.txt; pwd" })).toBe(
-          `kept\n/workspace/${session.sessionId}\n`,
-        )
-      },
-    )
+    test.todo("P5-08 a session with an environment whose cell lost its storage restores, and its next tool call runs in the same container folder", async () => {
+      const session = await stack().session()
+      expect(await session.tool("shell", { command: "echo kept > kept.txt" })).toBe("(no output)")
+      await session.synced()
+      await stack().loseCellStorage()
+      expect(await session.tool("shell", { command: "cat kept.txt; pwd" })).toBe(
+        `kept\n/workspace/${session.sessionId}\n`,
+      )
+    })
   },
 )
