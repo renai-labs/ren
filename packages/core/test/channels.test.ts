@@ -177,6 +177,17 @@ describe("Channels", () => {
     }),
   )
 
+  it.live("the provider fills in the event before the route, so the agent reads names, not ids", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const found = ChannelFixture.event(subject.install, { text: "ask <@U02> about it" })
+      yield* ChannelFixture.receive(ChannelFixture.delivery(found))
+      expect(yield* ChannelFixture.accepted(1)).toMatchObject([
+        { kind: "start", prompt: { text: "ask @Bob about it" } },
+      ])
+    }),
+  )
+
   it.live(
     "a message carries where it came from and the thread context, and goes on without a context it cannot read",
     () =>
@@ -549,6 +560,60 @@ describe("ChannelIdentity", () => {
 })
 
 describe("ChannelRoute", () => {
+  it.live(
+    "a DM starts a chat in the sender's private space, never a shared one; a sender without one, or unknown, is refused",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* routed
+        const database = yield* Database.Service
+        const routes = yield* ChannelRoute.Service
+        const outbox = yield* ChannelFixture.Outbox
+        const member = yield* person(subject.owner.organizationId, { inSpace: subject.owner.spaceId })
+        const alone = yield* Seed.space(subject.owner.organizationId)
+        yield* Seed.join(alone, member.id)
+        const own = Space.ID.create()
+        yield* database.db.insert(Database.Schema.space).values({
+          id: own,
+          organization_id: subject.owner.organizationId,
+          kind: "private",
+          owner_user_id: member.id,
+          name: "Personal Space",
+        })
+        yield* Seed.join(own, member.id)
+        outbox.emails.set("U01", member.email)
+        const dm = { id: "D01", kind: "dm" } as const
+        const found = ChannelFixture.event(subject.install, { place: dm, thread: { id: "D01:1712.33" } })
+        expect(yield* routes.resolve(found)).toMatchObject({ spaceId: own, senderUserId: member.id })
+        yield* ChannelFixture.receive(ChannelFixture.delivery(found))
+        yield* ChannelFixture.settled(found)
+        expect(yield* ChannelFixture.accepted(1)).toMatchObject([{ kind: "start" }])
+        expect(
+          yield* database.db
+            .select({ spaceId: Database.Schema.agent_session.space_id })
+            .from(Database.Schema.agent_session)
+            .innerJoin(
+              Database.Schema.channel_thread,
+              eq(Database.Schema.channel_thread.session_id, Database.Schema.agent_session.id),
+            )
+            .where(eq(Database.Schema.channel_thread.thread, "D01:1712.33")),
+        ).toEqual([{ spaceId: own }])
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ archived_at: new Date() })
+          .where(eq(Database.Schema.space.id, own))
+        const refused = (event: Channel.Event) => Effect.flip(routes.resolve(event))
+        expect(yield* refused(ChannelFixture.event(subject.install, { place: dm }))).toMatchObject({
+          _tag: "ChannelRoute.Refused",
+          reason: "no_private_space",
+        })
+        expect(
+          yield* refused(
+            ChannelFixture.event(subject.install, { place: dm, sender: { accountId: "U09", name: "Stranger" } }),
+          ),
+        ).toMatchObject({ _tag: "ChannelRoute.Refused", reason: "unlinked" })
+      }),
+  )
+
   it.live("a known sender in the space runs as themself; one outside it runs as the fallback user", () =>
     Effect.gen(function* () {
       const subject = yield* routed

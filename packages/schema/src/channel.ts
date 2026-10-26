@@ -107,6 +107,7 @@ export const FailureReason = Schema.Literals([
   "unlinked",
   "not_member",
   "fallback_gone",
+  "no_private_space",
   "brain_failed",
   "model_busy",
   "context_too_long",

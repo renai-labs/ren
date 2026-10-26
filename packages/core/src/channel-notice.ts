@@ -24,6 +24,8 @@ const textOf = (notice: Notice, app: string) => {
     unlinked: `Link your account to Ren so I can respond here. [Link your account](${app}/settings/preferences).`,
     not_member: "You need access to this channel’s space in Ren. Ask a space member to invite you.",
     fallback_gone: `I can’t respond here until this channel’s access is updated. Ask a space member to [update the channel settings](${app}/settings/channels/${notice.provider}).`,
+    no_private_space:
+      "I answer DMs in your private space in Ren, and you don’t have one. Mention me in a channel instead.",
     brain_failed: `I couldn’t start working on your message. Please try again. ${open}`,
     model_busy: `I’m temporarily unable to respond. Please try again in a minute. ${open}`,
     context_too_long: `This conversation is too long to continue. Please start a new thread. ${open}`,

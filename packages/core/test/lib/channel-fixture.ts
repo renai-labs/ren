@@ -126,6 +126,7 @@ const provider = Effect.gen(function* () {
         ? Effect.succeed(new Uint8Array(Number(file.url.slice("bytes:".length))).fill(97))
         : Effect.fail(new ChannelProvider.FileUnavailable({ message: `${file.name} is gone` }))
     },
+    enrich: (found) => Effect.succeed(Struct.evolve(found, { text: (text) => text.replaceAll("<@U02>", "@Bob") })),
     context: (found) =>
       found.message === "unreadable"
         ? Effect.fail(new ChannelProvider.Unavailable({ message: "Slack is down" }))

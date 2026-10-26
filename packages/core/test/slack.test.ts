@@ -1,7 +1,9 @@
 import { afterAll, describe, expect } from "bun:test"
 import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
+import type { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
+import { Session } from "@ren/schema/session"
 import { ConfigProvider, Effect, Layer, Option, Redacted } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { ChannelProvider } from "../src/channel-provider.js"
@@ -74,6 +76,24 @@ const callback = (event: object, extra: object = {}) => ({
   team_id: "T01",
   event,
   ...extra,
+})
+
+const authorized = { authorizations: [{ team_id: "T01", user_id: "UBOT" }] }
+
+const parsed = (event: object) =>
+  Effect.flatMap(provider, (slackProvider) => slackProvider.parse(signed(callback(event, authorized))))
+
+const eventOf = (overrides: Partial<Channel.Event> = {}): Channel.Event => ({
+  provider: "slack",
+  eventId: "Ev01",
+  install: "T01",
+  place: { id: "C07", kind: "channel" },
+  thread: { id: "C07:1.0" },
+  message: "5.0",
+  sender: { accountId: "T01:U01" },
+  text: "why?",
+  files: [],
+  ...overrides,
 })
 
 describe("Slack", () => {
@@ -150,6 +170,222 @@ describe("Slack", () => {
         _tag: "ChannelProvider.Unavailable",
       })
       slack.options.pageSize = 200
+    }),
+  )
+
+  it.live(
+    "a mention or a DM is an event of the thread channel:thread_ts; a bot, Ren's own message, an edit and a channel message without a mention are ignored",
+    () =>
+      Effect.gen(function* () {
+        expect(
+          yield* parsed({
+            type: "app_mention",
+            user: "U01",
+            team: "T01",
+            channel: "C07",
+            ts: "1712.40",
+            thread_ts: "1712.33",
+            text: "<@UBOT> the deploy failed",
+          }),
+        ).toEqual({
+          _tag: "Event",
+          event: {
+            provider: "slack",
+            eventId: "Ev01",
+            install: "T01",
+            place: { id: "C07", kind: "channel" },
+            thread: { id: "C07:1712.33" },
+            message: "1712.40",
+            sender: { accountId: "T01:U01" },
+            text: "the deploy failed",
+            files: [],
+          },
+        })
+        expect(
+          yield* parsed({
+            type: "message",
+            channel_type: "im",
+            subtype: "file_share",
+            user: "U01",
+            user_team: "T09",
+            channel: "D01",
+            ts: "1713.00",
+            text: "here",
+            files: [{ id: "F1", name: "a.log", mimetype: "text/plain", url_private_download: "https://f/1" }],
+          }),
+        ).toMatchObject({
+          _tag: "Event",
+          event: {
+            place: { id: "D01", kind: "dm" },
+            thread: { id: "D01:1713.00" },
+            sender: { accountId: "T09:U01" },
+            text: "here\n\n[file: a.log (text/plain)]",
+            files: [{ url: "https://f/1", name: "a.log", mime: "text/plain" }],
+          },
+        })
+        const message = { type: "message", channel_type: "im", user: "U01", channel: "D01", ts: "1713.00", text: "hi" }
+        expect(
+          yield* Effect.forEach(
+            [
+              { ...message, bot_id: "B01" },
+              { ...message, user: "UBOT" },
+              { ...message, subtype: "message_changed" },
+              { ...message, channel_type: "channel" },
+            ],
+            parsed,
+          ),
+        ).toMatchObject([{ _tag: "Ignore" }, { _tag: "Ignore" }, { _tag: "Ignore" }, { _tag: "Ignore" }])
+      }),
+  )
+
+  it.live(
+    "before the route, Slack gives the names of people and channels, the sender, the channel and the thread's link",
+    () =>
+      Effect.gen(function* () {
+        const slackProvider = yield* provider
+        const found = yield* installed()
+        slack.users.set("U01", { name: "ana", real_name: "Ana Lima" })
+        slack.users.set("U02", { name: "ben", real_name: "Ben Silva" })
+        slack.channels.splice(0, slack.channels.length, { id: "C07", name: "eng", is_private: false })
+        if (!slackProvider.enrich) return yield* Effect.die(new Error("Slack has no enrich"))
+        expect(
+          yield* slackProvider.enrich(
+            eventOf({
+              install: found.workspace,
+              thread: { id: "C07:1712.33" },
+              text: "ping <@U02> and <@U09> in <#C07>",
+            }),
+          ),
+        ).toMatchObject({
+          text: "ping @Ben Silva and @U09 in #eng",
+          sender: { accountId: "T01:U01", name: "Ana Lima", handle: "ana" },
+          place: { id: "C07", name: "eng" },
+          thread: { id: "C07:1712.33", url: `${slack.url}/archives/C07/p171233` },
+        })
+        expect(yield* slackProvider.enrich(eventOf({ install: "T-unknown", text: "ping <@U02>" }))).toMatchObject({
+          text: "ping @U02",
+        })
+      }),
+  )
+
+  it.live(
+    "the context is the thread since Ren's previous mention without Ren's own messages, and the latest 50 messages at most",
+    () =>
+      Effect.gen(function* () {
+        const slackProvider = yield* provider
+        const found = yield* installed()
+        slack.users.set("U01", { name: "ana", real_name: "Ana Lima" })
+        slack.users.set("U02", { name: "ben", real_name: "Ben Silva" })
+        const reply = (ts: string, user: string, text: string) => ({ ts, user, text })
+        slack.replies.splice(
+          0,
+          slack.replies.length,
+          reply("1.0", "U01", "deploy?"),
+          reply("2.0", "U02", "<@UBOT> check it"),
+          reply("3.0", "UBOT", "On it"),
+          reply("4.0", "U02", "it failed for <@U01>"),
+          reply("5.0", "U01", "<@UBOT> why?"),
+        )
+        const event = eventOf({ install: found.workspace })
+        expect(yield* slackProvider.context(event)).toEqual(Option.some("[Ben Silva] it failed for @Ana Lima"))
+        slack.replies.splice(0, 2)
+        expect(yield* slackProvider.context(event)).toEqual(Option.some("[Ben Silva] it failed for @Ana Lima"))
+        slack.replies.splice(
+          0,
+          slack.replies.length,
+          ...Array.from({ length: 60 }, (_, index) => reply(`${index + 1}.5`, "U01", `line ${index + 1}`)),
+          reply("99.0", "U02", "<@UBOT> sum it up"),
+        )
+        const long = yield* slackProvider.context(eventOf({ install: found.workspace, message: "99.0" }))
+        const lines = Option.getOrElse(long, () => "").split("\n")
+        expect([lines.length, lines[0], lines[1], lines.at(-1)]).toEqual([
+          51,
+          "[earlier messages omitted]",
+          "[Ana Lima] line 11",
+          "[Ana Lima] line 60",
+        ])
+        slack.replies.splice(0, slack.replies.length, reply("5.0", "U01", "<@UBOT> why?"))
+        expect(yield* slackProvider.context(event)).toEqual(Option.none())
+      }),
+  )
+
+  it.live("context reports an incomplete thread when its page budget cannot reach the current message", () =>
+    Effect.gen(function* () {
+      const slackProvider = yield* provider
+      const found = yield* installed()
+      slack.replies.splice(
+        0,
+        slack.replies.length,
+        ...Array.from({ length: 2001 }, (_, index) => ({
+          ts: `${index + 1}.0`,
+          user: "U01",
+          text: `line ${index + 1}`,
+        })),
+      )
+      expect(yield* slackProvider.context(eventOf({ install: found.workspace, message: "2002.0" }))).toEqual(
+        Option.some("[Thread context omitted: the pagination limit was reached before the current message.]"),
+      )
+    }),
+  )
+
+  it.live("files declared over the size limit are refused before downloading", () =>
+    Effect.gen(function* () {
+      const slackProvider = yield* provider
+      const found = yield* installed()
+      const file = { url: `${slack.url}/files/F2`, name: "large.log", mime: "text/plain" }
+      slack.files.set("F2", "small")
+      expect(
+        yield* Effect.flip(slackProvider.fetchFile(found.workspace, { ...file, size: Session.maxFileBytes + 1 })),
+      ).toMatchObject({
+        _tag: "ChannelProvider.FileUnavailable",
+        message: "Slack file large.log exceeds the 10 MB limit",
+      })
+    }),
+  )
+
+  it.live("files with an underreported size are refused when the response exceeds the byte limit", () =>
+    Effect.gen(function* () {
+      const slackProvider = yield* provider
+      const found = yield* installed()
+      const file = { url: `${slack.url}/files/F2`, name: "large.log", mime: "text/plain" }
+      slack.files.set("F2", "x".repeat(Session.maxFileBytes + 1))
+      expect(yield* Effect.flip(slackProvider.fetchFile(found.workspace, { ...file, size: 1 }))).toMatchObject({
+        _tag: "ChannelProvider.FileUnavailable",
+        message: "Slack file exceeds the 10 MB limit",
+      })
+      slack.files.delete("F2")
+    }),
+  )
+
+  it.live("a sender's email is their Slack profile's; a file downloads with the bot token, only from Slack", () =>
+    Effect.gen(function* () {
+      const slackProvider = yield* provider
+      const found = yield* installed()
+      slack.users.set("U01", { name: "ana", real_name: "Ana Lima", email: "ana@acme.test" })
+      expect(yield* slackProvider.email(found.workspace, { accountId: "T01:U01" })).toEqual(
+        Option.some("ana@acme.test"),
+      )
+      expect(yield* slackProvider.email(found.workspace, { accountId: "T01:U77" })).toEqual(Option.none())
+      slack.files.set("F1", "the log")
+      const bytes = yield* slackProvider.fetchFile(found.workspace, {
+        url: `${slack.url}/files/F1`,
+        name: "a.log",
+        mime: "text/plain",
+      })
+      expect(new TextDecoder().decode(bytes)).toBe("the log")
+      expect(
+        yield* Effect.flip(
+          slackProvider.fetchFile(found.workspace, {
+            url: "https://evil.example.com/F1",
+            name: "a",
+            mime: "text/plain",
+          }),
+        ),
+      ).toMatchObject({ _tag: "ChannelProvider.FileUnavailable" })
+      expect(slackProvider.linkOf(eventOf({ thread: { id: "c07:1712.33" } }))).toEqual(
+        Option.some({ kind: "slack_thread", key: "C07:1712.33" }),
+      )
+      expect(slackProvider.linkOf(eventOf({ place: { id: "D01", kind: "dm" } }))).toEqual(Option.none())
     }),
   )
 

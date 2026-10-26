@@ -5,7 +5,7 @@ import type { Agent } from "@ren/schema/agent"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
 import { and, eq, sql } from "drizzle-orm"
-import { Context, Effect, Layer, Option, Result, Schema } from "effect"
+import { Context, Effect, Layer, Option, Result, Schema, Struct } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainHost } from "./brain-host.js"
 import { ChannelInstalls } from "./channel-installs.js"
@@ -356,9 +356,10 @@ export const layer = Layer.effect(
     })
 
     const run = Effect.fnUntraced(function* (payload: typeof EventRun.payloadSchema.Type) {
-      const event = payload.event
-      const found = registry.get(event.provider)
-      if (Option.isNone(found)) return yield* Effect.logError(`No channel provider ${event.provider} runs this event`)
+      const found = registry.get(payload.event.provider)
+      if (Option.isNone(found))
+        return yield* Effect.logError(`No channel provider ${payload.event.provider} runs this event`)
+      const event = found.value.enrich ? yield* found.value.enrich(payload.event) : payload.event
       const route = yield* routes.resolve(event)
       yield* found.value
         .progress(targetOf(event), "received")
@@ -370,7 +371,7 @@ export const layer = Layer.effect(
       )
       const message = {
         messageId: payload.messageId,
-        prompt: yield* prompt(found.value, { ...event, text: route.text }),
+        prompt: yield* prompt(found.value, Struct.evolve(event, { text: () => route.text })),
         sender: { userId: route.senderUserId },
         channel: {
           provider: event.provider,
