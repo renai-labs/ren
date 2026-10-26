@@ -32,7 +32,6 @@ function CredentialsRoute() {
       apps={
         <OrgApps
           appId={search.app}
-          userId={context.me.user.id}
           onAppChange={(app) => void navigate({ search: app ? { app } : {}, replace: true })}
         />
       }

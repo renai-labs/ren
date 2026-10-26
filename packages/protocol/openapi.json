@@ -8797,11 +8797,19 @@
             "items": {
               "$ref": "#/components/schemas/AppProfile.SpaceRef"
             },
-            "description": "The listed spaces that the caller belongs to."
+            "description": "The listed spaces that the caller can see."
           },
           "hiddenSpaces": {
             "type": "integer",
-            "description": "The count of listed spaces that the caller does not belong to."
+            "description": "The count of listed spaces that the caller cannot see."
+          },
+          "canAccess": {
+            "type": "boolean",
+            "description": "True when the caller may change the spaces that list the profile."
+          },
+          "canShareEverySpace": {
+            "type": "boolean",
+            "description": "True when the caller may share the profile with every space."
           },
           "links": {
             "type": "array",
@@ -8872,6 +8880,8 @@
           "allSpaces",
           "spaces",
           "hiddenSpaces",
+          "canAccess",
+          "canShareEverySpace",
           "links",
           "items",
           "unused",
@@ -9436,9 +9446,18 @@
         ]
       },
       "Credential.Host": {
-        "type": "string",
-        "maxLength": 253,
-        "pattern": "^(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]*[a-z0-9]$"
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["*"]
+          },
+          {
+            "type": "string",
+            "maxLength": 253,
+            "pattern": "^(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z][a-z0-9-]*[a-z0-9]$"
+          }
+        ],
+        "description": "A host that may get the credential: a name, `*.<domain>` for its subdomains, or `*` for any host."
       },
       "Credential.Hosts": {
         "type": "array",

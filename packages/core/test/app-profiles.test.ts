@@ -129,6 +129,8 @@ it.live("a member's list writes touch only their spaces; get shows the hidden co
       spaces: [found.sales],
       hidden: 1,
     })
+    expect(seen).toMatchObject({ canAccess: false, canShareEverySpace: false })
+    expect(yield* profiles.get(found.root, both.id)).toMatchObject({ canAccess: true, canShareEverySpace: true })
     const mine = yield* ProfilesFixture.profile(found.ana, {
       appId: found.google.id,
       slug: "ana-shared",
@@ -138,6 +140,7 @@ it.live("a member's list writes touch only their spaces; get shows the hidden co
     expect((yield* Effect.flip(profiles.access(found.ana, mine.id, { add: [found.finance] })))._tag).toBe(
       "Primitive.Forbidden",
     )
+    expect(mine).toMatchObject({ canAccess: true, canShareEverySpace: false })
     const added = yield* profiles.access(found.ana, mine.id, { add: [found.design], remove: [found.sales] })
     expect(added.spaces.map((space) => space.id)).toEqual([found.design])
     expect((yield* Effect.flip(profiles.access(found.ana, mine.id, { allSpaces: true })))._tag).toBe(

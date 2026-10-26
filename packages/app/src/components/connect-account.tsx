@@ -14,10 +14,8 @@ import { ProgressIndicator } from "@ren/ui/progress-indicator"
 import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useRouteContext } from "@tanstack/react-router"
 import { Schema } from "effect"
 import { useState } from "react"
-import { Auth } from "../lib/auth.js"
 import { RouterContext } from "../lib/router-context.js"
 import { Platform } from "../platform/platform.js"
 import { AccountAccess } from "./account-access.js"
@@ -325,8 +323,6 @@ function KeyRow(props: {
 
 function EditAccount(props: { profile: AppProfileInfo; onChanged: () => Promise<unknown> }) {
   const context = RouterContext.useRouterContext()
-  const authed = useRouteContext({ from: "/_authed" })
-  const role = useQuery(Auth.activeRoleOptions(context.auth))
   const spaces = useQuery(context.api.space.list.queryOptions(Apps.page))
   const update = useMutation(context.api["app-profile"].update.mutationOptions())
   return (
@@ -342,12 +338,7 @@ function EditAccount(props: { profile: AppProfileInfo; onChanged: () => Promise<
         />
       </Field.Root>
       <Field.Root label="Used in" orientation="row" description={Apps.reach(props.profile)}>
-        <AccountAccess
-          profile={props.profile}
-          spaces={spaces.data?.items ?? []}
-          userId={authed.me.user.id}
-          admin={role.data !== undefined && Auth.isAdminRole(role.data)}
-        />
+        <AccountAccess profile={props.profile} spaces={spaces.data?.items ?? []} />
       </Field.Root>
       <Notice tone="danger" placement="inline">
         {update.error?.message}
