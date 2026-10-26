@@ -90,6 +90,28 @@ it.live("publish refuses a slug that a custom app holds, and never writes onto i
   }),
 )
 
+it.live("an admin reads a listed app but never edits, archives or moves it", () =>
+  Effect.gen(function* () {
+    const apps = yield* App.Service
+    const listed = yield* publish(publication("listed"))
+    const admin = yield* ProfilesFixture.user(yield* Seed.organization(), "Root", "admin")
+    const app = yield* apps.get(admin, listed.appId)
+    const edit = {
+      name: "Mine",
+      requiredCredentials: app.requiredCredentials,
+      mcps: app.mcps,
+      skills: app.skills,
+      dependsOn: app.dependsOn,
+      expectedRevision: app.revision,
+    }
+    expect((yield* Effect.flip(apps.update(admin, app.id, edit)))._tag).toBe("Primitive.Forbidden")
+    expect((yield* Effect.flip(apps.archive(admin, app.id)))._tag).toBe("Primitive.Forbidden")
+    expect((yield* Effect.flip(apps.transferOwnership(admin, app.id, { spaceId: admin.personal })))._tag).toBe(
+      "Primitive.Forbidden",
+    )
+  }),
+)
+
 it.live("browsing lists active listings by text and category", () =>
   Effect.gen(function* () {
     const registry = yield* AppRegistry.Service

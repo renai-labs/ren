@@ -55,19 +55,20 @@ export const layer = Layer.effect(
     const database = yield* Database.Service
     const access = yield* Access.Service
 
-    const allowed = (actor: Actor.Info, action: string) =>
-      access.isAllowed({ actor, action, resource: TaskPolicy.organization })
-        ? Effect.void
-        : Effect.fail(new Primitive.Forbidden({ message: "You cannot change labels." }))
-
-    const findOwn = Effect.fnUntraced(function* (transaction: Database.Transaction, actor: Actor.Info, id: Label.ID) {
+    const findOwn = Effect.fnUntraced(function* (
+      transaction: Database.Transaction,
+      actor: Actor.Info,
+      id: Label.ID,
+      action: string,
+    ) {
       const row = (yield* transaction
         .select()
         .from(Database.Schema.label)
         .where(and(eq(Database.Schema.label.id, id), visibleTo(actor)))
         .for("update")).at(0)
       if (!row) return yield* notFound
-      if (!row.organization_id) return yield* new Primitive.Forbidden({ message: "System labels cannot change." })
+      if (!access.isAllowed({ actor, action, resource: TaskPolicy.label(row.organization_id) }))
+        return yield* new Primitive.Forbidden({ message: "You cannot change this label." })
       return row
     })
 
@@ -102,7 +103,8 @@ export const layer = Layer.effect(
         )
       }),
       create: Effect.fn("Label.create")(function* (actor: Actor.Info, input: Label.CreateInput) {
-        yield* allowed(actor, actions.create)
+        if (!access.isAllowed({ actor, action: actions.create, resource: TaskPolicy.organization }))
+          return yield* new Primitive.Forbidden({ message: "You cannot create labels." })
         return yield* database.transaction((transaction) =>
           transaction
             .insert(Database.Schema.label)
@@ -117,9 +119,8 @@ export const layer = Layer.effect(
         )
       }),
       update: Effect.fn("Label.update")(function* (actor: Actor.Info, id: Label.ID, input: Label.UpdateInput) {
-        yield* allowed(actor, actions.update)
         return yield* database.transaction((transaction) =>
-          findOwn(transaction, actor, id).pipe(
+          findOwn(transaction, actor, id, actions.update).pipe(
             Effect.flatMap((row) =>
               transaction
                 .update(Database.Schema.label)
@@ -133,10 +134,9 @@ export const layer = Layer.effect(
         )
       }),
       archive: Effect.fn("Label.archive")(function* (actor: Actor.Info, id: Label.ID) {
-        yield* allowed(actor, actions.archive)
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
-            yield* findOwn(transaction, actor, id)
+            yield* findOwn(transaction, actor, id, actions.archive)
             yield* transaction.delete(Database.Schema.task_label).where(eq(Database.Schema.task_label.label_id, id))
             const rows = yield* transaction
               .update(Database.Schema.label)

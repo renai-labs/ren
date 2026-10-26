@@ -32,12 +32,14 @@ export const documents = [
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
 
 export interface Holds {
+  readonly organizationId: Auth.OrganizationID | null
   readonly isOwnerMember: boolean
   readonly isSpaceMember: boolean
   readonly isTargetMember?: boolean
   readonly isListed?: boolean
 }
 export const resource = (holds: Holds): Access.Resource => ({
+  organizationId: holds.organizationId,
   relationships: [
     ...(holds.isOwnerMember ? ["app.ownerMember"] : []),
     ...(holds.isSpaceMember ? ["app.spaceMember"] : []),
