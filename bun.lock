@@ -7,6 +7,7 @@
       "devDependencies": {
         "@ast-grep/cli": "0.45.3",
         "@oxlint/plugins": "1.87.0",
+        "@ren/test-harness": "workspace:*",
         "@tsconfig/bun": "catalog:",
         "@types/bun": "catalog:",
         "@typescript/native-preview": "catalog:",
@@ -414,6 +415,14 @@
         "storybook": "catalog:",
         "tailwindcss": "catalog:",
         "vite": "catalog:",
+      },
+    },
+    "packages/test-harness": {
+      "name": "@ren/test-harness",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
       },
     },
     "packages/ui": {
@@ -1659,6 +1668,8 @@
     "@ren/site": ["@ren/site@workspace:packages/site"],
 
     "@ren/storybook": ["@ren/storybook@workspace:packages/storybook"],
+
+    "@ren/test-harness": ["@ren/test-harness@workspace:packages/test-harness"],
 
     "@ren/ui": ["@ren/ui@workspace:packages/ui"],
 

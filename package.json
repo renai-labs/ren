@@ -103,6 +103,7 @@
     }
   },
   "devDependencies": {
+    "@ren/test-harness": "workspace:*",
     "@ast-grep/cli": "0.45.3",
     "@oxlint/plugins": "1.87.0",
     "@tsconfig/bun": "catalog:",
