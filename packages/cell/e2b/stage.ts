@@ -27,7 +27,8 @@ const owner = options.E2B_TEMPLATE_OWNER ?? "ren-v2-dev"
 
 const size = { cpuCount: options.E2B_TEMPLATE_CPU ?? 2, memoryMB: options.E2B_TEMPLATE_MEMORY_MB ?? 2048 }
 
-const dockerfiles = options.E2B_TEMPLATE_TOOLS === "full" ? ["e2b.Dockerfile", "e2b.tools.Dockerfile"] : ["e2b.Dockerfile"]
+const dockerfiles =
+  options.E2B_TEMPLATE_TOOLS === "full" ? ["e2b.Dockerfile", "e2b.tools.Dockerfile"] : ["e2b.Dockerfile"]
 
 const Manifest = Schema.Struct({
   name: Schema.String,

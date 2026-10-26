@@ -216,7 +216,9 @@ export const make = Effect.fnUntraced(function* (
     removeModels: install({ endpoints: [] }),
     configure: (update: HarnessConfig.Update) =>
       Effect.scoped(Effect.flatMap(Context.get(cell, Harness.Service).get, (instance) => instance.configure(update))),
-    configuration: Effect.scoped(Effect.flatMap(Context.get(cell, Harness.Service).get, (instance) => instance.configuration)),
+    configuration: Effect.scoped(
+      Effect.flatMap(Context.get(cell, Harness.Service).get, (instance) => instance.configuration),
+    ),
     configureApps: (apps: AppCatalog.Info) =>
       Effect.scoped(
         Effect.flatMap(Context.get(cell, Harness.Service).get, (instance) =>

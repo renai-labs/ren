@@ -145,7 +145,11 @@ export function MemberSelect(props: {
   const context = RouterContext.useRouterContext()
   const members = useQuery(
     Pages.all((number) =>
-      context.api["space-member"].list.queryOptions({ ...ChannelMappingData.page, page: number, spaceId: props.spaceId }),
+      context.api["space-member"].list.queryOptions({
+        ...ChannelMappingData.page,
+        page: number,
+        spaceId: props.spaceId,
+      }),
     ),
   )
   return (
@@ -169,7 +173,12 @@ function AgentSelect(props: { spaceId: string; value: string; onChange: (agentId
   const context = RouterContext.useRouterContext()
   const agents = useQuery(
     Pages.all((number) =>
-      context.api.agent.list.queryOptions({ ...ChannelMappingData.page, page: number, spaceId: props.spaceId, isSubagent: false }),
+      context.api.agent.list.queryOptions({
+        ...ChannelMappingData.page,
+        page: number,
+        spaceId: props.spaceId,
+        isSubagent: false,
+      }),
     ),
   )
   return (

@@ -20,7 +20,16 @@ import {
 } from "effect"
 import { RenInference } from "./ren-inference.js"
 
-export { Access, Catalog, Endpoint, LiteLLMModelInfo, catalog, fromLiteLLM, personLabel, placeholderKey } from "@ren/schema/models"
+export {
+  Access,
+  Catalog,
+  Endpoint,
+  LiteLLMModelInfo,
+  catalog,
+  fromLiteLLM,
+  personLabel,
+  placeholderKey,
+} from "@ren/schema/models"
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Models.Unavailable", {
   cause: Schema.Defect(),

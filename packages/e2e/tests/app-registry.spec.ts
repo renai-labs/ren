@@ -2,7 +2,9 @@ import { expect, test } from "@playwright/test"
 import { Ren } from "@ren/client"
 import { createOrganization, serverURL } from "./lib/servers.js"
 
-test("a member finds a listed app with the generated client, gives it a profile and cannot change it", async ({ request }) => {
+test("a member finds a listed app with the generated client, gives it a profile and cannot change it", async ({
+  request,
+}) => {
   await createOrganization(request, { name: "Ada Lovelace" })
   const cookie = (await request.storageState()).cookies.map((entry) => `${entry.name}=${entry.value}`).join("; ")
   const ren = Ren.make({ baseUrl: serverURL, headers: { cookie } })

@@ -71,10 +71,12 @@ export function SpaceChannels(props: { spaceId: string; userId: string }) {
 
 function useCanConfigure(spaceId: string) {
   const context = RouterContext.useRouterContext()
-  return useQuery({
-    ...context.api.space.get.queryOptions({ idOrSlug: spaceId }),
-    select: (space) => space.canUpdate,
-  }).data === true
+  return (
+    useQuery({
+      ...context.api.space.get.queryOptions({ idOrSlug: spaceId }),
+      select: (space) => space.canUpdate,
+    }).data === true
+  )
 }
 
 const channelState = (input: { loading: boolean; available: boolean; routed: boolean }): ChannelState => {

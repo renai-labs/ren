@@ -49,7 +49,8 @@ export const McpEntry = Schema.Struct({
   ),
   url: Schema.optionalKey(
     Schema.String.annotate({
-      description: "For a provider MCP: the address to call, the provider’s host with the first path segment `ren:<label>`.",
+      description:
+        "For a provider MCP: the address to call, the provider’s host with the first path segment `ren:<label>`.",
     }),
   ),
 }).annotate({ identifier: "AppCatalog.McpEntry" })

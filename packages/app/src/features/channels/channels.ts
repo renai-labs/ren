@@ -63,7 +63,13 @@ export const byId: Readonly<Record<Provider, Info>> = {
     category: "planning",
     description: "Assign work to Ren, respond to mentions, and keep issue conversations in sync.",
     place: { noun: "project", title: "Project" },
-    board: { label: "Linear projects", noun: "Linear project", glyph: "ListChecks", prefix: "", targetSharing: "shared" },
+    board: {
+      label: "Linear projects",
+      noun: "Linear project",
+      glyph: "ListChecks",
+      prefix: "",
+      targetSharing: "shared",
+    },
   },
 }
 

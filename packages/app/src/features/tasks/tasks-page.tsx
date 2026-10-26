@@ -214,11 +214,7 @@ function SelectionBar(
     <BulkActionBar
       {...props}
       count={props.tasks.length}
-      agents={
-        space === undefined
-          ? props.agents.filter((agent) => agent.isGlobal)
-          : (spaceAgents.data ?? [])
-      }
+      agents={space === undefined ? props.agents.filter((agent) => agent.isGlobal) : (spaceAgents.data ?? [])}
     />
   )
 }

@@ -90,7 +90,8 @@ export const layer = Layer.effect(
 
     return Service.of({
       issue: Effect.fn("CredentialCallers.issue")(function* (caller: Caller, kind: ProofKind) {
-        const login = kind === "ProxyLogin" ? { username: `ren-${Random.token(12)}`, password: Random.token(32) } : undefined
+        const login =
+          kind === "ProxyLogin" ? { username: `ren-${Random.token(12)}`, password: Random.token(32) } : undefined
         const passwordHash = login ? yield* hash(login.password) : null
         // oxlint-disable-next-line ren/no-comments -- The provider needs the login again on every resume and network update (C38); Ren keeps it sealed, and checks proofs against the hash.
         const passwordSealed = login
