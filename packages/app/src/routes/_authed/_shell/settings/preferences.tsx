@@ -11,5 +11,6 @@ function PreferencesPage() {
   const context = Route.useRouteContext()
   const me = useQuery(context.api.me.get.queryOptions())
   const user = me.data?.user ?? context.me.user
-  return <Preferences key={user.id} user={user} />
+  const organization = me.data?.organization ?? context.me.organization
+  return <Preferences key={user.id} user={user} organization={organization} />
 }

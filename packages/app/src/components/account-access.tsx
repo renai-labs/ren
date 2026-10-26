@@ -1,4 +1,4 @@
-import type { AppProfileInfo, SpaceInfo } from "@ren/client"
+import type { AppProfileInfo, AppProfileSpaceShape, SpaceInfo } from "@ren/client"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
 import { Icon } from "@ren/ui/icon"
@@ -10,13 +10,20 @@ import { RouterContext } from "../lib/router-context.js"
 import { Apps } from "./apps.js"
 
 // oxlint-disable-next-line ren/no-comments -- profiles.md §10 (P19, P20): the server decides, through canAccess and canShareEverySpace.
-export function AccountAccess(props: { profile: AppProfileInfo; spaces: ReadonlyArray<SpaceInfo> }) {
+export function AccountAccess(props: { profile: AppProfileInfo; spaces: ReadonlyArray<SpaceInfo>; userId: string }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
   const access = useMutation(context.api["app-profile"].access.mutationOptions())
   const [confirming, setConfirming] = useState<string>()
   if (props.profile.kind === "private" || !props.profile.canAccess) return null
   const listed = new Set(props.profile.spaces.map((space) => space.id))
+  const shapeOf = (space: SpaceInfo): AppProfileSpaceShape => {
+    if (space.kind === "private") return space.ownerUserId === props.userId ? "ownPrivate" : "otherPrivate"
+    return space.membershipId ? "joined" : "shared"
+  }
+  const offered = props.spaces.filter((space) =>
+    (listed.has(space.id) ? props.profile.canRemove : props.profile.canAdd).includes(shapeOf(space)),
+  )
   const change = (input: {
     readonly add?: Array<string>
     readonly remove?: Array<string>
@@ -63,12 +70,12 @@ export function AccountAccess(props: { profile: AppProfileInfo; spaces: Readonly
             </>
           ) : null}
           <Menu.Section label="Spaces">
-            {props.spaces.map((space) => (
+            {offered.map((space) => (
               <Menu.CheckboxItem
                 key={space.id}
                 checked={props.profile.allSpaces || listed.has(space.id)}
                 disabled={props.profile.allSpaces}
-                icon={<Icon glyph="Cube" />}
+                icon={<Icon glyph={space.kind === "private" ? "Lock" : "Cube"} />}
                 onCheckedChange={(checked) => {
                   if (checked) change({ add: [space.id] })
                   else if (Apps.isLastSpace(props.profile)) setConfirming(space.id)

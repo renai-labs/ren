@@ -62,6 +62,8 @@ export type AppProfileSlug = string
 
 export type AppProfileKind = "shared" | "private"
 
+export type AppProfileSpaceShape = "shared" | "joined" | "ownPrivate" | "otherPrivate"
+
 export type CredentialRequirementKind = "oauth" | "provider" | "fields" | "env"
 
 export type AppProfileItemStatus = "ok" | "missing" | "reconnect" | "unavailable"
@@ -815,6 +817,8 @@ export type AppProfileInfo = {
   hiddenSpaces: number
   canAccess: boolean
   canShareEverySpace: boolean
+  canAdd: Array<AppProfileSpaceShape>
+  canRemove: Array<AppProfileSpaceShape>
   links: Array<AppProfileLink>
   items: Array<AppProfileItem>
   unused: Array<{ credentialId: CredentialID; label: CredentialEnvName }>

@@ -9679,6 +9679,20 @@
             "type": "boolean",
             "description": "True when the caller may share the profile with every space."
           },
+          "canAdd": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.SpaceShape"
+            },
+            "description": "The kinds of space the caller may add to the list."
+          },
+          "canRemove": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppProfile.SpaceShape"
+            },
+            "description": "The kinds of space the caller may remove from the list."
+          },
           "links": {
             "type": "array",
             "items": {
@@ -9750,6 +9764,8 @@
           "hiddenSpaces",
           "canAccess",
           "canShareEverySpace",
+          "canAdd",
+          "canRemove",
           "links",
           "items",
           "unused",
@@ -9954,6 +9970,11 @@
         },
         "required": ["id", "name"],
         "additionalProperties": false
+      },
+      "AppProfile.SpaceShape": {
+        "type": "string",
+        "enum": ["shared", "joined", "ownPrivate", "otherPrivate"],
+        "description": "A space as a list write sees it: a shared space the caller is not in, one they are in, their own private space, or another person’s."
       },
       "AppProfile.UpdateInput": {
         "type": "object",

@@ -361,6 +361,12 @@ export const layer = Layer.effect(
             hiddenSpaces: visible.length - shown.length,
             canAccess: allowed(actor, AppProfilePolicy.actions.access, holds),
             canShareEverySpace: allowed(actor, AppProfilePolicy.actions.allSpaces, holds),
+            canAdd: shapes.filter((shape) =>
+              allowed(actor, AppProfilePolicy.actions.addSpace, holds, { target: AppProfilePolicy.shapes[shape] }),
+            ),
+            canRemove: shapes.filter((shape) =>
+              allowed(actor, AppProfilePolicy.actions.removeSpace, holds, { target: AppProfilePolicy.shapes[shape] }),
+            ),
             links: (dependencies.get(row.app_id) ?? [])
               .filter(
                 (edge) =>
@@ -846,5 +852,7 @@ const unusedAfter = (input: AppProfile.AccessInput, before: { readonly allSpaces
   ((input.remove?.length ?? 0) > 0 || input.allSpaces === false) &&
   !(input.allSpaces ?? before.allSpaces) &&
   before.left === 0
+
+const shapes = AppProfile.SpaceShape.literals
 
 const holdsNone = { isCreator: false, isListedMember: false, allSpaces: false, isSelf: false }

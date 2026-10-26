@@ -110,6 +110,14 @@ export interface Target {
   readonly isOwnPrivate: boolean
 }
 
+// oxlint-disable-next-line ren/no-comments -- The target facts of each space shape, so a client learns which spaces it may offer.
+export const shapes: Record<AppProfile.SpaceShape, Target> = {
+  shared: { isMember: false, isPrivate: false, isOwnPrivate: false },
+  joined: { isMember: true, isPrivate: false, isOwnPrivate: false },
+  ownPrivate: { isMember: true, isPrivate: true, isOwnPrivate: true },
+  otherPrivate: { isMember: false, isPrivate: true, isOwnPrivate: false },
+}
+
 export interface Link {
   readonly isPrivate: boolean
   readonly isForeign: boolean

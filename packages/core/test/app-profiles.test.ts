@@ -119,40 +119,47 @@ it.live("removing a shared profile from its last space deletes it; a space the c
   }),
 )
 
-it.live("a member's list writes touch only their spaces, or add their own private space (AC15); get shows the hidden count; only admins set all_spaces", () =>
-  Effect.gen(function* () {
-    const found = yield* org()
-    const profiles = yield* AppProfiles.Service
-    const both = yield* ProfilesFixture.profile(found.root, {
-      appId: found.google.id,
-      slug: "both",
-      kind: "shared",
-      spaceIds: [found.sales, found.finance],
-    })
-    const seen = yield* profiles.get(found.ana, both.id)
-    expect({ spaces: seen.spaces.map((space) => space.id), hidden: seen.hiddenSpaces }).toEqual({
-      spaces: [found.sales],
-      hidden: 1,
-    })
-    expect(seen).toMatchObject({ canAccess: true, canShareEverySpace: false })
-    expect(yield* profiles.get(found.root, both.id)).toMatchObject({ canAccess: true, canShareEverySpace: true })
-    const mine = yield* ProfilesFixture.profile(found.ana, {
-      appId: found.google.id,
-      slug: "ana-shared",
-      kind: "shared",
-      spaceIds: [found.sales],
-    })
-    expect((yield* Effect.flip(profiles.access(found.ana, mine.id, { add: [found.finance] })))._tag).toBe(
-      "Primitive.Forbidden",
-    )
-    expect(mine).toMatchObject({ canAccess: true, canShareEverySpace: false })
-    const added = yield* profiles.access(found.ana, mine.id, { add: [found.design], remove: [found.sales] })
-    expect(added.spaces.map((space) => space.id)).toEqual([found.design])
-    expect((yield* Effect.flip(profiles.access(found.ana, mine.id, { allSpaces: true })))._tag).toBe(
-      "Primitive.Forbidden",
-    )
-    expect((yield* profiles.access(found.root, mine.id, { allSpaces: true })).allSpaces).toBe(true)
-  }),
+it.live(
+  "a member's list writes touch only their spaces, or add their own private space (AC15); get shows the hidden count; only admins set all_spaces",
+  () =>
+    Effect.gen(function* () {
+      const found = yield* org()
+      const profiles = yield* AppProfiles.Service
+      const both = yield* ProfilesFixture.profile(found.root, {
+        appId: found.google.id,
+        slug: "both",
+        kind: "shared",
+        spaceIds: [found.sales, found.finance],
+      })
+      const seen = yield* profiles.get(found.ana, both.id)
+      expect({ spaces: seen.spaces.map((space) => space.id), hidden: seen.hiddenSpaces }).toEqual({
+        spaces: [found.sales],
+        hidden: 1,
+      })
+      expect(seen).toMatchObject({
+        canAccess: true,
+        canShareEverySpace: false,
+        canAdd: ["ownPrivate"],
+        canRemove: ["ownPrivate"],
+      })
+      expect(yield* profiles.get(found.root, both.id)).toMatchObject({ canAccess: true, canShareEverySpace: true })
+      const mine = yield* ProfilesFixture.profile(found.ana, {
+        appId: found.google.id,
+        slug: "ana-shared",
+        kind: "shared",
+        spaceIds: [found.sales],
+      })
+      expect((yield* Effect.flip(profiles.access(found.ana, mine.id, { add: [found.finance] })))._tag).toBe(
+        "Primitive.Forbidden",
+      )
+      expect(mine).toMatchObject({ canAccess: true, canShareEverySpace: false })
+      const added = yield* profiles.access(found.ana, mine.id, { add: [found.design], remove: [found.sales] })
+      expect(added.spaces.map((space) => space.id)).toEqual([found.design])
+      expect((yield* Effect.flip(profiles.access(found.ana, mine.id, { allSpaces: true })))._tag).toBe(
+        "Primitive.Forbidden",
+      )
+      expect((yield* profiles.access(found.root, mine.id, { allSpaces: true })).allSpaces).toBe(true)
+    }),
 )
 
 it.live(

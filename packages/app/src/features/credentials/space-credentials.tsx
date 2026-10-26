@@ -22,7 +22,9 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
   const all = useQuery(context.api.credential.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
-  const spaces = useQuery(context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
+  const spaces = useQuery(
+    context.api.space.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize, joined: true }),
+  )
 
   const [query, setQuery] = useState("")
   const [creating, setCreating] = useState(false)

@@ -20,7 +20,7 @@ export const listOptions = (api: Runtime.Context["api"], filters: TaskSearch.Fil
 
 export function catalogOptions(api: Runtime.Context["api"]) {
   return [
-    Pages.all((page) => api.space.list.queryOptions({ page, pageSize: Pagination.maximumPageSize })),
+    Pages.all((page) => api.space.list.queryOptions({ page, pageSize: Pagination.maximumPageSize, joined: true })),
     Pages.all((page) => api.agent.list.queryOptions({ page, pageSize: Pagination.maximumPageSize, isSubagent: false })),
     Pages.all((page) => api.label.list.queryOptions({ page, pageSize: Pagination.maximumPageSize })),
   ] as const

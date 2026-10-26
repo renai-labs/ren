@@ -15,6 +15,11 @@ Private spaces have their own spec: [`../private-spaces/README.md`](../private-s
 | Actor        | Who makes a request: a person, or an agent that acts for a person in one session (`Actor.Info`).                 |
 | `NotFound`   | The answer to a request for a record the actor cannot see. Ren never tells such an actor that the record exists. |
 | `Forbidden`  | The answer to a request for an action the actor cannot do, on a record the actor can see.                        |
+| Org entity   | An agent, custom app, shared profile, org credential, environment template or label. The org owns it (§7).       |
+| List         | The spaces that use an org entity: one access row per space.                                                     |
+| `all_spaces` | When true, every space of the org uses the org entity, private spaces included. Its list is then not read.       |
+| User         | A user of an org entity: a member of a space on its list, or every member when it has `all_spaces`.              |
+| Orphan       | An org entity with an empty list and `all_spaces = false`.                                                       |
 
 ## 2. How Ren decides
 
@@ -135,7 +140,74 @@ Rules:
 4. A label is a system label (no org), an org label, or a space label. A space label is seen only in its space. A task in a space can carry system labels, org labels and the labels of that space.
 5. An agent in a chat can do every task and label action that the person who sent the turn can do, with no approval step (AC10, AC17, section 12).
 
-## 7. Agents and agent memberships
+## 7. Org entities
+
+Place: the policy document of each entity: `AgentPolicy`, `AppPolicy`, `AppProfilePolicy`, `CredentialPolicy`, `EnvironmentTemplatePolicy`, and `TaskPolicy` for labels. Code changes, migration and specs that change: [`references/org-entities.md`](references/org-entities.md).
+
+### 7.1 Model
+
+```
+┌──────────────────────────────┐                                         ┌──────────────────────────────────┐
+│                              │        all_spaces = true                │                                  │
+│  org entity                  │  ─────────────────────────────────────▶ │  every space of the org,         │
+│  owner: the org              │        no access rows read              │  private spaces included         │
+│                              │                                         │                                  │
+└──────────────────────────────┘                                         └──────────────────────────────────┘
+               │
+               │   all_spaces = false
+               │   one access row per space
+               ▼
+┌──────────────────────────────────┐
+│                                  │
+│  the spaces on its list          │
+│  an empty list: an orphan        │
+│                                  │
+└──────────────────────────────────┘
+```
+
+| Entity               | Its list                              | Owned by Ren (no org) | Private kind (one person) |
+| -------------------- | ------------------------------------- | --------------------- | ------------------------- |
+| Agent                | `agent_membership`                    | global agent (`ren`)  | none                      |
+| Custom app           | the lists of its shared profiles (§8) | registry app          | none                      |
+| Shared profile       | `app_profile_space`                   | none                  | private profile (§9)      |
+| Org credential       | `credential_space` (new)              | none                  | `person` credential (§10) |
+| Environment template | `space_environment_template`          | none                  | none                      |
+| Label                | `label_space` (new)                   | system label          | none                      |
+
+Not org entities:
+
+| Group             | Records                                                              | Who decides                  |
+| ----------------- | -------------------------------------------------------------------- | ---------------------------- |
+| Inside one space  | sessions, tasks, brains, environments, space members, space settings | the space (§4, §5, §6, §11)  |
+| Part of a parent  | `profile` credentials, profile links, app dependencies, app listings | the parent                   |
+| Made by Ren       | `workload` credentials (`REN`, `MODELS`)                             | the workload                 |
+| Org configuration | OAuth apps, org settings                                             | every member, or admins (§3) |
+| Private kind      | `person` credentials, private profiles                               | its person (§9, §10)         |
+
+### 7.2 Who does what
+
+| Action                          | Who                                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| See and use it                  | its users                                                                              |
+| See it                          | admins, always, without joining a space; orphans included                              |
+| Create it                       | every member. It starts listed in one space they are a member of, or with `all_spaces` |
+| Edit or archive it              | its users and admins                                                                   |
+| Set or clear `all_spaces`       | its users and admins                                                                   |
+| Add a shared space to its list  | a user of it who is a member of that space; an admin, for any shared space             |
+| Add a private space to its list | the owner of that private space, when the owner is a user of it                        |
+| Remove a space from its list    | a member of that space; an admin                                                       |
+| See its list                    | a user: the listed spaces they are in, and a count of the others (P21); an admin: all  |
+
+### 7.3 Rules
+
+1. No space owns an org entity. Archiving a space removes that space from every list and archives no org entity (§4 rule 5).
+2. An orphan stays, with everything it holds: a shared profile keeps its sign-ins. Only admins see it. An admin lists it again, or archives it.
+3. An org entity reaches a space only by `all_spaces` or by a list entry. A membership in another space adds nothing (`../private-spaces/README.md` rule 12).
+4. An edit applies in every space that uses the entity, private spaces included. In a private space, the edited entity runs with the owner's person items (AC11).
+5. An admin sees and edits every org entity, also one listed only in private spaces. An admin sees that a private space is on a list, and never sees inside that space (AC28).
+6. A global agent, a registry app and a system label belong to Ren. Every member uses them in every space. Nobody changes them through the API.
+
+### 7.4 Agents
 
 Place: `AgentPolicy` (`core/src/agent/policy.ts`), `Agent` and `AgentMembership` services.
 
@@ -206,6 +278,7 @@ Rules:
 1. A member sees a shared profile when it lists a space they are in, or has `all_spaces`. An admin sees every shared profile, without joining the spaces it lists. A profile is org config; an admin still never sees a credential value or a space's chats.
 2. A member sees only the listed spaces they are in, and a count of the others (P21). An admin sees every listed space by name, private spaces included.
 3. A shared profile that no space uses any more is deleted, with its sign-ins.
+4. `AppProfile.Info.canAdd` and `canRemove` name the kinds of space the caller may add or remove (`shared`, `joined`, `ownPrivate`, `otherPrivate`), from the same rules. The app offers only those spaces.
 
 ## 10. Credentials and OAuth apps
 
