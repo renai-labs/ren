@@ -1,6 +1,7 @@
 import { Session } from "@ren/schema/session"
 import { ApplicationShell } from "@ren/ui/application-shell"
 import { StateMessage } from "@ren/ui/state-message"
+import { Text } from "@ren/ui/text"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useParams } from "@tanstack/react-router"
 import { lazy, Suspense } from "react"
@@ -24,12 +25,10 @@ export function ChatList() {
     )
   if (chats.data.items.length === 0)
     return (
-      <li>
-        <StateMessage
-          state="empty"
-          placement="inline"
-          title="Your conversations will appear here once you start chatting!"
-        />
+      <li className="flex p-2">
+        <Text purpose="body" tone="secondary" truncation="single-line" element="span">
+          No chats
+        </Text>
       </li>
     )
   return chats.data.items.map((chat) => (

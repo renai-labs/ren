@@ -58,6 +58,7 @@ const triggerVariants = cva(
       { appearance: "property", shape: "pill", size: "small", className: "pr-3 pl-2 text-sm" },
       { appearance: "chip", shape: "pill", size: "small", className: "gap-2 px-3" },
       { shape: ["square", "circle"], size: "small", className: "size-6 px-0" },
+      { shape: ["square", "circle"], size: "medium", className: "size-8 px-0" },
       { appearance: "inline", className: "px-1" },
     ],
   },

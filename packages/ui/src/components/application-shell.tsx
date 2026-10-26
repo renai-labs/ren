@@ -148,7 +148,9 @@ function Panel(props: RootProps & { toggle: () => void }) {
         </Tooltip.Root>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">{props.navigation}</div>
-      {props.navigationFooter ? <div className="shrink-0 px-2">{props.navigationFooter}</div> : null}
+      {props.navigationFooter ? (
+        <div className="flex min-h-10 shrink-0 flex-col justify-center px-2">{props.navigationFooter}</div>
+      ) : null}
     </div>
   )
 }
