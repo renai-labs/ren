@@ -9,7 +9,19 @@ import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Session } from "@ren/schema/session"
 import { TaskLink } from "@ren/schema/task-link"
 import { BunCrypto } from "@effect/platform-bun"
-import { Clock, ConfigProvider, Context, Deferred, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
+import {
+  Clock,
+  ConfigProvider,
+  Context,
+  Deferred,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Schedule,
+  Schema,
+  Struct,
+} from "effect"
 import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainRegistry } from "../../src/brain-registry.js"
@@ -20,7 +32,6 @@ import { ChannelSecrets } from "../../src/channel-secrets.js"
 import { ChannelMappings } from "../../src/channel-mappings.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
-import { ChannelReply } from "../../src/channel-reply.js"
 import { ChannelTurns } from "../../src/channel-turns.js"
 import { EgressControl } from "../../src/egress-control.js"
 import { Envelope } from "../../src/envelope.js"
@@ -89,6 +100,7 @@ const provider = Effect.gen(function* () {
   return {
     id: "slack",
     triggers: [trigger],
+    replyTool: "slack_reply_to_current_thread",
     verify: (request) =>
       request.headers.get("x-signature") === sign(request.body)
         ? Effect.void
@@ -154,7 +166,12 @@ const provider = Effect.gen(function* () {
     place: (_workspace, id) => Effect.sync(() => Option.fromNullishOr(outbox.places.find((place) => place.id === id))),
     announce: (_workspace, place, text) => Effect.sync(() => void outbox.announced.push({ place: place.id, text })),
   } satisfies ChannelProvider.Provider
-}).pipe(Effect.map(Option.some))
+})
+
+const providers = Effect.map(provider, (slack) => [
+  Option.some<ChannelProvider.Provider>(slack),
+  Option.some<ChannelProvider.Provider>({ ...Struct.omit(slack, ["replyTool"]), id: "github" }),
+])
 
 export const request = (body: string, signature = sign(body)): ChannelProvider.Request => ({
   headers: new Headers({ "x-signature": signature }),
@@ -310,14 +327,13 @@ const core = (held: boolean) =>
     ChannelInstalls.layer,
     ChannelRoute.layer.pipe(Layer.provideMerge(ChannelIdentity.layer)),
     ChannelMappings.layer,
-    ChannelReply.layer,
     SessionSync.layer,
     notices,
   ).pipe(
     Layer.provideMerge(
       Layer.mergeAll(
         BrainRegistry.layer,
-        ChannelProvider.layer(Effect.all([provider])),
+        ChannelProvider.layer(providers),
         Access.layer,
         Layer.mergeAll(PersonCredentials.layer, ChannelSecrets.layer).pipe(
           Layer.provide(Layer.mergeAll(Envelope.layerLocal, EgressControl.layerNone)),
@@ -409,9 +425,6 @@ const quick = (live: Clock.Clock): Clock.Clock => ({
   monotonicTimeNanos: live.monotonicTimeNanos,
   sleep: (duration) => (Duration.isLessThan(duration, Duration.seconds(30)) ? Effect.yieldNow : live.sleep(duration)),
 })
-
-export const quickly = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.flatMap(Clock.Clock, (live) => effect.pipe(Effect.provideService(Clock.Clock, quick(live))))
 
 export const receive = (body: string, signature?: string) =>
   Effect.gen(function* () {

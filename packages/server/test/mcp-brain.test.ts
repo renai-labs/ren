@@ -111,16 +111,6 @@ describe("Ren MCP for a brain", () => {
       }),
   )
 
-  it.live("channel_reply answers for the chat that calls it: a chat that no channel started has no thread", () =>
-    Effect.gen(function* () {
-      const subject = yield* chat()
-      expect(yield* tool(yield* subject.headers(), "channel_reply", { text: "Rolled back." })).toMatchObject({
-        isError: true,
-        content: [{ type: "text", text: "InvalidRequestError: This chat has no thread to reply to." }],
-      })
-    }),
-  )
-
   it.live("answers 401 to a sender that Ren refuses, a host token that it refuses and a call that names no chat", () =>
     Effect.gen(function* () {
       const subject = yield* chat()

@@ -68,6 +68,7 @@ export interface Place {
 export interface Provider {
   readonly id: Channel.Provider
   readonly triggers: ReadonlyArray<Channel.Trigger>
+  readonly replyTool?: string
   readonly verify: (request: Request) => Effect.Effect<void, Unauthorized>
   readonly parse: (request: Request) => Effect.Effect<Channel.Parsed, Malformed>
   readonly fetchFile: (install: string, file: Channel.FileRef) => Effect.Effect<Uint8Array, FileUnavailable>

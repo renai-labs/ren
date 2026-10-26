@@ -16,10 +16,6 @@ const exceptions = new Map([
     "Lists the providers this server can install, starts an install (a write that returns a redirect), and lists the places an install reaches, read live from a provider that can be unavailable: no primitive operation is either.",
   ],
   [
-    "channel-reply",
-    "The agent of a chat that a channel started answers in its thread: a write on the caller's chat, with no record of its own, which no primitive operation is.",
-  ],
-  [
     "credential-connect",
     "Starts a sign-in for one MCP of a profile: a write that returns a redirect, which no primitive operation is.",
   ],

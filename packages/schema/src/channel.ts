@@ -97,11 +97,6 @@ export const Parsed = Schema.Union([
 ]).annotate({ identifier: "Channel.Parsed" })
 export type Parsed = typeof Parsed.Type
 
-export interface ReplyInput extends Schema.Schema.Type<typeof ReplyInput> {}
-export const ReplyInput = Schema.Struct({
-  text: Schema.NonEmptyString.annotate({ description: "The answer, in Markdown. Ren posts it in the thread as is." }),
-}).annotate({ identifier: "Channel.ReplyInput" })
-
 export interface Sent extends Schema.Schema.Type<typeof Sent> {}
 export const Sent = Schema.Struct({
   provider: Provider,

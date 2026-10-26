@@ -6,7 +6,7 @@ import { ChannelReply } from "../src/channel-reply.js"
 const completed = (output: string): SessionMessage.Tool => ({
   type: "tool",
   id: "reply",
-  name: "ren_channel_reply",
+  name: "slack_reply_to_current_thread",
   state: {
     status: "completed",
     input: { text: "Rolled back." },
@@ -16,12 +16,12 @@ const completed = (output: string): SessionMessage.Tool => ({
 })
 
 test("a successful channel reply exposes the sent provider and original answer", () => {
-  const tool = completed('{"provider":"github","place":"acme/api"}')
+  const tool = completed('{"provider":"slack","place":"eng"}')
   expect(ChannelReply.shown(tool)).toBe(true)
-  expect(ChannelReply.of(tool)).toEqual({ text: "Rolled back.", sent: { provider: "github", place: "acme/api" } })
+  expect(ChannelReply.of(tool)).toEqual({ text: "Rolled back.", sent: { provider: "slack", place: "eng" } })
 })
 
-test.each(["", "Complete", '{"provider":"unknown","place":"acme/api"}'])(
+test.each(["", "Complete", '{"provider":"unknown","place":"eng"}'])(
   "a completed reply with unrecognized output uses the normal tool row: %s",
   (output) => {
     expect(ChannelReply.shown(completed(output))).toBe(false)
