@@ -7,12 +7,15 @@ import { Primitive } from "@ren/schema/primitive"
 import { Space } from "@ren/schema/space"
 import { SpaceEnvironmentTemplate } from "@ren/schema/space-environment-template"
 import { SpaceMember } from "@ren/schema/space-member"
-import { and, eq, isNotNull, or, sql } from "drizzle-orm"
+import { and, eq, isNotNull } from "drizzle-orm"
 import type { Access } from "../access.js"
+import { AccessFilter } from "../access-filter.js"
 import { SpaceQueries } from "./queries.js"
 
+export const member = "space.member"
+
 const spaceMember = {
-  name: "space.member",
+  name: member,
   holds: (membershipId: Space.MembershipID | null) => Boolean(membershipId),
   condition: isNotNull(SpaceQueries.membership.id),
 }
@@ -68,9 +71,4 @@ export const resource = (membershipId: Space.MembershipID | null, spaceId: Space
 })
 
 export const filter = (plan: Access.Plan) =>
-  and(
-    plan.spaceId ? eq(Database.Schema.space.id, plan.spaceId) : undefined,
-    plan.isAllowedEverywhere
-      ? undefined
-      : (or(...plan.allowedWhere.map((relationship) => conditions.get(relationship))) ?? sql`false`),
-  )
+  and(plan.spaceId ? eq(Database.Schema.space.id, plan.spaceId) : undefined, AccessFilter.where(plan, conditions))

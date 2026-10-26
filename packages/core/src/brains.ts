@@ -264,7 +264,7 @@ export const layer = Layer.effect(
           if (!createdBy) return false
           const member = yield* SpaceQueries.organizationMember(transaction, placement.organizationId, createdBy)
           if (!member) return false
-          const actor = { userId: createdBy, organizationId: placement.organizationId, roles: [member.role] }
+          const actor = { userId: createdBy, organizationId: placement.organizationId, roles: Auth.roles(member.role) }
           const visible = yield* transaction
             .select({ id: Database.Schema.space.id })
             .from(Database.Schema.space)

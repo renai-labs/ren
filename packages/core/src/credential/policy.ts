@@ -21,21 +21,24 @@ const write = Primitive.actions(Credential.definition, ["create", "update", "rot
 
 const remove = Primitive.actions(Credential.definition, ["remove"])
 
+export const actions = { deliver: `${Credential.definition.name}.deliver` } as const
+
 const every = SpacePolicy.organizationRoles
 
 const admins = SpacePolicy.administratorRoles
 
-// oxlint-disable-next-line ren/no-comments -- owner-access §4. A profile's credentials follow who sees the profile (profiles.md §10), which `Credentials` checks before this statement applies. An admin sees a person's credential and may delete it, never use, move or copy it. "Only the account holder moves an account credential" is checked in `Credentials.move`, because a statement cannot name the holder.
+// oxlint-disable-next-line ren/no-comments -- owner-access §4. A profile's credentials follow who sees the profile (profiles.md §10), which `Credentials` checks before this statement applies. An admin sees a person's credential and may delete it, never use, move or copy it. Only admins choose delivered for an org credential. "Only the account holder moves an account credential" is checked in `Credentials.move`, because a statement cannot name the holder.
 export const documents = [
   {
     primitive: Credential.definition.name,
     statements: [
       { actions: [...read, ...write], roles: every, on: relationships.org },
-      { actions: [...read, ...write], roles: admins, on: relationships.space },
-      { actions: [...read, ...write], roles: every, on: relationships.spaceMember },
-      { actions: [...read, ...write], roles: every, on: relationships.self },
+      { actions: [actions.deliver], roles: admins, on: relationships.org },
+      { actions: [...read, ...write, actions.deliver], roles: admins, on: relationships.space },
+      { actions: [...read, ...write, actions.deliver], roles: every, on: relationships.spaceMember },
+      { actions: [...read, ...write, actions.deliver], roles: every, on: relationships.self },
       { actions: [...read, ...remove], roles: admins, on: relationships.person },
-      { actions: [...read, ...write], roles: every, on: relationships.profile },
+      { actions: [...read, ...write, actions.deliver], roles: every, on: relationships.profile },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>

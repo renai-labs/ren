@@ -9,9 +9,10 @@ import type { Space } from "@ren/schema/space"
 import { Task } from "@ren/schema/task"
 import { TaskActivity } from "@ren/schema/task-activity"
 import { TaskComment } from "@ren/schema/task-comment"
-import { and, eq, isNotNull, sql } from "drizzle-orm"
+import { and, eq, isNotNull } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import type { Access } from "../access.js"
+import { AccessFilter } from "../access-filter.js"
 import { SpacePolicy } from "../space/policy.js"
 
 const spaceMember = "task.spaceMember"
@@ -23,6 +24,12 @@ const statements = (actions: ReadonlyArray<string>, options: { readonly agents: 
   { actions, roles: SpacePolicy.organizationRoles, on: spaceMember, agents: options.agents },
 ]
 
+export const actions = {
+  close: `${Task.definition.name}.close`,
+  decide: `${Task.definition.name}.decide`,
+} as const
+
+// oxlint-disable-next-line ren/no-comments -- Agents may request a review but only a person decides it, and only a person marks a task done or dismissed.
 export const documents = [
   {
     primitive: Task.definition.name,
@@ -36,7 +43,9 @@ export const documents = [
       ...statements(Primitive.actions(Task.definition, ["get", "create", "update", "assign", "start", "review"]), {
         agents: true,
       }),
-      ...statements(Primitive.actions(Task.definition, ["archive"]), { agents: false }),
+      ...statements([...Primitive.actions(Task.definition, ["archive"]), actions.close, actions.decide], {
+        agents: false,
+      }),
     ],
   },
   {
@@ -80,8 +89,8 @@ export const resource = (membershipId: Space.MembershipID | null, spaceId: Space
   spaceId,
 })
 
-export const filter = (plan: Access.Plan) => {
-  const inSpace = plan.spaceId ? eq(Database.Schema.task.space_id, plan.spaceId) : undefined
-  if (plan.isAllowedEverywhere) return inSpace
-  return and(inSpace, plan.allowedWhere.includes(spaceMember) ? isNotNull(membership.id) : sql`false`)
-}
+export const filter = (plan: Access.Plan) =>
+  and(
+    plan.spaceId ? eq(Database.Schema.task.space_id, plan.spaceId) : undefined,
+    AccessFilter.where(plan, new Map([[spaceMember, isNotNull(membership.id)]])),
+  )
