@@ -10,6 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "bun test --only-failures",
+    "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit",
     "generate": "tsr generate",
     "check:generated": "bun run generate && git diff --exit-code -- src/route-tree.gen.ts"

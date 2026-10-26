@@ -12,6 +12,7 @@
   "scripts": {
     "start": "bun run src/main.ts",
     "test": "bun test --only-failures",
+    "lint": "oxlint -c ../../oxlint.config.ts --disable-nested-config --type-aware --deny-warnings",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
