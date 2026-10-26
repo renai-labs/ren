@@ -32,10 +32,12 @@ The test harness for `@ren/ui` and `@ren/app` features: stories, the Playwright 
 
 ```sh
 bun run dev           # Storybook on :6006 (also `bun run dev:storybook` from the root)
-bun run test          # specs and the sweep; starts Storybook on :6116 unless one is running
+bun run test          # specs and the sweep; serves a cached static build on :6116 unless one is running
 bun run build         # static build, which CI serves with script/serve.ts
 REN_V1_PATH=../../../ren-v1 bun run test:parity
 ```
+
+The test server builds through Turbo before serving. The cache includes transitive package inputs and restores `storybook-static/`. Backend-only changes can reuse the frontend build. Parity runs keep the development server because their sources include an external checkout.
 
 ## Parity
 
