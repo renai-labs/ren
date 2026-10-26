@@ -1,6 +1,6 @@
 export * as Channel from "./channel.js"
 
-import { Effect, Schema } from "effect"
+import { Schema } from "effect"
 import { Agent } from "./agent.js"
 import { ChannelOrigin } from "./channel-origin.js"
 import { Identifier } from "./identifier.js"
@@ -13,6 +13,27 @@ export const titles: Readonly<Record<Provider, string>> = { slack: "Slack", line
 export const ThreadID = Identifier.make("cth", "Channel.ThreadID")
 export type ThreadID = typeof ThreadID.Type
 
+export const TriggerID = Schema.NonEmptyString.annotate({
+  identifier: "Channel.TriggerID",
+  description: "A provider’s event that starts a turn with no mention of Ren, such as GitHub’s pull_request_ready.",
+})
+
+export interface Trigger extends Schema.Schema.Type<typeof Trigger> {}
+export const Trigger = Schema.Struct({
+  id: TriggerID,
+  title: Schema.String,
+  description: Schema.String,
+  defaultPrompt: Schema.String,
+}).annotate({
+  identifier: "Channel.Trigger",
+  description: "An event that a mapping can turn on, so that Ren runs a turn with no mention.",
+})
+
+export interface TriggerSetting extends Schema.Schema.Type<typeof TriggerSetting> {}
+export const TriggerSetting = Schema.Struct({
+  id: TriggerID,
+  prompt: Schema.optionalKey(Schema.NonEmptyString.annotate({ description: "Without it, the trigger’s default." })),
+}).annotate({ identifier: "Channel.TriggerSetting", description: "A trigger that a mapping turned on." })
 
 export interface FileRef extends Schema.Schema.Type<typeof FileRef> {}
 export const FileRef = Schema.Struct({
@@ -45,6 +66,10 @@ export const Event = Schema.Struct({
   }),
   text: Schema.String,
   files: Schema.Array(FileRef),
+  trigger: Schema.optionalKey(TriggerID).annotate({
+    description:
+      "Set when nobody mentioned Ren. Only a mapping with this trigger on answers, with its prompt in place of the text.",
+  }),
 }).annotate({ identifier: "Channel.Event" })
 
 export const Parsed = Schema.Union([
@@ -88,18 +113,18 @@ const mapped = {
     description:
       "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository.",
   }),
+  triggers: Schema.optionalKey(
+    Schema.Record(TriggerID, Schema.Struct({ prompt: Schema.optionalKey(Schema.NonEmptyString) })).annotate({
+      description: "The provider’s triggers to turn on, such as GitHub’s pull_request_ready. All are off by default.",
+    }),
+  ),
 }
 
 export const Declaration = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("slack"), ...mapped }),
   Schema.Struct({ kind: Schema.Literal("linear"), ...mapped }),
   Schema.Struct({ kind: Schema.Literal("email"), ...fields }),
-  Schema.Struct({
-    kind: Schema.Literal("github"),
-    ...mapped,
-    prListener: Schema.Boolean.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(false))),
-    prListenerPrompt: Schema.optionalKey(Schema.NonEmptyString),
-  }),
+  Schema.Struct({ kind: Schema.Literal("github"), ...mapped }),
   Schema.Struct({
     kind: Schema.Literal("telegram"),
     ...fields,

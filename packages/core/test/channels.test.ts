@@ -883,6 +883,66 @@ describe("ChannelMappings", () => {
       ])
     }),
   )
+
+  it.live(
+    "a trigger runs only where a mapping turned it on, with the mapping's prompt; a refused trigger posts nothing",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* routed
+        const mappings = yield* ChannelMappings.Service
+        const outbox = yield* ChannelFixture.Outbox
+        const owner = {
+          userId: subject.owner.createdBy,
+          organizationId: subject.owner.organizationId,
+          roles: ["owner"],
+        }
+        const installId = yield* installOf(subject.install)
+        const triggered = (place: { readonly id: string; readonly name: string }) =>
+          ChannelFixture.event(subject.install, {
+            place: { ...place, kind: "channel" },
+            text: ChannelFixture.trigger.defaultPrompt,
+            trigger: ChannelFixture.trigger.id,
+          })
+        expect(
+          yield* Effect.flip(
+            mappings.create(owner, {
+              installId,
+              place: "C07",
+              spaceId: subject.owner.spaceId,
+              triggers: [{ id: "pull_request_ready" }],
+            }),
+          ),
+        ).toMatchObject({ _tag: "Primitive.Invalid", field: "triggers" })
+        yield* mappings.create(owner, { installId, place: "C07", spaceId: subject.owner.spaceId })
+        const off = [triggered({ id: "C07", name: "eng" }), triggered({ id: "C09", name: "sales" })]
+        yield* Effect.forEach(off, (found) =>
+          ChannelFixture.receive(ChannelFixture.delivery(found)).pipe(Effect.andThen(ChannelFixture.settled(found))),
+        )
+        expect(outbox.progress).toEqual([])
+        yield* mappings.create(owner, {
+          installId,
+          place: "C07",
+          spaceId: subject.owner.spaceId,
+          triggers: [{ id: ChannelFixture.trigger.id, prompt: "Summarise the thread." }],
+        })
+        const on = triggered({ id: "C07", name: "eng" })
+        yield* ChannelFixture.receive(ChannelFixture.delivery(on))
+        expect(yield* ChannelFixture.accepted(1)).toMatchObject([
+          { prompt: { text: "Summarise the thread." }, channel: { trigger: ChannelFixture.trigger.title } },
+        ])
+        yield* mappings.create(owner, {
+          installId,
+          place: "C11",
+          spaceId: subject.owner.spaceId,
+          triggers: [{ id: ChannelFixture.trigger.id }],
+        })
+        const refused = triggered({ id: "C11", name: "shared-with-vendor" })
+        yield* ChannelFixture.receive(ChannelFixture.delivery(refused))
+        yield* ChannelFixture.settled(refused)
+        expect(outbox.progress).toEqual([{ message: on.message, status: "received" }])
+        expect(outbox.sent).toEqual([])
+      }),
+  )
 })
 
 const onBrains = testEffect(ChannelFixture.sandboxLayer)

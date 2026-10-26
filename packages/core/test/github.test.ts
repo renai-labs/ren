@@ -159,6 +159,54 @@ describe("GitHub", () => {
     }),
   )
 
+  app.live(
+    "a pull request opened, not as a draft, or marked ready for review is a pull_request_ready trigger from its author",
+    () =>
+      Effect.gen(function* () {
+        const provider = GitHub.make(yield* client)
+        const pulled = (action: string, overrides: { readonly draft?: boolean; readonly sender?: object } = {}) =>
+          provider.parse(
+            request(
+              "pull_request",
+              JSON.stringify({
+                action,
+                installation: { id: 77 },
+                sender: overrides.sender ?? octocat,
+                repository: { id: 8812, full_name: "acme/api" },
+                pull_request: {
+                  number: 41,
+                  html_url: "https://github.com/acme/api/pull/41",
+                  draft: overrides.draft ?? false,
+                  user: { id: 1, login: "hubot", type: "User" },
+                },
+              }),
+            ),
+          )
+        expect(yield* pulled("opened")).toEqual({
+          _tag: "Event",
+          event: {
+            provider: "github",
+            eventId: "d-1",
+            install: "77",
+            place: { id: "8812", kind: "repository", name: "acme/api" },
+            thread: { id: "8812:41", url: "https://github.com/acme/api/pull/41" },
+            message: "pull:41",
+            sender: { accountId: "1", handle: "hubot" },
+            text: "Review this pull request.",
+            files: [],
+            trigger: "pull_request_ready",
+          },
+        })
+        const others = yield* Effect.all([
+          pulled("ready_for_review", { draft: false }),
+          pulled("opened", { draft: true }),
+          pulled("synchronize"),
+          pulled("opened", { sender: { id: 9001, login: "ren-test[bot]", type: "Bot" } }),
+        ])
+        expect(others.map((parsed) => parsed._tag)).toEqual(["Event", "Ignore", "Ignore", "Ignore"])
+      }),
+  )
+
   app.live("the context names the issue or pull request, its state and branches, and the triggering comment", () =>
     Effect.gen(function* () {
       const provider = GitHub.make(yield* client)
@@ -186,6 +234,14 @@ describe("GitHub", () => {
           "Pull request #41 “Fix the deploy”, draft, fix-deploy → main\nTriggering comment: 789 (review) by @hubot",
         ),
       )
+      expect(
+        yield* provider.context({
+          ...event,
+          thread: { id: "8812:41" },
+          message: "pull:41",
+          sender: { accountId: "1", handle: "hubot" },
+        }),
+      ).toEqual(Option.some("Pull request #41 “Fix the deploy”, draft, fix-deploy → main\nReady for review, by @hubot"))
       expect(github.minted.filter((each) => each === install)).toHaveLength(1)
       expect((yield* Effect.flip(provider.context({ ...event, thread: { id: "8812:404" } })))._tag).toBe(
         "ChannelProvider.Unavailable",
@@ -227,31 +283,36 @@ describe("GitHub", () => {
       }),
   )
 
-  app.live("progress: received puts 👀 on the comment; done and failed swap Ren's own 👀 for 🚀 or 😕", () =>
-    Effect.gen(function* () {
-      const provider = GitHub.make(yield* client)
-      const install = installation("acme")
-      const issue = { install, place: "acme/api", thread: "8812:12", message: "issue:456" }
-      const review = { ...issue, thread: "8812:41", message: "review:789" }
-      github.resources.set("/repos/acme/api/issues/comments/456/reactions", [
-        { id: 1, user: { id: 9001 } },
-        { id: 2, user: { id: 583231 } },
-      ])
-      github.resources.set("/repos/acme/api/pulls/comments/789/reactions", [{ id: 3, user: { id: 9001 } }])
-      const before = github.posted.length
-      yield* provider.progress(issue, "received")
-      yield* provider.progress(issue, "done")
-      yield* provider.progress(review, "failed")
-      expect(github.posted.slice(before).map((each) => [each.path, each.body])).toEqual([
-        ["/repos/acme/api/issues/comments/456/reactions", { content: "eyes" }],
-        ["/repos/acme/api/issues/comments/456/reactions", { content: "rocket" }],
-        ["/repos/acme/api/pulls/comments/789/reactions", { content: "confused" }],
-      ])
-      expect(github.removed).toEqual([
-        "/repos/acme/api/issues/comments/456/reactions/1",
-        "/repos/acme/api/pulls/comments/789/reactions/3",
-      ])
-    }),
+  app.live(
+    "progress: received puts 👀 on the comment, or on the pull request of a trigger; done and failed swap Ren's own 👀 for 🚀 or 😕",
+    () =>
+      Effect.gen(function* () {
+        const provider = GitHub.make(yield* client)
+        const install = installation("acme")
+        const issue = { install, place: "acme/api", thread: "8812:12", message: "issue:456" }
+        const review = { ...issue, thread: "8812:41", message: "review:789" }
+        const pull = { ...issue, thread: "8812:41", message: "pull:41" }
+        github.resources.set("/repos/acme/api/issues/comments/456/reactions", [
+          { id: 1, user: { id: 9001 } },
+          { id: 2, user: { id: 583231 } },
+        ])
+        github.resources.set("/repos/acme/api/pulls/comments/789/reactions", [{ id: 3, user: { id: 9001 } }])
+        const before = github.posted.length
+        yield* provider.progress(issue, "received")
+        yield* provider.progress(issue, "done")
+        yield* provider.progress(review, "failed")
+        yield* provider.progress(pull, "received")
+        expect(github.posted.slice(before).map((each) => [each.path, each.body])).toEqual([
+          ["/repos/acme/api/issues/comments/456/reactions", { content: "eyes" }],
+          ["/repos/acme/api/issues/comments/456/reactions", { content: "rocket" }],
+          ["/repos/acme/api/pulls/comments/789/reactions", { content: "confused" }],
+          ["/repos/acme/api/issues/41/reactions", { content: "eyes" }],
+        ])
+        expect(github.removed).toEqual([
+          "/repos/acme/api/issues/comments/456/reactions/1",
+          "/repos/acme/api/pulls/comments/789/reactions/3",
+        ])
+      }),
   )
 
   app.live("a sender's email is the public email of their login, if they show one", () =>

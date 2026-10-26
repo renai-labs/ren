@@ -6,6 +6,7 @@ import { call, makeApp, sessionCookie, signUp } from "./lib/app.js"
 
 const echo = Effect.succeedSome<ChannelProvider.Provider>({
   id: "slack",
+  triggers: [],
   verify: (request) =>
     request.headers.get("x-signature") === `signed:${request.body}`
       ? Effect.void

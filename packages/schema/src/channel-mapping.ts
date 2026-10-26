@@ -30,6 +30,9 @@ export const Info = Schema.Struct({
     description: "A sender that Ren cannot match to a member of the space runs as the fallback user. Off: refused.",
   }),
   fallbackUser: Schema.NullOr(Schema.Struct({ id: Auth.UserID, name: Schema.String })),
+  triggers: Schema.Array(Channel.TriggerSetting).annotate({
+    description: "The provider’s triggers that this mapping turned on. Each starts a turn with no mention.",
+  }),
   createdAt: Schema.DateTimeUtc,
   updatedAt: Schema.DateTimeUtc,
 }).annotate({ identifier: "ChannelMapping.Info", description: "The link from one place to a space." })
@@ -55,10 +58,13 @@ export const CreateInput = Schema.Struct({
   fallbackUserId: Schema.optional(Auth.UserID).annotate({
     description: "A member of the space. Without it, the caller.",
   }),
+  triggers: Schema.optional(Schema.Array(Channel.TriggerSetting)).annotate({
+    description: "The provider’s triggers to turn on, each at most once. Without it, none: every trigger is off.",
+  }),
 }).annotate({
   identifier: "ChannelMapping.CreateInput",
   description:
-    "Map a place, or replace the space, agent and fallback of its mapping. The same request twice gives the same mapping.",
+    "Map a place, or replace the space, agent, fallback and triggers of its mapping. The same request twice gives the same mapping.",
 })
 
 export interface RemoveInput extends Schema.Schema.Type<typeof RemoveInput> {}

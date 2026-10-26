@@ -1664,6 +1664,7 @@ export function make(options: ClientOptions) {
               agentId: input["agentId"],
               fallback: input["fallback"],
               fallbackUserId: input["fallbackUserId"],
+              triggers: input["triggers"],
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],

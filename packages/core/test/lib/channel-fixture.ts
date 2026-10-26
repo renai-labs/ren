@@ -72,11 +72,19 @@ export class Outbox extends Context.Service<
   }
 >()("@ren/core/test/ChannelFixture/Outbox") {}
 
+export const trigger = {
+  id: "channel_message",
+  title: "Answer every message",
+  description: "Each message in the channel, with no mention.",
+  defaultPrompt: "Answer this message.",
+}
+
 const provider = Effect.gen(function* () {
   const gate = yield* Hold
   const outbox = yield* Outbox
   return {
     id: "slack",
+    triggers: [trigger],
     verify: (request) =>
       request.headers.get("x-signature") === sign(request.body)
         ? Effect.void

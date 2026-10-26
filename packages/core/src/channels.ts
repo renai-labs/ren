@@ -194,17 +194,18 @@ export const layer = Layer.effect(
       const event = payload.event
       const found = registry.get(event.provider)
       if (Option.isNone(found)) return yield* Effect.logError(`No channel provider ${event.provider} runs this event`)
+      const route = yield* routes.resolve(event)
       yield* found.value
         .progress(targetOf(event), "received")
         .pipe(Effect.catchCause((cause) => Effect.logWarning("A channel progress could not be sent", cause)))
-      const route = yield* routes.resolve(event)
+      const trigger = found.value.triggers.find((each) => each.id === event.trigger)
       const context = yield* found.value.context(event).pipe(
         Effect.tapError((error) => Effect.logWarning(`The ${event.provider} thread context could not be read`, error)),
         Effect.orElseSucceed(Option.none<string>),
       )
       const message = {
         messageId: payload.messageId,
-        prompt: yield* prompt(found.value, event),
+        prompt: yield* prompt(found.value, { ...event, text: route.text }),
         sender: { userId: route.senderUserId },
         channel: {
           provider: event.provider,
@@ -213,6 +214,7 @@ export const layer = Layer.effect(
           sender: event.sender.name ?? event.sender.handle ?? event.sender.accountId,
           ...(event.sender.handle && { handle: event.sender.handle }),
           ...(Option.isSome(context) && { context: context.value }),
+          ...(trigger && { trigger: trigger.title }),
         },
       }
       const claimed = yield* claim(route, event, payload.sessionId)
@@ -260,7 +262,11 @@ export const layer = Layer.effect(
         `channel:${payload.event.provider}:${payload.event.install}:${payload.event.eventId}`,
         run(payload).pipe(
           Effect.catchTags({
-            "ChannelRoute.Refused": (error) => failed(payload.event, error.reason),
+            "ChannelRoute.Refused": (error) =>
+              payload.event.trigger
+                ? Effect.logInfo(`A ${payload.event.trigger} trigger was refused: ${error.reason}`)
+                : failed(payload.event, error.reason),
+            "ChannelRoute.NotTriggered": (error) => Effect.logDebug(`A channel trigger is off: ${error.message}`),
             "ChannelRoute.Unroutable": (error) => Effect.logWarning(`A channel event has no route: ${error.message}`),
             "Channels.Stopped": (error) =>
               Effect.logWarning(`A channel message stopped: ${error.message}`).pipe(

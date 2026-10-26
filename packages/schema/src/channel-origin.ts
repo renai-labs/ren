@@ -13,6 +13,9 @@ export const Info = Schema.Struct({
   sender: Schema.String,
   handle: Schema.optionalKey(Schema.String),
   context: Schema.optionalKey(Schema.String),
+  trigger: Schema.optionalKey(Schema.String).annotate({
+    description: "The title of the trigger that started this message, when nobody mentioned Ren.",
+  }),
 }).annotate({
   identifier: "ChannelOrigin.Info",
   description: "Where a message from Slack, Linear or GitHub came from, and what its thread holds.",

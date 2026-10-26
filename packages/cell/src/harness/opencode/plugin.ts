@@ -127,6 +127,9 @@ const channelHeader = (origin: ChannelOrigin.Info) =>
       .filter(Predicate.isNotUndefined)
       .join(" · "),
     origin.context,
+    origin.trigger
+      ? `Automated run (${origin.trigger}): nobody wrote to you in this thread. Do the work, then post the result with channel_reply.`
+      : undefined,
     "---\n\n",
   ]
     .filter(Predicate.isNotUndefined)

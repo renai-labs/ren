@@ -76,6 +76,7 @@ export const layer = Layer.effect(
       agent: row.agent,
       fallback: row.mapping.fallback,
       fallbackUser: row.fallbackUser && { id: Auth.UserID.make(row.fallbackUser.id), name: row.fallbackUser.name },
+      triggers: row.mapping.triggers,
       createdAt: DateTime.fromDateUnsafe(row.mapping.created_at),
       updatedAt: DateTime.fromDateUnsafe(row.mapping.updated_at),
     })
@@ -202,6 +203,13 @@ export const layer = Layer.effect(
         const found = yield* installOf(actor, input.installId)
         const provider = yield* providerOf(found.provider)
         const title = Channel.titles[found.provider]
+        const triggers = input.triggers ?? []
+        const offered = new Set(provider.triggers.map((trigger) => trigger.id))
+        const unknown = triggers.find((setting) => !offered.has(setting.id))
+        if (unknown)
+          return yield* new Primitive.Invalid({ message: `${title} has no trigger ${unknown.id}.`, field: "triggers" })
+        if (new Set(triggers.map((setting) => setting.id)).size !== triggers.length)
+          return yield* new Primitive.Invalid({ message: "Each trigger can be listed once.", field: "triggers" })
         const place = yield* provider
           .place(found.workspace, input.place)
           .pipe(
@@ -220,6 +228,7 @@ export const layer = Layer.effect(
           agent_id: input.agentId ?? null,
           fallback: input.fallback ?? !place.value.anyoneCanWrite,
           fallback_user_id: fallbackUserId,
+          triggers,
         }
         const written = yield* database.transaction((transaction) =>
           Effect.gen(function* () {

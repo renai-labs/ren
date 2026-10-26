@@ -19,15 +19,20 @@ export class Unroutable extends Schema.TaggedError<Unroutable>()("ChannelRoute.U
   message: Schema.String,
 }) {}
 
+export class NotTriggered extends Schema.TaggedError<NotTriggered>()("ChannelRoute.NotTriggered", {
+  message: Schema.String,
+}) {}
+
 export interface Route {
   readonly organizationId: Auth.OrganizationID
   readonly spaceId: Space.ID
   readonly agentId?: Agent.ID
   readonly senderUserId: Auth.UserID
+  readonly text: string
 }
 
 export interface Interface {
-  readonly resolve: (event: Channel.Event) => Effect.Effect<Route, Refused | Unroutable>
+  readonly resolve: (event: Channel.Event) => Effect.Effect<Route, Refused | Unroutable | NotTriggered>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/ChannelRoute") {}
@@ -44,6 +49,19 @@ export const layer = Layer.effect(
 
     const actsIn = (organizationId: Auth.OrganizationID, spaceId: Space.ID, userId: Auth.UserID) =>
       database.transaction((transaction) => SpaceQueries.actsIn(transaction, organizationId, spaceId, userId))
+
+    const runAs = Effect.fnUntraced(function* (
+      organizationId: Auth.OrganizationID,
+      routed: { readonly spaceId: Space.ID; readonly fallback: boolean; readonly fallbackUserId: Auth.UserID | null },
+      event: Channel.Event,
+    ) {
+      const sender = yield* identity.find(organizationId, event)
+      if (Option.isSome(sender) && (yield* actsIn(organizationId, routed.spaceId, sender.value))) return sender.value
+      if (!routed.fallback) return yield* new Refused({ reason: Option.isSome(sender) ? "not_member" : "unlinked" })
+      if (routed.fallbackUserId && (yield* actsIn(organizationId, routed.spaceId, routed.fallbackUserId)))
+        return routed.fallbackUserId
+      return yield* new Refused({ reason: "fallback_gone" })
+    })
 
     return Service.of({
       resolve: Effect.fn("ChannelRoute.resolve")(function* (event: Channel.Event) {
@@ -65,12 +83,18 @@ export const layer = Layer.effect(
             agentId: agent.id,
             fallback: mapping.fallback,
             fallbackUserId: mapping.fallback_user_id,
+            triggers: mapping.triggers,
           })
           .from(mapping)
           .innerJoin(space, and(eq(space.id, mapping.space_id), isNull(space.archived_at)))
           .leftJoin(agent, and(eq(agent.id, mapping.agent_id), AgentQueries.isUsableIn(space.id, found.organizationId)))
           .where(and(eq(mapping.install_id, found.id), eq(mapping.place, event.place.id)))
           .pipe(Effect.orDie)).at(0)
+        const trigger = mapped?.triggers.find((setting) => setting.id === event.trigger)
+        if (event.trigger && !trigger)
+          return yield* new NotTriggered({
+            message: `${event.provider} place ${event.place.id} has no mapping with the trigger ${event.trigger}`,
+          })
         const unmapped = mapped
           ? undefined
           : (yield* database.db
@@ -89,19 +113,13 @@ export const layer = Layer.effect(
           (unmapped && { spaceId: unmapped.id, agentId: null, fallback: true, fallbackUserId: found.installedBy })
         if (!routed)
           return yield* new Unroutable({ message: `Organization ${found.organizationId} has no active space` })
-        const route = (senderUserId: Auth.UserID): Route => ({
+        return {
           organizationId: found.organizationId,
           spaceId: routed.spaceId,
           ...(routed.agentId && { agentId: routed.agentId }),
-          senderUserId,
-        })
-        const sender = yield* identity.find(found.organizationId, event)
-        if (Option.isSome(sender) && (yield* actsIn(found.organizationId, routed.spaceId, sender.value)))
-          return route(sender.value)
-        if (!routed.fallback) return yield* new Refused({ reason: Option.isSome(sender) ? "not_member" : "unlinked" })
-        if (routed.fallbackUserId && (yield* actsIn(found.organizationId, routed.spaceId, routed.fallbackUserId)))
-          return route(routed.fallbackUserId)
-        return yield* new Refused({ reason: "fallback_gone" })
+          senderUserId: yield* runAs(found.organizationId, routed, event),
+          text: trigger?.prompt ?? event.text,
+        } satisfies Route
       }),
     })
   }),
