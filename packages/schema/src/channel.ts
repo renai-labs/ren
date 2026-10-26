@@ -55,6 +55,10 @@ export const Event = Schema.Struct({
     id: Schema.NonEmptyString,
     kind: Schema.Literals(["channel", "dm", "project", "repository"]),
     name: Schema.optionalKey(Schema.String),
+    anyoneCanWrite: Schema.optionalKey(Schema.Boolean).annotate({
+      description:
+        "Anyone with an account at the provider can write here, such as on a public GitHub repository. Unknown senders are refused here until a mapping turns the fallback on.",
+    }),
   }),
   thread: Schema.Struct({ id: Schema.NonEmptyString, url: Schema.optionalKey(Schema.String) }),
   message: Schema.NonEmptyString.annotate({

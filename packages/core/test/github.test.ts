@@ -58,6 +58,7 @@ const commented = (
     readonly body?: string
     readonly from?: string
     readonly sender?: object
+    readonly private?: boolean
   } = {},
 ) => {
   const item = { number: 12, html_url: "https://github.com/acme/api/issues/12" }
@@ -67,7 +68,7 @@ const commented = (
       action: overrides.action ?? "created",
       installation: { id: 77 },
       sender: overrides.sender ?? octocat,
-      repository: { id: 8812, full_name: "acme/api" },
+      repository: { id: 8812, full_name: "acme/api", private: overrides.private ?? false },
       comment: { id: 456, body: overrides.body ?? "@ren-test why does the deploy fail?" },
       ...(overrides.from !== undefined && { changes: { body: { from: overrides.from } } }),
       ...(event === "issue_comment" ? { issue: item } : { pull_request: item }),
@@ -115,7 +116,7 @@ describe("GitHub", () => {
           provider: "github",
           eventId: "d-1",
           install: "77",
-          place: { id: "8812", kind: "repository", name: "acme/api" },
+          place: { id: "8812", kind: "repository", name: "acme/api", anyoneCanWrite: true },
           thread,
           message: "issue:456",
           sender: { accountId: "583231", handle: "octocat" },
@@ -126,6 +127,10 @@ describe("GitHub", () => {
       expect(yield* provider.parse(commented("pull_request_review_comment"))).toMatchObject({
         _tag: "Event",
         event: { thread, message: "review:456" },
+      })
+      expect(yield* provider.parse(commented("issue_comment", { private: true }))).toMatchObject({
+        _tag: "Event",
+        event: { place: { anyoneCanWrite: false } },
       })
       const mentions = yield* Effect.forEach(
         ["@REN-TEST look", "ask @ren-test[bot].", "@ren-tester look", "mail me@ren-test", "no mention"],
@@ -172,7 +177,7 @@ describe("GitHub", () => {
                 action,
                 installation: { id: 77 },
                 sender: overrides.sender ?? octocat,
-                repository: { id: 8812, full_name: "acme/api" },
+                repository: { id: 8812, full_name: "acme/api", private: false },
                 pull_request: {
                   number: 41,
                   html_url: "https://github.com/acme/api/pull/41",
@@ -188,7 +193,7 @@ describe("GitHub", () => {
             provider: "github",
             eventId: "d-1",
             install: "77",
-            place: { id: "8812", kind: "repository", name: "acme/api" },
+            place: { id: "8812", kind: "repository", name: "acme/api", anyoneCanWrite: true },
             thread: { id: "8812:41", url: "https://github.com/acme/api/pull/41" },
             message: "pull:41",
             sender: { accountId: "1", handle: "hubot" },
@@ -218,7 +223,7 @@ describe("GitHub", () => {
               action: "closed",
               installation: { id: 77 },
               sender: input.sender ?? octocat,
-              repository: { id: 8812, full_name: "Acme/API" },
+              repository: { id: 8812, full_name: "Acme/API", private: false },
               pull_request: {
                 number: 41,
                 html_url: "https://github.com/Acme/API/pull/41",
