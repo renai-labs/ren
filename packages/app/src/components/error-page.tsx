@@ -23,7 +23,15 @@ const messages: Record<number, string> = {
   504: "The server took too long to respond.",
 }
 
-const statuses: Record<string, number> = { UnauthorizedError: 401 }
+const statuses: Record<string, number> = {
+  InvalidRequestError: 400,
+  UnauthorizedError: 401,
+  ForbiddenError: 403,
+  NotFoundError: 404,
+  ConflictError: 409,
+  TooLargeError: 413,
+  UnavailableError: 503,
+}
 
 function ErrorPage(props: { code: string; message: string; action?: ReactNode }) {
   return (
