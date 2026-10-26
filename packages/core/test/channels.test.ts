@@ -634,6 +634,27 @@ describe("ChannelRoute", () => {
     }),
   )
 
+  it.live("on an unmapped place that anyone can write, an unknown sender is refused, not run as the installer", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const routes = yield* ChannelRoute.Service
+      const outbox = yield* ChannelFixture.Outbox
+      const member = yield* person(subject.owner.organizationId, { inSpace: subject.owner.spaceId })
+      outbox.emails.set("U01", member.email)
+      const place = { id: "C07", kind: "channel", name: "eng", anyoneCanWrite: true } as const
+      expect(yield* routes.resolve(ChannelFixture.event(subject.install, { place }))).toMatchObject({
+        senderUserId: member.id,
+      })
+      expect(
+        yield* Effect.flip(
+          routes.resolve(
+            ChannelFixture.event(subject.install, { place, sender: { accountId: "U09", name: "Stranger" } }),
+          ),
+        ),
+      ).toMatchObject({ _tag: "ChannelRoute.Refused", reason: "unlinked" })
+    }),
+  )
+
   it.live("with no sender that may act and a fallback user outside the space, the event is refused", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service

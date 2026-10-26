@@ -88,6 +88,11 @@ export const layer = Layer.effect(
       )
     })
 
+    const unmapped = (installedBy: Auth.UserID | null, event: Channel.Event, task: Route["task"]) => ({
+      fallback: !task && !event.place.anyoneCanWrite,
+      fallbackUserId: installedBy,
+    })
+
     const defaultSpace = (found: {
       readonly organizationId: Auth.OrganizationID
       readonly defaultSpaceId: Space.ID | null
@@ -143,7 +148,7 @@ export const layer = Layer.effect(
         const place = task ?? mapped ?? (yield* defaultSpace(found))
         if (!place)
           return yield* new Unroutable({ message: `Organization ${found.organizationId} has no active space` })
-        const routed = { ...(mapped ?? { fallback: !task, fallbackUserId: found.installedBy }), ...place }
+        const routed = { ...(mapped ?? unmapped(found.installedBy, event, task)), ...place }
         return {
           organizationId: found.organizationId,
           spaceId: routed.spaceId,
