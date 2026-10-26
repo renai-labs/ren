@@ -88,6 +88,10 @@ const Posted = Schema.Struct({ ts: Schema.String })
 
 const Revoked = Schema.Struct({ revoked: Schema.optionalKey(Schema.Boolean) })
 
+const Answered = Schema.Struct({})
+
+const settledReactions: ReadonlySet<string> = new Set(["already_reacted", "no_reaction"])
+
 const decodeEnvelope = Schema.decodeUnknownEffect(Schema.fromJsonString(Envelope))
 
 const signatureAge = 5 * 60
@@ -199,6 +203,11 @@ const omitted = "[earlier messages omitted]"
 
 const accountUser = (accountId: string) => accountId.slice(accountId.indexOf(":") + 1)
 
+const threadOf = (target: ChannelProvider.Target) => {
+  const channel = target.thread.slice(0, target.thread.indexOf(":"))
+  return { channel, ts: target.thread.slice(channel.length + 1) }
+}
+
 const withinCharacters = (lines: ReadonlyArray<string>): ReadonlyArray<string> =>
   lines.join("\n").length + omitted.length + 1 <= contextCharacters || lines.length === 0
     ? lines
@@ -214,7 +223,6 @@ const placeOf = (conversation: typeof Conversation.Type): ChannelProvider.Place 
 export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): ChannelProvider.Provider => {
   const signing = Redacted.value(app.settings.signingSecret)
   const unavailable = (error: SlackApp.Failed) => new ChannelProvider.Unavailable({ message: error.message })
-  const later = (what: string) => new ChannelProvider.Unavailable({ message: `Slack ${what} are not handled yet` })
   const web = new URL(app.settings.web).hostname
   const fileHosts = new Set([web, `files.${web}`])
   const userOf = (token: Redacted.Redacted, id: string) =>
@@ -395,17 +403,26 @@ export const make = (app: SlackApp.Client, secrets: ChannelSecrets.Interface): C
     ),
     send: Effect.fn("Slack.send")(function* (target, text) {
       const token = yield* tokenOf(target.install)
-      const channel = target.thread.slice(0, target.thread.indexOf(":"))
+      const thread = threadOf(target)
       yield* app
-        .post(
-          "chat.postMessage",
-          { channel, thread_ts: target.thread.slice(channel.length + 1), ...message(text) },
-          Posted,
-          token,
-        )
+        .post("chat.postMessage", { channel: thread.channel, thread_ts: thread.ts, ...message(text) }, Posted, token)
         .pipe(Effect.mapError(delivery))
     }),
-    progress: () => Effect.fail(later("reactions")),
+    progress: Effect.fn("Slack.progress")(function* (target, status) {
+      if (status === "done") return
+      const token = yield* tokenOf(target.install)
+      const react = (method: "reactions.add" | "reactions.remove", name: string) =>
+        app
+          .post(method, { channel: threadOf(target).channel, timestamp: target.message, name }, Answered, token)
+          .pipe(
+            Effect.catchTag("SlackApp.Failed", (error) =>
+              error.error && settledReactions.has(error.error) ? Effect.void : Effect.fail(unavailable(error)),
+            ),
+          )
+      if (status === "received") return yield* react("reactions.add", "eyes")
+      yield* react("reactions.remove", "eyes")
+      yield* react("reactions.add", "x")
+    }),
     email: (install, sender) =>
       tokenOf(install).pipe(
         Effect.flatMap((token) =>

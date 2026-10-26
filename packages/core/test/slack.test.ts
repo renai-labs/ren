@@ -418,6 +418,32 @@ describe("Slack", () => {
       }),
   )
 
+  it.live(
+    "received adds 👀, done keeps it and failed swaps it for ❌; a reaction Slack already has or lacks is no error",
+    () =>
+      Effect.gen(function* () {
+        const slackProvider = yield* provider
+        const found = yield* installed()
+        const target = { install: found.workspace, place: "eng", thread: "C07:1712.33", message: "1712.40" }
+        const start = slack.posted.length
+        yield* slackProvider.progress(target, "received")
+        yield* slackProvider.progress(target, "done")
+        yield* slackProvider.progress(target, "failed")
+        const reaction = (name: string) => ({ channel: "C07", timestamp: "1712.40", name })
+        expect(slack.posted.slice(start).map((each) => [each.method, each.params])).toEqual([
+          ["reactions.add", reaction("eyes")],
+          ["reactions.remove", reaction("eyes")],
+          ["reactions.add", reaction("x")],
+        ])
+        slack.options.postError = "already_reacted"
+        const again = yield* Effect.result(slackProvider.progress(target, "received"))
+        slack.options.postError = "no_reaction"
+        const gone = yield* Effect.result(slackProvider.progress(target, "failed"))
+        slack.options.postError = undefined
+        expect([again._tag, gone._tag]).toEqual(["Success", "Success"])
+      }),
+  )
+
   it.live("a notice posts to the channel with the bot token; a channel the bot left is gone", () =>
     Effect.gen(function* () {
       const slackProvider = yield* provider
