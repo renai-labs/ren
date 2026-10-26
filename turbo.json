@@ -5,8 +5,7 @@
     "patches/**",
     "tsconfig.base.json",
     "bunfig.toml",
-    ".github/actions/setup-bun/**",
-    ".github/workflows/test.yml"
+    ".github/actions/setup-bun/**"
   ],
   "globalEnv": ["CI", "REN_SLOW"],
   "globalPassThroughEnv": ["CI", "DATABASE_URL"],
