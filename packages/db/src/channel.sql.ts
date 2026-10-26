@@ -1,11 +1,16 @@
 import type { Auth } from "@ren/schema/auth"
 import type { Channel } from "@ren/schema/channel"
+import type { Agent } from "@ren/schema/agent"
 import type { ChannelInstall } from "@ren/schema/channel-install"
+import type { ChannelMapping } from "@ren/schema/channel-mapping"
 import type { Credential } from "@ren/schema/credential"
 import type { Session } from "@ren/schema/session"
-import { index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
+import type { Space } from "@ren/schema/space"
+import { boolean, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core"
+import { agent } from "./agent.sql.js"
 import { organization, user } from "./auth.sql.js"
 import { credential } from "./credential.sql.js"
+import { space } from "./space.sql.js"
 
 export const channel_install = pgTable(
   "channel_install",
@@ -25,11 +30,47 @@ export const channel_install = pgTable(
     installed_by: text()
       .$type<Auth.UserID>()
       .references(() => user.id, { onDelete: "set null" }),
+    default_space_id: text()
+      .$type<Space.ID>()
+      .references(() => space.id, { onDelete: "set null" }),
     created_at: timestamp().defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("channel_install_provider_workspace_uidx").on(table.provider, table.workspace),
     uniqueIndex("channel_install_organization_id_provider_uidx").on(table.organization_id, table.provider),
+  ],
+)
+
+export const channel_mapping = pgTable(
+  "channel_mapping",
+  {
+    id: text().$type<ChannelMapping.ID>().primaryKey(),
+    install_id: text()
+      .$type<ChannelInstall.ID>()
+      .notNull()
+      .references(() => channel_install.id, { onDelete: "cascade" }),
+    place: text().notNull(),
+    place_name: text().notNull(),
+    space_id: text()
+      .$type<Space.ID>()
+      .notNull()
+      .references(() => space.id, { onDelete: "cascade" }),
+    agent_id: text()
+      .$type<Agent.ID>()
+      .references(() => agent.id, { onDelete: "set null" }),
+    fallback: boolean().notNull().default(true),
+    fallback_user_id: text()
+      .$type<Auth.UserID>()
+      .references(() => user.id, { onDelete: "set null" }),
+    created_by: text()
+      .$type<Auth.UserID>()
+      .references(() => user.id, { onDelete: "set null" }),
+    created_at: timestamp().defaultNow().notNull(),
+    updated_at: timestamp().defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("channel_mapping_install_id_place_uidx").on(table.install_id, table.place),
+    index("channel_mapping_space_id_idx").on(table.space_id),
   ],
 )
 

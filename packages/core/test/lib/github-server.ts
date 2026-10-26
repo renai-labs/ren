@@ -54,6 +54,7 @@ export interface Instance {
   readonly resources: Map<string, unknown>
   readonly posted: Array<{ readonly path: string; readonly body: unknown; readonly authorization: string | null }>
   readonly removed: Array<string>
+  readonly repositories: Array<{ readonly id: number; readonly full_name: string; readonly private: boolean }>
   readonly options: { failDelete: boolean; tokenExpiresAt: string; postStatus: number }
   readonly stop: () => void
 }
@@ -132,7 +133,23 @@ const post = async (state: State, request: Request, url: URL) => {
     : Response.json({ message: "Not Found" }, { status: state.options.postStatus })
 }
 
+const repositories = (state: State, request: Request, url: URL) => {
+  if (!request.headers.get("authorization")?.startsWith("Bearer ghs_")) return new Response(null, { status: 401 })
+  const id = /^\/repositories\/(\d+)$/u.exec(url.pathname)?.[1]
+  if (id) {
+    const found = state.repositories.find((repository) => String(repository.id) === id)
+    return found ? Response.json(found) : new Response(null, { status: 404 })
+  }
+  const page = Number(url.searchParams.get("page") ?? "1")
+  const perPage = Number(url.searchParams.get("per_page") ?? "30")
+  return Response.json({
+    total_count: state.repositories.length,
+    repositories: state.repositories.slice((page - 1) * perPage, page * perPage),
+  })
+}
+
 const api = (state: State, request: Request, url: URL) => {
+  if (/^\/(?:repositories|installation)\//u.test(url.pathname)) return repositories(state, request, url)
   if (request.method === "POST") return post(state, request, url)
   if (request.method !== "DELETE") return resource(state, request, url)
   state.removed.push(url.pathname)
@@ -148,6 +165,7 @@ export const start = (): Instance => {
     resources: new Map(),
     posted: [],
     removed: [],
+    repositories: [],
     options: { failDelete: false, tokenExpiresAt: "2027-01-15T08:00:00Z", postStatus: 201 },
   }
   const server = Bun.serve({
@@ -159,7 +177,7 @@ export const start = (): Instance => {
       if (request.method === "GET" && url.pathname === "/user") return userOf(state, request)
       if (request.method === "GET" && url.pathname === "/user/installations")
         return userInstallations(state, request, url)
-      if (url.pathname.startsWith("/repos/") || url.pathname.startsWith("/users/")) return api(state, request, url)
+      if (/^\/(?:repos|users|repositories|installation)\//u.test(url.pathname)) return api(state, request, url)
       const match = /^\/app\/installations\/(\d+)(\/access_tokens)?$/u.exec(url.pathname)
       if (!match?.[1]) return new Response(null, { status: 404 })
       return appInstallation(state, request, match[1], { tokens: request.method === "POST" && Boolean(match[2]) })

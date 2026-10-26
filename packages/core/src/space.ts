@@ -267,6 +267,9 @@ export const layer = Layer.effect(
                   isNull(Database.Schema.space_pending_member.archived_at),
                 ),
               )
+            yield* transaction
+              .delete(Database.Schema.channel_mapping)
+              .where(eq(Database.Schema.channel_mapping.space_id, id))
             const space = archived.at(0)
             if (!space) return yield* notFound
             const removed = yield* CredentialOffboarding.forSpace(transaction, id)

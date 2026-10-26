@@ -23,6 +23,9 @@ const echo = Effect.succeedSome<ChannelProvider.Provider>({
       : Effect.fail(new ChannelProvider.InstallFailed({ message: "Slack refused the install." })),
   changedOnProvider: () => false,
   revoke: () => Effect.void,
+  places: () => Effect.succeed([]),
+  place: () => Effect.succeedNone,
+  announce: () => Effect.void,
 })
 
 const app = makeApp(Routes.layer.pipe(Layer.provide(ChannelProvider.layer([echo]))))

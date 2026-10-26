@@ -93,8 +93,13 @@ import type {
   RenInferenceConnectionRenameInput,
   RenInferenceConnectionRemoveInput,
   ChannelInstallListInput,
+  ChannelInstallUpdateInput,
   ChannelInstallRemoveInput,
+  ChannelMappingListInput,
+  ChannelMappingCreateInput,
+  ChannelMappingRemoveInput,
   ChannelConnectChannelInstallStartInput,
+  ChannelConnectChannelPlaceListInput,
   ChannelReplyChannelReplyInput,
 } from "../../generated/index.js"
 
@@ -988,12 +993,47 @@ export function make(client: ReturnType<typeof Ren.make>) {
             queryFn: (context) => client["channel-install"]["list"](input, { signal: context.signal }),
           }),
       },
+      update: {
+        mutationKey: () => ["channel-install", "update"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["channel-install", "update"] as const,
+            mutationFn: (input: ChannelInstallUpdateInput) => client["channel-install"]["update"](input),
+          }),
+      },
       remove: {
         mutationKey: () => ["channel-install", "remove"] as const,
         mutationOptions: () =>
           mutationOptions({
             mutationKey: ["channel-install", "remove"] as const,
             mutationFn: (input: ChannelInstallRemoveInput) => client["channel-install"]["remove"](input),
+          }),
+      },
+    },
+    "channel-mapping": {
+      list: {
+        queryKey: (input?: ChannelMappingListInput) =>
+          input === undefined ? (["channel-mapping", "list"] as const) : (["channel-mapping", "list", input] as const),
+        queryOptions: (input: ChannelMappingListInput) =>
+          queryOptions({
+            queryKey: ["channel-mapping", "list", input] as const,
+            queryFn: (context) => client["channel-mapping"]["list"](input, { signal: context.signal }),
+          }),
+      },
+      create: {
+        mutationKey: () => ["channel-mapping", "create"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["channel-mapping", "create"] as const,
+            mutationFn: (input: ChannelMappingCreateInput) => client["channel-mapping"]["create"](input),
+          }),
+      },
+      remove: {
+        mutationKey: () => ["channel-mapping", "remove"] as const,
+        mutationOptions: () =>
+          mutationOptions({
+            mutationKey: ["channel-mapping", "remove"] as const,
+            mutationFn: (input: ChannelMappingRemoveInput) => client["channel-mapping"]["remove"](input),
           }),
       },
     },
@@ -1016,6 +1056,20 @@ export function make(client: ReturnType<typeof Ren.make>) {
               mutationKey: ["channel-connect", "channel-install", "start"] as const,
               mutationFn: (input: ChannelConnectChannelInstallStartInput) =>
                 client["channel-connect"]["channel-install"]["start"](input),
+            }),
+        },
+      },
+      "channel-place": {
+        list: {
+          queryKey: (input?: ChannelConnectChannelPlaceListInput) =>
+            input === undefined
+              ? (["channel-connect", "channel-place", "list"] as const)
+              : (["channel-connect", "channel-place", "list", input] as const),
+          queryOptions: (input: ChannelConnectChannelPlaceListInput) =>
+            queryOptions({
+              queryKey: ["channel-connect", "channel-place", "list", input] as const,
+              queryFn: (context) =>
+                client["channel-connect"]["channel-place"]["list"](input, { signal: context.signal }),
             }),
         },
       },

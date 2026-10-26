@@ -27,5 +27,13 @@ export const Route = createFileRoute("/_authed/_shell/settings/channels/$provide
 function ChannelProviderRoute() {
   const params = Route.useParams()
   const search = Route.useSearch()
-  return <ChannelProviderPage provider={params.provider} installed={search.installed} error={search.error} />
+  const context = Route.useRouteContext()
+  return (
+    <ChannelProviderPage
+      provider={params.provider}
+      userId={context.me.user.id}
+      installed={search.installed}
+      error={search.error}
+    />
+  )
 }

@@ -1,10 +1,13 @@
+import type { ChannelInstallInfo } from "@ren/client"
 import { Pagination } from "@ren/schema/pagination"
 import { Button } from "@ren/ui/button"
 import { ConfirmationDialog } from "@ren/ui/confirmation-dialog"
+import { Field } from "@ren/ui/field"
 import { Icon } from "@ren/ui/icon"
 import { List } from "@ren/ui/list"
 import { Notice } from "@ren/ui/notice"
 import { PageShell } from "@ren/ui/page-shell"
+import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { Time } from "@ren/ui/time"
 import { Toast } from "@ren/ui/toast"
@@ -12,25 +15,28 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
+import { ChannelMappings } from "./channel-mappings.js"
 import { Channels } from "./channels.js"
 
 const page = { page: 1, pageSize: Pagination.maximumPageSize }
 
+const first = "first"
+
 export function ChannelProviderPage(props: {
   provider: Channels.Provider
+  userId: string
   installed?: string | undefined
   error?: string | undefined
 }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
-  const provider = Channels.providers.find((each) => each.id === props.provider)
+  const provider = Channels.byId[props.provider]
   const installs = useQuery({
     ...context.api["channel-install"].list.queryOptions(page),
     refetchOnWindowFocus: "always",
   })
   const remove = useMutation(context.api["channel-install"].remove.mutationOptions())
   const [resetting, setResetting] = useState(false)
-  if (!provider) return null
   const install = installs.data?.items.find((each) => each.provider === provider.id)
   return (
     <PageShell.Root
@@ -57,15 +63,26 @@ export function ChannelProviderPage(props: {
     >
       <InstallOutcome title={provider.title} installed={props.installed} error={props.error} />
       {install ? (
-        <List.Root label={`${provider.title} install`}>
-          <List.Item
-            title={install.name}
-            description={
-              install.installedBy ? `Installed by ${install.installedBy.name}` : "Installed by a former member"
-            }
-            trailing={<Time value={install.createdAt} format="date" label="Installed" />}
-          />
-        </List.Root>
+        <>
+          <List.Root label={`${provider.title} install`}>
+            <List.Item
+              title={install.name}
+              description={
+                install.installedBy ? `Installed by ${install.installedBy.name}` : "Installed by a former member"
+              }
+              trailing={<Time value={install.createdAt} format="date" label="Installed" />}
+            />
+          </List.Root>
+          <PageShell.Section frame="divided">
+            <DefaultSpace install={install} noun={provider.place.noun} />
+          </PageShell.Section>
+          <PageShell.Section
+            title="Mappings"
+            description={`Each mapped ${provider.place.noun} answers in its own space, as its own agent.`}
+          >
+            <ChannelMappings installs={[install]} userId={props.userId} />
+          </PageShell.Section>
+        </>
       ) : (
         <Text purpose="body" tone="secondary">
           Connect {provider.title} from the{" "}
@@ -90,6 +107,47 @@ export function ChannelProviderPage(props: {
         onConfirmed={() => Toast.manager.add({ type: "success", title: `${provider.title} mappings reset` })}
       />
     </PageShell.Root>
+  )
+}
+
+function DefaultSpace(props: { install: ChannelInstallInfo; noun: string }) {
+  const context = RouterContext.useRouterContext()
+  const queryClient = useQueryClient()
+  const spaces = useQuery(context.api.space.list.queryOptions({ ...page, joined: true }))
+  const update = useMutation(context.api["channel-install"].update.mutationOptions())
+  const current = props.install.defaultSpace
+  const options = [
+    { value: first, label: "Organization’s first space" },
+    ...(current && !spaces.data?.items.some((space) => space.id === current.id)
+      ? [{ value: current.id, label: current.name }]
+      : []),
+    ...(spaces.data?.items ?? []).map((space) => ({ value: space.id, label: space.name })),
+  ]
+  return (
+    <Field.Root
+      label="Default space"
+      orientation="row"
+      description={`Messages from ${props.noun === "repository" ? "repositories" : `${props.noun}s`} with no mapping go here. `}
+    >
+      <Select.Root
+        label="Default space"
+        width="limited"
+        disabled={!props.install.canUpdate || update.isPending}
+        value={current?.id ?? first}
+        onValueChange={(chosen) =>
+          void update.mutateAsync({ id: props.install.id, defaultSpaceId: chosen === first ? null : chosen }).then(
+            () => queryClient.invalidateQueries({ queryKey: context.api["channel-install"].list.queryKey() }),
+            (cause: unknown) =>
+              Toast.manager.add({
+                type: "error",
+                title: "Couldn’t change the default space",
+                description: Channels.describe(cause),
+              }),
+          )
+        }
+        options={options}
+      />
+    </Field.Root>
   )
 }
 

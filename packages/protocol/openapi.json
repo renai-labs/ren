@@ -8011,6 +8011,104 @@
         "summary": "List channel-installs"
       }
     },
+    "/channel-installs/{id}": {
+      "patch": {
+        "tags": ["channel-install"],
+        "operationId": "channel-install.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelInstall.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The link between the organization and one provider workspace. Ren never returns its secret.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelInstall.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one channel-install.",
+        "summary": "Update channel-install",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelInstall.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/channel-installs/{id}/remove": {
       "post": {
         "tags": ["channel-install"],
@@ -8092,6 +8190,279 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ChannelInstall.RemoveInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/channel-mappings": {
+      "get": {
+        "tags": ["channel-mapping"],
+        "operationId": "channel-mapping.list",
+        "parameters": [
+          {
+            "name": "installId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ChannelInstall.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ChannelMapping.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelMapping.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the channel-mappings that the caller can see.",
+        "summary": "List channel-mappings"
+      },
+      "post": {
+        "tags": ["channel-mapping"],
+        "operationId": "channel-mapping.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The link from one place to a space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelMapping.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one channel-mapping.",
+        "summary": "Create channel-mapping",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelMapping.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/channel-mappings/{id}/remove": {
+      "post": {
+        "tags": ["channel-mapping"],
+        "operationId": "channel-mapping.remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelMapping.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The link from one place to a space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelMapping.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the remove action on one channel-mapping.",
+        "summary": "remove channel-mapping",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelMapping.RemoveInput"
               }
             }
           },
@@ -8235,6 +8606,102 @@
           },
           "required": true
         }
+      }
+    },
+    "/channel-places": {
+      "get": {
+        "tags": ["channel-connect"],
+        "operationId": "channel-place.list",
+        "parameters": [
+          {
+            "name": "installId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChannelInstall.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ChannelPlace.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelPlace.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "UnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the places that an install reaches, sorted by name, each with its mapping: Slack channels, Linear projects or GitHub repositories. Ren reads them from the provider.",
+        "summary": "List channel places"
       }
     },
     "/channel-replies": {
@@ -9774,11 +10241,36 @@
               }
             ]
           },
+          "defaultSpace": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Space.ID"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where messages from places with no mapping go. Without it, or when it is archived, the oldest active space."
+          },
+          "canUpdate": {
+            "type": "boolean",
+            "description": "The caller installed it, or is an admin."
+          },
           "createdAt": {
             "type": "string"
           }
         },
-        "required": ["id", "provider", "workspace", "name", "installedBy", "createdAt"],
+        "required": ["id", "provider", "workspace", "name", "installedBy", "defaultSpace", "canUpdate", "createdAt"],
         "additionalProperties": false,
         "description": "The link between the organization and one provider workspace. Ren never returns its secret."
       },
@@ -9846,6 +10338,206 @@
         "required": ["provider"],
         "additionalProperties": false
       },
+      "ChannelInstall.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "defaultSpaceId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A space the caller is a member of, or null for the oldest active space."
+          }
+        },
+        "required": ["defaultSpaceId"],
+        "additionalProperties": false
+      },
+      "ChannelMapping.CreateInput": {
+        "type": "object",
+        "properties": {
+          "installId": {
+            "$ref": "#/components/schemas/ChannelInstall.ID"
+          },
+          "place": {
+            "type": "string",
+            "minLength": 1
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, the place reaches the ren agent."
+          },
+          "fallback": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On by default, and off by default for a public GitHub repository."
+          },
+          "fallbackUserId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Auth.UserID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A member of the space. Without it, the caller."
+          }
+        },
+        "required": ["installId", "place", "spaceId"],
+        "additionalProperties": false,
+        "description": "Map a place, or replace the space, agent and fallback of its mapping. The same request twice gives the same mapping."
+      },
+      "ChannelMapping.ID": {
+        "type": "string",
+        "pattern": "^chm_"
+      },
+      "ChannelMapping.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ChannelMapping.ID"
+          },
+          "installId": {
+            "$ref": "#/components/schemas/ChannelInstall.ID"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Channel.Provider"
+          },
+          "place": {
+            "type": "string",
+            "description": "The provider’s id of the place: a Slack channel, a Linear project, a GitHub repository."
+          },
+          "placeName": {
+            "type": "string"
+          },
+          "space": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/Space.ID"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "name"],
+            "additionalProperties": false
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Agent.ID"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, the place reaches the ren agent."
+          },
+          "fallback": {
+            "type": "boolean",
+            "description": "A sender that Ren cannot match to a member of the space runs as the fallback user. Off: refused."
+          },
+          "fallbackUser": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/Auth.UserID"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "name"],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "installId",
+          "provider",
+          "place",
+          "placeName",
+          "space",
+          "agent",
+          "fallback",
+          "fallbackUser",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false,
+        "description": "The link from one place to a space."
+      },
+      "ChannelMapping.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelMapping.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "ChannelMapping.RemoveInput": {
+        "not": {
+          "type": "null"
+        }
+      },
       "ChannelOrigin.Info": {
         "type": "object",
         "properties": {
@@ -9871,6 +10563,60 @@
         "required": ["provider", "place", "sender"],
         "additionalProperties": false,
         "description": "Where a message from Slack, Linear or GitHub came from, and what its thread holds."
+      },
+      "ChannelPlace.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The provider’s id of the place: a Slack channel, a Linear project, a GitHub repository."
+          },
+          "name": {
+            "type": "string"
+          },
+          "private": {
+            "type": "boolean"
+          },
+          "anyoneCanWrite": {
+            "type": "boolean",
+            "description": "People outside the install’s workspace can write there, as on a public GitHub repository. A new mapping of an open place starts with the fallback off."
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelMapping.Info"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "name", "private", "anyoneCanWrite", "mapping"],
+        "additionalProperties": false,
+        "description": "A place that an install reaches."
+      },
+      "ChannelPlace.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelPlace.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
       },
       "ConflictErrorEncoded": {
         "type": "object",
@@ -15941,6 +16687,9 @@
     },
     {
       "name": "channel-install"
+    },
+    {
+      "name": "channel-mapping"
     },
     {
       "name": "channel-connect"

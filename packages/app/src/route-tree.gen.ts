@@ -35,6 +35,7 @@ import { Route as AuthedShellSettingsChannelsIndexRouteImport } from "./routes/_
 import { Route as AuthedShellSettingsChannelsProviderRouteImport } from "./routes/_authed/_shell/settings/channels/$provider"
 import { Route as AuthedShellSpacesSpaceIdIndexRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/index"
 import { Route as AuthedShellSpacesSpaceIdAppsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/apps"
+import { Route as AuthedShellSpacesSpaceIdChannelsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/channels"
 import { Route as AuthedShellSpacesSpaceIdCredentialsRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/credentials"
 import { Route as AuthedShellSpacesSpaceIdFactoryRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/factory"
 import { Route as AuthedShellSpacesSpaceIdMembersRouteImport } from "./routes/_authed/_shell/spaces/$spaceId/members"
@@ -182,6 +183,12 @@ const AuthedShellSpacesSpaceIdAppsRoute =
     path: "/apps",
     getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
   } as any)
+const AuthedShellSpacesSpaceIdChannelsRoute =
+  AuthedShellSpacesSpaceIdChannelsRouteImport.update({
+    id: "/channels",
+    path: "/channels",
+    getParentRoute: () => AuthedShellSpacesSpaceIdRouteRoute,
+  } as any)
 const AuthedShellSpacesSpaceIdCredentialsRoute =
   AuthedShellSpacesSpaceIdCredentialsRouteImport.update({
     id: "/credentials",
@@ -239,6 +246,7 @@ export interface FileRoutesByFullPath {
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
+  "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
   "/spaces/$spaceId/factory": typeof AuthedShellSpacesSpaceIdFactoryRoute
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
@@ -268,6 +276,7 @@ export interface FileRoutesByTo {
   "/settings/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
+  "/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
   "/spaces/$spaceId/factory": typeof AuthedShellSpacesSpaceIdFactoryRoute
   "/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
@@ -302,6 +311,7 @@ export interface FileRoutesById {
   "/_authed/_shell/settings/_admin/general": typeof AuthedShellSettingsAdminGeneralRoute
   "/_authed/_shell/settings/channels/$provider": typeof AuthedShellSettingsChannelsProviderRoute
   "/_authed/_shell/spaces/$spaceId/apps": typeof AuthedShellSpacesSpaceIdAppsRoute
+  "/_authed/_shell/spaces/$spaceId/channels": typeof AuthedShellSpacesSpaceIdChannelsRoute
   "/_authed/_shell/spaces/$spaceId/credentials": typeof AuthedShellSpacesSpaceIdCredentialsRoute
   "/_authed/_shell/spaces/$spaceId/factory": typeof AuthedShellSpacesSpaceIdFactoryRoute
   "/_authed/_shell/spaces/$spaceId/members": typeof AuthedShellSpacesSpaceIdMembersRoute
@@ -335,6 +345,7 @@ export interface FileRouteTypes {
     | "/settings/general"
     | "/settings/channels/$provider"
     | "/spaces/$spaceId/apps"
+    | "/spaces/$spaceId/channels"
     | "/spaces/$spaceId/credentials"
     | "/spaces/$spaceId/factory"
     | "/spaces/$spaceId/members"
@@ -364,6 +375,7 @@ export interface FileRouteTypes {
     | "/settings/general"
     | "/settings/channels/$provider"
     | "/spaces/$spaceId/apps"
+    | "/spaces/$spaceId/channels"
     | "/spaces/$spaceId/credentials"
     | "/spaces/$spaceId/factory"
     | "/spaces/$spaceId/members"
@@ -397,6 +409,7 @@ export interface FileRouteTypes {
     | "/_authed/_shell/settings/_admin/general"
     | "/_authed/_shell/settings/channels/$provider"
     | "/_authed/_shell/spaces/$spaceId/apps"
+    | "/_authed/_shell/spaces/$spaceId/channels"
     | "/_authed/_shell/spaces/$spaceId/credentials"
     | "/_authed/_shell/spaces/$spaceId/factory"
     | "/_authed/_shell/spaces/$spaceId/members"
@@ -602,6 +615,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AuthedShellSpacesSpaceIdAppsRouteImport
       parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
     }
+    "/_authed/_shell/spaces/$spaceId/channels": {
+      id: "/_authed/_shell/spaces/$spaceId/channels"
+      path: "/channels"
+      fullPath: "/spaces/$spaceId/channels"
+      preLoaderRoute: typeof AuthedShellSpacesSpaceIdChannelsRouteImport
+      parentRoute: typeof AuthedShellSpacesSpaceIdRouteRoute
+    }
     "/_authed/_shell/spaces/$spaceId/credentials": {
       id: "/_authed/_shell/spaces/$spaceId/credentials"
       path: "/credentials"
@@ -642,6 +662,7 @@ declare module "@tanstack/react-router" {
 
 interface AuthedShellSpacesSpaceIdRouteRouteChildren {
   AuthedShellSpacesSpaceIdAppsRoute: typeof AuthedShellSpacesSpaceIdAppsRoute
+  AuthedShellSpacesSpaceIdChannelsRoute: typeof AuthedShellSpacesSpaceIdChannelsRoute
   AuthedShellSpacesSpaceIdCredentialsRoute: typeof AuthedShellSpacesSpaceIdCredentialsRoute
   AuthedShellSpacesSpaceIdFactoryRoute: typeof AuthedShellSpacesSpaceIdFactoryRoute
   AuthedShellSpacesSpaceIdMembersRoute: typeof AuthedShellSpacesSpaceIdMembersRoute
@@ -651,6 +672,8 @@ interface AuthedShellSpacesSpaceIdRouteRouteChildren {
 const AuthedShellSpacesSpaceIdRouteRouteChildren: AuthedShellSpacesSpaceIdRouteRouteChildren =
   {
     AuthedShellSpacesSpaceIdAppsRoute: AuthedShellSpacesSpaceIdAppsRoute,
+    AuthedShellSpacesSpaceIdChannelsRoute:
+      AuthedShellSpacesSpaceIdChannelsRoute,
     AuthedShellSpacesSpaceIdCredentialsRoute:
       AuthedShellSpacesSpaceIdCredentialsRoute,
     AuthedShellSpacesSpaceIdFactoryRoute: AuthedShellSpacesSpaceIdFactoryRoute,

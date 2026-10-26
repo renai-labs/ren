@@ -187,11 +187,21 @@ import type {
   RenInferenceConnectionRemoveOutput,
   ChannelInstallListInput,
   ChannelInstallListOutput,
+  ChannelInstallUpdateInput,
+  ChannelInstallUpdateOutput,
   ChannelInstallRemoveInput,
   ChannelInstallRemoveOutput,
+  ChannelMappingListInput,
+  ChannelMappingListOutput,
+  ChannelMappingCreateInput,
+  ChannelMappingCreateOutput,
+  ChannelMappingRemoveInput,
+  ChannelMappingRemoveOutput,
   ChannelConnectChannelProviderListOutput,
   ChannelConnectChannelInstallStartInput,
   ChannelConnectChannelInstallStartOutput,
+  ChannelConnectChannelPlaceListInput,
+  ChannelConnectChannelPlaceListOutput,
   ChannelReplyChannelReplyInput,
   ChannelReplyChannelReplyOutput,
   SignInSignInProviderListOutput,
@@ -1599,11 +1609,73 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+      update: (input: ChannelInstallUpdateInput, requestOptions?: RequestOptions) =>
+        request<ChannelInstallUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/channel-installs/${encodeURIComponent(input.id)}`,
+            body: { defaultSpaceId: input["defaultSpaceId"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
       remove: (input: ChannelInstallRemoveInput, requestOptions?: RequestOptions) =>
         request<ChannelInstallRemoveOutput>(
           {
             method: "POST",
             path: `/channel-installs/${encodeURIComponent(input.id)}/remove`,
+            body: {},
+            successStatus: 200,
+            declaredStatuses: [401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    "channel-mapping": {
+      list: (input: ChannelMappingListInput, requestOptions?: RequestOptions) =>
+        request<ChannelMappingListOutput>(
+          {
+            method: "GET",
+            path: `/channel-mappings`,
+            query: {
+              installId: input["installId"],
+              spaceId: input["spaceId"],
+              page: input["page"],
+              pageSize: input["pageSize"],
+            },
+            successStatus: 200,
+            declaredStatuses: [401, 403],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      create: (input: ChannelMappingCreateInput, requestOptions?: RequestOptions) =>
+        request<ChannelMappingCreateOutput>(
+          {
+            method: "POST",
+            path: `/channel-mappings`,
+            body: {
+              installId: input["installId"],
+              place: input["place"],
+              spaceId: input["spaceId"],
+              agentId: input["agentId"],
+              fallback: input["fallback"],
+              fallbackUserId: input["fallbackUserId"],
+            },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      remove: (input: ChannelMappingRemoveInput, requestOptions?: RequestOptions) =>
+        request<ChannelMappingRemoveOutput>(
+          {
+            method: "POST",
+            path: `/channel-mappings/${encodeURIComponent(input.id)}/remove`,
             body: {},
             successStatus: 200,
             declaredStatuses: [401, 403, 404, 409],
@@ -1635,6 +1707,20 @@ export function make(options: ClientOptions) {
               body: { provider: input["provider"] },
               successStatus: 200,
               declaredStatuses: [400, 401, 403, 404, 409],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
+      "channel-place": {
+        list: (input: ChannelConnectChannelPlaceListInput, requestOptions?: RequestOptions) =>
+          request<ChannelConnectChannelPlaceListOutput>(
+            {
+              method: "GET",
+              path: `/channel-places`,
+              query: { installId: input["installId"], page: input["page"], pageSize: input["pageSize"] },
+              successStatus: 200,
+              declaredStatuses: [401, 403, 404, 503],
               empty: false,
             },
             requestOptions,

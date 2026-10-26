@@ -43,6 +43,7 @@ export function SpacePage(props: { spaceId: string; children: ReactNode }) {
           </Tabs.Link>
           <Tabs.Link render={<Link to="/spaces/$spaceId/apps" params={params} />}>Apps</Tabs.Link>
           <Tabs.Link render={<Link to="/spaces/$spaceId/credentials" params={params} />}>Credentials</Tabs.Link>
+          <Tabs.Link render={<Link to="/spaces/$spaceId/channels" params={params} />}>Channels</Tabs.Link>
           <Tabs.Link render={<Link to="/spaces/$spaceId/factory" params={params} />}>Factory</Tabs.Link>
         </Tabs.Navigation>
       }

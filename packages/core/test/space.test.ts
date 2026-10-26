@@ -3,6 +3,8 @@ import { Database } from "@ren/db/database"
 import { Testing } from "@ren/db/testing"
 import { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
+import { ChannelInstall } from "@ren/schema/channel-install"
+import { ChannelMapping } from "@ren/schema/channel-mapping"
 import { Session } from "@ren/schema/session"
 import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Layer } from "effect"
@@ -269,6 +271,45 @@ describe("Space archive and agents", () => {
         .set({ archived_at: new Date() })
         .where(eq(Database.Schema.agent.id, agentId))
       expect((yield* spaces.archive(ada, factory.id)).archivedAt).not.toBeNull()
+    }),
+  )
+
+  it.live("archiving a space removes the channel mappings to it", () =>
+    Effect.gen(function* () {
+      const spaces = yield* Space.Service
+      const database = yield* Database.Service
+      const organizationId = yield* Seed.organization()
+      const ada = yield* user(organizationId)
+      const eng = yield* spaces.create(ada, { name: "Eng" })
+      const kept = yield* spaces.create(ada, { name: "Kept" })
+      const installId = ChannelInstall.ID.create()
+      yield* database.db.insert(Database.Schema.channel_install).values({
+        id: installId,
+        organization_id: organizationId,
+        provider: "github",
+        workspace: `${Date.now()}`,
+        name: "acme",
+      })
+      yield* database.db.insert(Database.Schema.channel_mapping).values([
+        {
+          id: ChannelMapping.ID.create(),
+          install_id: installId,
+          place: "8812",
+          place_name: "acme/api",
+          space_id: eng.id,
+        },
+        {
+          id: ChannelMapping.ID.create(),
+          install_id: installId,
+          place: "8813",
+          place_name: "acme/web",
+          space_id: kept.id,
+        },
+      ])
+      yield* spaces.archive(ada, eng.id)
+      expect(
+        (yield* database.db.select().from(Database.Schema.channel_mapping)).map((mapping) => mapping.space_id),
+      ).toEqual([kept.id])
     }),
   )
 })

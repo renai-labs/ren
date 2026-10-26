@@ -56,6 +56,13 @@ export interface Installed {
   }
 }
 
+export interface Place {
+  readonly id: string
+  readonly name: string
+  readonly private: boolean
+  readonly anyoneCanWrite: boolean
+}
+
 export interface Provider {
   readonly id: Channel.Provider
   readonly verify: (request: Request) => Effect.Effect<void, Unauthorized>
@@ -72,6 +79,13 @@ export interface Provider {
   readonly completeInstall: (query: Readonly<Record<string, string>>) => Effect.Effect<Installed, InstallFailed>
   readonly changedOnProvider: (query: Readonly<Record<string, string>>) => boolean
   readonly revoke: (workspace: string) => Effect.Effect<void, Unavailable>
+  readonly places: (workspace: string) => Effect.Effect<ReadonlyArray<Place>, Unavailable>
+  readonly place: (workspace: string, id: string) => Effect.Effect<Option.Option<Place>, Unavailable>
+  readonly announce: (
+    workspace: string,
+    place: Place,
+    text: string,
+  ) => Effect.Effect<void, PlaceGone | Unavailable | Rejected>
 }
 
 export class Registry extends Context.Service<

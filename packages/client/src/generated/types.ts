@@ -208,6 +208,8 @@ export type RenInferenceMeter = { key: string; title: string; percent: number | 
 
 export type ChannelInstallID = string
 
+export type ChannelMappingID = string
+
 export type AuthSignInProvider = "google" | "github"
 
 export type HealthInfo = { status: HealthStatus; version: string }
@@ -573,7 +575,23 @@ export type ChannelInstallInfo = {
   workspace: string
   name: string
   installedBy: { id: AuthUserID; name: string } | null
+  defaultSpace: { id: SpaceID; name: string } | null
+  canUpdate: boolean
   createdAt: string
+}
+
+export type ChannelMappingInfo = {
+  id: ChannelMappingID
+  installId: ChannelInstallID
+  provider: ChannelProvider
+  place: string
+  placeName: string
+  space: { id: SpaceID; name: string }
+  agent: { id: AgentID; name: string } | null
+  fallback: boolean
+  fallbackUser: { id: AuthUserID; name: string } | null
+  createdAt: string
+  updatedAt: string
 }
 
 export type AuthSignInProviders = { items: Array<AuthSignInProvider> }
@@ -748,6 +766,16 @@ export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize:
 
 export type ChannelInstallPage = { items: Array<ChannelInstallInfo>; page: number; pageSize: number; total: number }
 
+export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
+
+export type ChannelPlaceInfo = {
+  id: string
+  name: string
+  private: boolean
+  anyoneCanWrite: boolean
+  mapping: ChannelMappingInfo | null
+}
+
 export type SpaceMemberPage = { items: Array<SpaceMemberInfo>; page: number; pageSize: number; total: number }
 
 export type SettingsInfo = {
@@ -826,6 +854,8 @@ export type TaskEventInfo = {
   actor: TaskActor
   createdAt: string
 }
+
+export type ChannelPlacePage = { items: Array<ChannelPlaceInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceSettingsInfo = { id: SpaceID; settings: SettingsInfo; canUpdate: boolean; updatedAt: string | null }
 
@@ -5827,9 +5857,102 @@ export type ChannelInstallListInput = {
 
 export type ChannelInstallListOutput = ChannelInstallPage
 
+export type ChannelInstallUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly defaultSpaceId: { readonly defaultSpaceId: string | null }["defaultSpaceId"]
+}
+
+export type ChannelInstallUpdateOutput = ChannelInstallInfo
+
 export type ChannelInstallRemoveInput = { readonly id: { readonly id: string }["id"] }
 
 export type ChannelInstallRemoveOutput = ChannelInstallInfo
+
+export type ChannelMappingListInput = {
+  readonly installId?: {
+    readonly installId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["installId"]
+  readonly spaceId?: {
+    readonly installId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly page: {
+    readonly installId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly installId?: string | undefined
+    readonly spaceId?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type ChannelMappingListOutput = ChannelMappingPage
+
+export type ChannelMappingCreateInput = {
+  readonly installId: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+  }["installId"]
+  readonly place: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+  }["place"]
+  readonly spaceId: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+  }["spaceId"]
+  readonly agentId?: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+  }["agentId"]
+  readonly fallback?: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+  }["fallback"]
+  readonly fallbackUserId?: {
+    readonly installId: string
+    readonly place: string
+    readonly spaceId: string
+    readonly agentId?: string | undefined
+    readonly fallback?: boolean | undefined
+    readonly fallbackUserId?: string | undefined
+  }["fallbackUserId"]
+}
+
+export type ChannelMappingCreateOutput = ChannelMappingInfo
+
+export type ChannelMappingRemoveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ChannelMappingRemoveOutput = ChannelMappingInfo
 
 export type ChannelConnectChannelProviderListOutput = ChannelInstallProviderInfos
 
@@ -5838,6 +5961,14 @@ export type ChannelConnectChannelInstallStartInput = {
 }
 
 export type ChannelConnectChannelInstallStartOutput = WriteResultRedirect
+
+export type ChannelConnectChannelPlaceListInput = {
+  readonly installId: { readonly installId: string; readonly page: number; readonly pageSize: number }["installId"]
+  readonly page: { readonly installId: string; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: { readonly installId: string; readonly page: number; readonly pageSize: number }["pageSize"]
+}
+
+export type ChannelConnectChannelPlaceListOutput = ChannelPlacePage
 
 export type ChannelReplyChannelReplyInput = { readonly text: { readonly text: string }["text"] }
 
