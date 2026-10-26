@@ -6,7 +6,7 @@ import { Identifier } from "./identifier.js"
 export const ID = Identifier.make("tlk", "TaskLink.ID")
 export type ID = typeof ID.Type
 
-export const Kind = Schema.Literals(["github_pr", "linear_issue", "slack_thread", "url"]).annotate({
+export const Kind = Schema.Literals(["github_pr", "github_issue", "linear_issue", "slack_thread", "url"]).annotate({
   identifier: "TaskLink.Kind",
 })
 export type Kind = typeof Kind.Type
@@ -37,6 +37,10 @@ const matchers: ReadonlyArray<(url: URL, path: string) => Ref | undefined> = [
   (_, path) => {
     const pull = /^github\.com\/(?<repository>[^/]+\/[^/]+)\/pull\/(?<number>\d+)(?:\/|$)/u.exec(path)?.groups
     return pull && { kind: "github_pr", key: `${pull.repository?.toLowerCase()}#${Number(pull.number)}` }
+  },
+  (_, path) => {
+    const issue = /^github\.com\/(?<repository>[^/]+\/[^/]+)\/issues\/(?<number>\d+)(?:\/|$)/u.exec(path)?.groups
+    return issue && { kind: "github_issue", key: `${issue.repository?.toLowerCase()}#${Number(issue.number)}` }
   },
   (_, path) => {
     const issue = /^linear\.app\/(?<workspace>[^/]+)\/issue\/(?<key>[^/]+)/u.exec(path)?.groups

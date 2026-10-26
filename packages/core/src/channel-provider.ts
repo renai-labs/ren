@@ -1,6 +1,7 @@
 export * as ChannelProvider from "./channel-provider.js"
 
 import type { Channel } from "@ren/schema/channel"
+import type { TaskLink } from "@ren/schema/task-link"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import type { PersonCredentials } from "./person-credentials.js"
 
@@ -70,6 +71,7 @@ export interface Provider {
   readonly parse: (request: Request) => Effect.Effect<Channel.Parsed, Malformed>
   readonly fetchFile: (install: string, file: Channel.FileRef) => Effect.Effect<Uint8Array, FileUnavailable>
   readonly context: (event: Channel.Event) => Effect.Effect<Option.Option<string>, Unavailable>
+  readonly linkOf: (event: Channel.Event) => Option.Option<TaskLink.Ref>
   readonly send: (target: Target, text: string) => Effect.Effect<void, PlaceGone | Unavailable | Rejected>
   readonly progress: (target: Target, status: Status) => Effect.Effect<void, Unavailable>
   readonly email: (

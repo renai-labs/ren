@@ -4,10 +4,11 @@ import type { Glyph } from "./icon.js"
 import { Link } from "./link.js"
 import { Tooltip } from "./tooltip.js"
 
-export type TaskLink = { kind: "github_pr" | "linear_issue" | "slack_thread" | "url"; url: string }
+export type TaskLink = { kind: "github_pr" | "github_issue" | "linear_issue" | "slack_thread" | "url"; url: string }
 
 const glyphs: Record<TaskLink["kind"], Glyph> = {
   github_pr: "Github",
+  github_issue: "Github",
   linear_issue: "Linear",
   slack_thread: "Slack",
   url: "Link",
@@ -19,12 +20,14 @@ export function TaskLinkBadge(props: { link: TaskLink; size?: "small" | "control
   const path = url?.pathname.split("/").filter(Boolean) ?? []
   const label = {
     github_pr: `${path[0]}/${path[1]}#${path[3]}`,
+    github_issue: `${path[0]}/${path[1]}#${path[3]}`,
     linear_issue: path[2] ?? props.link.url,
     slack_thread: "Slack thread",
     url: url?.hostname.replace(/^www\./u, "") || props.link.url,
   }[props.link.kind]
   const description = {
     github_pr: `GitHub pull request ${label}`,
+    github_issue: `GitHub issue ${label}`,
     linear_issue: `Linear issue ${label}`,
     slack_thread: label,
     url: props.link.url,

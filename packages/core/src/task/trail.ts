@@ -17,11 +17,11 @@ export interface Target {
 export const record = Effect.fnUntraced(function* (
   transaction: Database.Transaction,
   task: Target,
-  actor: Actor.Info,
+  actor: Actor.Info | null,
   events: ReadonlyArray<TaskEvent.Data>,
 ) {
   if (events.length === 0) return
-  const by = TaskQueries.actorOf(actor)
+  const by = actor ? TaskQueries.actorOf(actor) : { userId: null, agentId: null, sessionId: null }
   const encoded = yield* Schema.encodeEffect(Schema.Array(TaskEvent.Data))(events).pipe(Effect.orDie)
   yield* transaction.insert(Database.Schema.task_event).values(
     encoded.map((data) => ({

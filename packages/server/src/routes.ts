@@ -170,7 +170,7 @@ export const layer = Layer.mergeAll(
     OAuthRoutes.layer,
     ChannelRoutes.layer.pipe(
       Layer.provide(Channels.layer),
-      Layer.provide([SessionRunner.layer, ChannelInstalls.layer]),
+      Layer.provide([Task.layer.pipe(Layer.provideMerge(SessionRunner.layer)), ChannelInstalls.layer]),
       Layer.provide(BrainRegistry.layer),
     ),
   ).pipe(Layer.provide(bodyLimit(1024 * 1024))),

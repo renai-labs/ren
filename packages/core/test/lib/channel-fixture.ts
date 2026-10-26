@@ -7,6 +7,7 @@ import { Channel } from "@ren/schema/channel"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Session } from "@ren/schema/session"
+import { TaskLink } from "@ren/schema/task-link"
 import { BunCrypto } from "@effect/platform-bun"
 import { Clock, ConfigProvider, Context, Deferred, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
@@ -29,6 +30,7 @@ import { DurableRunner } from "../../src/durable-runner.js"
 import { Models } from "../../src/models.js"
 import { SessionRunner } from "../../src/session/runner.js"
 import { SessionSync } from "../../src/session-sync.js"
+import { Task } from "../../src/task.js"
 import { Host } from "./host.js"
 
 const secret = "channel-test-secret"
@@ -41,6 +43,7 @@ const Body = Schema.fromJsonString(
     Schema.Struct({ type: Schema.Literal("ignore") }),
     Schema.Struct({ type: Schema.Literal("uninstalled"), install: Schema.NonEmptyString }),
     Schema.Struct({ type: Schema.Literal("event"), event: Channel.Event }),
+    Schema.Struct({ type: Schema.Literal("signal"), signal: Channel.Signal }),
   ]),
 )
 
@@ -96,6 +99,7 @@ const provider = Effect.gen(function* () {
           if (body.type === "handshake") return { _tag: "Handshake", body: { challenge: body.challenge } }
           if (body.type === "ignore") return { _tag: "Ignore", reason: "a bot’s own message" }
           if (body.type === "uninstalled") return { _tag: "Uninstalled", install: body.install }
+          if (body.type === "signal") return { _tag: "Signal", signal: body.signal }
           return { _tag: "Event", event: body.event }
         }),
       ),
@@ -113,6 +117,11 @@ const provider = Effect.gen(function* () {
       found.message === "unreadable"
         ? Effect.fail(new ChannelProvider.Unavailable({ message: "Slack is down" }))
         : Effect.succeedSome("[Bob] the deploy failed at 10:02"),
+    linkOf: (found) =>
+      Option.fromNullishOr(found.thread.url).pipe(
+        Option.map(TaskLink.classify),
+        Option.filter((link) => link.kind === "slack_thread"),
+      ),
     send: (target, text) =>
       Effect.suspend(
         (): Effect.Effect<void, ChannelProvider.PlaceGone | ChannelProvider.Unavailable | ChannelProvider.Rejected> => {
@@ -191,6 +200,7 @@ const notices = ChannelNotice.layer.pipe(
 
 const Start = Schema.Struct({
   sessionId: Session.ID,
+  interactive: Schema.Boolean,
   initialMessage: Schema.optionalKey(
     Schema.Struct({
       messageId: Session.MessageID,
@@ -216,6 +226,7 @@ export interface Delivered {
   readonly messageId: Session.MessageID
   readonly prompt: Session.Prompt
   readonly delivery?: Session.Delivery
+  readonly interactive?: boolean
   readonly channel?: ChannelOrigin.Info
   readonly synthetic?: Session.Synthetic
 }
@@ -250,7 +261,12 @@ const cell = Layer.effect(
               const body = Schema.decodeUnknownSync(Start)(await incoming.json())
               started.add(body.sessionId)
               if (body.initialMessage)
-                accepted.push({ kind: "start", sessionId: body.sessionId, ...body.initialMessage })
+                accepted.push({
+                  kind: "start",
+                  sessionId: body.sessionId,
+                  interactive: body.interactive,
+                  ...body.initialMessage,
+                })
               return Response.json({ sessionId: body.sessionId, harness: "opencode" })
             }
             const sessionId = Session.ID.make(path.split("/")[3] ?? "")
@@ -289,7 +305,7 @@ const models = Models.layerNone
 
 const core = (held: boolean) =>
   Layer.mergeAll(
-    SessionRunner.layer,
+    Task.layer.pipe(Layer.provideMerge(SessionRunner.layer)),
     ChannelInstalls.layer,
     ChannelRoute.layer.pipe(Layer.provideMerge(ChannelIdentity.layer)),
     ChannelMappings.layer,

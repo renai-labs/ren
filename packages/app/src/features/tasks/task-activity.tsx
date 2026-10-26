@@ -1,4 +1,5 @@
 import type { TaskActor, TaskCommentInfo, TaskEventData, TaskInfo } from "@ren/client"
+import { Channel } from "@ren/schema/channel"
 import { TaskComment } from "@ren/schema/task-comment"
 import { Button } from "@ren/ui/button"
 import { Disclosure } from "@ren/ui/disclosure"
@@ -63,7 +64,9 @@ export function TaskActivity(props: {
                 <div key={item.id} className="flex flex-col gap-2">
                   <Text purpose="caption" tone="secondary">
                     <Text purpose="label" element="span">
-                      {actorName(item.event.actor)}
+                      {item.event.data._tag === "status" && item.event.data.automation
+                        ? Channel.titles[item.event.data.automation.provider]
+                        : actorName(item.event.actor)}
                     </Text>
                     {" · "}
                     <Time value={item.event.createdAt} format="relative" />
@@ -139,11 +142,7 @@ function Event(props: {
     case "archived":
       return <Text purpose="body">Archived the task.</Text>
     case "status":
-      return (
-        <Text purpose="body">
-          Changed status from {TaskView.statusLabel[data.from]} to {TaskView.statusLabel[data.to]}.
-        </Text>
-      )
+      return <StatusEvent data={data} />
     case "started":
       return (
         <TaskSessionCard
@@ -190,6 +189,15 @@ function Event(props: {
 const parentChange = (data: Extract<TaskEventData, { _tag: "parent" }>) => {
   if (data.to === null) return "Made this a task of its own."
   return data.from === null ? "Made this a sub-task." : "Moved this sub-task to another parent."
+}
+
+function StatusEvent(props: { data: Extract<TaskEventData, { _tag: "status" }> }) {
+  return (
+    <Text purpose="body">
+      {props.data.automation ? "Pull request merged. " : null}
+      Changed status from {TaskView.statusLabel[props.data.from]} to {TaskView.statusLabel[props.data.to]}.
+    </Text>
+  )
 }
 
 function ReviewEvent(props: { data: Extract<TaskEventData, { _tag: "reviewed" }> }) {

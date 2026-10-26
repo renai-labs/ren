@@ -1,6 +1,7 @@
 export * as Task from "./task.js"
 
 import { Database } from "@ren/db/database"
+import type { Auth } from "@ren/schema/auth"
 import { Label } from "@ren/schema/label"
 import { Session } from "@ren/schema/session"
 import { Task } from "@ren/schema/task"
@@ -29,6 +30,11 @@ type AssignError = Primitive.NotFound | Primitive.Forbidden | Primitive.Conflict
 export type Interface = Omit<Primitive.Interface<typeof Task.definition>, "assign"> & {
   readonly assign: (actor: Actor.Info, id: Task.ID, input: Task.AssignInput) => Effect.Effect<Task.Info, AssignError>
   readonly handOff: (actor: Actor.Info, id: Task.ID, input: Task.AssignInput) => Effect.Effect<HandOff, AssignError>
+  readonly completeMerged: (
+    organizationId: Auth.OrganizationID,
+    link: TaskLink.Ref,
+    url: string,
+  ) => Effect.Effect<ReadonlyArray<Task.ID>>
 }
 
 export const reviewStart: "continue" | "none" = "continue"
@@ -717,6 +723,45 @@ export const layer = Layer.effect(
         const start = input.humanReview ? "none" : (input.start ?? reviewStart)
         if (Option.isNone(decided) || start === "none") return yield* read(actor, id)
         return yield* launchAfterCommit(actor, id, "continue", decided.value)
+      }),
+      completeMerged: Effect.fn("Task.completeMerged")(function* (
+        organizationId: Auth.OrganizationID,
+        link: TaskLink.Ref,
+        url: string,
+      ) {
+        return yield* database
+          .transaction((transaction) =>
+            Effect.gen(function* () {
+              const open = yield* transaction
+                .select({ id: Database.Schema.task.id, status: Database.Schema.task.status })
+                .from(Database.Schema.task)
+                .where(TaskQueries.linking(organizationId, link))
+                .orderBy(asc(Database.Schema.task.id))
+                .for("update")
+              if (open.length === 0) return []
+              yield* transaction
+                .update(Database.Schema.task)
+                .set({ status: "done", human_review: false, human_review_reason: null, updated_at: sql`now()` })
+                .where(
+                  inArray(
+                    Database.Schema.task.id,
+                    open.map((task) => task.id),
+                  ),
+                )
+              yield* Effect.forEach(open, (task) =>
+                TaskTrail.record(transaction, { id: task.id, organizationId }, null, [
+                  {
+                    _tag: "status",
+                    from: task.status,
+                    to: "done",
+                    automation: { provider: "github", cause: "pull_request_merged", url },
+                  },
+                ]),
+              )
+              return open.map((task) => task.id)
+            }),
+          )
+          .pipe(Effect.orDie)
       }),
     })
   }),
