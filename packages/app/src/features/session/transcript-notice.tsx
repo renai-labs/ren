@@ -1,5 +1,6 @@
 import { TimelineText } from "@ren/chat"
 import type { SessionMessage } from "@ren/schema/session/message"
+import { Disclosure } from "@ren/ui/disclosure"
 import { Icon } from "@ren/ui/icon"
 import { List } from "@ren/ui/list"
 import { Notice } from "@ren/ui/notice"
@@ -7,7 +8,18 @@ import { Separator } from "@ren/ui/separator"
 import { Text } from "@ren/ui/text"
 import { Transcript } from "@ren/ui/transcript"
 
-export function TranscriptError(props: { text: string }) {
+export function TranscriptError(props: { kind?: string; text: string }) {
+  const title = props.kind && TimelineText.errorTitle(props.kind)
+  if (title)
+    return (
+      <Notice tone="danger" title={title}>
+        <Disclosure summary="Details">
+          <Text purpose="caption" tone="secondary" wrapping="anywhere">
+            {props.text}
+          </Text>
+        </Disclosure>
+      </Notice>
+    )
   const parts = TimelineText.errorParts(props.text)
   return (
     <Notice tone="danger" title={parts.head || undefined}>

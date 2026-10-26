@@ -1,7 +1,10 @@
 import { Composer, ComposerHistory } from "@ren/chat"
 import { Session } from "@ren/schema/session"
+import { SessionModel } from "@ren/schema/session/model"
 import { SessionMessage } from "@ren/schema/session/message"
 import { ConversationShell } from "@ren/ui/conversation-shell"
+import { Icon } from "@ren/ui/icon"
+import { Logotype } from "@ren/ui/logotype"
 import { Select } from "@ren/ui/select"
 import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
@@ -10,15 +13,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { startTransition, useId, useRef, useState, ViewTransition } from "react"
 import { Attention } from "../../lib/attention.js"
+import { ChatPreferences } from "../../lib/chat-preferences.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { Platform } from "../../platform/platform.js"
 import { Viewport } from "../../platform/viewport.js"
 import { Failure } from "./failure.js"
 import { ComposerModelPicker } from "./composer-model-picker.js"
-import { SpaceProfilesPill } from "../../components/profiles-pill.js"
+import { SpaceAppsStrip } from "../../components/apps-strip.js"
+import { ChatComposer } from "./chat-composer.js"
+import { ComposerCopy } from "./composer-copy.js"
 import { SessionDrafts } from "./session-drafts.js"
 
-export function NewChat(props: { name: string; userId: string }) {
+// oxlint-disable-next-line ren/no-comments -- With no listed pick the chat sends no model, so the brain takes the space's default.
+const listed = (
+  models: ReadonlyArray<SessionModel.Choice>,
+  picks: ReadonlyArray<SessionModel.Ref | null | undefined>,
+) => picks.find((pick) => pick && models.some((item) => SessionModel.key(item) === SessionModel.key(pick))) ?? undefined
+
+export function NewChat(props: { userId: string }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -38,7 +50,7 @@ export function NewChat(props: { name: string; userId: string }) {
   const options = (spaces.data?.items ?? []).map((space) => ({ value: space.id, label: space.name }))
   const spaceId = chosen ?? options.at(0)?.value
   const list = models.data ?? []
-  const model = Composer.model(draft, undefined, list)
+  const model = listed(list, [draft.model, ChatPreferences.model.read(platform.storage)])
   const text = draft.text.trim()
   const change = (next: Composer.Draft) => {
     if (spaceId && next.text.trim() && !prepared.current.has(spaceId)) {
@@ -71,105 +83,113 @@ export function NewChat(props: { name: string; userId: string }) {
     <ConversationShell.Root
       populated={false}
       composerPosition="centered"
+      placeholder={
+        <span aria-hidden>
+          <Logotype size="display" tone="watermark" drawing="outline" label="" />
+        </span>
+      }
       composer={
-        <>
-          <Text purpose="title" alignment="center">
-            Welcome, {props.name}
-          </Text>
-          <ConversationShell.Composer
-            label="Start a chat"
-            onSubmit={() => {
-              if (!text || !spaceId || create.isPending) return
-              Attention.ask(platform)
-              const message = { id: SessionMessage.ID.create(), text }
-              SessionDrafts.keepPending(platform.drafts, sessionID, message)
-              startTransition(() => setSent(text))
-              create.mutate(
-                { id: sessionID, spaceId, message, ...(model && { model }) },
-                {
-                  onSuccess: () => {
-                    platform.drafts?.remove(SessionDrafts.fresh)
-                    platform.drafts?.set(
-                      SessionDrafts.history,
-                      ComposerHistory.encode(
-                        ComposerHistory.prepend(ComposerHistory.decode(platform.drafts.get(SessionDrafts.history)), {
-                          text: draft.text,
-                          pasted: [],
-                        }),
-                      ),
-                    )
-                    void queryClient.invalidateQueries({ queryKey: context.api.session.list.queryKey() })
-                    void import("../../lib/chat.js")
-                      .then((loaded) => loaded.Chat.forUser(platform, props.userId).atoms.handoff(sessionID, message))
-                      .finally(() => {
-                        void navigate({ to: "/sessions/$sessionId", params: { sessionId: sessionID } })
-                      })
-                  },
-                  onError: (error) => {
-                    startTransition(() => setSent(undefined))
-                    setSessionID(Session.ID.create())
-                    Toast.manager.add({
-                      type: "error",
-                      title: "Could not start the chat",
-                      description: Failure.describe(error),
+        <ChatComposer
+          label="Start a chat"
+          layout="stacked"
+          header={
+            <Select.Root
+              label="Space"
+              appearance="inline"
+              leading={
+                <span className="flex items-center gap-2">
+                  <Text purpose="body" tone="secondary" element="span">
+                    Working in
+                  </Text>
+                  <Icon glyph="Cube" />
+                </span>
+              }
+              options={options}
+              value={spaceId ?? null}
+              onValueChange={setChosen}
+              placeholder="Choose a space"
+              disabled={create.isPending}
+            />
+          }
+          apps={spaceId ? <SpaceAppsStrip spaceId={spaceId} /> : null}
+          onSubmit={() => {
+            if (!text || !spaceId || create.isPending) return
+            Attention.ask(platform)
+            const message = { id: SessionMessage.ID.create(), text }
+            SessionDrafts.keepPending(platform.drafts, sessionID, message)
+            startTransition(() => setSent(text))
+            create.mutate(
+              { id: sessionID, spaceId, message, ...(model && { model }) },
+              {
+                onSuccess: () => {
+                  platform.drafts?.remove(SessionDrafts.fresh)
+                  platform.drafts?.set(
+                    SessionDrafts.history,
+                    ComposerHistory.encode(
+                      ComposerHistory.prepend(ComposerHistory.decode(platform.drafts.get(SessionDrafts.history)), {
+                        text: draft.text,
+                        pasted: [],
+                      }),
+                    ),
+                  )
+                  void queryClient.invalidateQueries({ queryKey: context.api.session.list.queryKey() })
+                  void import("../../lib/chat.js")
+                    .then((loaded) => loaded.Chat.forUser(platform, props.userId).atoms.handoff(sessionID, message))
+                    .finally(() => {
+                      void navigate({ to: "/sessions/$sessionId", params: { sessionId: sessionID } })
                     })
-                  },
                 },
-              )
-            }}
-            footerLeading={
-              <>
-                <Select.Root
-                  label="Space"
-                  appearance="plain"
-                  size="small"
-                  options={options}
-                  value={spaceId ?? null}
-                  onValueChange={setChosen}
-                  placeholder="Choose a space"
+                onError: (error) => {
+                  startTransition(() => setSent(undefined))
+                  setSessionID(Session.ID.create())
+                  Toast.manager.add({
+                    type: "error",
+                    title: "Could not start the chat",
+                    description: Failure.describe(error),
+                  })
+                },
+              },
+            )
+          }}
+          controls={
+            <>
+              {models.isPending || list.length > 0 ? (
+                <ComposerModelPicker
+                  models={list}
+                  selected={model}
+                  loading={models.isPending}
+                  disabled={create.isPending}
+                  onChange={(picked) => {
+                    ChatPreferences.model.write(platform.storage, picked)
+                    change(Composer.withModel(draft, picked))
+                    requestAnimationFrame(() => input.current?.focus())
+                  }}
                 />
-                {spaceId ? <SpaceProfilesPill spaceId={spaceId} /> : null}
-              </>
-            }
-            footerTrailing={
-              <>
-                {models.isPending || list.length > 0 ? (
-                  <ComposerModelPicker
-                    models={list}
-                    selected={model}
-                    loading={models.isPending}
-                    disabled={create.isPending}
-                    onChange={(picked) => {
-                      change(Composer.withModel(draft, picked))
-                      requestAnimationFrame(() => input.current?.focus())
-                    }}
-                  />
-                ) : null}
-                <ConversationShell.ComposerSubmit
-                  running={false}
-                  content={Boolean(text)}
-                  starting={create.isPending}
-                  disabled={!text || !spaceId}
-                  onStop={() => undefined}
-                />
-              </>
-            }
-          >
-            <ViewTransition name={transitionName} share="auto" default="none">
-              <ConversationShell.ComposerInput
-                ref={input}
-                aria-label="Message"
-                placeholder="Draft the quarterly report from the finance sheet"
-                dir="auto"
-                autoComplete="off"
-                focusOnMount={!mobile}
-                readOnly={create.isPending}
-                value={draft.text}
-                onChange={(event) => change(Composer.withText(draft, event.currentTarget.value))}
+              ) : null}
+              <ConversationShell.ComposerSubmit
+                running={false}
+                content={Boolean(text)}
+                starting={create.isPending}
+                disabled={!text || !spaceId}
+                onStop={() => undefined}
               />
-            </ViewTransition>
-          </ConversationShell.Composer>
-        </>
+            </>
+          }
+        >
+          <ViewTransition name={transitionName} share="auto" default="none">
+            <ConversationShell.ComposerInput
+              ref={input}
+              aria-label="Message"
+              placeholder={ComposerCopy.placeholder}
+              dir="auto"
+              autoComplete="off"
+              focusOnMount={!mobile}
+              readOnly={create.isPending}
+              value={draft.text}
+              onChange={(event) => change(Composer.withText(draft, event.currentTarget.value))}
+            />
+          </ViewTransition>
+        </ChatComposer>
       }
     />
   )

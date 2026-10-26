@@ -9,7 +9,6 @@ import { FindBar } from "@ren/ui/find-bar"
 import { Notice } from "@ren/ui/notice"
 import { StateMessage } from "@ren/ui/state-message"
 import { TaskProgress, type TaskStatus } from "@ren/ui/task-progress"
-import { Text } from "@ren/ui/text"
 import { Toast } from "@ren/ui/toast"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { DateTime, Effect, Option, SubscriptionRef } from "effect"
@@ -83,7 +82,6 @@ function Tasks(props: { tasks: ReadonlyArray<SessionTasks.Task>; running: boolea
 
 function SessionInteraction(props: {
   tasks: ReadonlyArray<SessionTasks.Task>
-  reconnecting: boolean
   running: boolean
   reverted: boolean
   onRedo: () => void
@@ -92,13 +90,6 @@ function SessionInteraction(props: {
   return (
     <>
       <Tasks tasks={props.tasks} running={props.running} />
-      {props.reconnecting ? (
-        <output>
-          <Text purpose="caption" tone="secondary">
-            Reconnecting
-          </Text>
-        </output>
-      ) : null}
       {props.reverted ? (
         <Notice
           tone="neutral"
@@ -429,13 +420,7 @@ export function SessionChat(props: {
         />
       }
       interaction={
-        <SessionInteraction
-          tasks={chat.tasks}
-          reconnecting={chat.reconnecting}
-          running={running}
-          reverted={chat.reverted}
-          onRedo={onRedo}
-        >
+        <SessionInteraction tasks={chat.tasks} running={running} reverted={chat.reverted} onRedo={onRedo}>
           <SessionRequests
             root={props.sessionID}
             sessionID={props.sessionID}
@@ -462,6 +447,9 @@ export function SessionChat(props: {
             reverted={chat.reverted}
             unavailable={chat.failed}
             covered={props.child !== undefined}
+            notice={chat.notice}
+            retrying={restart.isPending}
+            onRetry={retry}
             onUndo={onUndo}
             onRedo={onRedo}
             onCompact={onCompact}

@@ -407,7 +407,7 @@ export function TranscriptRow(props: { shared: Shared; data: RowData; row: Timel
         />
       ) : null
     case "Error":
-      return <TranscriptError text={row.text} />
+      return <TranscriptError kind={row.kind} text={row.text} />
     case "TurnDivider":
       return <Separator label="Interrupted" />
     case "CompactionQueued":
