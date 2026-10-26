@@ -15,6 +15,7 @@ import { BrainRegistry } from "../../src/brain-registry.js"
 import { Access } from "../../src/access.js"
 import { ChannelIdentity } from "../../src/channel-identity.js"
 import { ChannelInstalls } from "../../src/channel-installs.js"
+import { ChannelMappings } from "../../src/channel-mappings.js"
 import { ChannelNotice } from "../../src/channel-notice.js"
 import { ChannelProvider } from "../../src/channel-provider.js"
 import { ChannelReply } from "../../src/channel-reply.js"
@@ -66,6 +67,8 @@ export class Outbox extends Context.Service<
     readonly progress: Array<{ readonly message: string; readonly status: ChannelProvider.Status }>
     readonly emails: Map<string, string>
     readonly lookups: Array<string>
+    readonly places: Array<ChannelProvider.Place>
+    readonly announced: Array<{ readonly place: string; readonly text: string }>
   }
 >()("@ren/core/test/ChannelFixture/Outbox") {}
 
@@ -129,6 +132,9 @@ const provider = Effect.gen(function* () {
         : Effect.fail(new ChannelProvider.InstallFailed({ message: "Slack sent no team." })),
     changedOnProvider: () => false,
     revoke: () => Effect.void,
+    places: () => Effect.sync(() => outbox.places),
+    place: (_workspace, id) => Effect.sync(() => Option.fromNullishOr(outbox.places.find((place) => place.id === id))),
+    announce: (_workspace, place, text) => Effect.sync(() => void outbox.announced.push({ place: place.id, text })),
   } satisfies ChannelProvider.Provider
 }).pipe(Effect.map(Option.some))
 
@@ -278,6 +284,7 @@ const core = (held: boolean) =>
     SessionRunner.layer,
     ChannelInstalls.layer,
     ChannelRoute.layer.pipe(Layer.provideMerge(ChannelIdentity.layer)),
+    ChannelMappings.layer,
     ChannelReply.layer,
     SessionSync.layer,
     notices,
@@ -293,7 +300,19 @@ const core = (held: boolean) =>
     Layer.provideMerge(
       Layer.mergeAll(
         hold(held),
-        Layer.sync(Outbox, () => ({ sent: [], attempts: [], progress: [], emails: new Map(), lookups: [] })),
+        Layer.sync(Outbox, () => ({
+          sent: [],
+          attempts: [],
+          progress: [],
+          emails: new Map(),
+          lookups: [],
+          places: [
+            { id: "C07", name: "eng", private: false, anyoneCanWrite: false },
+            { id: "C09", name: "sales", private: true, anyoneCanWrite: false },
+            { id: "C11", name: "shared-with-vendor", private: false, anyoneCanWrite: true },
+          ],
+          announced: [],
+        })),
       ),
     ),
   )

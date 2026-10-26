@@ -4,7 +4,7 @@ import { AppGroup } from "./groups/app.js"
 import { AppRegistryGroup } from "./groups/app-registry.js"
 import { AppProfileGroup, AppProfileReachGroup } from "./groups/app-profile.js"
 import { AgentMembershipGroup } from "./groups/agent-membership.js"
-import { ChannelConnectGroup, ChannelInstallGroup } from "./groups/channel-install.js"
+import { ChannelConnectGroup, ChannelInstallGroup, ChannelMappingGroup } from "./groups/channel-install.js"
 import { ChannelReplyGroup } from "./groups/channel-reply.js"
 import { SignInGroup } from "./groups/sign-in.js"
 import { ChatGroup } from "./groups/chat.js"
@@ -58,6 +58,7 @@ export const Api = HttpApi.make("server")
   .add(OAuthAppGroup)
   .add(RenInferenceGroup)
   .add(ChannelInstallGroup)
+  .add(ChannelMappingGroup)
   .add(ChannelConnectGroup)
   .add(ChannelReplyGroup)
   .add(SignInGroup)

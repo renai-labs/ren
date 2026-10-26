@@ -45,6 +45,17 @@ const Reactions = Schema.Array(
 
 const Profile = Schema.Struct({ email: Schema.NullOr(Schema.String) })
 
+const Repository = Schema.Struct({ id: Schema.Number, full_name: Schema.String, private: Schema.Boolean })
+
+const Repositories = Schema.Struct({ total_count: Schema.Number, repositories: Schema.Array(Repository) })
+
+const placeOf = (repository: typeof Repository.Type): ChannelProvider.Place => ({
+  id: String(repository.id),
+  name: repository.full_name,
+  private: repository.private,
+  anyoneCanWrite: !repository.private,
+})
+
 const Author = Schema.Struct({ user: Schema.NullOr(Schema.Struct({ login: Schema.String })) })
 
 const commentEvents: Readonly<Record<string, "issue" | "review">> = {
@@ -77,6 +88,20 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
     const url = URL.parse(value)
     return url?.protocol === "https:" && url.host === web.host && !url.username && !url.password ? value : undefined
   }
+  const unavailable = (error: GitHubApp.Failed) => new ChannelProvider.Unavailable({ message: error.message })
+  const repositories = (
+    workspace: string,
+    page: number,
+    found: ReadonlyArray<ChannelProvider.Place>,
+  ): Effect.Effect<ReadonlyArray<ChannelProvider.Place>, GitHubApp.Failed> =>
+    app.read(workspace, `/installation/repositories?per_page=100&page=${page}`, Repositories).pipe(
+      Effect.flatMap((answer) => {
+        const all = [...found, ...answer.repositories.map(placeOf)]
+        return answer.repositories.length < 100 || all.length >= answer.total_count
+          ? Effect.succeed(all)
+          : repositories(workspace, page + 1, all)
+      }),
+    )
   const addsMention = (body: typeof Comment.Type) =>
     mentions(body.comment.body) &&
     (body.action === "created" ||
@@ -257,10 +282,18 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       } satisfies ChannelProvider.Installed
     }),
     changedOnProvider: (query) => query.setup_action === "update" && !query.state,
-    revoke: (workspace) =>
-      app
-        .deleteInstallation(workspace)
-        .pipe(Effect.mapError((error) => new ChannelProvider.Unavailable({ message: error.message }))),
+    revoke: (workspace) => app.deleteInstallation(workspace).pipe(Effect.mapError(unavailable)),
+    places: (workspace) =>
+      repositories(workspace, 1, []).pipe(Effect.mapError(unavailable), Effect.withSpan("GitHub.places")),
+    place: (workspace, id) =>
+      app.read(workspace, `/repositories/${encodeURIComponent(id)}`, Repository).pipe(
+        Effect.map((repository) => Option.some(placeOf(repository))),
+        Effect.catchTag("GitHubApp.Failed", (error) =>
+          error.status === 404 ? Effect.succeedNone : Effect.fail(unavailable(error)),
+        ),
+        Effect.withSpan("GitHub.place"),
+      ),
+    announce: () => Effect.void,
   }
 }
 

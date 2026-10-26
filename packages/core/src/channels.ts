@@ -110,6 +110,8 @@ export const layer = Layer.effect(
           sessionId: thread.session_id,
           created: Database.Schema.agent_session.id,
           archivedAt: Database.Schema.agent_session.archived_at,
+          spaceId: Database.Schema.agent_session.space_id,
+          agentId: Database.Schema.agent_session.agent_id,
         })
         .from(thread)
         .leftJoin(Database.Schema.agent_session, eq(Database.Schema.agent_session.id, thread.session_id))
@@ -130,10 +132,12 @@ export const layer = Layer.effect(
           ),
         )
       const claimed = yield* read
-      if (!claimed.archivedAt) return claimed
+      if (!claimed.created) return claimed
+      if (!claimed.archivedAt && claimed.spaceId === route.spaceId && claimed.agentId === (route.agentId ?? null))
+        return claimed
       yield* database.db
         .update(thread)
-        .set({ session_id: sessionId, updated_at: new Date() })
+        .set({ session_id: sessionId, last_reply_at: null, updated_at: new Date() })
         .where(and(eq(thread.id, claimed.id), eq(thread.session_id, claimed.sessionId)))
         .pipe(Effect.orDie)
       return yield* read

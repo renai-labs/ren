@@ -82,13 +82,21 @@ const fields = {
   agent: Schema.optionalKey(Agent.Name.annotate({ description: "Without it, the channel reaches the ren agent." })),
 }
 
+const mapped = {
+  ...fields,
+  fallback: Schema.optionalKey(Schema.Boolean).annotate({
+    description:
+      "Run a sender that Ren cannot match to a space member as the person who applies the spec. On by default, off by default for a public GitHub repository.",
+  }),
+}
+
 export const Declaration = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal("slack"), ...fields }),
-  Schema.Struct({ kind: Schema.Literal("linear"), ...fields }),
+  Schema.Struct({ kind: Schema.Literal("slack"), ...mapped }),
+  Schema.Struct({ kind: Schema.Literal("linear"), ...mapped }),
   Schema.Struct({ kind: Schema.Literal("email"), ...fields }),
   Schema.Struct({
     kind: Schema.Literal("github"),
-    ...fields,
+    ...mapped,
     prListener: Schema.Boolean.pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(false))),
     prListenerPrompt: Schema.optionalKey(Schema.NonEmptyString),
   }),

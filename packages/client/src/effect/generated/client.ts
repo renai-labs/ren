@@ -1214,6 +1214,17 @@ const EndpointChannelInstallList = (raw: RawClient["channel-install"]) => (input
     Effect.mapError(mapClientError),
   )
 
+type ChannelInstallUpdateRequest = Parameters<RawClient["channel-install"]["channel-install.update"]>[0]
+type ChannelInstallUpdateInput = {
+  readonly id: ChannelInstallUpdateRequest["params"]["id"]
+  readonly defaultSpaceId: ChannelInstallUpdateRequest["payload"]["defaultSpaceId"]
+}
+const EndpointChannelInstallUpdate = (raw: RawClient["channel-install"]) => (input: ChannelInstallUpdateInput) =>
+  raw["channel-install.update"]({
+    params: { id: input["id"] },
+    payload: { defaultSpaceId: input["defaultSpaceId"] },
+  }).pipe(Effect.mapError(mapClientError))
+
 type ChannelInstallRemoveRequest = Parameters<RawClient["channel-install"]["channel-install.remove"]>[0]
 type ChannelInstallRemoveInput = { readonly id: ChannelInstallRemoveRequest["params"]["id"] }
 const EndpointChannelInstallRemove = (raw: RawClient["channel-install"]) => (input: ChannelInstallRemoveInput) =>
@@ -1221,7 +1232,57 @@ const EndpointChannelInstallRemove = (raw: RawClient["channel-install"]) => (inp
 
 const adaptGroupChannelInstall = (raw: RawClient["channel-install"]) => ({
   list: EndpointChannelInstallList(raw),
+  update: EndpointChannelInstallUpdate(raw),
   remove: EndpointChannelInstallRemove(raw),
+})
+
+type ChannelMappingListRequest = Parameters<RawClient["channel-mapping"]["channel-mapping.list"]>[0]
+type ChannelMappingListInput = {
+  readonly installId?: ChannelMappingListRequest["query"]["installId"]
+  readonly spaceId?: ChannelMappingListRequest["query"]["spaceId"]
+  readonly page: ChannelMappingListRequest["query"]["page"]
+  readonly pageSize: ChannelMappingListRequest["query"]["pageSize"]
+}
+const EndpointChannelMappingList = (raw: RawClient["channel-mapping"]) => (input: ChannelMappingListInput) =>
+  raw["channel-mapping.list"]({
+    query: {
+      installId: input["installId"],
+      spaceId: input["spaceId"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ChannelMappingCreateRequest = Parameters<RawClient["channel-mapping"]["channel-mapping.create"]>[0]
+type ChannelMappingCreateInput = {
+  readonly installId: ChannelMappingCreateRequest["payload"]["installId"]
+  readonly place: ChannelMappingCreateRequest["payload"]["place"]
+  readonly spaceId: ChannelMappingCreateRequest["payload"]["spaceId"]
+  readonly agentId?: ChannelMappingCreateRequest["payload"]["agentId"]
+  readonly fallback?: ChannelMappingCreateRequest["payload"]["fallback"]
+  readonly fallbackUserId?: ChannelMappingCreateRequest["payload"]["fallbackUserId"]
+}
+const EndpointChannelMappingCreate = (raw: RawClient["channel-mapping"]) => (input: ChannelMappingCreateInput) =>
+  raw["channel-mapping.create"]({
+    payload: {
+      installId: input["installId"],
+      place: input["place"],
+      spaceId: input["spaceId"],
+      agentId: input["agentId"],
+      fallback: input["fallback"],
+      fallbackUserId: input["fallbackUserId"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ChannelMappingRemoveRequest = Parameters<RawClient["channel-mapping"]["channel-mapping.remove"]>[0]
+type ChannelMappingRemoveInput = { readonly id: ChannelMappingRemoveRequest["params"]["id"] }
+const EndpointChannelMappingRemove = (raw: RawClient["channel-mapping"]) => (input: ChannelMappingRemoveInput) =>
+  raw["channel-mapping.remove"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupChannelMapping = (raw: RawClient["channel-mapping"]) => ({
+  list: EndpointChannelMappingList(raw),
+  create: EndpointChannelMappingCreate(raw),
+  remove: EndpointChannelMappingRemove(raw),
 })
 
 const EndpointChannelConnectChannelProviderList = (raw: RawClient["channel-connect"]) => () =>
@@ -1235,9 +1296,22 @@ const EndpointChannelConnectChannelInstallStart =
   (raw: RawClient["channel-connect"]) => (input: ChannelConnectChannelInstallStartInput) =>
     raw["channel-install.start"]({ payload: { provider: input["provider"] } }).pipe(Effect.mapError(mapClientError))
 
+type ChannelConnectChannelPlaceListRequest = Parameters<RawClient["channel-connect"]["channel-place.list"]>[0]
+type ChannelConnectChannelPlaceListInput = {
+  readonly installId: ChannelConnectChannelPlaceListRequest["query"]["installId"]
+  readonly page: ChannelConnectChannelPlaceListRequest["query"]["page"]
+  readonly pageSize: ChannelConnectChannelPlaceListRequest["query"]["pageSize"]
+}
+const EndpointChannelConnectChannelPlaceList =
+  (raw: RawClient["channel-connect"]) => (input: ChannelConnectChannelPlaceListInput) =>
+    raw["channel-place.list"]({
+      query: { installId: input["installId"], page: input["page"], pageSize: input["pageSize"] },
+    }).pipe(Effect.mapError(mapClientError))
+
 const adaptGroupChannelConnect = (raw: RawClient["channel-connect"]) => ({
   "channel-provider": { list: EndpointChannelConnectChannelProviderList(raw) },
   "channel-install": { start: EndpointChannelConnectChannelInstallStart(raw) },
+  "channel-place": { list: EndpointChannelConnectChannelPlaceList(raw) },
 })
 
 type ChannelReplyChannelReplyRequest = Parameters<RawClient["channel-reply"]["channel.reply"]>[0]
@@ -1285,6 +1359,7 @@ const adaptClient = (raw: RawClient) => ({
   "oauth-app": adaptGroupOauthApp(raw["oauth-app"]),
   "ren-inference": adaptGroupRenInference(raw["ren-inference"]),
   "channel-install": adaptGroupChannelInstall(raw["channel-install"]),
+  "channel-mapping": adaptGroupChannelMapping(raw["channel-mapping"]),
   "channel-connect": adaptGroupChannelConnect(raw["channel-connect"]),
   "channel-reply": adaptGroupChannelReply(raw["channel-reply"]),
   "sign-in": adaptGroupSignIn(raw["sign-in"]),

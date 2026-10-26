@@ -10,6 +10,8 @@ import { eq } from "drizzle-orm"
 import { Deferred, Effect, Layer, Option, Schedule, Struct } from "effect"
 import type { Actor } from "../src/actor.js"
 import { ChannelIdentity } from "../src/channel-identity.js"
+import { ChannelInstalls } from "../src/channel-installs.js"
+import { ChannelMappings } from "../src/channel-mappings.js"
 import { ChannelReply } from "../src/channel-reply.js"
 import { ChannelRoute } from "../src/channel-route.js"
 import { ChannelTurns } from "../src/channel-turns.js"
@@ -651,6 +653,234 @@ describe("ChannelRoute", () => {
         _tag: "ChannelRoute.Refused",
         reason: "fallback_gone",
       })
+    }),
+  )
+})
+
+const installOf = Effect.fnUntraced(function* (workspace: string) {
+  const database = yield* Database.Service
+  const rows = yield* database.db
+    .select({ id: Database.Schema.channel_install.id })
+    .from(Database.Schema.channel_install)
+    .where(eq(Database.Schema.channel_install.workspace, workspace))
+  const found = rows.at(0)
+  if (!found) return yield* Effect.die(new Error(`No install of ${workspace}`))
+  return found.id
+})
+
+const sessionOf = Effect.fnUntraced(function* (sessionId: Session.ID | undefined) {
+  const database = yield* Database.Service
+  return (yield* database.db
+    .select({ spaceId: Database.Schema.agent_session.space_id, agentId: Database.Schema.agent_session.agent_id })
+    .from(Database.Schema.agent_session)
+    .where(eq(Database.Schema.agent_session.id, sessionId ?? Session.ID.create()))).at(0)
+})
+
+describe("ChannelMappings", () => {
+  it.live("remapping an existing thread starts a new chat in the sender's authorized space", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const mappings = yield* ChannelMappings.Service
+      const outbox = yield* ChannelFixture.Outbox
+      const owner = { userId: subject.owner.createdBy, organizationId: subject.owner.organizationId, roles: ["owner"] }
+      const installId = yield* installOf(subject.install)
+      const first = ChannelFixture.event(subject.install)
+      yield* mappings.create(owner, { installId, place: first.place.id, spaceId: subject.owner.spaceId })
+      yield* ChannelFixture.receive(ChannelFixture.delivery(first))
+      yield* ChannelFixture.settled(first)
+      const original = (yield* ChannelFixture.accepted(1)).at(0)?.sessionId
+      const destination = yield* Seed.space(subject.owner.organizationId)
+      const sender = yield* person(subject.owner.organizationId, { inSpace: destination })
+      outbox.emails.set("U02", sender.email)
+      yield* mappings.create(owner, { installId, place: first.place.id, spaceId: destination, fallback: false })
+      const next = ChannelFixture.event(subject.install, {
+        thread: first.thread,
+        sender: { accountId: "U02", name: "Bob" },
+      })
+      yield* ChannelFixture.receive(ChannelFixture.delivery(next))
+      yield* ChannelFixture.settled(next)
+      const delivered = (yield* ChannelFixture.accepted(2)).at(1)
+      expect(delivered?.sessionId).not.toBe(original)
+      expect(delivered?.kind).toBe("start")
+      expect((yield* sessionOf(delivered?.sessionId))?.spaceId).toBe(destination)
+      expect((yield* sessionOf(original))?.spaceId).toBe(subject.owner.spaceId)
+    }),
+  )
+
+  it.live("a mapped place answers in its space as its agent, and as ren once that agent is archived", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const database = yield* Database.Service
+      const mappings = yield* ChannelMappings.Service
+      const owner = { userId: subject.owner.createdBy, organizationId: subject.owner.organizationId, roles: ["owner"] }
+      const eng = yield* Seed.space(subject.owner.organizationId)
+      const triage = yield* Seed.agent({ organizationId: subject.owner.organizationId, spaceId: eng }, "triage", {
+        isSubagent: false,
+      })
+      const installId = yield* installOf(subject.install)
+      yield* mappings.create(owner, { installId, place: "C07", spaceId: eng, agentId: triage })
+      const first = ChannelFixture.event(subject.install)
+      yield* ChannelFixture.receive(ChannelFixture.delivery(first))
+      expect(yield* sessionOf((yield* ChannelFixture.accepted(1))[0]?.sessionId)).toEqual({
+        spaceId: eng,
+        agentId: triage,
+      })
+      yield* database.db
+        .update(Database.Schema.agent)
+        .set({ archived_at: new Date() })
+        .where(eq(Database.Schema.agent.id, triage))
+      yield* ChannelFixture.receive(
+        ChannelFixture.delivery(ChannelFixture.event(subject.install, { thread: first.thread })),
+      )
+      expect(yield* sessionOf((yield* ChannelFixture.accepted(2))[1]?.sessionId)).toEqual({
+        spaceId: eng,
+        agentId: null,
+      })
+      const next = ChannelFixture.event(subject.install, { thread: first.thread })
+      yield* ChannelFixture.receive(ChannelFixture.delivery(next))
+      yield* ChannelFixture.settled(next)
+      const delivered = yield* ChannelFixture.accepted(3)
+      expect(delivered.at(2)?.sessionId).toBe(delivered.at(1)?.sessionId)
+      expect(delivered.at(2)?.kind).toBe("send")
+    }),
+  )
+
+  it.live(
+    "an unmapped place goes to the install's default space, and to the oldest active space once it is archived",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* routed
+        const database = yield* Database.Service
+        const installs = yield* ChannelInstalls.Service
+        const owner = {
+          userId: subject.owner.createdBy,
+          organizationId: subject.owner.organizationId,
+          roles: ["owner"],
+        }
+        const support = yield* Seed.space(subject.owner.organizationId)
+        const installId = yield* installOf(subject.install)
+        expect((yield* installs.update(owner, installId, { defaultSpaceId: support })).defaultSpace).toEqual({
+          id: support,
+          name: "Team",
+        })
+        yield* ChannelFixture.receive(ChannelFixture.delivery(ChannelFixture.event(subject.install)))
+        expect((yield* sessionOf((yield* ChannelFixture.accepted(1))[0]?.sessionId))?.spaceId).toBe(support)
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ archived_at: new Date() })
+          .where(eq(Database.Schema.space.id, support))
+        yield* ChannelFixture.receive(ChannelFixture.delivery(ChannelFixture.event(subject.install)))
+        expect((yield* sessionOf((yield* ChannelFixture.accepted(2))[1]?.sessionId))?.spaceId).toBe(
+          subject.owner.spaceId,
+        )
+      }),
+  )
+
+  it.live(
+    "a mapping of an open place starts with the fallback off: a stranger is refused as unlinked, a member outside the space as not a member",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* routed
+        const mappings = yield* ChannelMappings.Service
+        const routes = yield* ChannelRoute.Service
+        const outbox = yield* ChannelFixture.Outbox
+        const owner = {
+          userId: subject.owner.createdBy,
+          organizationId: subject.owner.organizationId,
+          roles: ["owner"],
+        }
+        const installId = yield* installOf(subject.install)
+        const open = { id: "C11", kind: "channel", name: "shared-with-vendor" } as const
+        expect(
+          yield* mappings.create(owner, { installId, place: open.id, spaceId: subject.owner.spaceId }),
+        ).toMatchObject({ fallback: false, fallbackUser: { id: subject.owner.createdBy } })
+        expect(
+          yield* mappings.create(owner, { installId, place: "C07", spaceId: subject.owner.spaceId }),
+        ).toMatchObject({ fallback: true })
+        const outside = yield* person(subject.owner.organizationId)
+        outbox.emails.set("U02", outside.email)
+        expect(
+          yield* Effect.flip(routes.resolve(ChannelFixture.event(subject.install, { place: open }))),
+        ).toMatchObject({ reason: "unlinked" })
+        expect(
+          yield* Effect.flip(
+            routes.resolve(
+              ChannelFixture.event(subject.install, { place: open, sender: { accountId: "U02", name: "Bob" } }),
+            ),
+          ),
+        ).toMatchObject({ reason: "not_member" })
+      }),
+  )
+
+  it.live(
+    "a new mapping, or one that moves to another space, posts one notice; the same request again gives the same mapping and posts nothing",
+    () =>
+      Effect.gen(function* () {
+        const subject = yield* routed
+        const mappings = yield* ChannelMappings.Service
+        const database = yield* Database.Service
+        const outbox = yield* ChannelFixture.Outbox
+        const owner = {
+          userId: subject.owner.createdBy,
+          organizationId: subject.owner.organizationId,
+          roles: ["owner"],
+        }
+        const installId = yield* installOf(subject.install)
+        const sales = yield* Seed.space(subject.owner.organizationId)
+        yield* database.db
+          .update(Database.Schema.space)
+          .set({ name: "Sales" })
+          .where(eq(Database.Schema.space.id, sales))
+        const input = { installId, place: "C07", spaceId: subject.owner.spaceId }
+        const first = yield* mappings.create(owner, input)
+        expect(yield* mappings.create(owner, input)).toMatchObject({ id: first.id, space: first.space })
+        const moved = yield* mappings.create(owner, { ...input, spaceId: sales })
+        expect(moved.id).toBe(first.id)
+        expect(outbox.announced).toEqual([
+          { place: "C07", text: "Ren answers here for Team." },
+          { place: "C07", text: "Ren answers here for Sales." },
+        ])
+      }),
+  )
+
+  it.live("only a member of the target space maps a place, and the fallback user must be a member of it", () =>
+    Effect.gen(function* () {
+      const subject = yield* routed
+      const mappings = yield* ChannelMappings.Service
+      const installId = yield* installOf(subject.install)
+      const inside = yield* person(subject.owner.organizationId, { inSpace: subject.owner.spaceId })
+      const outside = yield* person(subject.owner.organizationId)
+      const actor = (user: { readonly id: Auth.UserID }) => ({
+        userId: user.id,
+        organizationId: subject.owner.organizationId,
+        roles: ["member"],
+      })
+      const input = { installId, place: "C07", spaceId: subject.owner.spaceId }
+      expect(yield* Effect.flip(mappings.create(actor(outside), input))).toMatchObject({ _tag: "Primitive.Forbidden" })
+      expect(
+        yield* Effect.flip(mappings.create(actor(inside), { ...input, fallbackUserId: outside.id })),
+      ).toMatchObject({ _tag: "Primitive.Invalid", field: "fallbackUserId" })
+      const mapped = yield* mappings.create(actor(inside), input)
+      expect(
+        yield* mappings.create(actor(inside), { ...input, fallback: false, fallbackUserId: outside.id }),
+      ).toMatchObject({
+        id: mapped.id,
+        fallback: false,
+      })
+      expect(yield* Effect.flip(mappings.remove(actor(outside), mapped.id, {}))).toMatchObject({
+        _tag: "Primitive.Forbidden",
+      })
+      yield* mappings.remove(actor(inside), mapped.id, {})
+      expect(
+        (yield* mappings.places(actor(outside), { installId, page: 1, pageSize: 100 })).items.map((place) => ({
+          name: place.name,
+          mapped: place.mapping !== null,
+        })),
+      ).toEqual([
+        { name: "eng", mapped: false },
+        { name: "sales", mapped: false },
+        { name: "shared-with-vendor", mapped: false },
+      ])
     }),
   )
 })

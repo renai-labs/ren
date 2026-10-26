@@ -8,6 +8,7 @@ import type { Actor } from "./actor.js"
 import { AgentPolicy } from "./agent/policy.js"
 import { CredentialPolicy } from "./credential/policy.js"
 import { ChannelInstallPolicy } from "./channel-install/policy.js"
+import { ChannelMappingPolicy } from "./channel-mapping/policy.js"
 import { OAuthAppPolicy } from "./oauth-app/policy.js"
 import { AppPolicy } from "./app/policy.js"
 import { AppProfilePolicy } from "./app/profile-policy.js"
@@ -91,6 +92,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...OAuthAppPolicy.documents,
   ...RenInferencePolicy.documents,
   ...ChannelInstallPolicy.documents,
+  ...ChannelMappingPolicy.documents,
 ])
 
 export const layer = Layer.effect(

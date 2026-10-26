@@ -267,6 +267,27 @@ describe("GitHub", () => {
     }),
   )
 
+  app.live("the places of an install are every page of its repositories; a public one is open to strangers", () =>
+    Effect.gen(function* () {
+      const provider = GitHub.make(yield* client)
+      const install = installation("acme")
+      github.repositories.push(
+        ...Array.from({ length: 150 }, (_, index) => ({
+          id: 9000 + index,
+          full_name: `acme/repo-${index}`,
+          private: index > 0,
+        })),
+      )
+      const places = yield* provider.places(install)
+      expect(places).toHaveLength(150)
+      expect(places[0]).toEqual({ id: "9000", name: "acme/repo-0", private: false, anyoneCanWrite: true })
+      expect(yield* provider.place(install, "9149")).toEqual(
+        Option.some({ id: "9149", name: "acme/repo-149", private: true, anyoneCanWrite: false }),
+      )
+      expect(yield* provider.place(install, "1")).toEqual(Option.none())
+    }),
+  )
+
   app.effect("the App JWT is issued 60 seconds in the past and expires within 10 minutes", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(1_800_000_000_000)

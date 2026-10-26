@@ -43,22 +43,31 @@ export class Service extends Context.Service<Service, Interface>()("@ren/core/Ch
 const table = Database.Schema.channel_install
 const states = Database.Schema.channel_install_state
 const users = Database.Schema.user
+const spaces = Database.Schema.space
 
 const notFound = new Primitive.NotFound({ message: "Install not found." })
 
 const failed = (reason: string): Outcome => ({ ok: false, reason })
 
-const toInfo = (row: {
-  readonly install: typeof table.$inferSelect
-  readonly installer: { readonly id: string; readonly name: string } | null
-}): ChannelInstall.Info => ({
-  id: row.install.id,
-  provider: row.install.provider,
-  workspace: row.install.workspace,
-  name: row.install.name,
-  installedBy: row.installer && { id: Auth.UserID.make(row.installer.id), name: row.installer.name },
-  createdAt: DateTime.fromDateUnsafe(row.install.created_at),
-})
+const mayChange = (actor: Actor.Info, installedBy: Auth.UserID | null) =>
+  installedBy === actor.userId || SpacePolicy.administratorRoles.some((role) => actor.roles.includes(role))
+
+const toInfo =
+  (actor: Actor.Info) =>
+  (row: {
+    readonly install: typeof table.$inferSelect
+    readonly installer: { readonly id: string; readonly name: string } | null
+    readonly defaultSpace: ChannelInstall.Info["defaultSpace"]
+  }): ChannelInstall.Info => ({
+    id: row.install.id,
+    provider: row.install.provider,
+    workspace: row.install.workspace,
+    name: row.install.name,
+    installedBy: row.installer && { id: Auth.UserID.make(row.installer.id), name: row.installer.name },
+    defaultSpace: row.defaultSpace,
+    canUpdate: mayChange(actor, row.install.installed_by),
+    createdAt: DateTime.fromDateUnsafe(row.install.created_at),
+  })
 
 export const layer = Layer.effect(
   Service,
@@ -68,7 +77,7 @@ export const layer = Layer.effect(
     const registry = yield* ChannelProvider.Registry
     const people = yield* PersonCredentials.Service
 
-    const allowed = (actor: Actor.Info, operation: "list" | "remove") =>
+    const allowed = (actor: Actor.Info, operation: "list" | "update" | "remove") =>
       access.isAllowed({
         actor,
         action: Primitive.action(ChannelInstall.definition, operation),
@@ -79,9 +88,32 @@ export const layer = Layer.effect(
 
     const select = () =>
       database.db
-        .select({ install: table, installer: { id: users.id, name: users.name } })
+        .select({
+          install: table,
+          installer: { id: users.id, name: users.name },
+          defaultSpace: { id: spaces.id, name: spaces.name },
+        })
         .from(table)
         .leftJoin(users, eq(users.id, table.installed_by))
+        .leftJoin(spaces, and(eq(spaces.id, table.default_space_id), isNull(spaces.archived_at)))
+
+    const held = Effect.fnUntraced(function* (
+      actor: Actor.Info,
+      id: ChannelInstall.ID,
+      operation: "update" | "remove",
+    ) {
+      yield* allowed(actor, operation)
+      if (!Schema.is(ChannelInstall.ID)(id)) return yield* notFound
+      const found = (yield* select()
+        .where(and(eq(table.id, id), eq(table.organization_id, actor.organizationId)))
+        .pipe(Effect.orDie)).at(0)
+      if (!found) return yield* notFound
+      if (!mayChange(actor, found.install.installed_by))
+        return yield* new Primitive.Forbidden({
+          message: `Only the person who installed ${Channel.titles[found.install.provider]}, or an admin, can ${operation === "update" ? "change" : "remove"} it.`,
+        })
+      return found
+    })
 
     const claim = Effect.fnUntraced(function* (
       organizationId: Auth.OrganizationID,
@@ -183,7 +215,12 @@ export const layer = Layer.effect(
           .offset((input.page - 1) * input.pageSize)
           .pipe(Effect.orDie)
         const totals = yield* database.db.select({ total: count() }).from(table).where(where).pipe(Effect.orDie)
-        return { items: rows.map(toInfo), page: input.page, pageSize: input.pageSize, total: totals.at(0)?.total ?? 0 }
+        return {
+          items: rows.map(toInfo(actor)),
+          page: input.page,
+          pageSize: input.pageSize,
+          total: totals.at(0)?.total ?? 0,
+        }
       }),
 
       start: Effect.fn("ChannelInstalls.start")(function* (actor: Actor.Info, input: ChannelInstall.StartInput) {
@@ -251,20 +288,51 @@ export const layer = Layer.effect(
         return outcome
       }),
 
-      remove: Effect.fn("ChannelInstalls.remove")(function* (actor: Actor.Info, id: ChannelInstall.ID) {
-        yield* allowed(actor, "remove")
-        if (!Schema.is(ChannelInstall.ID)(id)) return yield* notFound
-        const found = (yield* select()
-          .where(and(eq(table.id, id), eq(table.organization_id, actor.organizationId)))
-          .pipe(Effect.orDie)).at(0)
-        if (!found) return yield* notFound
-        if (
-          found.install.installed_by !== actor.userId &&
-          !SpacePolicy.administratorRoles.some((role) => actor.roles.includes(role))
+      update: Effect.fn("ChannelInstalls.update")(function* (
+        actor: Actor.Info,
+        id: ChannelInstall.ID,
+        input: ChannelInstall.UpdateInput,
+      ) {
+        const found = yield* held(actor, id, "update")
+        const defaultSpaceId = input.defaultSpaceId
+        yield* database.transaction((transaction) =>
+          Effect.gen(function* () {
+            if (
+              defaultSpaceId &&
+              (yield* transaction
+                .select({ id: spaces.id })
+                .from(spaces)
+                .where(
+                  and(
+                    eq(spaces.id, defaultSpaceId),
+                    eq(spaces.organization_id, actor.organizationId),
+                    isNull(spaces.archived_at),
+                  ),
+                )
+                .for("share")).length === 0
+            )
+              return yield* new Primitive.Invalid({ message: "Space not found.", field: "defaultSpaceId" })
+            if (
+              defaultSpaceId &&
+              !(yield* SpaceQueries.actsIn(transaction, actor.organizationId, defaultSpaceId, actor.userId))
+            )
+              return yield* new Primitive.Invalid({
+                message: "Choose a space you are a member of.",
+                field: "defaultSpaceId",
+              })
+            yield* transaction
+              .update(table)
+              .set({ default_space_id: defaultSpaceId })
+              .where(eq(table.id, found.install.id))
+          }),
         )
-          return yield* new Primitive.Forbidden({
-            message: `Only the person who installed ${Channel.titles[found.install.provider]}, or an admin, can remove it.`,
-          })
+        const updated = (yield* select().where(eq(table.id, found.install.id)).pipe(Effect.orDie)).at(0)
+        if (!updated) return yield* notFound
+        return toInfo(actor)(updated)
+      }),
+
+      remove: Effect.fn("ChannelInstalls.remove")(function* (actor: Actor.Info, id: ChannelInstall.ID) {
+        const found = yield* held(actor, id, "remove")
         yield* database.db.delete(table).where(eq(table.id, id)).pipe(Effect.orDie)
         yield* Option.match(registry.get(found.install.provider), {
           onNone: () => Effect.void,
@@ -277,7 +345,7 @@ export const layer = Layer.effect(
                 ),
               ),
         })
-        return toInfo(found)
+        return toInfo(actor)(found)
       }),
 
       removeByWorkspace: Effect.fn("ChannelInstalls.removeByWorkspace")(function* (

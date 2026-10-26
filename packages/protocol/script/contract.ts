@@ -13,7 +13,7 @@ const exceptions = new Map([
   ],
   [
     "channel-connect",
-    "Lists the providers this server can install, and starts an install: a write that returns a redirect, which no primitive operation is.",
+    "Lists the providers this server can install, starts an install (a write that returns a redirect), and lists the places an install reaches, read live from a provider that can be unavailable: no primitive operation is either.",
   ],
   [
     "channel-reply",

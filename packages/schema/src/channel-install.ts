@@ -6,6 +6,7 @@ import { Channel } from "./channel.js"
 import { Identifier } from "./identifier.js"
 import { Pagination } from "./pagination.js"
 import { Primitive } from "./primitive.js"
+import { Space } from "./space.js"
 
 export const ID = Identifier.make("chi", "ChannelInstall.ID")
 export type ID = typeof ID.Type
@@ -21,6 +22,11 @@ export const Info = Schema.Struct({
   }),
   name: Schema.String.annotate({ description: "The workspace name, or the GitHub account login." }),
   installedBy: Schema.NullOr(Schema.Struct({ id: Auth.UserID, name: Schema.String })),
+  defaultSpace: Schema.NullOr(Schema.Struct({ id: Space.ID, name: Schema.String })).annotate({
+    description:
+      "Where messages from places with no mapping go. Without it, or when it is archived, the oldest active space.",
+  }),
+  canUpdate: Schema.Boolean.annotate({ description: "The caller installed it, or is an admin." }),
   createdAt: Schema.DateTimeUtc,
 }).annotate({
   identifier: "ChannelInstall.Info",
@@ -33,6 +39,13 @@ export const ListInput = Schema.Struct({ ...Pagination.fields(50) }).annotate({
 })
 
 const Page = Pagination.Page(Info).annotate({ identifier: "ChannelInstall.Page" })
+
+export interface UpdateInput extends Schema.Schema.Type<typeof UpdateInput> {}
+export const UpdateInput = Schema.Struct({
+  defaultSpaceId: Schema.NullOr(Space.ID).annotate({
+    description: "A space the caller is a member of, or null for the oldest active space.",
+  }),
+}).annotate({ identifier: "ChannelInstall.UpdateInput" })
 
 export interface RemoveInput extends Schema.Schema.Type<typeof RemoveInput> {}
 export const RemoveInput = Schema.Struct({}).annotate({ identifier: "ChannelInstall.RemoveInput" })
@@ -58,5 +71,6 @@ export const definition = Primitive.define({
   id: ID,
   info: Info,
   list: { input: ListInput, page: Page },
+  update: { input: UpdateInput, result: Info },
   actions: { remove: { input: RemoveInput, result: Info } },
 })
