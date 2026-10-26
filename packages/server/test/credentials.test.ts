@@ -39,11 +39,15 @@ describe("credentials over HTTP", () => {
     expect((await (await call(app, cookie, "GET", "/credentials")).json()).items).toEqual([])
   })
 
-  test("a reserved label, a bare * host and a second label on one owner are refused", async () => {
+  test("a reserved label, a by-header key for any host and a second label on one owner are refused", async () => {
     const cookie = sessionCookie(await signUp(app, "refusals@gmail.com", "Ada"))
     const input = { owner: { kind: "org" }, hosts: ["api.stripe.com"], value: { type: "key", value: "v" } }
+    const byHeader = { op: "setHeader", name: "Authorization", format: "Bearer {value}" }
     expect((await call(app, cookie, "POST", "/credentials", { ...input, label: "PATH" })).status).toBe(400)
-    expect((await call(app, cookie, "POST", "/credentials", { ...input, label: "KEY", hosts: ["*"] })).status).toBe(400)
+    expect(
+      (await call(app, cookie, "POST", "/credentials", { ...input, label: "KEY", hosts: ["*"], inject: byHeader }))
+        .status,
+    ).toBe(400)
     expect((await call(app, cookie, "POST", "/credentials", { ...input, label: "KEY" })).status).toBe(200)
     const again = await call(app, cookie, "POST", "/credentials", { ...input, label: "KEY" })
     expect(again.status).toBe(409)
