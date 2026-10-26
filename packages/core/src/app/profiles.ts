@@ -221,7 +221,7 @@ export const layer = Layer.effect(
     ): AppProfilePolicy.Holds => ({
       kind: row.kind,
       isCreator: row.created_by_user_id === actor.userId,
-      isListedMember: spacesListed.some((space) => space.membershipId !== null),
+      isListedMember: spacesListed.some((space) => Boolean(space.membershipId)),
       allSpaces: row.all_spaces,
       isSelf: row.user_id === actor.userId,
     })
