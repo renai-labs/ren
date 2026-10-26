@@ -1,2 +1,2 @@
 [test]
-preload = ["./test/lib/preload.ts"]
+preload = ["../test-harness/src/isolate.ts", "./test/lib/preload.ts"]
