@@ -37,14 +37,14 @@ export function CredentialsPage(props: { userId: string }) {
   const state = { pending: "loading", error: "failed", success: visible.length > 0 ? "ready" : "empty" } as const
   return (
     <PageShell.Root
-      title="Keys"
-      subtitle="Keys your chats use. Chats get a placeholder; Ren puts in the key for the hosts you name."
+      title="Credentials"
+      subtitle="Credentials your chats use. Chats get a placeholder; Ren puts in the key for the hosts you name."
     >
       <Toolbar.Root
         alignment="split"
         leading={
           <Tabs.Root value={tab} onValueChange={(next: Tab) => setTab(next)}>
-            <Tabs.List label="Key groups">
+            <Tabs.List label="Credential groups">
               <Tabs.Tab value="all" count={items.length}>
                 All
               </Tabs.Tab>
@@ -58,9 +58,9 @@ export function CredentialsPage(props: { userId: string }) {
           </Tabs.Root>
         }
       >
-        <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search keys" />
+        <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
         <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setCreating(true)}>
-          Add key
+          Add credential
         </Button>
       </Toolbar.Root>
       <CredentialsTable
@@ -70,16 +70,16 @@ export function CredentialsPage(props: { userId: string }) {
         spaces={names}
         owners={owners}
         userId={props.userId}
-        emptyMessage="No keys yet. Add one so chats can reach an API."
+        emptyMessage="No credentials"
         onChanged={refresh}
       />
       {creating ? (
         <PasteCredentialDialog
-          title="Add key"
+          title="Add credential"
           description="Paste a key. Ren keeps it encrypted and never shows it again."
           owners={owners}
           userId={props.userId}
-          submitLabel="Save key"
+          submitLabel="Save credential"
           onClose={() => setCreating(false)}
           onSaved={refresh}
         />

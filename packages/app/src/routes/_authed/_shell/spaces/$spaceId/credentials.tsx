@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { SpaceCredentials } from "../../../../../features/credentials/space-credentials.js"
 
 export const Route = createFileRoute("/_authed/_shell/spaces/$spaceId/credentials")({
-  head: () => ({ meta: [{ title: "Space keys · Ren" }] }),
+  head: () => ({ meta: [{ title: "Space credentials · Ren" }] }),
   loader: (options) => {
     const context = options.context
     const page = { page: 1, pageSize: Pagination.maximumPageSize }

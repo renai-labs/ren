@@ -6,7 +6,6 @@ import { Icon } from "@ren/ui/icon"
 import { List } from "@ren/ui/list"
 import { Notice } from "@ren/ui/notice"
 import { SearchField } from "@ren/ui/search-field"
-import { Select } from "@ren/ui/select"
 import { Toast } from "@ren/ui/toast"
 import { Toolbar } from "@ren/ui/toolbar"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -14,8 +13,6 @@ import { useDeferredValue, useState } from "react"
 import { RouterContext } from "../../lib/router-context.js"
 import { PasteCredentialDialog } from "../../components/paste-credential-dialog.js"
 import { Credentials } from "../../components/credentials.js"
-import { ProfileDialog } from "../../components/profile-dialog.js"
-import { Profiles } from "../../components/profiles.js"
 import { CredentialsTable } from "./credentials-table.js"
 import { Owners } from "./owners.js"
 
@@ -46,7 +43,7 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
   return (
     <>
       <Toolbar.Root>
-        <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search keys" />
+        <SearchField.Expandable value={query} onValueChange={setQuery} placeholder="Search credentials" />
         {elsewhere.length > 0 ? (
           <Button
             appearance="secondary"
@@ -58,10 +55,9 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
           </Button>
         ) : null}
         <Button appearance="primary" size="small" leadingIcon={<Icon glyph="Plus" />} onClick={() => setCreating(true)}>
-          Add key
+          Add credential
         </Button>
       </Toolbar.Root>
-      <SpaceProfiles spaceId={props.spaceId} />
       <CredentialsTable
         rows={visible}
         state={state[all.status]}
@@ -69,16 +65,16 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
         spaces={names}
         owners={Owners.options(spaceList)}
         userId={props.userId}
-        emptyMessage="This space has no keys yet. Add one so its chats can reach an API."
+        emptyMessage="No credentials"
         onChanged={refresh}
       />
       {creating ? (
         <PasteCredentialDialog
-          title="Add key to this space"
+          title="Add credential to this space"
           description="Every chat in this space can use it."
           owners={[{ value: `space:${props.spaceId}`, label: names.get(props.spaceId) ?? "This space" }]}
           userId={props.userId}
-          submitLabel="Save key"
+          submitLabel="Save credential"
           onClose={() => setCreating(false)}
           onSaved={refresh}
         />
@@ -90,75 +86,6 @@ export function SpaceCredentials(props: { spaceId: string; userId: string }) {
           spaces={names}
           onClose={() => setCopying(false)}
           onCopied={refresh}
-        />
-      ) : null}
-    </>
-  )
-}
-
-// oxlint-disable-next-line ren/no-comments -- profiles.md §9 rule 1 (P12, P32): the profiles this space reaches, with their gaps; a new profile from here lists this space, and from a space with other members it is shared.
-function SpaceProfiles(props: { spaceId: string }) {
-  const context = RouterContext.useRouterContext()
-  const reach = useQuery({
-    ...context.api["app-profile-reach"].space.profiles.queryOptions({ id: props.spaceId }),
-    refetchOnWindowFocus: "always",
-  })
-  const members = useQuery(
-    context.api["space-member"].list.queryOptions({ spaceId: props.spaceId, status: "active", page: 1, pageSize: 2 }),
-  )
-  const apps = useQuery(context.api.app.list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }))
-  const registry = useQuery(
-    context.api["app-registry"].list.queryOptions({ page: 1, pageSize: Pagination.maximumPageSize }),
-  )
-  const [opened, setOpened] = useState<{ readonly appId: string; readonly profileId?: string }>()
-  const profiles = reach.data?.profiles ?? []
-  const choices = [
-    ...(apps.data?.items ?? []).map((app) => ({ value: app.id, label: app.name })),
-    ...(registry.data?.items ?? []).map((app) => ({ value: app.id, label: app.name })),
-  ]
-  return (
-    <>
-      <List.Root label="App profiles in this space">
-        <List.Section title="App profiles" appearance="eyebrow">
-          {profiles.map((profile) => {
-            const gaps = Profiles.gaps(profile).length
-            return (
-              <List.Item
-                key={profile.id}
-                title={`${profile.appSlug} · ${profile.name}`}
-                description={gaps ? `${gaps} not connected` : "Connected"}
-                trailing={
-                  <Button
-                    appearance="secondary"
-                    size="small"
-                    onClick={() => setOpened({ appId: profile.appId, profileId: profile.id })}
-                  >
-                    Open profile
-                  </Button>
-                }
-              />
-            )
-          })}
-        </List.Section>
-      </List.Root>
-      {choices.length > 0 ? (
-        <Toolbar.Root>
-          <Select.Root
-            label="New profile for"
-            size="small"
-            options={choices}
-            value={null}
-            placeholder="New profile for an app"
-            onValueChange={(appId) => setOpened({ appId })}
-          />
-        </Toolbar.Root>
-      ) : null}
-      {opened ? (
-        <ProfileDialog
-          appId={opened.appId}
-          {...(opened.profileId && { profileId: opened.profileId })}
-          from={{ spaceId: props.spaceId, members: members.data?.total ?? 1 }}
-          onClose={() => setOpened(undefined)}
         />
       ) : null}
     </>
@@ -190,7 +117,7 @@ function CopyFromSpaceDialog(props: {
           </Dialog.Description>
         </Dialog.Header>
         <Dialog.Body>
-          <List.Root label="Keys in other spaces">
+          <List.Root label="Credentials in other spaces">
             {props.candidates.map((candidate) => (
               <List.Item
                 key={candidate.id}
@@ -209,7 +136,7 @@ function CopyFromSpaceDialog(props: {
                         .catch(() => undefined)
                     }
                   >
-                    Copy key
+                    Copy credential
                   </Button>
                 }
               />

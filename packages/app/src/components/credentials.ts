@@ -32,21 +32,25 @@ export const matches = (
   needle: string,
 ) => Search.matches([credential.label, credential.name ?? "", ...credential.hosts], needle)
 
+const pasted = {
+  label: Credential.Label,
+  value: Schema.NonEmptyString.annotate({ message: "Paste the key." }),
+  owner: Schema.String,
+}
+
 export const PasteForm = Schema.toStandardSchemaV1(
-  Schema.Struct({
-    label: Credential.Label,
-    name: Schema.String,
-    hosts: Credential.HostsText,
-    value: Schema.NonEmptyString.annotate({ message: "Paste the key." }),
-    owner: Schema.String,
-  }),
+  Schema.Union([
+    Schema.Struct({ ...pasted, anyHost: Schema.Literal(false), hosts: Credential.HostsText }),
+    Schema.Struct({ ...pasted, anyHost: Schema.Literal(true), hosts: Schema.String }),
+  ]),
 )
+
+export const hostsOf = (value: { readonly anyHost: boolean; readonly hosts: string }) =>
+  value.anyHost ? [Credential.anyHost] : hosts(value.hosts)
 
 export const RotateForm = Schema.toStandardSchemaV1(
   Schema.Struct({ value: Schema.NonEmptyString.annotate({ message: "Paste the new key." }) }),
 )
-
-export const RenameForm = Schema.toStandardSchemaV1(Schema.Struct({ name: Schema.String }))
 
 export const OwnerForm = Schema.toStandardSchemaV1(Schema.Struct({ owner: Schema.NonEmptyString }))
 
