@@ -17,6 +17,8 @@ import { SpacePolicy } from "../space/policy.js"
 
 const spaceMember = "task.spaceMember"
 
+const commentAuthor = "comment.author"
+
 export const membership = alias(Database.Schema.space_member, "task_membership")
 
 const statements = (actions: ReadonlyArray<string>, options: { readonly agents: boolean }) => [
@@ -29,7 +31,7 @@ export const actions = {
   decide: `${Task.definition.name}.decide`,
 } as const
 
-// oxlint-disable-next-line ren/no-comments -- Agents may request a review but only a person decides it, and only a person marks a task done or dismissed.
+// oxlint-disable-next-line ren/no-comments -- Agents may request a review but only a person decides it, and only a person marks a task done or dismissed. Only its author, as a person, changes a comment.
 export const documents = [
   {
     primitive: Task.definition.name,
@@ -52,7 +54,11 @@ export const documents = [
     primitive: TaskComment.definition.name,
     statements: [
       ...statements(Primitive.actions(TaskComment.definition, ["create"]), { agents: true }),
-      ...statements(Primitive.actions(TaskComment.definition, ["update", "archive"]), { agents: false }),
+      {
+        actions: Primitive.actions(TaskComment.definition, ["update", "archive"]),
+        roles: SpacePolicy.organizationRoles,
+        on: commentAuthor,
+      },
     ],
   },
   {
@@ -78,6 +84,11 @@ export const documents = [
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
 
 export const organization: Access.Resource = { relationships: [] }
+
+export const comment = (holds: { readonly isAuthor: boolean }, spaceId: Space.ID): Access.Resource => ({
+  relationships: holds.isAuthor ? [commentAuthor] : [],
+  spaceId,
+})
 
 export const label = (organizationId: Auth.OrganizationID | null): Access.Resource => ({
   relationships: [],

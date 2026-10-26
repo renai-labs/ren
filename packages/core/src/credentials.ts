@@ -892,7 +892,13 @@ export const layer = Layer.effect(
           return yield* ownerRule("profile", "A profile’s credential stays in its profile.")
         const accountUserId = found.row.account_user_id
         if (accountUserId) {
-          if (accountUserId !== actor.userId)
+          if (
+            !isAllowed(
+              actor,
+              CredentialPolicy.actions.moveAccount,
+              CredentialPolicy.account({ isHolder: accountUserId === actor.userId }),
+            )
+          )
             return yield* ownerRule("not_account_holder", "Only the account holder moves an account credential.")
           if (input.owner.kind === "org")
             return yield* ownerRule("account_to_org", "An account credential cannot move to the org.")
