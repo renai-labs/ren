@@ -5,6 +5,7 @@ import type { SessionModel } from "@ren/schema/session/model"
 import { Exit, Option, Predicate, Schema } from "effect"
 import { TimelineDetail } from "./timeline-detail.js"
 import { TimelineRow } from "./timeline-row.js"
+import { ChannelReply } from "./channel-reply.js"
 import { ToolState } from "./tool-state.js"
 
 export type ReasoningMode = "hidden" | "compact" | "full"
@@ -130,6 +131,7 @@ const isEditTool = (content: SessionMessage.Tool) =>
   content.name === "patch" || content.name === "edit" || content.name === "write"
 
 const detailToolGroupType = (content: SessionMessage.Tool, detail: TimelineDetail.Detail): GroupType | undefined => {
+  if (ChannelReply.shown(content)) return
   if (content.name === "question" && !ToolState.failed(content)) return
   const category = TimelineDetail.category(content)
   if (category && detail[category].placement === "grouped") return "context"
@@ -150,6 +152,7 @@ const defaultToolGroupType = (
   group: { readonly hasContextGroup: boolean },
 ): GroupType | undefined => {
   if (content.name === "question" || ToolState.hasLoadedFiles(content)) return
+  if (ChannelReply.shown(content)) return
   if (content.state.status === "error") return expandedError(content, expanded) ? undefined : "context"
   if (!group.hasContextGroup && unsettledShell(content)) return
   if (ToolState.defaultOpen(content, expanded) !== true) return "context"
