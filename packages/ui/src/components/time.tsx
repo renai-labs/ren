@@ -76,3 +76,12 @@ function TimeElement(props: { value: DateInput; title?: string | undefined; chil
     </time>
   )
 }
+
+// oxlint-disable-next-line ren/no-comments -- The viewer's IANA time zone, for example "Europe/Berlin".
+export function localTimeZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+export function timeZones() {
+  return Intl.supportedValuesOf("timeZone")
+}

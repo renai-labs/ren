@@ -5,6 +5,7 @@ import { Agent } from "@ren/schema/agent"
 import { Auth } from "@ren/schema/auth"
 import { ChannelInstall } from "@ren/schema/channel-install"
 import { ChannelMapping } from "@ren/schema/channel-mapping"
+import { Schedule } from "@ren/schema/schedule"
 import { Session } from "@ren/schema/session"
 import { and, eq, isNull } from "drizzle-orm"
 import { Effect, Layer } from "effect"
@@ -345,7 +346,7 @@ describe("Space archive and agents", () => {
     }),
   )
 
-  it.live("archiving a space removes the channel mappings to it", () =>
+  it.live("archiving a space removes the channel mappings to it and archives its schedules (schedules S29)", () =>
     Effect.gen(function* () {
       const spaces = yield* Space.Service
       const database = yield* Database.Service
@@ -377,9 +378,28 @@ describe("Space archive and agents", () => {
           space_id: kept.id,
         },
       ])
+      yield* database.db.insert(Database.Schema.schedule).values(
+        [eng.id, kept.id].map((spaceId) => ({
+          id: Schedule.ID.create(),
+          organization_id: organizationId,
+          space_id: spaceId,
+          name: "Digest",
+          owner_id: ada.userId,
+          cron: "0 9 * * *",
+          time_zone: "UTC",
+          message: "Digest.",
+          next_run_at: new Date(Date.now() + 3_600_000),
+        })),
+      )
       yield* spaces.archive(ada, eng.id)
       expect(
         (yield* database.db.select().from(Database.Schema.channel_mapping)).map((mapping) => mapping.space_id),
+      ).toEqual([kept.id])
+      expect(
+        (yield* database.db
+          .select({ spaceId: Database.Schema.schedule.space_id })
+          .from(Database.Schema.schedule)
+          .where(isNull(Database.Schema.schedule.archived_at))).map((row) => row.spaceId),
       ).toEqual([kept.id])
     }),
   )

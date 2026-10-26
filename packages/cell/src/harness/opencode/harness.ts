@@ -355,6 +355,7 @@ const send = Effect.fn("OpenCodeHarness.send")(function* (
         userID: input.sender.userId,
         ...(input.sender.memberId && { memberID: input.sender.memberId }),
         ...(input.channel && { channel: input.channel }),
+        ...(input.schedule && { schedule: input.schedule }),
       },
     })
     .pipe(Effect.orDie)

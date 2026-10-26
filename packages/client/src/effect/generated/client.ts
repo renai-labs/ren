@@ -966,6 +966,116 @@ const adaptGroupLabel = (raw: RawClient["label"]) => ({
   archive: EndpointLabelArchive(raw),
 })
 
+type ScheduleListRequest = Parameters<RawClient["schedule"]["schedule.list"]>[0]
+type ScheduleListInput = {
+  readonly spaceId?: ScheduleListRequest["query"]["spaceId"]
+  readonly status?: ScheduleListRequest["query"]["status"]
+  readonly search?: ScheduleListRequest["query"]["search"]
+  readonly page: ScheduleListRequest["query"]["page"]
+  readonly pageSize: ScheduleListRequest["query"]["pageSize"]
+}
+const EndpointScheduleList = (raw: RawClient["schedule"]) => (input: ScheduleListInput) =>
+  raw["schedule.list"]({
+    query: {
+      spaceId: input["spaceId"],
+      status: input["status"],
+      search: input["search"],
+      page: input["page"],
+      pageSize: input["pageSize"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleGetRequest = Parameters<RawClient["schedule"]["schedule.get"]>[0]
+type ScheduleGetInput = { readonly idOrSlug: ScheduleGetRequest["params"]["idOrSlug"] }
+const EndpointScheduleGet = (raw: RawClient["schedule"]) => (input: ScheduleGetInput) =>
+  raw["schedule.get"]({ params: { idOrSlug: input["idOrSlug"] } }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleCreateRequest = Parameters<RawClient["schedule"]["schedule.create"]>[0]
+type ScheduleCreateInput = {
+  readonly spaceId: ScheduleCreateRequest["payload"]["spaceId"]
+  readonly name: ScheduleCreateRequest["payload"]["name"]
+  readonly message: ScheduleCreateRequest["payload"]["message"]
+  readonly when: ScheduleCreateRequest["payload"]["when"]
+  readonly target?: ScheduleCreateRequest["payload"]["target"]
+  readonly agentId?: ScheduleCreateRequest["payload"]["agentId"]
+}
+const EndpointScheduleCreate = (raw: RawClient["schedule"]) => (input: ScheduleCreateInput) =>
+  raw["schedule.create"]({
+    payload: {
+      spaceId: input["spaceId"],
+      name: input["name"],
+      message: input["message"],
+      when: input["when"],
+      target: input["target"],
+      agentId: input["agentId"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleUpdateRequest = Parameters<RawClient["schedule"]["schedule.update"]>[0]
+type ScheduleUpdateInput = {
+  readonly id: ScheduleUpdateRequest["params"]["id"]
+  readonly name?: ScheduleUpdateRequest["payload"]["name"]
+  readonly message?: ScheduleUpdateRequest["payload"]["message"]
+  readonly when?: ScheduleUpdateRequest["payload"]["when"]
+  readonly target?: ScheduleUpdateRequest["payload"]["target"]
+  readonly agentId?: ScheduleUpdateRequest["payload"]["agentId"]
+}
+const EndpointScheduleUpdate = (raw: RawClient["schedule"]) => (input: ScheduleUpdateInput) =>
+  raw["schedule.update"]({
+    params: { id: input["id"] },
+    payload: {
+      name: input["name"],
+      message: input["message"],
+      when: input["when"],
+      target: input["target"],
+      agentId: input["agentId"],
+    },
+  }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleArchiveRequest = Parameters<RawClient["schedule"]["schedule.archive"]>[0]
+type ScheduleArchiveInput = { readonly id: ScheduleArchiveRequest["params"]["id"] }
+const EndpointScheduleArchive = (raw: RawClient["schedule"]) => (input: ScheduleArchiveInput) =>
+  raw["schedule.archive"]({ params: { id: input["id"] } }).pipe(Effect.mapError(mapClientError))
+
+type SchedulePauseRequest = Parameters<RawClient["schedule"]["schedule.pause"]>[0]
+type SchedulePauseInput = { readonly id: SchedulePauseRequest["params"]["id"] }
+const EndpointSchedulePause = (raw: RawClient["schedule"]) => (input: SchedulePauseInput) =>
+  raw["schedule.pause"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleResumeRequest = Parameters<RawClient["schedule"]["schedule.resume"]>[0]
+type ScheduleResumeInput = { readonly id: ScheduleResumeRequest["params"]["id"] }
+const EndpointScheduleResume = (raw: RawClient["schedule"]) => (input: ScheduleResumeInput) =>
+  raw["schedule.resume"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+type ScheduleRunRequest = Parameters<RawClient["schedule"]["schedule.run"]>[0]
+type ScheduleRunInput = { readonly id: ScheduleRunRequest["params"]["id"] }
+const EndpointScheduleRun = (raw: RawClient["schedule"]) => (input: ScheduleRunInput) =>
+  raw["schedule.run"]({ params: { id: input["id"] }, payload: {} }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupSchedule = (raw: RawClient["schedule"]) => ({
+  list: EndpointScheduleList(raw),
+  get: EndpointScheduleGet(raw),
+  create: EndpointScheduleCreate(raw),
+  update: EndpointScheduleUpdate(raw),
+  archive: EndpointScheduleArchive(raw),
+  pause: EndpointSchedulePause(raw),
+  resume: EndpointScheduleResume(raw),
+  run: EndpointScheduleRun(raw),
+})
+
+type ScheduleRunListRequest = Parameters<RawClient["schedule-run"]["schedule-run.list"]>[0]
+type ScheduleRunListInput = {
+  readonly scheduleId: ScheduleRunListRequest["query"]["scheduleId"]
+  readonly page: ScheduleRunListRequest["query"]["page"]
+  readonly pageSize: ScheduleRunListRequest["query"]["pageSize"]
+}
+const EndpointScheduleRunList = (raw: RawClient["schedule-run"]) => (input: ScheduleRunListInput) =>
+  raw["schedule-run.list"]({
+    query: { scheduleId: input["scheduleId"], page: input["page"], pageSize: input["pageSize"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroupScheduleRun = (raw: RawClient["schedule-run"]) => ({ list: EndpointScheduleRunList(raw) })
+
 type CredentialListRequest = Parameters<RawClient["credential"]["credential.list"]>[0]
 type CredentialListInput = {
   readonly owner?: CredentialListRequest["query"]["owner"]
@@ -1355,6 +1465,8 @@ const adaptClient = (raw: RawClient) => ({
   "task-comment": adaptGroupTaskComment(raw["task-comment"]),
   "task-activity": adaptGroupTaskActivity(raw["task-activity"]),
   label: adaptGroupLabel(raw["label"]),
+  schedule: adaptGroupSchedule(raw["schedule"]),
+  "schedule-run": adaptGroupScheduleRun(raw["schedule-run"]),
   credential: adaptGroupCredential(raw["credential"]),
   "credential-connect": adaptGroupCredentialConnect(raw["credential-connect"]),
   "oauth-session": adaptGroupOauthSession(raw["oauth-session"]),

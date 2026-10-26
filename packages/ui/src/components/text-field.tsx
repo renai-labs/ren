@@ -33,7 +33,7 @@ const inputVariants = cva(
 )
 
 export type TextFieldProps = {
-  type?: "text" | "email" | "password" | "search" | "url" | "number" | "tel"
+  type?: "text" | "email" | "password" | "search" | "url" | "number" | "tel" | "date" | "time"
   size?: TextFieldSize
   appearance?: TextFieldAppearance
   typeface?: TextFieldTypeface

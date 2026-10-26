@@ -2,6 +2,7 @@ export * as SessionMessage from "./message.js"
 
 import { Schema } from "effect"
 import { ChannelOrigin } from "../channel-origin.js"
+import { ScheduleOrigin } from "../schedule-origin.js"
 import { Identifier } from "../identifier.js"
 import { SessionError } from "./error.js"
 import { SessionModel } from "./model.js"
@@ -129,6 +130,7 @@ export const User = Schema.Struct({
   type: Schema.tag("user"),
   sender: Schema.optionalKey(Sender),
   channel: Schema.optionalKey(ChannelOrigin.Info),
+  schedule: Schema.optionalKey(ScheduleOrigin.Info),
 }).annotate({ identifier: "SessionMessage.User" })
 
 export interface SyntheticMetadata extends Schema.Schema.Type<typeof SyntheticMetadata> {}

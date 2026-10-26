@@ -115,6 +115,8 @@ export type SessionMessageSender = { userId: string }
 
 export type ChannelProvider = "slack" | "linear" | "github"
 
+export type ScheduleOriginInfo = { scheduleId: string; name: string; scheduledAt: string }
+
 export type SessionMessageSyntheticMetadata = { source?: string; childID?: string; shellID?: string; jobID?: string }
 
 export type SessionMessageShellOutput = { output: string; cursor: number; size: number; truncated: boolean }
@@ -187,6 +189,28 @@ export type TaskEventLabelsChanged = { _tag: "label"; from: Array<string>; to: A
 export type TaskEventLinksChanged = { _tag: "link"; added: Array<string>; removed: Array<string> }
 
 export type TaskEventArchived = { _tag: "archived" }
+
+export type ScheduleID = string
+
+export type ScheduleOnce = { at: string }
+
+export type ScheduleStatus = "active" | "paused" | "ended"
+
+export type SchedulePauseReason = "user" | "owner_left" | "agent_removed"
+
+export type ScheduleRunID = string
+
+export type ScheduleRunTrigger = "timed" | "manual"
+
+export type ScheduleRunStatus = "pending" | "started" | "skipped" | "failed"
+
+export type ScheduleRunReason =
+  | "previous_run_busy"
+  | "paused"
+  | "archived"
+  | "owner_left"
+  | "agent_removed"
+  | "chat_archived"
 
 export type CredentialType = "key" | "basic" | "oauth" | "fields" | "route" | "client_credentials"
 
@@ -366,6 +390,8 @@ export type AgentMembershipInfo = {
 
 export type TaskActor = { userId: AuthUserID | null; agentId: AgentID | null; sessionId: SessionID | null }
 
+export type ScheduleTarget = "new-chat" | { sessionId: SessionID }
+
 export type SessionInfo = {
   id: SessionID
   spaceId: SpaceID
@@ -541,6 +567,20 @@ export type TaskEventReviewed = { _tag: "reviewed"; decision: TaskDecision; comm
 
 export type TaskEventFieldChanged = { _tag: "field"; field: TaskEventField; from: string | null; to: string | null }
 
+export type ScheduleWhen = { cron: string; timeZone: string; until?: string } | ScheduleOnce
+
+export type ScheduleRunInfo = {
+  id: ScheduleRunID
+  scheduleId: ScheduleID
+  scheduledAt: string
+  startedAt: string | null
+  trigger: ScheduleRunTrigger
+  status: ScheduleRunStatus
+  reason: ScheduleRunReason | null
+  error: string | null
+  sessionId: SessionID
+}
+
 export type CredentialInject =
   | { op: "replace"; in: [CredentialLocation, ...Array<CredentialLocation>] }
   | { op: "setHeader"; name: string; format: "Bearer {value}" | "Basic {basic}" | "{value}" }
@@ -707,6 +747,7 @@ export type SessionMessageUser = {
   type: "user"
   sender?: SessionMessageSender
   channel?: ChannelOriginInfo
+  schedule?: ScheduleOriginInfo
 }
 
 export type SessionMessageToolCompleted = {
@@ -771,6 +812,25 @@ export type TaskEventData =
   | TaskEventLinksChanged
   | TaskEventParentChanged
   | TaskEventArchived
+
+export type ScheduleInfo = {
+  id: ScheduleID
+  spaceId: SpaceID
+  name: string
+  agentId: AgentID | null
+  when: ScheduleWhen
+  target: ScheduleTarget
+  message: string
+  ownerId: AuthUserID
+  status: ScheduleStatus
+  pausedReason: SchedulePauseReason | null
+  nextRunAt: string | null
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
+export type ScheduleRunPage = { items: Array<ScheduleRunInfo>; page: number; pageSize: number; total: number }
 
 export type OAuthAppPage = { items: Array<OAuthAppInfo>; page: number; pageSize: number; total: number }
 
@@ -882,6 +942,8 @@ export type TaskEventInfo = {
   actor: TaskActor
   createdAt: string
 }
+
+export type SchedulePage = { items: Array<ScheduleInfo>; page: number; pageSize: number; total: number }
 
 export type ChannelMappingPage = { items: Array<ChannelMappingInfo>; page: number; pageSize: number; total: number }
 
@@ -5419,6 +5481,216 @@ export type LabelUpdateOutput = LabelInfo
 export type LabelArchiveInput = { readonly id: { readonly id: string }["id"] }
 
 export type LabelArchiveOutput = LabelInfo
+
+export type ScheduleListInput = {
+  readonly spaceId?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["spaceId"]
+  readonly status?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["status"]
+  readonly search?: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["search"]
+  readonly page: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["page"]
+  readonly pageSize: {
+    readonly spaceId?: string | undefined
+    readonly status?: ("active" | "paused" | "ended") | undefined
+    readonly search?: string | undefined
+    readonly page: number
+    readonly pageSize: number
+  }["pageSize"]
+}
+
+export type ScheduleListOutput = SchedulePage
+
+export type ScheduleGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["idOrSlug"] }
+
+export type ScheduleGetOutput = ScheduleInfo
+
+export type ScheduleCreateInput = {
+  readonly spaceId: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["spaceId"]
+  readonly name: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["name"]
+  readonly message: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["message"]
+  readonly when: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["when"]
+  readonly target?: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["target"]
+  readonly agentId?: {
+    readonly spaceId: string
+    readonly name: string
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["agentId"]
+}
+
+export type ScheduleCreateOutput = ScheduleInfo
+
+export type ScheduleUpdateInput = {
+  readonly id: { readonly id: string }["id"]
+  readonly name?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["name"]
+  readonly message?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["message"]
+  readonly when?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["when"]
+  readonly target?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["target"]
+  readonly agentId?: {
+    readonly name?: string | null
+    readonly message?: string | null
+    readonly when?:
+      | (
+          | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+          | { readonly at: string }
+          | { readonly in: string }
+        )
+      | null
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null | null
+  }["agentId"]
+}
+
+export type ScheduleUpdateOutput = ScheduleInfo
+
+export type ScheduleArchiveInput = { readonly id: { readonly id: string }["id"] }
+
+export type ScheduleArchiveOutput = ScheduleInfo
+
+export type SchedulePauseInput = { readonly id: { readonly id: string }["id"] }
+
+export type SchedulePauseOutput = ScheduleInfo
+
+export type ScheduleResumeInput = { readonly id: { readonly id: string }["id"] }
+
+export type ScheduleResumeOutput = ScheduleInfo
+
+export type ScheduleRunInput = { readonly id: { readonly id: string }["id"] }
+
+export type ScheduleRunOutput = ScheduleInfo
+
+export type ScheduleRunListInput = {
+  readonly scheduleId: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["scheduleId"]
+  readonly page: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["page"]
+  readonly pageSize: { readonly scheduleId: string; readonly page: number; readonly pageSize: number }["pageSize"]
+}
+
+export type ScheduleRunListOutput = ScheduleRunPage
 
 export type CredentialListInput = {
   readonly owner?: {

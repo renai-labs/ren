@@ -14,6 +14,7 @@ import type { Skill } from "@opencode/schema/skill"
 import { ChannelOrigin } from "@ren/schema/channel-origin"
 import { Form } from "@ren/schema/form"
 import { Permission } from "@ren/schema/permission"
+import { ScheduleOrigin } from "@ren/schema/schedule-origin"
 import { SessionEvent } from "@ren/schema/session/event"
 import type { SessionCapabilities } from "@ren/schema/session/capabilities"
 import { SessionCatalog } from "@ren/schema/session/catalog"
@@ -29,14 +30,19 @@ const decodeUserID = Schema.decodeUnknownOption(UserID)
 const FromChannel = Schema.Struct({ metadata: Schema.Struct({ channel: ChannelOrigin.Info }) })
 const decodeChannel = Schema.decodeUnknownOption(FromChannel)
 
+const FromSchedule = Schema.Struct({ metadata: Schema.Struct({ schedule: ScheduleOrigin.Info }) })
+const decodeSchedule = Schema.decodeUnknownOption(FromSchedule)
+
 const withMetadata = (value: unknown): unknown => {
   if (!Predicate.isObject(value)) return value
   const sender = decodeUserID(value)
   const channel = decodeChannel(value)
+  const schedule = decodeSchedule(value)
   return {
     ...value,
     ...(Option.isSome(sender) && { sender: { userId: sender.value.metadata.userID } }),
     ...(Option.isSome(channel) && { channel: channel.value.metadata.channel }),
+    ...(Option.isSome(schedule) && { schedule: schedule.value.metadata.schedule }),
   }
 }
 

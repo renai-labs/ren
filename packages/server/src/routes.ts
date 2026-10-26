@@ -20,6 +20,7 @@ import { Health } from "@ren/core/health"
 import { Invitation } from "@ren/core/invitation"
 import { Label } from "@ren/core/label"
 import { OrganizationSettings } from "@ren/core/organization-settings"
+import { Schedules } from "@ren/core/schedules"
 import { Session } from "@ren/core/session"
 import { SessionRunner } from "@ren/core/session/runner"
 import { SessionSync } from "@ren/core/session-sync"
@@ -61,6 +62,7 @@ import { MeHandler } from "./handlers/api/me.js"
 import { EnvironmentTemplateHandler, EnvironmentProviderHandler } from "./handlers/api/environment-template.js"
 import { OrganizationSettingsHandler } from "./handlers/api/organization-settings.js"
 import { RenInferenceHandler } from "./handlers/api/ren-inference.js"
+import { ScheduleHandler, ScheduleRunHandler } from "./handlers/api/schedule.js"
 import { HostEnvironmentsHandler } from "./handlers/ren-host/environment.js"
 import { HostModelsHandler } from "./handlers/ren-host/models.js"
 import { HostPullHandler } from "./handlers/ren-host/pull.js"
@@ -127,6 +129,8 @@ export const layer = Layer.mergeAll(
         TaskActivityHandler,
         TaskCommentHandler,
         LabelHandler,
+        ScheduleHandler,
+        ScheduleRunHandler,
         CredentialHandler,
         CredentialConnectHandler,
         OAuthSessionHandler,
@@ -150,7 +154,7 @@ export const layer = Layer.mergeAll(
           Layer.provide(ReferenceCheck.layer),
           Layer.provide(RepositoryHosts.layer),
         ),
-        Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer).pipe(
+        Layer.mergeAll(Task.layer, TaskActivity.layer, TaskComment.layer, Label.layer, Schedules.layer).pipe(
           Layer.provide(SessionRunner.layer),
           Layer.provide(BrainRegistry.layer),
         ),

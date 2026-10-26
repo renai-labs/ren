@@ -6307,6 +6307,790 @@
         "summary": "Archive label"
       }
     },
+    "/schedules": {
+      "get": {
+        "tags": ["schedule"],
+        "operationId": "schedule.list",
+        "parameters": [
+          {
+            "name": "spaceId",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Space.ID"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Without it, the schedules of every space you are in."
+            },
+            "required": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Schedule.Status"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Part of the name or the message."
+            },
+            "required": false
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the schedules that the caller can see.",
+        "summary": "List schedules"
+      },
+      "post": {
+        "tags": ["schedule"],
+        "operationId": "schedule.create",
+        "parameters": [],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one schedule.",
+        "summary": "Create schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.CreateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/schedules/{idOrSlug}": {
+      "get": {
+        "tags": ["schedule"],
+        "operationId": "schedule.get",
+        "parameters": [
+          {
+            "name": "idOrSlug",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one schedule by ID or slug.",
+        "summary": "Get schedule"
+      }
+    },
+    "/schedules/{id}": {
+      "patch": {
+        "tags": ["schedule"],
+        "operationId": "schedule.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change one schedule.",
+        "summary": "Update schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.UpdateInput"
+              }
+            }
+          },
+          "required": true
+        }
+      },
+      "delete": {
+        "tags": ["schedule"],
+        "operationId": "schedule.archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Archive one schedule and return it. Archiving an archived schedule returns it unchanged.",
+        "summary": "Archive schedule"
+      }
+    },
+    "/schedules/{id}/pause": {
+      "post": {
+        "tags": ["schedule"],
+        "operationId": "schedule.pause",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the pause action on one schedule.",
+        "summary": "pause schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.NoInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/schedules/{id}/resume": {
+      "post": {
+        "tags": ["schedule"],
+        "operationId": "schedule.resume",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the resume action on one schedule.",
+        "summary": "resume schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.NoInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/schedules/{id}/run": {
+      "post": {
+        "tags": ["schedule"],
+        "operationId": "schedule.run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule.Info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule.Info"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the run action on one schedule.",
+        "summary": "run schedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule.NoInput"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/schedule-runs": {
+      "get": {
+        "tags": ["schedule-run"],
+        "operationId": "schedule-run.list",
+        "parameters": [
+          {
+            "name": "scheduleId",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Schedule.ID"
+            },
+            "required": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?$"
+            },
+            "required": false
+          }
+        ],
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ScheduleRun.Page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRun.Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return one page of the schedule-runs that the caller can see.",
+        "summary": "List schedule-runs"
+      }
+    },
     "/credentials": {
       "get": {
         "tags": ["credential"],
@@ -10196,6 +10980,11 @@
         "type": "string",
         "pattern": "^usr_"
       },
+      "Auth.UserID_1": {
+        "type": "string",
+        "pattern": "^usr_",
+        "description": "The person who last wrote its instruction. Each run sends the message as this person."
+      },
       "Brain.Scope": {
         "type": "string",
         "enum": ["session", "space"]
@@ -13443,6 +14232,495 @@
         "type": "string",
         "enum": ["ok", "warn", "error"]
       },
+      "Schedule.CreateInput": {
+        "type": "object",
+        "properties": {
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "message": {
+            "$ref": "#/components/schemas/Schedule.MessageEncoded"
+          },
+          "when": {
+            "$ref": "#/components/schemas/Schedule.WhenInput"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.TargetInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, `new-chat`."
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An agent of the space for a new chat. Without it, the space’s default settings."
+          }
+        },
+        "required": ["spaceId", "name", "message", "when"],
+        "additionalProperties": false
+      },
+      "Schedule.Cron": {
+        "type": "string"
+      },
+      "Schedule.ID": {
+        "type": "string",
+        "pattern": "^sch_"
+      },
+      "Schedule.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Schedule.ID"
+          },
+          "spaceId": {
+            "$ref": "#/components/schemas/Space.ID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Agent.ID"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null: a new chat gets the space’s default settings."
+          },
+          "when": {
+            "$ref": "#/components/schemas/Schedule.When"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Schedule.Target"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/Auth.UserID_1"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Schedule.Status"
+          },
+          "pausedReason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.PauseReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextRunAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "spaceId",
+          "name",
+          "agentId",
+          "when",
+          "target",
+          "message",
+          "ownerId",
+          "status",
+          "pausedReason",
+          "nextRunAt",
+          "createdAt",
+          "updatedAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "Schedule.MessageEncoded": {
+        "type": "string"
+      },
+      "Schedule.NoInput": {
+        "not": {
+          "type": "null"
+        }
+      },
+      "Schedule.Once": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": ["at"],
+        "additionalProperties": false
+      },
+      "Schedule.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Schedule.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "Schedule.PauseReason": {
+        "type": "string",
+        "enum": ["user", "owner_left", "agent_removed"],
+        "description": "`user`: a person paused it. `owner_left`: its owner left the space. `agent_removed`: its agent left the space."
+      },
+      "Schedule.Recurring": {
+        "type": "object",
+        "properties": {
+          "cron": {
+            "$ref": "#/components/schemas/Schedule.Cron"
+          },
+          "timeZone": {
+            "$ref": "#/components/schemas/Schedule.TimeZone"
+          },
+          "until": {
+            "type": "string"
+          }
+        },
+        "required": ["cron", "timeZone"],
+        "additionalProperties": false
+      },
+      "Schedule.Status": {
+        "type": "string",
+        "enum": ["active", "paused", "ended"]
+      },
+      "Schedule.Target": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["new-chat"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "$ref": "#/components/schemas/Session.ID"
+              }
+            },
+            "required": ["sessionId"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "`new-chat` starts a chat at each run. A session ID sends the message to that chat."
+      },
+      "Schedule.TargetInput": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": ["new-chat"]
+          },
+          {
+            "type": "string",
+            "enum": ["this-chat"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "$ref": "#/components/schemas/Session.ID"
+              }
+            },
+            "required": ["sessionId"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "`new-chat` starts a chat at each run. `this-chat` sends the message to the chat of the agent that calls; a person cannot use it. A session ID sends the message to that chat."
+      },
+      "Schedule.TimeZone": {
+        "type": "string"
+      },
+      "Schedule.UpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.MessageEncoded"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "when": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.WhenInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Schedule.TargetInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentId": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Agent.ID"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "description": "A change to the message, the agent, the target or the time makes you its owner."
+      },
+      "Schedule.When": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "cron": {
+                "type": "string"
+              },
+              "timeZone": {
+                "type": "string"
+              },
+              "until": {
+                "type": "string"
+              }
+            },
+            "required": ["cron", "timeZone"],
+            "additionalProperties": false
+          },
+          {
+            "$ref": "#/components/schemas/Schedule.Once"
+          }
+        ],
+        "description": "A cron in a time zone, or one time."
+      },
+      "Schedule.WhenInput": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Schedule.Recurring"
+          },
+          {
+            "$ref": "#/components/schemas/Schedule.Once"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "in": {
+                "type": "string"
+              }
+            },
+            "required": ["in"],
+            "additionalProperties": false
+          }
+        ],
+        "description": "A cron in a time zone, one time, or a delay from now. Ren stores a delay as one time."
+      },
+      "ScheduleOrigin.Info": {
+        "type": "object",
+        "properties": {
+          "scheduleId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scheduledAt": {
+            "type": "string",
+            "description": "The time the run was for, as an ISO 8601 instant."
+          }
+        },
+        "required": ["scheduleId", "name", "scheduledAt"],
+        "additionalProperties": false,
+        "description": "The schedule that sent a message, and the time the run was for."
+      },
+      "ScheduleRun.ID": {
+        "type": "string",
+        "pattern": "^srn_"
+      },
+      "ScheduleRun.Info": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ScheduleRun.ID"
+          },
+          "scheduleId": {
+            "$ref": "#/components/schemas/Schedule.ID"
+          },
+          "scheduledAt": {
+            "type": "string"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ScheduleRun.Trigger"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ScheduleRun.Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleRun.Reason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/Session.ID_1"
+          }
+        },
+        "required": [
+          "id",
+          "scheduleId",
+          "scheduledAt",
+          "startedAt",
+          "trigger",
+          "status",
+          "reason",
+          "error",
+          "sessionId"
+        ],
+        "additionalProperties": false
+      },
+      "ScheduleRun.Page": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleRun.Info"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": ["items", "page", "pageSize", "total"],
+        "additionalProperties": false
+      },
+      "ScheduleRun.Reason": {
+        "type": "string",
+        "enum": ["previous_run_busy", "paused", "archived", "owner_left", "agent_removed", "chat_archived"],
+        "description": "Why a run was skipped."
+      },
+      "ScheduleRun.Status": {
+        "type": "string",
+        "enum": ["pending", "started", "skipped", "failed"]
+      },
+      "ScheduleRun.Trigger": {
+        "type": "string",
+        "enum": ["timed", "manual"],
+        "description": "`timed`: its time came. `manual`: a person or an agent ran it now."
+      },
       "Session.ClientAccess": {
         "anyOf": [
           {
@@ -13529,6 +14807,11 @@
       "Session.ID": {
         "type": "string",
         "pattern": "^ses_"
+      },
+      "Session.ID_1": {
+        "type": "string",
+        "pattern": "^ses_",
+        "description": "The chat that the run started or sent to."
       },
       "Session.Info": {
         "type": "object",
@@ -14769,6 +16052,9 @@
           },
           "channel": {
             "$ref": "#/components/schemas/ChannelOrigin.Info"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ScheduleOrigin.Info"
           }
         },
         "required": ["id", "time", "text", "type"],
@@ -16886,6 +18172,12 @@
     },
     {
       "name": "label"
+    },
+    {
+      "name": "schedule"
+    },
+    {
+      "name": "schedule-run"
     },
     {
       "name": "credential"
