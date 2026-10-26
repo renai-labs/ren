@@ -595,8 +595,7 @@ test.todo("REN-1486 an endpoint's base URL and key changed during a turn reach t
         ["/moved/v1/chat/completions", "Bearer moved-key"],
       ])
     }),
-  ),
-)
+  ))
 
 it.live(
   "the cell keeps a ren-host-token only when it expires later than the stored token, and model refresh sends the kept token",
