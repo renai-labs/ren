@@ -40,7 +40,7 @@ variable "database_security_group_id" {
 
 variable "github_repository" {
   type        = string
-  description = "owner/name of the repository whose deploy workflow gets the deploy role."
+  description = "The repository whose deploy workflow gets the deploy role, as its OIDC subject names it: owner/name, or owner@id/name@id when the owner uses immutable subjects."
 }
 
 variable "github_environment" {
