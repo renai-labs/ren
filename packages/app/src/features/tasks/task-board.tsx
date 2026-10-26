@@ -42,7 +42,10 @@ export function TaskBoard(props: Props) {
       groups={TaskView.boardGroups(
         space.data,
         props.catalog.agents,
-        TaskView.visible(props.groups.flatMap((group) => group.tasks), props.view),
+        TaskView.visible(
+          props.groups.flatMap((group) => group.tasks),
+          props.view,
+        ),
       )}
     />
   )
@@ -235,9 +238,7 @@ function CardActions(props: Props & { task: TaskInfo }) {
             }
           />
           <Menu.Popup alignment="end">
-            <Menu.Item
-              onSelect={() => start.mutate({ id: props.task.id, mode: "continue" }, { onError: fail })}
-            >
+            <Menu.Item onSelect={() => start.mutate({ id: props.task.id, mode: "continue" }, { onError: fail })}>
               Continue session
             </Menu.Item>
             <Menu.Item onSelect={() => start.mutate({ id: props.task.id, mode: "new" }, { onError: fail })}>

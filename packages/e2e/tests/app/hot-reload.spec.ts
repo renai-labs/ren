@@ -11,7 +11,13 @@ const controlURL = `http://127.0.0.1:${ports.mailbox}/models`
 
 const entry = (providerKey: string, modelKey: string, name: string) => ({
   model_name: modelKey,
-  model_info: { model_key: modelKey, provider_key: providerKey, display_name: name, max_input_tokens: 100_000, max_output_tokens: 4000 },
+  model_info: {
+    model_key: modelKey,
+    provider_key: providerKey,
+    display_name: name,
+    max_input_tokens: 100_000,
+    max_output_tokens: 4000,
+  },
 })
 
 // oxlint-disable-next-line ren/no-comments -- The stub LiteLLM's list in script/serve.ts (StubModel.defaultModels).

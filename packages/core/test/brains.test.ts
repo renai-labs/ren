@@ -197,7 +197,9 @@ for (const host of hosts)
       Effect.gen(function* () {
         const brain = yield* Brains.Service
         const chat = yield* created(`open ${stub.script().marker}`)
-        const access = yield* Host.ready(brain.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }))
+        const access = yield* Host.ready(
+          brain.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }),
+        )
         const read = yield* Effect.promise(() =>
           fetch(`${access.url}/chat/session/${chat.sessionId}`, {
             headers: { authorization: TestToken.basic(access.token) },
@@ -228,7 +230,9 @@ for (const host of hosts)
           expect(response.status).toBe(200)
           return (yield* Effect.promise(() => script.called())).text
         })
-        const access = yield* Host.ready(brain.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }))
+        const access = yield* Host.ready(
+          brain.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }),
+        )
         const read = yield* Effect.promise(() =>
           fetch(`${access.url}/chat/session/${chat.sessionId}`, {
             headers: { authorization: TestToken.basic(access.token) },
@@ -252,7 +256,9 @@ for (const host of hosts)
         Effect.gen(function* () {
           const brains = yield* Brains.Service
           const chat = yield* created(`open ${stub.script().marker}`)
-          yield* Host.ready(brains.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }))
+          yield* Host.ready(
+            brains.access(chat.sessionId, { userId: chat.owner.createdBy, memberId: Auth.MemberID.create() }),
+          )
           const found = yield* brains
             .accessEnvironment(
               {

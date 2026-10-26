@@ -87,15 +87,13 @@ it.live(
       const actors = yield* Actor.Service
       const subject = yield* chat()
       const own = Space.ID.create()
-      yield* database.db
-        .insert(Database.Schema.space)
-        .values({
-          id: own,
-          organization_id: subject.organizationId,
-          name: "Own",
-          kind: "private",
-          owner_user_id: subject.creator,
-        })
+      yield* database.db.insert(Database.Schema.space).values({
+        id: own,
+        organization_id: subject.organizationId,
+        name: "Own",
+        kind: "private",
+        owner_user_id: subject.creator,
+      })
       yield* database.db
         .insert(Database.Schema.space_member)
         .values({ id: Space.MembershipID.create(), space_id: own, user_id: subject.creator })

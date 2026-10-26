@@ -78,7 +78,9 @@ const opened = Effect.fnUntraced(function* (text: string) {
     .from(Database.Schema.agent_session)
     .where(eq(Database.Schema.agent_session.id, sessionId))).at(0)?.brainId
   if (!brainId) return yield* Effect.die(new Error("The chat has no brain"))
-  const access = yield* Host.ready(brains.access(sessionId, { userId: owner.createdBy, memberId: Auth.MemberID.create() }))
+  const access = yield* Host.ready(
+    brains.access(sessionId, { userId: owner.createdBy, memberId: Auth.MemberID.create() }),
+  )
   const chat = (path: string, init: RequestInit = {}) =>
     Effect.tryPromise(() =>
       fetch(`${access.url}/chat/session/${sessionId}${path}`, {

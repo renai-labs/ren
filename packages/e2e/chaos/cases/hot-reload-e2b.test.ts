@@ -22,7 +22,9 @@ const small = "anthropic/claude-haiku-5-5"
 const added = "openai/gpt-5.6-terra"
 
 const unmet =
-  Platform.e2b ?? Platform.litellm ?? (renTunnel && litellmTunnel ? undefined : "C12 needs CHAOS_REN_TUNNEL_URL and CHAOS_LITELLM_TUNNEL_URL")
+  Platform.e2b ??
+  Platform.litellm ??
+  (renTunnel && litellmTunnel ? undefined : "C12 needs CHAOS_REN_TUNNEL_URL and CHAOS_LITELLM_TUNNEL_URL")
 
 const accessFor = async (key: string): Promise<Models.Access> => {
   const response = await fetch(`${LiteLLM.url}/model/info`, { headers: { authorization: `Bearer ${key}` } })
@@ -42,9 +44,7 @@ describe.skipIf(unmet !== undefined)("hot reload on a paused E2B brain (spec §9
   }, 120_000)
 
   test("a push does not resume a paused brain; the wake applies the settings and reads the models of the pause", async () => {
-    const provider = ManagedRuntime.make(
-      E2BSandbox.layer.pipe(Layer.provide(FetchHttpClient.layer)),
-    )
+    const provider = ManagedRuntime.make(E2BSandbox.layer.pipe(Layer.provide(FetchHttpClient.layer)))
     cleanups.push(() => provider.dispose())
     const sandbox = <A, E>(use: (service: SandboxProvider.Interface) => Effect.Effect<A, E>) =>
       provider.runPromise(SandboxProvider.Service.use(use))

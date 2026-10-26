@@ -495,9 +495,8 @@ export const make = (
             delete event.headers[Models.personHeader]
             if (event.kind === "title") return
             if (!Ref.getUnsafe(models).some((endpoint) => endpoint.id === event.model.providerID)) return
-            const memberId = Option.flatMap(
-              yield* members.lastSpeaker(yield* rootOf(event.sessionID)),
-              (speaker) => Option.fromUndefinedOr(speaker.memberID),
+            const memberId = Option.flatMap(yield* members.lastSpeaker(yield* rootOf(event.sessionID)), (speaker) =>
+              Option.fromUndefinedOr(speaker.memberID),
             )
             if (Option.isNone(memberId)) return
             event.headers[Models.personHeader] = members.egress

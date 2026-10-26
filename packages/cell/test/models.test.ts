@@ -123,20 +123,23 @@ const chatWith = Effect.fnUntraced(function* (options: { readonly egress?: boole
   return { send, idle }
 })
 
-it.live("each step names the sender of the newest user message: a steer in one drain moves the next step to its sender", () =>
-  Effect.gen(function* () {
-    const chat = yield* chatWith()
-    const first = stub.script({ hold: true })
-    const second = stub.script()
-    yield* chat.send(first.marker, ada)
-    yield* Effect.promise(() => first.called())
-    yield* chat.send(second.marker, grace)
-    first.release()
-    yield* chat.idle
-    expect([(yield* Effect.promise(() => first.called())).member, (yield* Effect.promise(() => second.called())).member]).toEqual(
-      [ada, grace],
-    )
-  }),
+it.live(
+  "each step names the sender of the newest user message: a steer in one drain moves the next step to its sender",
+  () =>
+    Effect.gen(function* () {
+      const chat = yield* chatWith()
+      const first = stub.script({ hold: true })
+      const second = stub.script()
+      yield* chat.send(first.marker, ada)
+      yield* Effect.promise(() => first.called())
+      yield* chat.send(second.marker, grace)
+      first.release()
+      yield* chat.idle
+      expect([
+        (yield* Effect.promise(() => first.called())).member,
+        (yield* Effect.promise(() => second.called())).member,
+      ]).toEqual([ada, grace])
+    }),
 )
 
 it.live("a subagent request names the sender of its root turn; a title request names nobody", () =>

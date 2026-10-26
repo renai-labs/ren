@@ -16,8 +16,11 @@ export const pending = (sessionID: Session.ID) => `session.${sessionID}.pending`
 
 const FirstMessage = Schema.fromJsonString(Session.FirstMessage)
 
-export const keepPending = (drafts: Platform.Storage | undefined, sessionID: Session.ID, message: Session.FirstMessage) =>
-  drafts?.set(pending(sessionID), Schema.encodeSync(FirstMessage)(message))
+export const keepPending = (
+  drafts: Platform.Storage | undefined,
+  sessionID: Session.ID,
+  message: Session.FirstMessage,
+) => drafts?.set(pending(sessionID), Schema.encodeSync(FirstMessage)(message))
 
 export const takePending = (drafts: Platform.Storage | undefined, sessionID: Session.ID) =>
   Schema.decodeUnknownOption(FirstMessage)(drafts?.get(pending(sessionID)))

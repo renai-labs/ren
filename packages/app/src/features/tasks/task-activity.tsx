@@ -100,7 +100,9 @@ function ActivityGroup(props: { quiet: boolean; children: ReadonlyArray<ReactNod
   if (!props.quiet || props.children.length <= 3) return props.children
   return (
     <div className="flex flex-col gap-4">
-      <Disclosure summary={`Show ${props.children.length - 3} earlier events`}>{props.children.slice(0, -3)}</Disclosure>
+      <Disclosure summary={`Show ${props.children.length - 3} earlier events`}>
+        {props.children.slice(0, -3)}
+      </Disclosure>
       {props.children.slice(-3)}
     </div>
   )
