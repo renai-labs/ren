@@ -6,6 +6,7 @@ import { Session } from "@ren/schema/session"
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
+import { Brains } from "./brains.js"
 import { ChannelNotice } from "./channel-notice.js"
 import { ChannelProvider } from "./channel-provider.js"
 import { DurableRunner } from "./durable-runner.js"
@@ -42,6 +43,7 @@ export const layer = Layer.effect(
     const registry = yield* ChannelProvider.Registry
     const notices = yield* ChannelNotice.Service
     const runner = yield* SessionRunner.Service
+    const brains = yield* Brains.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const thread = Database.Schema.channel_thread
     const opencode = Database.Schema.opencode_session
@@ -65,6 +67,25 @@ export const layer = Layer.effect(
           Effect.map((rows) => Option.fromNullishOr(rows.at(0))),
         )
 
+    const threadOf = (sessionId: Session.ID) =>
+      database.db
+        .select()
+        .from(thread)
+        .where(and(eq(thread.session_id, sessionId), isNotNull(thread.last_message_at)))
+        .orderBy(desc(thread.last_message_at))
+        .limit(1)
+        .pipe(
+          Effect.orDie,
+          Effect.map((rows) => Option.fromNullishOr(rows.at(0))),
+        )
+
+    const targetOf = (found: typeof thread.$inferSelect): ChannelProvider.Target => ({
+      install: found.install,
+      place: found.place_name ?? found.thread,
+      thread: found.thread,
+      message: found.last_message ?? "",
+    })
+
     const end = Effect.fnUntraced(function* (
       payload: typeof TurnRun.payloadSchema.Type,
       found: {
@@ -75,12 +96,7 @@ export const layer = Layer.effect(
         readonly provider: ChannelProvider.Provider
       },
     ) {
-      const target = {
-        install: found.thread.install,
-        place: found.thread.place_name ?? found.thread.thread,
-        thread: found.thread.thread,
-        message: found.thread.last_message ?? "",
-      }
+      const target = targetOf(found.thread)
       const failed = found.outcome === "failed"
       yield* found.provider
         .progress(target, failed ? "failed" : "done")
@@ -124,23 +140,30 @@ export const layer = Layer.effect(
         .where(eq(opencode.session_id, sessionId))
         .pipe(Effect.orDie)).at(0)
       const latest = yield* latestOf(sessionId, "user")
-      const current = (yield* database.db
-        .select()
-        .from(thread)
-        .where(and(eq(thread.session_id, sessionId), isNotNull(thread.last_message_at)))
-        .orderBy(desc(thread.last_message_at))
-        .limit(1)
-        .pipe(Effect.orDie)).at(0)
-      const provider = Option.flatMap(Option.fromNullishOr(current), (found) => registry.get(found.provider))
-      if (row && current && Option.isSome(provider) && Option.isSome(latest) && latest.value.fromChannel)
+      const current = yield* threadOf(sessionId)
+      const provider = Option.flatMap(current, (found) => registry.get(found.provider))
+      if (row && Option.isSome(current) && Option.isSome(provider) && Option.isSome(latest) && latest.value.fromChannel)
         yield* end(payload, {
           outcome: row.outcome,
           createdBy: row.createdBy,
           latest: latest.value.id,
-          thread: current,
+          thread: current.value,
           provider: provider.value,
         })
     })
+
+    yield* brains.onStartRejected((sessionId) =>
+      Effect.gen(function* () {
+        const current = yield* threadOf(sessionId)
+        const provider = Option.flatMap(current, (found) => registry.get(found.provider))
+        if (Option.isNone(current) || Option.isNone(provider)) return
+        const target = targetOf(current.value)
+        yield* provider.value
+          .progress(target, "failed")
+          .pipe(Effect.catchCause((cause) => Effect.logWarning("A channel progress could not be sent", cause)))
+        yield* notices.notice({ provider: current.value.provider, target, reason: "brain_failed", sessionId })
+      }),
+    )
 
     yield* DurableRunner.register(TurnRun, (payload) =>
       DurableRunner.supervise(`channel-turn:${payload.sessionId}:${payload.idle}`, run(payload)),

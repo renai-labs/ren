@@ -259,6 +259,7 @@ export class Cell extends Context.Service<
     readonly start: (sessionId: Session.ID) => void
     readonly failSends: (count: number) => void
     readonly rejectSends: () => void
+    readonly rejectStarts: () => void
   }
 >()("@ren/core/test/ChannelFixture/Cell") {}
 
@@ -268,7 +269,7 @@ const cell = Layer.effect(
     const accepted: Array<Delivered> = []
     const sends: Array<Session.MessageID> = []
     const started = new Set<string>()
-    const failures = { left: 0, rejected: false }
+    const failures = { left: 0, rejected: false, starts: false }
     const server = yield* Effect.acquireRelease(
       Effect.sync(() =>
         Bun.serve({
@@ -278,6 +279,8 @@ const cell = Layer.effect(
             const path = new URL(incoming.url).pathname
             if (path === "/ren/sessions") {
               const body = Schema.decodeUnknownSync(Start)(await incoming.json())
+              if (failures.starts)
+                return Response.json({ _tag: "BrainRejectedError", message: "No agent" }, { status: 422 })
               started.add(body.sessionId)
               if (body.initialMessage)
                 accepted.push({
@@ -315,6 +318,9 @@ const cell = Layer.effect(
       },
       rejectSends: () => {
         failures.rejected = true
+      },
+      rejectStarts: () => {
+        failures.starts = true
       },
     })
   }),

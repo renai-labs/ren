@@ -39,6 +39,7 @@ import {
   Layer,
   Option,
   Redacted,
+  Ref,
   Schedule,
   Schema,
   Struct,
@@ -76,6 +77,7 @@ export interface Placement {
 
 export interface Interface {
   readonly start: (input: Session.StartInput, placement: Placement) => Effect.Effect<void, BrainRejectedError>
+  readonly onStartRejected: (listener: (sessionId: Session.ID) => Effect.Effect<void>) => Effect.Effect<void>
   readonly send: (
     input: Session.SendInput,
   ) => Effect.Effect<Session.Accepted, BrainHost.BrainUnavailable | BrainRejectedError | SessionNotStartedError>
@@ -189,6 +191,7 @@ export const layer = Layer.effect(
     const brainHost = yield* BrainHost.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
     const prepared = new Map<Brain.ID, number>()
+    const rejectedListeners = yield* Ref.make<ReadonlyArray<(sessionId: Session.ID) => Effect.Effect<void>>>([])
 
     const brainRow = Effect.fnUntraced(function* (brainId: Brain.ID) {
       const row = (yield* database.db
@@ -344,7 +347,19 @@ export const layer = Layer.effect(
             ),
           ),
           Effect.catchTag("BrainRejectedError", (error) =>
-            Effect.logError(`The brain rejected the start of ${payload.input.sessionId}: ${error.message}`),
+            Effect.logError(`The brain rejected the start of ${payload.input.sessionId}: ${error.message}`).pipe(
+              Effect.andThen(Ref.get(rejectedListeners)),
+              Effect.flatMap((listeners) =>
+                Effect.forEach(
+                  listeners,
+                  (listener) =>
+                    listener(payload.input.sessionId).pipe(
+                      Effect.catchCause((cause) => Effect.logError("A start rejection could not be reported", cause)),
+                    ),
+                  { discard: true },
+                ),
+              ),
+            ),
           ),
           Effect.catchTag("BrainUnavailable", (error) =>
             Effect.logWarning(`The brain of ${payload.input.sessionId} is unavailable; the start retries`).pipe(
@@ -362,6 +377,11 @@ export const layer = Layer.effect(
         yield* DurableRunner.ensure(StartRun, { input, placement, epoch: row.runEpoch }).pipe(
           Effect.provideService(WorkflowEngine.WorkflowEngine, engine),
         )
+      }),
+      onStartRejected: Effect.fn("Brains.onStartRejected")(function* (
+        listener: (sessionId: Session.ID) => Effect.Effect<void>,
+      ) {
+        yield* Ref.update(rejectedListeners, (listeners) => [...listeners, listener])
       }),
       send: Effect.fn("Brains.send")(function* (input: Session.SendInput) {
         yield* validatePrompt(input.prompt)
