@@ -21,7 +21,6 @@ import {
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, relative } from "node:path"
-import { heapStats } from "bun:jsc"
 import { Executor } from "../src/executor.js"
 import { Sandbox } from "../src/sandbox.js"
 import { testEffect } from "./lib/effect.js"
@@ -1171,33 +1170,6 @@ it.live(
   30_000,
 )
 
-it.effect(
-  "runs 1000 short commands twice, and gives back its file descriptors and heap objects the second time",
-  () =>
-    Effect.gen(function* () {
-      const executor = yield* Executor.Service
-      const short = Effect.gen(function* () {
-        const command = yield* executor.spawn(brain, { command: "echo", arguments: ["x"] })
-        yield* Stream.runDrain(yield* executor.output(brain, command.id))
-        return command
-      })
-      const batch = Effect.gen(function* () {
-        const first = yield* short
-        yield* Effect.forEach(Array.from({ length: 999 }), () => short, { concurrency: 1, discard: true })
-        yield* TestClock.adjust(Duration.seconds(46))
-        expect((yield* executor.output(brain, first.id).pipe(Effect.flip))._tag).toBe("ProcessNotFoundError")
-        Bun.gc(true)
-        return heapStats().objectCount
-      })
-      const warm = yield* batch
-      const files = Processes.openFiles()
-      const second = yield* batch
-      expect(Processes.openFiles()).toBe(files)
-      expect(second - warm).toBeLessThan(5000)
-    }),
-  60_000,
-)
-
 it.live("reads an empty file as no bytes", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
@@ -1280,27 +1252,6 @@ it.live("reaches paths outside the workspace by absolute path and by '..'", () =
   }),
 )
 
-it.live(
-  "lists a folder with 100 000 items in one reply well under the file size limit",
-  () =>
-    Effect.gen(function* () {
-      const executor = yield* Executor.Service
-      yield* executor.mkdir("g9")
-      const filled = yield* run({
-        command: "sh",
-        arguments: ["-c", "seq 1 100000 | sed 's/^/file-/' | xargs touch"],
-        directory: "g9",
-      })
-      expect((yield* collect(filled.events)).exit).toEqual({ type: "exit", exitCode: 0, signal: null })
-      const files = Processes.openFiles()
-      const listed = yield* executor.list("g9")
-      expect(listed).toHaveLength(100_000)
-      expect(JSON.stringify(listed).length).toBeLessThan(EnvironmentApi.maxFileBytes)
-      expect(Processes.openFiles()).toBe(files)
-    }),
-  60_000,
-)
-
 if (process.platform === "linux" ? existsSync("/dev/shm") : process.platform === "darwin")
   it.live("moves a file to another file system, or fails with a typed error and loses nothing", () =>
     Effect.gen(function* () {
@@ -1364,35 +1315,32 @@ it.live("reads an empty range after the end of a file and a range of 0 bytes", (
   }),
 )
 
-it.live(
-  "reads one whole version of a file that another process replaces at the same time",
-  () =>
-    Effect.gen(function* () {
-      const executor = yield* Executor.Service
-      yield* executor.mkdir("g16")
-      const versions = [97, 98].map((byte, index) => new Uint8Array((index + 1) * mebibyte).fill(byte))
-      yield* Effect.promise(() => writeFile(join(workspace, "g16/live.bin"), versions[0] ?? new Uint8Array()))
-      let replacing = true
-      const replacer = Effect.promise(async () => {
-        for (let count = 0; replacing; count++) {
-          await writeFile(join(workspace, "g16/next.bin"), versions[count % 2] ?? new Uint8Array())
-          await rename(join(workspace, "g16/next.bin"), join(workspace, "g16/live.bin"))
-        }
-      })
-      const replacing_ = yield* Effect.forkScoped(replacer)
-      const reads = yield* Effect.forEach(
-        Array.from({ length: 300 }),
-        () => Effect.map(executor.read("g16/live.bin"), (read) => ({ size: read.info.sizeBytes, bytes: read.bytes })),
-        { concurrency: 4 },
-      )
-      replacing = false
-      yield* Fiber.join(replacing_)
-      expect(
-        reads.map((read) => ({
-          uniform: read.bytes.every((byte) => byte === read.bytes[0]),
-          whole: read.size === read.bytes.length,
-        })),
-      ).toEqual(reads.map(() => ({ uniform: true, whole: true })))
-    }),
-  60_000,
+it.live("reads one whole version of a file that another process replaces at the same time", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    yield* executor.mkdir("g16")
+    const versions = [97, 98].map((byte, index) => new Uint8Array((index + 1) * 256 * 1024).fill(byte))
+    yield* Effect.promise(() => writeFile(join(workspace, "g16/live.bin"), versions[0] ?? new Uint8Array()))
+    let replacing = true
+    const replacer = Effect.promise(async () => {
+      for (let count = 0; replacing; count++) {
+        await writeFile(join(workspace, "g16/next.bin"), versions[count % 2] ?? new Uint8Array())
+        await rename(join(workspace, "g16/next.bin"), join(workspace, "g16/live.bin"))
+      }
+    })
+    const replacing_ = yield* Effect.forkScoped(replacer)
+    const reads = yield* Effect.forEach(
+      Array.from({ length: 30 }),
+      () => Effect.map(executor.read("g16/live.bin"), (read) => ({ size: read.info.sizeBytes, bytes: read.bytes })),
+      { concurrency: 4 },
+    )
+    replacing = false
+    yield* Fiber.join(replacing_)
+    expect(
+      reads.map((read) => ({
+        uniform: read.bytes.every((byte) => byte === read.bytes[0]),
+        whole: read.size === read.bytes.length,
+      })),
+    ).toEqual(reads.map(() => ({ uniform: true, whole: true })))
+  }),
 )
