@@ -83,8 +83,14 @@ export const Info = Schema.Struct({
   kind: Kind,
   userId: Schema.NullOr(Auth.UserID),
   allSpaces: Schema.Boolean,
-  spaces: Schema.Array(SpaceRef).annotate({ description: "The listed spaces that the caller belongs to." }),
-  hiddenSpaces: Schema.Int.annotate({ description: "The count of listed spaces that the caller does not belong to." }),
+  spaces: Schema.Array(SpaceRef).annotate({ description: "The listed spaces that the caller can see." }),
+  hiddenSpaces: Schema.Int.annotate({ description: "The count of listed spaces that the caller cannot see." }),
+  canAccess: Schema.Boolean.annotate({
+    description: "True when the caller may change the spaces that list the profile.",
+  }),
+  canShareEverySpace: Schema.Boolean.annotate({
+    description: "True when the caller may share the profile with every space.",
+  }),
   links: Schema.Array(Link),
   items: Schema.Array(Item),
   unused: Schema.Array(Schema.Struct({ credentialId: Credential.ID, label: Credential.EnvName })).annotate({

@@ -9,19 +9,13 @@ import { useState } from "react"
 import { RouterContext } from "../lib/router-context.js"
 import { Apps } from "./apps.js"
 
-// oxlint-disable-next-line ren/no-comments -- profiles.md §10 (P19, P20): the creator and admins change a shared account's spaces; a member only for spaces they belong to, admins for every space and for "Every space".
-export function AccountAccess(props: {
-  profile: AppProfileInfo
-  spaces: ReadonlyArray<SpaceInfo>
-  userId: string
-  admin: boolean
-}) {
+// oxlint-disable-next-line ren/no-comments -- profiles.md §10 (P19, P20): who changes a shared account's spaces, and who shares it with every space, comes with the profile; the space list holds only spaces the caller sees.
+export function AccountAccess(props: { profile: AppProfileInfo; spaces: ReadonlyArray<SpaceInfo> }) {
   const context = RouterContext.useRouterContext()
   const queryClient = useQueryClient()
   const access = useMutation(context.api["app-profile"].access.mutationOptions())
   const [confirming, setConfirming] = useState<string>()
-  if (props.profile.kind === "private") return null
-  if (!props.admin && props.profile.createdBy !== props.userId) return null
+  if (props.profile.kind === "private" || !props.profile.canAccess) return null
   const listed = new Set(props.profile.spaces.map((space) => space.id))
   const change = (input: {
     readonly add?: Array<string>
@@ -56,7 +50,7 @@ export function AccountAccess(props: {
           }
         />
         <Menu.Popup alignment="end" width="medium">
-          {props.admin ? (
+          {props.profile.canShareEverySpace ? (
             <>
               <Menu.CheckboxItem
                 checked={props.profile.allSpaces}
@@ -73,7 +67,7 @@ export function AccountAccess(props: {
               <Menu.CheckboxItem
                 key={space.id}
                 checked={props.profile.allSpaces || listed.has(space.id)}
-                disabled={props.profile.allSpaces || (!props.admin && !space.membershipId)}
+                disabled={props.profile.allSpaces}
                 icon={<Icon glyph="Cube" />}
                 onCheckedChange={(checked) => {
                   if (checked) change({ add: [space.id] })

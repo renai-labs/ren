@@ -11,14 +11,12 @@ import { AppGrid, AppRow } from "../../components/app-row.js"
 import { Apps } from "../../components/apps.js"
 import { ProfileDialog } from "../../components/profile-dialog.js"
 import { Profiles } from "../../components/profiles.js"
-import { Auth } from "../../lib/auth.js"
 import { RouterContext } from "../../lib/router-context.js"
 import { AccountList, AppDrawer } from "./app-drawer.js"
 
 // oxlint-disable-next-line ren/no-comments -- The space Apps tab for the whole org: every app with an account you can see, and where each account is used.
-export function OrgApps(props: { appId: string | undefined; userId: string; onAppChange: (appId?: string) => void }) {
+export function OrgApps(props: { appId: string | undefined; onAppChange: (appId?: string) => void }) {
   const context = RouterContext.useRouterContext()
-  const role = useQuery(Auth.activeRoleOptions(context.auth))
   const spaces = useQuery(context.api.space.list.queryOptions(Apps.page))
   const catalog = Apps.useCatalog()
   const [dialog, setDialog] = useState<{ readonly appId: string; readonly profileId?: string }>()
@@ -64,12 +62,7 @@ export function OrgApps(props: { appId: string | undefined; userId: string; onAp
             caption={Apps.reach}
             action={(profile: AppProfileInfo) => (
               <>
-                <AccountAccess
-                  profile={profile}
-                  spaces={spaces.data?.items ?? []}
-                  userId={props.userId}
-                  admin={role.data !== undefined && Auth.isAdminRole(role.data)}
-                />
+                <AccountAccess profile={profile} spaces={spaces.data?.items ?? []} />
                 <AccountActions
                   profile={profile}
                   onOpen={() => setDialog({ appId: profile.appId, profileId: profile.id })}

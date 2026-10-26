@@ -354,6 +354,8 @@ export const layer = Layer.effect(
             allSpaces: row.all_spaces,
             spaces: shown.map((space) => ({ id: space.id, name: space.name })),
             hiddenSpaces: visible.length - shown.length,
+            canAccess: allowed(actor, AppProfilePolicy.actions.access, holdsOf(actor, row, visible)),
+            canShareEverySpace: allowed(actor, AppProfilePolicy.actions.shareEverySpace, holdsOf(actor, row, visible)),
             links: (dependencies.get(row.app_id) ?? [])
               .filter(
                 (edge) =>

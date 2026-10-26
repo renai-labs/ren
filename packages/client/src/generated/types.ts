@@ -741,6 +741,8 @@ export type AppProfileInfo = {
   allSpaces: boolean
   spaces: Array<AppProfileSpaceRef>
   hiddenSpaces: number
+  canAccess: boolean
+  canShareEverySpace: boolean
   links: Array<AppProfileLink>
   items: Array<AppProfileItem>
   unused: Array<{ credentialId: CredentialID; label: CredentialEnvName }>
@@ -5354,7 +5356,7 @@ export type CredentialCreateInput = {
           | { readonly kind: "person"; readonly userId: string }
         readonly label: string
         readonly name?: string | null
-        readonly hosts: ReadonlyArray<string>
+        readonly hosts: ReadonlyArray<"*" | (string & {})>
         readonly inject?:
           | (
               | {
@@ -5386,7 +5388,7 @@ export type CredentialCreateInput = {
     | {
         readonly owner: { readonly kind: "profile"; readonly profileId: string }
         readonly item: { readonly mcp: string } | { readonly env: string }
-        readonly hosts: ReadonlyArray<string>
+        readonly hosts: ReadonlyArray<"*" | (string & {})>
         readonly value:
           | { readonly type: "key"; readonly value: string }
           | { readonly type: "basic"; readonly username: string; readonly password: string }
@@ -5408,17 +5410,17 @@ export type CredentialUpdateInput = {
   readonly id: { readonly id: string }["id"]
   readonly name?: {
     readonly name?: string | null | null
-    readonly hosts?: ReadonlyArray<string> | null
+    readonly hosts?: ReadonlyArray<"*" | (string & {})> | null
     readonly delivery?: ("egress" | "delivered") | null
   }["name"]
   readonly hosts?: {
     readonly name?: string | null | null
-    readonly hosts?: ReadonlyArray<string> | null
+    readonly hosts?: ReadonlyArray<"*" | (string & {})> | null
     readonly delivery?: ("egress" | "delivered") | null
   }["hosts"]
   readonly delivery?: {
     readonly name?: string | null | null
-    readonly hosts?: ReadonlyArray<string> | null
+    readonly hosts?: ReadonlyArray<"*" | (string & {})> | null
     readonly delivery?: ("egress" | "delivered") | null
   }["delivery"]
 }
