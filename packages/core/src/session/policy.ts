@@ -1,7 +1,7 @@
 export * as SessionPolicy from "./policy.js"
 
 import { Database } from "@ren/db/database"
-import type { Auth } from "@ren/schema/auth"
+import { Auth } from "@ren/schema/auth"
 import { Policy } from "@ren/schema/policy"
 import { Primitive } from "@ren/schema/primitive"
 import { Session } from "@ren/schema/session"
@@ -10,7 +10,6 @@ import { and, eq, isNotNull } from "drizzle-orm"
 import type { Access } from "../access.js"
 import { AccessFilter } from "../access-filter.js"
 import type { Actor } from "../actor.js"
-import { SpacePolicy } from "../space/policy.js"
 import { SpaceQueries } from "../space/queries.js"
 
 export const relationships = {
@@ -25,9 +24,9 @@ export const actions = {
   archive: Primitive.action(Session.definition, "archive"),
 }
 
-const every = SpacePolicy.organizationRoles
+const every = Auth.Role.literals
 
-const admins = SpacePolicy.administratorRoles
+const admins = Auth.administratorRoles
 
 // oxlint-disable-next-line ren/no-comments -- Whoever sees a space reads and starts its chats, and so does an agent in that space. Its creator or an admin archives a chat.
 export const documents = [
@@ -42,8 +41,6 @@ export const documents = [
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
-
-export const organization: Access.Resource = { relationships: [] }
 
 export const resource = (
   holds: { readonly membershipId: Space.MembershipID | null; readonly createdBy?: Auth.UserID },

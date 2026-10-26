@@ -40,15 +40,13 @@ export const consentOrganizationHeader = "x-ren-consent-organization"
 export const Role = Schema.Literals(["owner", "admin", "member"]).annotate({ identifier: "Auth.Role" })
 export type Role = typeof Role.Type
 
-const administratorRoles: ReadonlyArray<string> = ["owner", "admin"] satisfies ReadonlyArray<Role>
+export const administratorRoles = ["owner", "admin"] as const satisfies ReadonlyArray<Role>
 
 export const roles = (role: string) =>
   role
     .split(",")
     .map((each) => each.trim())
     .filter(Boolean)
-
-export const isAdministrator = (role: string) => roles(role).some((each) => administratorRoles.includes(each))
 
 export interface User extends Schema.Schema.Type<typeof User> {}
 export const User = Schema.Struct({

@@ -1,0 +1,18 @@
+id: no-hardcoded-policy
+language: Tsx
+message: >-
+  Who may do what belongs in a policy document (`packages/core/src/**/policy.ts`), checked through Access. Business code computes facts, such as membership or authorship, and never reads roles. Return the decision to clients as a `can…` field.
+severity: error
+files:
+  - packages/core/src/**
+  - packages/server/src/**
+  - packages/app/src/**
+ignores:
+  - packages/core/src/access.ts
+  - packages/core/src/**/policy.ts
+  - packages/core/src/**/profile-policy.ts
+rule:
+  any:
+    - pattern: $ACTOR.roles.includes($$$)
+    - pattern: $ACTOR.roles.some($$$)
+    - pattern: Auth.administratorRoles

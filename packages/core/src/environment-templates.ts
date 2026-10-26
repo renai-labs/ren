@@ -8,7 +8,6 @@ import { Access } from "./access.js"
 import { Actor } from "./actor.js"
 import { EnvironmentProvider } from "./environment-provider.js"
 import { Primitive } from "./primitive.js"
-import { SpacePolicy } from "./space/policy.js"
 
 export type Interface = Primitive.Interface<typeof EnvironmentTemplate.definition>
 
@@ -47,7 +46,7 @@ export const layer = Layer.effect(
     const registry = yield* EnvironmentProvider.Registry
 
     const isAllowed = (actor: Actor.Info, action: string) =>
-      access.isAllowed({ actor, action, resource: SpacePolicy.organization })
+      access.isAllowed({ actor, action, resource: Access.organization })
 
     const inOrganization = (actor: Actor.Info) =>
       and(eq(table.organization_id, actor.organizationId), isNull(table.archived_at))

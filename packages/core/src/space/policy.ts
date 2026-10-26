@@ -20,11 +20,7 @@ const spaceMember = {
   condition: isNotNull(SpaceQueries.membership.id),
 }
 
-export const administratorRoles = ["owner", "admin"] as const satisfies ReadonlyArray<Auth.Role>
-
 const conditions = new Map([spaceMember].map((relationship) => [relationship.name, relationship.condition]))
-
-export const organizationRoles = Auth.Role.literals
 
 const organizationActions = Primitive.actions(Space.definition, ["list", "create"])
 
@@ -40,30 +36,28 @@ export const documents = [
   {
     primitive: Space.definition.name,
     statements: [
-      { actions: organizationActions, roles: organizationRoles, on: Policy.everywhere },
-      { actions: readActions, roles: administratorRoles, on: Policy.everywhere, agents: true },
-      { actions: readActions, roles: organizationRoles, on: spaceMember.name, agents: true },
-      { actions: spaceActions, roles: administratorRoles, on: Policy.everywhere },
-      { actions: spaceActions, roles: organizationRoles, on: spaceMember.name },
+      { actions: organizationActions, roles: Auth.Role.literals, on: Policy.everywhere },
+      { actions: readActions, roles: Auth.administratorRoles, on: Policy.everywhere, agents: true },
+      { actions: readActions, roles: Auth.Role.literals, on: spaceMember.name, agents: true },
+      { actions: spaceActions, roles: Auth.administratorRoles, on: Policy.everywhere },
+      { actions: spaceActions, roles: Auth.Role.literals, on: spaceMember.name },
     ],
   },
   {
     primitive: SpaceMember.definition.name,
     statements: [
-      { actions: memberActions, roles: administratorRoles, on: Policy.everywhere },
-      { actions: memberActions, roles: organizationRoles, on: spaceMember.name },
+      { actions: memberActions, roles: Auth.administratorRoles, on: Policy.everywhere },
+      { actions: memberActions, roles: Auth.Role.literals, on: spaceMember.name },
     ],
   },
   {
     primitive: SpaceEnvironmentTemplate.definition.name,
     statements: [
-      { actions: spaceEnvironmentTemplateActions, roles: administratorRoles, on: Policy.everywhere },
-      { actions: spaceEnvironmentTemplateActions, roles: organizationRoles, on: spaceMember.name },
+      { actions: spaceEnvironmentTemplateActions, roles: Auth.administratorRoles, on: Policy.everywhere },
+      { actions: spaceEnvironmentTemplateActions, roles: Auth.Role.literals, on: spaceMember.name },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
-
-export const organization: Access.Resource = { relationships: [] }
 
 export const resource = (membershipId: Space.MembershipID | null, spaceId: Space.ID): Access.Resource => ({
   relationships: spaceMember.holds(membershipId) ? [spaceMember.name] : [],

@@ -9,7 +9,6 @@ import type { Actor } from "./actor.js"
 import { EgressControl } from "./egress-control.js"
 import { Envelope } from "./envelope.js"
 import { Primitive } from "./primitive.js"
-import { TaskPolicy } from "./task/policy.js"
 
 export interface Interface extends Omit<Primitive.Interface<typeof OAuthApp.definition>, "archive"> {
   readonly archive: (
@@ -63,7 +62,7 @@ export const layer = Layer.effect(
       access.isAllowed({
         actor,
         action: Primitive.action(OAuthApp.definition, operation),
-        resource: TaskPolicy.organization,
+        resource: Access.organization,
       })
         ? Effect.void
         : Effect.fail(new Primitive.Forbidden({ message: "You cannot change OAuth apps." }))

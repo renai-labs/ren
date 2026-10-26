@@ -8,7 +8,7 @@ import { Primitive } from "@ren/schema/primitive"
 import type { Access } from "../access.js"
 
 const statements = (actions: ReadonlyArray<string>, on: string) => [
-  { actions, roles: ["owner", "admin"] as const, on: Policy.everywhere },
+  { actions, roles: Auth.administratorRoles, on: Policy.everywhere },
   { actions, roles: Auth.Role.literals, on },
 ]
 

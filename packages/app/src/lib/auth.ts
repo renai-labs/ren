@@ -105,20 +105,22 @@ export function slugAvailabilityOptions(client: Client, slug: string) {
   })
 }
 
-const activeRoleKey = ["auth", "active-member-role"] as const
+const canAdministerKey = ["auth", "can-administer"] as const
 
-export function activeRoleOptions(client: Client) {
+// oxlint-disable-next-line ren/no-comments -- Better Auth's own organization access control (`OrganizationAccess` on the server) decides who administers the organization.
+export function canAdministerOptions(client: Client) {
   return queryOptions({
-    queryKey: activeRoleKey,
+    queryKey: canAdministerKey,
     queryFn: async (context) => {
-      const result = await client.organization.getActiveMemberRole({ fetchOptions: { signal: context.signal } })
-      assertSuccess(result, "Failed to load your role")
-      return result.data.role
+      const result = await client.organization.hasPermission({
+        permissions: { organization: ["update"] },
+        fetchOptions: { signal: context.signal },
+      })
+      assertSuccess(result, "Failed to load your permissions")
+      return result.data.success
     },
   })
 }
-
-export const isAdminRole = Auth.isAdministrator
 
 export const organizationSlug = Auth.organizationSlug
 
