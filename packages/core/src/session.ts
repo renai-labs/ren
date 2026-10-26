@@ -14,8 +14,8 @@ import { Actor } from "./actor.js"
 import { Brains } from "./brains.js"
 import { Models } from "./models.js"
 import { Primitive } from "./primitive.js"
+import { SessionPolicy } from "./session/policy.js"
 import { SessionRunner } from "./session/runner.js"
-import { SpacePolicy } from "./space/policy.js"
 import { SpaceQueries } from "./space/queries.js"
 import { OpenCodeStore } from "./session/opencode-store.js"
 import { TranscriptCodec } from "./transcript-codec.js"
@@ -137,9 +137,6 @@ const cutDataUrls = (message: SessionMessage.Info): SessionMessage.Info => {
   return Struct.evolve(message, { files: () => files.map((file) => Struct.evolve(file, { data: cut })) })
 }
 
-const spaceGet = Primitive.action(Space.definition, "get")
-const spaceUpdate = Primitive.action(Space.definition, "update")
-
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -175,7 +172,7 @@ export const layer = Layer.effect(
         eq(Database.Schema.space.organization_id, actor.organizationId),
         isNull(Database.Schema.space.archived_at),
         isNull(Database.Schema.agent_session.parent_id),
-        SpacePolicy.filter(access.plan(actor, spaceGet)),
+        SessionPolicy.filter(actor, access.plan(actor, SessionPolicy.actions.get)),
       )
 
     const find = Effect.fnUntraced(function* (
@@ -189,9 +186,9 @@ export const layer = Layer.effect(
     })
 
     const visibleSpace = Effect.fnUntraced(function* (actor: Actor.Info, spaceId: Space.ID) {
-      const space = yield* database.transaction((transaction) =>
+      const space = (yield* database.transaction((transaction) =>
         transaction
-          .select({ id: Database.Schema.space.id, membershipId: SpaceQueries.membership.id })
+          .select({ membershipId: SpaceQueries.membership.id })
           .from(Database.Schema.space)
           .leftJoin(SpaceQueries.membership, SpaceQueries.membershipOf(actor))
           .where(
@@ -199,11 +196,18 @@ export const layer = Layer.effect(
               eq(Database.Schema.space.id, spaceId),
               eq(Database.Schema.space.organization_id, actor.organizationId),
               isNull(Database.Schema.space.archived_at),
-              SpacePolicy.filter(access.plan(actor, spaceGet)),
             ),
           ),
+      )).at(0)
+      if (
+        !space ||
+        !access.isAllowed({
+          actor,
+          action: SessionPolicy.actions.create,
+          resource: SessionPolicy.resource({ membershipId: space.membershipId }, actor, spaceId),
+        })
       )
-      if (space.length === 0) return yield* spaceNotFound
+        return yield* spaceNotFound
     })
 
     const read = (actor: Actor.Info, id: Session.ID) =>
@@ -256,6 +260,8 @@ export const layer = Layer.effect(
 
     return Service.of({
       list: Effect.fn("Session.list")(function* (actor: Actor.Info, input: Session.ListInput) {
+        if (!access.isAllowed({ actor, action: SessionPolicy.actions.list, resource: SessionPolicy.organization }))
+          return { items: [], page: input.page, pageSize: input.pageSize, total: 0 }
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const where = and(
@@ -347,9 +353,18 @@ export const layer = Layer.effect(
         return yield* database.transaction((transaction) =>
           Effect.gen(function* () {
             const row = yield* find(transaction, actor, eq(Database.Schema.agent_session.id, id))
-            const isAdmin = access.plan(actor, spaceUpdate).isAllowedEverywhere
-            if (row.session.created_by !== actor.userId && !isAdmin)
-              return yield* new Primitive.Forbidden({ message: "Only the person who started a chat can archive it." })
+            if (
+              !access.isAllowed({
+                actor,
+                action: SessionPolicy.actions.archive,
+                resource: SessionPolicy.resource(
+                  { membershipId: row.membershipId, createdBy: row.session.created_by },
+                  actor,
+                  row.session.space_id,
+                ),
+              })
+            )
+              return yield* new Primitive.Forbidden({ message: "You cannot archive this chat." })
             if (row.session.archived_at) return toInfo(row)
             yield* transaction
               .update(Database.Schema.agent_session)

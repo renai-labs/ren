@@ -13,6 +13,7 @@ export const relationships = {
   person: "credential.person",
   self: "credential.self",
   profile: "credential.profile",
+  accountHolder: "credential.accountHolder",
 } as const
 
 const read = Primitive.actions(Credential.definition, ["list", "get"])
@@ -21,13 +22,16 @@ const write = Primitive.actions(Credential.definition, ["create", "update", "rot
 
 const remove = Primitive.actions(Credential.definition, ["remove"])
 
-export const actions = { deliver: `${Credential.definition.name}.deliver` } as const
+export const actions = {
+  deliver: `${Credential.definition.name}.deliver`,
+  moveAccount: `${Credential.definition.name}.moveAccount`,
+} as const
 
 const every = SpacePolicy.organizationRoles
 
 const admins = SpacePolicy.administratorRoles
 
-// oxlint-disable-next-line ren/no-comments -- owner-access §4. A profile's credentials follow who sees the profile (profiles.md §10), which `Credentials` checks before this statement applies. An admin sees a person's credential and may delete it, never use, move or copy it. Only admins choose delivered for an org credential. "Only the account holder moves an account credential" is checked in `Credentials.move`, because a statement cannot name the holder.
+// oxlint-disable-next-line ren/no-comments -- owner-access §4. A profile's credentials follow who sees the profile (profiles.md §10), which `Credentials` checks before this statement applies. An admin sees a person's credential and may delete it, never use, move or copy it. Only admins choose delivered for an org credential. Only its holder moves an account credential (moveAccount, on top of move).
 export const documents = [
   {
     primitive: Credential.definition.name,
@@ -39,6 +43,7 @@ export const documents = [
       { actions: [...read, ...write, actions.deliver], roles: every, on: relationships.self },
       { actions: [...read, ...remove], roles: admins, on: relationships.person },
       { actions: [...read, ...write, actions.deliver], roles: every, on: relationships.profile },
+      { actions: [actions.moveAccount], roles: every, on: relationships.accountHolder },
     ],
   },
 ] satisfies ReadonlyArray<typeof Policy.Document.Encoded>
@@ -56,3 +61,7 @@ export const resource = (
   if (owner.kind === "profile") return { relationships: [relationships.profile] }
   return { relationships: [owner.userId === context.userId ? relationships.self : relationships.person] }
 }
+
+export const account = (holds: { readonly isHolder: boolean }): Access.Resource => ({
+  relationships: holds.isHolder ? [relationships.accountHolder] : [],
+})
