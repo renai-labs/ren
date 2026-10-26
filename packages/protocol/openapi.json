@@ -10148,7 +10148,7 @@
       },
       "Auth.SignInProvider": {
         "type": "string",
-        "enum": ["google", "github"]
+        "enum": ["google", "github", "slack"]
       },
       "Auth.SignInProviders": {
         "type": "object",
