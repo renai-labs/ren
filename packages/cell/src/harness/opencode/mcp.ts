@@ -2,11 +2,13 @@ export * as OpenCodeMcp from "./mcp.js"
 
 import type { Plugin } from "@opencode/plugin/effect"
 import { Mcp } from "@opencode/schema/mcp"
+import { BrainToken } from "@ren/host-api/brain-token"
 import { HostMcp } from "@ren/host-api/host-mcp"
 import type { AppCatalog } from "@ren/schema/app-catalog"
 import type { Channel } from "@ren/schema/channel"
 import { Credential } from "@ren/schema/credential"
-import { Duration, Effect, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
+import { Clock, Duration, Effect, FiberHandle, Option, Ref, Schedule, Semaphore } from "effect"
+import { HostToken } from "../../host-token.js"
 import { OpenCodeChat } from "./chat.js"
 import type { OpenCodeExecution } from "./execution.js"
 
@@ -168,10 +170,21 @@ export const make = Effect.fnUntraced(function* (input: {
   const latest = yield* Ref.make(input.apps)
   const channels = yield* Ref.make(input.channels)
   const sender = yield* Ref.make(Option.none<string>())
+  const presented = yield* Ref.make(Option.none<string>())
+  const tokenOf = (ren: Ren) =>
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis
+      const kept = Option.filter(yield* Ref.get(presented), (token) =>
+        Option.exists(BrainToken.expiry(token), (exp) => exp * 1000 - now > Duration.toMillis(HostToken.refreshBefore)),
+      )
+      const token = Option.isSome(kept) ? kept : yield* ren.token
+      yield* Ref.set(presented, token)
+      return token
+    })
   const renServers = Effect.gen(function* () {
     if (Option.isNone(input.ren)) return []
     const address = yield* input.ren.value.address
-    const token = yield* input.ren.value.token
+    const token = yield* tokenOf(input.ren.value)
     if (Option.isNone(address) || Option.isNone(token)) return []
     const user = yield* Ref.get(sender)
     const headers = {

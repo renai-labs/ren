@@ -7,6 +7,7 @@ import type { Channel } from "@ren/schema/channel"
 // ast-grep-ignore: no-import-alias -- OpenCode's Session is imported too, and both are values
 import { Session as RenSession } from "@ren/schema/session"
 import { Effect, Layer, Option, Ref } from "effect"
+import { Base64Url } from "effect/encoding"
 import { HttpServer } from "effect/http"
 import { mkdir, mkdtemp, realpath } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -132,15 +133,32 @@ it.live("a prompt from another member calls Ren as that member; a prompt with no
   }),
 )
 
-it.live("a new host token reaches Ren at the next prompt", () =>
+const expiring = (name: string, minutes: number) =>
+  `head.${Base64Url.encode(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + minutes * 60 }))}.${name}`
+
+it.live("a new host token reaches Ren at the next prompt once the token in use is near its expiry", () =>
   Effect.gen(function* () {
-    const ren = yield* renAt()
+    const ren = yield* renAt(expiring("aging", 30))
     const opened = yield* open(Option.some(ren.ren))
     const sessionId = yield* opened.chat()
     yield* opened.call(sessionId, Option.some("usr_ada"))
-    yield* Ref.set(ren.current, Option.some("host-2"))
+    const replacement = expiring("replacement", 120)
+    yield* Ref.set(ren.current, Option.some(replacement))
     yield* opened.call(sessionId, Option.some("usr_ada"))
-    expect(ren.last(sessionId)?.get("authorization")).toBe("Bearer host-2")
+    expect(ren.last(sessionId)?.get("authorization")).toBe(`Bearer ${replacement}`)
+  }),
+)
+
+it.live("a newer host token leaves the Ren and channel servers connected while the token they use is valid", () =>
+  Effect.gen(function* () {
+    const fresh = expiring("fresh", 120)
+    const ren = yield* renAt(fresh)
+    const opened = yield* open(Option.some(ren.ren))
+    const sessionId = yield* opened.chat()
+    yield* opened.call(sessionId, Option.some("usr_ada"))
+    yield* Ref.set(ren.current, Option.some(expiring("newer", 121)))
+    yield* opened.call(sessionId, Option.some("usr_ada"))
+    expect(ren.last(sessionId)?.get("authorization")).toBe(`Bearer ${fresh}`)
   }),
 )
 
