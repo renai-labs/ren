@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test"
 import { ChannelProvider } from "@ren/core/channel-provider"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { Routes } from "../src/routes.js"
 import { call, makeApp, sessionCookie, signUp } from "./lib/app.js"
 
@@ -14,6 +14,7 @@ const echo = Effect.succeedSome<ChannelProvider.Provider>({
   parse: (request) => Effect.succeed({ _tag: "Handshake", body: { raw: request.body } }),
   fetchFile: () => Effect.fail(new ChannelProvider.FileUnavailable({ message: "no files" })),
   context: () => Effect.succeedNone,
+  linkOf: () => Option.none(),
   send: () => Effect.void,
   progress: () => Effect.void,
   email: () => Effect.succeedNone,

@@ -11,6 +11,9 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 export const GithubPullRequest: Story = {}
+export const GithubIssue: Story = {
+  args: { link: { kind: "github_issue", url: "https://github.com/renai-labs/ren/issues/517" } },
+}
 export const LinearIssue: Story = {
   args: { link: { kind: "linear_issue", url: "https://linear.app/renai/issue/REN-1442/tasks" } },
 }

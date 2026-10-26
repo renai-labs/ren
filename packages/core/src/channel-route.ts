@@ -4,12 +4,16 @@ import { Database } from "@ren/db/database"
 import type { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import type { Channel } from "@ren/schema/channel"
+import type { Session } from "@ren/schema/session"
 import type { Space } from "@ren/schema/space"
+import type { Task } from "@ren/schema/task"
 import { and, asc, eq, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { ChannelIdentity } from "./channel-identity.js"
+import { ChannelProvider } from "./channel-provider.js"
 import { AgentQueries } from "./agent/queries.js"
 import { SpaceQueries } from "./space/queries.js"
+import { TaskQueries } from "./task/queries.js"
 
 export class Refused extends Schema.TaggedError<Refused>()("ChannelRoute.Refused", {
   reason: Schema.Literals(["unlinked", "not_member", "fallback_gone"]),
@@ -29,6 +33,16 @@ export interface Route {
   readonly agentId?: Agent.ID
   readonly senderUserId: Auth.UserID
   readonly text: string
+  readonly task?:
+    | {
+        readonly id: Task.ID
+        readonly agentId: Agent.ID
+        readonly isGlobal: boolean
+        readonly title: string
+        readonly description: string | null
+        readonly sessionId?: Session.ID
+      }
+    | undefined
 }
 
 export interface Interface {
@@ -42,6 +56,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const identity = yield* ChannelIdentity.Service
+    const registry = yield* ChannelProvider.Registry
     const install = Database.Schema.channel_install
     const mapping = Database.Schema.channel_mapping
     const space = Database.Schema.space
@@ -62,6 +77,33 @@ export const layer = Layer.effect(
         return routed.fallbackUserId
       return yield* new Refused({ reason: "fallback_gone" })
     })
+
+    const taskOf = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID, event: Channel.Event) {
+      const link = Option.flatMap(registry.get(event.provider), (provider) => provider.linkOf(event))
+      if (event.trigger || Option.isNone(link)) return
+      return Option.getOrUndefined(
+        yield* database.transaction((transaction) => TaskQueries.openByLink(transaction, organizationId, link.value)),
+      )
+    })
+
+    const defaultSpace = (found: {
+      readonly organizationId: Auth.OrganizationID
+      readonly defaultSpaceId: Space.ID | null
+    }) =>
+      database.db
+        .select({ spaceId: space.id })
+        .from(space)
+        .where(and(eq(space.organization_id, found.organizationId), isNull(space.archived_at)))
+        .orderBy(
+          sql`case when ${space.id} = ${found.defaultSpaceId} then 0 else 1 end`,
+          asc(space.created_at),
+          asc(space.id),
+        )
+        .limit(1)
+        .pipe(
+          Effect.orDie,
+          Effect.map((rows) => rows.map((row) => ({ spaceId: row.spaceId, agentId: null })).at(0)),
+        )
 
     return Service.of({
       resolve: Effect.fn("ChannelRoute.resolve")(function* (event: Channel.Event) {
@@ -95,30 +137,18 @@ export const layer = Layer.effect(
           return yield* new NotTriggered({
             message: `${event.provider} place ${event.place.id} has no mapping with the trigger ${event.trigger}`,
           })
-        const unmapped = mapped
-          ? undefined
-          : (yield* database.db
-              .select({ id: space.id })
-              .from(space)
-              .where(and(eq(space.organization_id, found.organizationId), isNull(space.archived_at)))
-              .orderBy(
-                sql`case when ${space.id} = ${found.defaultSpaceId} then 0 else 1 end`,
-                asc(space.created_at),
-                asc(space.id),
-              )
-              .limit(1)
-              .pipe(Effect.orDie)).at(0)
-        const routed =
-          mapped ??
-          (unmapped && { spaceId: unmapped.id, agentId: null, fallback: true, fallbackUserId: found.installedBy })
-        if (!routed)
+        const task = yield* taskOf(found.organizationId, event)
+        const place = task ?? mapped ?? (yield* defaultSpace(found))
+        if (!place)
           return yield* new Unroutable({ message: `Organization ${found.organizationId} has no active space` })
+        const routed = { ...(mapped ?? { fallback: !task, fallbackUserId: found.installedBy }), ...place }
         return {
           organizationId: found.organizationId,
           spaceId: routed.spaceId,
           ...(routed.agentId && { agentId: routed.agentId }),
           senderUserId: yield* runAs(found.organizationId, routed, event),
           text: trigger?.prompt ?? event.text,
+          task,
         } satisfies Route
       }),
     })

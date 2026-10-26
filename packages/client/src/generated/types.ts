@@ -158,7 +158,7 @@ export type LabelID = string
 
 export type TaskLinkID = string
 
-export type TaskLinkKind = "github_pr" | "linear_issue" | "slack_thread" | "url"
+export type TaskLinkKind = "github_pr" | "github_issue" | "linear_issue" | "slack_thread" | "url"
 
 export type TaskCommentID = string
 
@@ -167,6 +167,8 @@ export type TaskEventID = string
 export type TaskEventCreated = { _tag: "created" }
 
 export type TaskStartMode = "new" | "continue"
+
+export type TaskEventAutomation = { provider: "github"; cause: "pull_request_merged"; url: string }
 
 export type TaskEventReviewRequested = { _tag: "review_requested"; reason: string }
 
@@ -499,8 +501,6 @@ export type TaskParent = { id: TaskID; identifier: string; title: string }
 
 export type TaskEventParentChanged = { _tag: "parent"; from: TaskID | null; to: TaskID | null }
 
-export type TaskEventStatusChanged = { _tag: "status"; from: TaskStatus; to: TaskStatus }
-
 export type TaskAgentSession = { id: SessionID; state: TaskSessionState }
 
 export type LabelSummary = { id: LabelID; name: string; color: string | null; isSystem: boolean }
@@ -519,6 +519,13 @@ export type LabelInfo = {
 export type TaskLinkInfo = { id: TaskLinkID; kind: TaskLinkKind; url: string }
 
 export type TaskEventStarted = { _tag: "started"; agentId: AgentID; sessionId: SessionID; mode: TaskStartMode }
+
+export type TaskEventStatusChanged = {
+  _tag: "status"
+  from: TaskStatus
+  to: TaskStatus
+  automation?: TaskEventAutomation
+}
 
 export type TaskEventReviewed = { _tag: "reviewed"; decision: TaskDecision; comment: string | null }
 

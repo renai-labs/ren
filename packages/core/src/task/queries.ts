@@ -5,9 +5,10 @@ import type { Agent } from "@ren/schema/agent"
 import type { Auth } from "@ren/schema/auth"
 import type { Space } from "@ren/schema/space"
 import { Task } from "@ren/schema/task"
-import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm"
+import type { TaskLink } from "@ren/schema/task-link"
+import { and, asc, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
-import { DateTime, Effect } from "effect"
+import { DateTime, Effect, Option } from "effect"
 import type { Access } from "../access.js"
 import type { Actor } from "../actor.js"
 import { AgentQueries } from "../agent/queries.js"
@@ -154,6 +155,57 @@ export const latestSessions = (transaction: Database.Transaction, taskIds: Reado
     )
 
 type Latest = Effect.Success<ReturnType<typeof latestSessions>>[number]
+
+export const linking = (organizationId: Auth.OrganizationID, ref: TaskLink.Ref) =>
+  and(
+    eq(Database.Schema.task.organization_id, organizationId),
+    isNull(Database.Schema.task.archived_at),
+    inArray(Database.Schema.task.status, Task.actionable),
+    sql`exists (
+      select 1 from ${Database.Schema.task_link}
+      where ${Database.Schema.task_link.task_id} = ${Database.Schema.task.id}
+        and ${Database.Schema.task_link.kind} = ${ref.kind}
+        and ${Database.Schema.task_link.key} = ${ref.key}
+    )`,
+  )
+
+export const openByLink = Effect.fnUntraced(function* (
+  transaction: Database.Transaction,
+  organizationId: Auth.OrganizationID,
+  ref: TaskLink.Ref,
+) {
+  const found = yield* transaction
+    .select({
+      id: Database.Schema.task.id,
+      spaceId: Database.Schema.task.space_id,
+      agentId: Database.Schema.task.agent_id,
+      title: Database.Schema.task.title,
+      description: Database.Schema.task.description,
+    })
+    .from(Database.Schema.task)
+    .innerJoin(
+      Database.Schema.space,
+      and(eq(Database.Schema.space.id, Database.Schema.task.space_id), isNull(Database.Schema.space.archived_at)),
+    )
+    .where(and(linking(organizationId, ref), isNotNull(Database.Schema.task.agent_id)))
+    .limit(2)
+  const task = found.length === 1 ? found.at(0) : undefined
+  if (!task?.agentId) return Option.none()
+  const agent = (yield* transaction
+    .select({ id: Database.Schema.agent.id, organizationId: Database.Schema.agent.organization_id })
+    .from(Database.Schema.agent)
+    .where(and(eq(Database.Schema.agent.id, task.agentId), AgentQueries.isUsableIn(task.spaceId, organizationId)))).at(
+    0,
+  )
+  if (!agent) return Option.none()
+  const session = (yield* latestSessions(transaction, [task.id])).at(0)
+  return Option.some({
+    ...task,
+    agentId: agent.id,
+    isGlobal: !agent.organizationId,
+    ...(session && { sessionId: session.id }),
+  })
+})
 
 const stateOf = (session: Latest): Task.SessionState => {
   if (session.suspended || !session.synced) return "working"

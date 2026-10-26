@@ -4,7 +4,7 @@ import { Database } from "@ren/db/database"
 import type { Agent } from "@ren/schema/agent"
 import { Channel } from "@ren/schema/channel"
 import { Session } from "@ren/schema/session"
-import { and, eq } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Result, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 import { BrainHost } from "./brain-host.js"
@@ -14,6 +14,8 @@ import { ChannelProvider } from "./channel-provider.js"
 import { ChannelRoute } from "./channel-route.js"
 import { DurableRunner } from "./durable-runner.js"
 import { SessionRunner } from "./session/runner.js"
+import { Task } from "./task.js"
+import { TaskTrail } from "./task/trail.js"
 
 export interface Reply {
   readonly status: 200 | 400 | 401 | 404 | 500
@@ -34,8 +36,10 @@ export const EventRun = DurableRunner.make("ChannelEvent", {
 class Stopped extends Schema.TaggedError<Stopped>()("Channels.Stopped", {
   reason: Channel.FailureReason,
   message: Schema.String,
-  sessionId: Session.ID,
+  sessionId: Schema.optionalKey(Session.ID),
 }) {}
+
+type Message = Omit<Session.SendInput, "sessionId" | "delivery">
 
 const filesAtOnce = 4
 
@@ -54,7 +58,9 @@ export const layer = Layer.effect(
     const runner = yield* SessionRunner.Service
     const brainHost = yield* BrainHost.Service
     const engine = yield* WorkflowEngine.WorkflowEngine
+    const tasks = yield* Task.Service
     const thread = Database.Schema.channel_thread
+    const install = Database.Schema.channel_install
 
     const prompt = Effect.fnUntraced(function* (provider: ChannelProvider.Provider, event: Channel.Event) {
       const fetched = yield* Effect.forEach(
@@ -163,6 +169,119 @@ export const layer = Layer.effect(
         ),
       )
 
+    const routeTask = Effect.fn("Channels.routeTask")(function* (
+      task: NonNullable<ChannelRoute.Route["task"]>,
+      route: ChannelRoute.Route,
+      event: Channel.Event,
+      message: Message,
+      newSessionId: Session.ID,
+    ) {
+      yield* Effect.annotateCurrentSpan("taskId", task.id)
+      const handoff = (error: { readonly message: string }) =>
+        new Stopped({ reason: "task_handoff", message: `Task ${task.id}: ${error.message}` })
+      const sessionId = task.sessionId ?? newSessionId
+      const initial = task.sessionId
+        ? message
+        : {
+            ...message,
+            prompt: {
+              ...message.prompt,
+              text: [
+                message.prompt.text,
+                `<task_context task_id=${JSON.stringify(task.id)} note="This message reached you through the task it is linked to, in a new session. Work it as that task: use task_get for the full record and its activity trail, and do not create another task for it.">`,
+                `Task ${task.id}: ${task.title}`,
+                task.description,
+                "</task_context>",
+              ]
+                .filter(Boolean)
+                .join("\n\n"),
+            },
+          }
+      yield* database.db
+        .insert(thread)
+        .values({
+          id: Channel.ThreadID.create(),
+          organization_id: route.organizationId,
+          provider: event.provider,
+          install: event.install,
+          thread: event.thread.id,
+          session_id: sessionId,
+          url: event.thread.url ?? null,
+          place_name: event.place.name ?? event.place.id,
+          last_message: event.message,
+          last_message_at: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [thread.provider, thread.install, thread.thread],
+          set: {
+            session_id: sessionId,
+            last_reply_at: sql`case when ${thread.session_id} = ${sessionId} then ${thread.last_reply_at} end`,
+            place_name: event.place.name ?? event.place.id,
+            last_message: event.message,
+            last_message_at: new Date(),
+            updated_at: new Date(),
+          },
+        })
+        .pipe(Effect.orDie)
+      const deliver = send({ ...initial, sessionId, delivery: "steer" })
+      yield* (
+        task.sessionId
+          ? deliver
+          : runner
+              .create(
+                { organizationId: route.organizationId, spaceId: route.spaceId, createdBy: route.senderUserId },
+                { sessionId, harness: "opencode", interactive: false, initialMessage: initial },
+                task.isGlobal ? {} : { agentId: task.agentId },
+              )
+              .pipe(
+                Effect.catchTags({
+                  "SessionRunner.AlreadyExists": () => deliver,
+                  "SessionRunner.NotFound": (error) => Effect.fail(handoff(error)),
+                  BrainRejectedError: (error) => Effect.fail(handoff(error)),
+                }),
+              )
+      ).pipe(
+        Effect.catchTag("Channels.Stopped", (error) =>
+          Effect.fail(error.reason === "unknown" ? handoff(error) : error),
+        ),
+      )
+      if (task.sessionId) return
+      yield* database.transaction((transaction) =>
+        Effect.gen(function* () {
+          const inserted = yield* transaction
+            .insert(Database.Schema.task_session)
+            .values({ task_id: task.id, session_id: sessionId, agent_id: task.agentId })
+            .onConflictDoNothing()
+            .returning({ id: Database.Schema.task_session.session_id })
+          if (inserted.length === 0) return
+          yield* TaskTrail.record(
+            transaction,
+            { id: task.id, organizationId: route.organizationId },
+            { userId: route.senderUserId, organizationId: route.organizationId, roles: [] },
+            [{ _tag: "started", agentId: task.agentId, sessionId, mode: "new" }],
+          )
+        }),
+      )
+    })
+
+    const signal = (provider: Channel.Provider, received: Channel.Signal) =>
+      Effect.gen(function* () {
+        const installed = (yield* database.db
+          .select({ organizationId: install.organization_id })
+          .from(install)
+          .where(and(eq(install.provider, provider), eq(install.workspace, received.install)))).at(0)
+        if (!installed) return yield* Effect.logWarning(`A ${provider} signal names no install: ${received.install}`)
+        const done = yield* tasks.completeMerged(installed.organizationId, received.link, received.url)
+        yield* Effect.logInfo(`${received.url} merged; ${done.length} tasks are done`)
+      }).pipe(
+        Effect.as({ status: 200 } satisfies Reply),
+        Effect.catchCause((cause) =>
+          Effect.logError(`A ${provider} signal could not be handled`, cause).pipe(
+            Effect.as({ status: 500 } satisfies Reply),
+          ),
+        ),
+      )
+
     const targetOf = (event: Channel.Event): ChannelProvider.Target => ({
       install: event.install,
       place: event.place.name ?? event.place.id,
@@ -189,6 +308,52 @@ export const layer = Layer.effect(
         ],
         { discard: true },
       )
+
+    const routeThread = Effect.fnUntraced(function* (
+      route: ChannelRoute.Route,
+      event: Channel.Event,
+      message: Message,
+      sessionId: Session.ID,
+    ) {
+      const claimed = yield* claim(route, event, sessionId)
+      yield* database.db
+        .update(thread)
+        .set({
+          place_name: event.place.name ?? event.place.id,
+          last_message: event.message,
+          last_message_at: new Date(),
+          updated_at: new Date(),
+        })
+        .where(eq(thread.id, claimed.id))
+        .pipe(Effect.orDie)
+      const sendToThread = send({ ...message, sessionId: claimed.sessionId, delivery: "steer" })
+      if (claimed.created) return yield* sendToThread
+      const create = (options: { readonly agentId?: Agent.ID }) =>
+        runner.create(
+          { organizationId: route.organizationId, spaceId: route.spaceId, createdBy: route.senderUserId },
+          { sessionId: claimed.sessionId, harness: "opencode", interactive: false, initialMessage: message },
+          options,
+        )
+      const agentId = route.agentId
+      return yield* (
+        agentId
+          ? create({ agentId }).pipe(
+              Effect.catchTag("SessionRunner.NotFound", () =>
+                Effect.logWarning(`Agent ${agentId} is gone; the channel session runs ren`).pipe(
+                  Effect.andThen(create({})),
+                ),
+              ),
+            )
+          : create({})
+      ).pipe(
+        Effect.catchTags({
+          "SessionRunner.AlreadyExists": () => sendToThread,
+          "SessionRunner.NotFound": Effect.die,
+          BrainRejectedError: (error) =>
+            Effect.fail(new Stopped({ reason: "unknown", message: error.message, sessionId: claimed.sessionId })),
+        }),
+      )
+    })
 
     const run = Effect.fnUntraced(function* (payload: typeof EventRun.payloadSchema.Type) {
       const event = payload.event
@@ -217,44 +382,8 @@ export const layer = Layer.effect(
           ...(trigger && { trigger: trigger.title }),
         },
       }
-      const claimed = yield* claim(route, event, payload.sessionId)
-      yield* database.db
-        .update(thread)
-        .set({
-          place_name: event.place.name ?? event.place.id,
-          last_message: event.message,
-          last_message_at: new Date(),
-          updated_at: new Date(),
-        })
-        .where(eq(thread.id, claimed.id))
-        .pipe(Effect.orDie)
-      const sendToThread = send({ ...message, sessionId: claimed.sessionId, delivery: "steer" })
-      if (claimed.created) return yield* sendToThread
-      const create = (options: { readonly agentId?: Agent.ID }) =>
-        runner.create(
-          { organizationId: route.organizationId, spaceId: route.spaceId, createdBy: route.senderUserId },
-          { sessionId: claimed.sessionId, harness: "opencode", interactive: false, initialMessage: message },
-          options,
-        )
-      const agentId = route.agentId
-      yield* (
-        agentId
-          ? create({ agentId }).pipe(
-              Effect.catchTag("SessionRunner.NotFound", () =>
-                Effect.logWarning(`Agent ${agentId} is gone; the channel session runs ren`).pipe(
-                  Effect.andThen(create({})),
-                ),
-              ),
-            )
-          : create({})
-      ).pipe(
-        Effect.catchTags({
-          "SessionRunner.AlreadyExists": () => sendToThread,
-          "SessionRunner.NotFound": Effect.die,
-          BrainRejectedError: (error) =>
-            Effect.fail(new Stopped({ reason: "unknown", message: error.message, sessionId: claimed.sessionId })),
-        }),
-      )
+      if (route.task) return yield* routeTask(route.task, route, event, message, payload.sessionId)
+      yield* routeThread(route, event, message, payload.sessionId)
     })
 
     yield* DurableRunner.register(EventRun, (payload) =>
@@ -301,6 +430,7 @@ export const layer = Layer.effect(
           yield* Effect.logDebug(`A ${id} delivery is ignored: ${value.reason}`)
           return { status: 200 } satisfies Reply
         }
+        if (value._tag === "Signal") return yield* signal(found.value.id, value.signal)
         return yield* DurableRunner.ensure(EventRun, {
           event: value.event,
           messageId: Session.MessageID.create(),

@@ -207,6 +207,57 @@ describe("GitHub", () => {
       }),
   )
 
+  app.live("a merged pull request is a signal for the tasks that link it, also from a bot; a close is ignored", () =>
+    Effect.gen(function* () {
+      const provider = GitHub.make(yield* client)
+      const closed = (input: { readonly merged: boolean; readonly sender?: object }) =>
+        provider.parse(
+          request(
+            "pull_request",
+            JSON.stringify({
+              action: "closed",
+              installation: { id: 77 },
+              sender: input.sender ?? octocat,
+              repository: { id: 8812, full_name: "Acme/API" },
+              pull_request: {
+                number: 41,
+                html_url: "https://github.com/Acme/API/pull/41",
+                merged: input.merged,
+                user: { id: 1, login: "hubot", type: "User" },
+              },
+            }),
+          ),
+        )
+      const signal = {
+        _tag: "Signal",
+        signal: {
+          kind: "pull_request_merged",
+          install: "77",
+          link: { kind: "github_pr", key: "acme/api#41" },
+          url: "https://github.com/Acme/API/pull/41",
+        },
+      } as const
+      expect(yield* closed({ merged: true })).toEqual(signal)
+      expect(
+        yield* closed({ merged: true, sender: { id: 41898282, login: "github-actions[bot]", type: "Bot" } }),
+      ).toEqual(signal)
+      expect((yield* closed({ merged: false }))._tag).toBe("Ignore")
+    }),
+  )
+
+  app.live("the link of a thread is its pull request or issue", () =>
+    Effect.gen(function* () {
+      const provider = GitHub.make(yield* client)
+      const parsed = yield* provider.parse(commented("issue_comment"))
+      if (parsed._tag !== "Event") return yield* Effect.die(new Error("The mention did not parse"))
+      expect(provider.linkOf(parsed.event)).toEqual(Option.some({ kind: "github_issue", key: "acme/api#12" }))
+      expect(
+        provider.linkOf({ ...parsed.event, thread: { id: "8812:41", url: "https://github.com/acme/api/pull/41" } }),
+      ).toEqual(Option.some({ kind: "github_pr", key: "acme/api#41" }))
+      expect(provider.linkOf({ ...parsed.event, thread: { id: "8812:41" } })).toEqual(Option.none())
+    }),
+  )
+
   app.live("the context names the issue or pull request, its state and branches, and the triggering comment", () =>
     Effect.gen(function* () {
       const provider = GitHub.make(yield* client)

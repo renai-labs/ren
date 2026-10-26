@@ -27,6 +27,7 @@ const textOf = (notice: Notice, app: string) => {
     brain_failed: `I couldn’t start working on your message. Please try again. ${open}`,
     model_busy: `I’m temporarily unable to respond. Please try again in a minute. ${open}`,
     context_too_long: `This conversation is too long to continue. Please start a new thread. ${open}`,
+    task_handoff: "Couldn’t hand this message to the task’s agent. Try again in a moment.",
     unknown: `Something went wrong while I was working on your message. Please try again. ${open}`,
   }
   return texts[notice.reason]

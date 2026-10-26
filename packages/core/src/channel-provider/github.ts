@@ -1,6 +1,7 @@
 export * as GitHub from "./github.js"
 
 import type { Channel } from "@ren/schema/channel"
+import { TaskLink } from "@ren/schema/task-link"
 import { Clock, Effect, Option, Redacted, Schema } from "effect"
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { ChannelProvider } from "../channel-provider.js"
@@ -35,6 +36,7 @@ const PullRequestEvent = Schema.Struct({
     number: Schema.Number,
     html_url: Schema.String,
     draft: Schema.optionalKey(Schema.Boolean),
+    merged: Schema.optionalKey(Schema.Boolean),
     user: Account,
   }),
 })
@@ -166,8 +168,16 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       },
     }
   }
+  const fromMerge = (body: typeof PullRequestEvent.Type): Channel.Parsed => {
+    const url = webUrl(body.pull_request.html_url)
+    const link = url ? TaskLink.classify(url) : undefined
+    return url && link?.kind === "github_pr"
+      ? { _tag: "Signal", signal: { kind: "pull_request_merged", install: String(body.installation.id), link, url } }
+      : ignore(`GitHub pull_request.closed names no pull request on ${web.host}`)
+  }
   const fromPullRequest = (delivery: string, body: typeof PullRequestEvent.Type): Channel.Parsed => {
     const pull = body.pull_request
+    if (body.action === "closed" && pull.merged) return fromMerge(body)
     if (!(body.action === "ready_for_review" || (body.action === "opened" && !pull.draft)))
       return ignore(`GitHub pull_request.${body.action}${pull.draft ? " of a draft" : ""} is not handled`)
     if (body.sender.type === "Bot" || String(body.sender.id) === app.settings.botUserId)
@@ -222,6 +232,11 @@ export const make = (app: GitHubApp.Client): ChannelProvider.Provider => {
       )
     }),
     fetchFile: () => Effect.fail(new ChannelProvider.FileUnavailable({ message: "GitHub events carry no files" })),
+    linkOf: (event) =>
+      Option.fromNullishOr(event.thread.url).pipe(
+        Option.map(TaskLink.classify),
+        Option.filter((link) => link.kind === "github_pr" || link.kind === "github_issue"),
+      ),
     context: Effect.fn("GitHub.context")(
       function* (event) {
         const repository = (event.place.name ?? "").split("/").map(encodeURIComponent).join("/")

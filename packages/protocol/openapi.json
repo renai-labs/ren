@@ -16307,6 +16307,25 @@
         ],
         "additionalProperties": false
       },
+      "TaskEvent.Automation": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["github"]
+          },
+          "cause": {
+            "type": "string",
+            "enum": ["pull_request_merged"]
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["provider", "cause", "url"],
+        "additionalProperties": false,
+        "description": "The outside event that changed the status, with no person or agent acting."
+      },
       "TaskEvent.Created": {
         "type": "object",
         "properties": {
@@ -16568,6 +16587,9 @@
           },
           "to": {
             "$ref": "#/components/schemas/Task.Status"
+          },
+          "automation": {
+            "$ref": "#/components/schemas/TaskEvent.Automation"
           }
         },
         "required": ["_tag", "from", "to"],
@@ -16595,7 +16617,7 @@
       },
       "TaskLink.Kind": {
         "type": "string",
-        "enum": ["github_pr", "linear_issue", "slack_thread", "url"]
+        "enum": ["github_pr", "github_issue", "linear_issue", "slack_thread", "url"]
       },
       "TaskLink.Url": {
         "type": "string",

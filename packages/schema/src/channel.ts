@@ -4,6 +4,7 @@ import { Schema } from "effect"
 import { Agent } from "./agent.js"
 import { ChannelOrigin } from "./channel-origin.js"
 import { Identifier } from "./identifier.js"
+import { TaskLink } from "./task-link.js"
 
 export const Provider = ChannelOrigin.Provider
 export type Provider = ChannelOrigin.Provider
@@ -72,11 +73,23 @@ export const Event = Schema.Struct({
   }),
 }).annotate({ identifier: "Channel.Event" })
 
+export interface Signal extends Schema.Schema.Type<typeof Signal> {}
+export const Signal = Schema.Struct({
+  kind: Schema.Literal("pull_request_merged"),
+  install: Schema.NonEmptyString,
+  link: Schema.Struct({
+    kind: TaskLink.Kind,
+    key: Schema.String.annotate({ description: "The canonical key of the linked item, such as acme/web#41." }),
+  }),
+  url: Schema.String,
+}).annotate({ identifier: "Channel.Signal", description: "A provider event that changes tasks and starts no turn." })
+
 export const Parsed = Schema.Union([
   Schema.TaggedStruct("Handshake", { body: Schema.Json }),
   Schema.TaggedStruct("Ignore", { reason: Schema.String }),
   Schema.TaggedStruct("Event", { event: Event }),
   Schema.TaggedStruct("Uninstalled", { install: Schema.NonEmptyString }),
+  Schema.TaggedStruct("Signal", { signal: Signal }),
 ]).annotate({ identifier: "Channel.Parsed" })
 export type Parsed = typeof Parsed.Type
 
@@ -98,6 +111,7 @@ export const FailureReason = Schema.Literals([
   "brain_failed",
   "model_busy",
   "context_too_long",
+  "task_handoff",
   "unknown",
 ]).annotate({ identifier: "Channel.FailureReason" })
 export type FailureReason = typeof FailureReason.Type

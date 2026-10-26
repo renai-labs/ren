@@ -45,7 +45,7 @@ Rules:
 1. A new task is `todo`.
 2. The first start by any agent sets `todo` to `in_progress`. A human or an agent can also set `in_progress`.
 3. A handoff does not change the status. A task that waits for its next agent is still `in_progress`.
-4. Only a human sets `done` or `dismissed`. An agent tool refuses both values. Later, a merged GitHub pull request that the task links sets `done` with the actor "system" (phase 3; v2 has no GitHub integration yet).
+4. Only a human sets `done` or `dismissed`. An agent tool refuses both values. A merged GitHub pull request that the task links sets `done` with no actor and the `automation` data on the `status` event ([channels piece I](runtime/channels/i-tasks.md), CH43).
 5. Nothing sets `todo` again automatically. A human can reopen a task to `todo` or `in_progress`.
 6. When the status becomes `done` or `dismissed`, Ren turns human review off.
 7. The actionable statuses are `todo` and `in_progress`. The default list shows them (v1 L32).
@@ -192,7 +192,7 @@ As in v1 (v1 L89–L97):
 
 As in v1 (v1 L81–L88): a task links GitHub pull requests, Linear issues, Slack threads and plain URLs. Each link has a kind and a canonical key; the pair (task, kind, key) is unique. Links change only with `addLinks` and `removeLinks`. A task has at most 32 links. The `link` events are the only record of who added or removed a link; a link row has no creator. Creating a task with links writes a `link` event for them, by the creator. The app shows links but does not add them (v1 parity).
 
-**TODO (channels):** v1 routes a message in a linked thread to the task's agent (v1 hand-offs). v2 has no channels yet. Links are stored now; routing comes with channels.
+Channels route a message in a linked thread to the task's agent, and follow the task through hand-offs ([channels piece I](runtime/channels/i-tasks.md), CH42). Links also have the kind `github_issue` (CH45).
 
 ## Subtasks (phase 2)
 
@@ -202,7 +202,7 @@ v1 has no subtasks. v2 adds them with the smallest model:
 - `create` and `update` set the parent; `update` with `parentId: null` makes a subtask a task of its own. A change writes a `parent` event on the subtask only. The parent's trail does not change.
 - A subtask is in its parent's space, always. The database holds this: the parent key is (`parent_id`, `space_id`), and it cascades a parent's move to its subtasks. A parent from another space is refused.
 - `assign` with a `spaceId` moves a parent and all its subtasks, archived ones included. Each live subtask gets an `assigned` event. A subtask's agent that is not usable in the new space is cleared, which turns its human review off, and a subtask's owner who is not a member of the new space is cleared. A subtask cannot move alone.
-- A subtask has its own agent, owner, status, human review, priority, labels, due date and links. It moves through the factory on its own. Its links are its own, so a pull request that a subtask opens links to the subtask, and `linkedTo` finds the task that owns the link. When channels exist, routing can also look at the parent's links.
+- A subtask has its own agent, owner, status, human review, priority, labels, due date and links. It moves through the factory on its own. Its links are its own, so a pull request that a subtask opens links to the subtask, and `linkedTo` finds the task that owns the link. Channel routing looks at a task's own links only, not its parent's.
 - The parent's status is not derived from its subtasks. Closing a parent leaves its subtasks as they are. `Task.Info.subtasks` holds the count, `{ total, done }`, for example "2 of 5 done": it counts live subtasks, leaves out dismissed ones, and is null when the task has no live subtasks. A subtask's `parent` holds the parent's ID, identifier and title.
 - Archiving a parent archives its live subtasks, each with an `archived` event.
 - The start message does not name the parent or the subtasks; an agent reads them with `task_get` and `task_list`.
