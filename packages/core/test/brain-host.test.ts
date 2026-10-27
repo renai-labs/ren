@@ -379,6 +379,85 @@ describe("BrainHost pull", () => {
       expect(reply.deleted).toEqual([gone])
     }),
   )
+
+  it.live(
+    "a pull gives each chat with an environment its drives: the mounts behind the egress, or why it has none",
+    () =>
+      Effect.gen(function* () {
+        const organizationId = yield* Seed.organization()
+        const spaceId = yield* Seed.team(organizationId)
+        const creator = yield* Seed.user()
+        const brainId = Brain.ID.create()
+        const owner = { organizationId, spaceId, createdBy: creator.id, brainId }
+        const environments = yield* Environments.Service
+        const bound = yield* Effect.forEach(["mounting", "unmountable", "direct"], (provider) =>
+          Effect.gen(function* () {
+            const sessionId = yield* Seed.session(owner)
+            yield* environments.bind(
+              { sessionId, organizationId, spaceId },
+              yield* Seed.environmentTemplate(organizationId, { provider }),
+            )
+            return sessionId
+          }),
+        )
+        const without = yield* Seed.session(owner)
+        const brain = yield* Brains.Service
+        const reply = yield* brain.pull(
+          { brainId, organizationId, spaceId, generation: 1 },
+          { version: "test", keyIds: [], sessions: [] },
+        )
+        const drivesOf = (sessionId: Session.ID) => reply.chats.find((chat) => chat.id === sessionId)?.drives
+        const remote = {
+          type: "s3",
+          bucket: "ren-drives-test",
+          region: "us-east-1",
+          endpoint: "http://127.0.0.1:59000",
+          placeholder: "ren:DRIVE",
+        }
+        expect(drivesOf(bound[0] ?? without)).toMatchObject({
+          type: "mounts",
+          mounts: [
+            {
+              kind: "space",
+              alias: "drive:space",
+              remote: { ...remote, prefix: `${organizationId}/drives/spaces/${spaceId}/` },
+              access: "read",
+            },
+            {
+              kind: "org",
+              alias: "drive:org",
+              remote: { ...remote, prefix: `${organizationId}/drives/org/` },
+              access: "read",
+            },
+          ],
+        })
+        expect(drivesOf(bound[1] ?? without)).toEqual({ type: "unavailable", reason: "no_mount" })
+        expect(drivesOf(bound[2] ?? without)).toEqual({ type: "unavailable", reason: "no_egress" })
+        expect(drivesOf(without)).toBeUndefined()
+      }).pipe(
+        Effect.provide(
+          Layer.unwrap(
+            Effect.map(
+              Effect.all([
+                TestProvider.make({ id: "mounting", canMount: true, egress: true }),
+                TestProvider.make({ id: "unmountable", egress: true }),
+                TestProvider.make({ id: "direct", canMount: true }),
+              ]),
+              (probes) => {
+                const environments = Environments.layer.pipe(
+                  Layer.provide(Signer.layerLocal),
+                  Layer.provide(EnvironmentProvider.layer(probes.map((probe) => Effect.succeed(probe.provider)))),
+                )
+                return Layer.merge(
+                  Host.cellLayer({ CELL_URL: "http://127.0.0.1:9" }, fixed, environments),
+                  environments,
+                )
+              },
+            ),
+          ),
+        ),
+      ),
+  )
 })
 
 describe("BrainHost host tokens", () => {

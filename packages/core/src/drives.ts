@@ -46,11 +46,22 @@ export interface Interface {
     input: Drive.PathInput,
   ) => Effect.Effect<void, Primitive.NotFound | Primitive.Forbidden | Unavailable>
   readonly sweep: (archivedBefore: Date) => Effect.Effect<void, Unavailable>
+  readonly availability: (
+    owner: { readonly organizationId: Auth.OrganizationID; readonly spaceId: Space.ID },
+    environment: { readonly canMount: boolean; readonly egress: boolean },
+  ) => Drive.Availability
 }
 
 export class Service extends Context.Service<Service, Interface>()("@ren/core/Drives") {}
 
 export const linkLifetime = Duration.minutes(15)
+
+export const placeholder = "ren:DRIVE"
+
+const descriptions: Record<Drive.Kind, string> = {
+  space: "The files that the people of this space upload to its drive in Ren. Read-only.",
+  org: "The files that the people of the organization upload to its drive in Ren, for every space. Read-only.",
+}
 
 export const prefixOf = (owner: {
   readonly organizationId: Auth.OrganizationID
@@ -228,6 +239,30 @@ export const layer = Layer.effect(
         if (!(yield* exists(key))) return yield* missing(input.path)
         yield* send((signal) => s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: signal }))
       }),
+      availability: (owner, environment) => {
+        if (!environment.canMount) return { type: "unavailable", reason: "no_mount" }
+        if (!environment.egress) return { type: "unavailable", reason: "no_egress" }
+        return {
+          type: "mounts",
+          mounts: (["space", "org"] as const).map((kind) => ({
+            kind,
+            alias: `drive:${kind}`,
+            description: descriptions[kind],
+            remote: {
+              type: "s3",
+              bucket,
+              prefix: prefixOf({
+                organizationId: owner.organizationId,
+                ...(kind === "space" && { spaceId: owner.spaceId }),
+              }),
+              region: config.region,
+              ...(Option.isSome(config.endpoint) && { endpoint: config.endpoint.value }),
+              placeholder,
+            },
+            access: "read",
+          })),
+        }
+      },
       sweep: Effect.fn("Drives.sweep")(function* (archivedBefore: Date) {
         const spaces = yield* database.db
           .select({ spaceId: Database.Schema.space.id, organizationId: Database.Schema.space.organization_id })

@@ -47,6 +47,7 @@ import { ModelProvider } from "./provider/model.js"
 import { Wait } from "./wait.js"
 import { Signer } from "@ren/core/signer"
 import { CredentialEnv } from "@ren/core/credential-env"
+import { Drives } from "@ren/core/drives"
 
 const root = path.resolve(import.meta.dir, "../../..")
 const adminUrl = process.env.DATABASE_URL ?? "postgres://ren:ren@localhost:54320/ren"
@@ -282,11 +283,13 @@ export const start = async (options: {
               .pipe(Layer.provide(Signer.layerLocal))
               .pipe(Layer.provide(EnvironmentProvider.layer(ChaosEnvironments.providers))),
           ),
+          Layer.provide(Drives.layer.pipe(Layer.provide(Access.layer))),
           Layer.provide(FetchHttpClient.layer),
           Layer.provide(
             ConfigProvider.layer(
               ConfigProvider.fromUnknown({
                 ...keys,
+                ...TestDrives.config,
                 CELL_URL: cell.url,
                 [ChaosEnvironments.fileVariable]: environmentsFile,
                 [ChaosModels.fileVariable]: modelsFile,

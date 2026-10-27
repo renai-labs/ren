@@ -111,7 +111,6 @@ export const services = Layer.mergeAll(
   TranscriptCodec.layer({ opencode: { messages: OpenCodeTranscript.messages } }),
   OAuth.layer,
   RenInferenceRemoval.layer.pipe(Layer.provide(DurableRunner.layerMemory)),
-  Drives.layer,
 ).pipe(
   Layer.provideMerge(ProviderConnect.layer),
   Layer.provideMerge(AppProfiles.layer),
@@ -128,6 +127,7 @@ export const services = Layer.mergeAll(
       GitHubApp.layerNone,
     ),
   ),
+  Layer.provideMerge(Drives.layer),
   Layer.provideMerge(Layer.mergeAll(Envelope.layerLocal, Access.layer, OAuthFetch.layerUnchecked)),
   Layer.provideMerge(EgressControl.layerNone),
   Layer.provideMerge(EnvironmentProvider.layer([Docker.provider])),

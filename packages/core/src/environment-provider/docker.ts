@@ -74,6 +74,7 @@ export const provider = Effect.gen(function* () {
     id: EnvironmentProvider.ID.make("docker"),
     // oxlint-disable-next-line ren/no-comments -- A Docker environment has no egress yet, so its processes get no placeholders (R19, §11.1).
     egress: false,
+    canMount: false,
     title: "Docker",
     description:
       "A container on the machine that runs Ren, made from an image that runs Ren’s executor. For development and self-hosting: its executor listens on 127.0.0.1, so the brain must run on the same machine.",

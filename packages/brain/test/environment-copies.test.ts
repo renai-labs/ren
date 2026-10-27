@@ -135,6 +135,31 @@ it.live(
     }),
 )
 
+it.live("a mount that fails is tried again at the next turn, not at the next call", () =>
+  Effect.gen(function* () {
+    const session = yield* copiesOf()
+    const item: EnvironmentCopies.Item = {
+      path: join(session.directory, ".ren", "drives", "space"),
+      copy: {
+        type: "mount",
+        remote: {
+          type: "s3",
+          bucket: "drives",
+          prefix: "org_1/drives/org/",
+          region: "us-east-1",
+          endpoint: "http://127.0.0.1:1",
+          placeholder: "ren:DRIVE",
+        },
+      },
+    }
+    const failed = session.copies.ensure([item]).pipe(Effect.map((failures) => failures.map((each) => each.item)))
+    expect(yield* failed).toEqual([item])
+    expect(yield* failed).toEqual([])
+    yield* session.copies.turnStarted
+    expect(yield* failed).toEqual([item])
+  }),
+)
+
 it.live("a copy that a chat deletes comes back after turnStarted and for a new generation, not before", () =>
   Effect.gen(function* () {
     const session = yield* copiesOf()

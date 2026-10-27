@@ -196,6 +196,11 @@ export const UnpackInput = Schema.Struct({
   ),
 }).annotate({ identifier: "Executor.UnpackInput" })
 
+export class MountError extends Schema.TaggedError<MountError>()("MountError", {
+  path: Schema.String,
+  message: Schema.String,
+}) {}
+
 export interface MountInput extends Schema.Schema.Type<typeof MountInput> {}
 export const MountInput = Schema.Struct({
   path: Schema.String.annotate({
@@ -272,4 +277,5 @@ export const Rpcs = RpcGroup.make(
   }),
   Rpc.make("files.mkdir", { payload: Path, error: FileSystemError }),
   Rpc.make("files.unpack", { payload: UnpackInput, error: Schema.Union([ArchiveError, FileSystemError]) }),
+  Rpc.make("drives.mount", { payload: MountInput, error: MountError }),
 ).middleware(Authentication)

@@ -1,5 +1,6 @@
 export * as BrainSettings from "./settings.js"
 
+import { Drive } from "@ren/schema/drive"
 import { Permission } from "@ren/schema/permission"
 import { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
@@ -26,6 +27,7 @@ export const Resolved = Schema.Struct({
   primary: Agent,
   subagents: Schema.Array(Agent),
   references: Reference.List,
+  drives: Schema.optionalKey(Drive.Availability),
 }).annotate({ identifier: "BrainSettings.Resolved" })
 
 export interface Chat extends Schema.Schema.Type<typeof ChatSettings> {}
@@ -48,6 +50,7 @@ export type Layers = SessionSettings.Layers
 export interface Placement {
   readonly agent: string | null
   readonly model: Option.Option<Session.Model>
+  readonly drives?: Drive.Availability | undefined
 }
 
 export type Lookup = (model: Session.Model) => Option.Option<{ readonly variants: ReadonlyArray<string> }>
@@ -124,6 +127,7 @@ export const resolve = (layers: Layers, chat: Placement, lookup: Lookup): Result
         own.flatMap((settings) => settings.references.map((reference) => [reference.alias, reference] as const)),
       ).values(),
     ).toSorted((left, right) => left.alias.localeCompare(right.alias)),
+    ...(chat.drives && { drives: chat.drives }),
   })
 }
 

@@ -6,6 +6,7 @@ import { TestAccess, TestGitHub } from "@ren/brain/testing"
 import { TestEnvironment, testEffect } from "@ren/executor/testing"
 import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
+import type { Drive } from "@ren/schema/drive"
 import type { Reference } from "@ren/schema/reference"
 import { Session } from "@ren/schema/session"
 import { Context, Effect, Fiber, Layer, Option } from "effect"
@@ -36,7 +37,12 @@ const pathOf = (github: TestGitHub.Instance, commit: string) =>
 
 const fresh = () => TestGitHub.make({ repo: `docs-${crypto.randomUUID().slice(0, 8)}` })
 
-const open = Effect.fnUntraced(function* (github: TestGitHub.Instance, references: ReadonlyArray<Reference.Info>) {
+const open = Effect.fnUntraced(function* (
+  github: TestGitHub.Instance,
+  references: ReadonlyArray<Reference.Info>,
+  drives?: Drive.Availability,
+) {
+  const sessionId = Session.ID.create()
   const context = yield* Layer.build(TestAccess.memory(new Map()))
   const memory = Context.get(context, TestAccess.Memory)
   const environments = Context.get(
@@ -52,7 +58,10 @@ const open = Effect.fnUntraced(function* (github: TestGitHub.Instance, reference
     yield* Layer.build(ChatSettings.layer.pipe(Layer.provide(ModelsTest.storage()))),
     ChatSettings.Service,
   )
-  yield* settings.save(TestSettings.layers({ ren: { references } }), [])
+  yield* settings.save(
+    TestSettings.layers({ ren: { references } }),
+    drives ? [{ id: sessionId, agent: null, archived: false, drives }] : [],
+  )
   const endpoints = Shared.access(undefined, stub.url).endpoints
   const host = yield* OpenCodeServer.make(
     (replacements) =>
@@ -75,7 +84,6 @@ const open = Effect.fnUntraced(function* (github: TestGitHub.Instance, reference
     },
   )
   const harness = yield* OpenCodeHarness.make(host, endpoints, Option.some(settings))
-  const sessionId = Session.ID.create()
   const accessOf = (generation: number) =>
     Effect.flatMap(TestEnvironment.url, (url) =>
       TestEnvironment.access({
@@ -258,7 +266,7 @@ it.live("a reference that cannot be copied leaves the tool working with its caus
     const call = yield* chat.tool("read", { path: join(pathOf(github, commit), "guide.md") })
     expect(result(call)).toContain("main")
     expect(result(call)).toContain(
-      "The reference release is not on the environment: The archive answered 503. The next environment tool copies it again.",
+      "The reference release is not on the environment: The archive answered 503. The next environment tool tries again.",
     )
     yield* github.breakArchive(undefined)
     expect(result(yield* chat.tool("read", { path: join(pathOf(github, release), "guide.md") }))).toContain("release")
@@ -275,4 +283,55 @@ it.live("files deleted under the root come back at the next turn", () =>
     yield* Effect.promise(() => rm(root, { recursive: true, force: true }))
     expect(result(yield* chat.tool("read", { path: file }))).toContain("Use the docs.")
   }),
+)
+
+const drivesRoot = join(workspace, ".ren", "drives")
+
+const mounts: Drive.Availability = {
+  type: "mounts",
+  mounts: [
+    {
+      kind: "space",
+      alias: "drive:space",
+      description: "The space’s files",
+      remote: {
+        type: "s3",
+        bucket: "ren-drives",
+        prefix: "org_1/drives/spaces/spc_1/",
+        region: "us-east-1",
+        placeholder: "ren:DRIVE",
+      },
+      access: "read",
+    },
+  ],
+}
+
+it.live("a chat whose environment cannot mount gets a note and no drive reference", () =>
+  Effect.gen(function* () {
+    const github = yield* fresh()
+    const commit = yield* github.commit({ "guide.md": "Use the docs." })
+    const chat = yield* open(github, [docsOf(github)], { type: "unavailable", reason: "no_mount" })
+    const call = yield* chat.tool("read", { path: join(pathOf(github, commit), "guide.md") })
+    expect(call.system).toContain(
+      "The drives of this space and organization are not available in this chat: its environment cannot mount them.",
+    )
+    expect(call.system).not.toContain("drive:space")
+  }),
+)
+
+it.live(
+  "a drive is a reference at its root, a mount that fails is a note in the tool result, and writes under it are denied",
+  () =>
+    Effect.gen(function* () {
+      const github = yield* fresh()
+      yield* github.commit({ "guide.md": "Use the docs." })
+      const chat = yield* open(github, [docsOf(github)], mounts)
+      const call = yield* chat.tool("shell", { command: "echo hi" })
+      expect(call.system).toContain(join(drivesRoot, "space"))
+      expect(call.system).toContain("The space’s files")
+      expect(result(call)).toContain("The reference drive:space is not on the environment:")
+      expect(
+        result(yield* chat.tool("write", { path: join(drivesRoot, "space", "notes.md"), content: "x" })),
+      ).toContain("is in a read-only drive")
+    }),
 )
