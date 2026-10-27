@@ -302,7 +302,7 @@ export const layer = Layer.effect(
         yield* pause(row.id, "owner_left")
         return Option.some<ScheduleRun.Reason>("owner_left")
       }
-      if (Option.isNone(yield* agentIn(database.db, row, row.agent_id))) {
+      if (!row.target_session_id && Option.isNone(yield* agentIn(database.db, row, row.agent_id))) {
         yield* pause(row.id, "agent_removed")
         return Option.some<ScheduleRun.Reason>("agent_removed")
       }

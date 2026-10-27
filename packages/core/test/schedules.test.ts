@@ -352,7 +352,7 @@ describe("Schedules", () => {
       }),
   )
 
-  it.live("a person's this-chat, a past time and a past end are refused (S5, S20)", () =>
+  it.live("a person's this-chat, a past time, a past end and a cron that never matches are refused (S5, S20)", () =>
     Effect.gen(function* () {
       const schedules = yield* Schedules.Service
       const t = yield* team
@@ -369,8 +369,12 @@ describe("Schedules", () => {
           decodeCreate({ ...base, when: { ...daily, until: DateTime.makeUnsafe("2020-01-01T00:00:00Z") } }),
         )
         .pipe(Effect.flip)
-      expect([thisChat, past, ended].map((error) => [error._tag, "field" in error && error.field])).toEqual([
+      const never = yield* schedules
+        .create(t.ada, decodeCreate({ ...base, when: { cron: "0 0 30 2 *", timeZone: "UTC" } }))
+        .pipe(Effect.flip)
+      expect([thisChat, past, ended, never].map((error) => [error._tag, "field" in error && error.field])).toEqual([
         ["Primitive.Invalid", "target"],
+        ["Primitive.Invalid", "when"],
         ["Primitive.Invalid", "when"],
         ["Primitive.Invalid", "when"],
       ])
