@@ -23,6 +23,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
+    "@ren/schema": "workspace:*",
     "@renai-labs/sdk": "workspace:*",
     "effect": "catalog:"
   },
