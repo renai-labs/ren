@@ -11,7 +11,8 @@ export type Alias = typeof Alias.Type
 
 export const Repository = Schema.String.check(
   Schema.isNonEmpty({ message: "Repository is required." }),
-  Schema.isPattern(/^https:\/\/[^/\s]+\/[^/\s]+\/[^/\s]+$/u, {
+  // oxlint-disable-next-line ren/no-comments -- R48: a host such as GitLab nests groups, so each git host decides how many path segments it accepts.
+  Schema.isPattern(/^https:\/\/[^/\s]+(?:\/[^/\s]+){2,}$/u, {
     message: "Use the repository’s https://<host>/<owner>/<repo> address.",
   }),
 ).annotate({ identifier: "Reference.Repository" })
