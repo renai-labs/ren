@@ -113,7 +113,7 @@ const settingsAndAgents = Layer.mergeAll(SpaceSettings.layer, OrganizationSettin
   Layer.provide(RepositoryHosts.layer),
 )
 
-// oxlint-disable-next-line ren/no-comments -- Only the Api: MCP routes may answer with SSE, and Bun's compression stream cannot flush each event. Only gzip: Bun's brotli ignores the level, runs at quality 11 and blocks the event loop.
+// oxlint-disable-next-line ren/no-comments -- Api only (MCP may stream SSE); gzip only (Bun's brotli blocks the event loop).
 const Compression = HttpRouter.middleware(
   Effect.gen(function* () {
     const platform = yield* HttpPlatform.HttpPlatform
