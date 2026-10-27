@@ -1,6 +1,7 @@
 export * as Profiles from "./profiles.js"
 
 import type { AppProfileInfo } from "@ren/client"
+import { Slug } from "@ren/util/slug"
 
 export type Kind = "shared" | "private"
 
@@ -45,10 +46,4 @@ export const gapLabel = (profiles: ReadonlyArray<AppProfileInfo>) => {
   return count === 0 ? undefined : `${count} not connected`
 }
 
-export const slugOf = (name: string) =>
-  name
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replaceAll(/^-+|-+$/gu, "")
-    .slice(0, 32)
-    .replace(/-+$/u, "")
+export const slugOf = (name: string) => Slug.of(name, 32)

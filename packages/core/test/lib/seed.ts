@@ -78,7 +78,9 @@ export const actor = Effect.fnUntraced(function* (organizationId: Auth.Organizat
 export const space = Effect.fnUntraced(function* (organizationId: Auth.OrganizationID) {
   const database = yield* Database.Service
   const id = Space.ID.create()
-  yield* database.db.insert(Database.Schema.space).values({ id, organization_id: organizationId, name: "Team" })
+  yield* database.db
+    .insert(Database.Schema.space)
+    .values({ id, organization_id: organizationId, slug: id.toLowerCase().replace("_", "-"), name: "Team" })
   return id
 })
 
@@ -227,7 +229,9 @@ export const team = Effect.fnUntraced(function* (organizationId: Auth.Organizati
   const found = existing.at(0)
   if (found) return found.id
   const id = Space.ID.create()
-  yield* database.db.insert(Database.Schema.space).values({ id, organization_id: organizationId, name: "Team" })
+  yield* database.db
+    .insert(Database.Schema.space)
+    .values({ id, organization_id: organizationId, slug: id.toLowerCase().replace("_", "-"), name: "Team" })
   return id
 })
 

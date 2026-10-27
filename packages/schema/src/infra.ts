@@ -1,6 +1,6 @@
 export * as Infra from "./infra.js"
 
-import { Effect, Schema } from "effect"
+import { Effect, Schema, Struct } from "effect"
 import { Agent } from "./agent.js"
 import { App } from "./app.js"
 import { AppProfile } from "./app-profile.js"
@@ -40,7 +40,7 @@ export const Uses = Schema.Struct({
 
 export interface SpaceDeclaration extends Schema.Schema.Type<typeof SpaceDeclaration> {}
 export const SpaceDeclaration = Schema.Struct({
-  ...Space.CreateInput.fields,
+  ...Struct.omit(Space.CreateInput.fields, ["slug"]),
   settings: SpaceSettings.UpdateInput.fields.settings.pipe(
     Schema.withDecodingDefaultTypeKey(Effect.succeed({ permissions: [], references: [] })),
   ),

@@ -4037,7 +4037,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Primitive.Slug_2"
+                  "$ref": "#/components/schemas/Primitive.Slug_3"
                 },
                 {
                   "type": "null"
@@ -10283,7 +10283,7 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Declaration"
@@ -10292,7 +10292,7 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Declaration"
@@ -10301,11 +10301,11 @@
           "dependsOn": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             }
           },
           "slug": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "ownerSpaceId": {
             "$ref": "#/components/schemas/Space.ID"
@@ -10343,7 +10343,7 @@
             "$ref": "#/components/schemas/App.ID"
           },
           "slug": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "organizationId": {
             "anyOf": [
@@ -10397,7 +10397,7 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Info"
@@ -10406,7 +10406,7 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Info"
@@ -10415,7 +10415,7 @@
           "dependsOn": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             }
           },
           "revision": {
@@ -10544,7 +10544,7 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Declaration"
@@ -10553,7 +10553,7 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Declaration"
@@ -10562,7 +10562,7 @@
           "dependsOn": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             }
           },
           "name": {
@@ -10618,12 +10618,12 @@
       "AppListing.Categories": {
         "type": "object",
         "propertyNames": {
-          "$ref": "#/components/schemas/Primitive.Slug"
+          "$ref": "#/components/schemas/Primitive.Slug_1"
         },
         "additionalProperties": {
           "type": "array",
           "items": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "minItems": 1
         },
@@ -10798,7 +10798,7 @@
             "$ref": "#/components/schemas/App.ID"
           },
           "appSlug": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "slug": {
             "$ref": "#/components/schemas/AppProfile.Slug"
@@ -11105,7 +11105,7 @@
             "type": "string"
           },
           "also": {
-            "$ref": "#/components/schemas/Primitive.Slug_1"
+            "$ref": "#/components/schemas/Primitive.Slug_2"
           }
         },
         "required": ["kind", "slug", "also"],
@@ -11167,7 +11167,7 @@
             "$ref": "#/components/schemas/App.ID"
           },
           "slug": {
-            "$ref": "#/components/schemas/Primitive.Slug"
+            "$ref": "#/components/schemas/Primitive.Slug_1"
           },
           "name": {
             "type": "string",
@@ -11204,7 +11204,7 @@
           "mcps": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Mcp.Info"
@@ -11213,7 +11213,7 @@
           "skills": {
             "type": "object",
             "propertyNames": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             },
             "additionalProperties": {
               "$ref": "#/components/schemas/Skill.Info"
@@ -11222,7 +11222,7 @@
           "dependsOn": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Primitive.Slug"
+              "$ref": "#/components/schemas/Primitive.Slug_1"
             }
           },
           "revision": {
@@ -11941,7 +11941,7 @@
             "type": "object",
             "properties": {
               "mcp": {
-                "$ref": "#/components/schemas/Primitive.Slug"
+                "$ref": "#/components/schemas/Primitive.Slug_1"
               }
             },
             "required": ["mcp"],
@@ -12263,7 +12263,7 @@
             "type": "object",
             "properties": {
               "mcp": {
-                "$ref": "#/components/schemas/Primitive.Slug"
+                "$ref": "#/components/schemas/Primitive.Slug_1"
               }
             },
             "required": ["mcp"],
@@ -14501,19 +14501,31 @@
       "Primitive.Slug": {
         "type": "string",
         "maxLength": 64,
-        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Unique among the live spaces of the organization. A new name does not change it."
       },
       "Primitive.Slug_1": {
         "type": "string",
         "maxLength": 64,
-        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-        "description": "The older app in the org that has the same name."
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
       },
       "Primitive.Slug_2": {
         "type": "string",
         "maxLength": 64,
         "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "The older app in the org that has the same name."
+      },
+      "Primitive.Slug_3": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
         "description": "Match a category in any group."
+      },
+      "Primitive.Slug_4": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Unique among the live schedules of its space. A new name does not change it."
       },
       "Reference.Alias": {
         "type": "string",
@@ -14712,6 +14724,17 @@
             "minLength": 1,
             "maxLength": 256
           },
+          "slug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.Slug_1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, Ren makes one from the name and adds -2, -3, … when it is taken."
+          },
           "message": {
             "$ref": "#/components/schemas/Schedule.MessageEncoded"
           },
@@ -14759,6 +14782,9 @@
           },
           "spaceId": {
             "$ref": "#/components/schemas/Space.ID"
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Primitive.Slug_4"
           },
           "name": {
             "type": "string"
@@ -14829,6 +14855,7 @@
         "required": [
           "id",
           "spaceId",
+          "slug",
           "name",
           "agentId",
           "when",
@@ -16729,6 +16756,17 @@
             "minLength": 1,
             "maxLength": 256
           },
+          "slug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Primitive.Slug_1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Without it, Ren makes one from the name and adds -2, -3, … when it is taken."
+          },
           "description": {
             "anyOf": [
               {
@@ -16779,6 +16817,9 @@
               }
             ],
             "description": "The owner of a private space. Null for a shared space."
+          },
+          "slug": {
+            "$ref": "#/components/schemas/Primitive.Slug"
           },
           "name": {
             "type": "string"
@@ -16854,6 +16895,7 @@
           "organizationId",
           "kind",
           "ownerUserId",
+          "slug",
           "name",
           "description",
           "brainScope",

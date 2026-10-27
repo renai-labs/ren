@@ -6,6 +6,7 @@ import { AppProfile } from "@ren/schema/app-profile"
 import type { Auth } from "@ren/schema/auth"
 import type { Space } from "@ren/schema/space"
 import { Pagination } from "@ren/util/pagination"
+import { Slug } from "@ren/util/slug"
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import { Access } from "../access.js"
@@ -58,14 +59,6 @@ type Row = typeof profiles.$inferSelect
 
 const notFound = new Primitive.NotFound({ message: "Profile not found." })
 
-const slugify = (name: string) =>
-  name
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replaceAll(/^-+|-+$/gu, "")
-    .slice(0, AppProfile.maximumSlugLength)
-    .replace(/-+$/u, "")
-
 const isSlug = Schema.is(AppProfile.Slug)
 
 // oxlint-disable-next-line ren/no-comments -- P13: a custom app's first profile is shared, lists only its owner space, and takes the owner space's name.
@@ -82,7 +75,7 @@ export const createOwner = Effect.fnUntraced(function* (
     0,
   )
   const name = space?.name ?? "Main"
-  const slug = slugify(name)
+  const slug = Slug.of(name, AppProfile.maximumSlugLength)
   const id = AppProfile.ID.create()
   yield* transaction.insert(profiles).values({
     id,

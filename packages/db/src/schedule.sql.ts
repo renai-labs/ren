@@ -12,6 +12,8 @@ import { space } from "./space.sql.js"
 
 export const scheduleRunTimedConstraint = "schedule_run_schedule_id_scheduled_at_uidx"
 
+export const scheduleSlugConstraint = "schedule_space_id_slug_uidx"
+
 const literals = (values: ReadonlyArray<string>) => sql.raw(values.map((value) => `'${value}'`).join(", "))
 
 export const schedule = pgTable(
@@ -26,6 +28,7 @@ export const schedule = pgTable(
       .$type<Space.ID>()
       .notNull()
       .references(() => space.id, { onDelete: "cascade" }),
+    slug: text().notNull(),
     name: text().notNull(),
     owner_id: text()
       .$type<Auth.UserID>()
@@ -51,6 +54,7 @@ export const schedule = pgTable(
       .on(table.next_run_at)
       .where(sql`${table.archived_at} is null and ${table.paused_reason} is null`),
     index("schedule_space_id_idx").on(table.space_id).where(isNull(table.archived_at)),
+    uniqueIndex(scheduleSlugConstraint).on(table.space_id, table.slug).where(isNull(table.archived_at)),
     check("schedule_when_check", sql`(${table.cron} is null) <> (${table.run_at} is null)`),
     check("schedule_time_zone_check", sql`(${table.cron} is null) = (${table.time_zone} is null)`),
     check("schedule_paused_reason_check", sql`${table.paused_reason} in (${literals(Schedule.PauseReason.literals)})`),

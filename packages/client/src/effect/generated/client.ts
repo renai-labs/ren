@@ -48,12 +48,13 @@ const EndpointSpaceGet = (raw: RawClient["space"]) => (input: SpaceGetInput) =>
 type SpaceCreateRequest = Parameters<RawClient["space"]["space.create"]>[0]
 type SpaceCreateInput = {
   readonly name: SpaceCreateRequest["payload"]["name"]
+  readonly slug?: SpaceCreateRequest["payload"]["slug"]
   readonly description?: SpaceCreateRequest["payload"]["description"]
 }
 const EndpointSpaceCreate = (raw: RawClient["space"]) => (input: SpaceCreateInput) =>
-  raw["space.create"]({ payload: { name: input["name"], description: input["description"] } }).pipe(
-    Effect.mapError(mapClientError),
-  )
+  raw["space.create"]({
+    payload: { name: input["name"], slug: input["slug"], description: input["description"] },
+  }).pipe(Effect.mapError(mapClientError))
 
 type SpaceUpdateRequest = Parameters<RawClient["space"]["space.update"]>[0]
 type SpaceUpdateInput = {
@@ -1062,6 +1063,7 @@ type ScheduleCreateRequest = Parameters<RawClient["schedule"]["schedule.create"]
 type ScheduleCreateInput = {
   readonly spaceId: ScheduleCreateRequest["payload"]["spaceId"]
   readonly name: ScheduleCreateRequest["payload"]["name"]
+  readonly slug?: ScheduleCreateRequest["payload"]["slug"]
   readonly message: ScheduleCreateRequest["payload"]["message"]
   readonly when: ScheduleCreateRequest["payload"]["when"]
   readonly target?: ScheduleCreateRequest["payload"]["target"]
@@ -1072,6 +1074,7 @@ const EndpointScheduleCreate = (raw: RawClient["schedule"]) => (input: ScheduleC
     payload: {
       spaceId: input["spaceId"],
       name: input["name"],
+      slug: input["slug"],
       message: input["message"],
       when: input["when"],
       target: input["target"],
