@@ -14,6 +14,7 @@ import { OAuthAppPolicy } from "./oauth-app/policy.js"
 import { AppPolicy } from "./app/policy.js"
 import { AppProfilePolicy } from "./app/profile-policy.js"
 import { EnvironmentTemplatePolicy } from "./environment-templates/policy.js"
+import { InfraPolicy } from "./infra-specs/policy.js"
 import { RenInferencePolicy } from "./ren-inference/policy.js"
 import { SchedulePolicy } from "./schedule/policy.js"
 import { SessionPolicy } from "./session/policy.js"
@@ -104,6 +105,7 @@ export const documents = Schema.decodeUnknownEffect(Policy.Documents)([
   ...ChannelInstallPolicy.documents,
   ...ChannelMappingPolicy.documents,
   ...SchedulePolicy.documents,
+  ...InfraPolicy.documents,
 ])
 
 export const layer = Layer.effect(
