@@ -1,6 +1,6 @@
 # References: playbook
 
-Status: R1–R33 are built (PR #73), and tests 1–12 of §9 pass. R34–R46 are decided and not built; tests 13–22 are for them. No Linear issue yet.
+Status: R1–R46 are built (PR #73), and tests 1–22 of §9 pass. No Linear issue yet.
 
 A reference is a git repository that an agent can read in a chat. This folder is the single source for references. Update this file in the same change that makes or changes a decision.
 
