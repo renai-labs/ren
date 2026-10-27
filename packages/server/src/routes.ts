@@ -215,6 +215,7 @@ export const layer = Layer.mergeAll(
       bodyLimit(Sync.maxBodyBytes),
       SessionSync.layer,
       ChannelTurns.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
+      Task.layer.pipe(Layer.provide(SessionRunner.layer), Layer.provide(BrainRegistry.layer)),
     ]),
   ),
   Cors,
