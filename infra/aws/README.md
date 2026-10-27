@@ -15,6 +15,7 @@ egress ──mTLS server.<name>.internal:4443──▶ server        server ─�
 | `network.tf` | Security groups, the load balancer, one rule on the database's security group             |
 | `server.tf`  | ECS cluster, ECR repository, server secret, roles, task definition, service               |
 | `egress.tf`  | Egress instance, fixed address, artifacts bucket, egress secret, release SSM document     |
+| `waf.tf`     | Load balancer firewall: rate limit (skips brain requests), blocked IPs, AWS rules         |
 | `app.tf`     | App bucket and CloudFront distribution                                                    |
 | `deploy.tf`  | The role the deploy workflow assumes with GitHub OIDC                                     |
 
