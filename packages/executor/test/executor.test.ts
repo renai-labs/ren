@@ -5,7 +5,7 @@ import { Brain } from "@ren/schema/brain"
 import { Environment } from "@ren/schema/environment"
 import { ConfigProvider, Context, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Scope, Stream } from "effect"
 import { TestClock } from "effect/testing"
-import { existsSync } from "node:fs"
+import { existsSync, watch } from "node:fs"
 import {
   chmod,
   mkdir,
@@ -384,10 +384,7 @@ it.live(
     }),
 )
 
-const archives = Effect.fnUntraced(function* (
-  folders: Readonly<Record<string, (root: string) => Promise<void>>>,
-  options: { readonly together?: number } = {},
-) {
+const archives = Effect.fnUntraced(function* (folders: Readonly<Record<string, (root: string) => Promise<void>>>) {
   const source = yield* Effect.promise(() => mkdtemp(join(tmpdir(), "ren-archive-")))
   yield* Effect.forEach(Object.entries(folders), (entry) =>
     Effect.promise(async () => {
@@ -405,7 +402,12 @@ const archives = Effect.fnUntraced(function* (
   )
   const requests: Array<string> = []
   const authorizations: Array<string | null> = []
-  const arrived = Promise.withResolvers<void>()
+  // oxlint-disable-next-line ren/no-comments -- While held, an archive sends its first half and waits for release. While stalled, it sends its headers and no bytes. `arrived` ends at the first request after hold.
+  const state = {
+    held: undefined as PromiseWithResolvers<void> | undefined,
+    arrived: Promise.withResolvers<void>(),
+    isStalled: false,
+  }
   const server = yield* Effect.acquireRelease(
     Effect.sync(() =>
       Bun.serve({
@@ -415,19 +417,50 @@ const archives = Effect.fnUntraced(function* (
           const name = new URL(request.url).pathname.slice(1)
           requests.push(name)
           authorizations.push(request.headers.get("authorization"))
-          if (requests.length >= (options.together ?? 1)) arrived.resolve()
-          await arrived.promise
+          state.arrived.resolve()
+          if (state.isStalled) return new Response(new ReadableStream())
           const file = Bun.file(join(source, name))
-          return (await file.exists()) ? new Response(file) : new Response("missing", { status: 404 })
+          if (!(await file.exists())) return new Response("missing", { status: 404 })
+          const gate = state.held
+          if (!gate) return new Response(file)
+          const bytes = await file.bytes()
+          const half = Math.floor(bytes.length / 2)
+          return new Response(
+            new ReadableStream({
+              start: async (controller) => {
+                controller.enqueue(bytes.subarray(0, half))
+                await gate.promise
+                controller.enqueue(bytes.subarray(half))
+                controller.close()
+              },
+            }),
+          )
         },
       }),
     ),
-    (served) => Effect.promise(() => served.stop(true)),
+    (served) =>
+      Effect.promise(() => {
+        state.held?.resolve()
+        return served.stop(true)
+      }),
   )
   return {
     url: (name: string) => `http://127.0.0.1:${server.port}/${name}`,
     requests: () => [...requests],
     authorizations: () => [...authorizations],
+    hold: () => {
+      state.held = Promise.withResolvers<void>()
+      state.arrived = Promise.withResolvers<void>()
+    },
+    arrived: Effect.promise(() => state.arrived.promise),
+    release: () => {
+      state.held?.resolve()
+      state.held = undefined
+    },
+    stall: (isStalled: boolean) => {
+      state.isStalled = isStalled
+      state.arrived = Promise.withResolvers<void>()
+    },
   }
 })
 
@@ -481,15 +514,86 @@ it.live("an archive with a link or a download that fails leaves nothing at the p
   }),
 )
 
-it.live("two unpacks of one path at the same time both succeed", () =>
+it.live("two unpacks of one path give one download, and a waiter downloads itself when the first is interrupted", () =>
   Effect.gen(function* () {
     const executor = yield* Executor.Service
-    const served = yield* archives({ docs: (root) => put(join(root, "README.md"), "docs") }, { together: 2 })
-    const input = { url: served.url("docs.tar.gz"), folder: ".", path: "together/docs/c1" }
-    yield* Effect.all([executor.unpack(input), executor.unpack(input)], { concurrency: "unbounded" })
-    expect(served.requests()).toEqual(["docs.tar.gz", "docs.tar.gz"])
-    expect(yield* Effect.promise(() => Bun.file(join(workspace, "together/docs/c1/README.md")).text())).toBe("docs")
+    const served = yield* archives({ docs: (root) => put(join(root, "README.md"), "docs") })
+    const together = { url: served.url("docs.tar.gz"), folder: ".", path: "together/docs/c1" }
+    served.hold()
+    const both = yield* Effect.forkChild(
+      Effect.all([executor.unpack(together), executor.unpack(together)], { concurrency: "unbounded" }),
+    )
+    yield* served.arrived
+    served.release()
+    yield* Fiber.join(both)
+    expect(served.requests()).toEqual(["docs.tar.gz"])
     expect(yield* Effect.promise(() => readdir(join(workspace, "together/docs")))).toEqual(["c1"])
+
+    const handover = { ...together, path: "handover/docs/c1" }
+    served.hold()
+    const first = yield* Effect.forkChild(executor.unpack(handover))
+    yield* served.arrived
+    const second = yield* Effect.forkChild(executor.unpack(handover))
+    yield* Effect.yieldNow
+    served.hold()
+    yield* Fiber.interrupt(first)
+    yield* served.arrived
+    served.release()
+    yield* Fiber.join(second)
+    expect(served.requests()).toEqual(["docs.tar.gz", "docs.tar.gz", "docs.tar.gz"])
+    expect(yield* Effect.promise(() => Bun.file(join(workspace, "handover/docs/c1/README.md")).text())).toBe("docs")
+    expect(yield* Effect.promise(() => readdir(join(workspace, "handover/docs")))).toEqual(["c1"])
+  }),
+)
+
+it.effect("a download that sends no bytes for 60 seconds fails, and the path is free again", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* archives({ docs: (root) => put(join(root, "README.md"), "docs") })
+    const input = { url: served.url("docs.tar.gz"), folder: ".", path: "stalled/docs/c1" }
+    served.stall(true)
+    const stalled = yield* Effect.forkChild(Effect.flip(executor.unpack(input)))
+    yield* served.arrived
+    yield* TestClock.adjust(Duration.seconds(60))
+    expect((yield* Fiber.join(stalled)).message).toBe("The archive sent no bytes for 1m")
+    served.stall(false)
+    yield* executor.unpack(input)
+    expect(yield* Effect.promise(() => readdir(join(workspace, "stalled/docs")))).toEqual(["c1"])
+  }),
+)
+
+it.live("writes a large file while its archive still arrives, and the file is whole", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const large = crypto.getRandomValues(new Uint8Array(8 * 1024 * 1024))
+    const served = yield* archives({ large: (root) => writeFile(join(root, "large.bin"), large) })
+    const parent = join(workspace, "chunked/large")
+    yield* Effect.promise(() => mkdir(parent, { recursive: true }))
+    const written = Promise.withResolvers<void>()
+    const watcher = watch(parent, { recursive: true }, (_event, name) => {
+      if (name?.endsWith("large.bin")) written.resolve()
+    })
+    served.hold()
+    const unpacked = yield* Effect.forkChild(
+      executor.unpack({ url: served.url("large.tar.gz"), folder: ".", path: "chunked/large/c1" }),
+    )
+    yield* Effect.promise(() => written.promise)
+    watcher.close()
+    served.release()
+    yield* Fiber.join(unpacked)
+    expect(yield* Effect.promise(() => Bun.file(join(parent, "c1/large.bin")).bytes())).toEqual(large)
+  }),
+)
+
+it.live("removes an old staging folder of the path before a download", () =>
+  Effect.gen(function* () {
+    const executor = yield* Executor.Service
+    const served = yield* archives({ docs: (root) => put(join(root, "README.md"), "docs") })
+    const parent = join(workspace, "staged/docs")
+    yield* Effect.promise(() => put(join(parent, "c1.0f1e2d3c.staging/README.md"), "half"))
+    yield* Effect.promise(() => put(join(parent, "c2.0f1e2d3c.staging/README.md"), "other path"))
+    yield* executor.unpack({ url: served.url("docs.tar.gz"), folder: ".", path: "staged/docs/c1" })
+    expect((yield* Effect.promise(() => readdir(parent))).toSorted()).toEqual(["c1", "c2.0f1e2d3c.staging"])
   }),
 )
 
