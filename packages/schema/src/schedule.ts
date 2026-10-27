@@ -166,6 +166,7 @@ export const UpdateInput = Schema.Struct({
 const NoInput = Schema.Struct({}).annotate({ identifier: "Schedule.NoInput" })
 
 export const Declaration = Schema.Struct({
+  name: Schema.optionalKey(Primitive.Name.annotate({ description: "Without it, the slug." })),
   agent: Schema.optionalKey(Agent.Name.annotate({ description: "Without it, the space’s default settings." })),
   cron: Cron,
   timeZone: TimeZone,
