@@ -101,6 +101,7 @@ const ownSpace = Effect.fnUntraced(function* (owner: Effect.Success<ReturnType<t
     organization_id: owner.organizationId,
     kind: "private",
     owner_user_id: owner.createdBy,
+    slug: "personal-space",
     name: "Personal Space",
   })
   yield* Seed.join(id, owner.createdBy)

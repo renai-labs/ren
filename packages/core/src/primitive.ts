@@ -1,6 +1,7 @@
 export * as Primitive from "./primitive.js"
 
 import { Primitive } from "@ren/schema/primitive"
+import { Slug } from "@ren/util/slug"
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core"
 import { Cause, Effect, Option, Schema } from "effect"
 import { SqlError } from "effect/sql"
@@ -18,6 +19,19 @@ export class Invalid extends Schema.TaggedError<Invalid>()("Primitive.Invalid", 
   message: Schema.String,
   field: Schema.optional(Schema.String),
 }) {}
+
+export const slugFor = (
+  input: { readonly name: string; readonly slug?: string | undefined },
+  fallback: string,
+  taken: ReadonlySet<string>,
+) => {
+  if (!input.slug)
+    return Effect.succeed(
+      Slug.free(Slug.of(input.name, Primitive.maximumSlugLength) || fallback, taken, Primitive.maximumSlugLength),
+    )
+  if (taken.has(input.slug)) return Effect.fail(new Conflict({ message: `The slug “${input.slug}” is already taken.` }))
+  return Effect.succeed(input.slug)
+}
 
 export const uniqueConflict =
   (constraint: string, message: string) =>

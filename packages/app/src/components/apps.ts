@@ -2,6 +2,7 @@ export * as Apps from "./apps.js"
 
 import type { AppInfo, AppProfileInfo, AppRegistryInfo, SpaceInfo } from "@ren/client"
 import { Pagination } from "@ren/schema/pagination"
+import { Slug } from "@ren/util/slug"
 import { Search } from "@ren/util/search"
 import { useQuery } from "@tanstack/react-query"
 import { Profiles } from "./profiles.js"
@@ -91,15 +92,8 @@ export const summary = (profiles: ReadonlyArray<AppProfileInfo>) => {
 export const lists = (profile: AppProfileInfo, space: Pick<SpaceInfo, "id">) =>
   profile.allSpaces || profile.spaces.some((listed) => listed.id === space.id)
 
-export const freeSlug = (name: string, taken: ReadonlyArray<string>) => {
-  const base = Profiles.slugOf(name) || "space"
-  const used = new Set(taken)
-  if (!used.has(base)) return base
-  const found = Array.from({ length: 98 }, (_, index) => `${base.slice(0, 29)}-${index + 2}`).find(
-    (slug) => !used.has(slug),
-  )
-  return found ?? base
-}
+export const freeSlug = (name: string, taken: ReadonlyArray<string>) =>
+  Slug.free(Profiles.slugOf(name) || "space", new Set(taken), 32)
 
 const progress = (profile: AppProfileInfo) => {
   const needed = profile.items.filter((item) => !item.optional)

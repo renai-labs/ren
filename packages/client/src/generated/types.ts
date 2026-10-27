@@ -12,6 +12,8 @@ export type SpaceID = string
 
 export type SpaceKind = "shared" | "private"
 
+export type PrimitiveSlug = string
+
 export type BrainScope = "session" | "space"
 
 export type SpaceMembershipID = string
@@ -41,8 +43,6 @@ export type MemoryPath = string
 export type AgentID = string
 
 export type AppID = string
-
-export type PrimitiveSlug = string
 
 export type CredentialAppEnvName = string
 
@@ -272,11 +272,16 @@ export type InvitationPreview = {
 
 export type AppProfileSpaceRef = { id: SpaceID; name: string }
 
+export type AppProfileSkipped = { kind: "mcps" | "skills" | "env"; slug: string; also: PrimitiveSlug }
+
+export type AppListingCategories = { [x: PrimitiveSlug]: Array<PrimitiveSlug> }
+
 export type SpaceInfo = {
   id: SpaceID
   organizationId: AuthOrganizationID
   kind: SpaceKind
   ownerUserId: AuthUserID | null
+  slug: PrimitiveSlug
   name: string
   description: string | null
   brainScope: BrainScope
@@ -363,10 +368,6 @@ export type TaskEventAssigned = {
   toSpaceId: SpaceID
   note: string | null
 }
-
-export type AppProfileSkipped = { kind: "mcps" | "skills" | "env"; slug: string; also: PrimitiveSlug }
-
-export type AppListingCategories = { [x: PrimitiveSlug]: Array<PrimitiveSlug> }
 
 export type CredentialEnv = { kind: "env"; name: CredentialAppEnvName; description?: string; optional?: boolean }
 
@@ -652,6 +653,16 @@ export type AuthSignInProviders = { items: Array<AuthSignInProvider> }
 
 export type AuthMe = { user: AuthUser; organization: AuthOrganization | null }
 
+export type AppListingInfo = {
+  appId: AppID
+  body: string | null
+  categories: AppListingCategories
+  examplePrompts: Array<string>
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+
 export type SpacePage = { items: Array<SpaceInfo>; page: number; pageSize: number; total: number }
 
 export type SpaceMemberInfo = SpaceMemberActive | SpaceMemberPending
@@ -675,16 +686,6 @@ export type SpaceEnvironmentTemplatePage = {
 export type PermissionRuleList = Array<PermissionRule>
 
 export type ReferenceList = Array<ReferenceInfo>
-
-export type AppListingInfo = {
-  appId: AppID
-  body: string | null
-  categories: AppListingCategories
-  examplePrompts: Array<string>
-  createdAt: string
-  updatedAt: string
-  archivedAt: string | null
-}
 
 export type CredentialSkillRequirement = CredentialEnv | CredentialOAuthApp
 
@@ -820,6 +821,7 @@ export type TaskEventData =
 export type ScheduleInfo = {
   id: ScheduleID
   spaceId: SpaceID
+  slug: PrimitiveSlug
   name: string
   agentId: AgentID | null
   when: ScheduleWhen
@@ -1183,8 +1185,21 @@ export type SpaceGetInput = { readonly idOrSlug: { readonly idOrSlug: string }["
 export type SpaceGetOutput = SpaceInfo
 
 export type SpaceCreateInput = {
-  readonly name: { readonly name: string; readonly description?: string | undefined }["name"]
-  readonly description?: { readonly name: string; readonly description?: string | undefined }["description"]
+  readonly name: {
+    readonly name: string
+    readonly slug?: string | undefined
+    readonly description?: string | undefined
+  }["name"]
+  readonly slug?: {
+    readonly name: string
+    readonly slug?: string | undefined
+    readonly description?: string | undefined
+  }["slug"]
+  readonly description?: {
+    readonly name: string
+    readonly slug?: string | undefined
+    readonly description?: string | undefined
+  }["description"]
 }
 
 export type SpaceCreateOutput = SpaceInfo
@@ -5611,6 +5626,7 @@ export type ScheduleCreateInput = {
   readonly spaceId: {
     readonly spaceId: string
     readonly name: string
+    readonly slug?: string | null
     readonly message: string
     readonly when:
       | { readonly cron: string; readonly timeZone: string; readonly until?: string }
@@ -5622,6 +5638,7 @@ export type ScheduleCreateInput = {
   readonly name: {
     readonly spaceId: string
     readonly name: string
+    readonly slug?: string | null
     readonly message: string
     readonly when:
       | { readonly cron: string; readonly timeZone: string; readonly until?: string }
@@ -5630,9 +5647,22 @@ export type ScheduleCreateInput = {
     readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
     readonly agentId?: string | null
   }["name"]
+  readonly slug?: {
+    readonly spaceId: string
+    readonly name: string
+    readonly slug?: string | null
+    readonly message: string
+    readonly when:
+      | { readonly cron: string; readonly timeZone: string; readonly until?: string }
+      | { readonly at: string }
+      | { readonly in: string }
+    readonly target?: ("new-chat" | "this-chat" | { readonly sessionId: string }) | null
+    readonly agentId?: string | null
+  }["slug"]
   readonly message: {
     readonly spaceId: string
     readonly name: string
+    readonly slug?: string | null
     readonly message: string
     readonly when:
       | { readonly cron: string; readonly timeZone: string; readonly until?: string }
@@ -5644,6 +5674,7 @@ export type ScheduleCreateInput = {
   readonly when: {
     readonly spaceId: string
     readonly name: string
+    readonly slug?: string | null
     readonly message: string
     readonly when:
       | { readonly cron: string; readonly timeZone: string; readonly until?: string }
@@ -5655,6 +5686,7 @@ export type ScheduleCreateInput = {
   readonly target?: {
     readonly spaceId: string
     readonly name: string
+    readonly slug?: string | null
     readonly message: string
     readonly when:
       | { readonly cron: string; readonly timeZone: string; readonly until?: string }
@@ -5666,6 +5698,7 @@ export type ScheduleCreateInput = {
   readonly agentId?: {
     readonly spaceId: string
     readonly name: string
+    readonly slug?: string | null
     readonly message: string
     readonly when:
       | { readonly cron: string; readonly timeZone: string; readonly until?: string }

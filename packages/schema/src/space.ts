@@ -38,6 +38,9 @@ export const Info = Schema.Struct({
   ownerUserId: Schema.NullOr(Auth.UserID).annotate({
     description: "The owner of a private space. Null for a shared space.",
   }),
+  slug: Primitive.Slug.annotate({
+    description: "Unique among the live spaces of the organization. A new name does not change it.",
+  }),
   name: Schema.String,
   description: Schema.NullOr(Schema.String),
   brainScope: Brain.Scope,
@@ -65,6 +68,9 @@ const Page = Pagination.Page(Info).annotate({ identifier: "Space.Page" })
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const CreateInput = Schema.Struct({
   name: Primitive.Name,
+  slug: Schema.optional(Primitive.Slug).annotate({
+    description: "Without it, Ren makes one from the name and adds -2, -3, … when it is taken.",
+  }),
   description: Schema.optional(Schema.String),
 }).annotate({ identifier: "Space.CreateInput" })
 

@@ -372,7 +372,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/spaces`,
-            body: { name: input["name"], description: input["description"] },
+            body: { name: input["name"], slug: input["slug"], description: input["description"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 403, 404, 409],
             empty: false,
@@ -1464,6 +1464,7 @@ export function make(options: ClientOptions) {
             body: {
               spaceId: input["spaceId"],
               name: input["name"],
+              slug: input["slug"],
               message: input["message"],
               when: input["when"],
               target: input["target"],

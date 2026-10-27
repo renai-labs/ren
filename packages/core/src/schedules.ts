@@ -98,6 +98,7 @@ const whenOf = (row: Row): Schedule.When =>
 const toInfo = (row: Row): Schedule.Info => ({
   id: row.id,
   spaceId: row.space_id,
+  slug: row.slug,
   name: row.name,
   agentId: row.agent_id,
   when: whenOf(row),
@@ -628,11 +629,16 @@ export const layer = Layer.effect(
               return yield* new Primitive.NotFound({ message: "Agent not found." })
             const stored = yield* whenOfInput(input.when, at)
             const target = yield* targetOf(transaction, actor, input.spaceId, input.target ?? "new-chat")
+            const taken = yield* transaction
+              .select({ slug: schedule.slug })
+              .from(schedule)
+              .where(and(eq(schedule.space_id, input.spaceId), isNull(schedule.archived_at)))
             const rows = yield* transaction
               .insert(schedule)
               .values({
                 id: Schedule.ID.create(),
                 ...placement,
+                slug: yield* Primitive.slugFor(input, "schedule", new Set(taken.map((row) => row.slug))),
                 name: input.name,
                 owner_id: actor.userId,
                 agent_id: input.agentId ?? null,

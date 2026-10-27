@@ -51,6 +51,42 @@ describe("Space", () => {
   )
 
   it.live(
+    "a space takes a slug from its name, unique among the live spaces of its organization, and keeps it when renamed",
+    () =>
+      Effect.gen(function* () {
+        const spaces = yield* Space.Service
+        const organizationId = yield* Seed.organization()
+        const ada = yield* user(organizationId)
+        const namesake = yield* user(organizationId)
+        expect((yield* spaces.list(ada, page)).items.map((space) => space.slug)).toEqual([
+          "general-space",
+          "ada-s-personal-space",
+        ])
+        expect((yield* spaces.list(namesake, page)).items.map((space) => space.slug)).toEqual([
+          "general-space",
+          "ada-s-personal-space-2",
+        ])
+        const first = yield* spaces.create(ada, { name: "Sales & Ops" })
+        const second = yield* spaces.create(ada, { name: "Sales & Ops" })
+        expect([first.slug, second.slug]).toEqual(["sales-ops", "sales-ops-2"])
+        expect((yield* spaces.create(ada, { name: "Support", slug: "help" })).slug).toBe("help")
+        expect((yield* spaces.create(ada, { name: "!!!" })).slug).toBe("space")
+        expect((yield* spaces.create(ada, { name: "x".repeat(70) })).slug).toBe("x".repeat(64))
+        expect((yield* spaces.create(ada, { name: "x".repeat(70) })).slug).toBe(`${"x".repeat(62)}-2`)
+        const taken = yield* Effect.flip(spaces.create(ada, { name: "Sales", slug: "sales-ops" }))
+        expect(taken).toMatchObject({ _tag: "Primitive.Conflict", message: "The slug “sales-ops” is already taken." })
+        yield* spaces.update(ada, first.id, { name: "Revenue" })
+        expect(yield* spaces.get(ada, "sales-ops")).toMatchObject({ id: first.id, name: "Revenue", slug: "sales-ops" })
+        yield* spaces.archive(ada, second.id)
+        expect((yield* Effect.flip(spaces.get(ada, "sales-ops-2")))._tag).toBe("Primitive.NotFound")
+        expect((yield* spaces.create(ada, { name: "Sales & Ops" })).slug).toBe("sales-ops-2")
+        const other = yield* user(yield* Seed.organization())
+        expect((yield* spaces.create(other, { name: "Sales & Ops" })).slug).toBe("sales-ops")
+        expect((yield* Effect.flip(spaces.get(other, "help")))._tag).toBe("Primitive.NotFound")
+      }),
+  )
+
+  it.live(
     "hides spaces from members outside them; an admin sees the list entry and joins before changing anything (AC4)",
     () =>
       Effect.gen(function* () {
@@ -383,6 +419,7 @@ describe("Space archive and agents", () => {
           id: Schedule.ID.create(),
           organization_id: organizationId,
           space_id: spaceId,
+          slug: "digest",
           name: "Digest",
           owner_id: ada.userId,
           cron: "0 9 * * *",

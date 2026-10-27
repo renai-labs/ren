@@ -603,6 +603,7 @@ describe("ChannelRoute", () => {
           organization_id: subject.owner.organizationId,
           kind: "private",
           owner_user_id: member.id,
+          slug: "personal-space",
           name: "Personal Space",
         })
         yield* Seed.join(own, member.id)

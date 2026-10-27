@@ -2,7 +2,9 @@ export * as SpaceProvisioning from "./provisioning.js"
 
 import { Database } from "@ren/db/database"
 import { Auth } from "@ren/schema/auth"
+import { Primitive } from "@ren/schema/primitive"
 import { Space } from "@ren/schema/space"
+import { Slug } from "@ren/util/slug"
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { CredentialOffboarding } from "../credential/offboarding.js"
@@ -31,10 +33,12 @@ const insertSpace = Effect.fnUntraced(function* (
   name: string,
   owner: Auth.UserID | null = null,
 ) {
+  const taken = yield* SpaceQueries.slugs(transaction, organizationId)
   const id = Space.ID.create()
   yield* transaction.insert(Database.Schema.space).values({
     id,
     organization_id: organizationId,
+    slug: Slug.free(Slug.of(name, Primitive.maximumSlugLength) || "space", taken, Primitive.maximumSlugLength),
     name,
     kind: owner ? "private" : "shared",
     owner_user_id: owner,
