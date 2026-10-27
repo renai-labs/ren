@@ -12,12 +12,20 @@ describe("Drive.Path", () => {
     },
   )
 
-  test.each(["", "/q3.pdf", "reports/", "reports//q3.pdf", "../q3.pdf", "reports/../q3.pdf", "./q3.pdf", "a\nb"])(
-    "rejects %j",
-    (path) => {
-      expect(accepts(path)).toBe(false)
-    },
-  )
+  test.each([
+    "",
+    "/q3.pdf",
+    "reports/",
+    "reports//q3.pdf",
+    "../q3.pdf",
+    "reports/../q3.pdf",
+    "./q3.pdf",
+    "a\nb",
+    "reports/${filename}",
+    "${filename}.pdf",
+  ])("rejects %j", (path) => {
+    expect(accepts(path)).toBe(false)
+  })
 
   test("normalizes a path to NFC, so a name that macOS sends decomposed finds its file", () => {
     expect(Schema.decodeUnknownSync(Drive.Path)("cv/re\u0301sume\u0301.pdf")).toBe("cv/r\u00E9sum\u00E9.pdf")
